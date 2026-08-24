@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { memoryController, type MemoryItem, type MemoryConfigResult } from '@/lib/memory-controller'
+import { memoryController, type MemoryItem, type MemoryConfigResult, type MemoryArchiveStats } from '@/lib/memory-controller'
 
 function importanceColor(i: number): string {
   if (i >= 0.8) return 'text-foreground font-medium'
@@ -28,6 +28,8 @@ export default function MemoryPage() {
   const [selectedItem, setSelectedItem] = useState<MemoryItem | null>(null)
   const [editContent, setEditContent] = useState('')
   const [editMode, setEditMode] = useState(false)
+  const [archiveStats, setArchiveStats] = useState<MemoryArchiveStats | null>(null)
+  const [archiving, setArchiving] = useState(false)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -45,7 +47,49 @@ export default function MemoryPage() {
     }
   }, [addToast])
 
-  useEffect(() => { void fetchAll() }, [fetchAll])
+  const loadArchiveStats = useCallback(async () => {
+    try {
+      const resp = await memoryController.archiveStats()
+      setArchiveStats(resp)
+    } catch { /* silent */ }
+  }, [])
+
+  const handleArchive = useCallback(async () => {
+    setArchiving(true)
+    try {
+      const resp = await memoryController.archive()
+      addToast(`Archived: ${resp.total} items`, 'success')
+      void loadArchiveStats()
+      void fetchAll()
+    } catch {
+      addToast('Could not archive', 'error')
+    } finally {
+      setArchiving(false)
+    }
+  }, [addToast, loadArchiveStats, fetchAll])
+
+  const handlePruneArchive = useCallback(async () => {
+    try {
+      const resp = await memoryController.archivePrune()
+      addToast(`Pruned: ${resp.pruned} items`, 'success')
+      void loadArchiveStats()
+    } catch {
+      addToast('Could not prune archive', 'error')
+    }
+  }, [addToast, loadArchiveStats])
+
+  const handleToggleEnabled = useCallback(async () => {
+    if (!stats) return
+    try {
+      await memoryController.setEnabled(!stats.enabled)
+      setStats(prev => prev ? { ...prev, enabled: !prev.enabled } : prev)
+      addToast(`Memory ${stats.enabled ? 'disabled' : 'enabled'}`, 'success')
+    } catch {
+      addToast('Could not toggle memory', 'error')
+    }
+  }, [stats, addToast])
+
+  useEffect(() => { void fetchAll(); void loadArchiveStats() }, [fetchAll, loadArchiveStats])
 
   const doSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults(null); return }
@@ -116,6 +160,10 @@ export default function MemoryPage() {
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={() => void fetchAll()}>Refresh</Button>
           <Button size="sm" variant="ghost" onClick={consolidate}>Consolidate</Button>
+          <Button size="sm" variant="ghost" onClick={() => void handleArchive()} disabled={archiving}>{archiving ? 'Archiving...' : 'Archive'}</Button>
+          <Button size="sm" variant={stats?.enabled ? 'outline' : 'ghost'} onClick={() => void handleToggleEnabled()}>
+            {stats?.enabled ? 'Disable' : 'Enable'}
+          </Button>
           <Button size="sm" onClick={() => setShowStore(!showStore)}>
             {showStore ? 'Cancel' : 'Store'}
           </Button>
@@ -151,6 +199,24 @@ export default function MemoryPage() {
         </div>
       )}
 
+
+      {archiveStats && (
+        <Card>
+          <CardContent className="p-3 flex items-center justify-between">
+            <div className="flex gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Archived</p>
+                <p className="text-sm font-medium">{archiveStats.records} items</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Size</p>
+                <p className="text-sm font-medium">{archiveStats.bytes} bytes</p>
+              </div>
+            </div>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handlePruneArchive()}>Prune Old</Button>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex items-center gap-2">
         <Input
           value={searchQuery}
@@ -182,10 +248,29 @@ export default function MemoryPage() {
                 value={storeContent}
                 onChange={e => setStoreContent(e.target.value)}
                 rows={3}
+                aria-label="Memory content to store"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
-            <div className="flex items-center gap-2">
+      
+      {archiveStats && (
+        <Card>
+          <CardContent className="p-3 flex items-center justify-between">
+            <div className="flex gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Archived</p>
+                <p className="text-sm font-medium">{archiveStats.records} items</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Size</p>
+                <p className="text-sm font-medium">{archiveStats.bytes} bytes</p>
+              </div>
+            </div>
+            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handlePruneArchive()}>Prune Old</Button>
+          </CardContent>
+        </Card>
+      )}
+      <div className="flex items-center gap-2">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="memory-topic" variant="uppercase">Topic</Label>
                 <Input id="memory-topic" value={storeTopic} onChange={e => setStoreTopic(e.target.value)}
@@ -264,6 +349,7 @@ export default function MemoryPage() {
                   value={editContent}
                   onChange={e => setEditContent(e.target.value)}
                   rows={12}
+                  aria-label="Edit memory content"
                   className="w-full rounded-md border border-input bg-background p-3 text-sm"
                 />
               ) : (

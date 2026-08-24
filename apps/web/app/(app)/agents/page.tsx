@@ -574,6 +574,7 @@ export default function AgentsPage() {
                         type="checkbox"
                         checked={selectedIds.size === filteredAgents.length && filteredAgents.length > 0}
                         onChange={selectAll}
+                        aria-label="Select all agents"
                         className="rounded border-border"
                       />
                       <span className="text-muted-foreground">Select all</span>
@@ -657,6 +658,7 @@ export default function AgentsPage() {
                             type="checkbox"
                             checked={selectedIds.has(agent.id)}
                             onChange={() => toggleSelect(agent.id)}
+                            aria-label={`Select agent ${agent.name}`}
                             className="mt-1 rounded border-border"
                           />
                           <div className="min-w-0 flex-1">

@@ -34,12 +34,10 @@ logger = logging.getLogger("slo.startup")
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
 _TIMEOUT_CONFIG = 5.0
-_TIMEOUT_MODEL_LOAD = 120.0
 _TIMEOUT_WANDB = 30.0
 _TIMEOUT_MULTIMODAL = 30.0
 _TIMEOUT_MODEL_REGISTRY = 10.0
 _TIMEOUT_ROUTERS = 30.0
-_TIMEOUT_STARTUP_TOTAL = 120.0
 _TIMEOUT_SHUTDOWN = 30.0
 
 # Modules the background model-load thread imports while the main thread is
@@ -67,7 +65,6 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "domains.api.sse_envelope",
     "pydantic.v1",
 ]
-_TIMEOUT_REGISTER_GENERATE = 120.0
 
 
 class StartupProfileSelector:
@@ -195,7 +192,7 @@ class StartupOrchestrator:
             self._lifecycle.register_startup_hook(
                 StartupHook(
                     "model_load", self._phase2_model_load,
-                    depends_on=["config"], timeout=_TIMEOUT_MODEL_LOAD, critical=False,
+                    depends_on=["config"], timeout=self._config.startup_model_load_timeout, critical=False,
                     profiles=full_only,
                 ),
             )

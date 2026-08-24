@@ -365,6 +365,7 @@ export default function HomePage() {
                 <input
                   type="text"
                   placeholder="e.g., I prefer Python over JavaScript"
+                  aria-label="Quick add knowledge"
                   className="flex-1 h-9 rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>

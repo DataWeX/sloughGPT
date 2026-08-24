@@ -149,6 +149,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               <button
                 type="button"
                 onClick={() => updateSettings({ pushToTalk: !settings.pushToTalk })}
+                role="switch"
+                aria-checked={settings.pushToTalk}
+                aria-label="Push-to-talk"
                 className={`w-9 h-5 rounded-full transition-colors ${
                   settings.pushToTalk ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}
@@ -164,6 +167,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
               <button
                 type="button"
                 onClick={() => updateSettings({ streamingTTS: !settings.streamingTTS })}
+                role="switch"
+                aria-checked={settings.streamingTTS}
+                aria-label="Stream speech"
                 className={`w-9 h-5 rounded-full transition-colors ${
                   settings.streamingTTS ? 'bg-primary' : 'bg-muted-foreground/30'
                 }`}

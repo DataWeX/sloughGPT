@@ -19,8 +19,8 @@ export default function RegistryContent() {
   const fetchData = async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
-        registryController.list().catch(() => []),
-        registryController.stats().catch(() => null),
+        registryController.list().catch((e) => { addToast('Could not load models', 'error'); return [] }),
+        registryController.stats().catch((e) => { addToast('Could not load registry stats', 'error'); return null }),
         registryController.best().catch(() => null),
       ])
       setModels(modelsRes)

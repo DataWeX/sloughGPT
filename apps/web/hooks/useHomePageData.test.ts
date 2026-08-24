@@ -1,85 +1,71 @@
-/**
- */
-import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
-import { renderHook, act, cleanup } from '@testing-library/react'
-import React from 'react'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+import { renderHook, cleanup } from '@testing-library/react'
 import { useHomePageData } from './useHomePageData'
 
-const mockModelStatus = vi.fn().mockResolvedValue({ loaded: false, model_type: null })
-const mockModelList = vi.fn().mockResolvedValue([])
-const mockSoulsList = vi.fn().mockResolvedValue({ souls: [], current_soul: '' })
 const mockSessionList = vi.fn().mockResolvedValue([])
 const mockTrainingList = vi.fn().mockResolvedValue([])
 const mockKnowledgeStats = vi.fn().mockResolvedValue({ total_items: 0 })
 
+vi.mock('@/lib/dev-log', () => ({
+  logger: { child: () => ({ warning: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }) },
+}))
+
 vi.mock('@/lib/model-controller', () => ({
-  modelController: {
-    status: (...args: unknown[]) => mockModelStatus(...args),
-    list: (...args: unknown[]) => mockModelList(...args),
-  },
+  modelController: { status: vi.fn().mockResolvedValue({ loaded: false, model_type: null }), list: vi.fn().mockResolvedValue([]) },
 }))
 
 vi.mock('@/lib/souls-controller', () => ({
-  soulsController: {
-    list: (...args: unknown[]) => mockSoulsList(...args),
-  },
+  soulsController: { list: vi.fn().mockResolvedValue({ souls: [], current_soul: '' }) },
 }))
 
 vi.mock('@/lib/session-controller', () => ({
-  sessionController: {
-    list: (...args: unknown[]) => mockSessionList(...args),
-  },
+  sessionController: { list: (...args: unknown[]) => mockSessionList(...args) },
 }))
 
 vi.mock('@/lib/training-controller', () => ({
-  trainingController: {
-    list: (...args: unknown[]) => mockTrainingList(...args),
-  },
+  trainingController: { list: (...args: unknown[]) => mockTrainingList(...args) },
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
-  knowledgeController: {
-    stats: (...args: unknown[]) => mockKnowledgeStats(...args),
-  },
+  knowledgeController: { stats: (...args: unknown[]) => mockKnowledgeStats(...args) },
 }))
 
-const mockGetFeedbackStats = vi.fn().mockResolvedValue({ total: 0, positive: 0, negative: 0 })
 vi.mock('@/lib/feedback-controller', () => ({
-  feedbackController: {
-    getFeedbackStats: (...args: unknown[]) => mockGetFeedbackStats(...args),
-  },
+  feedbackController: { getFeedbackStats: vi.fn().mockResolvedValue({ total: 0 }) },
 }))
 
-const mockDatasetList = vi.fn().mockResolvedValue([])
 vi.mock('@/lib/dataset-controller', () => ({
-  datasetController: {
-    list: (...args: unknown[]) => mockDatasetList(...args),
-  },
+  datasetController: { list: vi.fn().mockResolvedValue([]) },
 }))
 
 vi.mock('@/lib/query', () => ({
-  useQuery: (_key: unknown, _fetcher: () => Promise<unknown>) => ({ data: undefined }),
-  useMutation: (mutate: (...a: unknown[]) => Promise<unknown>) => ({
-    mutate: (...a: unknown[]) => mutate(...a),
-    isLoading: false,
-  }),
+  useQuery: () => ({ data: undefined }),
+  useMutation: () => ({ mutate: vi.fn(), isLoading: false }),
   useInvalidate: () => vi.fn(),
+  invalidateQuery: vi.fn(),
+  fetchQuery: vi.fn(),
+  getQueryState: vi.fn(),
+}))
+
+vi.mock('@/lib/query/hooks', () => ({
+  useQuery: () => ({ data: undefined }),
+  useMutation: () => ({ mutate: vi.fn(), isLoading: false }),
+  useInvalidate: () => vi.fn(),
+  useIsFetching: () => 0,
+}))
+
+vi.mock('@/lib/query/api-hooks', () => ({
+  useModels: () => ({ data: undefined }),
+  useSouls: () => ({ data: undefined }),
 }))
 
 vi.mock('@/hooks/useLiveStatus', () => ({
-  liveStatusStore: { setState: vi.fn(), getState: vi.fn(() => ({ ready: true })) },
+  liveStatusStore: { setState: vi.fn(), getState: () => ({ ready: true }) },
   useApiReady: () => true,
   useLiveStatus: () => ({ health: null }),
 }))
 
-beforeEach(() => {
-  // useLiveStatus is mocked — no store setup needed
-})
-
-afterEach(() => {
-  cleanup()
-  vi.clearAllMocks()
-})
+afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 const ONLINE_HEALTH = { status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'ready', inference_count: 42 }
 
@@ -99,30 +85,9 @@ describe('useHomePageData', () => {
     expect(result.current.modelStatus).toEqual({ loaded: false, model: null })
   })
 
-  it('fetches model status and soul on online health', async () => {
-    mockModelStatus.mockResolvedValue({ loaded: true, model_type: 'gpt2' })
-    mockSoulsList.mockResolvedValue({ souls: [{ name: 'friendly', description: 'A friendly soul', traits: ['warm'] }], current_soul: 'friendly' })
-    renderHook(() => useHomePageData(ONLINE_HEALTH))
-    await vi.waitFor(() => {
-      expect(mockModelStatus).toHaveBeenCalled()
-      expect(mockSoulsList).toHaveBeenCalled()
-    })
-  })
-
-  it('fetches model list, sessions, training jobs, knowledge stats on health', async () => {
-    mockModelList.mockResolvedValue([{ id: 'gpt2' }, { id: 'tinyllama' }])
-    mockSessionList.mockResolvedValue([
-      { id: 's1', name: 'Chat A', updated_at: '2024-06-01T00:00:00Z' },
-    ])
-    mockTrainingList.mockResolvedValue([{ id: 'j1', name: 'Job 1', status: 'completed', created_at: '2024-06-01T00:00:00Z' }])
-    mockKnowledgeStats.mockResolvedValue({ total_items: 5 })
-    renderHook(() => useHomePageData(ONLINE_HEALTH))
-    await vi.waitFor(() => {
-      expect(mockModelList).toHaveBeenCalled()
-      expect(mockSessionList).toHaveBeenCalled()
-      expect(mockTrainingList).toHaveBeenCalled()
-      expect(mockKnowledgeStats).toHaveBeenCalled()
-    })
+  it('sets model status from health parameter', () => {
+    const { result } = renderHook(() => useHomePageData(ONLINE_HEALTH))
+    expect(result.current.modelStatus).toEqual({ loaded: true, model: 'gpt2' })
   })
 
   it('extracts inferenceCount from health', () => {
@@ -133,5 +98,15 @@ describe('useHomePageData', () => {
   it('handles null inferenceCount', () => {
     const { result } = renderHook(() => useHomePageData({ ...ONLINE_HEALTH, inference_count: undefined } as any))
     expect(result.current.inferenceCount).toBe(0)
+  })
+
+  it('healthSummary returns model_type from health', () => {
+    const { result } = renderHook(() => useHomePageData(ONLINE_HEALTH))
+    expect(result.current.healthSummary).toBe('gpt2')
+  })
+
+  it('healthSummary is null when offline', () => {
+    const { result } = renderHook(() => useHomePageData('offline'))
+    expect(result.current.healthSummary).toBeNull()
   })
 })

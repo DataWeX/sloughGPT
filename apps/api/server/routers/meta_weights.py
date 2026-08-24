@@ -87,7 +87,10 @@ class MetaWeightsRouter:
         Side effects:
             - none
         """
-        return success_response(data={"status": "ok"})
+        try:
+            return success_response(data={"status": "ok"})
+        except Exception as e:
+            classify_and_raise(e, source="meta_weights.ping")
 
 
 router = MetaWeightsRouter().router

@@ -143,6 +143,7 @@ export function KnowledgeTab({
             value={knowledgeSearch}
             onChange={e => setKnowledgeSearch(e.target.value)}
             placeholder="Search snippets..."
+            aria-label="Search knowledge snippets"
             className="h-6 w-full rounded border border-border/60 bg-background pl-6 pr-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
           {knowledgeSearch && (

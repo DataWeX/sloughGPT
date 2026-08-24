@@ -12,7 +12,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, raise_error, safe_audit_log
+from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
 
 
 # ---------- request / response models ----------
@@ -72,11 +72,14 @@ class AuthRouter:
 
     @property
     def users_collection(self):
-        """Expose the users collection for testing."""
-        return self._users
+        try:
+            """Expose the users collection for testing."""
+            return self._users
 
-    # ---------- user store backed by MogDB ----------
+        # ---------- user store backed by MogDB ----------
 
+        except Exception as e:
+            classify_and_raise(e, source="auth.users_collection")
     def _load_users(self) -> dict:
         """Load all users from MogDB, returned as a dict keyed by user ID.
 

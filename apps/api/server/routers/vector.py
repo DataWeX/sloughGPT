@@ -43,18 +43,21 @@ class VectorRouter:
         self.router.add_api_route("/ingest/status", self.ingest_status, methods=["GET"])
 
     async def get_vector_store(self) -> dict:
-        """get_vector_store."""
-        if self._vector_store is None:
-            try:
-                from domains.inference.vector_store import create_vector_store
-                kwargs = {"dimension": 384}
-                if self._vector_store_type == "chromadb":
-                    kwargs["persist_directory"] = "data/vector_store"
-                self._vector_store = await create_vector_store(provider=self._vector_store_type, **kwargs)
-            except Exception as e:
-                logging.getLogger(__name__).debug("Vector store init failed: %s", e)
-        return self._vector_store
+        try:
+            """get_vector_store."""
+            if self._vector_store is None:
+                try:
+                    from domains.inference.vector_store import create_vector_store
+                    kwargs = {"dimension": 384}
+                    if self._vector_store_type == "chromadb":
+                        kwargs["persist_directory"] = "data/vector_store"
+                    self._vector_store = await create_vector_store(provider=self._vector_store_type, **kwargs)
+                except Exception as e:
+                    logging.getLogger(__name__).debug("Vector store init failed: %s", e)
+            return self._vector_store
 
+        except Exception as e:
+            classify_and_raise(e, source="vector.get_vector_store")
     async def init_vector_store(self, config: VectorStoreConfig) -> dict:
         """init_vector_store."""
         self._vector_store_type = config.provider or "chromadb"
@@ -86,51 +89,63 @@ class VectorRouter:
             classify_and_raise(e, source="vector")
 
     async def get_stats(self) -> dict:
-        """get_stats."""
-        store = await self.get_vector_store()
-        if not store:
-            return success_response(data={"provider": self._vector_store_type, "count": 0})
-        return success_response(data={"provider": self._vector_store_type, "count": await store.count()})
+        try:
+            """get_stats."""
+            store = await self.get_vector_store()
+            if not store:
+                return success_response(data={"provider": self._vector_store_type, "count": 0})
+            return success_response(data={"provider": self._vector_store_type, "count": await store.count()})
 
+        except Exception as e:
+            classify_and_raise(e, source="vector.get_stats")
     async def upsert_vectors(self, request: UpsertRequest) -> dict:
-        """upsert_vectors."""
-        import time as _time
-        _t0 = _time.monotonic()
-        store = await self.get_vector_store()
-        if not store:
-            raise_error("Vector store not connected", "E_INFRA_STARTUP", status_code=500)
-        from domains.inference.vector_store import VectorEntry, simple_embed
-        entries = []
-        for i, text in enumerate(request.texts):
-            embedding = request.embeddings[i] if request.embeddings and i < len(request.embeddings) else simple_embed(text)
-            entry = VectorEntry(
-                id=request.ids[i] if request.ids and i < len(request.ids) else None,
-                text=text,
-                vector=embedding,
-                metadata=request.metadata[i] if request.metadata and i < len(request.metadata) else {}
-            )
-            entries.append(entry)
-        count = await store.upsert(entries)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("vector.upsert", resource="vector_store", detail=f"count={count} elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={"status": "upserted", "count": count, "elapsed_ms": round(_elapsed_ms, 1)})
+        try:
+            """upsert_vectors."""
+            import time as _time
+            _t0 = _time.monotonic()
+            store = await self.get_vector_store()
+            if not store:
+                raise_error("Vector store not connected", "E_INFRA_STARTUP", status_code=500)
+            from domains.inference.vector_store import VectorEntry, simple_embed
+            entries = []
+            for i, text in enumerate(request.texts):
+                embedding = request.embeddings[i] if request.embeddings and i < len(request.embeddings) else simple_embed(text)
+                entry = VectorEntry(
+                    id=request.ids[i] if request.ids and i < len(request.ids) else None,
+                    text=text,
+                    vector=embedding,
+                    metadata=request.metadata[i] if request.metadata and i < len(request.metadata) else {}
+                )
+                entries.append(entry)
+            count = await store.upsert(entries)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("vector.upsert", resource="vector_store", detail=f"count={count} elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={"status": "upserted", "count": count, "elapsed_ms": round(_elapsed_ms, 1)})
 
+        except Exception as e:
+            classify_and_raise(e, source="vector.upsert_vectors")
     async def search_vectors(self, request: SearchRequest) -> dict:
-        """search_vectors."""
-        import time as _time
-        _t0 = _time.monotonic()
-        store = await self.get_vector_store()
-        if not store:
-            return success_response(data={"results": []})
-        from domains.inference.vector_store import simple_embed
-        query_embedding = simple_embed(request.query)
-        results = await store.query(query_embedding, top_k=request.top_k)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        return success_response(data={"results": [{"text": r.text, "score": r.score, "id": r.id} for r in results], "elapsed_ms": round(_elapsed_ms, 1)})
+        try:
+            """search_vectors."""
+            import time as _time
+            _t0 = _time.monotonic()
+            store = await self.get_vector_store()
+            if not store:
+                return success_response(data={"results": []})
+            from domains.inference.vector_store import simple_embed
+            query_embedding = simple_embed(request.query)
+            results = await store.query(query_embedding, top_k=request.top_k)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            return success_response(data={"results": [{"text": r.text, "score": r.score, "id": r.id} for r in results], "elapsed_ms": round(_elapsed_ms, 1)})
 
+        except Exception as e:
+            classify_and_raise(e, source="vector.search_vectors")
     async def ingest_status(self) -> dict:
-        """ingest_status."""
-        return success_response(data={"status": "ready"})
+        try:
+            """ingest_status."""
+            return success_response(data={"status": "ready"})
 
 
+        except Exception as e:
+            classify_and_raise(e, source="vector.ingest_status")
 router = VectorRouter().router

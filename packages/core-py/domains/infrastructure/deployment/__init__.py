@@ -112,7 +112,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                 extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Deployment Manager: {e}",
+            self.logger.error("Failed to initialize Deployment Manager: %s", e,
                 extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment Manager initialization failed: {e}")
 
@@ -135,7 +135,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
                 extra={"tag": "INFRA"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Deployment Manager: {e}",
+            self.logger.error("Failed to shutdown Deployment Manager: %s", e,
                 extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment Manager shutdown failed: {e}")
 
@@ -179,12 +179,12 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             task = asyncio.create_task(self._execute_deployment(deployment))
             self.active_deployments[deployment_id] = task
 
-            self.logger.info(f"Started deployment {deployment_id} to {environment}",
+            self.logger.info("Started deployment %s to %s", deployment_id, environment,
                 extra={"tag": "INFRA"})
             return deployment_id
 
         except Exception as e:
-            self.logger.error(f"Failed to start deployment: {e}",
+            self.logger.error("Failed to start deployment: %s", e,
                 extra={"tag": "INFRA"})
             raise ComponentException(f"Deployment start failed: {e}")
 
@@ -230,12 +230,12 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
 
             self.stats["rolled_back_deployments"] += 1
 
-            self.logger.info(f"Rolled back deployment {deployment_id}",
+            self.logger.info("Rolled back deployment %s", deployment_id,
                 extra={"tag": "INFRA"})
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to rollback deployment {deployment_id}: {e}",
+            self.logger.error("Failed to rollback deployment %s: %s", deployment_id, e,
                 extra={"tag": "INFRA"})
             raise ComponentException(f"Rollback failed: {e}")
 
@@ -291,7 +291,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             deployment.completed_at = time.time()
             self.stats["successful_deployments"] += 1
 
-            self.logger.info(f"Deployment {deployment.deployment_id} completed successfully",
+            self.logger.info("Deployment %s completed successfully", deployment.deployment_id,
                 extra={"tag": "INFRA"})
 
         except Exception as e:
@@ -301,7 +301,7 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
             deployment.error_message = str(e)
             self.stats["failed_deployments"] += 1
 
-            self.logger.error(f"Deployment {deployment.deployment_id} failed: {e}",
+            self.logger.error("Deployment %s failed: %s", deployment.deployment_id, e,
                 extra={"tag": "INFRA"})
 
         finally:

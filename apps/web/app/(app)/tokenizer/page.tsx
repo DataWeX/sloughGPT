@@ -21,7 +21,7 @@ import { TokenTreeCompareCard } from '@/components/tokenizer/TokenTreeCompareCar
 import { TokenTreePlaygroundCard } from '@/components/tokenizer/TokenTreePlaygroundCard'
 import { useToastStore } from '@/lib/toast-store'
 
-type Tab = 'playground' | 'vocab' | 'samples' | 'train'
+type Tab = 'playground' | 'vocab' | 'samples' | 'train' | 'analyze' | 'decompose' | 'detokenize' | 'pretokenize'
 
 export default function TokenizerPage() {
   const router = useRouter()
@@ -43,6 +43,10 @@ export default function TokenizerPage() {
   const [trainVocab, setTrainVocab] = useState(512)
   const [training, setTraining] = useState(false)
   const [trainResult, setTrainResult] = useState<string | null>(null)
+  const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
+  const [decomposeResult, setDecomposeResult] = useState<Record<string, unknown> | null>(null)
+  const [detokenizeResult, setDetokenizeResult] = useState<string | null>(null)
+  const [pretokenizeResult, setPretokenizeResult] = useState<Record<string, unknown> | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const addToast = useToastStore(s => s.addToast)
 
@@ -103,9 +107,54 @@ export default function TokenizerPage() {
     }
   }
 
+
+  const handleAnalyze = async () => {
+    if (!inputText.trim()) return
+    setAnalyzeResult(null)
+    try {
+      const res = await tokenizerController.analyze([inputText])
+      setAnalyzeResult(JSON.stringify(res, null, 2))
+    } catch (err) {
+      setAnalyzeResult(err instanceof Error ? err.message : 'Could not analyze')
+    }
+  }
+
+  const handleDecompose = async () => {
+    if (!inputText.trim()) return
+    setDecomposeResult(null)
+    try {
+      const res = await tokenizerController.decompose(inputText)
+      setDecomposeResult(res)
+    } catch (err) {
+      setDecomposeResult({ error: err instanceof Error ? err.message : 'Could not decompose' })
+    }
+  }
+
+  const handleDetokenize = async () => {
+    if (!inputText.trim()) return
+    setDetokenizeResult(null)
+    try {
+      const res = await tokenizerController.detokenize(inputText.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)))
+      setDetokenizeResult(res.text)
+    } catch (err) {
+      setDetokenizeResult(err instanceof Error ? err.message : 'Could not detokenize')
+    }
+  }
+
+  const handlePretokenize = async () => {
+    if (!inputText.trim()) return
+    setPretokenizeResult(null)
+    try {
+      const res = await tokenizerController.pretokenize(inputText)
+      setPretokenizeResult(res)
+    } catch (err) {
+      setPretokenizeResult({ error: err instanceof Error ? err.message : 'Could not pretokenize' })
+    }
+  }
+
   const toolbar = (
     <div className="flex gap-1 border-b border-border/30 pb-0">
-      {(['playground', 'vocab', 'samples', 'train'] as Tab[]).map(t => (
+      {(['playground', 'vocab', 'samples', 'train', 'analyze', 'decompose', 'detokenize', 'pretokenize'] as Tab[]).map(t => (
         <button
           type="button"
           key={t}
@@ -277,6 +326,43 @@ export default function TokenizerPage() {
           </CardContent>
         </Card>
       )}
+      {tab === 'analyze' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Enter text to analyze token structure, entropy, and compression.</p>
+          <Button size="sm" onClick={() => void handleAnalyze()}>Analyze</Button>
+          {analyzeResult && (
+            <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-80 whitespace-pre-wrap">{analyzeResult}</pre>
+          )}
+        </div>
+      )}
+      {tab === 'decompose' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Enter text to decompose into character-level representation.</p>
+          <Button size="sm" onClick={() => void handleDecompose()}>Decompose</Button>
+          {decomposeResult && (
+            <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-80 whitespace-pre-wrap">{JSON.stringify(decomposeResult, null, 2)}</pre>
+          )}
+        </div>
+      )}
+      {tab === 'detokenize' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Enter comma-separated token IDs to convert back to text.</p>
+          <Button size="sm" onClick={() => void handleDetokenize()}>Detokenize</Button>
+          {detokenizeResult && (
+            <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-80 whitespace-pre-wrap">{detokenizeResult}</pre>
+          )}
+        </div>
+      )}
+      {tab === 'pretokenize' && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">Enter text to see how it is pre-tokenized into words/fragments.</p>
+          <Button size="sm" onClick={() => void handlePretokenize()}>Pretokenize</Button>
+          {pretokenizeResult && (
+            <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-80 whitespace-pre-wrap">{JSON.stringify(pretokenizeResult, null, 2)}</pre>
+          )}
+        </div>
+      )}
+
 
       <TokenTreeQueryCard key={treeVersion} />
       <TokenTreeMergesCard refreshKey={treeVersion} />

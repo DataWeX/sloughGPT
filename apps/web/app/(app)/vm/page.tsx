@@ -842,6 +842,7 @@ export default function VMPage() {
                   type="number"
                   value={maxSteps}
                   onChange={(e) => setMaxSteps(Number(e.target.value))}
+                  aria-label="Maximum execution steps"
                   className="w-20 px-2 py-1 text-xs border rounded bg-background"
                   min={1}
                   max={MAX_STEPS_LIMIT}
@@ -869,6 +870,7 @@ export default function VMPage() {
                     type="checkbox"
                     checked={debug}
                     onChange={(e) => setDebug(e.target.checked)}
+                    aria-label="Toggle debug mode"
                     className="rounded"
                   />
                   Debug
@@ -955,6 +957,7 @@ export default function VMPage() {
                       <input
                         type="file"
                         accept=".asm,.txt"
+                        aria-label="Load assembly source file"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0]

@@ -31,24 +31,30 @@ class StatusRouter:
             classify_and_raise(e, source="status.get")
 
     async def ready(self) -> dict:
-        """Kubernetes-style readiness probe.
+        try:
+            """Kubernetes-style readiness probe.
 
-        Returns ready=True when the service can accept traffic.
+            Returns ready=True when the service can accept traffic.
 
-        Returns:
-            Success envelope with ready: True.
-        """
-        return success_response(data={"ready": True})
+            Returns:
+                Success envelope with ready: True.
+            """
+            return success_response(data={"ready": True})
 
+        except Exception as e:
+            classify_and_raise(e, source="status.ready")
     async def live(self) -> dict:
-        """Kubernetes-style liveness probe.
+        try:
+            """Kubernetes-style liveness probe.
 
-        Returns alive=True when the process is running and responsive.
+            Returns alive=True when the process is running and responsive.
 
-        Returns:
-            Success envelope with alive: True.
-        """
-        return success_response(data={"alive": True})
+            Returns:
+                Success envelope with alive: True.
+            """
+            return success_response(data={"alive": True})
 
 
+        except Exception as e:
+            classify_and_raise(e, source="status.live")
 router = StatusRouter().router

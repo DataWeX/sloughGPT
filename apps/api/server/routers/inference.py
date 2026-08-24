@@ -139,10 +139,13 @@ class ChatRequest(BaseModel):
     agent_id: Optional[str] = Field(default=None, description="Agent ID for role-based system instructions")
 
     def model_post_init(self, __context: Any) -> None:
-        """Resolve max_new_tokens alias into max_tokens."""
-        if self.max_new_tokens is not None and self.max_tokens == 128:
-            object.__setattr__(self, 'max_tokens', self.max_new_tokens)
+        try:
+            """Resolve max_new_tokens alias into max_tokens."""
+            if self.max_new_tokens is not None and self.max_tokens == 128:
+                object.__setattr__(self, 'max_tokens', self.max_new_tokens)
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.model_post_init")
 class ChatResponse(BaseModel):
     message: str
     session_id: str
@@ -328,13 +331,19 @@ class _SessionDictSerializer(Serializer[dict]):
     """JSON serializer for session dict data."""
 
     def serialize(self, obj: dict) -> dict:
-        """serialize."""
-        return obj
+        try:
+            """serialize."""
+            return obj
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.serialize")
     def deserialize(self, data: dict) -> dict:
-        """deserialize."""
-        return data
+        try:
+            """deserialize."""
+            return data
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.deserialize")
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
 
@@ -408,9 +417,12 @@ class InferenceRouter:
         return self._context_core
 
     def set_vector_store_ref(self, store) -> dict:
-        """set_vector_store_ref."""
-        self._vector_store_ref = store
+        try:
+            """set_vector_store_ref."""
+            self._vector_store_ref = store
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.set_vector_store_ref")
     def _load_session_from_disk(self, session_id: str) -> dict:
         data = self._session_repo.get(session_id)
         if data is not None:
@@ -446,13 +458,16 @@ class InferenceRouter:
             self._session_dirty.discard(session_id)
 
     async def flush_dirty_sessions(self) -> int:
-        """flush_dirty_sessions."""
-        dirty = list(self._session_dirty)
-        if not dirty:
-            return 0
-        await asyncio.gather(*[self._flush_session_to_disk(sid) for sid in dirty], return_exceptions=True)
-        return len(dirty)
+        try:
+            """flush_dirty_sessions."""
+            dirty = list(self._session_dirty)
+            if not dirty:
+                return 0
+            await asyncio.gather(*[self._flush_session_to_disk(sid) for sid in dirty], return_exceptions=True)
+            return len(dirty)
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.flush_dirty_sessions")
     def _start_background_flush(self) -> None:
         if self._background_flush_task is not None and not self._background_flush_task.done():
             return
@@ -772,97 +787,109 @@ class InferenceRouter:
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     async def get_info(self) -> dict:
-        """get_info."""
-        from host_metrics import sample_host_metrics_async
-        import state as server_state
+        try:
+            """get_info."""
+            from host_metrics import sample_host_metrics_async
+            import state as server_state
 
-        data = {
-            "api_version": "1.0.0",
-            "model": {
-                "type": server_state.model_type,
-                "loaded": server_state.model is not None or server_state.provider is not None,
-            },
-        }
+            data = {
+                "api_version": "1.0.0",
+                "model": {
+                    "type": server_state.model_type,
+                    "loaded": server_state.model is not None or server_state.provider is not None,
+                },
+            }
 
-        mrl = server_state.model_request_logger
-        if mrl is not None:
-            data["model"]["request_stats"] = mrl.get_stats()
+            mrl = server_state.model_request_logger
+            if mrl is not None:
+                data["model"]["request_stats"] = mrl.get_stats()
 
-        host = await sample_host_metrics_async()
-        if host is not None:
-            data["host"] = host
+            host = await sample_host_metrics_async()
+            if host is not None:
+                data["host"] = host
 
-        cp = server_state.checkpoint
-        if cp:
-            data["model"].update({
-                "vocab_size": len(cp.get("stoi", {})) if isinstance(cp, dict) else 0,
-                "chars": len(cp.get("chars", [])) if isinstance(cp, dict) else 0,
+            cp = server_state.checkpoint
+            if cp:
+                data["model"].update({
+                    "vocab_size": len(cp.get("stoi", {})) if isinstance(cp, dict) else 0,
+                    "chars": len(cp.get("chars", [])) if isinstance(cp, dict) else 0,
+                })
+
+            se = server_state.soul_engine
+            if se is not None and getattr(se, 'is_loaded', False):
+                data["soul_engine"] = se.get_stats()
+
+            return data
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_info")
+    async def get_info_soul(self) -> dict:
+        try:
+            """get_info_soul."""
+            import state as server_state
+            cs = server_state.current_soul
+            if not cs:
+                return success_response(data={})
+            soul_info = {}
+            try:
+                soul_info["soul"] = {
+                    "name": cs.name if hasattr(cs, "name") else "",
+                    "description": cs.description if hasattr(cs, "description") else "",
+                    "integrity_hash": getattr(cs, "integrity_hash", ""),
+                    "born_at": getattr(cs, "born_at", ""),
+                    "tags": getattr(cs, "tags", []),
+                    "certifications": getattr(cs, "certifications", []),
+                }
+            except Exception as e:
+                logger.debug("Failed to build soul info: %s", e)
+            return success_response(data=soul_info)
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_info_soul")
+    async def root(self) -> dict:
+        try:
+            """root."""
+            import state as server_state
+            soul_name = None
+            if server_state.soul_engine is not None and getattr(server_state.soul_engine, 'slo', None):
+                soul_name = server_state.soul_engine.slo.name
+            elif server_state.current_soul and hasattr(server_state.current_soul, "name"):
+                soul_name = server_state.current_soul.name
+            return success_response(data={
+                "name": "SloughGPT API",
+                "version": "1.0.0",
+                "status": "running",
+                "model": server_state.model_type,
+                "soul_loaded": soul_name,
+                "soul_engine_active": server_state.soul_engine is not None and getattr(server_state.soul_engine, 'is_loaded', False),
+                "endpoints": {
+                    "generate": "/generate (POST)",
+                    "v1_infer": "/v1/infer (POST) — SloughGPT Standard v1 envelope",
+                    "generate_stream": "/generate/stream (POST)",
+                    "generate_ws": "/ws/generate (WebSocket)",
+                    "load_soul": "/load-soul (POST) - loads into SloEngine",
+                    "soul": "/soul (GET)",
+                    "models": "/models (GET)",
+                    "datasets": "/datasets (GET)",
+                    "train_resolve": "/train/resolve (POST) — preview manifest → data_path",
+                    "info": "/info (GET)",
+                },
             })
 
-        se = server_state.soul_engine
-        if se is not None and getattr(se, 'is_loaded', False):
-            data["soul_engine"] = se.get_stats()
-
-        return data
-
-    async def get_info_soul(self) -> dict:
-        """get_info_soul."""
-        import state as server_state
-        cs = server_state.current_soul
-        if not cs:
-            return success_response(data={})
-        soul_info = {}
-        try:
-            soul_info["soul"] = {
-                "name": cs.name if hasattr(cs, "name") else "",
-                "description": cs.description if hasattr(cs, "description") else "",
-                "integrity_hash": getattr(cs, "integrity_hash", ""),
-                "born_at": getattr(cs, "born_at", ""),
-                "tags": getattr(cs, "tags", []),
-                "certifications": getattr(cs, "certifications", []),
-            }
         except Exception as e:
-            logger.debug("Failed to build soul info: %s", e)
-        return success_response(data=soul_info)
-
-    async def root(self) -> dict:
-        """root."""
-        import state as server_state
-        soul_name = None
-        if server_state.soul_engine is not None and getattr(server_state.soul_engine, 'slo', None):
-            soul_name = server_state.soul_engine.slo.name
-        elif server_state.current_soul and hasattr(server_state.current_soul, "name"):
-            soul_name = server_state.current_soul.name
-        return success_response(data={
-            "name": "SloughGPT API",
-            "version": "1.0.0",
-            "status": "running",
-            "model": server_state.model_type,
-            "soul_loaded": soul_name,
-            "soul_engine_active": server_state.soul_engine is not None and getattr(server_state.soul_engine, 'is_loaded', False),
-            "endpoints": {
-                "generate": "/generate (POST)",
-                "v1_infer": "/v1/infer (POST) — SloughGPT Standard v1 envelope",
-                "generate_stream": "/generate/stream (POST)",
-                "generate_ws": "/ws/generate (WebSocket)",
-                "load_soul": "/load-soul (POST) - loads into SloEngine",
-                "soul": "/soul (GET)",
-                "models": "/models (GET)",
-                "datasets": "/datasets (GET)",
-                "train_resolve": "/train/resolve (POST) — preview manifest → data_path",
-                "info": "/info (GET)",
-            },
-        })
-
+            classify_and_raise(e, source="inference.root")
     async def list_chat_tools(self) -> dict:
-        """list_chat_tools."""
         try:
+            """list_chat_tools."""
+            try:
 
-            return success_response(data={"tools": get_tool_registry().list_tools()})
+                return success_response(data={"tools": get_tool_registry().list_tools()})
+            except Exception as e:
+                logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
+                return success_response(data={"tools": []})
+
         except Exception as e:
-            logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
-            return success_response(data={"tools": []})
-
+            classify_and_raise(e, source="inference.list_chat_tools")
     async def chat_stream(self, req: ChatRequest, request: Request) -> StreamingResponse:
         """chat_stream."""
         from startup_progress import STARTUP_PHASE
@@ -1336,43 +1363,55 @@ class InferenceRouter:
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     async def inspect_context(self) -> dict:
-        """inspect_context."""
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        return ctx_core.get_context_inspector()
+        try:
+            """inspect_context."""
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            return ctx_core.get_context_inspector()
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.inspect_context")
     async def store_fact(self, key: str, value: str) -> dict:
-        """store_fact."""
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        ctx_core.store_fact(key, value)
-        return success_response(data={"stored": key})
+        try:
+            """store_fact."""
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            ctx_core.store_fact(key, value)
+            return success_response(data={"stored": key})
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.store_fact")
     async def get_facts(self, query: str = "") -> dict:
-        """get_facts."""
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        if query:
-            return success_response(data={"facts": ctx_core.search_semantic(query)})
-        return success_response(data={"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]})
+        try:
+            """get_facts."""
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            if query:
+                return success_response(data={"facts": ctx_core.search_semantic(query)})
+            return success_response(data={"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]})
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_facts")
     async def reset_context(self, all: bool = False) -> dict:
-        """reset_context."""
-        self._context_core = None
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        if all:
-            ctx_core.reset_all()
-            safe_audit_log("inference.reset_context", resource="context", detail="scope=all")
-        else:
-            ctx_core.reset_session()
-            safe_audit_log("inference.reset_context", resource="context", detail="scope=session")
-        return success_response(data={"reset": "session" if not all else "all"})
+        try:
+            """reset_context."""
+            self._context_core = None
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            if all:
+                ctx_core.reset_all()
+                safe_audit_log("inference.reset_context", resource="context", detail="scope=all")
+            else:
+                ctx_core.reset_session()
+                safe_audit_log("inference.reset_context", resource="context", detail="scope=session")
+            return success_response(data={"reset": "session" if not all else "all"})
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.reset_context")
     async def chat(self, req: ChatRequest) -> ChatResponse:
         """chat."""
         _chat_t0 = time.monotonic()
@@ -1395,7 +1434,7 @@ class InferenceRouter:
                 _cb = getattr(_server, '_circuit_breaker', None)
                 if _cb is not None and _cb.state.value == "open":
                     raise_error("Model is degraded — circuit breaker open. Please wait or reload the model.", "E_BAD_REQUEST", status_code=503)
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="inference.chat")
         except Exception as e:
             logger.debug("Circuit breaker check failed: %s", e)
@@ -1538,58 +1577,73 @@ class InferenceRouter:
         })
 
     async def get_voice_audio(self, session_id: str, message_id: str) -> dict:
-        """get_voice_audio."""
-        self._ensure_dirs()
-        base = self._VOICE_DIR.resolve()
-        audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
-        if not str(audio_path).startswith(str(base)):
-            raise_error("Invalid path", "E_AUTH_FORBIDDEN", status_code=403)
+        try:
+            """get_voice_audio."""
+            self._ensure_dirs()
+            base = self._VOICE_DIR.resolve()
+            audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
+            if not str(audio_path).startswith(str(base)):
+                raise_error("Invalid path", "E_AUTH_FORBIDDEN", status_code=403)
 
-        def _resolve():
-            if audio_path.exists():
-                return audio_path
-            for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
-                candidate = audio_path.parent / f"{audio_path.stem}{ext}"
-                if candidate.exists():
-                    return candidate
-            return None
+            def _resolve():
+                if audio_path.exists():
+                    return audio_path
+                for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
+                    candidate = audio_path.parent / f"{audio_path.stem}{ext}"
+                    if candidate.exists():
+                        return candidate
+                return None
 
-        resolved = await asyncio.to_thread(_resolve)
-        if resolved is None:
-            raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
-        return FileResponse(str(resolved), media_type="audio/m4a")
+            resolved = await asyncio.to_thread(_resolve)
+            if resolved is None:
+                raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
+            return FileResponse(str(resolved), media_type="audio/m4a")
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_voice_audio")
     async def list_sessions(self, archived: Optional[bool] = None) -> dict:
-        """list_sessions."""
-        sessions = await asyncio.to_thread(self._build_session_metadata_index)
-        if archived is not None:
-            sessions = [s for s in sessions if s.get("archived", False) == archived]
-        return success_response(data=sessions)
+        try:
+            """list_sessions."""
+            sessions = await asyncio.to_thread(self._build_session_metadata_index)
+            if archived is not None:
+                sessions = [s for s in sessions if s.get("archived", False) == archived]
+            return success_response(data=sessions)
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.list_sessions")
     async def search_sessions(self, q: str = "", limit: int = 20) -> dict:
-        """search_sessions."""
-        if not q.strip():
-            return success_response(data=[], meta={"query": q, "total": 0})
-        results = await asyncio.to_thread(_search_sessions_sync, q, limit)
-        return success_response(data=results, meta={"query": q, "total": len(results)})
+        try:
+            """search_sessions."""
+            if not q.strip():
+                return success_response(data=[], meta={"query": q, "total": 0})
+            results = await asyncio.to_thread(_search_sessions_sync, q, limit)
+            return success_response(data=results, meta={"query": q, "total": len(results)})
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.search_sessions")
     async def get_current_session(self) -> dict:
-        """get_current_session."""
-        sessions = await asyncio.to_thread(self._build_session_cache)
-        if not sessions:
-            return success_response(data=None)
-        return success_response(data=sessions[0])
+        try:
+            """get_current_session."""
+            sessions = await asyncio.to_thread(self._build_session_cache)
+            if not sessions:
+                return success_response(data=None)
+            return success_response(data=sessions[0])
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_current_session")
     async def upsert_session(self, session_id: str, req: UpsertSessionRequest) -> dict:
-        """upsert_session."""
-        existing = self._get_session(session_id)
-        update_data = req.model_dump(exclude_none=True)
-        for key, value in update_data.items():
-            existing[key] = value
-        self._save_session(session_id, existing)
-        await self._flush_session_to_disk(session_id)
-        return success_response(data={"session_id": session_id}, message="saved")
+        try:
+            """upsert_session."""
+            existing = self._get_session(session_id)
+            update_data = req.model_dump(exclude_none=True)
+            for key, value in update_data.items():
+                existing[key] = value
+            self._save_session(session_id, existing)
+            await self._flush_session_to_disk(session_id)
+            return success_response(data={"session_id": session_id}, message="saved")
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.upsert_session")
     async def create_session(self, req: CreateSessionRequest) -> dict:
         """create_session."""
         try:
@@ -1605,25 +1659,31 @@ class InferenceRouter:
             classify_and_raise(exc, source="create_session")
 
     async def get_session(self, session_id: str) -> dict:
-        """get_session."""
-        data = self._get_session(session_id)
-        if not data.get("messages"):
-            raise_error("Session not found", "E_NOT_FOUND", status_code=404)
-        return success_response(data=data)
+        try:
+            """get_session."""
+            data = self._get_session(session_id)
+            if not data.get("messages"):
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data=data)
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_session")
     async def delete_session(self, session_id: str) -> dict:
-        """delete_session."""
-        if self._session_repo.delete(session_id):
-            self._session_memory_cache.pop(session_id, None)
-            self._session_dirty.discard(session_id)
-            self._session_deleted.add(session_id)
-            if len(self._session_deleted) > 1000:
-                self._session_deleted = set(list(self._session_deleted)[-500:])
-            self._clear_session_kv(session_id)
-            safe_audit_log("inference.session_delete", resource=session_id)
-            return success_response(data={"session_id": session_id}, message="deleted")
-        raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+        try:
+            """delete_session."""
+            if self._session_repo.delete(session_id):
+                self._session_memory_cache.pop(session_id, None)
+                self._session_dirty.discard(session_id)
+                self._session_deleted.add(session_id)
+                if len(self._session_deleted) > 1000:
+                    self._session_deleted = set(list(self._session_deleted)[-500:])
+                self._clear_session_kv(session_id)
+                safe_audit_log("inference.session_delete", resource=session_id)
+                return success_response(data={"session_id": session_id}, message="deleted")
+            raise_error("Session not found", "E_NOT_FOUND", status_code=404)
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.delete_session")
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
 
@@ -1643,112 +1703,130 @@ class InferenceRouter:
                            session_id, exc, extra={"tag": "KV"})
 
     async def chat_suggestions(self) -> dict:
-        """chat_suggestions."""
-        return success_response(data=[
-            {"text": "What can you help me with?", "icon": "chat"},
-            {"text": "Tell me about yourself", "icon": "user"},
-            {"text": "Write a short poem", "icon": "pen"},
-            {"text": "Explain quantum computing simply", "icon": "atom"},
-            {"text": "Help me debug my code", "icon": "bug"},
-            {"text": "Summarize a topic for me", "icon": "document"},
-        ])
+        try:
+            """chat_suggestions."""
+            return success_response(data=[
+                {"text": "What can you help me with?", "icon": "chat"},
+                {"text": "Tell me about yourself", "icon": "user"},
+                {"text": "Write a short poem", "icon": "pen"},
+                {"text": "Explain quantum computing simply", "icon": "atom"},
+                {"text": "Help me debug my code", "icon": "bug"},
+                {"text": "Summarize a topic for me", "icon": "document"},
+            ])
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.chat_suggestions")
     async def list_model_providers(self) -> dict:
-        """list_model_providers."""
-        from domains.models.provider import list_providers, get_provider
+        try:
+            """list_model_providers."""
+            from domains.models.provider import list_providers, get_provider
 
-        result = {}
-        for name in list_providers():
-            provider = get_provider(name)
-            if provider is not None:
-                try:
-                    caps = provider.capabilities
-                    result[name] = {
-                        "model_id": provider.model_id,
-                        "capabilities": {
-                            "chat": caps.chat,
-                            "streaming": caps.streaming,
-                            "embedding": caps.embedding,
-                            "vision": caps.vision,
-                        },
-                        "metadata": provider.metadata,
-                    }
-                except Exception:
-                    result[name] = {"model_id": str(provider)}
-            else:
-                result[name] = {"error": "provider not found"}
-        return success_response(data=result)
+            result = {}
+            for name in list_providers():
+                provider = get_provider(name)
+                if provider is not None:
+                    try:
+                        caps = provider.capabilities
+                        result[name] = {
+                            "model_id": provider.model_id,
+                            "capabilities": {
+                                "chat": caps.chat,
+                                "streaming": caps.streaming,
+                                "embedding": caps.embedding,
+                                "vision": caps.vision,
+                            },
+                            "metadata": provider.metadata,
+                        }
+                    except Exception:
+                        result[name] = {"model_id": str(provider)}
+                else:
+                    result[name] = {"error": "provider not found"}
+            return success_response(data=result)
 
-    # ── Operations (CancelManager) ──
+        # ── Operations (CancelManager) ──
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.list_model_providers")
     async def list_operations(self, type: Optional[str] = None) -> dict:
-        """List all tracked operations (active + recently finished).
+        try:
+            """List all tracked operations (active + recently finished).
 
-        Args:
-            type: Optional filter by operation type (training, inference, download, etc.)
+            Args:
+                type: Optional filter by operation type (training, inference, download, etc.)
 
-        Returns:
-            Dict with 'operations' list and 'counts' by status.
-        """
+            Returns:
+                Dict with 'operations' list and 'counts' by status.
+            """
 
-        mgr = get_cancel_manager()
-        op_type = OpType(type) if type else None
-        all_ops = mgr.list_all(op_type=op_type)
-        return success_response(data={
-            "operations": [op.to_dict() for op in all_ops],
-            "counts": mgr.count(op_type=op_type),
-        })
+            mgr = get_cancel_manager()
+            op_type = OpType(type) if type else None
+            all_ops = mgr.list_all(op_type=op_type)
+            return success_response(data={
+                "operations": [op.to_dict() for op in all_ops],
+                "counts": mgr.count(op_type=op_type),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.list_operations")
     async def cancel_operation(self, op_id: str) -> dict:
-        """Cancel a single operation by ID.
+        try:
+            """Cancel a single operation by ID.
 
-        Args:
-            op_id: The operation ID to cancel.
+            Args:
+                op_id: The operation ID to cancel.
 
-        Returns:
-            Dict with cancel result.
-        """
+            Returns:
+                Dict with cancel result.
+            """
 
-        mgr = get_cancel_manager()
-        found = mgr.get(op_id)
-        if not found:
-            raise_error("Operation not found", "E_NOT_FOUND", status_code=404)
-        if mgr.cancel(op_id):
-            safe_audit_log("inference.operation_cancel", resource=op_id)
-            return success_response(data=found.to_dict(), message="cancelled")
-        raise_error(
-            f"Cannot cancel operation in '{found.status.value}' state",
-            "E_CANCEL_FAILED",
-            status_code=409,
-        )
+            mgr = get_cancel_manager()
+            found = mgr.get(op_id)
+            if not found:
+                raise_error("Operation not found", "E_NOT_FOUND", status_code=404)
+            if mgr.cancel(op_id):
+                safe_audit_log("inference.operation_cancel", resource=op_id)
+                return success_response(data=found.to_dict(), message="cancelled")
+            raise_error(
+                f"Cannot cancel operation in '{found.status.value}' state",
+                "E_CANCEL_FAILED",
+                status_code=409,
+            )
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.cancel_operation")
     async def cancel_all_operations(self, type: Optional[str] = None) -> dict:
-        """Cancel all active operations, optionally filtered by type.
+        try:
+            """Cancel all active operations, optionally filtered by type.
 
-        Args:
-            type: Optional filter by operation type.
+            Args:
+                type: Optional filter by operation type.
 
-        Returns:
-            Dict with list of cancelled operation IDs.
-        """
+            Returns:
+                Dict with list of cancelled operation IDs.
+            """
 
-        mgr = get_cancel_manager()
-        op_type = OpType(type) if type else None
-        cancelled = mgr.cancel_all(op_type=op_type)
-        safe_audit_log("inference.operation_cancel_all", detail=f"count={len(cancelled)} type={type or 'all'}")
-        return success_response(data={"cancelled": cancelled, "count": len(cancelled)})
+            mgr = get_cancel_manager()
+            op_type = OpType(type) if type else None
+            cancelled = mgr.cancel_all(op_type=op_type)
+            safe_audit_log("inference.operation_cancel_all", detail=f"count={len(cancelled)} type={type or 'all'}")
+            return success_response(data={"cancelled": cancelled, "count": len(cancelled)})
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.cancel_all_operations")
     async def purge_operations(self, max_age_s: float = 3600.0) -> dict:
-        """Remove finished operations older than max_age_s."""
-        import time as _time
-        _t0 = _time.monotonic()
-        removed = get_cancel_manager().purge(max_age_s=max_age_s)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("inference.purge_operations", detail=f"removed={removed} max_age={max_age_s}s elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={"purged": removed, "elapsed_ms": round(_elapsed_ms, 1)})
+        try:
+            """Remove finished operations older than max_age_s."""
+            import time as _time
+            _t0 = _time.monotonic()
+            removed = get_cancel_manager().purge(max_age_s=max_age_s)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("inference.purge_operations", detail=f"removed={removed} max_age={max_age_s}s elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={"purged": removed, "elapsed_ms": round(_elapsed_ms, 1)})
 
-    # ── Route registration ──
+        # ── Route registration ──
 
+        except Exception as e:
+            classify_and_raise(e, source="inference.purge_operations")
     def _register_routes(self):
         r = self.router
         r.add_api_route("/inference/generate", self.generate, methods=["POST"], response_model=GenerateResponse)

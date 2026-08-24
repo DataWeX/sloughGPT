@@ -186,208 +186,226 @@ class InferRouter:
             model_name = req.model or (getattr(model, 'model_id', None) or type(model).__name__ if model else 'unknown')
             safe_audit_log("infer.generate", resource=model_name, detail=f"elapsed={elapsed_ms:.0f}ms tokens={tokens}")
             return InferResponse(text=result, model=model_name, tokens_generated=tokens, elapsed_ms=round(elapsed_ms, 1))
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="infer.infer")
         except Exception as e:
             logger.warning("Inference failed: %s", e)
             classify_and_raise(e, source="infer")
 
     async def infer_stream(self, req: InferRequest, request: Request) -> AsyncGenerator[str, None]:
-        """Stream generated tokens as SSE.
+        try:
+            """Stream generated tokens as SSE.
 
-        Yields standard envelope: {stream, phase, status, data: {token}, meta}.
-        """
-        if self._get_model() is None:
-            async def error_stream() -> AsyncIterator[str]:
-                """error_stream."""
-                yield self._sse_error("infer", "IDLE", "Model still loading — please wait.")
-            return StreamingResponse(error_stream(), media_type="text/event-stream")
+            Yields standard envelope: {stream, phase, status, data: {token}, meta}.
+            """
+            if self._get_model() is None:
+                async def error_stream() -> AsyncIterator[str]:
+                    """error_stream."""
+                    yield self._sse_error("infer", "IDLE", "Model still loading — please wait.")
+                return StreamingResponse(error_stream(), media_type="text/event-stream")
 
-        async def generate() -> AsyncIterator[str]:
-            """generate."""
-            from domains.models.provider import get_provider
-            provider = get_provider("default")
-            if provider is None:
-                yield self._sse_error("infer", "IDLE", "No provider available")
-                return
+            async def generate() -> AsyncIterator[str]:
+                """generate."""
+                from domains.models.provider import get_provider
+                provider = get_provider("default")
+                if provider is None:
+                    yield self._sse_error("infer", "IDLE", "No provider available")
+                    return
 
-            provider_messages = [{"role": "user", "content": req.prompt}]
-            start = datetime.datetime.now()
-            token_count = 0
-            try:
-                async for token in provider.chat_stream(
-                    provider_messages,
-                    max_tokens=req.max_new_tokens,
-                    temperature=req.temperature,
-                    top_p=req.top_p,
-                    top_k=req.top_k,
-                    repetition_penalty=req.repetition_penalty,
-                ):
-                    if await request.is_disconnected():
-                        return
-                    if token:
-                        token_count += 1
-                        yield self._sse_token("infer", token)
-            except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="infer_stream")
-                yield self._sse_error("infer", err.code, err.user_message)
-                return
-            elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
-            try:
-                from domains.infrastructure.server_state import get_server_state
-                get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed_ms, model=req.model)
-            except Exception as e:
-                logger.warning("Failed to record inference metrics: %s", e)
-            safe_audit_log("infer.stream", resource=req.model or "default", detail=f"elapsed={elapsed_ms:.0f}ms tokens={token_count}")
-            import json
-            yield "data: " + json.dumps({
-                "stream": "infer", "phase": "STREAMING", "status": "complete",
-                "data": {}, "meta": {"tokens": token_count, "elapsed_ms": round(elapsed_ms, 1)},
-            }) + "\n\n"
+                provider_messages = [{"role": "user", "content": req.prompt}]
+                start = datetime.datetime.now()
+                token_count = 0
+                try:
+                    async for token in provider.chat_stream(
+                        provider_messages,
+                        max_tokens=req.max_new_tokens,
+                        temperature=req.temperature,
+                        top_p=req.top_p,
+                        top_k=req.top_k,
+                        repetition_penalty=req.repetition_penalty,
+                    ):
+                        if await request.is_disconnected():
+                            return
+                        if token:
+                            token_count += 1
+                            yield self._sse_token("infer", token)
+                except Exception as e:
+                    from domains.infrastructure.errors import classify_exception, emit_error_event
+                    err = classify_exception(e)
+                    emit_error_event(err, source="infer_stream")
+                    yield self._sse_error("infer", err.code, err.user_message)
+                    return
+                elapsed_ms = (datetime.datetime.now() - start).total_seconds() * 1000
+                try:
+                    from domains.infrastructure.server_state import get_server_state
+                    get_server_state().record_inference(tokens=token_count, elapsed_ms=elapsed_ms, model=req.model)
+                except Exception as e:
+                    logger.warning("Failed to record inference metrics: %s", e)
+                safe_audit_log("infer.stream", resource=req.model or "default", detail=f"elapsed={elapsed_ms:.0f}ms tokens={token_count}")
+                import json
+                yield "data: " + json.dumps({
+                    "stream": "infer", "phase": "STREAMING", "status": "complete",
+                    "data": {}, "meta": {"tokens": token_count, "elapsed_ms": round(elapsed_ms, 1)},
+                }) + "\n\n"
 
-        return StreamingResponse(generate(), media_type="text/event-stream")
+            return StreamingResponse(generate(), media_type="text/event-stream")
 
+        except Exception as e:
+            classify_and_raise(e, source="infer.infer_stream")
     async def infer_embed(self, req: EmbedRequest) -> EmbedResponse:
-        """Return embedding vector for text.
+        try:
+            """Return embedding vector for text.
 
-        Uses the loaded model's embed() method if available, otherwise falls back
-        to the n-gram TF-IDF embedder.
-        """
-        _t0 = _time.monotonic()
-        model = self._get_model_interface()
-        if model is not None and hasattr(model, 'embed'):
+            Uses the loaded model's embed() method if available, otherwise falls back
+            to the n-gram TF-IDF embedder.
+            """
+            _t0 = _time.monotonic()
+            model = self._get_model_interface()
+            if model is not None and hasattr(model, 'embed'):
+                try:
+                    import numpy as np
+                    vec = model.embed(req.text)
+                    if isinstance(vec, np.ndarray):
+                        vec = vec.tolist()
+                    model_name = req.model or getattr(model, 'model_id', 'unknown')
+                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                    safe_audit_log("infer.embed", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms dims={len(vec)}")
+                    return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
+                except NotImplementedError:
+                    pass
+                except Exception as e:
+                    logger.debug("Model embed failed, falling back to n-gram: %s", e)
+
+            # Fallback: n-gram TF-IDF embedder
             try:
+                from domains.inference.vector_store import _ngram_embed
                 import numpy as np
-                vec = model.embed(req.text)
+                vec = _ngram_embed(req.text)
                 if isinstance(vec, np.ndarray):
                     vec = vec.tolist()
-                model_name = req.model or getattr(model, 'model_id', 'unknown')
+                model_name = req.model or "ngram-tfidf"
                 _elapsed_ms = (_time.monotonic() - _t0) * 1000
-                safe_audit_log("infer.embed", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms dims={len(vec)}")
+                safe_audit_log("infer.embed", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms dims={len(vec)} fallback=ngram")
                 return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
-            except NotImplementedError:
-                pass
-            except Exception as e:
-                logger.debug("Model embed failed, falling back to n-gram: %s", e)
+            except ImportError:
+                raise_error("No embedding backend available", "E_BAD_REQUEST", status_code=503)
 
-        # Fallback: n-gram TF-IDF embedder
-        try:
-            from domains.inference.vector_store import _ngram_embed
-            import numpy as np
-            vec = _ngram_embed(req.text)
-            if isinstance(vec, np.ndarray):
-                vec = vec.tolist()
-            model_name = req.model or "ngram-tfidf"
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("infer.embed", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms dims={len(vec)} fallback=ngram")
-            return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
-        except ImportError:
-            raise_error("No embedding backend available", "E_BAD_REQUEST", status_code=503)
-
+        except Exception as e:
+            classify_and_raise(e, source="infer.infer_embed")
     async def infer_tokenize(self, req: TokenizeRequest) -> TokenizeResponse:
-        """Tokenize text into token IDs and strings.
-
-        Uses the loaded model's tokenizer if available, otherwise falls back to
-        simple byte-level tokenization.
-        """
-        _t0 = _time.monotonic()
-        model = self._get_model_interface()
-        if model is not None:
-            try:
-                tokenizer = getattr(model, '_tokenizer', None) or getattr(model, 'tokenizer', None)
-                if tokenizer is not None and hasattr(tokenizer, 'encode'):
-                    ids = tokenizer.encode(req.text)
-                    tokens = [getattr(tokenizer, 'itos', {}).get(i, f"<{i}>") for i in ids]
-                    model_name = req.model or "model-tokenizer"
-                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
-                    safe_audit_log("infer.tokenize", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)}")
-                    return TokenizeResponse(tokens=tokens, ids=ids, count=len(ids))
-            except Exception as e:
-                logger.debug("Model tokenize failed, falling back to byte-level: %s", e)
-
-        # Fallback: byte-level tokenization (always works, no dependencies)
-        ids = list(req.text.encode("utf-8"))
-        tokens = [f"b{b}" for b in ids]
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("infer.tokenize", resource="byte-level", detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)}")
-        return TokenizeResponse(tokens=tokens, ids=ids, count=len(ids))
-
-    async def infer_detokenize(self, req: DetokenizeRequest) -> DetokenizeResponse:
-        """Convert token IDs back to text."""
-        _t0 = _time.monotonic()
-        model = self._get_model_interface()
-        if model is not None:
-            try:
-                tokenizer = getattr(model, '_tokenizer', None) or getattr(model, 'tokenizer', None)
-                if tokenizer is not None and hasattr(tokenizer, 'decode'):
-                    text = tokenizer.decode(req.ids)
-                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
-                    safe_audit_log("infer.detokenize", resource="model", detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}")
-                    return DetokenizeResponse(text=text, count=len(req.ids))
-            except Exception as exc:
-                logger.debug("Tokenizer decode failed: %s", exc)
-
-        # Fallback: interpret IDs as byte values
         try:
-            text = bytes(req.ids).decode("utf-8", errors="replace")
+            """Tokenize text into token IDs and strings.
+
+            Uses the loaded model's tokenizer if available, otherwise falls back to
+            simple byte-level tokenization.
+            """
+            _t0 = _time.monotonic()
+            model = self._get_model_interface()
+            if model is not None:
+                try:
+                    tokenizer = getattr(model, '_tokenizer', None) or getattr(model, 'tokenizer', None)
+                    if tokenizer is not None and hasattr(tokenizer, 'encode'):
+                        ids = tokenizer.encode(req.text)
+                        tokens = [getattr(tokenizer, 'itos', {}).get(i, f"<{i}>") for i in ids]
+                        model_name = req.model or "model-tokenizer"
+                        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                        safe_audit_log("infer.tokenize", resource=model_name, detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)}")
+                        return TokenizeResponse(tokens=tokens, ids=ids, count=len(ids))
+                except Exception as e:
+                    logger.debug("Model tokenize failed, falling back to byte-level: %s", e)
+
+            # Fallback: byte-level tokenization (always works, no dependencies)
+            ids = list(req.text.encode("utf-8"))
+            tokens = [f"b{b}" for b in ids]
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("infer.detokenize", resource="byte-level", detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}")
-            return DetokenizeResponse(text=text, count=len(req.ids))
-        except Exception:
-            return DetokenizeResponse(text="", count=len(req.ids))
+            safe_audit_log("infer.tokenize", resource="byte-level", detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)}")
+            return TokenizeResponse(tokens=tokens, ids=ids, count=len(ids))
 
+        except Exception as e:
+            classify_and_raise(e, source="infer.infer_tokenize")
+    async def infer_detokenize(self, req: DetokenizeRequest) -> DetokenizeResponse:
+        try:
+            """Convert token IDs back to text."""
+            _t0 = _time.monotonic()
+            model = self._get_model_interface()
+            if model is not None:
+                try:
+                    tokenizer = getattr(model, '_tokenizer', None) or getattr(model, 'tokenizer', None)
+                    if tokenizer is not None and hasattr(tokenizer, 'decode'):
+                        text = tokenizer.decode(req.ids)
+                        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                        safe_audit_log("infer.detokenize", resource="model", detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}")
+                        return DetokenizeResponse(text=text, count=len(req.ids))
+                except Exception as exc:
+                    logger.debug("Tokenizer decode failed: %s", exc)
+
+            # Fallback: interpret IDs as byte values
+            try:
+                text = bytes(req.ids).decode("utf-8", errors="replace")
+                _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                safe_audit_log("infer.detokenize", resource="byte-level", detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}")
+                return DetokenizeResponse(text=text, count=len(req.ids))
+            except Exception:
+                return DetokenizeResponse(text="", count=len(req.ids))
+
+        except Exception as e:
+            classify_and_raise(e, source="infer.infer_detokenize")
     async def infer_health(self) -> InferHealthResponse:
-        """Engine health — whether a model is loaded and what capabilities it has."""
-        model = self._get_model_interface()
-        if model is None:
+        try:
+            """Engine health — whether a model is loaded and what capabilities it has."""
+            model = self._get_model_interface()
+            if model is None:
+                return InferHealthResponse(
+                    status="no_model",
+                    model_loaded=False,
+                    has_streaming=False,
+                    has_embedding=False,
+                )
+
+            info = model.info() if hasattr(model, 'info') else None
             return InferHealthResponse(
-                status="no_model",
-                model_loaded=False,
-                has_streaming=False,
-                has_embedding=False,
+                status="ready",
+                model_loaded=True,
+                model_id=info.model_id if info else "unknown",
+                engine_type=info.model_type if info else type(model).__name__,
+                has_streaming=info.has_streaming if info else hasattr(model, 'generate_stream'),
+                has_embedding=info.has_embedding if info else hasattr(model, 'embed'),
             )
 
-        info = model.info() if hasattr(model, 'info') else None
-        return InferHealthResponse(
-            status="ready",
-            model_loaded=True,
-            model_id=info.model_id if info else "unknown",
-            engine_type=info.model_type if info else type(model).__name__,
-            has_streaming=info.has_streaming if info else hasattr(model, 'generate_stream'),
-            has_embedding=info.has_embedding if info else hasattr(model, 'embed'),
-        )
-
+        except Exception as e:
+            classify_and_raise(e, source="infer.infer_health")
     async def infer_info(self) -> InferInfoResponse:
-        """Metadata about the currently loaded model."""
-        model = self._get_model_interface()
-        if model is None:
-            raise_error("No model loaded", "E_BAD_REQUEST", status_code=503)
+        try:
+            """Metadata about the currently loaded model."""
+            model = self._get_model_interface()
+            if model is None:
+                raise_error("No model loaded", "E_BAD_REQUEST", status_code=503)
 
-        info = model.info() if hasattr(model, 'info') else None
-        if info is None:
+            info = model.info() if hasattr(model, 'info') else None
+            if info is None:
+                return InferInfoResponse(
+                    model_id="unknown",
+                    model_type=type(model).__name__,
+                    num_parameters=model.num_parameters() if hasattr(model, 'num_parameters') else 0,
+                )
+
             return InferInfoResponse(
-                model_id="unknown",
-                model_type=type(model).__name__,
-                num_parameters=model.num_parameters() if hasattr(model, 'num_parameters') else 0,
+                model_id=info.model_id,
+                model_type=info.model_type,
+                num_parameters=info.num_parameters,
+                vocab_size=info.vocab_size,
+                max_context=info.max_context,
+                num_layers=info.num_layers,
+                has_tokenizer=info.has_tokenizer,
+                has_streaming=info.has_streaming,
+                has_embedding=info.has_embedding,
+                extra=info.extra,
             )
 
-        return InferInfoResponse(
-            model_id=info.model_id,
-            model_type=info.model_type,
-            num_parameters=info.num_parameters,
-            vocab_size=info.vocab_size,
-            max_context=info.max_context,
-            num_layers=info.num_layers,
-            has_tokenizer=info.has_tokenizer,
-            has_streaming=info.has_streaming,
-            has_embedding=info.has_embedding,
-            extra=info.extra,
-        )
+        # --- SSE helpers (local, avoid import issues) ---
 
-    # --- SSE helpers (local, avoid import issues) ---
-
+        except Exception as e:
+            classify_and_raise(e, source="infer.infer_info")
     def _sse_token(self, stream: str, token: str, done: bool = False, meta: dict = None, elapsed_ms: float = None) -> str:
         phase = "STREAMING"
         status = "complete" if done else "working"

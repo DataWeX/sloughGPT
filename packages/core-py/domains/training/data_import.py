@@ -25,7 +25,7 @@ def _retry(fn, retries=2, delay=1.0, exceptions=(urllib.error.URLError, Connecti
         except exceptions as e:
             last_exc = e
             if attempt < retries:
-                logger.warning(f"Retry {attempt + 1}/{retries} after {type(e).__name__}: {e}",
+                logger.warning("Retry %s/%s after %s: %s", attempt + 1, retries, type(e).__name__, e,
                     extra={"tag": "TRAIN"},)
                 time.sleep(delay * (attempt + 1))
     raise last_exc
@@ -79,7 +79,7 @@ class RepoImporter:
         target = self.cache_dir / repo_name
 
         if target.exists():
-            logger.info(f"Repo already exists: {target}",
+            logger.info("Repo already exists: %s", target,
                 extra={"tag": "TRAIN"},)
             return target
 
@@ -89,7 +89,7 @@ class RepoImporter:
         if depth:
             cmd.extend(["--depth", str(depth)])
 
-        logger.info(f"Cloning {url}...",
+        logger.info("Cloning %s...", url,
             extra={"tag": "TRAIN"},)
         subprocess.check_call(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -581,7 +581,7 @@ class RepoImporter:
                 output_path=output_path,
             )
         except Exception as e:
-            logger.error(f"Failed to import from GitHub: {e}",
+            logger.error("Failed to import from GitHub: %s", e,
                 extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
@@ -637,7 +637,7 @@ class BooksSearch:
                     if r.get("title")
                 ]
         except Exception as e:
-            logger.error(f"Books search failed: {e}",
+            logger.error("Books search failed: %s", e,
                 extra={"tag": "TRAIN"},)
             return []
 
@@ -673,7 +673,7 @@ class HuggingFaceImporter:
         try:
             return fetch_dataset_search(query, limit=limit)
         except Exception as e:
-            logger.error(f"Search failed: {e}",
+            logger.error("Search failed: %s", e,
                 extra={"tag": "TRAIN"},)
             return []
 
@@ -702,7 +702,7 @@ class HuggingFaceImporter:
             output_path = Path(output_dir) / name
             output_path.mkdir(parents=True, exist_ok=True)
 
-            logger.info(f"Downloading {dataset_id}...",
+            logger.info("Downloading %s...", dataset_id,
                 extra={"tag": "TRAIN"},)
 
             # Handle datasets with subsets/config
@@ -710,7 +710,7 @@ class HuggingFaceImporter:
                 dataset = load_dataset(dataset_id, trust_remote_code=True)
             except Exception as config_err:
                 # Try with default config for datasets with subsets
-                logger.warning(f"Full load failed, trying default config: {config_err}",
+                logger.warning("Full load failed, trying default config: %s", config_err,
                     extra={"tag": "TRAIN"},)
                 dataset = load_dataset(dataset_id, split="train", trust_remote_code=True)
 
@@ -748,7 +748,7 @@ class HuggingFaceImporter:
                 output_path=str(corpus_file),
             )
         except Exception as e:
-            logger.error(f"Download failed: {e}",
+            logger.error("Download failed: %s", e,
                 extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
@@ -809,7 +809,7 @@ class URLImporter:
                 output_path=str(corpus_file),
             )
         except Exception as e:
-            logger.error(f"URL import failed: {e}",
+            logger.error("URL import failed: %s", e,
                 extra={"tag": "TRAIN"},)
             return ImportResult(
                 success=False,
@@ -861,7 +861,7 @@ class GitHubSearch:
                 for r in data.get("items", [])
             ]
         except Exception as e:
-            logger.error(f"GitHub search failed: {e}",
+            logger.error("GitHub search failed: %s", e,
                 extra={"tag": "TRAIN"},)
             return []
 
@@ -984,7 +984,7 @@ class ISBNImporter:
             data = _retry(lambda: json.loads(urllib.request.urlopen(req, timeout=30).read().decode()))
             items = data.get("results", [])
             if not items:
-                logger.info(f"No Gutendex results for: {title}",
+                logger.info("No Gutendex results for: %s", title,
                     extra={"tag": "TRAIN"},)
                 return None
 
@@ -992,11 +992,11 @@ class ISBNImporter:
             text_url = f"https://www.gutenberg.org/cache/epub/{gutenberg_id}/pg{gutenberg_id}.txt"
             text_req = urllib.request.Request(text_url, headers={"User-Agent": "SloughGPT/1.0"})
             text = _retry(lambda: urllib.request.urlopen(text_req, timeout=60).read().decode("utf-8", errors="replace"))
-            logger.info(f"Downloaded {len(text)} chars from Gutenberg #{gutenberg_id}",
+            logger.info("Downloaded %s chars from Gutenberg #%s", len(text), gutenberg_id,
                 extra={"tag": "TRAIN"},)
             return text
         except Exception as e:
-            logger.warning(f"Gutenberg fetch failed for '{title}': {e}",
+            logger.warning("Gutenberg fetch failed for '%s': %s", title, e,
                 extra={"tag": "TRAIN"},)
             return None
 

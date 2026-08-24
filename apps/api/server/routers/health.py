@@ -62,132 +62,150 @@ class HealthRouter:
         self.router.add_api_route("/stream", self.health_stream, methods=["GET"])
 
     async def health(self) -> dict:
-        """Basic health status.
-
-        Returns model loaded state, device, inference count, lifecycle
-        phase, and resource allocation. This is the primary health check
-        for load balancers and monitoring dashboards.
-
-        During cold start, ``get_basic_health`` can block on first-time
-        module imports (psutil, controllers.models, lifecycle) when the
-        model-load thread is also importing. A 5-second timeout with a
-        lightweight fallback prevents the CLI's 90s startup timer from
-        firing on a healthy server.
-
-        Returns:
-            Envelope with ``model_loaded``, ``model_type``, ``device``,
-            ``is_inferencing``, ``lifecycle``, ``resource_allocation``.
-        """
-        ctrl = get_health_controller()
         try:
-            data = await asyncio.wait_for(
-                asyncio.to_thread(ctrl.get_basic_health),
-                timeout=5.0,
-            )
-        except (asyncio.TimeoutError, Exception):
-            # Fast fallback during cold start — read lightweight sources only
-            import state as server_state
-            data = {
-                "status": "healthy",
-                "model_loaded": server_state.model is not None or server_state.provider is not None,
-                "model_type": getattr(server_state, "model_type", None),
-                "lifecycle": {"phase": STARTUP_PHASE.get("phase", "initializing")},
-                "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
-            }
-        return success_response(data=data)
+            """Basic health status.
 
+            Returns model loaded state, device, inference count, lifecycle
+            phase, and resource allocation. This is the primary health check
+            for load balancers and monitoring dashboards.
+
+            During cold start, ``get_basic_health`` can block on first-time
+            module imports (psutil, controllers.models, lifecycle) when the
+            model-load thread is also importing. A 5-second timeout with a
+            lightweight fallback prevents the CLI's 90s startup timer from
+            firing on a healthy server.
+
+            Returns:
+                Envelope with ``model_loaded``, ``model_type``, ``device``,
+                ``is_inferencing``, ``lifecycle``, ``resource_allocation``.
+            """
+            ctrl = get_health_controller()
+            try:
+                data = await asyncio.wait_for(
+                    asyncio.to_thread(ctrl.get_basic_health),
+                    timeout=5.0,
+                )
+            except (asyncio.TimeoutError, Exception):
+                # Fast fallback during cold start — read lightweight sources only
+                import state as server_state
+                data = {
+                    "status": "healthy",
+                    "model_loaded": server_state.model is not None or server_state.provider is not None,
+                    "model_type": getattr(server_state, "model_type", None),
+                    "lifecycle": {"phase": STARTUP_PHASE.get("phase", "initializing")},
+                    "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
+                }
+            return success_response(data=data)
+
+        except Exception as e:
+            classify_and_raise(e, source="health.health")
     async def liveness(self) -> dict:
-        """Kubernetes liveness probe.
+        try:
+            """Kubernetes liveness probe.
 
-        Returns alive=True when the process is running. Does NOT check
-        model readiness — use ``/health/ready`` for that.
+            Returns alive=True when the process is running. Does NOT check
+            model readiness — use ``/health/ready`` for that.
 
-        Returns:
-            Envelope with ``status: "alive"``.
-        """
-        ctrl = get_health_controller()
-        return success_response(data=await asyncio.to_thread(ctrl.get_liveness))
+            Returns:
+                Envelope with ``status: "alive"``.
+            """
+            ctrl = get_health_controller()
+            return success_response(data=await asyncio.to_thread(ctrl.get_liveness))
 
+        except Exception as e:
+            classify_and_raise(e, source="health.liveness")
     async def readiness(self) -> dict:
-        """Kubernetes readiness probe.
+        try:
+            """Kubernetes readiness probe.
 
-        Returns ready=True when the service can accept traffic. Returns
-        ready=False during startup before routers are registered.
+            Returns ready=True when the service can accept traffic. Returns
+            ready=False during startup before routers are registered.
 
-        Returns:
-            Envelope with ``status: "ready"``.
-        """
-        ctrl = get_health_controller()
-        return success_response(data=await asyncio.to_thread(ctrl.get_readiness))
+            Returns:
+                Envelope with ``status: "ready"``.
+            """
+            ctrl = get_health_controller()
+            return success_response(data=await asyncio.to_thread(ctrl.get_readiness))
 
+        except Exception as e:
+            classify_and_raise(e, source="health.readiness")
     async def detailed_health(self) -> dict:
-        """Full system health with system metrics and GPU info.
+        try:
+            """Full system health with system metrics and GPU info.
 
-        Includes everything from ``/health`` plus CPU/memory percentages,
-        GPU backend and VRAM, registry health, training pool status,
-        health score with diagnoses, trend histories, and recent errors.
+            Includes everything from ``/health`` plus CPU/memory percentages,
+            GPU backend and VRAM, registry health, training pool status,
+            health score with diagnoses, trend histories, and recent errors.
 
-        Cached for 2 seconds to avoid redundant psutil reads under
-        concurrent polling.
+            Cached for 2 seconds to avoid redundant psutil reads under
+            concurrent polling.
 
-        Returns:
-            Envelope with ``system``, ``gpu``, ``registry``,
-            ``health_score``, ``health_history``, ``memory_history``,
-            ``recent_errors``, and all basic health fields.
-        """
-        ctrl = get_health_controller()
-        return success_response(data=await asyncio.to_thread(ctrl.get_detailed_health))
+            Returns:
+                Envelope with ``system``, ``gpu``, ``registry``,
+                ``health_score``, ``health_history``, ``memory_history``,
+                ``recent_errors``, and all basic health fields.
+            """
+            ctrl = get_health_controller()
+            return success_response(data=await asyncio.to_thread(ctrl.get_detailed_health))
 
+        except Exception as e:
+            classify_and_raise(e, source="health.detailed_health")
     async def startup_progress(self) -> dict:
-        """Current startup phase.
+        try:
+            """Current startup phase.
 
-        Returns the lifecycle phase string (e.g. "running", "starting",
-        "draining") from the startup progress tracker.
+            Returns the lifecycle phase string (e.g. "running", "starting",
+            "draining") from the startup progress tracker.
 
-        Returns:
-            Envelope with the current phase string.
-        """
-        return success_response(data=STARTUP_PHASE)
+            Returns:
+                Envelope with the current phase string.
+            """
+            return success_response(data=STARTUP_PHASE)
 
+        except Exception as e:
+            classify_and_raise(e, source="health.startup_progress")
     async def debug_info(self) -> dict:
-        """Debug information for troubleshooting.
+        try:
+            """Debug information for troubleshooting.
 
-        Subset of ``/health/detailed`` focused on model state, inference
-        metrics, and error histories. Lighter than detailed health —
-        does not read CPU/memory or GPU info.
+            Subset of ``/health/detailed`` focused on model state, inference
+            metrics, and error histories. Lighter than detailed health —
+            does not read CPU/memory or GPU info.
 
-        Returns:
-            Envelope with ``model_loaded``, ``model_type``, ``soul``,
-            ``health_score``, ``model_metrics``, ``recent_errors``.
-        """
-        ctrl = get_health_controller()
-        detailed = await asyncio.to_thread(ctrl.get_detailed_health)
-        return success_response(data={
-            "model_loaded": detailed.get("model_loaded", False),
-            "model_type": detailed.get("model_type"),
-            "soul": detailed.get("soul"),
-            "uptime_seconds": detailed.get("uptime_seconds", 0),
-            "request_count": detailed.get("request_count", 0),
-            "error_count": detailed.get("error_count", 0),
-            "inference_count": detailed.get("inference_count", 0),
-            "total_tokens": detailed.get("total_tokens", 0),
-            "tokens_per_sec": detailed.get("tokens_per_sec", 0),
-            "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
-            "avg_latency_ms": detailed.get("avg_latency_ms", 0),
-            "requests_per_minute": detailed.get("requests_per_minute", 0),
-            "health_score": detailed.get("health_score", {}),
-            "model_metrics": detailed.get("model_metrics", []),
-            "model_events": detailed.get("model_events", []),
-            "health_history": detailed.get("health_history", []),
-            "memory_history": detailed.get("memory_history", []),
-            "rate_violations": detailed.get("rate_violations", []),
-            "path_latencies": detailed.get("path_latencies", []),
-            "recent_errors": detailed.get("recent_errors", []),
-            "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
-            "memory_percent": detailed.get("system", {}).get("memory_percent"),
-            "gpu_backend": detailed.get("gpu", {}).get("backend"),
-        })
+            Returns:
+                Envelope with ``model_loaded``, ``model_type``, ``soul``,
+                ``health_score``, ``model_metrics``, ``recent_errors``.
+            """
+            ctrl = get_health_controller()
+            detailed = await asyncio.to_thread(ctrl.get_detailed_health)
+            return success_response(data={
+                "model_loaded": detailed.get("model_loaded", False),
+                "model_type": detailed.get("model_type"),
+                "soul": detailed.get("soul"),
+                "uptime_seconds": detailed.get("uptime_seconds", 0),
+                "request_count": detailed.get("request_count", 0),
+                "error_count": detailed.get("error_count", 0),
+                "inference_count": detailed.get("inference_count", 0),
+                "total_tokens": detailed.get("total_tokens", 0),
+                "tokens_per_sec": detailed.get("tokens_per_sec", 0),
+                "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
+                "avg_latency_ms": detailed.get("avg_latency_ms", 0),
+                "requests_per_minute": detailed.get("requests_per_minute", 0),
+                "health_score": detailed.get("health_score", {}),
+                "model_metrics": detailed.get("model_metrics", []),
+                "model_events": detailed.get("model_events", []),
+                "health_history": detailed.get("health_history", []),
+                "memory_history": detailed.get("memory_history", []),
+                "rate_violations": detailed.get("rate_violations", []),
+                "path_latencies": detailed.get("path_latencies", []),
+                "recent_errors": detailed.get("recent_errors", []),
+                "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
+                "memory_percent": detailed.get("system", {}).get("memory_percent"),
+                "gpu_backend": detailed.get("gpu", {}).get("backend"),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="health.debug_info")
     async def model_health(self) -> dict:
         """Model health monitor stats.
 
@@ -216,65 +234,68 @@ class HealthRouter:
             classify_and_raise(e, source="health_model_health")
 
     async def health_summary(self) -> dict:
-        """Condensed health score and key metrics.
-
-        Returns the numeric health score (0-100), status label, human
-        summary, and top-level system metrics. Designed for the frontend
-        status bar — lighter than ``/health/detailed``.
-
-        During cold start, ``get_detailed_health`` can block on first-time
-        module imports. A 5-second timeout with a lightweight fallback
-        prevents the frontend status bar from hanging.
-
-        Returns:
-            Envelope with ``score``, ``status``, ``summary``,
-            ``diagnoses``, ``model_loaded``, ``cpu_percent``,
-            ``memory_percent``.
-        """
-        ctrl = get_health_controller()
         try:
-            detailed = await asyncio.wait_for(
-                asyncio.to_thread(ctrl.get_detailed_health),
-                timeout=5.0,
-            )
-            hs = detailed.get("health_score", {})
-            data = {
-                "score": hs.get("score", 0),
-                "status": hs.get("status", "unknown"),
-                "summary": hs.get("summary", ""),
-                "diagnoses": hs.get("diagnoses", []),
-                "model_loaded": detailed.get("model_loaded", False),
-                "model_loading": detailed.get("model_loading", False),
-                "model_type": detailed.get("model_type"),
-                "soul": detailed.get("soul"),
-                "uptime_seconds": detailed.get("uptime_seconds", 0),
-                "request_count": detailed.get("request_count", 0),
-                "error_count": detailed.get("error_count", 0),
-                "tokens_per_sec": detailed.get("tokens_per_sec", 0),
-                "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
-                "memory_percent": detailed.get("system", {}).get("memory_percent"),
-            }
-        except (asyncio.TimeoutError, Exception):
-            # Fast fallback during cold start
-            import state as server_state
-            data = {
-                "score": 0,
-                "status": "starting",
-                "summary": "Server is starting up.",
-                "diagnoses": [],
-                "model_loaded": server_state.model is not None or server_state.provider is not None,
-                "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
-                "model_type": getattr(server_state, "model_type", None),
-                "soul": None,
-                "uptime_seconds": 0,
-                "request_count": 0,
-                "error_count": 0,
-                "tokens_per_sec": 0,
-                "cpu_percent": None,
-                "memory_percent": None,
-            }
-        return success_response(data=data)
+            """Condensed health score and key metrics.
 
+            Returns the numeric health score (0-100), status label, human
+            summary, and top-level system metrics. Designed for the frontend
+            status bar — lighter than ``/health/detailed``.
+
+            During cold start, ``get_detailed_health`` can block on first-time
+            module imports. A 5-second timeout with a lightweight fallback
+            prevents the frontend status bar from hanging.
+
+            Returns:
+                Envelope with ``score``, ``status``, ``summary``,
+                ``diagnoses``, ``model_loaded``, ``cpu_percent``,
+                ``memory_percent``.
+            """
+            ctrl = get_health_controller()
+            try:
+                detailed = await asyncio.wait_for(
+                    asyncio.to_thread(ctrl.get_detailed_health),
+                    timeout=5.0,
+                )
+                hs = detailed.get("health_score", {})
+                data = {
+                    "score": hs.get("score", 0),
+                    "status": hs.get("status", "unknown"),
+                    "summary": hs.get("summary", ""),
+                    "diagnoses": hs.get("diagnoses", []),
+                    "model_loaded": detailed.get("model_loaded", False),
+                    "model_loading": detailed.get("model_loading", False),
+                    "model_type": detailed.get("model_type"),
+                    "soul": detailed.get("soul"),
+                    "uptime_seconds": detailed.get("uptime_seconds", 0),
+                    "request_count": detailed.get("request_count", 0),
+                    "error_count": detailed.get("error_count", 0),
+                    "tokens_per_sec": detailed.get("tokens_per_sec", 0),
+                    "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
+                    "memory_percent": detailed.get("system", {}).get("memory_percent"),
+                }
+            except (asyncio.TimeoutError, Exception):
+                # Fast fallback during cold start
+                import state as server_state
+                data = {
+                    "score": 0,
+                    "status": "starting",
+                    "summary": "Server is starting up.",
+                    "diagnoses": [],
+                    "model_loaded": server_state.model is not None or server_state.provider is not None,
+                    "model_loading": STARTUP_PHASE.get("phase") == "loading_model",
+                    "model_type": getattr(server_state, "model_type", None),
+                    "soul": None,
+                    "uptime_seconds": 0,
+                    "request_count": 0,
+                    "error_count": 0,
+                    "tokens_per_sec": 0,
+                    "cpu_percent": None,
+                    "memory_percent": None,
+                }
+            return success_response(data=data)
+
+        except Exception as e:
+            classify_and_raise(e, source="health.health_summary")
     def _build_health_snapshot(self, ctrl) -> dict:
         """Build a single SSE health snapshot.
 

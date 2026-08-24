@@ -2302,6 +2302,9 @@ Examples:
             self._print("  Usage: kill <job_id>")
             return
         result = self._spinner_call("Killing job", lambda: self.cmds.kill(args.strip()), ok_msg=None)
+        if isinstance(result, dict) and "error" in result:
+            self._print(self._format_error(Exception(result["error"]), "kill"))
+            return
         self._print(self._dump_json(result))
 
     def _cmd_load(self, args: str = "") -> None:

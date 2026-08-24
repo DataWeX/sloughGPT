@@ -35,6 +35,7 @@ import { QualityCard } from '@/components/monitoring/QualityCard'
 import { FeedbackCard } from '@/components/monitoring/FeedbackCard'
 import { TrainingHistory } from '@/components/monitoring/TrainingHistory'
 import { ExecutorPool } from '@/components/monitoring/ExecutorPool'
+import { InferencePoolCard } from '@/components/monitoring/InferencePoolCard'
 import { ProcessCard } from '@/components/monitoring/ProcessCard'
 import { KvCacheCard } from '@/components/monitoring/KvCacheCard'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
@@ -418,6 +419,7 @@ export default function SystemHealthPage() {
                 {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
               </div>
             )}
+            <InferencePoolCard onRefresh={fetchAll} />
           </div>
         </FoldSection>
       )}

@@ -154,9 +154,9 @@ export function MemoryCard() {
     setLoading(true)
     try {
       const [statsResult, listResult, archiveResult] = await Promise.all([
-        memoryController.stats().catch(() => null),
+        memoryController.stats().catch((e) => { addToast('Could not load memory stats', 'error'); return null }),
         memoryController.list(),
-        memoryController.archiveStats().catch(() => null),
+        memoryController.archiveStats().catch((e) => { addToast('Could not load archive stats', 'error'); return null }),
       ])
       setStats(statsResult)
       setItems(listResult.items || [])

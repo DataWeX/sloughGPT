@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException
 
 from routers.datasets import router as datasets_router, DatasetsRouter
 from controllers.datasets import DatasetsController
+from domains.infrastructure.errors import NotFoundError
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -412,7 +413,7 @@ class TestConvertToMessages:
         router, ctrl = _make_convert_router(tmp_path, "corpus")
         _write_jsonl(router, "corpus", [{"text": "hello"}, {"text": "world"}])
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
-            res = asyncio.run(router.convert_to_messages("corpus"))
+            res = asyncio.run(router.convert_to_messages("corpus"))["data"]
         assert res["status"] == "converted"
         assert res["new_dataset_id"] == "corpus-messages"
         assert res["total_conversations"] == 2
@@ -436,7 +437,7 @@ class TestConvertToMessages:
             {"role": "user", "content": "hi"},
         ]}])
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
-            res = asyncio.run(router.convert_to_messages("chat"))
+            res = asyncio.run(router.convert_to_messages("chat"))["data"]
         rows = _read_rows(router, "chat-messages")
         assert rows[0]["messages"][0]["content"] == "You are a bot."
         assert res["total_conversations"] == 1
@@ -445,14 +446,14 @@ class TestConvertToMessages:
         router, ctrl = _make_convert_router(tmp_path, "corpus")
         ctrl.list_datasets.return_value = []
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
-            with pytest.raises(HTTPException) as ei:
+            with pytest.raises(NotFoundError) as ei:
                 asyncio.run(router.convert_to_messages("nope"))
-        assert ei.value.status_code == 404
+        assert ei.value.http_status == 404
 
     def test_convert_missing_jsonl_raises_404(self, tmp_path):
         router, ctrl = _make_convert_router(tmp_path, "corpus")
         (router._DATASETS_DIR / "corpus").mkdir(parents=True)
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
-            with pytest.raises(HTTPException) as ei:
+            with pytest.raises(NotFoundError) as ei:
                 asyncio.run(router.convert_to_messages("corpus"))
-        assert ei.value.status_code == 404
+        assert ei.value.http_status == 404

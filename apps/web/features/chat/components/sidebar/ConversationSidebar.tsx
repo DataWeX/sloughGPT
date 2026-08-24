@@ -528,7 +528,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
   )
 }
 
-function ConvRow({
+const ConvRow = memo(function ConvRow({
   conversation: c,
   isActive,
   onSelect,
@@ -753,4 +753,4 @@ function ConvRow({
       </div>
     </div>
   )
-}
+})

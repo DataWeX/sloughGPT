@@ -199,7 +199,7 @@ async def apply_processors(messages: list, processors: list) -> list:
         try:
             messages = await proc.process(messages)
         except Exception as e:
-            logger.warning(f"Processor {type(proc).__name__} failed: {e}", extra={"tag": "MODEL"})
+            logger.warning("Processor %s failed: %s", type(proc).__name__, e, extra={"tag": "MODEL"})
     return messages
 
 
@@ -241,7 +241,7 @@ class VisionProcessor:
                 mgr.initialize(vision_model="slonet")
             return get_provider(self._provider_name) is not None
         except Exception as e:
-            logger.warning(f"Failed to init multimodal: {e}", extra={"tag": "MODEL"})
+            logger.warning("Failed to init multimodal: %s", e, extra={"tag": "MODEL"})
             return False
 
     async def _caption(self, img_data: str) -> str:
@@ -266,7 +266,7 @@ class VisionProcessor:
             mgr = get_multimodal_manager()
             return mgr.caption_image(img).text
         except Exception as e:
-            logger.warning(f"Caption failed: {e}", extra={"tag": "MODEL"})
+            logger.warning("Caption failed: %s", e, extra={"tag": "MODEL"})
             return "[image]"
 
     async def process(self, messages: list) -> list:
@@ -290,7 +290,7 @@ class VisionProcessor:
         for i, img in enumerate(images):
             cap = await self._caption(img)
             captions.append(cap)
-            logger.info(f"Image {i+1} captioned: {cap[:60]}", extra={"tag": "MODEL"})
+            logger.info("Image %s captioned: %s", i + 1, cap[:60], extra={"tag": "MODEL"})
 
         caption_block = "\n".join(f"[Image: {c}]" for c in captions)
 
@@ -625,7 +625,7 @@ class ProviderRouter:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning(f"Processor {type(processor).__name__} failed: {e}", extra={"tag": "MODEL"})
+                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
 
         if not self._text_name:
             yield "No text model configured. Please load a model first."
@@ -662,11 +662,11 @@ class ProviderRouter:
                 return
 
             tool_name, tool_arg, match_text = match
-            logger.info(f"Tool call detected: {tool_name}({tool_arg[:40]})", extra={"tag": "MODEL"})
+            logger.info("Tool call detected: %s(%s)", tool_name, tool_arg[:40], extra={"tag": "MODEL"})
             yield f"\n[Running tool: {tool_name}...]\n"
 
             tool_result = await self._execute_tool(tool_name, tool_arg, cancel_event=cancel_event)
-            logger.info(f"Tool result: {tool_result[:60] if tool_result else 'empty'}", extra={"tag": "MODEL"})
+            logger.info("Tool result: %s", tool_result[:60] if tool_result else "empty", extra={"tag": "MODEL"})
 
             msgs.append({"role": "assistant", "content": generated.replace(match_text, "").strip()})
             msgs.append({"role": "system", "content": f"Tool {tool_name} returned: {tool_result}"})
@@ -713,7 +713,7 @@ class ProviderRouter:
             except Exception as e:
                 return f"[tool error: {e}]"
 
-        logger.warning(f"Unknown tool: {tool_name}", extra={"tag": "MODEL"})
+        logger.warning("Unknown tool: %s", tool_name, extra={"tag": "MODEL"})
         return f"[unknown tool: {tool_name}]"
 
     async def chat(
@@ -729,7 +729,7 @@ class ProviderRouter:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning(f"Processor {type(processor).__name__} failed: {e}", extra={"tag": "MODEL"})
+                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
 
         if not self._text_name:
             return "No text model configured. Please load a model first."
@@ -822,7 +822,7 @@ class SloTransformerProvider:
         try:
             out = await loop.run_in_executor(None, _gen)
         except Exception as e:
-            logger.warning(f"SloTransformer generation error: {e}", extra={"tag": "MODEL"})
+            logger.warning("SloTransformer generation error: %s", e, extra={"tag": "MODEL"})
             return
         if out is None:
             return

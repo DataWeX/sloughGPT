@@ -93,7 +93,7 @@ async def exec_command(req: ShellExecRequest):
         output, exit_code = await asyncio.to_thread(repl.execute, req.command)
     except Exception as e:
         logger.warning("Shell exec error: %s", e, extra={"tag": "SHELL"})
-        output = ""
+        output = f"Shell error: {type(e).__name__}: {e}"
         exit_code = 1
 
     elapsed = (_time.monotonic() - t0) * 1000

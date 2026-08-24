@@ -306,7 +306,7 @@ class ModelsController:
         try:
             from llama_cpp import Llama
 
-            logger.info(f"Loading GGUF model: {model_path}", extra={"tag": "MODEL"})
+            logger.info("Loading GGUF model: %s", model_path, extra={"tag": "MODEL"})
 
             # Determine device for llama.cpp
             if device == "mps" or device == "cuda":
@@ -330,7 +330,7 @@ class ModelsController:
                 "n_ctx": 4096,
             }
         except Exception as e:
-            logger.error(f"Failed to load GGUF model {model_path}: {e}", extra={"tag": "MODEL"})
+            logger.error("Failed to load GGUF model %s: %s", model_path, e, extra={"tag": "MODEL"})
             raise
 
     def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None,

@@ -54,38 +54,38 @@ class SearchResponse(BaseModel):
 
 
 class GitHubImportRequest(BaseModel):
-    url: str
-    name: str
+    url: str = Field(..., pattern=r'^https?://', max_length=2000)
+    name: str = Field(..., min_length=1, max_length=200)
     extensions: Optional[List[str]] = None
-    max_files: Optional[int] = None
+    max_files: Optional[int] = Field(default=None, ge=1, le=10000)
 
 
 class HuggingFaceImportRequest(BaseModel):
-    dataset_id: str
-    name: Optional[str] = None
+    dataset_id: str = Field(..., min_length=1, max_length=200)
+    name: Optional[str] = Field(default=None, max_length=200)
 
 
 class URLImportRequest(BaseModel):
-    url: str
-    name: str
+    url: str = Field(..., pattern=r'^https?://', max_length=2000)
+    name: str = Field(..., min_length=1, max_length=200)
 
 
 class LocalImportRequest(BaseModel):
-    path: str
-    name: str
+    path: str = Field(..., min_length=1, max_length=1000)
+    name: str = Field(..., min_length=1, max_length=200)
     extensions: Optional[List[str]] = None
 
 
 class KaggleImportRequest(BaseModel):
-    dataset: str
-    name: Optional[str] = None
+    dataset: str = Field(..., min_length=1, max_length=200)
+    name: Optional[str] = Field(default=None, max_length=200)
 
 
 class CSVImportRequest(BaseModel):
-    url: str
-    name: str
-    delimiter: Optional[str] = ","
-    encoding: Optional[str] = "utf-8"
+    url: str = Field(..., pattern=r'^https?://', max_length=2000)
+    name: str = Field(..., min_length=1, max_length=200)
+    delimiter: Optional[str] = Field(default=", max_length=1")
+    encoding: Optional[str] = Field(default="utf-8", max_length=50)
 
 
 class BatchImportSource(BaseModel):

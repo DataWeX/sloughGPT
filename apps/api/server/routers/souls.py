@@ -490,7 +490,7 @@ Be yourself — let your personality shape how you respond."""
                         "generation_params": getattr(s, "generation_params", {}),
                     })
             raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="souls.get_soul")
         except Exception as e:
             logger.warning("Get soul failed: %s", e)

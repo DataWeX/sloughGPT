@@ -775,6 +775,7 @@ export default function KnowledgePage() {
                   type="checkbox"
                   checked={selectedIds.size === displayItems.length && displayItems.length > 0}
                   onChange={toggleSelectAll}
+                  aria-label="Select all knowledge items"
                   className="rounded border-border"
                 />
                 Select all ({displayItems.length})
@@ -797,6 +798,7 @@ export default function KnowledgePage() {
                       type="checkbox"
                       checked={selectedIds.has(item.id)}
                       onChange={() => toggleSelect(item.id)}
+                      aria-label={`Select knowledge item`}
                       className="mt-0.5 rounded border-border shrink-0"
                     />
                     <div className="flex-1 min-w-0">
@@ -861,6 +863,7 @@ export default function KnowledgePage() {
                                   step={0.1}
                                   value={importanceValue}
                                   onChange={e => setImportanceValue(Number(e.target.value))}
+                                  aria-label="Importance value"
                                   className="w-16 h-1 accent-primary"
                                 />
                                 <span className="text-[10px] font-mono w-6 text-right">{importanceValue.toFixed(1)}</span>

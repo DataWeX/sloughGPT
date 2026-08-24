@@ -5,6 +5,7 @@ import { Input } from '@sloughgpt/strui'
 import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
 import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
+import { truncate } from '@/lib/conversations-utils'
 
 interface SearchResult {
   session: ChatSession
@@ -16,10 +17,6 @@ interface ConversationSearchProps {
   open: boolean
   onClose: () => void
   onNavigate: (sessionId: string) => void
-}
-
-function truncate(text: string, len = 80): string {
-  return text.length > len ? text.slice(0, len) + '…' : text
 }
 
 function snippet(content: string, query: string, maxLen = 100): React.ReactNode {

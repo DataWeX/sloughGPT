@@ -60,78 +60,90 @@ class ExperimentsRouter:
             classify_and_raise(e, source="create_experiment")
 
     async def list_experiments(self) -> dict:
-        """List all ML experiments stored on disk.
+        try:
+            """List all ML experiments stored on disk.
 
-        Scans the data/experiments/ directory for subdirectories, each
-        representing an experiment, and returns their names.
+            Scans the data/experiments/ directory for subdirectories, each
+            representing an experiment, and returns their names.
 
-        Returns:
-            Success envelope with experiments array and count.
-        """
-        def _scan():
-            if not self.EXPERIMENTS_DIR.exists():
-                return []
-            return [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
-        exps = await asyncio.to_thread(_scan)
-        return success_response(data={"experiments": exps, "count": len(exps)})
+            Returns:
+                Success envelope with experiments array and count.
+            """
+            def _scan():
+                if not self.EXPERIMENTS_DIR.exists():
+                    return []
+                return [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
+            exps = await asyncio.to_thread(_scan)
+            return success_response(data={"experiments": exps, "count": len(exps)})
 
+        except Exception as e:
+            classify_and_raise(e, source="experiments.list_experiments")
     async def get_experiment(self, experiment_id: str) -> dict:
-        """Retrieve metadata for a single experiment by its ID.
+        try:
+            """Retrieve metadata for a single experiment by its ID.
 
-        Validates the experiment ID format and checks that the directory
-        exists under data/experiments/.
+            Validates the experiment ID format and checks that the directory
+            exists under data/experiments/.
 
-        Args:
-            experiment_id: The unique experiment identifier.
+            Args:
+                experiment_id: The unique experiment identifier.
 
-        Returns:
-            Success envelope with id and filesystem path.
+            Returns:
+                Success envelope with id and filesystem path.
 
-        Raises:
-            400 if the experiment ID is invalid.
-            404 if the experiment directory is not found.
-        """
-        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        def _check():
-            p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-            return p.exists() and str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())), str(p)
-        exists, path_str = await asyncio.to_thread(_check)
-        if not exists:
-            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        return success_response(data={"id": experiment_id, "path": path_str})
+            Raises:
+                400 if the experiment ID is invalid.
+                404 if the experiment directory is not found.
+            """
+            if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+                raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+            def _check():
+                p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+                return p.exists() and str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())), str(p)
+            exists, path_str = await asyncio.to_thread(_check)
+            if not exists:
+                raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data={"id": experiment_id, "path": path_str})
 
+        except Exception as e:
+            classify_and_raise(e, source="experiments.get_experiment")
     async def delete_experiment(self, experiment_id: str) -> dict:
-        """Delete an experiment and all its data."""
-        import shutil
-        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        def _check_delete():
-            p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-            if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-                return None
-            shutil.rmtree(p)
-            return True
-        result = await asyncio.to_thread(_check_delete)
-        if result is None:
-            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        safe_audit_log("experiment.delete", resource=experiment_id)
-        return success_response(data={"id": experiment_id, "deleted": True})
+        try:
+            """Delete an experiment and all its data."""
+            import shutil
+            if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+                raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+            def _check_delete():
+                p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+                if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+                    return None
+                shutil.rmtree(p)
+                return True
+            result = await asyncio.to_thread(_check_delete)
+            if result is None:
+                raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("experiment.delete", resource=experiment_id)
+            return success_response(data={"id": experiment_id, "deleted": True})
 
+        except Exception as e:
+            classify_and_raise(e, source="experiments.delete_experiment")
     async def get_experiment_runs(self, experiment_id: str) -> dict:
-        """Get runs for an experiment"""
-        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        def _check_runs():
-            p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-            if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-                return None
-            return list(p.glob("*.json"))
-        runs = await asyncio.to_thread(_check_runs)
-        if runs is None:
-            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-        return success_response(data={"runs": len(runs)})
+        try:
+            """Get runs for an experiment"""
+            if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
+                raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+            def _check_runs():
+                p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
+                if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
+                    return None
+                return list(p.glob("*.json"))
+            runs = await asyncio.to_thread(_check_runs)
+            if runs is None:
+                raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data={"runs": len(runs)})
 
+        except Exception as e:
+            classify_and_raise(e, source="experiments.get_experiment_runs")
     async def get_experiment_data(self, experiment_id: str) -> dict:
         """Get logged metrics and params for an experiment."""
         e_id = experiment_id

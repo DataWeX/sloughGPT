@@ -345,46 +345,49 @@ class MobileRouter:
         return get_models_controller().load_model(model_id)
 
     async def get_dashboard(self, request: Request) -> dict:
-        """
-        Mobile dashboard — aggregated home screen data.
+        try:
+            """
+            Mobile dashboard — aggregated home screen data.
 
-        Returns:
-            status, model info, current soul, recent conversations, stats.
-        """
-        health = self._get_health_data()
-        soul = self._get_current_soul()
-        sessions = self._get_sessions_list()
-        models = self._get_models_list()
+            Returns:
+                status, model info, current soul, recent conversations, stats.
+            """
+            health = self._get_health_data()
+            soul = self._get_current_soul()
+            sessions = self._get_sessions_list()
+            models = self._get_models_list()
 
-        if isinstance(sessions, dict):
-            sessions = sessions.get("data", [])
+            if isinstance(sessions, dict):
+                sessions = sessions.get("data", [])
 
-        recent = []
-        for s in sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)[:5]:
-            recent.append({
-                "id": s.get("id", s.get("session_id", "")),
-                "title": s.get("name", s.get("title", "New Chat")),
-                "last_message": "",
-                "updated_at": s.get("updated_at", ""),
+            recent = []
+            for s in sorted(sessions, key=lambda x: x.get("updated_at", ""), reverse=True)[:5]:
+                recent.append({
+                    "id": s.get("id", s.get("session_id", "")),
+                    "title": s.get("name", s.get("title", "New Chat")),
+                    "last_message": "",
+                    "updated_at": s.get("updated_at", ""),
+                })
+
+            return success_response(data={
+                "status": health.get("status", "unknown"),
+                "model": {
+                    "name": health.get("model_type", "None"),
+                    "loaded": health.get("model_loaded", False),
+                },
+                "soul": {
+                    "name": soul.get("name", "Default"),
+                    "description": soul.get("description", ""),
+                },
+                "recent_conversations": recent,
+                "stats": {
+                    "model_count": len(models) if isinstance(models, list) else 0,
+                    "inference_count": health.get("inference_count", 0),
+                },
             })
 
-        return success_response(data={
-            "status": health.get("status", "unknown"),
-            "model": {
-                "name": health.get("model_type", "None"),
-                "loaded": health.get("model_loaded", False),
-            },
-            "soul": {
-                "name": soul.get("name", "Default"),
-                "description": soul.get("description", ""),
-            },
-            "recent_conversations": recent,
-            "stats": {
-                "model_count": len(models) if isinstance(models, list) else 0,
-                "inference_count": health.get("inference_count", 0),
-            },
-        })
-
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_dashboard")
     async def list_conversations(
         self,
         request: Request,
@@ -432,120 +435,132 @@ class MobileRouter:
         })
 
     async def get_conversation(self, request: Request, session_id: str) -> dict:
-        """Single conversation with full message history."""
-        messages = self._get_session_messages(session_id)
-        return success_response(data={
-            "id": session_id,
-            "messages": messages or [],
-            "created_at": "",
-        })
+        try:
+            """Single conversation with full message history."""
+            messages = self._get_session_messages(session_id)
+            return success_response(data={
+                "id": session_id,
+                "messages": messages or [],
+                "created_at": "",
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_conversation")
     async def get_models(self, request: Request) -> dict:
-        """Available models with current selection and checkpoint options."""
-        models = self._get_models_list()
-        soul = self._get_current_soul()
-        souls = self._get_souls()
-        checkpoints = self._get_checkpoints()
-        health = self._get_health_data()
+        try:
+            """Available models with current selection and checkpoint options."""
+            models = self._get_models_list()
+            soul = self._get_current_soul()
+            souls = self._get_souls()
+            checkpoints = self._get_checkpoints()
+            health = self._get_health_data()
 
-        model_list = []
-        if isinstance(models, list):
-            for m in models:
-                model_list.append({
-                    "id": m.get("model_id", m.get("id", "")),
-                    "name": m.get("name", m.get("model_id", "")),
-                    "loaded": m.get("loaded", m.get("status") == "loaded"),
-                    "size_gb": m.get("size_gb", 0),
-                    "source": m.get("source", "local"),
-                })
-
-        soul_list = []
-        if isinstance(souls, list):
-            for s in souls:
-                soul_list.append({
-                    "name": s.get("name", ""),
-                    "description": s.get("description", ""),
-                    "traits": s.get("traits", []),
-                })
-
-        cp_list = []
-        if isinstance(checkpoints, list):
-            for cp in checkpoints:
-                if isinstance(cp, dict):
-                    cp_list.append({
-                        "name": cp.get("name", cp.get("checkpoint_name", "")),
-                        "soul": cp.get("soul", ""),
-                        "loss": cp.get("loss"),
-                        "steps": cp.get("steps"),
+            model_list = []
+            if isinstance(models, list):
+                for m in models:
+                    model_list.append({
+                        "id": m.get("model_id", m.get("id", "")),
+                        "name": m.get("name", m.get("model_id", "")),
+                        "loaded": m.get("loaded", m.get("status") == "loaded"),
+                        "size_gb": m.get("size_gb", 0),
+                        "source": m.get("source", "local"),
                     })
 
-        return success_response(data={
-            "current": {
-                "model_id": health.get("model_type", ""),
-                "soul": soul.get("name", ""),
-                "checkpoint": None,
-            },
-            "models": model_list,
-            "souls": soul_list,
-            "checkpoints": cp_list,
-        })
+            soul_list = []
+            if isinstance(souls, list):
+                for s in souls:
+                    soul_list.append({
+                        "name": s.get("name", ""),
+                        "description": s.get("description", ""),
+                        "traits": s.get("traits", []),
+                    })
 
+            cp_list = []
+            if isinstance(checkpoints, list):
+                for cp in checkpoints:
+                    if isinstance(cp, dict):
+                        cp_list.append({
+                            "name": cp.get("name", cp.get("checkpoint_name", "")),
+                            "soul": cp.get("soul", ""),
+                            "loss": cp.get("loss"),
+                            "steps": cp.get("steps"),
+                        })
+
+            return success_response(data={
+                "current": {
+                    "model_id": health.get("model_type", ""),
+                    "soul": soul.get("name", ""),
+                    "checkpoint": None,
+                },
+                "models": model_list,
+                "souls": soul_list,
+                "checkpoints": cp_list,
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_models")
     async def switch_model(self, request: Request, body: SwitchRequest) -> dict:
-        """Switch model and/or soul in one call."""
-        errors = []
-        if body.model_id:
-            try:
-                self._load_model(body.model_id)
-            except Exception as e:
-                errors.append(f"model_load: {e}")
+        try:
+            """Switch model and/or soul in one call."""
+            errors = []
+            if body.model_id:
+                try:
+                    self._load_model(body.model_id)
+                except Exception as e:
+                    errors.append(f"model_load: {e}")
 
-        if body.soul_name:
-            try:
-                self._switch_soul(body.soul_name, body.checkpoint_name)
-            except Exception as e:
-                errors.append(f"soul_switch: {e}")
+            if body.soul_name:
+                try:
+                    self._switch_soul(body.soul_name, body.checkpoint_name)
+                except Exception as e:
+                    errors.append(f"soul_switch: {e}")
 
-        health = self._get_health_data()
+            health = self._get_health_data()
 
-        if errors:
-            logger.warning("Mobile switch_model partial failure: %s", "; ".join(errors), extra={"tag": "REQ"})
+            if errors:
+                logger.warning("Mobile switch_model partial failure: %s", "; ".join(errors), extra={"tag": "REQ"})
 
-        return success_response(data={
-            "status": "ok" if not errors else "partial",
-            "model": health.get("model_type", ""),
-            "soul": body.soul_name or "",
-            "checkpoint": body.checkpoint_name,
-            "errors": errors or None,
-        })
+            return success_response(data={
+                "status": "ok" if not errors else "partial",
+                "model": health.get("model_type", ""),
+                "soul": body.soul_name or "",
+                "checkpoint": body.checkpoint_name,
+                "errors": errors or None,
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.switch_model")
     async def get_health(self, request: Request) -> dict:
-        """System health summary for mobile."""
-        detailed = self._get_detailed_health()
-        metrics = self._get_system_metrics()
-        disk = self._get_disk_info()
+        try:
+            """System health summary for mobile."""
+            detailed = self._get_detailed_health()
+            metrics = self._get_system_metrics()
+            disk = self._get_disk_info()
 
-        system_info = detailed.get("system", {})
+            system_info = detailed.get("system", {})
 
-        return success_response(data={
-            "status": detailed.get("status", "unknown"),
-            "model": {
-                "name": detailed.get("model_type", ""),
-                "loaded": detailed.get("model_loaded", False),
-                "type": detailed.get("model_type", ""),
-            },
-            "uptime_seconds": detailed.get("uptime_seconds", 0),
-            "cpu_percent": system_info.get("cpu_percent", metrics.get("cpu_percent", 0)),
-            "memory_percent": system_info.get("memory_percent", metrics.get("memory_percent", 0)),
-            "memory_available_gb": round(
-                system_info.get("memory_available_mb", 0) / 1024, 2
-            ),
-            "disk_used_gb": disk.get("used_gb", 0),
-            "disk_free_gb": disk.get("free_gb", 0),
-            "inference_count": detailed.get("inference", {}).get(
-                "inference_count", detailed.get("inference_count", 0)
-            ),
-        })
+            return success_response(data={
+                "status": detailed.get("status", "unknown"),
+                "model": {
+                    "name": detailed.get("model_type", ""),
+                    "loaded": detailed.get("model_loaded", False),
+                    "type": detailed.get("model_type", ""),
+                },
+                "uptime_seconds": detailed.get("uptime_seconds", 0),
+                "cpu_percent": system_info.get("cpu_percent", metrics.get("cpu_percent", 0)),
+                "memory_percent": system_info.get("memory_percent", metrics.get("memory_percent", 0)),
+                "memory_available_gb": round(
+                    system_info.get("memory_available_mb", 0) / 1024, 2
+                ),
+                "disk_used_gb": disk.get("used_gb", 0),
+                "disk_free_gb": disk.get("free_gb", 0),
+                "inference_count": detailed.get("inference", {}).get(
+                    "inference_count", detailed.get("inference_count", 0)
+                ),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_health")
     async def list_knowledge(
         self,
         request: Request,
@@ -588,208 +603,244 @@ class MobileRouter:
         })
 
     async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest) -> dict:
-        """Add a knowledge item."""
         try:
-            item_id = self._create_knowledge_item(body.content, body.topic)
-            return success_response(data={"id": item_id, "content": body.content, "topic": body.topic})
-        except Exception as e:
-            raise_error(f"Failed to create knowledge: {e}", "E_DOMAIN")
-
-    async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
-        """Update a knowledge item."""
-        try:
-            self._update_knowledge_item(item_id, content=body.content, topic=body.topic, importance=body.importance)
-            return success_response(data={"id": item_id, "updated": True})
-        except Exception as e:
-            raise_error(f"Failed to update knowledge: {e}", "E_DOMAIN")
-
-    async def delete_knowledge(self, request: Request, item_id: str) -> dict:
-        """Delete a knowledge item."""
-        try:
-            self._delete_knowledge_item(item_id)
-        except Exception as e:
-            raise_error(f"Failed to delete knowledge: {e}", "E_DOMAIN")
-        safe_audit_log("mobile.knowledge_delete", resource=item_id)
-        return success_response(data={"status": "deleted", "id": item_id})
-
-    async def sync_offline(self, request: Request, body: SyncRequest) -> dict:
-        """
-        Sync offline messages when mobile reconnects.
-
-        Processes queued messages from the offline cache, sends them to the
-        chat endpoint, and returns results for each.
-        """
-        from routers.inference import _instance as _inference, Message, ChatRequest
-
-        results: list[SyncResult] = []
-
-        for msg in body.pending_messages:
+            """Add a knowledge item."""
             try:
-                chat_req = ChatRequest(
-                    messages=[Message(role="user", content=msg.content)],
-                    session_id=msg.session_id,
-                )
-                chat_resp = await _inference.chat(chat_req)
-                chat_result = chat_resp.model_dump() if hasattr(chat_resp, "model_dump") else (chat_resp if isinstance(chat_resp, dict) else {})
+                item_id = self._create_knowledge_item(body.content, body.topic)
+                return success_response(data={"id": item_id, "content": body.content, "topic": body.topic})
+            except Exception as e:
+                raise_error(f"Failed to create knowledge: {e}", "E_DOMAIN")
 
-                if chat_result and chat_result.get("message"):
-                    results.append(SyncResult(
-                        id=msg.id,
-                        status="sent",
-                        assistant_message={
-                            "role": "assistant",
-                            "content": chat_result["message"],
-                            "timestamp": chat_result.get("timestamp", 0),
-                        },
-                    ))
-                else:
+        except Exception as e:
+            classify_and_raise(e, source="mobile.create_knowledge")
+    async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
+        try:
+            """Update a knowledge item."""
+            try:
+                self._update_knowledge_item(item_id, content=body.content, topic=body.topic, importance=body.importance)
+                return success_response(data={"id": item_id, "updated": True})
+            except Exception as e:
+                raise_error(f"Failed to update knowledge: {e}", "E_DOMAIN")
+
+        except Exception as e:
+            classify_and_raise(e, source="mobile.update_knowledge")
+    async def delete_knowledge(self, request: Request, item_id: str) -> dict:
+        try:
+            """Delete a knowledge item."""
+            try:
+                self._delete_knowledge_item(item_id)
+            except Exception as e:
+                raise_error(f"Failed to delete knowledge: {e}", "E_DOMAIN")
+            safe_audit_log("mobile.knowledge_delete", resource=item_id)
+            return success_response(data={"status": "deleted", "id": item_id})
+
+        except Exception as e:
+            classify_and_raise(e, source="mobile.delete_knowledge")
+    async def sync_offline(self, request: Request, body: SyncRequest) -> dict:
+        try:
+            """
+            Sync offline messages when mobile reconnects.
+
+            Processes queued messages from the offline cache, sends them to the
+            chat endpoint, and returns results for each.
+            """
+            from routers.inference import _instance as _inference, Message, ChatRequest
+
+            results: list[SyncResult] = []
+
+            for msg in body.pending_messages:
+                try:
+                    chat_req = ChatRequest(
+                        messages=[Message(role="user", content=msg.content)],
+                        session_id=msg.session_id,
+                    )
+                    chat_resp = await _inference.chat(chat_req)
+                    chat_result = chat_resp.model_dump() if hasattr(chat_resp, "model_dump") else (chat_resp if isinstance(chat_resp, dict) else {})
+
+                    if chat_result and chat_result.get("message"):
+                        results.append(SyncResult(
+                            id=msg.id,
+                            status="sent",
+                            assistant_message={
+                                "role": "assistant",
+                                "content": chat_result["message"],
+                                "timestamp": chat_result.get("timestamp", 0),
+                            },
+                        ))
+                    else:
+                        results.append(SyncResult(
+                            id=msg.id,
+                            status="error",
+                            error="No response from server",
+                        ))
+                except Exception as e:
                     results.append(SyncResult(
                         id=msg.id,
                         status="error",
-                        error="No response from server",
+                        error=str(e),
                     ))
-            except Exception as e:
-                results.append(SyncResult(
-                    id=msg.id,
-                    status="error",
-                    error=str(e),
-                ))
 
-        sessions = self._get_sessions_list()
-        if isinstance(sessions, dict):
-            sessions = sessions.get("data", [])
-        elif not isinstance(sessions, list):
-            sessions = []
+            sessions = self._get_sessions_list()
+            if isinstance(sessions, dict):
+                sessions = sessions.get("data", [])
+            elif not isinstance(sessions, list):
+                sessions = []
 
-        return success_response(data={
-            "results": [r.model_dump() for r in results],
-            "synced_count": sum(1 for r in results if r.status == "sent"),
-            "failed_count": sum(1 for r in results if r.status == "error"),
-            "sessions": sessions[:20],
-        })
+            return success_response(data={
+                "results": [r.model_dump() for r in results],
+                "synced_count": sum(1 for r in results if r.status == "sent"),
+                "failed_count": sum(1 for r in results if r.status == "error"),
+                "sessions": sessions[:20],
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.sync_offline")
     async def sync_status(self, request: Request) -> dict:
-        """Check server connectivity and last sync state."""
-        health = self._get_health_data()
+        try:
+            """Check server connectivity and last sync state."""
+            health = self._get_health_data()
 
-        return success_response(data={
-            "reachable": health.get("status") == "healthy",
-            "model_loaded": health.get("model_loaded", False),
-            "server_time": int(__import__("time").time() * 1000),
-            "inference_count": health.get("inference_count", 0),
-        })
+            return success_response(data={
+                "reachable": health.get("status") == "healthy",
+                "model_loaded": health.get("model_loaded", False),
+                "server_time": int(__import__("time").time() * 1000),
+                "inference_count": health.get("inference_count", 0),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.sync_status")
     async def register_device(self, body: DeviceRegistrationRequest) -> dict:
-        """
-        Register a mobile device for push notifications.
+        try:
+            """
+            Register a mobile device for push notifications.
 
-        Args:
-            body: Device token, platform, user_id, and topic subscriptions.
+            Args:
+                body: Device token, platform, user_id, and topic subscriptions.
 
-        Returns:
-            Registration status.
-        """
-        from domains.mobile.notifications import get_notification_service
+            Returns:
+                Registration status.
+            """
+            from domains.mobile.notifications import get_notification_service
 
-        svc = get_notification_service()
-        result = svc.register_device(
-            token=body.token,
-            platform=body.platform,
-            user_id=body.user_id,
-            topics=body.topics,
-        )
-        return success_response(data=result)
+            svc = get_notification_service()
+            result = svc.register_device(
+                token=body.token,
+                platform=body.platform,
+                user_id=body.user_id,
+                topics=body.topics,
+            )
+            return success_response(data=result)
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.register_device")
     async def unregister_device(self, body: UnregisterDeviceRequest) -> dict:
-        """Unregister a device from push notifications."""
-        from domains.mobile.notifications import get_notification_service
+        try:
+            """Unregister a device from push notifications."""
+            from domains.mobile.notifications import get_notification_service
 
-        svc = get_notification_service()
-        removed = svc.unregister_device(body.token)
-        return success_response(data={"status": "removed" if removed else "not_found"})
+            svc = get_notification_service()
+            removed = svc.unregister_device(body.token)
+            return success_response(data={"status": "removed" if removed else "not_found"})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.unregister_device")
     async def list_devices(self, topic: str | None = Query(None)) -> dict:
-        """
-        List registered devices.
+        try:
+            """
+            List registered devices.
 
-        Args:
-            topic: Optional topic filter.
+            Args:
+                topic: Optional topic filter.
 
-        Returns:
-            List of registered devices.
-        """
-        from domains.mobile.notifications import get_notification_service
+            Returns:
+                List of registered devices.
+            """
+            from domains.mobile.notifications import get_notification_service
 
-        svc = get_notification_service()
-        return success_response(data={"devices": svc.get_devices(topic=topic)})
+            svc = get_notification_service()
+            return success_response(data={"devices": svc.get_devices(topic=topic)})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.list_devices")
     async def send_notification(self, body: NotificationSendRequest) -> dict:
-        """
-        Send a push notification to registered devices.
+        try:
+            """
+            Send a push notification to registered devices.
 
-        Args:
-            body: Title, body, topic filter, data payload, optional token list.
+            Args:
+                body: Title, body, topic filter, data payload, optional token list.
 
-        Returns:
-            Send result with recipient count.
-        """
-        from domains.mobile.notifications import get_notification_service, NotificationPayload
+            Returns:
+                Send result with recipient count.
+            """
+            from domains.mobile.notifications import get_notification_service, NotificationPayload
 
-        svc = get_notification_service()
-        payload = NotificationPayload(
-            title=body.title,
-            body=body.body,
-            data=body.data or {},
-            badge=body.badge,
-            topic=body.topic,
-        )
-        result = await svc.send_notification_async(
-            payload=payload,
-            tokens=body.tokens,
-            topic=body.topic,
-        )
-        return success_response(data=result)
+            svc = get_notification_service()
+            payload = NotificationPayload(
+                title=body.title,
+                body=body.body,
+                data=body.data or {},
+                badge=body.badge,
+                topic=body.topic,
+            )
+            result = await svc.send_notification_async(
+                payload=payload,
+                tokens=body.tokens,
+                topic=body.topic,
+            )
+            return success_response(data=result)
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.send_notification")
     async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
-        """Get recent notification history."""
-        from domains.mobile.notifications import get_notification_service
+        try:
+            """Get recent notification history."""
+            from domains.mobile.notifications import get_notification_service
 
-        svc = get_notification_service()
-        return success_response(data={"history": svc.get_history(limit=limit)})
+            svc = get_notification_service()
+            return success_response(data={"history": svc.get_history(limit=limit)})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.notification_history")
     async def cleanup_devices(self) -> dict:
-        """
-        Remove devices inactive for 30+ days.
+        try:
+            """
+            Remove devices inactive for 30+ days.
 
-        Returns:
-            Count of removed devices.
-        """
-        from domains.mobile.notifications import get_notification_service
+            Returns:
+                Count of removed devices.
+            """
+            from domains.mobile.notifications import get_notification_service
 
-        svc = get_notification_service()
-        removed = svc.cleanup_stale()
-        return success_response(data={"removed": removed})
+            svc = get_notification_service()
+            removed = svc.cleanup_stale()
+            return success_response(data={"removed": removed})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.cleanup_devices")
     async def notify_training_complete(self, request: Request) -> dict:
-        """Send a training-complete notification to all registered devices."""
-        from domains.mobile.notifications import get_notification_service, NotificationPayload
+        try:
+            """Send a training-complete notification to all registered devices."""
+            from domains.mobile.notifications import get_notification_service, NotificationPayload
 
-        svc = get_notification_service()
-        training = self._get_training_status()
+            svc = get_notification_service()
+            training = self._get_training_status()
 
-        status = training.get("status", "unknown")
-        loss = training.get("final_loss")
+            status = training.get("status", "unknown")
+            loss = training.get("final_loss")
 
-        payload = NotificationPayload(
-            title="Training Complete",
-            body=f"Model training finished. Final loss: {loss:.4f}" if loss is not None else f"Training {status}",
-            data={"type": "training_complete", "status": status},
-            topic="training",
-        )
+            payload = NotificationPayload(
+                title="Training Complete",
+                body=f"Model training finished. Final loss: {loss:.4f}" if loss is not None else f"Training {status}",
+                data={"type": "training_complete", "status": status},
+                topic="training",
+            )
 
-        result = svc.send_notification(payload=payload, topic="training")
-        return success_response(data=result)
+            result = svc.send_notification(payload=payload, topic="training")
+            return success_response(data=result)
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.notify_training_complete")
     async def mobile_train(self, body: MobileTrainRequest) -> dict:
         """Train the SloNet model on conversation pairs from the mobile app."""
         import time as _time
@@ -886,68 +937,74 @@ class MobileRouter:
         except json.JSONDecodeError as e:
             logger.error("Failed to parse training output: %s", e, extra={"tag": "REQ"})
             raise_error("Training produced invalid output", "E_INFRA_STARTUP", status_code=500)
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="mobile._write_pairs")
         except Exception as e:
             logger.warning("Mobile train failed: %s", e, extra={"tag": "REQ"})
             classify_and_raise(e, source="mobile_train")
 
     async def get_training_stats(self) -> dict:
-        """
-        Get training data statistics.
+        try:
+            """
+            Get training data statistics.
 
-        Returns:
-            Total pairs, pending, synced, used counts, and quality breakdown.
+            Returns:
+                Total pairs, pending, synced, used counts, and quality breakdown.
 
-        Side effects:
-            - Reads from MogDB training data collection.
-        """
-        from domains.training.mobile_training_store import get_training_store
+            Side effects:
+                - Reads from MogDB training data collection.
+            """
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        stats = store.stats()
-        quality_counts = store.quality_breakdown()
+            store = get_training_store()
+            stats = store.stats()
+            quality_counts = store.quality_breakdown()
 
-        return success_response(data={
-            "total": stats["total"],
-            "pending": stats["pending"],
-            "synced": stats["synced"],
-            "used": stats["used"],
-            "by_quality": quality_counts,
-        })
+            return success_response(data={
+                "total": stats["total"],
+                "pending": stats["pending"],
+                "synced": stats["synced"],
+                "used": stats["used"],
+                "by_quality": quality_counts,
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_training_stats")
     async def get_pending_pairs(self, limit: int = Query(50, ge=1, le=500)) -> dict:
-        """
-        Get pending (unsynced) training pairs.
+        try:
+            """
+            Get pending (unsynced) training pairs.
 
-        Args:
-            limit: Max pairs to return (default 50, max 500).
+            Args:
+                limit: Max pairs to return (default 50, max 500).
 
-        Returns:
-            List of unsynced training pair documents.
+            Returns:
+                List of unsynced training pair documents.
 
-        Side effects:
-            - Reads from MogDB training data collection.
-        """
-        from domains.training.mobile_training_store import get_training_store
+            Side effects:
+                - Reads from MogDB training data collection.
+            """
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        pairs = store.get_pending_pairs(limit=limit)
-        return success_response(data={
-            "pairs": [
-                {
-                    "id": p.get("_id", ""),
-                    "user_msg": p.get("user_msg", ""),
-                    "assistant_msg": p.get("assistant_msg", ""),
-                    "quality": p.get("quality", 0),
-                    "session_id": p.get("session_id", ""),
-                    "timestamp": p.get("timestamp", 0),
-                }
-                for p in pairs
-            ],
-            "count": len(pairs),
-        })
+            store = get_training_store()
+            pairs = store.get_pending_pairs(limit=limit)
+            return success_response(data={
+                "pairs": [
+                    {
+                        "id": p.get("_id", ""),
+                        "user_msg": p.get("user_msg", ""),
+                        "assistant_msg": p.get("assistant_msg", ""),
+                        "quality": p.get("quality", 0),
+                        "session_id": p.get("session_id", ""),
+                        "timestamp": p.get("timestamp", 0),
+                    }
+                    for p in pairs
+                ],
+                "count": len(pairs),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_pending_pairs")
     async def list_training_pairs(
         self,
         limit: int = Query(50, ge=1, le=500),
@@ -1042,120 +1099,138 @@ class MobileRouter:
         )
 
     async def get_session_pairs(self, session_id: str) -> dict:
-        """
-        Get all training pairs from a specific session.
+        try:
+            """
+            Get all training pairs from a specific session.
 
-        Args:
-            session_id: Chat session identifier.
+            Args:
+                session_id: Chat session identifier.
 
-        Returns:
-            List of training pairs for that session.
+            Returns:
+                List of training pairs for that session.
 
-        Side effects:
-            - Reads from MogDB training data collection.
-        """
-        from domains.training.mobile_training_store import get_training_store
+            Side effects:
+                - Reads from MogDB training data collection.
+            """
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        pairs = store.get_pairs_by_session(session_id)
-        return success_response(data={
-            "session_id": session_id,
-            "pairs": [
-                {
-                    "id": p.get("_id", ""),
-                    "user_msg": p.get("user_msg", ""),
-                    "assistant_msg": p.get("assistant_msg", ""),
-                    "quality": p.get("quality", 0),
-                    "timestamp": p.get("timestamp", 0),
-                }
-                for p in pairs
-            ],
-            "count": len(pairs),
-        })
+            store = get_training_store()
+            pairs = store.get_pairs_by_session(session_id)
+            return success_response(data={
+                "session_id": session_id,
+                "pairs": [
+                    {
+                        "id": p.get("_id", ""),
+                        "user_msg": p.get("user_msg", ""),
+                        "assistant_msg": p.get("assistant_msg", ""),
+                        "quality": p.get("quality", 0),
+                        "timestamp": p.get("timestamp", 0),
+                    }
+                    for p in pairs
+                ],
+                "count": len(pairs),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_session_pairs")
     async def update_pair_quality(self, pair_id: str, body: QualityUpdateRequest) -> dict:
-        """
-        Update quality signal on a training pair.
+        try:
+            """
+            Update quality signal on a training pair.
 
-        Args:
-            pair_id: Training pair document ID.
-            body: New quality value.
+            Args:
+                pair_id: Training pair document ID.
+                body: New quality value.
 
-        Returns:
-            Update status.
+            Returns:
+                Update status.
 
-        Side effects:
-            - Updates quality field in MogDB training data collection.
-        """
-        from domains.training.mobile_training_store import get_training_store
+            Side effects:
+                - Updates quality field in MogDB training data collection.
+            """
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        updated = store.update_quality(pair_id, body.quality)
-        if not updated:
+            store = get_training_store()
+            updated = store.update_quality(pair_id, body.quality)
+            if not updated:
 
-            raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
-        return success_response(data={"status": "updated", "pair_id": pair_id, "quality": body.quality})
+                raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data={"status": "updated", "pair_id": pair_id, "quality": body.quality})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.update_pair_quality")
     async def delete_pair(self, pair_id: str) -> dict:
-        """
-        Delete a single training pair.
+        try:
+            """
+            Delete a single training pair.
 
-        Args:
-            pair_id: Training pair document ID.
+            Args:
+                pair_id: Training pair document ID.
 
-        Returns:
-            Deletion status.
+            Returns:
+                Deletion status.
 
-        Side effects:
-            - Deletes pair from MogDB training data collection.
-        """
-        from domains.training.mobile_training_store import get_training_store
+            Side effects:
+                - Deletes pair from MogDB training data collection.
+            """
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        deleted = store.delete_pair(pair_id)
-        if not deleted:
+            store = get_training_store()
+            deleted = store.delete_pair(pair_id)
+            if not deleted:
 
-            raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
-        safe_audit_log("mobile.pair_delete", resource=pair_id)
-        return success_response(data={"status": "deleted", "pair_id": pair_id})
+                raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("mobile.pair_delete", resource=pair_id)
+            return success_response(data={"status": "deleted", "pair_id": pair_id})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.delete_pair")
     async def delete_synced_pairs(self) -> dict:
-        """
-        Delete all synced training pairs (already used for training).
+        try:
+            """
+            Delete all synced training pairs (already used for training).
 
-        Returns:
-            Count of deleted pairs.
+            Returns:
+                Count of deleted pairs.
 
-        Side effects:
-            - Deletes all synced pairs from MogDB training data collection.
-        """
-        from domains.training.mobile_training_store import get_training_store
+            Side effects:
+                - Deletes all synced pairs from MogDB training data collection.
+            """
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        count = store.delete_synced()
-        safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
-        return success_response(data={"status": "deleted", "count": count})
+            store = get_training_store()
+            count = store.delete_synced()
+            safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
+            return success_response(data={"status": "deleted", "count": count})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.delete_synced_pairs")
     async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete")) -> dict:
-        """Delete multiple training pairs by ID."""
-        from domains.training.mobile_training_store import get_training_store
+        try:
+            """Delete multiple training pairs by ID."""
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        count = 0
-        for pair_id in ids:
-            if store.delete_pair(pair_id):
-                count += 1
-        safe_audit_log("mobile.pairs_delete_bulk", detail=f"count={count} requested={len(ids)}")
-        return success_response(data={"status": "deleted", "count": count})
+            store = get_training_store()
+            count = 0
+            for pair_id in ids:
+                if store.delete_pair(pair_id):
+                    count += 1
+            safe_audit_log("mobile.pairs_delete_bulk", detail=f"count={count} requested={len(ids)}")
+            return success_response(data={"status": "deleted", "count": count})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.delete_pairs_bulk")
     async def compact_training_store(self) -> dict:
-        """Compact the training data store (reclaim space from deleted records)."""
-        from domains.training.mobile_training_store import get_training_store
+        try:
+            """Compact the training data store (reclaim space from deleted records)."""
+            from domains.training.mobile_training_store import get_training_store
 
-        store = get_training_store()
-        count = store.compact()
-        return success_response(data={"status": "compacted", "count": count})
+            store = get_training_store()
+            count = store.compact()
+            return success_response(data={"status": "compacted", "count": count})
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.compact_training_store")
     async def train_from_sessions(self, body: FromSessionsRequest = FromSessionsRequest(), request: Request = None) -> AsyncGenerator[str, None]:
         """
         Train the model from server-side inference logs (SSE streaming).
@@ -1374,20 +1449,23 @@ class MobileRouter:
                 proc.kill()
 
     async def get_auto_train_status(self) -> dict:
-        """
-        Get auto-trainer status and configuration.
+        try:
+            """
+            Get auto-trainer status and configuration.
 
-        Returns:
-            Enabled state, threshold, pending count, last train info.
+            Returns:
+                Enabled state, threshold, pending count, last train info.
 
-        Side effects:
-            - None (reads from AutoTrainer singleton).
-        """
-        from domains.training.auto_trainer import get_auto_trainer
+            Side effects:
+                - None (reads from AutoTrainer singleton).
+            """
+            from domains.training.auto_trainer import get_auto_trainer
 
-        trainer = get_auto_trainer()
-        return success_response(data=trainer.status())
+            trainer = get_auto_trainer()
+            return success_response(data=trainer.status())
 
+        except Exception as e:
+            classify_and_raise(e, source="mobile.get_auto_train_status")
     async def update_auto_train_config(
         self,
         threshold: int | None = Query(None, ge=1, le=100),

@@ -263,6 +263,7 @@ export default function AutoTrainPage() {
                     onChange={e => setSourceText(e.target.value)}
                     placeholder="Paste or type your training data here..."
                     rows={6}
+                    aria-label="Source text for training"
                     className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
@@ -286,6 +287,7 @@ export default function AutoTrainPage() {
                     id="at-checkpoint"
                     value={selectedCheckpoint}
                     onChange={e => setSelectedCheckpoint(e.target.value)}
+                    aria-label="Select checkpoint"
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="">-- select --</option>

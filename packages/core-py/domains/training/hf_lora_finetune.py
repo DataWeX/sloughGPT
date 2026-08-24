@@ -107,11 +107,11 @@ class HFLoraTrainer:
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found: {model_path}")
 
-        logger.info(f"Loading model from {model_path}")
+        logger.info("Loading model from %s", model_path)
         provider = SloNetChatProvider.from_slnc(str(model_path))
         self.model = provider._model
-        logger.info(f"Model loaded: {self.model.vocab_size} vocab, "
-                    f"{self.model.n_embed} embed, {self.model.n_layer} layers")
+        logger.info("Model loaded: %s vocab, %s embed, %s layers",
+                    self.model.vocab_size, self.model.n_embed, self.model.n_layer)
         return self.model
 
     def apply_lora(self) -> Dict[str, Any]:
@@ -128,8 +128,8 @@ class HFLoraTrainer:
         self.model = apply_lora_to_model(self.model, config)
         self.lora_params = get_lora_parameters(self.model)
         n_params = count_lora_parameters(self.model)
-        logger.info(f"Applied LoRA: {len(self.lora_params)} tensors, "
-                    f"{n_params:,} trainable parameters")
+        logger.info("Applied LoRA: %d tensors, %s trainable parameters",
+                    len(self.lora_params), f"{n_params:,}")
         return self.lora_params
 
     def _prepare_data(self):
@@ -257,8 +257,8 @@ class HFLoraTrainer:
                                 "lr": self.config.learning_rate,
                             })
                         logger.info(
-                            f"step={total_steps} epoch={epoch+1} "
-                            f"loss={avg_loss:.4f} lr={self.config.learning_rate:.2e}"
+                            "step=%d epoch=%d loss=%.4f lr=%.2e",
+                            total_steps, epoch+1, avg_loss, self.config.learning_rate,
                         )
 
                 # Epoch complete
@@ -266,8 +266,8 @@ class HFLoraTrainer:
                 if avg_epoch_loss < best_loss:
                     best_loss = avg_epoch_loss
 
-                logger.info(f"Epoch {epoch+1}/{self.config.epochs} "
-                           f"loss={avg_epoch_loss:.4f}")
+                logger.info("Epoch %d/%d loss=%.4f",
+                            epoch+1, self.config.epochs, avg_epoch_loss)
 
             # Save adapter
             adapter_path = self._save_adapter()
@@ -296,7 +296,7 @@ class HFLoraTrainer:
 
         except Exception as e:
             self._is_training = False
-            logger.error(f"Training failed: {e}")
+            logger.error("Training failed: %s", e)
             return TrainResult(
                 success=False,
                 status="failed",
@@ -326,8 +326,8 @@ class HFLoraTrainer:
             adapter_dict[f"_config/target_module_{i}"] = np.array([ord(c) for c in m], dtype=np.int64)
 
         np.savez_compressed(str(adapter_path), **adapter_dict)
-        logger.info(f"Saved LoRA adapter to {adapter_path} "
-                   f"({adapter_path.stat().st_size / 1024:.1f} KB)")
+        logger.info("Saved LoRA adapter to %s (%.1f KB)",
+                    adapter_path, adapter_path.stat().st_size / 1024)
         return adapter_path
 
     @property
@@ -375,7 +375,7 @@ def load_lora_adapter(model: SloTransformer, adapter_path: str) -> SloTransforme
         if name in adapter and hasattr(param, 'data'):
             param.data[:] = adapter[name]
 
-    logger.info(f"Loaded LoRA adapter from {adapter_path}")
+    logger.info("Loaded LoRA adapter from %s", adapter_path)
     return model
 
 
@@ -406,7 +406,7 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
 
             # Replace in the tree
             _set_nested(model, path.split("."), new_linear)
-            logger.info(f"Merged LoRA into {path}")
+            logger.info("Merged LoRA into %s", path)
 
         elif isinstance(module, LoRAEmbedding):
             # Fold LoRA delta into base embedding weight
@@ -418,7 +418,7 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
 
             # Replace in the tree
             _set_nested(model, path.split("."), base_embedding)
-            logger.info(f"Merged LoRA embedding into {path}")
+            logger.info("Merged LoRA embedding into %s", path)
 
     # Clear the LoRA flag
     model._has_lora = False

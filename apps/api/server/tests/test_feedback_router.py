@@ -19,6 +19,8 @@ from tests.test_support import get_test_client
 @pytest.fixture(autouse=True)
 def _isolated_feedback_controller(tmp_path):
     """Create a FeedbackController backed by a temp MogDB, inject it, clean up."""
+    import routers.feedback as fb_mod
+    fb_mod._feedback_stats_cache = None
     db_path = str(tmp_path / "feedback_mogdb")
     controller = FeedbackController(tmp_path, db_path=db_path)
     set_feedback_controller(controller)
@@ -178,7 +180,7 @@ class TestConversations:
         conv_id = create_resp.json()["id"]
         resp = client.delete(f"/feedback/conversations/{conv_id}")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.json()["data"]["status"] == "deleted"
 
     def test_delete_conversation_not_found(self):
         resp = client.delete("/feedback/conversations/nonexistent")

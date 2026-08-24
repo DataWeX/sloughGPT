@@ -98,9 +98,9 @@ class CollectionsRouter:
                 "name": req.name,
                 "source_type": req.source_type,
                 "store_type": req.store_type,
-                "filters": len(filters),
+                "filters": len(req.filter_chain),
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="collections.create_pipeline")
         except Exception as e:
             logger.warning("Create pipeline failed: %s", e)
@@ -125,7 +125,7 @@ class CollectionsRouter:
                 "stats": pipeline.stats,
                 "elapsed_ms": round(_elapsed_ms, 1),
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="collections.run_pipeline")
         except Exception as e:
             logger.warning("Run pipeline failed: %s", e)
@@ -162,7 +162,7 @@ class CollectionsRouter:
                 "records": records[:50],
                 "elapsed_ms": round(_elapsed_ms, 1),
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="collections.collect_direct")
         except Exception as e:
             logger.warning("Direct collect failed: %s", e)
@@ -191,7 +191,7 @@ class CollectionsRouter:
                 "name": getattr(pipeline, 'name', pipeline_id),
                 "stats": pipeline.stats,
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="collections.get_pipeline")
         except Exception as e:
             classify_and_raise(e, source="get_pipeline")
@@ -223,7 +223,7 @@ class CollectionsRouter:
                 "collected": count,
                 "stats": pipeline.stats,
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="collections.collect")
         except Exception as e:
             classify_and_raise(e, source="collect")
@@ -248,7 +248,7 @@ class CollectionsRouter:
                 "total": len(records),
                 "returned": len(limited),
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="collections.get_records")
         except Exception as e:
             classify_and_raise(e, source="get_records")

@@ -253,13 +253,14 @@ export default function CompanionPage() {
                   <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${color} w-20 text-center`}>
                     {label}
                   </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
+                   <input
+                     type="range"
+                     min={0}
+                     max={1}
+                     step={0.05}
                 value={(traits[key as keyof CompanionTraits] as number) ?? 0.5}
                 onChange={e => handleTraitChange(key, parseFloat(e.target.value))}
+                aria-label={`${label} trait level`}
                 className="flex-1 h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
               />
               <span className="text-xs font-mono text-muted-foreground w-8 text-right">

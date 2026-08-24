@@ -125,34 +125,37 @@ class SystemRouter:
             classify_and_raise(exc, source="system.lifecycle")
 
     async def stream_output(self, request: Request, tail: int = Query(50, ge=0, le=500)) -> AsyncGenerator[str, None]:
-        """SSE stream of all server output (logs, training progress, etc.).
+        try:
+            """SSE stream of all server output (logs, training progress, etc.).
 
-        Sends recent history first, then streams new lines as they arrive.
-        Each event: {"text": "...", "level": "info|error|warning", "source": "...", "ts": 1234.5}
-        """
-        from domains.infrastructure.output_buffer import get_server_buffer
+            Sends recent history first, then streams new lines as they arrive.
+            Each event: {"text": "...", "level": "info|error|warning", "source": "...", "ts": 1234.5}
+            """
+            from domains.infrastructure.output_buffer import get_server_buffer
 
-        buf = get_server_buffer()
-        sub = buf.subscribe("http-" + str(id(request)))
+            buf = get_server_buffer()
+            sub = buf.subscribe("http-" + str(id(request)))
 
-        async def generate() -> AsyncGenerator[str, None]:
-            """generate."""
-            try:
-                for line in buf.tail(tail):
-                    yield f"data: {line.to_sse()}\n\n"
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    lines = await sub.async_read(timeout=0.2)
-                    for line in lines:
+            async def generate() -> AsyncGenerator[str, None]:
+                """generate."""
+                try:
+                    for line in buf.tail(tail):
                         yield f"data: {line.to_sse()}\n\n"
-            except (asyncio.CancelledError, GeneratorExit):
-                pass
-            finally:
-                buf.unsubscribe(sub.name)
+                    while True:
+                        if await request.is_disconnected():
+                            break
+                        lines = await sub.async_read(timeout=0.2)
+                        for line in lines:
+                            yield f"data: {line.to_sse()}\n\n"
+                except (asyncio.CancelledError, GeneratorExit):
+                    pass
+                finally:
+                    buf.unsubscribe(sub.name)
 
-        return StreamingResponse(generate(), media_type="text/event-stream")
+            return StreamingResponse(generate(), media_type="text/event-stream")
 
+        except Exception as e:
+            classify_and_raise(e, source="system.stream_output")
     async def tail_output(self, n: int = Query(100, ge=1, le=1000)) -> dict:
         """Get last N lines of server output."""
         try:

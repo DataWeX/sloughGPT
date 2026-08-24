@@ -62,6 +62,16 @@ function buildSteps(status: WorkflowStatus | null): PipelineStep[] {
 export function WorkflowPipeline({ status }: WorkflowPipelineProps) {
   const steps = buildSteps(status)
 
+  if (status === null) {
+    return (
+      <Card data-testid="workflow-pipeline">
+        <CardContent className="py-6">
+          <p className="text-sm text-muted-foreground text-center">Pipeline not configured</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (steps.length === 0) return null
 
   return (

@@ -138,61 +138,64 @@ class MultimodalRouter:
     # ── Unified Status ────────────────────────────────────────────────
 
     async def status(self) -> dict:
-        """status."""
-        mgr = self._ensure_initialized()
-        caps = mgr.capabilities
-        engine = getattr(mgr, "_multimodal_engine", None)
-        learning = getattr(mgr, "_learning_count", 0)
-        trained = getattr(engine, "_trained", False) if engine else False
-        vocab_size = getattr(getattr(engine, "text", None), "vocab_size", 0) if engine else 0
-        buf = getattr(mgr, "_replay_buffer", None)
-        history = getattr(mgr, "_caption_history", [])
-        accuracy_history = getattr(mgr, "_accuracy_history", [])
-        unique = len(set(history)) if history else 0
+        try:
+            """status."""
+            mgr = self._ensure_initialized()
+            caps = mgr.capabilities
+            engine = getattr(mgr, "_multimodal_engine", None)
+            learning = getattr(mgr, "_learning_count", 0)
+            trained = getattr(engine, "_trained", False) if engine else False
+            vocab_size = getattr(getattr(engine, "text", None), "vocab_size", 0) if engine else 0
+            buf = getattr(mgr, "_replay_buffer", None)
+            history = getattr(mgr, "_caption_history", [])
+            accuracy_history = getattr(mgr, "_accuracy_history", [])
+            unique = len(set(history)) if history else 0
 
-        with self._video_training_lock:
-            video = dict(self._video_training_state)
+            with self._video_training_lock:
+                video = dict(self._video_training_state)
 
-        with self._dpo_lock:
-            dpo = dict(self._dpo_state)
+            with self._dpo_lock:
+                dpo = dict(self._dpo_state)
 
-        return success_response(data={
-            "engine": {
-                "speech_to_text": caps.speech_to_text,
-                "image_caption": caps.image_caption,
-                "speech_model": caps.speech_model,
-                "vision_model": caps.vision_model,
-                "status": "trained" if trained else ("learning" if learning > 0 else "ready"),
-            },
-            "learning": {
-                "images_learned": learning,
-                "trained": trained,
-                "vocab_size": vocab_size,
-                "replay_buffer_size": buf.size if buf else 0,
-                "learning_method": "contrastive + self-training",
-                "caption_history": history[-50:],
-                "unique_captions": unique,
-                "diversity_ratio": round(unique / max(len(history), 1), 3),
-                "accuracy_history": [round(a, 2) for a in accuracy_history[-50:]],
-                "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
-                "last_accuracy": round(accuracy_history[-1], 2) if accuracy_history else 0.0,
-            },
-            "batch": {
-                "running": self._background_job["running"],
-                "job_id": self._background_job["job_id"],
-                "total": self._background_job["total"],
-                "completed": self._background_job["completed"],
-                "errors": self._background_job["errors"],
-                "progress_pct": round(self._background_job["completed"] / max(self._background_job["total"], 1) * 100, 1) if self._background_job["total"] > 0 else 0,
-                "current_caption": self._background_job["current_caption"],
-                "current_image": self._background_job["current_image"],
-            },
-            "dpo": dpo,
-            "video": video,
-        })
+            return success_response(data={
+                "engine": {
+                    "speech_to_text": caps.speech_to_text,
+                    "image_caption": caps.image_caption,
+                    "speech_model": caps.speech_model,
+                    "vision_model": caps.vision_model,
+                    "status": "trained" if trained else ("learning" if learning > 0 else "ready"),
+                },
+                "learning": {
+                    "images_learned": learning,
+                    "trained": trained,
+                    "vocab_size": vocab_size,
+                    "replay_buffer_size": buf.size if buf else 0,
+                    "learning_method": "contrastive + self-training",
+                    "caption_history": history[-50:],
+                    "unique_captions": unique,
+                    "diversity_ratio": round(unique / max(len(history), 1), 3),
+                    "accuracy_history": [round(a, 2) for a in accuracy_history[-50:]],
+                    "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
+                    "last_accuracy": round(accuracy_history[-1], 2) if accuracy_history else 0.0,
+                },
+                "batch": {
+                    "running": self._background_job["running"],
+                    "job_id": self._background_job["job_id"],
+                    "total": self._background_job["total"],
+                    "completed": self._background_job["completed"],
+                    "errors": self._background_job["errors"],
+                    "progress_pct": round(self._background_job["completed"] / max(self._background_job["total"], 1) * 100, 1) if self._background_job["total"] > 0 else 0,
+                    "current_caption": self._background_job["current_caption"],
+                    "current_image": self._background_job["current_image"],
+                },
+                "dpo": dpo,
+                "video": video,
+            })
 
-    # ── Training ───────────────────────────────────────────────────────
+        # ── Training ───────────────────────────────────────────────────────
 
+        except Exception as e:
+            classify_and_raise(e, source="multimodal.status")
     async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None)) -> dict:
         """train_on_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
@@ -297,49 +300,52 @@ class MultimodalRouter:
         safe_audit_log("multimodal.train.complete", resource=self._background_job.get("job_id", "unknown"), detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={self._background_job['completed']} errors={self._background_job['errors']}")
 
     async def train_video(self, req: VideoTrainRequest) -> dict:
-        """train_video."""
-        import time as _time
-        _t0 = _time.monotonic()
-        with self._video_training_lock:
-            if self._video_training_state["status"] == "running":
-                raise_error("Video training already in progress", "E_INFRA_BUSY")
-            self._video_training_state["status"] = "running"
-            self._video_training_state["error"] = None
-            self._video_training_state["result"] = None
-
-        job_id = f"video_{int(time.time())}"
-        self._video_training_state["job_id"] = job_id
-
-        def _progress(epoch, step, loss, total):
+        try:
+            """train_video."""
+            import time as _time
+            _t0 = _time.monotonic()
             with self._video_training_lock:
-                self._video_training_state["current_epoch"] = epoch
-                self._video_training_state["current_step"] = step
-                self._video_training_state["total_steps"] = total
-                self._video_training_state["current_loss"] = float(loss)
+                if self._video_training_state["status"] == "running":
+                    raise_error("Video training already in progress", "E_INFRA_BUSY")
+                self._video_training_state["status"] = "running"
+                self._video_training_state["error"] = None
+                self._video_training_state["result"] = None
 
-        def _run():
-            try:
-                from domains.training.video_trainer import VideoCaptionTrainer
-                trainer = VideoCaptionTrainer(max_frames=8, lr=req.learning_rate)
-                result = trainer.train(
-                    data_path=req.data_path, epochs=req.epochs, batch_size=req.batch_size,
-                    lr=req.learning_rate, output_dir=req.output_dir, progress_callback=_progress,
-                )
+            job_id = f"video_{int(time.time())}"
+            self._video_training_state["job_id"] = job_id
+
+            def _progress(epoch, step, loss, total):
                 with self._video_training_lock:
-                    self._video_training_state["status"] = "completed" if result.get("status") == "completed" else "error"
-                    self._video_training_state["result"] = result
-            except Exception as e:
-                with self._video_training_lock:
-                    self._video_training_state["status"] = "error"
-                    self._video_training_state["error"] = str(e)
+                    self._video_training_state["current_epoch"] = epoch
+                    self._video_training_state["current_step"] = step
+                    self._video_training_state["total_steps"] = total
+                    self._video_training_state["current_loss"] = float(loss)
 
-        from domains.training.executor import get_training_executor
-        executor = get_training_executor()
-        executor.submit(_run, f"vtrain_{job_id}")
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail=f"video elapsed={_elapsed_ms:.0f}ms", epochs=req.epochs, batch_size=req.batch_size)
-        return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
+            def _run():
+                try:
+                    from domains.training.video_trainer import VideoCaptionTrainer
+                    trainer = VideoCaptionTrainer(max_frames=8, lr=req.learning_rate)
+                    result = trainer.train(
+                        data_path=req.data_path, epochs=req.epochs, batch_size=req.batch_size,
+                        lr=req.learning_rate, output_dir=req.output_dir, progress_callback=_progress,
+                    )
+                    with self._video_training_lock:
+                        self._video_training_state["status"] = "completed" if result.get("status") == "completed" else "error"
+                        self._video_training_state["result"] = result
+                except Exception as e:
+                    with self._video_training_lock:
+                        self._video_training_state["status"] = "error"
+                        self._video_training_state["error"] = str(e)
 
+            from domains.training.executor import get_training_executor
+            executor = get_training_executor()
+            executor.submit(_run, f"vtrain_{job_id}")
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail=f"video elapsed={_elapsed_ms:.0f}ms", epochs=req.epochs, batch_size=req.batch_size)
+            return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
+
+        except Exception as e:
+            classify_and_raise(e, source="multimodal.train_video")
     async def video_infer(self, req: VideoInferRequest) -> dict:
         """video_infer."""
         try:
@@ -567,77 +573,83 @@ class MultimodalRouter:
     # ── Dataset ───────────────────────────────────────────────────────
 
     async def create_visual_dataset(self, req: VisualDatasetRequest) -> dict:
-        """create_visual_dataset."""
-        import time as _time
-        _t0 = _time.monotonic()
-        image_dir = Path(req.image_dir).resolve()
-        _REPO_ROOT = Path(__file__).resolve().parents[4]
-        allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
-        if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
-                    raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
-
-        extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-        datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
-        output_path = datasets_dir / f"{req.name}.jsonl"
-
-        def _validate_and_list():
-            if not image_dir.exists():
-                raise_error(f"Directory not found: {req.image_dir}", "E_BAD_REQUEST")
-            files = sorted([f for f in image_dir.iterdir() if f.suffix.lower() in extensions])
-            if not files:
-                raise_error(f"No images in {req.image_dir}", "E_BAD_REQUEST")
-            datasets_dir.mkdir(parents=True, exist_ok=True)
-            return files
-
-        image_files = await asyncio.to_thread(_validate_and_list)
-        auto_captioned = False
-        if req.auto_caption:
-            try:
-                mgr = self._ensure_initialized()
-                auto_captioned = True
-            except Exception as exc:
-                auto_captioned = False
-                logger.debug("Auto-caption init failed: %s", exc)
-        def _build_dataset():
-            entries = 0
-            with open(output_path, "w") as f:
-                for img_path in image_files:
-                    entry = {"image_path": str(img_path), "caption": ""}
-                    if req.auto_caption and auto_captioned:
-                        try:
-                            caps = mgr.caption_image(str(img_path))
-                            if caps:
-                                entry["caption"] = caps[0].text
-                        except Exception as exc:
-                            logger.debug("Per-image caption failed for %s: %s", img_path, exc)
-                    f.write(json.dumps(entry) + "\n")
-                    entries += 1
-            return entries
-
-        entries = await asyncio.to_thread(_build_dataset)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("multimodal.visual_dataset", resource=req.name, detail=f"entries={entries} auto_caption={auto_captioned} elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),
-                "entries": entries, "auto_captioned": auto_captioned, "elapsed_ms": round(_elapsed_ms, 1)})
-
-    # ── Checkpoints ──────────────────────────────────────────────────
-
-    async def list_checkpoints(self):
-        """list_checkpoints."""
         try:
-            from domains.training.video_trainer import list_video_checkpoints
+            """create_visual_dataset."""
+            import time as _time
+            _t0 = _time.monotonic()
+            image_dir = Path(req.image_dir).resolve()
+            _REPO_ROOT = Path(__file__).resolve().parents[4]
+            allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
+            if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
+                        raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
 
-            def _list():
-                ckpts = list_video_checkpoints()
-                if not ckpts:
-                    ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
-                return ckpts
+            extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+            datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+            output_path = datasets_dir / f"{req.name}.jsonl"
 
-            return await asyncio.to_thread(_list)
-        except Exception as exc:
-            logger.warning("list_checkpoints failed: %s", exc)
-            return []
+            def _validate_and_list():
+                if not image_dir.exists():
+                    raise_error(f"Directory not found: {req.image_dir}", "E_BAD_REQUEST")
+                files = sorted([f for f in image_dir.iterdir() if f.suffix.lower() in extensions])
+                if not files:
+                    raise_error(f"No images in {req.image_dir}", "E_BAD_REQUEST")
+                datasets_dir.mkdir(parents=True, exist_ok=True)
+                return files
 
+            image_files = await asyncio.to_thread(_validate_and_list)
+            auto_captioned = False
+            if req.auto_caption:
+                try:
+                    mgr = self._ensure_initialized()
+                    auto_captioned = True
+                except Exception as exc:
+                    auto_captioned = False
+                    logger.debug("Auto-caption init failed: %s", exc)
+            def _build_dataset():
+                entries = 0
+                with open(output_path, "w") as f:
+                    for img_path in image_files:
+                        entry = {"image_path": str(img_path), "caption": ""}
+                        if req.auto_caption and auto_captioned:
+                            try:
+                                caps = mgr.caption_image(str(img_path))
+                                if caps:
+                                    entry["caption"] = caps[0].text
+                            except Exception as exc:
+                                logger.debug("Per-image caption failed for %s: %s", img_path, exc)
+                        f.write(json.dumps(entry) + "\n")
+                        entries += 1
+                return entries
+
+            entries = await asyncio.to_thread(_build_dataset)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("multimodal.visual_dataset", resource=req.name, detail=f"entries={entries} auto_caption={auto_captioned} elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),
+                    "entries": entries, "auto_captioned": auto_captioned, "elapsed_ms": round(_elapsed_ms, 1)})
+
+        # ── Checkpoints ──────────────────────────────────────────────────
+
+        except Exception as e:
+            classify_and_raise(e, source="multimodal.create_visual_dataset")
+    async def list_checkpoints(self):
+        try:
+            """list_checkpoints."""
+            try:
+                from domains.training.video_trainer import list_video_checkpoints
+
+                def _list():
+                    ckpts = list_video_checkpoints()
+                    if not ckpts:
+                        ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                    return ckpts
+
+                return await asyncio.to_thread(_list)
+            except Exception as exc:
+                logger.warning("list_checkpoints failed: %s", exc)
+                return []
+
+        except Exception as e:
+            classify_and_raise(e, source="multimodal.list_checkpoints")
     async def load_checkpoint(self, name: str) -> dict:
         """load_checkpoint."""
         try:
@@ -694,19 +706,22 @@ class MultimodalRouter:
     # ── Reset ─────────────────────────────────────────────────────────
 
     async def reset(self) -> dict:
-        """reset."""
-        mgr = self._ensure_initialized()
-        mgr._learning_count = 0
-        mgr._caption_history = []
-        mgr._accuracy_history = []
-        if getattr(mgr, "_replay_buffer", None):
-            mgr._replay_buffer.clear()
-        mgr._multimodal_engine = None
-        logger.info("Multimodal engine reset: all state cleared")
-        safe_audit_log("multimodal.reset", resource="all")
-        return success_response(data={"status": "ok", "message": "Multimodal engine reset"})
+        try:
+            """reset."""
+            mgr = self._ensure_initialized()
+            mgr._learning_count = 0
+            mgr._caption_history = []
+            mgr._accuracy_history = []
+            if getattr(mgr, "_replay_buffer", None):
+                mgr._replay_buffer.clear()
+            mgr._multimodal_engine = None
+            logger.info("Multimodal engine reset: all state cleared")
+            safe_audit_log("multimodal.reset", resource="all")
+            return success_response(data={"status": "ok", "message": "Multimodal engine reset"})
 
 
+        except Exception as e:
+            classify_and_raise(e, source="multimodal.reset")
 # ── Module-level exports ──────────────────────────────────────────
 
 multimodal_router = MultimodalRouter()

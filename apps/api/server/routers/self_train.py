@@ -71,7 +71,7 @@ class SelfTrainRouter:
             logger.info("Self-training started (pid=%d, model=%s)", proc.pid, req.model if req and req.model else "default")
             safe_audit_log("self_train.start", resource=req.model if req and req.model else "default", detail=f"pid={proc.pid}", temperature=req.temperature if req and req.temperature is not None else None, forever=bool(req and req.forever))
             return success_response(data={"status": "started", "pid": proc.pid})
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="self_train.start_self_train")
         except Exception as e:
             logger.warning("Self-training start failed: %s", e)

@@ -143,11 +143,14 @@ class BenchmarkRouter:
 
     async def run_benchmark(self, model: str = "gpt2") -> dict:
         """Run model benchmark - returns real metrics"""
-        _t0 = _time.monotonic()
-        result = self._get_model_metrics(model)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("benchmark.run", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data=result)
+        try:
+            _t0 = _time.monotonic()
+            result = self._get_model_metrics(model)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.run", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data=result)
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.run_benchmark")
 
     async def get_model_metrics(self, model: str = "gpt2") -> dict:
         """Return real-time metrics for the currently loaded model.
@@ -166,11 +169,14 @@ class BenchmarkRouter:
             Reads the ModelsController for inference counters.
             Returns model_loaded=False if no provider is resident.
         """
-        _t0 = _time.monotonic()
-        result = self._get_model_metrics(model)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("benchmark.metrics", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data=result)
+        try:
+            _t0 = _time.monotonic()
+            result = self._get_model_metrics(model)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.metrics", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data=result)
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.get_model_metrics")
 
     async def get_benchmark_by_id(self, model_id: str) -> dict:
         """Return benchmark results for a specific model.
@@ -186,11 +192,14 @@ class BenchmarkRouter:
         Side effects:
             Reads the ServerState singleton for the active provider.
         """
-        _t0 = _time.monotonic()
-        result = self._get_model_metrics(model_id)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("benchmark.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data=result)
+        try:
+            _t0 = _time.monotonic()
+            result = self._get_model_metrics(model_id)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("benchmark.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data=result)
+        except Exception as e:
+            classify_and_raise(e, source="benchmark.get_benchmark_by_id")
 
     async def calculate_perplexity(self, text: str = "Sample text for evaluation") -> dict:
         """Calculate next-token perplexity on text using the active SloNet model.
@@ -234,7 +243,7 @@ class BenchmarkRouter:
                 "loss": round(loss, 4),
                 "tokens": len(ids),
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="benchmark.calculate_perplexity")
         except Exception as e:
             logger.warning("Perplexity benchmark failed: %s", e)

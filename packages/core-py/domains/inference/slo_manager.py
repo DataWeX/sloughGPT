@@ -81,7 +81,7 @@ class SloManager:
             return
 
         if not self.slos_dir.exists():
-            logger.warning(f"Slos directory not found: {self.slos_dir}", extra={"tag": "SOUL"})
+            logger.warning("Slos directory not found: %s", self.slos_dir, extra={"tag": "SOUL"})
             return
 
         # Find personality profiles (.slo) and checkpoint files (.soul) — recursive
@@ -92,7 +92,7 @@ class SloManager:
                     if soul_info:
                         self._souls_cache[soul_info.name] = soul_info
                 except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                    logger.debug(f"Failed to parse soul {sou_path}: {e}")  # pragma: no cover
+                    logger.debug("Failed to parse soul %s: %s", sou_path, e)  # pragma: no cover
 
         # Find text profile files in souls/ subdirectory (both .slo and .soul)
         soul_candidates = [self.slos_dir / "souls"]
@@ -111,10 +111,10 @@ class SloManager:
                             if soul_info and soul_info.name not in self._souls_cache:
                                 self._souls_cache[soul_info.name] = soul_info
                         except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                            logger.debug(f"Failed to parse soul profile {soul_path}: {e}")  # pragma: no cover
+                            logger.debug("Failed to parse soul profile %s: %s", soul_path, e)  # pragma: no cover
 
         if not hasattr(self, '_scanned'):
-            logger.info(f"Found {len(self._souls_cache)} souls", extra={"tag": "SOUL"})
+            logger.info("Found %s souls", len(self._souls_cache), extra={"tag": "SOUL"})
             self._scanned = True
 
     def _parse_soul_info(self, sou_path: str) -> Optional[SloInfo]:
@@ -195,7 +195,7 @@ class SloManager:
                 traits=traits,
             )
         except Exception as e:
-            logger.debug(f"Parse error for {sou_path}: {e}")
+            logger.debug("Parse error for %s: %s", sou_path, e)
             return None
 
     def _load_preference(self) -> None:
@@ -205,7 +205,7 @@ class SloManager:
                 name = self._preference_file.read_text().strip()
                 if name in self._souls_cache:
                     self._current_soul = name
-                    logger.info(f"Restored soul preference: {name}", extra={"tag": "SOUL"})
+                    logger.info("Restored soul preference: %s", name, extra={"tag": "SOUL"})
             except Exception:
                 pass
 
@@ -262,7 +262,7 @@ class SloManager:
         soul = self._souls_cache[name]
         soul.loaded_at = os.times().elapsed
 
-        logger.info(f"Switched to soul: {name}", extra={"tag": "SOUL"})
+        logger.info("Switched to soul: %s", name, extra={"tag": "SOUL"})
 
         return {
             "success": True,

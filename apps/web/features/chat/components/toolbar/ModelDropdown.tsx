@@ -11,6 +11,7 @@ import {
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
+import { shortModelName } from '@/lib/chat-utils'
 
 interface ModelDropdownProps {
   variant?: 'dropdown' | 'panel'
@@ -27,10 +28,6 @@ interface FineTunedModel {
   model?: string
   dataset?: string
   size_mb?: number
-}
-
-function shortModelName(m: string): string {
-  return m.includes('/') ? m.split('/').pop() || m : m
 }
 
 function sizeLabel(info?: ModelInfo): string {

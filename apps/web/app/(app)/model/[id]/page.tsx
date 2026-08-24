@@ -437,6 +437,7 @@ function ModelTestPrompt({ modelId }: { modelId: string }) {
           onChange={e => setPrompt(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleTest() }}
           placeholder="Type a prompt to test..."
+          aria-label="Model test prompt"
           className="flex-1 h-9 rounded-md border border-border/60 bg-background px-3 text-sm"
           disabled={loading}
         />

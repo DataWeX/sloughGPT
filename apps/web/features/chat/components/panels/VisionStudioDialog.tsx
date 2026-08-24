@@ -419,6 +419,7 @@ export function VisionStudioDialog({
                   placeholder="e.g., 'a red car on a sunny road'"
                   value={trainLabel}
                   onChange={(e) => setTrainLabel(e.target.value)}
+                  aria-label="Ground truth label for training image"
                   disabled={!previewUrl || trainLoading}
                 />
               </div>
@@ -456,6 +457,7 @@ export function VisionStudioDialog({
                   placeholder="Describe an image to generate..."
                   value={genPrompt}
                   onChange={(e) => setGenPrompt(e.target.value)}
+                  aria-label="Image generation prompt"
                   onKeyDown={(e) => { if (e.key === 'Enter') handleGenerateImage() }}
                   disabled={genLoading}
                 />

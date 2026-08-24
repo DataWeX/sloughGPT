@@ -75,14 +75,17 @@ class SessionRouter:
         return SessionCore.get_messages(session_id)
 
     async def set_session_context(self, session_id: str, ctx: SessionContext) -> dict:
-        """Set session context (messages stored for regeneration)."""
-        if ctx.messages:
-            from domains.infrastructure.session_core import SessionCore
-            result = SessionCore.store_context(session_id, ctx.messages)
-            safe_audit_log("session.context_store", resource=session_id, detail=f"messages={len(ctx.messages)}")
-            return success_response(data=result)
-        return success_response(data={"session_id": session_id, "message_count": 0}, message="stored")
+        try:
+            """Set session context (messages stored for regeneration)."""
+            if ctx.messages:
+                from domains.infrastructure.session_core import SessionCore
+                result = SessionCore.store_context(session_id, ctx.messages)
+                safe_audit_log("session.context_store", resource=session_id, detail=f"messages={len(ctx.messages)}")
+                return success_response(data=result)
+            return success_response(data={"session_id": session_id, "message_count": 0}, message="stored")
 
+        except Exception as e:
+            classify_and_raise(e, source="session.set_session_context")
     async def get_session_messages(self, session_id: str) -> dict:
         """Return stored conversation messages for a session.
 
@@ -191,86 +194,89 @@ class SessionRouter:
             classify_and_raise(e, source="session_inspector")
 
     async def regenerate_session(self, session_id: str, request: Request) -> StreamingResponse:
-        """Regenerate the last assistant response for a session."""
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
-        _op_id = None
         try:
-            mgr = get_cancel_manager()
-            _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}")
-            mgr.start(_op_id)
-        except Exception as exc:
-            logger.debug("CancelManager registration failed for regenerate: %s", exc)
-
-        async def generate() -> AsyncIterator[str]:
-            """generate."""
-            _regen_start = time.time()
+            """Regenerate the last assistant response for a session."""
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            _op_id = None
             try:
-                from domains.infrastructure.session_core import SessionCore
-                msgs = SessionCore.get_messages(session_id)
-                if not msgs:
-                    yield self._sse_error("chat", "REGENERATE", "No session context found")
-                    return
+                mgr = get_cancel_manager()
+                _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}")
+                mgr.start(_op_id)
+            except Exception as exc:
+                logger.debug("CancelManager registration failed for regenerate: %s", exc)
 
-                from domains.models.provider import get_provider
-                provider = get_provider("default")
-                if provider is None:
-                    yield self._sse_error("chat", "REGENERATE", "Model not loaded")
-                    return
-
-                yield self._sse_event("chat", "REGENERATE", "thinking",
-                                      data={}, message="Regenerating...")
-
-                full_response = ""
-                _token_gen_start = time.time()
-                _max_token_wait_s = cfg.generate_timeout
-                _heartbeat_interval_s = 10.0
-                _last_heartbeat = time.time()
+            async def generate() -> AsyncIterator[str]:
+                """generate."""
+                _regen_start = time.time()
                 try:
-                    async for token in provider.chat_stream(
-                        msgs,
-                        max_tokens=512,
-                        temperature=0.8,
-                        session_id=session_id,
-                    ):
-                        if await request.is_disconnected():
-                            logger.info("Client disconnected from regenerate stream (request)", extra={"tag": "REQ", "context": {"session_id": session_id}})
-                            return
-                        if token:
-                            _token_gen_start = time.time()
-                            full_response += token
-                            yield self._sse_token("chat", token)
-                        else:
-                            now = time.time()
-                            if now - _last_heartbeat >= _heartbeat_interval_s:
-                                yield ": heartbeat\n\n"
-                                _last_heartbeat = now
-                        elapsed_since_token = time.time() - _token_gen_start
-                        if elapsed_since_token > _max_token_wait_s:
-                            logger.warning("Regenerate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "REQ"})
-                            yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
-                            return
-                    yield self._sse_token("chat", "", done=True)
-                    _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
-                    safe_audit_log("session.regenerate", resource=session_id, detail=f"chars={len(full_response)} elapsed={_regen_elapsed_ms}ms")
-                    logger.info("Regenerate completed: %d chars in %dms", len(full_response), _regen_elapsed_ms, extra={"tag": "REQ"})
-                except GeneratorExit:
-                    return
-                except Exception as e:
-                    logger.error("Regenerate stream error: %s", e, exc_info=True, extra={"tag": "REQ"})
-                    yield self._sse_error("chat", "REGENERATE", f"Generation failed: {e}")
-                    return
+                    from domains.infrastructure.session_core import SessionCore
+                    msgs = SessionCore.get_messages(session_id)
+                    if not msgs:
+                        yield self._sse_error("chat", "REGENERATE", "No session context found")
+                        return
 
-            except Exception as e:
-                logger.error("Regenerate error: %s", e, exc_info=True, extra={"tag": "REQ"})
-                yield self._sse_error("chat", "REGENERATE", str(e))
-            finally:
-                if _op_id:
+                    from domains.models.provider import get_provider
+                    provider = get_provider("default")
+                    if provider is None:
+                        yield self._sse_error("chat", "REGENERATE", "Model not loaded")
+                        return
+
+                    yield self._sse_event("chat", "REGENERATE", "thinking",
+                                          data={}, message="Regenerating...")
+
+                    full_response = ""
+                    _token_gen_start = time.time()
+                    _max_token_wait_s = cfg.generate_timeout
+                    _heartbeat_interval_s = 10.0
+                    _last_heartbeat = time.time()
                     try:
-                        get_cancel_manager().finish(_op_id)
-                    except Exception as exc:
-                        logger.debug("CancelManager.finish failed for regenerate: %s", exc)
+                        async for token in provider.chat_stream(
+                            msgs,
+                            max_tokens=512,
+                            temperature=0.8,
+                            session_id=session_id,
+                        ):
+                            if await request.is_disconnected():
+                                logger.info("Client disconnected from regenerate stream (request)", extra={"tag": "REQ", "context": {"session_id": session_id}})
+                                return
+                            if token:
+                                _token_gen_start = time.time()
+                                full_response += token
+                                yield self._sse_token("chat", token)
+                            else:
+                                now = time.time()
+                                if now - _last_heartbeat >= _heartbeat_interval_s:
+                                    yield ": heartbeat\n\n"
+                                    _last_heartbeat = now
+                            elapsed_since_token = time.time() - _token_gen_start
+                            if elapsed_since_token > _max_token_wait_s:
+                                logger.warning("Regenerate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "REQ"})
+                                yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                                return
+                        yield self._sse_token("chat", "", done=True)
+                        _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
+                        safe_audit_log("session.regenerate", resource=session_id, detail=f"chars={len(full_response)} elapsed={_regen_elapsed_ms}ms")
+                        logger.info("Regenerate completed: %d chars in %dms", len(full_response), _regen_elapsed_ms, extra={"tag": "REQ"})
+                    except GeneratorExit:
+                        return
+                    except Exception as e:
+                        logger.error("Regenerate stream error: %s", e, exc_info=True, extra={"tag": "REQ"})
+                        yield self._sse_error("chat", "REGENERATE", f"Generation failed: {e}")
+                        return
 
-        return StreamingResponse(generate(), media_type="text/event-stream")
+                except Exception as e:
+                    logger.error("Regenerate error: %s", e, exc_info=True, extra={"tag": "REQ"})
+                    yield self._sse_error("chat", "REGENERATE", str(e))
+                finally:
+                    if _op_id:
+                        try:
+                            get_cancel_manager().finish(_op_id)
+                        except Exception as exc:
+                            logger.debug("CancelManager.finish failed for regenerate: %s", exc)
+
+            return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+        except Exception as e:
+            classify_and_raise(e, source="session.regenerate_session")
 router = SessionRouter().router

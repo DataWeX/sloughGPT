@@ -227,159 +227,180 @@ class KBRouter:
         return best if scores[best] > 0 else "general"
 
     def list_knowledge(self, limit: int = Query(200, ge=1, le=5000), offset: int = Query(0, ge=0)) -> dict:
-        """List knowledge items with optional pagination."""
-        memory = self._get_memory()
-        entries = memory.list_all(top_k=limit + offset)
-        entries = entries[offset:offset + limit]
-        return [self._fact_from_entry(e) for e in entries]
-
-    def add_knowledge(self, req: KnowledgeCreate) -> dict:
-        """add_knowledge."""
-        from domains.learner.knowledge import KnowledgeFact
-        memory = self._get_memory()
-        topic = req.topic if not req.auto_tag else self._auto_tag(req.content)
-
-        # Auto-label semantic category if not set
-        label = ""
         try:
-            from domains.infrastructure.truth_labeler import get_truth_labeler
-            labeler = get_truth_labeler()
-            lr = labeler.label(req.content)
-            label = lr.label
-        except Exception as exc:
-            logger.debug("Truth labeler unavailable: %s", exc)
-        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+            """List knowledge items with optional pagination."""
+            memory = self._get_memory()
+            entries = memory.list_all(top_k=limit + offset)
+            entries = entries[offset:offset + limit]
+            return [self._fact_from_entry(e) for e in entries]
 
-        fact = KnowledgeFact(
-            content=req.content,
-            topic=topic,
-            source=req.source,
-            importance=req.importance,
-        )
-        is_new = memory.add_fact(fact)
-        import hashlib
-        content_hash = hashlib.md5(req.content.encode()).hexdigest()
-        item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
+        except Exception as e:
+            classify_and_raise(e, source="kb.list_knowledge")
+    def add_knowledge(self, req: KnowledgeCreate) -> dict:
+        try:
+            """add_knowledge."""
+            from domains.learner.knowledge import KnowledgeFact
+            memory = self._get_memory()
+            topic = req.topic if not req.auto_tag else self._auto_tag(req.content)
 
-        # Auto-ingest into production RAG for grounding verification
-        if is_new:
+            # Auto-label semantic category if not set
+            label = ""
             try:
-                from domains.cognitive.rag_service import get_rag_service
-                rag_svc = get_rag_service()
-                rag_svc.add_document(
-                    content=req.content,
-                    metadata={"source": req.source or "knowledge", "topic": topic or "general", "item_id": item_id},
-                )
-            except Exception as e:
-                logger.warning("RAG auto-ingest failed for knowledge add (topic=%s): %s", topic, e, exc_info=True)
+                from domains.infrastructure.truth_labeler import get_truth_labeler
+                labeler = get_truth_labeler()
+                lr = labeler.label(req.content)
+                label = lr.label
+            except Exception as exc:
+                logger.debug("Truth labeler unavailable: %s", exc)
+            logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
-        safe_audit_log(
-            "knowledge.add",
-            resource=topic or "general",
-            detail="stored" if is_new else "duplicate",
-            source=req.source or "",
-        )
-        return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
-
-    def update_knowledge(self, item_id: str, req: KnowledgeUpdate) -> dict:
-        """Update a knowledge item's content, topic, or importance."""
-        memory = self._get_memory()
-        all_items = memory.list_all(top_k=5000)
-        target = None
-        for item in all_items:
-            if item.get("id") == item_id:
-                target = item
-                break
-        if not target:
-            raise_error("Item not found", "E_NOT_FOUND", status_code=404)
-
-        # Build updated fact
-        from domains.learner.knowledge import KnowledgeFact
-        new_fact = KnowledgeFact(
-            content=req.content if req.content is not None else target["content"],
-            topic=req.topic if req.topic is not None else target.get("topic", "general"),
-            source=target.get("source", "manual"),
-            url=target.get("url", ""),
-            timestamp=target.get("timestamp", time.time()),
-            importance=req.importance if req.importance is not None else target.get("importance", 0.5),
-        )
-
-        # Delete old, add new
-        memory.delete_by_id(item_id)
-        ok = memory.add_fact(new_fact)
-        safe_audit_log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
-        return success_response(data={"status": "updated" if ok else "stored"})
-
-    def batch_ingest(self, req: KnowledgeBatchRequest) -> dict:
-        """Store multiple knowledge items in KnowledgeMemory."""
-        from domains.learner.knowledge import KnowledgeFact
-        memory = self._get_memory()
-        stored = 0
-        for item in req.items:
             fact = KnowledgeFact(
-                content=item.content,
-                topic="injected",
-                source=item.source,
-                timestamp=time.time(),
-                importance=0.7,
+                content=req.content,
+                topic=topic,
+                source=req.source,
+                importance=req.importance,
             )
-            if memory.add_fact(fact):
-                stored += 1
-        safe_audit_log("knowledge.add", resource="batch", detail=f"stored={stored}")
-        return success_response(data={"stored": stored})
+            is_new = memory.add_fact(fact)
+            import hashlib
+            content_hash = hashlib.md5(req.content.encode()).hexdigest()
+            item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
 
+            # Auto-ingest into production RAG for grounding verification
+            if is_new:
+                try:
+                    from domains.cognitive.rag_service import get_rag_service
+                    rag_svc = get_rag_service()
+                    rag_svc.add_document(
+                        content=req.content,
+                        metadata={"source": req.source or "knowledge", "topic": topic or "general", "item_id": item_id},
+                    )
+                except Exception as e:
+                    logger.warning("RAG auto-ingest failed for knowledge add (topic=%s): %s", topic, e, exc_info=True)
+
+            safe_audit_log(
+                "knowledge.add",
+                resource=topic or "general",
+                detail="stored" if is_new else "duplicate",
+                source=req.source or "",
+            )
+            return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.add_knowledge")
+    def update_knowledge(self, item_id: str, req: KnowledgeUpdate) -> dict:
+        try:
+            """Update a knowledge item's content, topic, or importance."""
+            memory = self._get_memory()
+            all_items = memory.list_all(top_k=5000)
+            target = None
+            for item in all_items:
+                if item.get("id") == item_id:
+                    target = item
+                    break
+            if not target:
+                raise_error("Item not found", "E_NOT_FOUND", status_code=404)
+
+            # Build updated fact
+            from domains.learner.knowledge import KnowledgeFact
+            new_fact = KnowledgeFact(
+                content=req.content if req.content is not None else target["content"],
+                topic=req.topic if req.topic is not None else target.get("topic", "general"),
+                source=target.get("source", "manual"),
+                url=target.get("url", ""),
+                timestamp=target.get("timestamp", time.time()),
+                importance=req.importance if req.importance is not None else target.get("importance", 0.5),
+            )
+
+            # Delete old, add new
+            memory.delete_by_id(item_id)
+            ok = memory.add_fact(new_fact)
+            safe_audit_log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
+            return success_response(data={"status": "updated" if ok else "stored"})
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.update_knowledge")
+    def batch_ingest(self, req: KnowledgeBatchRequest) -> dict:
+        try:
+            """Store multiple knowledge items in KnowledgeMemory."""
+            from domains.learner.knowledge import KnowledgeFact
+            memory = self._get_memory()
+            stored = 0
+            for item in req.items:
+                fact = KnowledgeFact(
+                    content=item.content,
+                    topic="injected",
+                    source=item.source,
+                    timestamp=time.time(),
+                    importance=0.7,
+                )
+                if memory.add_fact(fact):
+                    stored += 1
+            safe_audit_log("knowledge.add", resource="batch", detail=f"stored={stored}")
+            return success_response(data={"stored": stored})
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.batch_ingest")
     def search_knowledge(self, query: str = "") -> dict:
-        """search_knowledge."""
-        memory = self._get_memory()
-        results = memory.search(query, top_k=20) if query else []
-        return success_response(data={
-            "results": [self._fact_from_entry(r) for r in results],
-            "count": len(results),
-        })
+        try:
+            """search_knowledge."""
+            memory = self._get_memory()
+            results = memory.search(query, top_k=20) if query else []
+            return success_response(data={
+                "results": [self._fact_from_entry(r) for r in results],
+                "count": len(results),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.search_knowledge")
     def knowledge_stats(self) -> dict:
-        """Return knowledge base statistics.
+        try:
+            """Return knowledge base statistics.
 
-        Aggregates topic/source counts from the full store in a single pass.
-        """
-        memory = self._get_memory()
-        topics: dict[str, int] = {}
-        sources: dict[str, int] = {}
-        total = 0
-        importance_sum = 0.0
+            Aggregates topic/source counts from the full store in a single pass.
+            """
+            memory = self._get_memory()
+            topics: dict[str, int] = {}
+            sources: dict[str, int] = {}
+            total = 0
+            importance_sum = 0.0
 
-        for item in memory.list_all(top_k=5000):
-            t = item.get("topic", "general")
-            topics[t] = topics.get(t, 0) + 1
-            s = item.get("source", "unknown")
-            sources[s] = sources.get(s, 0) + 1
-            importance_sum += item.get("importance", 0.5)
-            total += 1
+            for item in memory.list_all(top_k=5000):
+                t = item.get("topic", "general")
+                topics[t] = topics.get(t, 0) + 1
+                s = item.get("source", "unknown")
+                sources[s] = sources.get(s, 0) + 1
+                importance_sum += item.get("importance", 0.5)
+                total += 1
 
-        avg_importance = importance_sum / max(total, 1)
-        return success_response(data={
-            "total_items": total,
-            "topics": topics,
-            "topic_count": len(topics),
-            "sources": sources,
-            "avg_importance": round(avg_importance, 3),
-            "searchable": True,
-        })
+            avg_importance = importance_sum / max(total, 1)
+            return success_response(data={
+                "total_items": total,
+                "topics": topics,
+                "topic_count": len(topics),
+                "sources": sources,
+                "avg_importance": round(avg_importance, 3),
+                "searchable": True,
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.knowledge_stats")
     def list_topics(self) -> dict:
-        """List all unique topics with item counts."""
-        memory = self._get_memory()
-        all_items = memory.list_all(top_k=5000)
-        topics: dict[str, int] = {}
-        for item in all_items:
-            t = item.get("topic", "general")
-            topics[t] = topics.get(t, 0) + 1
-        sorted_topics = sorted(topics.items(), key=lambda x: -x[1])
-        return success_response(data={
-            "topics": [{"name": t, "count": c} for t, c in sorted_topics],
-            "total": len(topics),
-        })
+        try:
+            """List all unique topics with item counts."""
+            memory = self._get_memory()
+            all_items = memory.list_all(top_k=5000)
+            topics: dict[str, int] = {}
+            for item in all_items:
+                t = item.get("topic", "general")
+                topics[t] = topics.get(t, 0) + 1
+            sorted_topics = sorted(topics.items(), key=lambda x: -x[1])
+            return success_response(data={
+                "topics": [{"name": t, "count": c} for t, c in sorted_topics],
+                "total": len(topics),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.list_topics")
     def ingest_url(self, req: UrlIngestRequest) -> dict:
         """Ingest a URL into the knowledge base."""
         try:
@@ -425,85 +446,106 @@ class KBRouter:
                 "rejected": result.get("rejected", False),
                 "reason": result.get("reason"),
             })
-        except AppError:
+        except AppError as e:
             classify_and_raise(e, source="kb.ingest_url")
         except Exception as e:
             logger.warning("KB ingest failed: %s", e)
             classify_and_raise(e, source="kb_ingest")
 
     def batch_delete_knowledge(self, req: BatchDeleteRequest) -> dict:
-        """Delete multiple knowledge items by ID."""
-        memory = self._get_memory()
-        deleted = 0
-        for item_id in req.ids:
-            if memory.delete_by_id(item_id):
-                deleted += 1
-        safe_audit_log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
-        return success_response(data={"deleted": deleted})
+        try:
+            """Delete multiple knowledge items by ID."""
+            memory = self._get_memory()
+            deleted = 0
+            for item_id in req.ids:
+                if memory.delete_by_id(item_id):
+                    deleted += 1
+            safe_audit_log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
+            return success_response(data={"deleted": deleted})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.batch_delete_knowledge")
     def suggest_topic(self, req: SuggestTopicRequest) -> dict:
-        """Return the best auto-detected topic for content without storing."""
-        topic = self._auto_tag(req.content)
-        return success_response(data={"topic": topic, "confidence": "high" if topic != "general" else "low"})
+        try:
+            """Return the best auto-detected topic for content without storing."""
+            topic = self._auto_tag(req.content)
+            return success_response(data={"topic": topic, "confidence": "high" if topic != "general" else "low"})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.suggest_topic")
     def delete_knowledge(self, item_id: str) -> dict:
-        """delete_knowledge."""
-        memory = self._get_memory()
-        if memory.delete_by_id(item_id):
-            safe_audit_log("knowledge.delete", resource=item_id)
-            return success_response(data={"status": "deleted"})
-        raise_error("Item not found", "E_NOT_FOUND", status_code=404)
-
-    def train_knowledge_adapter_route(self) -> dict:
-        """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
-        import time as _time
-        from domains.infrastructure.knowledge_weight_integrator import train_knowledge_adapter, get_adapter_status
-        memory = self._get_memory()
-        facts = memory.list_all(top_k=5000)
-
-        _t0 = _time.monotonic()
-        result = train_knowledge_adapter(
-            knowledge_facts=facts,
-            num_epochs=2,
-        )
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-
-        status = get_adapter_status()
-        safe_audit_log(
-            "knowledge.train",
-            resource="adapter",
-            detail=f"elapsed={_elapsed_ms:.0f}ms",
-            facts=len(facts), status=result.get("status", ""),
-        )
-        return success_response(data={**result, "adapter_status": status, "elapsed_ms": round(_elapsed_ms, 1)})
-
-    def knowledge_adapter_status(self) -> dict:
-        """Return status of the knowledge weight adapter."""
-        from domains.infrastructure.knowledge_weight_integrator import get_adapter_status
-        return success_response(data=get_adapter_status())
-
-    def related_knowledge(self, item_id: str, top_k: int = Query(6, ge=1, le=20)) -> dict:
-        """Return semantically related knowledge items, excluding the current one."""
-        memory = self._get_memory()
-        all_items = memory.list_all(top_k=5000)
-        target = None
-        for item in all_items:
-            if item.get("id") == item_id:
-                target = item
-                break
-        if not target:
+        try:
+            """delete_knowledge."""
+            memory = self._get_memory()
+            if memory.delete_by_id(item_id):
+                safe_audit_log("knowledge.delete", resource=item_id)
+                return success_response(data={"status": "deleted"})
             raise_error("Item not found", "E_NOT_FOUND", status_code=404)
-        results = memory.search(target.get("content", ""), top_k=top_k + 1)
-        related = [r for r in results if r.get("id") != item_id][:top_k]
-        return success_response(data={"items": [self._fact_from_entry(r) for r in related], "count": len(related)})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.delete_knowledge")
+    def train_knowledge_adapter_route(self) -> dict:
+        try:
+            """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
+            import time as _time
+            from domains.infrastructure.knowledge_weight_integrator import train_knowledge_adapter, get_adapter_status
+            memory = self._get_memory()
+            facts = memory.list_all(top_k=5000)
+
+            _t0 = _time.monotonic()
+            result = train_knowledge_adapter(
+                knowledge_facts=facts,
+                num_epochs=2,
+            )
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+
+            status = get_adapter_status()
+            safe_audit_log(
+                "knowledge.train",
+                resource="adapter",
+                detail=f"elapsed={_elapsed_ms:.0f}ms",
+                facts=len(facts), status=result.get("status", ""),
+            )
+            return success_response(data={**result, "adapter_status": status, "elapsed_ms": round(_elapsed_ms, 1)})
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.train_knowledge_adapter_route")
+    def knowledge_adapter_status(self) -> dict:
+        try:
+            """Return status of the knowledge weight adapter."""
+            from domains.infrastructure.knowledge_weight_integrator import get_adapter_status
+            return success_response(data=get_adapter_status())
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.knowledge_adapter_status")
+    def related_knowledge(self, item_id: str, top_k: int = Query(6, ge=1, le=20)) -> dict:
+        try:
+            """Return semantically related knowledge items, excluding the current one."""
+            memory = self._get_memory()
+            all_items = memory.list_all(top_k=5000)
+            target = None
+            for item in all_items:
+                if item.get("id") == item_id:
+                    target = item
+                    break
+            if not target:
+                raise_error("Item not found", "E_NOT_FOUND", status_code=404)
+            results = memory.search(target.get("content", ""), top_k=top_k + 1)
+            related = [r for r in results if r.get("id") != item_id][:top_k]
+            return success_response(data={"items": [self._fact_from_entry(r) for r in related], "count": len(related)})
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.related_knowledge")
     def get_context(self) -> dict:
-        """get_context."""
-        memory = self._get_memory()
-        context = memory.get_context_string(max_items=50)
-        all_facts = memory.list_all()
-        return success_response(data={"context": context, "count": len(all_facts)})
+        try:
+            """get_context."""
+            memory = self._get_memory()
+            context = memory.get_context_string(max_items=50)
+            all_facts = memory.list_all()
+            return success_response(data={"context": context, "count": len(all_facts)})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.get_context")
     async def ingest_file(
         self,
         file: UploadFile = File(...),
@@ -647,215 +689,236 @@ class KBRouter:
         return chunks
 
     async def search_files(self, req: FileSearchRequest) -> dict:
-        """Semantic search across codebase files.
+        try:
+            """Semantic search across codebase files.
 
-        Indexes files in the given path and returns results ranked by
-        natural-language relevance.
-        """
-        from domains.learner.knowledge_ops import FileIndex
+            Indexes files in the given path and returns results ranked by
+            natural-language relevance.
+            """
+            from domains.learner.knowledge_ops import FileIndex
 
-        idx = FileIndex()
-        extensions = set(req.extensions) if req.extensions else None
+            idx = FileIndex()
+            extensions = set(req.extensions) if req.extensions else None
 
-        def _index_and_search():
-            stats = idx.index_directory(req.path, extensions=extensions)
-            results = idx.search(req.query, top_k=req.top_k)
-            return stats, results
+            def _index_and_search():
+                stats = idx.index_directory(req.path, extensions=extensions)
+                results = idx.search(req.query, top_k=req.top_k)
+                return stats, results
 
-        stats, results = await asyncio.to_thread(_index_and_search)
+            stats, results = await asyncio.to_thread(_index_and_search)
 
-        return success_response(data={
-            "results": results,
-            "indexed_files": stats["files_indexed"],
-            "indexed_chunks": stats["chunks_total"],
-        })
-
-    async def check_duplicate(self, req: DuplicateCheckRequest) -> dict:
-        """Check if content is a near-duplicate of existing knowledge.
-
-        Returns whether it's a duplicate, the best match, and similarity score.
-        """
-        from domains.learner.knowledge_ops import DuplicateDetector
-
-        memory = self._get_memory()
-        dup = DuplicateDetector(threshold=req.threshold)
-
-        def _check_dup():
-            dup.load_from_store(memory._vector_store)
-            return dup.check(req.content, embed_fn=memory._get_embedding)
-
-        is_dup, best_match, score = await asyncio.to_thread(_check_dup)
-
-        return success_response(data={
-            "is_duplicate": is_dup,
-            "best_match": best_match,
-            "score": score,
-            "threshold": req.threshold,
-        })
-
-    async def categorize_knowledge(self, req: CategorizeRequest) -> dict:
-        """Auto-assign a topic to content based on existing knowledge categories."""
-        from domains.learner.knowledge_ops import AutoCategorizer
-
-        memory = self._get_memory()
-        cat = AutoCategorizer()
-
-        def _categorize():
-            cat.load_from_store(memory._vector_store)
-            topic = cat.categorize(req.content, embed_fn=memory._get_embedding)
-            suggestions = cat.suggest_topics(req.content, top_k=3)
-            return topic, suggestions
-
-        topic, suggestions = await asyncio.to_thread(_categorize)
-
-        return success_response(data={
-            "topic": topic,
-            "suggestions": [{"topic": t, "score": round(s, 4)} for t, s in suggestions],
-        })
-
-    async def knowledge_gaps(self) -> dict:
-        """Find under-represented topics and knowledge gaps."""
-        from domains.learner.knowledge_ops import KnowledgeGapDetector
-
-        memory = self._get_memory()
-        gap = KnowledgeGapDetector()
-
-        def _find_gaps():
-            gap.load_from_store(memory._vector_store)
-            return gap.find_gaps(), gap._topic_counts
-
-        gaps, topic_counts = await asyncio.to_thread(_find_gaps)
-
-        return success_response(data={
-            "gaps": gaps,
-            "total_facts": memory._fact_counter,
-            "topics": list(topic_counts.keys()),
-        })
-
-    async def bulk_ingest(self, req: BulkIngestRequest) -> dict:
-        """Bulk ingest texts with automatic deduplication.
-
-        Skips near-duplicate content and reports added/skipped/errors.
-        The synchronous ingest runs in a thread pool so the event loop is not
-        blocked for other requests.
-        """
-        from domains.learner.knowledge_ops import BulkProcessor
-
-        memory = self._get_memory()
-        bp = BulkProcessor(memory)
-        report = await asyncio.to_thread(
-            bp.ingest_texts,
-            req.items,
-            topic=req.topic,
-            source=req.source,
-            dedup_threshold=req.dedup_threshold,
-        )
-
-        safe_audit_log(
-            "knowledge.add",
-            resource=req.topic or "bulk",
-            detail="bulk",
-            added=report.get("added", 0), skipped=report.get("skipped", 0),
-        )
-        return success_response(data={
-            "status": "completed",
-            **report,
-        })
-
-    async def train_embedder_endpoint(self) -> dict:
-        """Train the SloNet text embedder on all knowledge + dataset texts.
-
-        Collects texts from the knowledge base, ingested files, and datasets,
-        then trains a contrastive embedder. Returns training stats.
-        """
-        import asyncio
-
-        def _train():
-            from pathlib import Path
-            from domains.inference.slo_embedder import train_embedder
-
-            REPO = Path(__file__).resolve().parents[4]
-            texts = []
-
-            # 1. Knowledge entries
-            kb_path = REPO / "data" / "knowledge" / "entries.json"
-            if kb_path.exists():
-                with open(kb_path) as f:
-                    entries = json.load(f)
-                for e in entries:
-                    t = e.get("text", "")
-                    if len(t) > 20:
-                        texts.append(t)
-
-            # 2. Ingested files
-            ingested_dir = REPO / "data" / "ingested"
-            if ingested_dir.exists():
-                for fp in ingested_dir.glob("*.txt"):
-                    try:
-                        raw = fp.read_text(errors="ignore")
-                        chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
-                        texts.extend(chunks[:500])
-                    except Exception as exc:
-                        logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
-                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
-
-            # 3. Dataset files
-            datasets_dir = REPO / "datasets"
-            if datasets_dir.exists():
-                for fp in datasets_dir.glob("*.txt"):
-                    try:
-                        raw = fp.read_text(errors="ignore")
-                        chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
-                        texts.extend(chunks[:500])
-                    except Exception as exc:
-                        logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
-                    logger.debug("Suppressed exception in %s", __name__, exc_info=True)
-
-            # Deduplicate
-            seen = set()
-            unique = [t for t in texts if hash(t[:200]) not in seen and not seen.add(hash(t[:200]))]
-            texts = unique[:500]
-
-            if len(texts) < 10:
-                raise_error(f"Only {len(texts)} texts found. Need at least 10.", code="E_VAL_FIELD")
-
-            result = train_embedder(
-                texts, epochs=15, lr=5e-4, batch_size=32,
-                embed_dim=64, vocab_size=1024, max_seq_len=32,
-                n_heads=2, n_layers=1,
-            )
             return success_response(data={
-                "status": "trained",
-                "texts_used": len(texts),
-                "epochs": result["epochs"],
-                "final_loss": result["final_loss"],
-                "save_path": result["save_path"],
+                "results": results,
+                "indexed_files": stats["files_indexed"],
+                "indexed_chunks": stats["chunks_total"],
             })
 
-        result = await asyncio.to_thread(_train)
-        safe_audit_log("knowledge.train", resource="embedder", detail=result.get("status", "ok"), texts_used=result.get("texts_used", 0))
-        return success_response(data=result)
+        except Exception as e:
+            classify_and_raise(e, source="kb.search_files")
+    async def check_duplicate(self, req: DuplicateCheckRequest) -> dict:
+        try:
+            """Check if content is a near-duplicate of existing knowledge.
 
+            Returns whether it's a duplicate, the best match, and similarity score.
+            """
+            from domains.learner.knowledge_ops import DuplicateDetector
+
+            memory = self._get_memory()
+            dup = DuplicateDetector(threshold=req.threshold)
+
+            def _check_dup():
+                dup.load_from_store(memory._vector_store)
+                return dup.check(req.content, embed_fn=memory._get_embedding)
+
+            is_dup, best_match, score = await asyncio.to_thread(_check_dup)
+
+            return success_response(data={
+                "is_duplicate": is_dup,
+                "best_match": best_match,
+                "score": score,
+                "threshold": req.threshold,
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.check_duplicate")
+    async def categorize_knowledge(self, req: CategorizeRequest) -> dict:
+        try:
+            """Auto-assign a topic to content based on existing knowledge categories."""
+            from domains.learner.knowledge_ops import AutoCategorizer
+
+            memory = self._get_memory()
+            cat = AutoCategorizer()
+
+            def _categorize():
+                cat.load_from_store(memory._vector_store)
+                topic = cat.categorize(req.content, embed_fn=memory._get_embedding)
+                suggestions = cat.suggest_topics(req.content, top_k=3)
+                return topic, suggestions
+
+            topic, suggestions = await asyncio.to_thread(_categorize)
+
+            return success_response(data={
+                "topic": topic,
+                "suggestions": [{"topic": t, "score": round(s, 4)} for t, s in suggestions],
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.categorize_knowledge")
+    async def knowledge_gaps(self) -> dict:
+        try:
+            """Find under-represented topics and knowledge gaps."""
+            from domains.learner.knowledge_ops import KnowledgeGapDetector
+
+            memory = self._get_memory()
+            gap = KnowledgeGapDetector()
+
+            def _find_gaps():
+                gap.load_from_store(memory._vector_store)
+                return gap.find_gaps(), gap._topic_counts
+
+            gaps, topic_counts = await asyncio.to_thread(_find_gaps)
+
+            return success_response(data={
+                "gaps": gaps,
+                "total_facts": memory._fact_counter,
+                "topics": list(topic_counts.keys()),
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.knowledge_gaps")
+    async def bulk_ingest(self, req: BulkIngestRequest) -> dict:
+        try:
+            """Bulk ingest texts with automatic deduplication.
+
+            Skips near-duplicate content and reports added/skipped/errors.
+            The synchronous ingest runs in a thread pool so the event loop is not
+            blocked for other requests.
+            """
+            from domains.learner.knowledge_ops import BulkProcessor
+
+            memory = self._get_memory()
+            bp = BulkProcessor(memory)
+            report = await asyncio.to_thread(
+                bp.ingest_texts,
+                req.items,
+                topic=req.topic,
+                source=req.source,
+                dedup_threshold=req.dedup_threshold,
+            )
+
+            safe_audit_log(
+                "knowledge.add",
+                resource=req.topic or "bulk",
+                detail="bulk",
+                added=report.get("added", 0), skipped=report.get("skipped", 0),
+            )
+            return success_response(data={
+                "status": "completed",
+                **report,
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.bulk_ingest")
+    async def train_embedder_endpoint(self) -> dict:
+        try:
+            """Train the SloNet text embedder on all knowledge + dataset texts.
+
+            Collects texts from the knowledge base, ingested files, and datasets,
+            then trains a contrastive embedder. Returns training stats.
+            """
+            import asyncio
+
+            def _train():
+                from pathlib import Path
+                from domains.inference.slo_embedder import train_embedder
+
+                REPO = Path(__file__).resolve().parents[4]
+                texts = []
+
+                # 1. Knowledge entries
+                kb_path = REPO / "data" / "knowledge" / "entries.json"
+                if kb_path.exists():
+                    with open(kb_path) as f:
+                        entries = json.load(f)
+                    for e in entries:
+                        t = e.get("text", "")
+                        if len(t) > 20:
+                            texts.append(t)
+
+                # 2. Ingested files
+                ingested_dir = REPO / "data" / "ingested"
+                if ingested_dir.exists():
+                    for fp in ingested_dir.glob("*.txt"):
+                        try:
+                            raw = fp.read_text(errors="ignore")
+                            chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
+                            texts.extend(chunks[:500])
+                        except Exception as exc:
+                            logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
+                        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+
+                # 3. Dataset files
+                datasets_dir = REPO / "datasets"
+                if datasets_dir.exists():
+                    for fp in datasets_dir.glob("*.txt"):
+                        try:
+                            raw = fp.read_text(errors="ignore")
+                            chunks = [p.strip() for p in raw.split("\n\n") if len(p.strip()) > 40]
+                            texts.extend(chunks[:500])
+                        except Exception as exc:
+                            logger.debug("File read failed during embedder training: %s: %s", fp.name, exc)
+                        logger.debug("Suppressed exception in %s", __name__, exc_info=True)
+
+                # Deduplicate
+                seen = set()
+                unique = [t for t in texts if hash(t[:200]) not in seen and not seen.add(hash(t[:200]))]
+                texts = unique[:500]
+
+                if len(texts) < 10:
+                    raise_error(f"Only {len(texts)} texts found. Need at least 10.", code="E_VAL_FIELD")
+
+                result = train_embedder(
+                    texts, epochs=15, lr=5e-4, batch_size=32,
+                    embed_dim=64, vocab_size=1024, max_seq_len=32,
+                    n_heads=2, n_layers=1,
+                )
+                return success_response(data={
+                    "status": "trained",
+                    "texts_used": len(texts),
+                    "epochs": result["epochs"],
+                    "final_loss": result["final_loss"],
+                    "save_path": result["save_path"],
+                })
+
+            result = await asyncio.to_thread(_train)
+            safe_audit_log("knowledge.train", resource="embedder", detail=result.get("status", "ok"), texts_used=result.get("texts_used", 0))
+            return success_response(data=result)
+
+        except Exception as e:
+            classify_and_raise(e, source="kb.train_embedder_endpoint")
     async def embedder_status(self) -> dict:
-        """Check if a trained embedder checkpoint exists."""
-        from domains.inference.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
+        try:
+            """Check if a trained embedder checkpoint exists."""
+            from domains.inference.slo_embedder import _EMBEDDER_PATH, SloTextEmbedder
 
-        exists = await asyncio.to_thread(lambda: _EMBEDDER_PATH.exists())
-        info = None
-        if exists:
-            emb = await asyncio.to_thread(SloTextEmbedder.load)
-            if emb:
-                info = {
-                    "embed_dim": emb.embed_dim,
-                    "vocab_size": len(emb.vocab),
-                    "path": str(_EMBEDDER_PATH),
-                }
+            exists = await asyncio.to_thread(lambda: _EMBEDDER_PATH.exists())
+            info = None
+            if exists:
+                emb = await asyncio.to_thread(SloTextEmbedder.load)
+                if emb:
+                    info = {
+                        "embed_dim": emb.embed_dim,
+                        "vocab_size": len(emb.vocab),
+                        "path": str(_EMBEDDER_PATH),
+                    }
 
-        return success_response(data={
-            "trained": exists,
-            "info": info,
-        })
+            return success_response(data={
+                "trained": exists,
+                "info": info,
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.embedder_status")
     def _get_spaced_rep(self):
         if self._spaced_rep_scheduler is None:
             from domains.infrastructure.spaced_repetition_engine import SpacedRepetitionScheduler
@@ -863,114 +926,147 @@ class KBRouter:
         return self._spaced_rep_scheduler
 
     def get_due_reviews(self) -> dict:
-        """Get knowledge items that are due for review."""
-        scheduler = self._get_spaced_rep()
-        due_ids = scheduler.get_due_reviews()
-        stats = scheduler.get_review_stats()
-        return success_response(data={"due_ids": due_ids, "stats": stats})
+        try:
+            """Get knowledge items that are due for review."""
+            scheduler = self._get_spaced_rep()
+            due_ids = scheduler.get_due_reviews()
+            stats = scheduler.get_review_stats()
+            return success_response(data={"due_ids": due_ids, "stats": stats})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.get_due_reviews")
     def schedule_review(self, item_id: str, performance: float = Query(0.8, ge=0.0, le=1.0)) -> dict:
-        """Record a review performance and schedule next review."""
-        scheduler = self._get_spaced_rep()
-        next_time = scheduler.schedule_review(item_id, performance)
-        return success_response(data={"item_id": item_id, "next_review": next_time})
+        try:
+            """Record a review performance and schedule next review."""
+            scheduler = self._get_spaced_rep()
+            next_time = scheduler.schedule_review(item_id, performance)
+            return success_response(data={"item_id": item_id, "next_review": next_time})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.schedule_review")
     def label_text(self, text: str = Query(..., min_length=1)) -> dict:
-        """Classify text into semantic category (factual, procedural, etc.)."""
-        from domains.infrastructure.truth_labeler import get_truth_labeler
-        labeler = get_truth_labeler()
-        result = labeler.label(text)
-        return success_response(data=result.to_dict())
+        try:
+            """Classify text into semantic category (factual, procedural, etc.)."""
+            from domains.infrastructure.truth_labeler import get_truth_labeler
+            labeler = get_truth_labeler()
+            result = labeler.label(text)
+            return success_response(data=result.to_dict())
 
-    # ── Production RAG Endpoints ───────────────────────────────────────────
+        # ── Production RAG Endpoints ───────────────────────────────────────────
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.label_text")
     def rag_ingest(self, req: RAGIngestRequest) -> dict:
-        """Ingest a document into the production RAG index."""
-        import time as _time
-        _t0 = _time.monotonic()
-        from domains.cognitive.rag_service import get_rag_service
-        rag_svc = get_rag_service()
-        chunk_ids = rag_svc.add_document(
-            content=req.content,
-            metadata={"source": req.source, "topic": req.topic},
-            chunk_size=req.chunk_size,
-        )
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("knowledge.rag_ingest", resource=req.source or "unknown", detail=f"chunks={len(chunk_ids)} elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={
-            "chunk_ids": chunk_ids,
-            "num_chunks": len(chunk_ids),
-            "stats": rag_svc.stats(),
-        })
+        try:
+            """Ingest a document into the production RAG index."""
+            import time as _time
+            _t0 = _time.monotonic()
+            from domains.cognitive.rag_service import get_rag_service
+            rag_svc = get_rag_service()
+            chunk_ids = rag_svc.add_document(
+                content=req.content,
+                metadata={"source": req.source, "topic": req.topic},
+                chunk_size=req.chunk_size,
+            )
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("knowledge.rag_ingest", resource=req.source or "unknown", detail=f"chunks={len(chunk_ids)} elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={
+                "chunk_ids": chunk_ids,
+                "num_chunks": len(chunk_ids),
+                "stats": rag_svc.stats(),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.rag_ingest")
     def rag_query(self, req: RAGQueryRequest) -> dict:
-        """Query the production RAG index for relevant context."""
-        import time as _time
-        _t0 = _time.monotonic()
-        from domains.cognitive.rag_service import get_rag_service
-        rag_svc = get_rag_service()
-        result = rag_svc.query(req.question, top_k=req.top_k)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        logger.info("RAG query in %.1fms (top_k=%d)", _elapsed_ms, req.top_k)
-        return success_response(data=result)
+        try:
+            """Query the production RAG index for relevant context."""
+            import time as _time
+            _t0 = _time.monotonic()
+            from domains.cognitive.rag_service import get_rag_service
+            rag_svc = get_rag_service()
+            result = rag_svc.query(req.question, top_k=req.top_k)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            logger.info("RAG query in %.1fms (top_k=%d)", _elapsed_ms, req.top_k)
+            return success_response(data=result)
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.rag_query")
     def rag_verify(self, req: RAGVerifyRequest) -> dict:
-        """Verify generated text against the RAG index for hallucinations."""
-        import time as _time
-        _t0 = _time.monotonic()
-        from domains.cognitive.rag_service import get_rag_service
-        rag_svc = get_rag_service()
-        result = rag_svc.verify_and_ground(req.text, req.question)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        logger.info("RAG verify in %.1fms", _elapsed_ms)
-        return success_response(data=result)
+        try:
+            """Verify generated text against the RAG index for hallucinations."""
+            import time as _time
+            _t0 = _time.monotonic()
+            from domains.cognitive.rag_service import get_rag_service
+            rag_svc = get_rag_service()
+            result = rag_svc.verify_and_ground(req.text, req.question)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            logger.info("RAG verify in %.1fms", _elapsed_ms)
+            return success_response(data=result)
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.rag_verify")
     def rag_list_documents(self) -> dict:
-        """List all documents in the RAG index (metadata only)."""
-        from domains.cognitive.rag_service import get_rag_service
-        rag_svc = get_rag_service()
-        return success_response(data={
-            "documents": rag_svc.list_documents(),
-            "stats": rag_svc.stats(),
-        })
+        try:
+            """List all documents in the RAG index (metadata only)."""
+            from domains.cognitive.rag_service import get_rag_service
+            rag_svc = get_rag_service()
+            return success_response(data={
+                "documents": rag_svc.list_documents(),
+                "stats": rag_svc.stats(),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.rag_list_documents")
     def rag_clear(self) -> dict:
-        """Clear the entire RAG index and persisted documents."""
-        from domains.cognitive.rag_service import get_rag_service
-        import time
-        rag_svc = get_rag_service()
-        _t0 = time.monotonic()
-        count = rag_svc.clear()
-        _elapsed_ms = (time.monotonic() - _t0) * 1000
-        safe_audit_log("knowledge.rag_clear", resource="rag", detail=f"cleared={count} elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={"cleared": count, "elapsed_ms": round(_elapsed_ms, 1)})
+        try:
+            """Clear the entire RAG index and persisted documents."""
+            from domains.cognitive.rag_service import get_rag_service
+            import time
+            rag_svc = get_rag_service()
+            _t0 = time.monotonic()
+            count = rag_svc.clear()
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
+            safe_audit_log("knowledge.rag_clear", resource="rag", detail=f"cleared={count} elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={"cleared": count, "elapsed_ms": round(_elapsed_ms, 1)})
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.rag_clear")
     def rag_stats(self) -> dict:
-        """Retrieve statistics for the production RAG index.
+        try:
+            """Retrieve statistics for the production RAG index.
 
-        Returns document count, chunk count, index size, and other
-        metrics from the RAG service's internal state.
+            Returns document count, chunk count, index size, and other
+            metrics from the RAG service's internal state.
 
-        Returns:
-            Success envelope with RAG stats dict.
-        """
-        from domains.cognitive.rag_service import get_rag_service
-        rag_svc = get_rag_service()
-        return success_response(data=rag_svc.stats())
+            Returns:
+                Success envelope with RAG stats dict.
+            """
+            from domains.cognitive.rag_service import get_rag_service
+            rag_svc = get_rag_service()
+            return success_response(data=rag_svc.stats())
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.rag_stats")
     def kg_sync_to_rag(self) -> dict:
-        """Sync all KG triples into the RAG index via the training pipeline."""
-        from domains.cognitive.rag_service import KGTrainingPipeline, get_rag_service
-        rag_svc = get_rag_service()
-        pipeline = KGTrainingPipeline(rag_service=rag_svc)
-        result = pipeline.sync_kg_to_rag()
-        return success_response(data=result)
+        try:
+            """Sync all KG triples into the RAG index via the training pipeline."""
+            from domains.cognitive.rag_service import KGTrainingPipeline, get_rag_service
+            rag_svc = get_rag_service()
+            pipeline = KGTrainingPipeline(rag_service=rag_svc)
+            result = pipeline.sync_kg_to_rag()
+            return success_response(data=result)
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.kg_sync_to_rag")
     def kg_pipeline_stats(self) -> dict:
-        """Return KG → RAG pipeline queue stats."""
-        from domains.cognitive.rag_service import KGTrainingPipeline
-        pipeline = KGTrainingPipeline()
-        return success_response(data=pipeline.stats())
+        try:
+            """Return KG → RAG pipeline queue stats."""
+            from domains.cognitive.rag_service import KGTrainingPipeline
+            pipeline = KGTrainingPipeline()
+            return success_response(data=pipeline.stats())
 
 
+        except Exception as e:
+            classify_and_raise(e, source="kb.kg_pipeline_stats")
 router = KBRouter().router

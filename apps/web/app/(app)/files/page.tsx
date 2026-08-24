@@ -159,6 +159,7 @@ export default function FilesPage() {
               <input
                 ref={fileInputRef}
                 type="file"
+                aria-label="Upload file"
                 className="hidden"
                 onChange={handleUpload}
                 accept=".txt,.md,.json,.jsonl,.csv,.pdf,.py,.js,.ts,.html,.css"
@@ -202,6 +203,7 @@ export default function FilesPage() {
                       type="checkbox"
                       checked={selected.size === filtered.length && filtered.length > 0}
                       onChange={toggleSelectAll}
+                      aria-label="Select all files"
                       className="h-4 w-4 rounded border-border"
                     />
                     Select all ({filtered.length})
@@ -213,6 +215,7 @@ export default function FilesPage() {
                           type="checkbox"
                           checked={selected.has(f.id)}
                           onChange={() => toggleSelect(f.id)}
+                          aria-label={`Select file ${f.filename}`}
                           className="h-4 w-4 rounded border-border shrink-0"
                         />
                         <div className="flex-1 min-w-0">
