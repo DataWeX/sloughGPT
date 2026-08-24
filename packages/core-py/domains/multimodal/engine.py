@@ -234,7 +234,7 @@ class MultimodalEngine:
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
 
-        logger.info(f"Multimodal engine saved to {path}", extra={"tag": "MODEL"})
+        logger.info("Multimodal engine saved to %s", path, extra={"tag": "MODEL"})
         return path
 
     @classmethod
@@ -313,7 +313,7 @@ class MultimodalEngine:
                 p.data = data[key]
             d_idx += 1
 
-        logger.info(f"Multimodal engine loaded from {path}", extra={"tag": "MODEL"})
+        logger.info("Multimodal engine loaded from %s", path, extra={"tag": "MODEL"})
         return engine
 
     @property

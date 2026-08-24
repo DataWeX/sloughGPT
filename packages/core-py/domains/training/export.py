@@ -568,7 +568,7 @@ def export_to_gguf(
         tokenizer=tokenizer,
         config=config,
     )
-    logger.info(f"Exported GGUF: {output_path} ({quantization})",
+    logger.info("Exported GGUF: %s (%s)", output_path, quantization,
         extra={"tag": "TRAIN"},)
     return result
 
@@ -599,7 +599,7 @@ def export_to_gguf_fp16(
     """
     from domains.training.gguf_export import export_to_gguf_fp16 as gguf_fp16_export
     result = gguf_fp16_export(model, output_path, tokenizer)
-    logger.info(f"Exported GGUF FP16: {output_path}",
+    logger.info("Exported GGUF FP16: %s", output_path,
         extra={"tag": "TRAIN"},)
     return result
 
@@ -628,7 +628,7 @@ def export_to_gguf_q4_k_m(
     """
     from domains.training.gguf_export import export_to_gguf_q4_k_m as gguf_q4_k_m_export
     result = gguf_q4_k_m_export(model, output_path, tokenizer)
-    logger.info(f"Exported GGUF Q4_K_M: {output_path}",
+    logger.info("Exported GGUF Q4_K_M: %s", output_path,
         extra={"tag": "TRAIN"},)
     return result
 
@@ -663,7 +663,7 @@ def export_to_sou(
         soul_profile=soul_profile,
         weights_only=weights_only,
     )
-    logger.info(f"Exported Slo Unit: {output_path}",
+    logger.info("Exported Slo Unit: %s", output_path,
         extra={"tag": "TRAIN"},)
     return output_path
 

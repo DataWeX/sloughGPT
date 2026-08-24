@@ -71,7 +71,7 @@ class TestRunEval:
         ev = _mock_evaluator()
         with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev), \
              patch("pathlib.Path.exists", return_value=True):
-            resp = client.get("/lora-eval/run?adapter_path=/tmp/test.npz")
+            resp = client.get("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
         assert resp.status_code == 200
         data = _data(resp)
         assert data["status"] == "compared"

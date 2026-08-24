@@ -118,7 +118,7 @@ class ServerSpeechRecognizer:
                 text = self._decode_vosk(audio_data)
                 return TranscriptionResult(text=text, confidence=0.9, language=language)
         except Exception as e:
-            logger.error(f"Speech recognition error: {e}", extra={"tag": "MODEL"})
+            logger.error("Speech recognition error: %s", e, extra={"tag": "MODEL"})
         return TranscriptionResult(
             text="",
             confidence=0.0,

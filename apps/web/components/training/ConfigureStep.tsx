@@ -149,7 +149,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs">
                   <input type="checkbox" checked={form.useLoRA} onChange={e => form.setUseLoRA(e.target.checked)}
-                    className="rounded border-border" />
+                    className="rounded border-border" aria-label="Enable LoRA" />
                   Use LoRA (parameter-efficient fine-tuning)
                 </label>
                 {form.useLoRA && (

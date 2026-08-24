@@ -267,6 +267,7 @@ export function VisionStudioDialog({
                   accept="image/*"
                   className="hidden"
                   onChange={handleFileSelect}
+                  aria-label="Upload image for analysis"
                 />
               </div>
 
@@ -409,7 +410,7 @@ export function VisionStudioDialog({
                     <p className="text-xs text-muted-foreground">Select an image for training</p>
                   </>
                 )}
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} aria-label="Upload image for training" />
               </div>
 
               <div className="space-y-2">

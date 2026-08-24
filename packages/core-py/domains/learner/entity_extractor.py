@@ -181,7 +181,7 @@ async def extract_facts_neural(user_msg: str, assistant_msg: str) -> List[str]:
         facts = [line.strip("- ").strip() for line in text.splitlines() if line.strip()]
         return [f for f in facts if len(f) > 5]
     except Exception as e:
-        logger.debug(f"Neural extraction failed: {e}", extra={"tag": "INF"})
+        logger.debug("Neural extraction failed: %s", e, extra={"tag": "INF"})
         return []
 
 
@@ -228,9 +228,9 @@ async def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=
                 continue
 
         if stored > 0:
-            logger.info(f"Auto-extracted {stored} facts from conversation", extra={"tag": "INF"})
+            logger.info("Auto-extracted %s facts from conversation", stored, extra={"tag": "INF"})
 
         return stored
     except Exception as e:
-        logger.debug(f"Entity extraction skipped: {e}", extra={"tag": "INF"})
+        logger.debug("Entity extraction skipped: %s", e, extra={"tag": "INF"})
         return 0

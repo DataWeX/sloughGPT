@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { cn, Switch, Button } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
 import { memoryController, type MemoryItem, type MemoryStats } from '@/lib/memory-controller'
@@ -592,12 +593,12 @@ export function MemoryTab() {
         </div>
       )}
 
-      <a
+      <Link
         href="/knowledge"
         className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
       >
         Manage memory →
-      </a>
+      </Link>
     </div>
   )
 }

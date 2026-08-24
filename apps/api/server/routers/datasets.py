@@ -142,7 +142,7 @@ class DatasetsRouter:
                     )
                 raise_error(result.error or "Import failed", "E_BAD_REQUEST")
             except HTTPException:
-                classify_and_raise(e, source="datasets.import_from_local")
+                raise
             except Exception as e:
                 logger.warning("Dataset import (local) failed: %s", e)
                 classify_and_raise(e, source="dataset_import_local")
@@ -176,7 +176,7 @@ class DatasetsRouter:
                     )
                 raise_error(result.error or "Import failed", "E_BAD_REQUEST")
             except HTTPException:
-                classify_and_raise(e, source="datasets.import_from_github")
+                raise
             except Exception as e:
                 logger.warning("Dataset import (github) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
@@ -209,7 +209,7 @@ class DatasetsRouter:
                     )
                 raise_error(result.error or "Download failed", "E_BAD_REQUEST")
             except HTTPException:
-                classify_and_raise(e, source="datasets.import_from_huggingface")
+                raise
             except Exception as e:
                 logger.warning("Dataset import (huggingface) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
@@ -258,7 +258,7 @@ class DatasetsRouter:
                     )
                 raise_error(result.error or "Download failed", "E_BAD_REQUEST")
             except HTTPException:
-                classify_and_raise(e, source="datasets.import_from_url")
+                raise
             except Exception as e:
                 logger.warning("Dataset import (url) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
@@ -319,7 +319,7 @@ class DatasetsRouter:
                 output_path=str(output_dir),
             )
         except HTTPException:
-            classify_and_raise(e, source="datasets._organize")
+            raise
         except FileNotFoundError:
             raise_error("Kaggle CLI not found. Install with: pip install kaggle", "E_BAD_REQUEST")
         except Exception as e:
@@ -374,7 +374,7 @@ class DatasetsRouter:
                 output_path=str(output_dir),
             )
         except HTTPException:
-            classify_and_raise(e, source="datasets._write_csv")
+            raise
         except Exception as e:
             logger.warning("Dataset import (csv) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
@@ -518,7 +518,7 @@ class DatasetsRouter:
                 )
             raise_error(result.error or "Import failed", "E_BAD_REQUEST")
         except HTTPException:
-            classify_and_raise(e, source="datasets.import_from_isbn")
+            raise
         except Exception as e:
             logger.warning("Dataset import (isbn) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")

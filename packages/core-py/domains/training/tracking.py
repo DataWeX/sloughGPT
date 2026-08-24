@@ -83,7 +83,7 @@ class ExperimentTracker:
             mlflow.set_tracking_uri(self.config.tracking_uri)
             mlflow.set_experiment(self.config.experiment_name)
             self._client = mlflow
-            logger.info(f"MLflow initialized: {self.config.tracking_uri}",
+            logger.info("MLflow initialized: %s", self.config.tracking_uri,
                 extra={"tag": "TRAIN"},)
         except ImportError:
             logger.warning("MLflow not installed: pip install mlflow",
@@ -132,7 +132,7 @@ class ExperimentTracker:
                 api_key=self.config.api_key,
             )
             self._client = experiment
-            logger.info(f"Comet initialized: {self.config.project}",
+            logger.info("Comet initialized: %s", self.config.project,
                 extra={"tag": "TRAIN"},)
         except ImportError:
             logger.warning("Comet not installed: pip install comet-ml",

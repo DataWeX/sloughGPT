@@ -4,12 +4,22 @@ import React from 'react'
 
 const mockGetInspector = vi.fn()
 const mockRegenerate = vi.fn()
+const mockList = vi.fn()
+const mockSearch = vi.fn()
+const mockCreate = vi.fn()
+const mockDelete = vi.fn()
+const mockListArchived = vi.fn()
 const mockAddToast = vi.fn()
 
 vi.mock('@/lib/session-controller', () => ({
   sessionController: {
     getInspector: (...args: unknown[]) => mockGetInspector(...args),
     regenerate: (...args: unknown[]) => mockRegenerate(...args),
+    list: (...args: unknown[]) => mockList(...args),
+    search: (...args: unknown[]) => mockSearch(...args),
+    create: (...args: unknown[]) => mockCreate(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
+    listArchived: (...args: unknown[]) => mockListArchived(...args),
   },
 }))
 
@@ -53,6 +63,11 @@ const mockInspector = {
   workspace: { working_memory: ['topic: AI'], semantic_keys: ['user_pref'], episodic_count: 12, sensory_buffer_size: 5, system_prompt: 'You are helpful.' },
   elapsed_ms: 42,
 }
+
+const mockSessions = [
+  { id: 's1', name: 'Chat 1', created_at: '2026-01-01T00:00:00Z' },
+  { id: 's2', name: 'Chat 2', created_at: '2026-01-02T00:00:00Z' },
+]
 
 describe('SessionPage', () => {
   afterEach(() => {
@@ -186,6 +201,86 @@ describe('SessionPage', () => {
     fireEvent.click(screen.getByText('Refresh'))
     await waitFor(() => {
       expect(mockGetInspector).toHaveBeenCalledTimes(2)
+    }, { timeout: 5000 })
+  })
+
+  it('loads and displays session list', async () => {
+    mockList.mockResolvedValue(mockSessions)
+    render(<SessionPage />)
+    fireEvent.click(screen.getByText('Sessions'))
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalled()
+    }, { timeout: 5000 })
+    expect(screen.getByText(/Sessions \(2\)/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Chat 1/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Chat 2/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('loads archived sessions', async () => {
+    mockListArchived.mockResolvedValue([{ id: 'a1', name: 'Old Chat' }])
+    render(<SessionPage />)
+    fireEvent.click(screen.getByText('Archived'))
+    await waitFor(() => {
+      expect(mockListArchived).toHaveBeenCalled()
+    }, { timeout: 5000 })
+    expect(screen.getByText('Old Chat')).toBeInTheDocument()
+  })
+
+  it('creates a new session', async () => {
+    mockList.mockResolvedValue([])
+    mockCreate.mockResolvedValue({ id: 'new-1' })
+    mockGetInspector.mockResolvedValue(mockInspector)
+    render(<SessionPage />)
+    fireEvent.click(screen.getByText('Sessions'))
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalled()
+    }, { timeout: 5000 })
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Soul name (optional)')).toBeInTheDocument()
+    }, { timeout: 5000 })
+    fireEvent.click(screen.getByText('Create Session'))
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalled()
+    }, { timeout: 5000 })
+    expect(mockAddToast).toHaveBeenCalledWith('Session created', 'success')
+  })
+
+  it('deletes a session', async () => {
+    mockList.mockResolvedValue(mockSessions)
+    render(<SessionPage />)
+    fireEvent.click(screen.getByText('Sessions'))
+    await waitFor(() => {
+      expect(screen.getAllByText(/Chat 1/).length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 5000 })
+    const deleteButtons = screen.getAllByText('Delete')
+    fireEvent.click(deleteButtons[0])
+    await waitFor(() => {
+      expect(mockDelete).toHaveBeenCalledWith('s1')
+    }, { timeout: 5000 })
+    expect(mockAddToast).toHaveBeenCalledWith('Session deleted', 'success')
+  })
+
+  it('shows error toast on list failure', async () => {
+    mockList.mockRejectedValue(new Error('network'))
+    render(<SessionPage />)
+    fireEvent.click(screen.getByText('Sessions'))
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalled()
+    }, { timeout: 5000 })
+  })
+
+  it('searches sessions', async () => {
+    mockList.mockResolvedValue(mockSessions)
+    mockSearch.mockResolvedValue([mockSessions[0]])
+    render(<SessionPage />)
+    fireEvent.click(screen.getByText('Sessions'))
+    await waitFor(() => {
+      expect(screen.getAllByText(/Chat 1/).length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 5000 })
+    fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'Chat 1' } })
+    fireEvent.keyDown(screen.getByPlaceholderText('Search...'), { key: 'Enter' })
+    await waitFor(() => {
+      expect(mockSearch).toHaveBeenCalledWith('Chat 1', 20)
     }, { timeout: 5000 })
   })
 })

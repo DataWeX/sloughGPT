@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconX, IconSearch, IconEdit } from '@sloughgpt/strui'
 import { chatDB, type KnowledgeItem } from '@/lib/db'
@@ -255,12 +256,12 @@ export function KnowledgeTab({
         </button>
       )}
 
-      <a
+      <Link
         href="/datasets"
         className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
       >
         Browse datasets →
-      </a>
+      </Link>
     </div>
   )
 }

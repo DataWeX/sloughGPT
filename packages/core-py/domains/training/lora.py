@@ -412,7 +412,7 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
 
             _set_nested(model, path.split("."), new_lora)
             applied += 1
-            logger.info(f"Applied LoRA to {path}", extra={"tag": "TRAIN"})
+            logger.info("Applied LoRA to %s", path, extra={"tag": "TRAIN"})
     else:
         named_items = model.named_modules() if hasattr(model, 'named_modules') else model.named_children()
         for name, module in named_items:
@@ -441,10 +441,10 @@ def apply_lora_to_model(model, config: Optional[LoRAConfig] = None,
                 parent = getattr(parent, part)
             setattr(parent, parts[-1], new_lora)
             applied += 1
-            logger.info(f"Applied LoRA to {name}", extra={"tag": "TRAIN"})
+            logger.info("Applied LoRA to %s", name, extra={"tag": "TRAIN"})
 
     model._has_lora = applied > 0
-    logger.info(f"LoRA applied: {applied} layers, rank={config.rank}, alpha={config.alpha}")
+    logger.info("LoRA applied: %d layers, rank=%s, alpha=%s", applied, config.rank, config.alpha)
     return model
 
 
@@ -484,7 +484,7 @@ def print_lora_summary(model):
     """Print LoRA parameter summary."""
     lora_params = get_lora_parameters(model)
     total = sum(p.data.size if hasattr(p, 'data') else 1 for p in lora_params.values())
-    logger.info(f"LoRA parameters: {len(lora_params)} tensors, {total:,} total parameters",
+    logger.info("LoRA parameters: %d tensors, %d total parameters", len(lora_params), total,
         extra={"tag": "TRAIN"},)
     param_counts = {}
     for name, p in lora_params.items():
@@ -492,7 +492,7 @@ def print_lora_summary(model):
         sz = p.data.size if hasattr(p, 'data') else 1
         param_counts[key] = param_counts.get(key, 0) + sz
     for k, v in param_counts.items():
-        logger.info(f"  {k}: {v:,} parameters",
+        logger.info("  %s: %d parameters", k, v,
             extra={"tag": "TRAIN"},)
 
 

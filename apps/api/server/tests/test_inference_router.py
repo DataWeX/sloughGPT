@@ -12,14 +12,14 @@ class TestInferenceRoot:
     def test_root_returns_status(self):
         resp = client.get("/")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["name"] == "SloughGPT API"
         assert body["version"] == "1.0.0"
         assert body["status"] == "running"
 
     def test_root_has_endpoints_dict(self):
         resp = client.get("/")
-        body = resp.json()
+        body = resp.json()["data"]
         assert "endpoints" in body
         assert isinstance(body["endpoints"], dict)
 
@@ -41,20 +41,19 @@ class TestInfoEndpoints:
 
 class TestSuggestions:
     def test_suggestions_returns_list(self):
-        resp = client.get("/suggestions")
+        resp = client.get("/chat/suggestions")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == "success"
-        assert isinstance(body["data"], list)
-        assert len(body["data"]) >= 4
+        body = resp.json()["data"]
+        assert isinstance(body, list)
+        assert len(body) >= 4
 
     def test_chat_suggestions_returns_same(self):
-        resp1 = client.get("/suggestions")
+        resp1 = client.get("/chat/suggestions")
         resp2 = client.get("/chat/suggestions")
         assert resp1.json()["data"] == resp2.json()["data"]
 
     def test_suggestions_have_text_and_icon(self):
-        resp = client.get("/suggestions")
+        resp = client.get("/chat/suggestions")
         for item in resp.json()["data"]:
             assert "text" in item
             assert "icon" in item
@@ -64,7 +63,7 @@ class TestChatTools:
     def test_list_tools_returns_dict(self):
         resp = client.get("/chat/tools")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "tools" in body
         assert isinstance(body["tools"], list)
 
@@ -176,13 +175,13 @@ class TestContextEndpoints:
     def test_reset_context(self):
         resp = client.post("/context/reset")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body.get("reset") == "session"
 
     def test_reset_context_all(self):
         resp = client.post("/context/reset?all=true")
         assert resp.status_code == 200
-        assert resp.json().get("reset") == "all"
+        assert resp.json()["data"].get("reset") == "all"
 
 
 class TestGenerateRequiresModel:

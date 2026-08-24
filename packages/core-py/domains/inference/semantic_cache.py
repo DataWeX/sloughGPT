@@ -181,7 +181,7 @@ class SemanticCache:
             best_entry.hit_count += 1
             best_entry.last_accessed = current_time
             self._stats["hits"] += 1
-            logger.debug(f"Cache hit: score={best_score:.3f}")
+            logger.debug("Cache hit: score=%.3f", best_score)
             return best_entry.response
 
         self._stats["misses"] += 1
@@ -224,7 +224,7 @@ class SemanticCache:
         )
 
         self.entries[entry_id] = entry
-        logger.debug(f"Cached entry: {entry_id}")
+        logger.debug("Cached entry: %s", entry_id)
 
         return entry_id
 

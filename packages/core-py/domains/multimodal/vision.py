@@ -115,7 +115,7 @@ class VisionCNN:
                 tags=[f"f{i}" for i in high],
             )
         except Exception as e:
-            logger.error(f"VisionCNN caption error: {e}", extra={"tag": "MODEL"})
+            logger.error("VisionCNN caption error: %s", e, extra={"tag": "MODEL"})
             return ImageCaption(text="[vision model error]", confidence=0.0, tags=[])
 
     def detect(self, image) -> List[VisualObject]:

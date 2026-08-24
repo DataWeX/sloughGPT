@@ -379,7 +379,7 @@ class FeedbackWorkflowManager:
             except Exception as e:
                 logger.debug("Health monitor benchmark failed: %s", e)
         except Exception as e:
-            logger.warning(f"Auto-train skipped: {e}", extra={"tag": "INFRA"})
+            logger.warning("Auto-train skipped: %s", e, extra={"tag": "INFRA"})
 
     def _maybe_dpo_train(self):
         """Run DPO preference learning on mixed-feedback pairs.
@@ -471,8 +471,8 @@ class FeedbackWorkflowManager:
                     rejected = True
                     self._last_rollback_time = time.time()
                     logger.warning(
-                        f"DPO train rejected: PPL increased {ppl_delta:+.1f}% "
-                        f"({before_ppl:.1f} → {after_ppl:.1f})", extra={"tag": "INFRA"}
+                        "DPO train rejected: PPL increased %+.1f%% "
+                        "(%s -> %s)", ppl_delta, before_ppl, after_ppl, extra={"tag": "INFRA"}
                     )
 
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1
@@ -487,7 +487,7 @@ class FeedbackWorkflowManager:
                     f"ppl={after_ppl:.1f if after_ppl else '?'}", extra={"tag": "INFRA"}
                 )
         except Exception as e:
-            logger.warning(f"DPO train skipped: {e}", extra={"tag": "INFRA"})
+            logger.warning("DPO train skipped: %s", e, extra={"tag": "INFRA"})
 
     def _do_aggregate(self) -> None:
         """Run adapter aggregation and log the result.
@@ -626,12 +626,13 @@ class FeedbackWorkflowManager:
             if rejected:
                 self._stats["user_adapter_rejected"] = self._stats.get("user_adapter_rejected", 0) + 1
 
+            status = "rejected" if rejected else "trained"
             logger.info(
-                f"User adapter {'rejected' if rejected else 'trained'} for {user_id}: "
-                f"{steps} steps, loss={avg_loss:.4f}", extra={"tag": "INFRA"}
+                "User adapter %s for %s: %s steps, loss=%.4f",
+                status, user_id, steps, avg_loss, extra={"tag": "INFRA"}
             )
         except Exception as e:
-            logger.warning(f"User adapter training skipped: {e}", extra={"tag": "INFRA"})
+            logger.warning("User adapter training skipped: %s", e, extra={"tag": "INFRA"})
 
     def run_scheduled_tasks(self):
         """Execute periodic tasks based on configured intervals.

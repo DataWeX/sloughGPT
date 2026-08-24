@@ -454,7 +454,7 @@ class ToolRunner:
                     "note": "Vision model not available — install SloNet dependencies",
                 }
             except Exception as ve:
-                logger.warning(f"VisionCNN analysis failed, falling back to metadata: {ve}")
+                logger.warning("VisionCNN analysis failed, falling back to metadata: %s", ve)
                 return {
                     "success": True,
                     "format": ext,

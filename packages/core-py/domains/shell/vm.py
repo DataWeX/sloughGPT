@@ -4644,7 +4644,7 @@ class X86CPU:
         except (InsFault, MemFault):
             raise
         except Exception as e:
-            logger.error(f"CPU fault at EIP=0x{start_eip:X}: {type(e).__name__}: {e}")
+            logger.error("CPU fault at EIP=0x%X: %s: %s", start_eip, type(e).__name__, e)
             return False
         self._step_count += 1
         return True

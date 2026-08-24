@@ -1064,9 +1064,9 @@ class SloughGPTTrainer:
                     extra={"tag": "TRAIN"},
                 )
 
-        logger.info(f"Training config: {self.config}",
+        logger.info("Training config: %s", self.config,
             extra={"tag": "TRAIN"},)
-        logger.info(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}",
+        logger.info("Total parameters: %s", f"{sum(p.numel() for p in self.model.parameters()):,}",
             extra={"tag": "TRAIN"},)
         if self._experiment_tracker is not None:
             n_params = sum(p.numel() for p in self.model.parameters())
@@ -1123,7 +1123,7 @@ class SloughGPTTrainer:
                     extra={"tag": "TRAIN"},)
                 break
 
-            logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}",
+            logger.info("Epoch %d/%d", epoch + 1, self.config.epochs,
                 extra={"tag": "TRAIN"},)
 
             model = self.training_model

@@ -471,7 +471,7 @@ export default function KnowledgePage() {
       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importing}>
         {importing ? 'Importing...' : 'Import'}
       </Button>
-      <input ref={fileInputRef} type="file" accept=".json,.txt,.csv" className="hidden" onChange={handleImportFile} />
+      <input ref={fileInputRef} type="file" accept=".json,.txt,.csv" className="hidden" onChange={handleImportFile} aria-label="Import knowledge file" />
       {importProgress && importProgress.total > 0 && (
         <div className="flex items-center gap-2">
           <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">

@@ -2727,7 +2727,10 @@ Examples:
                 self._print("  Usage: train stop <job_id>")
                 return
             r = self.cmds.train_stop(parts[1])
-            self._print(f"  Stopped: {r}")
+            if isinstance(r, dict) and "error" in r:
+                self._print(self._format_error(Exception(r["error"]), "train stop"))
+            else:
+                self._print(f"  Stopped: {r.get('status', r) if isinstance(r, dict) else r}")
             return
 
         if sub == "distill":

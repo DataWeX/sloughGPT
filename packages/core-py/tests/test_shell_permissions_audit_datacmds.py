@@ -682,6 +682,7 @@ class TestSoulsCmd:
     def test_switch_no_name(self):
         console = _make_console()
         api = MagicMock()
+        api.souls.return_value = []
         rc = souls_cmd.run(["switch"], console, api, {})
         assert rc == 1
 

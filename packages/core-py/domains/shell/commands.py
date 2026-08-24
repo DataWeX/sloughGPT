@@ -105,9 +105,13 @@ class ShellCommands:
             )
             if r.status_code in (200, 201):
                 return r.json()
-            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+        except requests.ConnectionError as e:
+            return {"error": f"Cannot connect to API server: {e}", "error_type": "ConnectionError"}
+        except requests.Timeout as e:
+            return {"error": f"Request timed out: {e}", "error_type": "Timeout"}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": str(e), "error_type": type(e).__name__}
 
     @staticmethod
     def unload_model() -> dict[str, Any]:

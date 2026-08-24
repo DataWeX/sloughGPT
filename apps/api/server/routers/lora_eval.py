@@ -58,7 +58,6 @@ class LoraEvalRouter:
             baseline = evaluator.run(adapter_path=None, soul_name=soul, save=True)
 
             try:
-                from pathlib import Path
                 if await asyncio.to_thread(Path(adapter_file).exists):
                     with_adapter = evaluator.run(adapter_path=adapter_file, soul_name=soul, save=True)
                     delta = evaluator.compare(baseline, with_adapter)

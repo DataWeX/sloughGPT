@@ -169,12 +169,12 @@ class ServerState:
     def get_request_history(self, limit: int = 20) -> list[dict]:
         """Return the most recent requests (newest first)."""
         with self._lock:
-            return list(reversed(self._request_history[-limit:]))
+            return list(reversed(list(self._request_history)[-limit:]))
 
     def get_avg_latency(self, window: int = 20) -> float:
         """Average latency of the last N requests in ms."""
         with self._lock:
-            recent = self._request_history[-window:]
+            recent = list(self._request_history)[-window:]
             if not recent:
                 return 0.0
             return round(sum(r["elapsed_ms"] for r in recent) / len(recent), 1)
@@ -182,7 +182,7 @@ class ServerState:
     def get_p95_latency(self) -> float:
         """P95 latency of recent requests in ms (last 100 requests)."""
         with self._lock:
-            recent = self._request_history[-100:]
+            recent = list(self._request_history)[-100:]
             if not recent:
                 return 0.0
             sorted_lat = sorted(r["elapsed_ms"] for r in recent)
@@ -207,7 +207,7 @@ class ServerState:
     def get_error_history(self, limit: int = 10) -> list[dict]:
         """Return the most recent errors (newest first)."""
         with self._lock:
-            return list(reversed(self._error_history[-limit:]))
+            return list(reversed(list(self._error_history)[-limit:]))
 
     def record_path_latency(self, path: str, elapsed_ms: float) -> None:
         """Track per-path latency for breakdown analysis."""
@@ -266,7 +266,7 @@ class ServerState:
         (sliding window needs at least 2 data points for a meaningful rate).
         """
         with self._lock:
-            recent = self._recent_inferences[-10:]
+            recent = list(self._recent_inferences)[-10:]
             if len(recent) < 3:
                 # Not enough data — use lifetime average
                 if self._total_inference_ms <= 0:
@@ -366,7 +366,7 @@ class ServerState:
     def get_model_events(self, limit: int = 10) -> list[dict]:
         """Return the most recent model events (newest first)."""
         with self._lock:
-            return list(reversed(self._model_events[-limit:]))
+            return list(reversed(list(self._model_events)[-limit:]))
 
     def record_health_snapshot(self) -> None:
         """Snapshot the current health score into history for trend analysis."""
@@ -440,7 +440,7 @@ class ServerState:
     def get_health_history(self, limit: int = 20) -> list[dict]:
         """Return health score history (oldest first, for charting)."""
         with self._lock:
-            return list(self._health_history[-limit:])
+            return list(self._health_history)[-limit:]
 
     def record_memory_snapshot(self) -> None:
         """Snapshot current memory usage (RSS + virtual) for trend tracking."""
@@ -467,7 +467,7 @@ class ServerState:
     def get_memory_history(self, limit: int = 20) -> list[dict]:
         """Return memory usage history (oldest first, for charting)."""
         with self._lock:
-            return list(self._memory_history[-limit:])
+            return list(self._memory_history)[-limit:]
 
     def check_rate_limit(self, path: str, max_per_second: int = 30) -> bool:
         """Check if a path exceeds rate limit. Returns True if allowed, False if blocked."""
@@ -493,7 +493,7 @@ class ServerState:
     def get_rate_limit_violations(self, limit: int = 10) -> list[dict]:
         """Return recent rate limit violations (newest first)."""
         with self._lock:
-            return list(reversed(self._rate_limit_violations[-limit:]))
+            return list(reversed(list(self._rate_limit_violations)[-limit:]))
 
     def record_memory_pressure_block(self) -> None:
         """Record that inference was blocked due to memory pressure."""

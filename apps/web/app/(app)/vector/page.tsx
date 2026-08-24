@@ -125,6 +125,7 @@ export default function VectorPage() {
             onChange={e => setUpsertText(e.target.value)}
             placeholder={"Enter text entries, one per line:\nSloughGPT is an AI framework\nIt learns from conversations\nMemory persists across sessions"}
             className="w-full h-24 text-sm font-mono rounded-md border bg-background px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            aria-label="Vector store entries"
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">{upsertText.split('\n').filter(t => t.trim()).length} entries</span>

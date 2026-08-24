@@ -97,12 +97,12 @@ class ModelLoader:
     @classmethod
     def register(cls, name: str, model_class: type):
         cls._registry[name] = model_class
-        logger.info(f"Registered model backend: {name}", extra={"tag": "MODEL"})
+        logger.info("Registered model backend: %s", name, extra={"tag": "MODEL"})
 
     @classmethod
     def register_loader(cls, suffix: str, loader_func: Callable):
         cls._loader_funcs[suffix] = loader_func
-        logger.info(f"Registered loader for: {suffix}", extra={"tag": "MODEL"})
+        logger.info("Registered loader for: %s", suffix, extra={"tag": "MODEL"})
 
     @classmethod
     def load(cls, path: str, device: str = "cpu", **kwargs) -> ModelInterface:

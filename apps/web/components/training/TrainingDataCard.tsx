@@ -155,6 +155,7 @@ export function TrainingDataCard({ addToast }: Props) {
                       value={p.quality}
                       onChange={e => void handleUpdateQuality(p.id, Number(e.target.value))}
                       className="h-7 rounded border bg-background px-1 text-xs"
+                      aria-label="Quality rating"
                     >
                       {[1, 2, 3, 4, 5].map(q => <option key={q} value={q}>{q}</option>)}
                     </select>

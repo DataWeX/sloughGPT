@@ -110,7 +110,7 @@ describe('TokenizerPage', () => {
     await waitFor(() => { expect(screen.getByText('Vocab: 100 · Merges: 20')).toBeTruthy() })
     expect(screen.getByText('Vocab Size')).toBeTruthy()
     expect(screen.getByText('Base Chars')).toBeTruthy()
-    expect(screen.getByText('Merges')).toBeTruthy()
+    expect(screen.getAllByText('Merges').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Special Tokens')).toBeTruthy()
     expect(screen.getAllByText('100').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('80').length).toBeGreaterThanOrEqual(1)

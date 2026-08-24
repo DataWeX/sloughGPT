@@ -137,6 +137,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                         value={editRate}
                         onChange={e => setEditRate(parseFloat(e.target.value))}
                         className="w-20"
+                        aria-label="Speech rate"
                       />
                       <span className="font-numeric w-7 text-right">{editRate.toFixed(1)}</span>
                     </label>
@@ -150,6 +151,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                         value={editPitch}
                         onChange={e => setEditPitch(parseFloat(e.target.value))}
                         className="w-20"
+                        aria-label="Speech pitch"
                       />
                       <span className="font-numeric w-7 text-right">{editPitch.toFixed(1)}</span>
                     </label>
@@ -158,6 +160,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                     <select
                       className="text-xs border border-border rounded px-2 py-1 bg-background w-full"
                       value={p.voice}
+                      aria-label="Voice selection"
                       onChange={e => {
                         const updated = presets.map(pr => pr.name === p.name ? { ...pr, voice: e.target.value } : pr)
                         setPresets(updated)
