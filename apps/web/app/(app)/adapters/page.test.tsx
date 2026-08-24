@@ -22,6 +22,14 @@ vi.mock('@sloughgpt/strui', () => {
     StatCard: ({ label, value }: any) => <div data-testid="stat-card"><span>{label}</span>: <span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogAction: ({ children, onClick, className }: any) => <button onClick={onClick} className={className}>{children}</button>,
+    AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
   }
 })
 

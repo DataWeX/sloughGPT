@@ -830,7 +830,7 @@ export default function KnowledgePage() {
                             <button type="button" onClick={() => handleSaveEdit(item.id)} className="text-success hover:text-success/80 p-1" aria-label="Save edit">
                               <IconCheck className="h-3.5 w-3.5" />
                             </button>
-                            <button onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground p-1" aria-label="Cancel edit">
+                            <button type="button" onClick={() => setEditingId(null)} className="text-muted-foreground hover:text-foreground p-1" aria-label="Cancel edit">
                               <IconX className="h-3.5 w-3.5" />
                             </button>
                           </div>
@@ -863,15 +863,16 @@ export default function KnowledgePage() {
                                   className="w-16 h-1 accent-primary"
                                 />
                                 <span className="text-[10px] font-mono w-6 text-right">{importanceValue.toFixed(1)}</span>
-                                <button onClick={() => handleSaveImportance(item.id)} aria-label="Save importance" className="text-primary hover:text-primary/80">
+                                <button type="button" onClick={() => handleSaveImportance(item.id)} aria-label="Save importance" className="text-primary hover:text-primary/80">
                                   <IconCheck className="h-3 w-3" />
                                 </button>
-                                <button onClick={() => setEditingImportanceId(null)} aria-label="Cancel editing" className="text-muted-foreground hover:text-foreground">
+                                <button type="button" onClick={() => setEditingImportanceId(null)} aria-label="Cancel editing" className="text-muted-foreground hover:text-foreground">
                                   <IconX className="h-3 w-3" />
                                 </button>
                               </div>
                             ) : (
                               <button
+                                type="button"
                                 onClick={() => { setEditingImportanceId(item.id); setImportanceValue(item.importance) }}
                                 className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
                               >
@@ -888,6 +889,7 @@ export default function KnowledgePage() {
                     {editingId !== item.id && (
                       <div className="flex items-center gap-1 shrink-0">
                         <button
+                          type="button"
                           onClick={() => { setEditingId(item.id); setEditContent(item.content); setEditTopic(item.topic || '') }}
                           className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
                           aria-label="Edit knowledge"
@@ -895,6 +897,7 @@ export default function KnowledgePage() {
                           <IconEdit className="h-4 w-4" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => setPendingDelete(item)}
                           className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-opacity"
                           aria-label="Delete knowledge"

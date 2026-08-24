@@ -437,7 +437,7 @@ export default function SystemHealthPage() {
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
-                  <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
+                  <button type="button" onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
                     Export
                   </button>
                 </div>

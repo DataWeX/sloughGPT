@@ -128,7 +128,7 @@ export default function AdaptersPage() {
       {aggregateResult && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
           {aggregateResult}
-          <button className="ml-2 underline" onClick={() => setAggregateResult(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setAggregateResult(null)}>Dismiss</button>
         </div>
       )}
 

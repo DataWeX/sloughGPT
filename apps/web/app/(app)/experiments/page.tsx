@@ -169,7 +169,7 @@ export default function ExperimentsPage() {
         {logMsg && (
           <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
             {logMsg}
-            <button className="ml-2 underline" onClick={() => setLogMsg(null)}>Dismiss</button>
+            <button type="button" className="ml-2 underline" onClick={() => setLogMsg(null)}>Dismiss</button>
           </div>
         )}
 

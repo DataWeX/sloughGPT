@@ -292,10 +292,10 @@ export default function DatasetDetailPage() {
                     {exportOpen && (
                       <div className="absolute right-0 top-full mt-1 z-50">
                         <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-                          <button onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button type="button" onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
                             Export as JSONL
                           </button>
-                          <button onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button type="button" onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
                             Export as CSV
                           </button>
                         </div>

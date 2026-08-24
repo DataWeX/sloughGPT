@@ -219,11 +219,11 @@ export default function ComparePage() {
               <div className="flex flex-wrap gap-2">
                 {snapshots.map(snap => (
                   <div key={snap.id} className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/20 px-2 py-1">
-                    <button onClick={() => loadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
+                    <button type="button" onClick={() => loadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
                       {snap.name}
                     </button>
                     <span className="text-[10px] text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
-                    <button onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-[10px] text-muted-foreground hover:text-destructive ml-1">×</button>
+                    <button type="button" onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-[10px] text-muted-foreground hover:text-destructive ml-1">×</button>
                   </div>
                 ))}
               </div>

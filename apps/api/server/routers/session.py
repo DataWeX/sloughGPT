@@ -12,8 +12,11 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, AsyncIterator
 
 from schemas.common import success_response, classify_and_raise, safe_audit_log
+from config import ServerConfig
 
 logger = logging.getLogger(__name__)
+
+cfg = ServerConfig.from_env()
 
 
 class SessionContext(BaseModel):

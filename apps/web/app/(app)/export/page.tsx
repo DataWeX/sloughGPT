@@ -126,7 +126,7 @@ export default function ExportPage() {
       {exportError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {exportError}
-          <button className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
         </div>
       )}
       {formatLoadError && (
