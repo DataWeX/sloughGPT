@@ -426,7 +426,7 @@ class KBRouter:
                 "reason": result.get("reason"),
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="kb.ingest_url")
         except Exception as e:
             logger.warning("KB ingest failed: %s", e)
             classify_and_raise(e, source="kb_ingest")

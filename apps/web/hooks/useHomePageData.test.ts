@@ -42,6 +42,20 @@ vi.mock('@/lib/knowledge-controller', () => ({
   },
 }))
 
+const mockGetFeedbackStats = vi.fn().mockResolvedValue({ total: 0, positive: 0, negative: 0 })
+vi.mock('@/lib/feedback-controller', () => ({
+  feedbackController: {
+    getFeedbackStats: (...args: unknown[]) => mockGetFeedbackStats(...args),
+  },
+}))
+
+const mockDatasetList = vi.fn().mockResolvedValue([])
+vi.mock('@/lib/dataset-controller', () => ({
+  datasetController: {
+    list: (...args: unknown[]) => mockDatasetList(...args),
+  },
+}))
+
 vi.mock('@/lib/query/api-hooks', () => ({
   useModels: () => ({ data: mockModelList.mock.results[0]?.value ?? [] }),
   useSouls: () => ({ data: mockSoulsList.mock.results[0]?.value ?? { souls: [], current_soul: '' } }),

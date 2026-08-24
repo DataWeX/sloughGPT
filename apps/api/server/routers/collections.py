@@ -101,7 +101,7 @@ class CollectionsRouter:
                 "filters": len(filters),
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="collections.create_pipeline")
         except Exception as e:
             logger.warning("Create pipeline failed: %s", e)
             classify_and_raise(e, source="create_pipeline")
@@ -126,7 +126,7 @@ class CollectionsRouter:
                 "elapsed_ms": round(_elapsed_ms, 1),
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="collections.run_pipeline")
         except Exception as e:
             logger.warning("Run pipeline failed: %s", e)
             classify_and_raise(e, source="run_pipeline")
@@ -163,7 +163,7 @@ class CollectionsRouter:
                 "elapsed_ms": round(_elapsed_ms, 1),
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="collections.collect_direct")
         except Exception as e:
             logger.warning("Direct collect failed: %s", e)
             classify_and_raise(e, source="collect_direct")
@@ -192,7 +192,7 @@ class CollectionsRouter:
                 "stats": pipeline.stats,
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="collections.get_pipeline")
         except Exception as e:
             classify_and_raise(e, source="get_pipeline")
 
@@ -224,7 +224,7 @@ class CollectionsRouter:
                 "stats": pipeline.stats,
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="collections.collect")
         except Exception as e:
             classify_and_raise(e, source="collect")
 
@@ -249,7 +249,7 @@ class CollectionsRouter:
                 "returned": len(limited),
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="collections.get_records")
         except Exception as e:
             classify_and_raise(e, source="get_records")
 

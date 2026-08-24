@@ -515,7 +515,7 @@ class ShellREPL(LinuxCommandsMixin):
                     except SystemExit as e:
                         self._last_exit_code = e.code if isinstance(e.code, int) else 1
                     except Exception as e:
-                        self._print(f"  Error: {e}")
+                        self._print(self._format_error(e, cmd))
                         self._last_exit_code = 1
                         self._audit.error(line, repr(e))
                     elapsed_ms = (_time.time() - t0) * 1000
@@ -532,7 +532,7 @@ class ShellREPL(LinuxCommandsMixin):
             self._aborted = True
             self._print("  Aborted")
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e))
             self._last_exit_code = 1
             self._audit.error(line, repr(e))
 
@@ -1233,7 +1233,7 @@ class ShellREPL(LinuxCommandsMixin):
                     self._print(f"  Command timed out: {cmd}")
                     self._last_exit_code = 124
                 except Exception as e:
-                    self._print(f"  Error: {e}")
+                    self._print(self._format_error(e, cmd))
                     self._last_exit_code = 1
                 finally:
                     self.io = old_io
@@ -1309,7 +1309,7 @@ class ShellREPL(LinuxCommandsMixin):
             except SystemExit as e:
                 self._last_exit_code = e.code if isinstance(e.code, int) else 1
             except Exception as e:
-                self._print(f"  Error: {e}")
+                self._print(self._format_error(e, cmd))
                 self._last_exit_code = 1
         finally:
             self.io = old_io

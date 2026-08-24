@@ -887,7 +887,7 @@ class MobileRouter:
             logger.error("Failed to parse training output: %s", e, extra={"tag": "REQ"})
             raise_error("Training produced invalid output", "E_INFRA_STARTUP", status_code=500)
         except AppError:
-            raise
+            classify_and_raise(e, source="mobile._write_pairs")
         except Exception as e:
             logger.warning("Mobile train failed: %s", e, extra={"tag": "REQ"})
             classify_and_raise(e, source="mobile_train")

@@ -583,6 +583,10 @@ class AutoTrainRouter:
             """start_turbo."""
             global _turbo_state, _turbo_cancel_event
 
+            with _turbo_lock:
+                if _turbo_state.get("status") == "running":
+                    raise_error("A turbo training job is already running", code="E_INFRA_BUSY")
+
             data_path = req.data_path
             if not data_path and req.dataset_id:
                 data_path = _resolve_dataset_path(req.dataset_id)
@@ -601,8 +605,6 @@ class AutoTrainRouter:
                 pass
 
             with _turbo_lock:
-                if _turbo_state.get("status") == "running":
-                    raise_error("A turbo training job is already running", code="E_INFRA_BUSY")
                 _turbo_state = {
                     "status": "running",
                     "job_id": f"turbo_{int(time.time())}",

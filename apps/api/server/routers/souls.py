@@ -491,7 +491,7 @@ Be yourself — let your personality shape how you respond."""
                     })
             raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
         except AppError:
-            raise
+            classify_and_raise(e, source="souls.get_soul")
         except Exception as e:
             logger.warning("Get soul failed: %s", e)
             classify_and_raise(e, source="get_soul")

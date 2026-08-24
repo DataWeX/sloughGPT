@@ -1396,7 +1396,7 @@ class InferenceRouter:
                 if _cb is not None and _cb.state.value == "open":
                     raise_error("Model is degraded — circuit breaker open. Please wait or reload the model.", "E_BAD_REQUEST", status_code=503)
         except AppError:
-            raise
+            classify_and_raise(e, source="inference.chat")
         except Exception as e:
             logger.debug("Circuit breaker check failed: %s", e)
 

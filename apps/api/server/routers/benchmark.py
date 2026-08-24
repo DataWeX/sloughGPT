@@ -235,7 +235,7 @@ class BenchmarkRouter:
                 "tokens": len(ids),
             })
         except AppError:
-            raise
+            classify_and_raise(e, source="benchmark.calculate_perplexity")
         except Exception as e:
             logger.warning("Perplexity benchmark failed: %s", e)
             classify_and_raise(e, source="benchmark")

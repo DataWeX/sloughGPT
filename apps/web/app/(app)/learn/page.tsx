@@ -8,7 +8,7 @@ import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
-type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds'
+type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds' | 'train' | 'evaluate' | 'deploy'
 
 export default function LearnPage() {
   const [status, setStatus] = useState<LearnerStatus | null>(null)
@@ -31,7 +31,55 @@ export default function LearnPage() {
   const [feeds, setFeeds] = useState<Array<{ url: string; interval: number; last_poll?: string }>>([])
   const [newFeedUrl, setNewFeedUrl] = useState('')
   const [feedMsg, setFeedMsg] = useState<string | null>(null)
+  const [training, setTraining] = useState(false)
+  const [trainResult, setTrainResult] = useState<{ status: string; loss?: number } | null>(null)
+  const [evaluating, setEvaluating] = useState(false)
+  const [evalResult, setEvalResult] = useState<Record<string, unknown> | null>(null)
+  const [deploying, setDeploying] = useState(false)
+  const [deployResult, setDeployResult] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
+
+  const handleTrain = async () => {
+    setTraining(true)
+    setTrainResult(null)
+    try {
+      const result = await learnerController.train()
+      setTrainResult(result)
+      addToast('Training complete', 'success')
+    } catch (e) {
+      addToast(`Training failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setTraining(false)
+    }
+  }
+
+  const handleEvaluate = async () => {
+    setEvaluating(true)
+    setEvalResult(null)
+    try {
+      const result = await learnerController.evaluate()
+      setEvalResult(result.metrics)
+      addToast('Evaluation complete', 'success')
+    } catch (e) {
+      addToast(`Evaluation failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setEvaluating(false)
+    }
+  }
+
+  const handleDeploy = async () => {
+    setDeploying(true)
+    setDeployResult(null)
+    try {
+      const result = await learnerController.deploy()
+      setDeployResult(result.status)
+      addToast('Deploy complete', 'success')
+    } catch (e) {
+      addToast(`Deploy failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setDeploying(false)
+    }
+  }
 
   useEffect(() => {
     learnerController.status().then(s => {
@@ -260,6 +308,78 @@ export default function LearnPage() {
                     <span className="text-muted-foreground shrink-0 ml-2">{f.interval}s</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'train' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Train Knowledge Model</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">Train a model on ingested knowledge to improve retrieval quality and generate better embeddings.</p>
+            <Button onClick={() => void handleTrain()} disabled={training} className="w-full">
+              {training ? 'Training...' : 'Start Training'}
+            </Button>
+            {trainResult && (
+              <div className="rounded bg-muted/30 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className="font-medium">{trainResult.status}</span>
+                </div>
+                {trainResult.loss != null && (
+                  <div className="flex justify-between mt-1">
+                    <span className="text-muted-foreground">Loss</span>
+                    <span className="font-mono">{trainResult.loss.toFixed(4)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'evaluate' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Evaluate Knowledge Model</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">Run evaluation metrics on the trained knowledge model to measure retrieval accuracy and quality.</p>
+            <Button onClick={() => void handleEvaluate()} disabled={evaluating} className="w-full">
+              {evaluating ? 'Evaluating...' : 'Run Evaluation'}
+            </Button>
+            {evalResult && (
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(evalResult).map(([key, value]) => (
+                  <div key={key} className="rounded bg-muted/30 p-2 text-center">
+                    <div className="text-[10px] text-muted-foreground">{key}</div>
+                    <div className="text-xs font-mono font-medium">{String(value)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'deploy' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Deploy Knowledge Model</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">Deploy the trained knowledge model to make it available for inference and retrieval.</p>
+            <Button onClick={() => void handleDeploy()} disabled={deploying} className="w-full">
+              {deploying ? 'Deploying...' : 'Deploy Model'}
+            </Button>
+            {deployResult && (
+              <div className="rounded bg-muted/30 p-3 text-sm">
+                <span className="text-muted-foreground">Status: </span>
+                <span className="font-medium">{deployResult}</span>
               </div>
             )}
           </CardContent>

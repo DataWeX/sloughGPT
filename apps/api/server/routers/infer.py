@@ -187,7 +187,7 @@ class InferRouter:
             safe_audit_log("infer.generate", resource=model_name, detail=f"elapsed={elapsed_ms:.0f}ms tokens={tokens}")
             return InferResponse(text=result, model=model_name, tokens_generated=tokens, elapsed_ms=round(elapsed_ms, 1))
         except AppError:
-            raise
+            classify_and_raise(e, source="infer.infer")
         except Exception as e:
             logger.warning("Inference failed: %s", e)
             classify_and_raise(e, source="infer")

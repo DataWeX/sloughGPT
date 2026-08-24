@@ -1,16 +1,10 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
 const mockAddToast = vi.fn()
-
-beforeAll(() => {
-  if (!Element.prototype.scrollIntoView) {
-    Element.prototype.scrollIntoView = vi.fn()
-  }
-})
 
 vi.mock('@/lib/http-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
@@ -47,6 +41,9 @@ vi.mock('@/components/PageContainer', () => ({
 import SelfTrainPage from './page'
 
 describe('SelfTrainPage', () => {
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn()
+  })
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()

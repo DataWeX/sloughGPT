@@ -48,6 +48,10 @@ def _reset_turbo(tmp_path):
     mod._turbo_state.update(_IDLE)
     mod._turbo_cancel_event = threading.Event()
     inst = mod._auto_train_instance
+    ds_dir = tmp_path / "datasets"
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    (ds_dir / "x.txt").write_text("hello\n")
+    mod._test_data_path = str(ds_dir / "x.txt")
     with patch.object(inst, "REPO_ROOT", tmp_path), \
          patch.object(inst, "TURBO_DIR", tmp_path / "models" / "turbo-trained"), \
          patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "models" / "auto-training"), \
@@ -60,8 +64,8 @@ def _wait_for_status(desired, timeout=5.0):
     deadline = time.time() + timeout
     body = None
     while time.time() < deadline:
-        body = client.get("/auto-train/turbo/status").json()
-        if body["status"] == desired:
+        body = client.get("/auto-train/turbo/status").json().get("data", {})
+        if body.get("status") == desired:
             return body
         time.sleep(0.05)
     raise AssertionError(f"status never became {desired!r}; last={body!r}")
@@ -128,9 +132,9 @@ def test_turbo_progress_and_complete(MockTrainer):
     blocker = threading.Event()
     MockTrainer.return_value.train.side_effect = _fake_train_result(blocker=blocker)
 
-    resp = client.post("/auto-train/start-turbo", json={"data_path": "x.txt"})
+    resp = client.post("/auto-train/start-turbo", json={"data_path": mod._test_data_path})
     assert resp.status_code == 200
-    body = resp.json()
+    body = resp.json()["data"]
     assert body["status"] == "started"
     assert body["job_id"]
 
@@ -155,7 +159,7 @@ def test_turbo_progress_and_complete(MockTrainer):
 @patch("domains.training.train_pipeline.SloughGPTTrainer")
 def test_turbo_cancelled(MockTrainer):
     MockTrainer.return_value.train.side_effect = _fake_train_result(cancel=True)
-    client.post("/auto-train/start-turbo", json={"data_path": "x.txt"})
+    client.post("/auto-train/start-turbo", json={"data_path": mod._test_data_path})
     body = _wait_for_status("error")
     assert body["error"] == "Training cancelled"
 
@@ -163,7 +167,7 @@ def test_turbo_cancelled(MockTrainer):
 @patch("domains.training.train_pipeline.SloughGPTTrainer")
 def test_turbo_trainer_error(MockTrainer):
     MockTrainer.return_value.train.side_effect = _fake_train_result(error=RuntimeError("boom"))
-    client.post("/auto-train/start-turbo", json={"data_path": "x.txt"})
+    client.post("/auto-train/start-turbo", json={"data_path": mod._test_data_path})
     body = _wait_for_status("error")
     assert body["error"] == "boom"
 
@@ -305,7 +309,7 @@ def test_turbo_real_training_end_to_end(tmp_path):
         "learning_rate": 0.001,
     })
     assert resp.status_code == 200
-    assert resp.json()["status"] == "started"
+    assert resp.json()["data"]["status"] == "started"
 
     complete = _wait_for_status("complete", timeout=60.0)
     assert complete["progress"] == 100.0
