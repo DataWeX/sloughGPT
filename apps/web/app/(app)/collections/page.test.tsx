@@ -99,16 +99,31 @@ describe('CollectionsPage', () => {
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
   })
 
-  it('create button disabled when name is empty', async () => {
+  it('creates a pipeline', async () => {
+    mockApiGet.mockResolvedValue({ pipelines: [], counts: null })
+    mockApiPost.mockResolvedValue({})
+    render(<CollectionsPage />)
+    fireEvent.click(screen.getByText('New pipeline'))
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'my-pipe' } })
+    fireEvent.click(screen.getByText('Create'))
+    await waitFor(() => {
+      expect(mockApiPost).toHaveBeenCalledWith('/collections/create', expect.objectContaining({ name: 'my-pipe' }))
+    }, { timeout: 5000 })
+    expect(mockAddToast).toHaveBeenCalledWith('Created pipeline: my-pipe', 'success')
+  })
+
+  it('validates name is required', async () => {
     mockApiGet.mockResolvedValue({ pipelines: [], counts: null })
     render(<CollectionsPage />)
     fireEvent.click(screen.getByText('New pipeline'))
-    const btn = screen.getByText('Create', { selector: 'button' })
-    expect(btn).toBeDisabled()
+    fireEvent.click(screen.getByText('Create'))
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Name is required', 'error')
+    }, { timeout: 5000 })
   })
 
   it('runs a pipeline', async () => {
-    mockApiGet.mockResolvedValue({ pipelines: [{ id: 'web-scraper', name: 'web-scraper', source_type: 'url', store_type: 'memory' }], counts: { pipelines: 1, sources: 1, stores: 1, filters: 0 } })
+    mockApiGet.mockResolvedValue({ pipelines: [{ id: 'p1', name: 'web-scraper', source_type: 'url', store_type: 'memory' }], counts: { pipelines: 1, sources: 1, stores: 1, filters: 0 } })
     mockApiPost.mockResolvedValue({})
     render(<CollectionsPage />)
     await waitFor(() => {
@@ -122,7 +137,7 @@ describe('CollectionsPage', () => {
   })
 
   it('deletes a pipeline', async () => {
-    mockApiGet.mockResolvedValue({ pipelines: [{ id: 'web-scraper', name: 'web-scraper', source_type: 'url', store_type: 'memory' }], counts: { pipelines: 1, sources: 1, stores: 1, filters: 0 } })
+    mockApiGet.mockResolvedValue({ pipelines: [{ id: 'p1', name: 'web-scraper', source_type: 'url', store_type: 'memory' }], counts: { pipelines: 1, sources: 1, stores: 1, filters: 0 } })
     mockApiDelete.mockResolvedValue({})
     render(<CollectionsPage />)
     await waitFor(() => {
@@ -130,7 +145,7 @@ describe('CollectionsPage', () => {
     }, { timeout: 5000 })
     fireEvent.click(screen.getByText('Delete'))
     await waitFor(() => {
-      expect(mockApiDelete).toHaveBeenCalledWith('/collections/web-scraper')
+      expect(mockApiDelete).toHaveBeenCalledWith('/collections/p1')
     }, { timeout: 5000 })
     expect(mockAddToast).toHaveBeenCalledWith('Pipeline deleted', 'success')
   })

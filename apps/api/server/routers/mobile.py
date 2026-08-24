@@ -352,9 +352,9 @@ class MobileRouter:
             status, model info, current soul, recent conversations, stats.
         """
         health = self._get_health_data()
-        soul = self._get_current_soul()
-        sessions = self._get_sessions_list()
-        models = self._get_models_list()
+        soul = await asyncio.to_thread(self._get_current_soul)
+        sessions = await asyncio.to_thread(self._get_sessions_list)
+        models = await asyncio.to_thread(self._get_models_list)
 
         if isinstance(sessions, dict):
             sessions = sessions.get("data", [])
@@ -393,7 +393,7 @@ class MobileRouter:
         search: str | None = Query(None),
     ) -> dict:
         """Paginated conversation list for mobile."""
-        sessions = await asyncio.to_thread(self._get_sessions_list)
+        sessions = self._get_sessions_list()
         if isinstance(sessions, dict):
             sessions = sessions.get("data", [])
 
@@ -433,7 +433,7 @@ class MobileRouter:
 
     async def get_conversation(self, request: Request, session_id: str) -> dict:
         """Single conversation with full message history."""
-        messages = await asyncio.to_thread(self._get_session_messages, session_id)
+        messages = self._get_session_messages(session_id)
         return success_response(data={
             "id": session_id,
             "messages": messages or [],
@@ -442,11 +442,11 @@ class MobileRouter:
 
     async def get_models(self, request: Request) -> dict:
         """Available models with current selection and checkpoint options."""
-        models = await asyncio.to_thread(self._get_models_list)
-        soul = await asyncio.to_thread(self._get_current_soul)
-        souls = await asyncio.to_thread(self._get_souls)
-        checkpoints = await asyncio.to_thread(self._get_checkpoints)
-        health = await asyncio.to_thread(self._get_health_data)
+        models = self._get_models_list()
+        soul = self._get_current_soul()
+        souls = self._get_souls()
+        checkpoints = self._get_checkpoints()
+        health = self._get_health_data()
 
         model_list = []
         if isinstance(models, list):
@@ -495,17 +495,17 @@ class MobileRouter:
         errors = []
         if body.model_id:
             try:
-                await asyncio.to_thread(self._load_model, body.model_id)
+                self._load_model(body.model_id)
             except Exception as e:
                 errors.append(f"model_load: {e}")
 
         if body.soul_name:
             try:
-                await asyncio.to_thread(self._switch_soul, body.soul_name, body.checkpoint_name)
+                self._switch_soul(body.soul_name, body.checkpoint_name)
             except Exception as e:
                 errors.append(f"soul_switch: {e}")
 
-        health = await asyncio.to_thread(self._get_health_data)
+        health = self._get_health_data()
 
         if errors:
             logger.warning("Mobile switch_model partial failure: %s", "; ".join(errors), extra={"tag": "REQ"})
@@ -520,9 +520,9 @@ class MobileRouter:
 
     async def get_health(self, request: Request) -> dict:
         """System health summary for mobile."""
-        detailed = await asyncio.to_thread(self._get_detailed_health)
-        metrics = await asyncio.to_thread(self._get_system_metrics)
-        disk = await asyncio.to_thread(self._get_disk_info)
+        detailed = self._get_detailed_health()
+        metrics = self._get_system_metrics()
+        disk = self._get_disk_info()
 
         system_info = detailed.get("system", {})
 
@@ -556,9 +556,9 @@ class MobileRouter:
     ) -> dict:
         """Paginated knowledge items for mobile."""
         if search:
-            items = await asyncio.to_thread(self._search_knowledge, search, per_page * 5)
+            items = self._search_knowledge(search, per_page * 5)
         else:
-            items = await asyncio.to_thread(self._get_knowledge_items, per_page * 5, 0, topic)
+            items = self._get_knowledge_items(per_page * 5, 0, topic)
 
         if not isinstance(items, list):
             items = []
@@ -590,7 +590,7 @@ class MobileRouter:
     async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest) -> dict:
         """Add a knowledge item."""
         try:
-            item_id = await asyncio.to_thread(self._create_knowledge_item, body.content, body.topic)
+            item_id = self._create_knowledge_item(body.content, body.topic)
             return success_response(data={"id": item_id, "content": body.content, "topic": body.topic})
         except Exception as e:
             raise_error(f"Failed to create knowledge: {e}", "E_DOMAIN")
@@ -673,7 +673,7 @@ class MobileRouter:
 
     async def sync_status(self, request: Request) -> dict:
         """Check server connectivity and last sync state."""
-        health = await asyncio.to_thread(self._get_health_data)
+        health = self._get_health_data()
 
         return success_response(data={
             "reachable": health.get("status") == "healthy",

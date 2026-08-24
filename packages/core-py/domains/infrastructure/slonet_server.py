@@ -9,7 +9,6 @@ from typing import Optional, List, Iterator, AsyncIterator, Dict, Any, Callable
 
 import numpy as np
 
-from .constants import DEFAULT_GENERATE_TIMEOUT
 from domains.infrastructure.model_server import CircuitBreaker, ModelMetrics
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")
@@ -53,7 +52,7 @@ class SloNetServer:
         model_factory: Optional[Callable[[], Any]] = None,
         model_id: str = "slonet",
         max_workers: int = 4,
-        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+        generate_timeout: float = 120.0,
         enable_circuit_breaker: bool = True,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",

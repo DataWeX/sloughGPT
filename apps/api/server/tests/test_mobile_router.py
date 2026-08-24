@@ -6,7 +6,7 @@ Mocks the static helper methods on MobileRouter instead of httpx.
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from test_support import get_test_client
 
 
@@ -14,11 +14,6 @@ from test_support import get_test_client
 def client():
     """Create test client."""
     return get_test_client()
-
-
-def resp_data(response):
-    """Unwrap StandardResponse to get inner data."""
-    return response.json()["data"]
 
 
 class TestMobileDashboard:
@@ -53,7 +48,7 @@ class TestMobileDashboard:
             response = client.get("/mobile/dashboard")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["status"] == "healthy"
         assert data["model"]["name"] == "gpt2"
         assert data["model"]["loaded"] is True
@@ -73,7 +68,7 @@ class TestMobileDashboard:
             response = client.get("/mobile/dashboard")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["status"] == "unknown"
 
 
@@ -97,7 +92,7 @@ class TestMobileConversations:
             response = client.get("/mobile/conversations?page=1&per_page=10")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert len(data["conversations"]) == 10
         assert data["total"] == 25
         assert data["page"] == 1
@@ -124,7 +119,7 @@ class TestMobileConversations:
             response = client.get("/mobile/conversations?search=Python")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert len(data["conversations"]) == 1
         assert data["conversations"][0]["title"] == "Python Help"
 
@@ -139,7 +134,7 @@ class TestMobileConversations:
             response = client.get("/mobile/conversations/session_123")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["id"] == "session_123"
         assert len(data["messages"]) == 2
 
@@ -173,7 +168,7 @@ class TestMobileModels:
             response = client.get("/mobile/models")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["current"]["model_id"] == "gpt2"
         assert data["current"]["soul"] == "Default"
         assert len(data["models"]) == 2
@@ -195,7 +190,7 @@ class TestMobileModels:
             )
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["status"] == "ok"
         assert data["model"] == "llama"
         assert data["soul"] == "Creative"
@@ -236,7 +231,7 @@ class TestMobileHealth:
             response = client.get("/mobile/health")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["status"] == "healthy"
         assert data["model"]["name"] == "gpt2"
         assert data["model"]["loaded"] is True
@@ -253,6 +248,20 @@ class TestMobileKnowledge:
     def test_list_knowledge_paginated(self, client):
         """GET /mobile/knowledge should return paginated items."""
         items = [
+            MagicMock(
+                id=f"item_{i}",
+                content=f"Knowledge {i}",
+                topic="tech",
+                importance=0.8,
+                source="manual",
+                url="",
+                timestamp=0,
+                score=0,
+            )
+            for i in range(1, 51)
+        ]
+
+        with patch("apps.api.server.routers.mobile.MobileRouter._get_knowledge_items", return_value=[
             {
                 "id": f"item_{i}",
                 "content": f"Knowledge {i}",
@@ -264,13 +273,11 @@ class TestMobileKnowledge:
                 "score": 0,
             }
             for i in range(1, 51)
-        ]
-
-        with patch("apps.api.server.routers.mobile.MobileRouter._get_knowledge_items", return_value=items):
+        ]):
             response = client.get("/mobile/knowledge?page=1&per_page=20")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert len(data["items"]) == 20
         assert data["total"] == 50
         assert data["page"] == 1
@@ -287,7 +294,7 @@ class TestMobileKnowledge:
             response = client.get("/mobile/knowledge?topic=tech")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert len(data["items"]) == 2
         assert all(item["topic"] == "tech" for item in data["items"])
 
@@ -301,7 +308,7 @@ class TestMobileKnowledge:
             response = client.get("/mobile/knowledge?search=Python")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert len(data["items"]) == 1
         assert "Python" in data["items"][0]["content"]
 
@@ -314,7 +321,7 @@ class TestMobileKnowledge:
             )
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["content"] == "New knowledge"
         assert data["topic"] == "tech"
         assert data["id"] == "new_item"
@@ -328,7 +335,7 @@ class TestMobileKnowledge:
             )
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["updated"] is True
         assert data["id"] == "item_1"
 
@@ -338,6 +345,6 @@ class TestMobileKnowledge:
             response = client.delete("/mobile/knowledge/item_1")
 
         assert response.status_code == 200
-        data = resp_data(response)
+        data = response.json()
         assert data["status"] == "deleted"
         assert data["id"] == "item_1"

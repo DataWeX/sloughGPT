@@ -19,7 +19,6 @@ import time
 from threading import Lock
 from typing import Any, Optional, Union
 
-from .constants import DEFAULT_GENERATE_TIMEOUT
 from .model_server import ModelServer, ModelStatus
 
 logger = logging.getLogger("slo.infrastructure.model_registry")
@@ -56,7 +55,7 @@ class ModelRegistry:
         tokenizer: Any,
         make_default: bool = False,
         max_concurrent: Optional[int] = None,
-        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+        generate_timeout: float = 120.0,
         enable_circuit_breaker: bool = True,
         process_guard: Optional[Any] = None,
         idle_timeout_s: float = 0.0,

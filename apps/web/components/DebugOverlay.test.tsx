@@ -21,6 +21,12 @@ vi.mock('@/lib/error-store', () => ({
   useErrorStore: mockUseErrorStore,
 }))
 
+const mockUseLiveStatus = vi.hoisted(() => vi.fn())
+vi.mock('@/hooks/useLiveStatus', () => ({
+  useLiveStatus: mockUseLiveStatus,
+  useLiveStatusStore: vi.fn(() => ({ connectionStatus: 'connected' })),
+}))
+
 const mockDebugData = {
   model_loaded: true,
   model_type: 'gpt2',
@@ -88,6 +94,7 @@ describe('DebugOverlay', () => {
       return sel(state)
     })
     mockUseErrorStore.getState = vi.fn(() => ({ errors: [] }))
+    mockUseLiveStatus.mockReturnValue({ health: mockDebugData })
   })
 
   afterEach(() => {

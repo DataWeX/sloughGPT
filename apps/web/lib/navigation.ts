@@ -59,6 +59,8 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/compare', labelKey: 'nav.compare', icon: '⚖️', description: 'Compare models' },
       { path: '/tokenizer', labelKey: 'nav.tokenizer', icon: '🔤', description: 'Tokenizer explorer' },
       { path: '/vector', labelKey: 'nav.vector', icon: '📐', description: 'Vector store & embeddings' },
+      { path: '/kb', labelKey: 'nav.kb', icon: '📖', description: 'Knowledge base management' },
+      { path: '/token-tree', labelKey: 'nav.token-tree', icon: '🌳', description: 'BPE merge tree explorer' },
       { path: '/meta-weights', labelKey: 'nav.meta-weights', icon: '⚖️', description: 'Inference weight tuning' },
       { path: '/infer', labelKey: 'nav.infer', icon: '⚡', description: 'API playground' },
       { path: '/world', labelKey: 'nav.world', icon: '🌍', description: 'World simulation & rendering' },
