@@ -22,8 +22,8 @@ describe('extractErrorMessage', () => {
     expect(extractErrorMessage(null)).toBe('Unknown error')
   })
 
-  it('returns default fallback for number', () => {
-    expect(extractErrorMessage(42)).toBe('Unknown error')
+  it('converts number to string', () => {
+    expect(extractErrorMessage(42)).toBe('42')
   })
 
   it('serializes object to JSON when no known error properties', () => {

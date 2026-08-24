@@ -25,6 +25,9 @@ export default function MemoryPage() {
   const [storeTopic, setStoreTopic] = useState('manual')
   const [config, setConfig] = useState<MemoryConfigResult | null>(null)
   const [showStore, setShowStore] = useState(false)
+  const [rememberContent, setRememberContent] = useState('')
+  const [rememberTopic, setRememberTopic] = useState('')
+  const [remembering, setRemembering] = useState(false)
   const [selectedItem, setSelectedItem] = useState<MemoryItem | null>(null)
   const [editContent, setEditContent] = useState('')
   const [editMode, setEditMode] = useState(false)
@@ -46,6 +49,22 @@ export default function MemoryPage() {
       setLoading(false)
     }
   }, [addToast])
+
+  const handleRemember = useCallback(async () => {
+    if (!rememberContent.trim()) return
+    setRemembering(true)
+    try {
+      await memoryController.remember(rememberContent, rememberTopic || rememberContent)
+      addToast('Memory saved', 'success')
+      setRememberContent('')
+      setRememberTopic('')
+      void fetchAll()
+    } catch {
+      addToast('Could not save memory', 'error')
+    } finally {
+      setRemembering(false)
+    }
+  }, [rememberContent, rememberTopic, addToast, fetchAll])
 
   const loadArchiveStats = useCallback(async () => {
     try {
@@ -234,6 +253,29 @@ export default function MemoryPage() {
           </Button>
         )}
       </div>
+
+      <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <Input
+                value={rememberContent}
+                onChange={e => setRememberContent(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void handleRemember() }}
+                placeholder="Quick remember: type a fact and press Enter"
+                className="h-8 text-xs flex-1"
+              />
+              <Input
+                value={rememberTopic}
+                onChange={e => setRememberTopic(e.target.value)}
+                placeholder="Topic (optional)"
+                className="h-8 text-xs w-28"
+              />
+              <Button size="sm" onClick={() => void handleRemember()} disabled={remembering || !rememberContent.trim()}>
+                {remembering ? 'Saving...' : 'Remember'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
       {showStore && (
         <Card>
