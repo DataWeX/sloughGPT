@@ -213,8 +213,8 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
                 self.assessment_history = self.assessment_history[-500:]
 
             self.logger.debug(
-                f"Monitored {len(thoughts)} thoughts, efficiency: "
-                f"{monitoring_results['overall_efficiency']:.2f}"
+                "Monitored %d thoughts, efficiency: %.2f",
+                len(thoughts), monitoring_results['overall_efficiency']
             )
             return monitoring_results
 

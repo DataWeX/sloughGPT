@@ -216,23 +216,14 @@ class CompanionRouter:
         )
 
     async def list_presets(self) -> dict:
-        """Return the hardcoded list of available companion presets.
-
-        Returns:
-            Success envelope containing a presets array. Each preset
-            has id (warm/curious/playful/balanced), name, description,
-            and a traits dictionary with warmth, curiosity, humor values.
-
-        Side effects:
-            None. The preset list is static and does not read from
-            any external store.
-        """
-        presets = [
-            {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
-            {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},
-            {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
-            {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
-        ]
+        """Return the hardcoded list of available companion presets."""
+        try:
+            presets = [
+                {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
+                {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},
+                {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
+                {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
+            ]
         return success_response(data={"presets": presets})
 
 
