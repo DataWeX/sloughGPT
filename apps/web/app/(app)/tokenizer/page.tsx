@@ -21,7 +21,7 @@ import { TokenTreeCompareCard } from '@/components/tokenizer/TokenTreeCompareCar
 import { TokenTreePlaygroundCard } from '@/components/tokenizer/TokenTreePlaygroundCard'
 import { useToastStore } from '@/lib/toast-store'
 
-type Tab = 'playground' | 'vocab' | 'samples' | 'train' | 'analyze' | 'decompose' | 'detokenize' | 'pretokenize'
+type Tab = 'playground' | 'vocab' | 'samples' | 'train' | 'analyze' | 'decompose' | 'detokenize' | 'pretokenize' | 'merges'
 
 export default function TokenizerPage() {
   const router = useRouter()
@@ -46,6 +46,8 @@ export default function TokenizerPage() {
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
   const [decomposeResult, setDecomposeResult] = useState<Record<string, unknown> | null>(null)
   const [detokenizeResult, setDetokenizeResult] = useState<string | null>(null)
+  const [mergesResult, setMergesResult] = useState<import('@/lib/tokenizer-controller').MergeEntry[] | null>(null)
+  const [mergesQuery, setMergesQuery] = useState('')
   const [pretokenizeResult, setPretokenizeResult] = useState<Record<string, unknown> | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const addToast = useToastStore(s => s.addToast)
@@ -141,6 +143,15 @@ export default function TokenizerPage() {
     }
   }
 
+const handleGetMerges = async () => {
+    try {
+      const res = await tokenizerController.getMerges(50)
+      setMergesResult(res.merges)
+    } catch {
+      setMergesResult([])
+    }
+  }
+
   const handlePretokenize = async () => {
     if (!inputText.trim()) return
     setPretokenizeResult(null)
@@ -154,7 +165,7 @@ export default function TokenizerPage() {
 
   const toolbar = (
     <div className="flex gap-1 border-b border-border/30 pb-0">
-      {(['playground', 'vocab', 'samples', 'train', 'analyze', 'decompose', 'detokenize', 'pretokenize'] as Tab[]).map(t => (
+      {(['playground', 'vocab', 'samples', 'train', 'analyze', 'decompose', 'detokenize', 'pretokenize', 'merges'] as Tab[]).map(t => (
         <button
           type="button"
           key={t}
@@ -353,6 +364,26 @@ export default function TokenizerPage() {
           )}
         </div>
       )}
+      
+      {tab === 'merges' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">BPE Merges</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Input value={mergesQuery} onChange={e => setMergesQuery(e.target.value)} placeholder="Filter merges (optional)" className="h-8 text-xs flex-1" />
+              <Button size="sm" onClick={() => void handleGetMerges()}>Load Merges</Button>
+            </div>
+            {mergesResult && (
+              <div className="rounded bg-muted p-3 text-xs max-h-64 overflow-auto font-mono">
+                {mergesResult.length === 0 ? <p className="text-muted-foreground">No merges found</p> : mergesResult.map((m, i) => <div key={i}>{m.index}: {m.left} + {m.right} → {m.token}</div>)}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {tab === 'pretokenize' && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">Enter text to see how it is pre-tokenized into words/fragments.</p>

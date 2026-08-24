@@ -41,14 +41,76 @@ export default function SessionPage() {
     }
   }, [sessionId, addToast, handleInspect])
 
+
+  const [sessions, setSessions] = useState<{ id: string; name?: string; created_at?: string }[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<{ id: string; name?: string; created_at?: string }[] | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createSoul, setCreateSoul] = useState('')
+
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    try {
+      const items = await sessionController.list()
+      setSessions(items.slice(0, 50))
+    } catch { /* silent */ }
+    finally { setSessionsLoading(false) }
+  }, [])
+
+  const handleSearch = useCallback(async () => {
+    if (!searchQuery.trim()) { setSearchResults(null); return }
+    try {
+      const items = await sessionController.search(searchQuery, 20)
+      setSearchResults(items)
+    } catch {
+      addToast('Could not search sessions', 'error')
+    }
+  }, [searchQuery, addToast])
+
+  const handleCreate = useCallback(async () => {
+    try {
+      const resp = await sessionController.create(createSoul || 'new session')
+      addToast('Session created', 'success')
+      setSessionId(resp.id)
+      setShowCreate(false)
+      void loadSessions()
+      void handleInspect()
+    } catch {
+      addToast('Could not create session', 'error')
+    }
+  }, [createSoul, addToast, loadSessions, handleInspect])
+
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await sessionController.delete(id)
+      addToast('Session deleted', 'success')
+      if (sessionId === id) { setInspector(null); setSessionId('') }
+      void loadSessions()
+    } catch {
+      addToast('Could not delete session', 'error')
+    }
+  }, [sessionId, addToast, loadSessions])
+
+  const handleLoadArchived = useCallback(async () => {
+    try {
+      const items = await sessionController.listArchived()
+      setSessions(items.slice(0, 50))
+    } catch {
+      addToast('Could not load archived sessions', 'error')
+    }
+  }, [addToast])
+
   return (
     <PageContainer
       title="Session Inspector"
       subtitle="Debug and inspect chat session state"
       headerRight={
-        inspector && (
-          <Button size="sm" variant="ghost" onClick={() => void handleInspect()}>Refresh</Button>
-        )
+        <div className="flex gap-1">
+          <Button size="sm" variant="ghost" onClick={() => { void loadSessions(); setShowCreate(!showCreate) }}>Sessions</Button>
+          <Button size="sm" variant="ghost" onClick={() => void handleLoadArchived()}>Archived</Button>
+          {inspector && <Button size="sm" variant="ghost" onClick={() => void handleInspect()}>Refresh</Button>}
+        </div>
       }
     >
       <div className="space-y-4">
@@ -78,7 +140,43 @@ export default function SessionPage() {
           </CardContent>
         </Card>
 
-        {inspector && (
+  
+      {showCreate && (
+        <Card>
+          <CardContent className="p-3 flex items-center gap-2">
+            <Input value={createSoul} onChange={e => setCreateSoul(e.target.value)} placeholder="Soul name (optional)" className="h-8 text-xs flex-1" />
+            <Button size="sm" onClick={() => void handleCreate()}>Create Session</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {(sessions.length > 0 || searchResults) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between">
+              Sessions ({(searchResults ?? sessions).length})
+              <div className="flex gap-1">
+                <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleSearch() }} placeholder="Search..." className="h-7 text-xs w-40" />
+                {searchResults && <Button size="sm" variant="ghost" onClick={() => { setSearchResults(null); setSearchQuery('') }}>Clear</Button>}
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-60 overflow-auto">
+              {(searchResults ?? sessions).map(s => (
+                <div key={s.id} className="flex items-center justify-between rounded px-2 py-1 hover:bg-muted/30 transition-colors text-xs">
+                  <button type="button" className="text-left flex-1 truncate font-mono" onClick={() => { setSessionId(s.id); void handleInspect() }}>
+                    {s.name || s.id}{s.created_at ? ` — ${new Date(s.created_at).toLocaleDateString()}` : ''}
+                  </button>
+                  <Button variant="ghost" size="sm" className="text-[10px] h-6 text-destructive" onClick={() => void handleDelete(s.id)}>Delete</Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {inspector && (
           <>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[

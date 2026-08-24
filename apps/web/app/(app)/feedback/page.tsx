@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -41,6 +41,15 @@ export default function FeedbackPage() {
       if (!s && !w && !t) setLoadError('Could not load feedback data. Please try again.')
     }).finally(() => setLoading(false))
   }, [])
+
+  const handleExport = useCallback(async () => {
+    try {
+      const resp = await feedbackController.exportTrainingData('json')
+      addToast(`Exported ${resp.count} items to ${resp.path ?? 'server'}`, 'success')
+    } catch {
+      addToast('Could not export training data', 'error')
+    }
+  }, [addToast])
 
   const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
