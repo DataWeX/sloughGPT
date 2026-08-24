@@ -45,6 +45,8 @@ import threading
 from typing import Any, Optional, Callable, Generator
 from dataclasses import dataclass, field
 
+from .constants import DEFAULT_GENERATE_TIMEOUT
+
 logger = logging.getLogger("slo.infrastructure.model_worker")
 
 _ctx = mp.get_context("spawn")  # spawn avoids fork-safety issues with torch
@@ -674,7 +676,7 @@ class ModelWorkerProcess:
     def __init__(
         self,
         worker_id: str = "worker",
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         stall_timeout: float = _STALL_TIMEOUT_S,
         extra_sys_paths: Optional[list] = None,
         # SloNet mode (preferred)

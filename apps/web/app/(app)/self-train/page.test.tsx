@@ -40,6 +40,10 @@ vi.mock('@/components/PageContainer', () => ({
 
 import SelfTrainPage from './page'
 
+beforeEach(() => {
+  Element.prototype.scrollIntoView = vi.fn()
+})
+
 describe('SelfTrainPage', () => {
   afterEach(() => {
     cleanup()
@@ -75,7 +79,9 @@ describe('SelfTrainPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Running')).toBeInTheDocument()
     }, { timeout: 5000 })
-    expect(screen.getByText('12345')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('12345')).toBeInTheDocument()
+    }, { timeout: 5000 })
   })
 
   it('shows exited status', async () => {
