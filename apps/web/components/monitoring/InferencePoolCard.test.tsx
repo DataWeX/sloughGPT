@@ -81,7 +81,7 @@ it('does not render Refresh button when onRefresh is absent', async () => {
 })
 
 it('hides max_workers when null', async () => {
-  vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true, max_workers: null })
+  vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true, max_workers: undefined })
   render(<InferencePoolCard />)
   await vi.waitFor(() => expect(screen.getByText('Active')).toBeTruthy())
   expect(screen.queryByText('Max Workers')).toBeNull()
