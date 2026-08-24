@@ -21,7 +21,6 @@ Features:
 - Seed control for reproducible generation
 - Per-request metadata (timing, token count, model info)
 """
-import logging
 import threading
 import time
 from pathlib import Path

@@ -94,7 +94,7 @@ def _fake_train_result(blocker=None, error=None, cancel=False):
 
 @patch("domains.training.train_pipeline.SloughGPTTrainer")
 def test_turbo_status_idle(_):
-    body = client.get("/auto-train/turbo/status").json()
+    body = client.get("/auto-train/turbo/status").json()["data"]
     assert body["status"] == "idle"
     assert body["job_id"] is None
     assert body["global_step"] == 0

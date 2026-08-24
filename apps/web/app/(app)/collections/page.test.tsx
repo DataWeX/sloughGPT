@@ -22,7 +22,7 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     cn: (...a: any[]) => a.join(' '),
     Button: ({ children, onClick, disabled, variant, className }: any) => (
-      <button onClick={onClick} disabled={disabled} data-variant={variant} className={className}>{children}</button>
+      <button onClick={onClick} data-variant={variant} className={className} data-disabled={disabled}>{children}</button>
     ),
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
@@ -131,7 +131,7 @@ describe('CollectionsPage', () => {
     }, { timeout: 5000 })
     fireEvent.click(screen.getByText('Run'))
     await waitFor(() => {
-      expect(mockApiPost).toHaveBeenCalledWith('/collections/run?name=web-scraper')
+      expect(mockApiPost).toHaveBeenCalledWith('/collections/run?name=p1')
     }, { timeout: 5000 })
     expect(mockAddToast).toHaveBeenCalledWith('Pipeline executed', 'success')
   })

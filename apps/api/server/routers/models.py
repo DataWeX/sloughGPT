@@ -498,32 +498,41 @@ class ModelsRouter:
 
     async def get_download_status(self, model_id: str) -> Dict[str, Any]:
         """Get download progress for a specific model."""
-        from domains.infrastructure.download_manager import get_download_manager
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
 
-        mgr = get_download_manager()
-        progress = mgr.get_progress(model_id)
-        if progress is None:
-            cached = mgr.is_cached(model_id)
-            return success_response(data={"model_id": model_id, "cached": cached}, message="not_found")
-        return success_response(data=progress)
+            mgr = get_download_manager()
+            progress = mgr.get_progress(model_id)
+            if progress is None:
+                cached = mgr.is_cached(model_id)
+                return success_response(data={"model_id": model_id, "cached": cached}, message="not_found")
+            return success_response(data=progress)
+        except Exception as e:
+            classify_and_raise(e, source="models.download_status")
 
     async def list_downloads(self) -> Dict[str, Any]:
         """List all active and recent downloads."""
-        from domains.infrastructure.download_manager import get_download_manager
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
 
-        mgr = get_download_manager()
-        mgr.cleanup_stale()
-        return success_response(data=mgr.list_downloads())
+            mgr = get_download_manager()
+            mgr.cleanup_stale()
+            return success_response(data=mgr.list_downloads())
+        except Exception as e:
+            classify_and_raise(e, source="models.downloads_list")
 
     async def cancel_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """Cancel an in-progress download."""
-        from domains.infrastructure.download_manager import get_download_manager
+        try:
+            from domains.infrastructure.download_manager import get_download_manager
 
-        mgr = get_download_manager()
-        if mgr.cancel(model_id):
-            safe_audit_log("model.cancel", resource=model_id, detail="cancelled")
-            return success_response(data={"model_id": model_id}, message="cancelled")
-        return success_response(data={"model_id": model_id}, message="not_found")
+            mgr = get_download_manager()
+            if mgr.cancel(model_id):
+                safe_audit_log("model.cancel", resource=model_id, detail="cancelled")
+                return success_response(data={"model_id": model_id}, message="cancelled")
+            return success_response(data={"model_id": model_id}, message="not_found")
+        except Exception as e:
+            classify_and_raise(e, source="models.download_cancel")
 
     async def verify_download(self, model_id: str) -> Dict[str, Any]:
         """Verify a downloaded model's weight files against Hub SHA-256 checksums.
@@ -558,56 +567,62 @@ class ModelsRouter:
             classify_and_raise(e, source="verify_download")
 
     async def retry_download(self, model_id: str) -> Dict[str, Any]:
-        """Redownload a cached model (cleanup + fresh download)."""
-        from domains.infrastructure.download_manager import (
-            cleanup_incomplete,
-            get_download_manager,
-            is_download_complete,
-        )
+        try:
+            """Redownload a cached model (cleanup + fresh download)."""
+            from domains.infrastructure.download_manager import (
+                cleanup_incomplete,
+                get_download_manager,
+                is_download_complete,
+            )
 
-        if is_download_complete(model_id):
-            cleanup_incomplete(model_id)
-            safe_audit_log("model.retry_download", resource=model_id, detail="cleanup+restart")
+            if is_download_complete(model_id):
+                cleanup_incomplete(model_id)
+                safe_audit_log("model.retry_download", resource=model_id, detail="cleanup+restart")
 
-        mgr = get_download_manager()
-        if mgr.is_downloading(model_id):
-            return success_response(data={"model_id": model_id}, message="already_downloading")
+            mgr = get_download_manager()
+            if mgr.is_downloading(model_id):
+                return success_response(data={"model_id": model_id}, message="already_downloading")
 
-        asyncio.create_task(self._run_download(model_id, 0))
-        return success_response(data={"model_id": model_id}, message="started")
+            asyncio.create_task(self._run_download(model_id, 0))
+            return success_response(data={"model_id": model_id}, message="started")
 
+        except Exception as e:
+            classify_and_raise(e, source="models.retry_download")
     async def cache_usage(self) -> Dict[str, Any]:
-        """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
-        cache = _hf_cache_dir
+        try:
+            """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
+            cache = _hf_cache_dir
 
-        def _compute():
-            if not cache.exists():
-                return 0, 0
-            total = 0
-            count = 0
-            for entry in cache.iterdir():
-                if entry.name.startswith("models--") and entry.is_dir():
-                    blobs = entry / "blobs"
-                    if blobs.is_dir():
-                        for f in blobs.iterdir():
-                            if f.is_file():
-                                try:
-                                    total += f.stat().st_size
-                                except OSError:
-                                    pass
-                    count += 1
-            return total, count
+            def _compute():
+                if not cache.exists():
+                    return 0, 0
+                total = 0
+                count = 0
+                for entry in cache.iterdir():
+                    if entry.name.startswith("models--") and entry.is_dir():
+                        blobs = entry / "blobs"
+                        if blobs.is_dir():
+                            for f in blobs.iterdir():
+                                if f.is_file():
+                                    try:
+                                        total += f.stat().st_size
+                                    except OSError:
+                                        pass
+                        count += 1
+                return total, count
 
-        total, count = await asyncio.to_thread(_compute)
-        if total == 0 and count == 0:
-            return success_response(data={"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)})
-        return success_response(data={
-            "total_bytes": total,
-            "total_gb": round(total / (1024**3), 2),
-            "model_count": count,
-            "cache_dir": str(cache),
-        })
+            total, count = await asyncio.to_thread(_compute)
+            if total == 0 and count == 0:
+                return success_response(data={"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)})
+            return success_response(data={
+                "total_bytes": total,
+                "total_gb": round(total / (1024**3), 2),
+                "model_count": count,
+                "cache_dir": str(cache),
+            })
 
+        except Exception as e:
+            classify_and_raise(e, source="models.cache_usage")
     async def download_qwen_gguf(self) -> dict:
         """Download Qwen2.5-0.5B-Instruct GGUF (Q4_K_M) from HuggingFace Hub.
 
@@ -649,369 +664,402 @@ class ModelsRouter:
             classify_and_raise(e, source="download_gguf")
 
     async def visual_model_load(self, model_dir: str = "", model_id: str = "") -> dict:
-        """Load a vision / multimodal model from a local directory.
-
-        ``model_dir`` — path to the model directory on disk.
-        ``model_id``  — HuggingFace model identifier (used when `model_dir` is empty).
-        """
-        logger.info("Visual model load requested: dir=%s, id=%s", model_dir, model_id, extra={"tag": "MODEL"})
-        ctrl = get_models_controller()
-        if model_dir:
-            result = ctrl.load_model_path(model_dir)
-        elif model_id:
-            result = ctrl.load_model(model_id)
-        else:
-            raise_error("Either model_dir or model_id required", "E_BAD_REQUEST")
-        return wrap_controller_result(result)
-
-    async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Apply int8/int4 quantization to the currently loaded model.
-
-        Works with both SloNet and HuggingFace models. Quantizes all
-        linear layers in-place — no model reload required. The quantization
-        state is reflected in the health endpoint's ``quantization`` field.
-
-        Args:
-            bits: 4 or 8 (default 8)
-            mode: ``symmetric`` (default) or ``asymmetric``
-
-        Returns:
-            Quantization report with per-tensor error metrics and aggregate summary.
-        """
         try:
-            from domains.infrastructure.quantization import Quantine
-        except ImportError:
-            raise_error("Quantization not available — domains.infrastructure.quantization missing", "E_BAD_REQUEST")
-        try:
-            from domains.infrastructure.quant_core.wrapper import HAS_AVX2
-        except ImportError:
-            HAS_AVX2 = False
-        import numpy as np
+            """Load a vision / multimodal model from a local directory.
 
-        bits = req.bits
-        mode = req.mode
-
-        if bits not in (4, 8):
-            raise_error(f"bits must be 4 or 8, got {bits}", "E_BAD_REQUEST")
-        if mode not in ("symmetric", "asymmetric"):
-            raise_error(f"mode must be symmetric or asymmetric, got {mode}", "E_BAD_REQUEST")
-
-        # Find the active provider (try SloNet first, then HuggingFace)
-        from domains.models.provider import get_provider
-
-        provider = get_provider("slonet")
-        model_type = "slonet"
-
-        if provider is None:
-            provider = get_provider("hf-default")
-            model_type = "huggingface"
-
-        if provider is None:
-            raise_error("No model loaded", "E_BAD_REQUEST")
-
-        model = getattr(provider, "_model", None)
-        if model is None:
-            raise_error("Provider has no model", "E_BAD_REQUEST")
-
-        # Walk linear layers using the appropriate walker
-        if model_type == "slonet":
-            from domains.infrastructure.quantization import walk_slo_linears
-            layers = walk_slo_linears(model)
-        else:
-            from domains.infrastructure.quantization import walk_hf_linears
-            layers = walk_hf_linears(model)
-
-        engine = Quantine(bits=bits, mode=mode)
-        quantized_count = 0
-        tensor_infos = {}
-        for name, module in layers.items():
-            weight = module.weight.data
-            # Convert torch tensor to numpy if needed
-            if hasattr(weight, 'cpu'):
-                weight = weight.cpu().numpy().astype(np.float32).copy()
+            ``model_dir`` — path to the model directory on disk.
+            ``model_id``  — HuggingFace model identifier (used when `model_dir` is empty).
+            """
+            logger.info("Visual model load requested: dir=%s, id=%s", model_dir, model_id, extra={"tag": "MODEL"})
+            ctrl = get_models_controller()
+            if model_dir:
+                result = ctrl.load_model_path(model_dir)
+            elif model_id:
+                result = ctrl.load_model(model_id)
             else:
-                weight = np.asarray(weight, dtype=np.float32).copy()
-            info = engine.quantize(f"{name}.weight", weight)
-            if info.is_quantized:
-                if model_type == "slonet":
-                    module.set_quantized_weight(info)
-                else:
-                    # For HuggingFace models: monkey-patch forward with quantized path
-                    from domains.infrastructure.quantization import QuantizedLinear
-                    module._quant_info = info
-                    ql = QuantizedLinear.from_linear(module, info)
-                    module._ql = ql
-                    module._orig_forward = module.forward
-                    module.forward = ql.make_torch_forward()
-                tensor_infos[name] = info
-                quantized_count += 1
+                raise_error("Either model_dir or model_id required", "E_BAD_REQUEST")
+            return wrap_controller_result(result)
 
-        # Persist quantized weights to disk for fast future loads
-        if quantized_count > 0 and hasattr(provider, "_model_path"):
-            model_path = provider._model_path
-            if model_path:
-                from pathlib import Path
-                p = Path(str(model_path))
-                quant_npz = p.with_suffix(p.suffix + ".quant.npz")
-                engine.save_weights(str(quant_npz), tensor_infos)
-
-        # Store the engine on the provider for health endpoint access
-        provider._quant_engine = engine
-
-        report = {
-            "quantized": True,
-            "bits": bits,
-            "mode": mode,
-            "model_type": model_type,
-            "layers_quantized": quantized_count,
-            "total_layers": len(layers),
-            "summary": engine.summary(),
-            "per_tensor": engine.error_report(),
-            "avx2_enabled": False,
-        }
-
-        # Check if AVX2 extension is available
+        except Exception as e:
+            classify_and_raise(e, source="models.visual_model_load")
+    async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
-            from domains.infrastructure.quant_core.wrapper import HAS_AVX2
-            report["avx2_enabled"] = bool(HAS_AVX2)
-        except Exception:
-            report["avx2_enabled"] = False
+            """Apply int8/int4 quantization to the currently loaded model.
 
-        safe_audit_log("model.quantize", resource=self._audit_model_id(provider), detail=f"bits={bits} mode={mode}", bits=bits, mode=mode, layers_quantized=quantized_count, model_type=model_type)
+            Works with both SloNet and HuggingFace models. Quantizes all
+            linear layers in-place — no model reload required. The quantization
+            state is reflected in the health endpoint's ``quantization`` field.
 
-        return success_response(data=report)
+            Args:
+                bits: 4 or 8 (default 8)
+                mode: ``symmetric`` (default) or ``asymmetric``
 
-    async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Reset quantized model back to float32 weights.
-
-        Clears quantization state from all linear layers. The model
-        returns to its original float32 precision.
-
-        Returns:
-            Status report with number of layers reset.
-        """
-        from domains.models.provider import get_provider
-
-        provider = get_provider("slonet")
-        model_type = "slonet"
-
-        if provider is None:
-            provider = get_provider("hf-default")
-            model_type = "huggingface"
-
-        if provider is None:
-            raise_error("No model loaded", "E_BAD_REQUEST")
-
-        model = getattr(provider, "_model", None)
-        if model is None:
-            raise_error("Provider has no model", "E_BAD_REQUEST")
-
-        # Clear quantization state
-        if model_type == "slonet":
-            from domains.infrastructure.quantization import walk_slo_linears
-            layers = walk_slo_linears(model)
-            for name, module in layers.items():
-                module._quant_info = None
-        else:
-            from domains.infrastructure.quantization import walk_hf_linears
-            layers = walk_hf_linears(model)
-            for name, module in layers.items():
-                if hasattr(module, "_quant_info"):
-                    module._quant_info = None
-                    # Restore original forward if we patched it
-                    if hasattr(module, "_orig_forward"):
-                        module.forward = module._orig_forward
-                        del module._orig_forward
-                    if hasattr(module, "_ql"):
-                        del module._ql
-
-        # Clear the quantization engine
-        provider._quant_engine = None
-
-        safe_audit_log("model.dequantize", resource=self._audit_model_id(provider), detail=f"model_type={model_type}", layers_reset=len(layers))
-
-        return success_response(data={
-            "dequantized": True,
-            "model_type": model_type,
-            "layers_reset": len(layers),
-        })
-
-    async def set_precision(self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Switch compute precision on-the-fly without model reload.
-
-        Works on both GPU (fp16 via accelerator) and CPU (fp32/int8/int4).
-        Already-loaded models switch immediately — no restart needed.
-
-        Args:
-            mode: ``"auto"`` (benchmark and pick fastest), ``"fp32"``, or
-                  ``"fp16"``. On GPU without fp16 support, silently falls
-                  back to ``"fp32"``.
-
-        Returns:
-            Active precision mode, benchmark results (if ``mode="auto"``),
-            and per-format timing/quality.
-        """
-        from domains.slolib.gpu import get_accelerator, set_accelerator_precision
-        import numpy as np
-
-        acc = get_accelerator()
-        acc_mode = req.mode
-
-        result = {
-            "accelerator": acc.name,
-            "device_type": acc.device_type,
-        }
-
-        if acc.name == "cpu":
-            # CPU path: use Quantine to select best format
-            from domains.infrastructure.quantization import Quantine
-            suggestion = Quantine.suggest_format()
-            result["precision"] = suggestion["format"]
-            result["bits"] = suggestion["bits"]
-            result["reason"] = suggestion["reason"]
-            result["benchmark"] = suggestion["benchmark"]
-            result["fp16_mode"] = False
-
-            # If int8/int4 selected, apply quantization
-            if suggestion["format"] in ("int8", "int4"):
-                from domains.models.provider import get_provider
-                provider = get_provider("slonet") or get_provider("hf-default")
-                if provider is not None:
-                    model = getattr(provider, "_model", None)
-                    if model is not None:
-                        # Re-use existing quantize logic
-                        from domains.infrastructure.quantization import Quantine, walk_slo_linears, walk_hf_linears
-                        engine = Quantine(bits=suggestion["bits"], mode="symmetric")
-                        if hasattr(model, "layers"):
-                            layers = walk_slo_linears(model)
-                        else:
-                            layers = walk_hf_linears(model)
-                        quantized = 0
-                        for name, module in layers.items():
-                            weight = module.weight.data
-                            if hasattr(weight, "cpu"):
-                                weight = weight.cpu().numpy().astype(np.float32).copy()
-                            else:
-                                weight = np.asarray(weight, dtype=np.float32).copy()
-                            info = engine.quantize(f"{name}.weight", weight)
-                            if info.is_quantized:
-                                module._quant_info = info
-                                quantized += 1
-                        result["layers_quantized"] = quantized
-                        result["total_layers"] = len(layers)
-        else:
-            # GPU path: use accelerator's set_precision
-            active = set_accelerator_precision(acc_mode)
-            result["precision"] = active
-            result["fp16_mode"] = acc._fp16_mode
-            result["reason"] = f"Accelerator {acc.name} set to {active}"
-
-        safe_audit_log("model.precision", resource=acc.name, detail=str(result.get("precision", "unknown")), mode=acc_mode)
-
-        return wrap_controller_result(result)
-
-    async def get_catalog(self) -> dict:
-        """Get the persistent model catalog."""
-        from domains.infrastructure.model_catalog import get_model_catalog
-        catalog = get_model_catalog()
-        return success_response(data=catalog.list_all())
-
-    async def get_catalog_stats(self) -> dict:
-        """Get catalog statistics."""
-        from domains.infrastructure.model_catalog import get_model_catalog
-        catalog = get_model_catalog()
-        return success_response(data=catalog.stats())
-
-    async def get_conversion_status(self, model_id: Optional[str] = None) -> dict:
-        """Get model conversion/download status.
-
-        Without model_id: returns all active conversions.
-        With model_id: returns status for that specific model.
-        """
-        from domains.infrastructure.conversion_tracker import get_tracker
-        tracker = get_tracker()
-
-        if model_id:
-            status = tracker.get(model_id)
-            if not status:
-                return success_response(data={"model_id": model_id, "stage": "idle", "progress": 0})
-            return success_response(data=status)
-
-        return success_response(data=tracker.get_active())
-
-    async def get_process_guard(self) -> dict:
-        """Get ProcessGuard status.
-
-        Returns enabled state, whether a guard is actively running, the
-        guarded model id, and the guard health snapshot.
-        """
-        ctrl = get_models_controller()
-        return success_response(data=ctrl.get_process_guard_status())
-
-    async def set_process_guard(self, req: ProcessGuardRequest) -> dict:
-        """Enable or disable ProcessGuard at runtime.
-
-        Body: ``{"enabled": true}`` or ``{"enabled": false}``
-
-        Disabling stops any active guard. Enabling starts the guard for the
-        currently loaded model if a .slnc file exists.
-        """
-        ctrl = get_models_controller()
-        result = ctrl.set_process_guard_enabled(req.enabled)
-        safe_audit_log("model.process_guard", resource="process_guard", detail=f"enabled={req.enabled}")
-        return success_response(data=result)
-
-    async def get_engine_status(self) -> dict:
-        """Get standalone inference engine status.
-
-        Returns whether the engine subprocess is enabled, its PID, whether
-        the client is connected, the model id, and the last 20 lines of stderr.
-        """
-        import state as server_state
-        proc = getattr(server_state, "_inference_engine_proc", None)
-        provider = getattr(server_state, "provider", None)
-        stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
-        from domains.infrastructure.inference_client import InferenceClient
-        is_client = isinstance(provider, InferenceClient)
-        pid = proc.pid if proc is not None else None
-        alive = proc.poll() is None if proc is not None else False
-        health = {}
-        metrics = {}
-        if is_client and alive:
+            Returns:
+                Quantization report with per-tensor error metrics and aggregate summary.
+            """
             try:
-                health = await asyncio.to_thread(provider.health)
-                metrics = health.get("metrics", {})
+                from domains.infrastructure.quantization import Quantine
+            except ImportError:
+                raise_error("Quantization not available — domains.infrastructure.quantization missing", "E_BAD_REQUEST")
+            try:
+                from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+            except ImportError:
+                HAS_AVX2 = False
+            import numpy as np
+
+            bits = req.bits
+            mode = req.mode
+
+            if bits not in (4, 8):
+                raise_error(f"bits must be 4 or 8, got {bits}", "E_BAD_REQUEST")
+            if mode not in ("symmetric", "asymmetric"):
+                raise_error(f"mode must be symmetric or asymmetric, got {mode}", "E_BAD_REQUEST")
+
+            # Find the active provider (try SloNet first, then HuggingFace)
+            from domains.models.provider import get_provider
+
+            provider = get_provider("slonet")
+            model_type = "slonet"
+
+            if provider is None:
+                provider = get_provider("hf-default")
+                model_type = "huggingface"
+
+            if provider is None:
+                raise_error("No model loaded", "E_BAD_REQUEST")
+
+            model = getattr(provider, "_model", None)
+            if model is None:
+                raise_error("Provider has no model", "E_BAD_REQUEST")
+
+            # Walk linear layers using the appropriate walker
+            if model_type == "slonet":
+                from domains.infrastructure.quantization import walk_slo_linears
+                layers = walk_slo_linears(model)
+            else:
+                from domains.infrastructure.quantization import walk_hf_linears
+                layers = walk_hf_linears(model)
+
+            engine = Quantine(bits=bits, mode=mode)
+            quantized_count = 0
+            tensor_infos = {}
+            for name, module in layers.items():
+                weight = module.weight.data
+                # Convert torch tensor to numpy if needed
+                if hasattr(weight, 'cpu'):
+                    weight = weight.cpu().numpy().astype(np.float32).copy()
+                else:
+                    weight = np.asarray(weight, dtype=np.float32).copy()
+                info = engine.quantize(f"{name}.weight", weight)
+                if info.is_quantized:
+                    if model_type == "slonet":
+                        module.set_quantized_weight(info)
+                    else:
+                        # For HuggingFace models: monkey-patch forward with quantized path
+                        from domains.infrastructure.quantization import QuantizedLinear
+                        module._quant_info = info
+                        ql = QuantizedLinear.from_linear(module, info)
+                        module._ql = ql
+                        module._orig_forward = module.forward
+                        module.forward = ql.make_torch_forward()
+                    tensor_infos[name] = info
+                    quantized_count += 1
+
+            # Persist quantized weights to disk for fast future loads
+            if quantized_count > 0 and hasattr(provider, "_model_path"):
+                model_path = provider._model_path
+                if model_path:
+                    from pathlib import Path
+                    p = Path(str(model_path))
+                    quant_npz = p.with_suffix(p.suffix + ".quant.npz")
+                    engine.save_weights(str(quant_npz), tensor_infos)
+
+            # Store the engine on the provider for health endpoint access
+            provider._quant_engine = engine
+
+            report = {
+                "quantized": True,
+                "bits": bits,
+                "mode": mode,
+                "model_type": model_type,
+                "layers_quantized": quantized_count,
+                "total_layers": len(layers),
+                "summary": engine.summary(),
+                "per_tensor": engine.error_report(),
+                "avx2_enabled": False,
+            }
+
+            # Check if AVX2 extension is available
+            try:
+                from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+                report["avx2_enabled"] = bool(HAS_AVX2)
             except Exception:
-                health = {"type": "error"}
-        return success_response(data={
-            "enabled": is_client,
-            "pid": pid,
-            "alive": alive,
-            "model_id": getattr(provider, "model_id", None) if is_client else None,
-            "health": health,
-            "metrics": metrics,
-            "stderr_tail": stderr_tail[-20:],
-        })
+                report["avx2_enabled"] = False
 
+            safe_audit_log("model.quantize", resource=self._audit_model_id(provider), detail=f"bits={bits} mode={mode}", bits=bits, mode=mode, layers_quantized=quantized_count, model_type=model_type)
+
+            return success_response(data=report)
+
+        except Exception as e:
+            classify_and_raise(e, source="models.quantize_model")
+    async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Reset quantized model back to float32 weights.
+
+            Clears quantization state from all linear layers. The model
+            returns to its original float32 precision.
+
+            Returns:
+                Status report with number of layers reset.
+            """
+            from domains.models.provider import get_provider
+
+            provider = get_provider("slonet")
+            model_type = "slonet"
+
+            if provider is None:
+                provider = get_provider("hf-default")
+                model_type = "huggingface"
+
+            if provider is None:
+                raise_error("No model loaded", "E_BAD_REQUEST")
+
+            model = getattr(provider, "_model", None)
+            if model is None:
+                raise_error("Provider has no model", "E_BAD_REQUEST")
+
+            # Clear quantization state
+            if model_type == "slonet":
+                from domains.infrastructure.quantization import walk_slo_linears
+                layers = walk_slo_linears(model)
+                for name, module in layers.items():
+                    module._quant_info = None
+            else:
+                from domains.infrastructure.quantization import walk_hf_linears
+                layers = walk_hf_linears(model)
+                for name, module in layers.items():
+                    if hasattr(module, "_quant_info"):
+                        module._quant_info = None
+                        # Restore original forward if we patched it
+                        if hasattr(module, "_orig_forward"):
+                            module.forward = module._orig_forward
+                            del module._orig_forward
+                        if hasattr(module, "_ql"):
+                            del module._ql
+
+            # Clear the quantization engine
+            provider._quant_engine = None
+
+            safe_audit_log("model.dequantize", resource=self._audit_model_id(provider), detail=f"model_type={model_type}", layers_reset=len(layers))
+
+            return success_response(data={
+                "dequantized": True,
+                "model_type": model_type,
+                "layers_reset": len(layers),
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="models.dequantize_model")
+    async def set_precision(self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Switch compute precision on-the-fly without model reload.
+
+            Works on both GPU (fp16 via accelerator) and CPU (fp32/int8/int4).
+            Already-loaded models switch immediately — no restart needed.
+
+            Args:
+                mode: ``"auto"`` (benchmark and pick fastest), ``"fp32"``, or
+                      ``"fp16"``. On GPU without fp16 support, silently falls
+                      back to ``"fp32"``.
+
+            Returns:
+                Active precision mode, benchmark results (if ``mode="auto"``),
+                and per-format timing/quality.
+            """
+            from domains.slolib.gpu import get_accelerator, set_accelerator_precision
+            import numpy as np
+
+            acc = get_accelerator()
+            acc_mode = req.mode
+
+            result = {
+                "accelerator": acc.name,
+                "device_type": acc.device_type,
+            }
+
+            if acc.name == "cpu":
+                # CPU path: use Quantine to select best format
+                from domains.infrastructure.quantization import Quantine
+                suggestion = Quantine.suggest_format()
+                result["precision"] = suggestion["format"]
+                result["bits"] = suggestion["bits"]
+                result["reason"] = suggestion["reason"]
+                result["benchmark"] = suggestion["benchmark"]
+                result["fp16_mode"] = False
+
+                # If int8/int4 selected, apply quantization
+                if suggestion["format"] in ("int8", "int4"):
+                    from domains.models.provider import get_provider
+                    provider = get_provider("slonet") or get_provider("hf-default")
+                    if provider is not None:
+                        model = getattr(provider, "_model", None)
+                        if model is not None:
+                            # Re-use existing quantize logic
+                            from domains.infrastructure.quantization import Quantine, walk_slo_linears, walk_hf_linears
+                            engine = Quantine(bits=suggestion["bits"], mode="symmetric")
+                            if hasattr(model, "layers"):
+                                layers = walk_slo_linears(model)
+                            else:
+                                layers = walk_hf_linears(model)
+                            quantized = 0
+                            for name, module in layers.items():
+                                weight = module.weight.data
+                                if hasattr(weight, "cpu"):
+                                    weight = weight.cpu().numpy().astype(np.float32).copy()
+                                else:
+                                    weight = np.asarray(weight, dtype=np.float32).copy()
+                                info = engine.quantize(f"{name}.weight", weight)
+                                if info.is_quantized:
+                                    module._quant_info = info
+                                    quantized += 1
+                            result["layers_quantized"] = quantized
+                            result["total_layers"] = len(layers)
+            else:
+                # GPU path: use accelerator's set_precision
+                active = set_accelerator_precision(acc_mode)
+                result["precision"] = active
+                result["fp16_mode"] = acc._fp16_mode
+                result["reason"] = f"Accelerator {acc.name} set to {active}"
+
+            safe_audit_log("model.precision", resource=acc.name, detail=str(result.get("precision", "unknown")), mode=acc_mode)
+
+            return wrap_controller_result(result)
+
+        except Exception as e:
+            classify_and_raise(e, source="models.set_precision")
+    async def get_catalog(self) -> dict:
+        try:
+            """Get the persistent model catalog."""
+            from domains.infrastructure.model_catalog import get_model_catalog
+            catalog = get_model_catalog()
+            return success_response(data=catalog.list_all())
+
+        except Exception as e:
+            classify_and_raise(e, source="models.get_catalog")
+    async def get_catalog_stats(self) -> dict:
+        try:
+            """Get catalog statistics."""
+            from domains.infrastructure.model_catalog import get_model_catalog
+            catalog = get_model_catalog()
+            return success_response(data=catalog.stats())
+
+        except Exception as e:
+            classify_and_raise(e, source="models.get_catalog_stats")
+    async def get_conversion_status(self, model_id: Optional[str] = None) -> dict:
+        try:
+            """Get model conversion/download status.
+
+            Without model_id: returns all active conversions.
+            With model_id: returns status for that specific model.
+            """
+            from domains.infrastructure.conversion_tracker import get_tracker
+            tracker = get_tracker()
+
+            if model_id:
+                status = tracker.get(model_id)
+                if not status:
+                    return success_response(data={"model_id": model_id, "stage": "idle", "progress": 0})
+                return success_response(data=status)
+
+            return success_response(data=tracker.get_active())
+
+        except Exception as e:
+            classify_and_raise(e, source="models.get_conversion_status")
+    async def get_process_guard(self) -> dict:
+        try:
+            """Get ProcessGuard status.
+
+            Returns enabled state, whether a guard is actively running, the
+            guarded model id, and the guard health snapshot.
+            """
+            ctrl = get_models_controller()
+            return success_response(data=ctrl.get_process_guard_status())
+
+        except Exception as e:
+            classify_and_raise(e, source="models.get_process_guard")
+    async def set_process_guard(self, req: ProcessGuardRequest) -> dict:
+        try:
+            """Enable or disable ProcessGuard at runtime.
+
+            Body: ``{"enabled": true}`` or ``{"enabled": false}``
+
+            Disabling stops any active guard. Enabling starts the guard for the
+            currently loaded model if a .slnc file exists.
+            """
+            ctrl = get_models_controller()
+            result = ctrl.set_process_guard_enabled(req.enabled)
+            safe_audit_log("model.process_guard", resource="process_guard", detail=f"enabled={req.enabled}")
+            return success_response(data=result)
+
+        except Exception as e:
+            classify_and_raise(e, source="models.set_process_guard")
+    async def get_engine_status(self) -> dict:
+        try:
+            """Get standalone inference engine status.
+
+            Returns whether the engine subprocess is enabled, its PID, whether
+            the client is connected, the model id, and the last 20 lines of stderr.
+            """
+            import state as server_state
+            proc = getattr(server_state, "_inference_engine_proc", None)
+            provider = getattr(server_state, "provider", None)
+            stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
+            from domains.infrastructure.inference_client import InferenceClient
+            is_client = isinstance(provider, InferenceClient)
+            pid = proc.pid if proc is not None else None
+            alive = proc.poll() is None if proc is not None else False
+            health = {}
+            metrics = {}
+            if is_client and alive:
+                try:
+                    health = await asyncio.to_thread(provider.health)
+                    metrics = health.get("metrics", {})
+                except Exception:
+                    health = {"type": "error"}
+            return success_response(data={
+                "enabled": is_client,
+                "pid": pid,
+                "alive": alive,
+                "model_id": getattr(provider, "model_id", None) if is_client else None,
+                "health": health,
+                "metrics": metrics,
+                "stderr_tail": stderr_tail[-20:],
+            })
+
+        except Exception as e:
+            classify_and_raise(e, source="models.get_engine_status")
     async def reload_engine(self, req: Dict[str, Any]) -> dict:
-        """Hot-reload the inference engine model.
+        try:
+            """Hot-reload the inference engine model.
 
-        Body: ``{"model_id": "Qwen/Qwen2.5-0.5B-Instruct", "slnc_path": "/path/to/model.slnc"}``
+            Body: ``{"model_id": "Qwen/Qwen2.5-0.5B-Instruct", "slnc_path": "/path/to/model.slnc"}``
 
-        Swaps the model in the engine subprocess without restarting.
-        """
-        import state as server_state
-        from domains.infrastructure.inference_client import InferenceClient
-        provider = getattr(server_state, "provider", None)
-        if not isinstance(provider, InferenceClient):
-            return success_response(data={"error": "Inference engine not active"})
-        model_id = req.get("model_id", server_state.model_type)
-        slnc_path = req.get("slnc_path")
-        result = await asyncio.to_thread(provider.reload, model_id, slnc_path)
-        if result.get("type") == "reload_ok":
-            server_state.model_type = model_id
-        safe_audit_log("model.reload_engine", resource=model_id or "unknown", detail=f"result={result.get('type', 'unknown')}")
-        return success_response(data=result)
+            Swaps the model in the engine subprocess without restarting.
+            """
+            import state as server_state
+            from domains.infrastructure.inference_client import InferenceClient
+            provider = getattr(server_state, "provider", None)
+            if not isinstance(provider, InferenceClient):
+                return success_response(data={"error": "Inference engine not active"})
+            model_id = req.get("model_id", server_state.model_type)
+            slnc_path = req.get("slnc_path")
+            result = await asyncio.to_thread(provider.reload, model_id, slnc_path)
+            if result.get("type") == "reload_ok":
+                server_state.model_type = model_id
+            safe_audit_log("model.reload_engine", resource=model_id or "unknown", detail=f"result={result.get('type', 'unknown')}")
+            return success_response(data=result)
+        except Exception as e:
+            classify_and_raise(e, source="models.reload_engine")
 
 
 router = ModelsRouter().router

@@ -3,7 +3,7 @@ import time
 import threading
 import queue
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, List, Iterator, AsyncIterator, Any, Callable
 
 import numpy as np

@@ -398,7 +398,7 @@ def create_model_guard(
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
     generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
-    stall_timeout: float = 120.0,
+    stall_timeout: float = DEFAULT_STALL_TIMEOUT,
     max_concurrent: Optional[int] = None,
 ) -> ProcessGuard:
     """Create a ProcessGuard for an HF model (legacy path).
@@ -443,7 +443,7 @@ def create_slo_guard(
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
     generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
-    stall_timeout: float = 120.0,
+    stall_timeout: float = DEFAULT_STALL_TIMEOUT,
     max_concurrent: Optional[int] = None,
     quantize: bool = False,
     quant_bits: int = 8,

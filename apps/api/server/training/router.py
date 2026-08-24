@@ -16,14 +16,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
-from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 try:
-    from domains.api.sse_envelope import sse_event, sse_error, sse_complete
+    from domains.api.sse_envelope import sse_event, sse_error
 except ImportError:
     def sse_event(stream, phase, status, data=None, meta=None, message=""):
         import json as _j
@@ -33,13 +33,11 @@ except ImportError:
         }) + "\n\n"
     def sse_error(stream, phase, error, meta=None):
         return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
-    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
-        return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
 from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, DistillStartRequest, LoraFinetuneRequest
-from .controller import get_training_controller, TrainingState
+from .controller import get_training_controller
 from .webhooks import (
     get_webhook_store,
     TRAINING_EVENTS,

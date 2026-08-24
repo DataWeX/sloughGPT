@@ -2664,7 +2664,7 @@ Examples:
                 for e in errs:
                     self._print(f"  Warning: {e['error']}")
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "protect"))
 
     def _cmd_unprotect(self, args: str = "") -> None:
         """Remove protection from a model: unprotect <model_id>"""
@@ -2685,7 +2685,7 @@ Examples:
                 for e in errs:
                     self._print(f"  Warning: {e['error']}")
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "unprotect"))
 
     def _cmd_train(self, args: str = "") -> None:
         """Train: train [dataset] | train status | train follow <id> | train stop <id> | train distill <dataset> | train load-adapter <path> | train unload-adapter"""
@@ -3005,7 +3005,7 @@ Examples:
                     line += f"  — {desc}"
                 self._print(line)
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "souls"))
 
     def _cmd_datasets(self, args: str = "") -> None:
         """List datasets."""
@@ -3027,7 +3027,7 @@ Examples:
                     info += f"  {size}"
                 self._print(info)
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "datasets"))
 
     def _cmd_knowledge(self, args: str = "") -> None:
         """List or search knowledge base entries."""
@@ -3053,7 +3053,7 @@ Examples:
                 for r in results[:20]:
                     self._print(f"  {r.get('content', r.get('text', '?'))[:80]}")
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "knowledge"))
 
     def _cmd_checkpoints(self, args: str = "") -> None:
         """List training checkpoints."""
@@ -3075,7 +3075,7 @@ Examples:
                     info += f"  loss={loss}"
                 self._print(info)
         except Exception as e:
-            self._print(f"  Error: {e}")
+            self._print(self._format_error(e, "checkpoints"))
 
     def _cmd_gen(self, args: str = "") -> None:
         if not args:

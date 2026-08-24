@@ -838,14 +838,14 @@ class TokenTree:
         return {"total": total, "entries": entries}
 
     def show_merges(self, top_n: int = 20) -> None:
-        """Print the most frequent merge rules (parent pair -> merged token)."""
+        """Log the most frequent merge rules (parent pair -> merged token)."""
         ranked = sorted(
             ((i, m, self._freqs.get(self.stoi.get(m[0] + m[1]), 0)) for i, m in enumerate(self.merges)),
             key=lambda x: x[2],
             reverse=True,
         )
         for _, (left, right), cnt in ranked[:top_n]:
-            print(f"  {left!r} + {right!r} -> {left + right!r}  (count={cnt})")
+            logger.info("  %r + %r -> %r  (count=%d)", left, right, left + right, cnt)
 
     def _ranked_merges(self) -> List[dict]:
         """Return all merge rules sorted by corpus frequency descending.
