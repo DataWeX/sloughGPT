@@ -432,24 +432,12 @@ class MobileRouter:
         })
 
     async def get_conversation(self, request: Request, session_id: str) -> dict:
-        """
-        Single conversation with full message history.
-
-        Args:
-            session_id: The session identifier.
-
-        Returns:
-            Session ID and full message list.
-
-        Side effects:
-            - Calls /session/{id}/messages internally.
-        """
-        data, _ = await self._internal_get(request, f"/session/{session_id}/messages")
-        data = data or {}
+        """Single conversation with full message history."""
+        messages = await asyncio.to_thread(self._get_session_messages, session_id)
         return success_response(data={
             "id": session_id,
-            "messages": data.get("messages", []),
-            "created_at": data.get("created_at", ""),
+            "messages": messages or [],
+            "created_at": "",
         })
 
     async def get_models(self, request: Request) -> dict:
