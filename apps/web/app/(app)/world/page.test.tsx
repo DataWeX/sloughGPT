@@ -43,6 +43,13 @@ vi.mock('@/components/PageContainer', () => ({
   ),
 }))
 
+vi.stubGlobal('fetch', vi.fn())
+
+vi.stubGlobal('URL', {
+  createObjectURL: vi.fn(() => 'blob:mock-url'),
+  revokeObjectURL: vi.fn(),
+})
+
 import WorldPage from './page'
 
 describe('WorldPage', () => {
@@ -137,12 +144,13 @@ describe('WorldPage', () => {
 
   it('shows tick result after tick', async () => {
     mockStats.mockResolvedValue({ status: 'ok', components: [], materials: {} })
-    mockTick.mockResolvedValue({ tick: 1, babies: 5, render_stats: null })
+    mockTick.mockResolvedValue({ tick: 3, babies: 5, render_stats: null })
     render(<WorldPage />)
     fireEvent.click(screen.getByText('Run Tick'))
     await waitFor(() => {
-      expect(screen.getByText('1')).toBeInTheDocument()
+      expect(screen.getByText('3')).toBeInTheDocument()
     }, { timeout: 5000 })
+    expect(screen.getByText('5')).toBeInTheDocument()
   })
 
   it('calls neural process on Tick + Neural click', async () => {
