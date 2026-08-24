@@ -36,6 +36,7 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Filter..."
+              aria-label="Filter models"
               className="h-7 w-32 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
             />
           )}

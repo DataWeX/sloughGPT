@@ -180,6 +180,7 @@ export function FineTunedModelsCard({
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelect(m.name)}
+                          aria-label={`Select ${m.name}`}
                           className="mt-1 rounded border-border shrink-0"
                         />
                       )}

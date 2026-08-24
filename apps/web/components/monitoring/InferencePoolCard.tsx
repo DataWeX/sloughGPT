@@ -5,7 +5,7 @@ import { Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { systemController, type InferencePoolStatus } from '@/lib/system-controller'
-import { useToastStore } from '@/lib/store/toast-store'
+import { useToastStore } from '@/lib/toast-store'
 
 interface InferencePoolCardProps {
   onRefresh?: () => void

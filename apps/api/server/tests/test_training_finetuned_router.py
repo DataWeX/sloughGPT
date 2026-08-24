@@ -27,6 +27,7 @@ _FINETUNED = tempfile.mkdtemp(prefix="slough-finetuned-")
 @pytest.fixture(autouse=True)
 def _point_at_tmpdir():
     """Redirect the router's finetuned dir to a temp location and reset it."""
+    import training.router as _rt
     base = Path(_FINETUNED)
     for child in base.iterdir():
         if child.is_dir():
@@ -34,8 +35,10 @@ def _point_at_tmpdir():
             shutil.rmtree(child)
         else:
             child.unlink()
+    _rt._finetuned_models_cache = None
     with patch("training.router._finetuned_dir", return_value=base):
         yield
+    _rt._finetuned_models_cache = None
 
 
 def _make_model(name="gpt2_finetune_a_1"):
@@ -148,7 +151,7 @@ def test_load_finetuned_controller_error():
     with patch("controllers.models.get_models_controller", return_value=ctrl):
         resp = client.post("/training/finetuned-models/broken/load")
     assert resp.status_code == 500
-    assert "boom" in resp.json()["detail"]
+    assert "boom" in resp.json()["error"]
 
 
 # ── DELETE /training/finetuned-models/{name} ───────────────────────────────

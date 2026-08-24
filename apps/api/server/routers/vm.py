@@ -141,10 +141,8 @@ async def run_assembly(req: VMRunRequest) -> dict:
         current.restore_to_cpu(vs.cpu)
 
         if req.keyboard_input:
-            kbd = vs.devices.get("keyboard")
-            if kbd:
-                for ch in req.keyboard_input:
-                    kbd._scancode_buffer.append(ord(ch) & 0xFF)
+            for ch in req.keyboard_input:
+                vs.cpu.push_key(ord(ch) & 0xFF)
 
         output_buffer: list[str] = []
         original_write = vs._syscall._sys_write
@@ -269,9 +267,9 @@ async def run_assembly(req: VMRunRequest) -> dict:
 
         kbd_state = None
         try:
-            kbd = vs.devices.get("keyboard")
-            if kbd and hasattr(kbd, "_scancode_buffer"):
-                kbd_state = "".join(chr(b) for b in kbd._scancode_buffer if 32 <= b < 127)
+            kbd_buf = getattr(vs.cpu, '_kbd_buffer', None)
+            if kbd_buf:
+                kbd_state = "".join(chr(b) for b in kbd_buf if 32 <= b < 127)
         except Exception as exc:
             logger.debug("Keyboard state capture failed: %s", exc)
 

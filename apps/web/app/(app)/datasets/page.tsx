@@ -444,6 +444,7 @@ export default function DatasetsPage() {
                             value={previewSearch}
                             onChange={e => setPreviewSearch(e.target.value)}
                             placeholder="Filter samples..."
+                            aria-label="Filter samples"
                             className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                           />
                         )}

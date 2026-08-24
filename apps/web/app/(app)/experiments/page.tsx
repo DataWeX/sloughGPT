@@ -283,6 +283,7 @@ export default function ExperimentsPage() {
                           checked={selectedIds.has(exp.id)}
                           onChange={() => toggleSelect(exp.id)}
                           onClick={e => e.stopPropagation()}
+                          aria-label={`Select experiment ${exp.id}`}
                           className="rounded border-border shrink-0"
                         />
                         <div className="font-medium truncate">{exp.id}</div>

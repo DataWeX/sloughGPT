@@ -265,6 +265,7 @@ export default function KbPage() {
                           type="checkbox"
                           checked={selectedIds.has(item.id)}
                           onChange={() => toggleSelect(item.id)}
+                          aria-label={`Select entry`}
                           className="mt-1 h-4 w-4 rounded border-border"
                         />
                         <div className="min-w-0 flex-1">

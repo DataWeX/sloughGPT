@@ -118,6 +118,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                   value={modelSearch}
                   onChange={e => setModelSearch(e.target.value)}
                   placeholder="Search models..."
+                  aria-label="Search models"
                   className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 />
               </div>

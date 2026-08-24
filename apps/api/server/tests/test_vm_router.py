@@ -94,7 +94,7 @@ HLT"""
         """GET /vm/builtins returns list of programs."""
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "programs" in data
         assert len(data["programs"]) >= 8
         names = [p["name"] for p in data["programs"]]
@@ -108,7 +108,7 @@ HLT"""
         """GET /vm/info returns VM capabilities."""
         resp = client.get("/vm/info")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["isa"] == "x86-32"
         assert "EAX" in data["registers"]
         assert data["max_steps"] > 0
@@ -280,8 +280,9 @@ HLT"""
 
         resp = client.post("/vm/training/jobs/7/stop")
         assert resp.status_code == 200
-        assert resp.json()["job_id"] == 7
-        assert resp.json()["status"] == "stopping"
+        body = resp.json()["data"]
+        assert body["job_id"] == 7
+        assert body["status"] == "stopping"
 
     def test_training_job_stop_404(self, monkeypatch):
         """POST /vm/training/jobs/{id}/stop returns 404 for unknown job."""
