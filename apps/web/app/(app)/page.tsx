@@ -22,6 +22,7 @@ import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { OnboardingCard } from '@/components/onboarding/OnboardingCard'
 import { sessionController } from '@/lib/session-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
@@ -326,7 +327,7 @@ export default function HomePage() {
                       const result = await chatController.send('Hello!')
                       data.setTestResponse(result.message || 'No response')
                     } catch (e: unknown) {
-                      data.setTestResponse(extractErrorMessage(e, 'Failed to connect'))
+                      data.setTestResponse(extractErrorMessage(e, 'Could not connect'))
                     } finally {
                       data.setTestRunning(false)
                     }
@@ -358,7 +359,7 @@ export default function HomePage() {
                   input.value = ''
                   data.setKnowledgeCount(k => k + 1)
                   addToast('Fact saved', 'success')
-                } catch { addToast('Failed to save', 'error') }
+                } catch { addToast('Could not save', 'error') }
               }} className="flex gap-2">
                 <input
                   type="text"
@@ -452,21 +453,10 @@ export default function HomePage() {
       )}
 
       {!onboardingDismissed && (
-        <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
-          <CardContent className="py-3 flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">New here?</span>{' '}
-              Start chatting, then train the model on your conversations. The more you chat, the better it gets.
-            </p>
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
-              onClick={() => setOnboardingDismissed(true)}
-            >
-              Got it
-            </button>
-          </CardContent>
-        </Card>
+        <OnboardingCard
+          onComplete={() => setOnboardingDismissed(true)}
+          onSkip={() => setOnboardingDismissed(true)}
+        />
       )}
 
       {recentSessions.length > 0 && (

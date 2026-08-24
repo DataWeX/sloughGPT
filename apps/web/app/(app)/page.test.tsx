@@ -225,7 +225,7 @@ describe('HomePage', () => {
     const input = screen.getByPlaceholderText('e.g., I prefer Python over JavaScript')
     await act(async () => { fireEvent.change(input, { target: { value: 'I like coffee' } }) })
     await act(async () => { fireEvent.submit(screen.getByText('Save').closest('form')!) })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to save', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not save', 'error') })
   })
 
   it('renders feedback stats and links to training', () => {
@@ -277,12 +277,12 @@ describe('HomePage', () => {
 
   it('dismisses the onboarding card via localStorage', async () => {
     render(<HomePage />)
-    expect(screen.getByText('New here?')).toBeTruthy()
+    expect(screen.getByText('Welcome to SloughGPT')).toBeTruthy()
     await act(async () => {})
-    const gotIt = screen.getByText('Got it')
-    await act(async () => { gotIt.click() })
+    const skip = screen.getByText('Skip')
+    await act(async () => { skip.click() })
     expect(localStorage.getItem('onboarding_dismissed')).toBe('1')
-    expect(screen.queryByText('New here?')).toBeFalsy()
+    expect(screen.queryByText('Welcome to SloughGPT')).toBeFalsy()
   })
 
   it('renders conversation and dataset stats cards from controller data', async () => {
