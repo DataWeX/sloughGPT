@@ -24,9 +24,9 @@ function makeStats(overrides: Partial<FeedbackStats['db_stats']> = {}): Feedback
 }
 
 describe('FeedbackInsightsCard', () => {
-  it('returns null when no stats', () => {
-    const { container } = render(<FeedbackInsightsCard stats={null} />)
-    expect(container.querySelector('[data-testid="feedback-insights"]')).toBeNull()
+  it('renders empty state when no stats', () => {
+    render(<FeedbackInsightsCard stats={null} />)
+    expect(screen.getAllByText('No feedback data yet').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders insights card', () => {

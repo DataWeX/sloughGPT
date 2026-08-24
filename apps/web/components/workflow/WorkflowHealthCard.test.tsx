@@ -49,9 +49,9 @@ function makeStatus(overrides: Partial<WorkflowStatus> = {}): WorkflowStatus {
 }
 
 describe('WorkflowHealthCard', () => {
-  it('returns null when no stats', () => {
-    const { container } = render(<WorkflowHealthCard status={{ running: true } as unknown as WorkflowStatus} />)
-    expect(container.querySelector('[data-testid="workflow-health"]')).toBeNull()
+  it('renders empty state when no stats', () => {
+    render(<WorkflowHealthCard status={{ running: true } as unknown as WorkflowStatus} />)
+    expect(screen.getAllByText('No workflow data').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders health card', () => {

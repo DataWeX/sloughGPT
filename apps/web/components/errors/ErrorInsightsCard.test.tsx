@@ -18,9 +18,9 @@ const baseRecent = [
 ]
 
 describe('ErrorInsightsCard', () => {
-  it('returns null for empty data', () => {
-    const { container } = render(<ErrorInsightsCard grouped={[]} recent={[]} total={0} />)
-    expect(container.querySelector('[data-testid="error-insights"]')).toBeNull()
+  it('renders empty state for empty data', () => {
+    render(<ErrorInsightsCard grouped={[]} recent={[]} total={0} />)
+    expect(screen.getAllByText('No errors recorded').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders card', () => {

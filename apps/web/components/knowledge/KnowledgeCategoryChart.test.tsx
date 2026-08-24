@@ -25,9 +25,9 @@ const stats: KnowledgeStats = {
 }
 
 describe('KnowledgeCategoryChart', () => {
-  it('returns null for empty items', () => {
-    const { container } = render(<KnowledgeCategoryChart items={[]} stats={null} />)
-    expect(container.querySelector('[data-testid="knowledge-category-chart"]')).toBeNull()
+  it('renders empty state for empty items', () => {
+    render(<KnowledgeCategoryChart items={[]} stats={null} />)
+    expect(screen.getAllByText('No knowledge items yet').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders chart card', () => {

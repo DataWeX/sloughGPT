@@ -20,9 +20,9 @@ function makeFile(overrides: Partial<FileEntry> = {}): FileEntry {
 }
 
 describe('FileStatsCard', () => {
-  it('returns null for empty files', () => {
-    const { container } = render(<FileStatsCard files={[]} />)
-    expect(container.querySelector('[data-testid="file-stats"]')).toBeNull()
+  it('renders empty state for empty files', () => {
+    render(<FileStatsCard files={[]} />)
+    expect(screen.getAllByText('No files uploaded').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders overview with file count and total size', () => {

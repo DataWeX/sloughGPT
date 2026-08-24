@@ -8,14 +8,14 @@ const baseSystem = { cpu_percent: 12.5, memory_percent: 40.2, memory_available_m
 describe('ProcessCard', () => {
   afterEach(cleanup)
 
-  it('renders nothing when detailed is null', () => {
-    const { container } = render(<ProcessCard detailed={null} />)
-    expect(container.innerHTML).toBe('')
+  it('renders empty state when detailed is null', () => {
+    render(<ProcessCard detailed={null} />)
+    expect(screen.getAllByText('Process info unavailable').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders nothing when system is undefined', () => {
-    const { container } = render(<ProcessCard detailed={{}} />)
-    expect(container.innerHTML).toBe('')
+  it('renders empty state when system is undefined', () => {
+    render(<ProcessCard detailed={{}} />)
+    expect(screen.getAllByText('Process info unavailable').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders CPU and Memory from system block', () => {

@@ -45,14 +45,14 @@ const healthy: LiveHealthSnapshot = {
 describe('DiagnosticsCard', () => {
   afterEach(cleanup)
 
-  it('renders nothing when liveHealth is null', () => {
-    const { container } = render(<DiagnosticsCard liveHealth={null} />)
-    expect(container.innerHTML).toBe('')
+  it('renders empty state when liveHealth is null', () => {
+    render(<DiagnosticsCard liveHealth={null} />)
+    expect(screen.getAllByText('Diagnostics unavailable').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders nothing when there are no diagnoses and no summary', () => {
-    const { container } = render(<DiagnosticsCard liveHealth={{ ...healthy, diagnoses: [], health_summary: '' }} />)
-    expect(container.innerHTML).toBe('')
+  it('renders empty state when there are no diagnoses and no summary', () => {
+    render(<DiagnosticsCard liveHealth={{ ...healthy, diagnoses: [], health_summary: '' }} />)
+    expect(screen.getAllByText('No diagnostics available').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders health score badge and summary', () => {
