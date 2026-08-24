@@ -134,7 +134,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Metacognitive Monitor initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Metacognitive Monitor: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to initialize Metacognitive Monitor: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Metacognitive Monitor initialization failed: {e}")
 
     async def shutdown(self) -> None:
@@ -165,7 +165,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Metacognitive Monitor shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Metacognitive Monitor: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to shutdown Metacognitive Monitor: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Metacognitive Monitor shutdown failed: {e}")
 
     async def monitor_thought_process(self, thoughts: List[Thought]) -> Dict[str, Any]:

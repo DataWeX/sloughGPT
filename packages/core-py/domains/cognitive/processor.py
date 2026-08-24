@@ -411,6 +411,6 @@ class CognitiveProcessor(BaseComponent, ICognitiveProcessor):
                 memory_stats = await self.memory_manager.get_memory_statistics()
                 assessment["memory_statistics"] = memory_stats
             except Exception as e:
-                self.logger.error(f"Failed to get memory statistics: {e}", extra={"tag": "COG"})
+                self.logger.error("Failed to get memory statistics: %s", e, extra={"tag": "COG"})
 
         return assessment

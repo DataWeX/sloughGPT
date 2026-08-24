@@ -83,19 +83,12 @@ class CompanionRouter:
         return self._companion
 
     async def get_companion_info(self) -> dict:
-        """Return the current companion's full state as a dictionary.
-
-        Returns:
-            Success envelope containing the companion's traits (name,
-            warmth, curiosity, creativity, confidence, humor) and
-            other configuration.
-
-        Side effects:
-            Lazily instantiates the CompanionSystem singleton on first
-            call via get_companion().
-        """
-        comp = self._get_companion()
-        return success_response(data=comp.to_dict())
+        """Return the current companion's full state as a dictionary."""
+        try:
+            comp = self._get_companion()
+            return success_response(data=comp.to_dict())
+        except Exception as e:
+            classify_and_raise(e, source="companion.info")
 
     async def set_personality(self, req: SetPersonalityRequest) -> dict:
         """Set companion personality (full replacement)."""
@@ -174,19 +167,12 @@ class CompanionRouter:
             classify_and_raise(e, source="companion.preset")
 
     async def get_prompt(self) -> dict:
-        """Return the system prompt currently used by the companion.
-
-        Returns:
-            Success envelope with a system_prompt string containing the
-            full system prompt derived from the companion's personality
-            traits and configuration.
-
-        Side effects:
-            Lazily instantiates the CompanionSystem singleton on first
-            call via get_companion().
-        """
-        comp = self._get_companion()
-        return success_response(data={"system_prompt": comp.get_system_prompt()})
+        """Return the system prompt currently used by the companion."""
+        try:
+            comp = self._get_companion()
+            return success_response(data={"system_prompt": comp.get_system_prompt()})
+        except Exception as e:
+            classify_and_raise(e, source="companion.prompt")
 
     async def chat(self, req: ChatRequest) -> dict:
         """Chat with companion — generates a response using the active model."""

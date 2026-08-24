@@ -301,92 +301,93 @@ async def run_assembly(req: VMRunRequest) -> dict:
 
 @router.get("/training/jobs/{job_id}", response_model=VMTrainingJobResponse)
 async def training_job_status(job_id: str) -> dict:
-    """Return the status of a training job launched via VM syscall.
-
-    Delegates to the VM training bridge, which proxies ``GET /training/jobs/{id}``.
-    Returns 404 when the bridge has no record of the job.
-    """
+    """Return the status of a training job launched via VM syscall."""
     try:
-        job_num = int(job_id)
-    except ValueError:
-        raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
-    try:
-        from domains.shell.vm_training_bridge import get_bridge
-    except ImportError as e:
-        raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
+        try:
+            job_num = int(job_id)
+        except ValueError:
+            raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
+        try:
+            from domains.shell.vm_training_bridge import get_bridge
+        except ImportError as e:
+            raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
 
-    bridge = get_bridge()
-    status = bridge.status(job_num)
-    if status["status"] == "not_found":
-        raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
+        bridge = get_bridge()
+        status = bridge.status(job_num)
+        if status["status"] == "not_found":
+            raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
 
-    info = bridge.job_info(job_num) or {}
-    result = None
-    if status["status"] == "completed":
-        result = bridge.get_result_json(job_num)
-    return VMTrainingJobResponse(
-        job_id=job_num,
-        api_job_id=str(info.get("api_job_id", "")),
-        status=status["status"],
-        progress=status["progress"],
-        error=status["error"],
-        result=result,
-    )
+        info = bridge.job_info(job_num) or {}
+        result = None
+        if status["status"] == "completed":
+            result = bridge.get_result_json(job_num)
+        return VMTrainingJobResponse(
+            job_id=job_num,
+            api_job_id=str(info.get("api_job_id", "")),
+            status=status["status"],
+            progress=status["progress"],
+            error=status["error"],
+            result=result,
+        )
+    except Exception as e:
+        classify_and_raise(e, source="vm.training_job_status")
 
 
 @router.post("/training/jobs/{job_id}/stop")
 async def training_job_stop(job_id: str) -> dict:
-    """Request a stop for a running training job launched via VM syscall.
-
-    Delegates to the VM training bridge, which proxies
-    ``POST /training/jobs/{api_job_id}/stop``.  Returns 404 when the bridge
-    has no record of the job or the stop call failed.
-    """
+    """Request a stop for a running training job launched via VM syscall."""
     try:
-        job_num = int(job_id)
-    except ValueError:
-        raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
-    try:
-        from domains.shell.vm_training_bridge import get_bridge
-    except ImportError as e:
-        raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
+        try:
+            job_num = int(job_id)
+        except ValueError:
+            raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
+        try:
+            from domains.shell.vm_training_bridge import get_bridge
+        except ImportError as e:
+            raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
 
-    bridge = get_bridge()
-    ok = bridge.stop(job_num)
-    if not ok:
-        raise_error("Training job not found or not stoppable", "E_NOT_FOUND", status_code=404)
-    return success_response(data={"status": "stopping", "job_id": job_num})
+        bridge = get_bridge()
+        ok = bridge.stop(job_num)
+        if not ok:
+            raise_error("Training job not found or not stoppable", "E_NOT_FOUND", status_code=404)
+        return success_response(data={"status": "stopping", "job_id": job_num})
+    except Exception as e:
+        classify_and_raise(e, source="vm.training_job_stop")
 
 
 @router.get("/builtins")
 async def list_builtins() -> dict:
     """List built-in x86 assembly programs with their source code."""
     try:
-        from vm_builtins import BUILTIN_PROGRAMS
-        programs = [
-            {"name": name, "description": entry["description"], "code": entry["program"]()}
-            for name, entry in BUILTIN_PROGRAMS.items()
-        ]
-    except ImportError:
-        return success_response(data={"programs": []})
-    return success_response(data={"programs": programs})
+        try:
+            from vm_builtins import BUILTIN_PROGRAMS
+            programs = [
+                {"name": name, "description": entry["description"], "code": entry["program"]()}
+                for name, entry in BUILTIN_PROGRAMS.items()
+            ]
+        except ImportError:
+            return success_response(data={"programs": []})
+        return success_response(data={"programs": programs})
+    except Exception as e:
+        classify_and_raise(e, source="vm.builtins")
 
 
 @router.get("/info")
 async def vm_info() -> dict:
     """Return VM capabilities and limits."""
-    reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
-    registers = {name: {"size_bits": 32, "name": name} for name in reg_names}
-    return success_response(data={
-        "isa": "x86-32",
-        "max_steps": 1000000,
-        "default_memory": 0x100000,
-        "max_memory": 0x1000000,
-        "registers": registers,
-        "features": [
-            "protected mode (32-bit)",
-            "flat memory model",
-            "ring 0 only",
+    try:
+        reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
+        registers = {name: {"size_bits": 32, "name": name} for name in reg_names}
+        return success_response(data={
+            "isa": "x86-32",
+            "max_steps": 1000000,
+            "default_memory": 0x100000,
+            "max_memory": 0x1000000,
+            "registers": registers,
+            "features": [
+                "protected mode (32-bit)",
+                "flat memory model",
+                "ring 0 only",
             "INT 0x80 syscalls",
             "PIT timer",
             "keyboard/screen I/O",
