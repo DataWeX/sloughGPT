@@ -142,3 +142,7 @@ export function formatUptime(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
 }
+
+export function shortModelName(id: string): string {
+  return id.includes('/') ? id.split('/').pop() || id : id
+}

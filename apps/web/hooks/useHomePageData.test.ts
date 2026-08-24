@@ -58,11 +58,7 @@ vi.mock('@/lib/dataset-controller', () => ({
 }))
 
 vi.mock('@/lib/query', () => ({
-  useQuery: (_key: unknown, fetcher: () => Promise<unknown>) => {
-    const [data, setData] = React.useState<unknown>(undefined)
-    React.useEffect(() => { fetcher().then(setData).catch(() => {}) }, [fetcher])
-    return { data }
-  },
+  useQuery: (_key: unknown, _fetcher: () => Promise<unknown>) => ({ data: undefined }),
   useMutation: (mutate: (...a: unknown[]) => Promise<unknown>) => ({
     mutate: (...a: unknown[]) => mutate(...a),
     isLoading: false,

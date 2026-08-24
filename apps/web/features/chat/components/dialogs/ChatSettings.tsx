@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@sloughgpt/strui'
 import { IconChevronDown, IconCheck } from '@sloughgpt/strui'
+import { shortModelName } from '@/lib/chat-utils'
 
 interface ChatSettingsProps {
   isOpen: boolean
@@ -25,10 +26,6 @@ interface ChatSettingsProps {
 const TEMP_OPTIONS = [0.1, 0.2, 0.3, 0.5, 0.7, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0]
 const MAX_TOKEN_OPTIONS = [50, 100, 150, 200, 300, 400, 500, 750, 1000]
 const DEFAULT_MODELS = ['gpt2', 'gpt2-medium', 'gpt2-large', 'distilgpt2']
-
-function modelShortName(id: string): string {
-  return id.includes('/') ? id.split('/').pop()! : id
-}
 
 export function ChatSettings({
   isOpen,
@@ -52,8 +49,8 @@ export function ChatSettings({
       <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="select" size="sm" className="text-xs font-mono" title={model} aria-label={`Model: ${modelShortName(model)}`}>
-              <span className="truncate">{modelShortName(model)}</span>
+            <Button variant="select" size="sm" className="text-xs font-mono" title={model} aria-label={`Model: ${shortModelName(model)}`}>
+              <span className="truncate">{shortModelName(model)}</span>
               <IconChevronDown className="h-3 w-3 opacity-60 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
@@ -65,7 +62,7 @@ export function ChatSettings({
                 className="justify-between font-mono text-xs"
                 title={m}
               >
-                <span className="truncate">{modelShortName(m)}</span>
+                <span className="truncate">{shortModelName(m)}</span>
                 {m === model && <IconCheck className="h-3 w-3 text-primary shrink-0" />}
               </DropdownMenuItem>
             ))}

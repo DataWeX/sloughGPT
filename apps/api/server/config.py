@@ -64,6 +64,9 @@ class ServerConfig:
     inference_pool_size: int = field(default_factory=lambda: max(1, multiprocessing.cpu_count() // 2))
     request_timeout_seconds: float = 120.0
     generate_timeout: float = 120.0  # timeout for model.generate() calls (env: SLO_GENERATE_TIMEOUT)
+    startup_model_load_timeout: float = 120.0  # timeout for model loading during startup (env: SLO_STARTUP_MODEL_LOAD_TIMEOUT)
+    startup_total_timeout: float = 120.0  # timeout for entire startup sequence (env: SLO_STARTUP_TOTAL_TIMEOUT)
+    startup_register_generate_timeout: float = 120.0  # timeout for register_generate() calls (env: SLO_REGISTER_GENERATE_TIMEOUT)
     streaming_skip_paths: tuple[str, ...] = (
         "/chat/stream", "/auto-train/stream", "/session/",
         "/generate/stream", "/models/load", "/inference/generate", "/chat",

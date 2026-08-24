@@ -244,8 +244,8 @@ export default function TokenTreePage() {
                 <Input type="number" value={vocabSize} onChange={e => setVocabSize(Number(e.target.value))} className="h-8 text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Training Texts (one per line, optional)</Label>
-                <textarea value={trainTexts} onChange={e => setTrainTexts(e.target.value)} rows={3} className="w-full rounded-md border border-input bg-background p-2 text-xs font-mono" placeholder="Leave empty to use default corpus..." />
+                <Label htmlFor="train-texts" className="text-xs">Training Texts (one per line, optional)</Label>
+                <textarea id="train-texts" value={trainTexts} onChange={e => setTrainTexts(e.target.value)} rows={3} className="w-full rounded-md border border-input bg-background p-2 text-xs font-mono" placeholder="Leave empty to use default corpus..." />
               </div>
             </div>
             <Button onClick={() => void handleTrain()} disabled={loading} className="w-full">

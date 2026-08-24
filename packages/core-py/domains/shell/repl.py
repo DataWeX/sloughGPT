@@ -32,7 +32,7 @@ import subprocess
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .runtime import DaitRuntime
 from .commands import ShellCommands
@@ -1593,7 +1593,7 @@ class ShellREPL(LinuxCommandsMixin):
             self._print(result_repr)
         except Exception as e:
             exit_code = 1
-            result_repr = f"Error: {e}"
+            result_repr = self._format_error(e)
             self._print(f"  {result_repr}")
 
         # Audit-log every evaluation
@@ -2961,7 +2961,7 @@ Examples:
                 self._print("\n  Detached (job continues on server)")
                 return
             except Exception as e:
-                self._print(f"\n  Error: {e}")
+                self._print(f"\n  {self._format_error(e, 'train follow')}")
                 return
 
             time.sleep(3)

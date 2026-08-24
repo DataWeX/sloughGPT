@@ -325,8 +325,8 @@ export default function KbPage() {
                   {suggestResult && <p className="text-[10px] text-muted-foreground">Suggested: {suggestResult}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs">Importance ({newImportance.toFixed(1)})</Label>
-                  <input type="range" min="0" max="1" step="0.1" value={newImportance} onChange={e => setNewImportance(Number(e.target.value))} className="w-full" />
+                  <Label htmlFor="importance-slider" className="text-xs">Importance ({newImportance.toFixed(1)})</Label>
+                  <input id="importance-slider" type="range" min="0" max="1" step="0.1" value={newImportance} onChange={e => setNewImportance(Number(e.target.value))} className="w-full" />
                 </div>
               </div>
               <div className="flex gap-2">
