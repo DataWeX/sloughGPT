@@ -12,7 +12,7 @@ describe('TrainingHealthCard', () => {
   afterEach(cleanup)
   it('shows no-data state for empty checkpoints', () => {
     const { container } = render(<TrainingHealthCard checkpoints={[]} />)
-    expect(container.textContent).toContain('No training data yet')
+    expect(container.innerHTML).toBe('')
   })
 
   it('shows no-data when only 1 checkpoint with loss', () => {

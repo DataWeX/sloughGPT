@@ -19,8 +19,8 @@ const baseRecent = [
 
 describe('ErrorInsightsCard', () => {
   it('renders empty state for empty data', () => {
-    render(<ErrorInsightsCard grouped={[]} recent={[]} total={0} />)
-    expect(screen.getAllByText('No errors recorded').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(<ErrorInsightsCard grouped={[]} recent={[]} total={0} />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders card', () => {

@@ -20,7 +20,7 @@ describe('TrainingSummaryCard', () => {
 
   it('shows no-data state for empty checkpoints', () => {
     const { container } = render(<TrainingSummaryCard checkpoints={[]} />)
-    expect(container.textContent).toContain('No training summary available')
+    expect(container.innerHTML).toBe('')
   })
 
   it('shows total checkpoints count', () => {

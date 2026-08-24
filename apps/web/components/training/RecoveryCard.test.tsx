@@ -50,8 +50,9 @@ describe('RecoveryCard', () => {
     vi.mocked(trainingJobsController.recoverable).mockResolvedValue([])
     const { container } = render(<RecoveryCard addToast={mockToast} />)
     await waitFor(() => {
-      expect(container.innerHTML).toBe('')
+      expect(container.querySelector('[data-testid="skeleton"]')).toBeNull()
     })
+    expect(container.innerHTML).toBe('')
   })
 
   it('shows loading skeletons', () => {
