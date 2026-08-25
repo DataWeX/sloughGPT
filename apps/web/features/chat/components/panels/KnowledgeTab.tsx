@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, memo } from 'react'
 import Link from 'next/link'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconX, IconSearch, IconEdit } from '@sloughgpt/strui'
@@ -13,7 +13,7 @@ interface KnowledgeTabProps {
   onOpenShortcuts: () => void
 }
 
-export function KnowledgeTab({
+export const KnowledgeTab = memo(function KnowledgeTab({
   onOpenConversationViewer,
   onOpenSettings,
   onOpenShortcuts,
@@ -267,4 +267,4 @@ export function KnowledgeTab({
       </Link>
     </div>
   )
-}
+})

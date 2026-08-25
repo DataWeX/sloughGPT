@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -45,7 +45,7 @@ function computeQuality(preview: DatasetPreview): QualityMetrics {
   }
 }
 
-export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
+export const DatasetQualityCard = memo(function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
   const [preview, setPreview] = useState<DatasetPreview | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -178,4 +178,4 @@ export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

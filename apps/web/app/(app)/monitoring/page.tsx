@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
@@ -57,7 +57,7 @@ const TrendChart = dynamicNext(() => import('@/components/monitoring/TrendChart'
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })
 
-export default function SystemHealthPage() {
+export default memo(function SystemHealthPage() {
   const { health: liveHealth, connectionStatus } = useLiveStatus()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
@@ -485,4 +485,4 @@ export default function SystemHealthPage() {
 
     </PageContainer>
   )
-}
+})

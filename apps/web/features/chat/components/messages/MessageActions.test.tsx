@@ -192,11 +192,11 @@ describe('MessageActions', () => {
     expect(screen.queryByRole('button', { name: /delete message/i })).not.toBeInTheDocument()
   })
 
-  it('calls onDelete with messageId when delete clicked', () => {
+  it('calls onDelete with messageId when delete clicked', async () => {
     const onDelete = vi.fn()
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<MessageActions content="text" messageId="m1" onDelete={onDelete} />)
     fireEvent.click(screen.getByRole('button', { name: /delete message/i }))
+    fireEvent.click(screen.getByRole('button', { name: /delete$/i }))
     expect(onDelete).toHaveBeenCalledWith('m1')
   })
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingPair, type TrainingDataStats } from '@/lib/training-controller'
 
@@ -8,7 +8,7 @@ interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }
 
-export function TrainingDataCard({ addToast }: Props) {
+export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Props) {
   const [stats, setStats] = useState<TrainingDataStats | null>(null)
   const [pairs, setPairs] = useState<TrainingPair[]>([])
   const [loading, setLoading] = useState(true)
@@ -209,4 +209,4 @@ export function TrainingDataCard({ addToast }: Props) {
       </CardContent>
     </Card>
   )
-}
+})

@@ -190,7 +190,6 @@ const commands: ChatCommand[] = [
       return { handled: true }
     },
   },
-  },
   {
     command: '/translate',
     description: 'Translate the last response to another language',

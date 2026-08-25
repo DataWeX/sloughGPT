@@ -336,6 +336,7 @@ export function ChatDialogSection({ controller }: ChatPageSectionProps) {
           bookmarks={bookmarks}
           onRemoveBookmark={removeBookmark}
           onClearBookmarks={clearAll}
+          messages={chat.messages}
         />
       )}
 

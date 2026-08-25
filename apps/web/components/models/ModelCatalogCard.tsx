@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Progress } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -28,7 +28,7 @@ interface ModelCatalogCardProps {
   onModelLoaded: () => Promise<void>
 }
 
-export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeId, onModelLoaded }: ModelCatalogCardProps) {
+export default memo(function ModelCatalogCard({ models, modelsLoading, activeRuntimeId, onModelLoaded }: ModelCatalogCardProps) {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const { mutateAsync: loadModel } = useLoadModel()
@@ -235,4 +235,4 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
       </CardContent>
     </Card>
   )
-}
+})

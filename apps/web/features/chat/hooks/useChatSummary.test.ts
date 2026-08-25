@@ -29,7 +29,7 @@ describe('useChatSummary', () => {
   })
 
   it('generates summary successfully', async () => {
-    vi.mocked(chatController.sendMessage).mockResolvedValue('Test summary')
+    vi.mocked(chatController.send).mockResolvedValue({ message: 'Test summary', session_id: 'test', done: true })
     const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
 
     await act(async () => {
@@ -53,7 +53,7 @@ describe('useChatSummary', () => {
   })
 
   it('handles errors', async () => {
-    vi.mocked(chatController.sendMessage).mockRejectedValue(new Error('API error'))
+    vi.mocked(chatController.send).mockRejectedValue(new Error('API error'))
     const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
 
     await act(async () => {
@@ -65,7 +65,7 @@ describe('useChatSummary', () => {
   })
 
   it('clears summary', async () => {
-    vi.mocked(chatController.sendMessage).mockResolvedValue('Test summary')
+    vi.mocked(chatController.send).mockResolvedValue({ message: 'Test summary', session_id: 'test', done: true })
     const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
 
     await act(async () => {

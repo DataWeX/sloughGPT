@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -19,7 +19,7 @@ interface ModelsCardProps {
   onClear: (modelId: string) => void
 }
 
-export default function ModelsCard({ models, loading, results, running, onBenchmark, onClear }: ModelsCardProps) {
+export default memo(function ModelsCard({ models, loading, results, running, onBenchmark, onClear }: ModelsCardProps) {
   const [search, setSearch] = useState('')
   const router = useRouter()
   const filtered = search
@@ -93,4 +93,4 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
       </CardContent>
     </Card>
   )
-}
+})

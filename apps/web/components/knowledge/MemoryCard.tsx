@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -109,7 +109,7 @@ function archiveSummary(record: MemoryArchiveRecord): { text: string; detail: st
  * Shows enabled state, stats, recent items, semantic search, manual store,
  * and a confirmed clear-all. Wired to `memoryController` (`/memory/*`).
  */
-export function MemoryCard() {
+export const MemoryCard = memo(function MemoryCard() {
   const addToast = useToastStore(s => s.addToast)
   const [stats, setStats] = useState<MemoryStats | null>(null)
   const [items, setItems] = useState<MemoryItem[]>([])
@@ -1194,4 +1194,4 @@ export function MemoryCard() {
       </Dialog>
     </Card>
   )
-}
+})

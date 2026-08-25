@@ -22,9 +22,10 @@ interface ChatToolPanelProps {
   bookmarks?: import('@/features/chat/hooks/useChatBookmarks').BookmarkedMessage[]
   onRemoveBookmark?: (id: string) => void
   onClearBookmarks?: () => void
+  messages?: import('@/lib/chat-utils').ChatMessage[]
 }
 
-export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks }: ChatToolPanelProps) {
+export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks, messages = [] }: ChatToolPanelProps) {
   const [showVision, setShowVision] = useState(false)
   const ctx = useChatContext()
 
@@ -120,14 +121,14 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Summary</span>
                   </div>
-                  <ConversationSummary messages={[]} model={ctx.model} />
+                  <ConversationSummary messages={messages} model={ctx.model} />
                 </section>
                 <section aria-label="Statistics">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconChart className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Statistics</span>
                   </div>
-                  <ConversationStats messages={[]} />
+                  <ConversationStats messages={messages} />
                 </section>
                 <section aria-label="Bookmarks">
                   <ChatBookmarksPanel

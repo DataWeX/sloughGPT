@@ -51,7 +51,7 @@ export function ContextTab() {
 
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchAll = async () => {
+  const fetchData = async () => {
     setLoading(true)
     try {
       const [insp, modeData, traits, knowledge, fb] = await Promise.all([
@@ -79,36 +79,7 @@ export function ContextTab() {
 
   useEffect(() => {
     let active = true
-    const fetchAll = async () => {
-      setLoading(true)
-      try {
-        const [insp, modeData, traits, knowledge, fb] = await Promise.all([
-          chatController.inspectContext(),
-          soulsController.getModes().catch((e) => { logger.debug('Could not load modes', { e }); return null }),
-          soulsController.getTraitWeights().catch((e) => { logger.debug('Could not load traits', { e }); return null }),
-          chatDB.getKnowledge().catch((e) => { logger.debug('Could not load knowledge', { e }); return null }),
-          feedbackController.getFeedbackStats().then(
-            s => ({ up: s.db_stats?.thumbs_up ?? 0, down: s.db_stats?.thumbs_down ?? 0 }),
-            (e) => { logger.debug('Could not load feedback', { e }); return null },
-          ),
-        ])
-        if (active) {
-          setInspector(insp)
-          setModes(modeData)
-          setTraitWeights(traits)
-          setKnowledgeCount(Array.isArray(knowledge) ? knowledge.length : null)
-          setFeedback(fb)
-        }
-      } catch (err) {
-        if (active) {
-          addToast('Failed to load context inspector', 'error')
-          logger.debug('Could not context inspector fetch', { exception: String(err) })
-        }
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void fetchAll()
+    void fetchData()
     return () => { active = false }
   }, [])
 
@@ -128,7 +99,7 @@ export function ContextTab() {
         <span className="text-xs text-muted-foreground">What the model sees</span>
         <button
           type="button"
-          onClick={fetchAll}
+          onClick={fetchData}
           disabled={loading}
           className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
           aria-label="Refresh context"

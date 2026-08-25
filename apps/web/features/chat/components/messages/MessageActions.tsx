@@ -7,6 +7,7 @@ import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconTh
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 interface MessageActionsProps {
   content: string
@@ -117,6 +118,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
   const [showRetryOptions, setShowRetryOptions] = useState(false)
   const [retryTemperature, setRetryTemperature] = useState(temperature)
   const [localReactions, setLocalReactions] = useState<Record<string, number>>(() => getReactions(messageId))
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const addToast = useToastStore(s => s.addToast)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -394,19 +396,28 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
       )}
 
       {onDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => {
-            if (window.confirm('Delete this message?')) {
+        <>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setShowDeleteConfirm(true)}
+            aria-label="Delete message"
+            className="hover:text-destructive text-muted-foreground p-2"
+          >
+            <IconTrash className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <ConfirmDialog
+            open={showDeleteConfirm}
+            onOpenChange={setShowDeleteConfirm}
+            title="Delete message"
+            description="Are you sure you want to delete this message? This cannot be undone."
+            confirmLabel="Delete"
+            onConfirm={() => {
               onDelete(messageId)
-            }
-          }}
-          aria-label="Delete message"
-          className="hover:text-destructive text-muted-foreground p-2"
-        >
-          <IconTrash className="h-3.5 w-3.5" aria-hidden="true" />
-        </Button>
+              setShowDeleteConfirm(false)
+            }}
+          />
+        </>
       )}
 
       {onSuggestionClick && (

@@ -22,6 +22,7 @@ interface KeyboardDeps {
   onCancelStream?: () => void
   onApproveTool?: () => void
   onDenyTool?: () => void
+  onToggleSidebar?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -32,7 +33,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     searchInputRef, handleSearchChange,
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
-    onCancelStream, onApproveTool, onDenyTool,
+    onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
   } = deps
 
   const depsRef = useRef(deps)
@@ -107,6 +108,10 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault()
         d.onDenyTool?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault()
+        d.onToggleSidebar?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

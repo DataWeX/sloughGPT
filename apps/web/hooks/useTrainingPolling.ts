@@ -129,7 +129,7 @@ export function useTrainingPolling(): TrainingPolling {
         const current = readTraining()
 
         if (s.status === 'running') {
-          writeTraining({
+          const patch: Record<string, unknown> = {
             progress: s.progress ?? current.progress,
             loss: s.loss ?? current.loss,
             globalStep: s.global_step ?? current.globalStep,
@@ -139,7 +139,13 @@ export function useTrainingPolling(): TrainingPolling {
             elapsedSeconds: s.elapsed_s ?? current.elapsedSeconds,
             avgQuality: s.avg_quality ?? current.avgQuality,
             message: s.paused ? 'Paused' : (current.message === 'Paused' ? '' : current.message),
-          })
+          }
+          if (s.loss != null) {
+            const step = s.global_step ?? current.globalStep
+            const hist = [...current.lossHistory, { step: step || current.lossHistory.length, loss: s.loss }]
+            patch.lossHistory = hist.length > 200 ? hist.slice(-200) : hist
+          }
+          writeTraining(patch)
           return
         }
 

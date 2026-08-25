@@ -150,6 +150,7 @@ export function useChatPageController(
       }
     },
     onToggleBookmarks: () => ui.setToolPanelOpen(prev => !prev),
+    onToggleSidebar: () => ui.setSidebarOpen(prev => !prev),
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -263,11 +264,12 @@ export function useChatPageController(
       addSystemMessage,
       sendMessage: chat.sendMessage,
       archiveConversation: () => {
-        const name = `Chat - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
         const sid = chat.sessionIdRef.current
-        if (sid) chat.renameSession(sid, name)
-        chat.setInput('')
-        showToast(`Archived as "${name}"`, 'success')
+        if (sid) {
+          chat.archiveSession(sid, true)
+          chat.newChat()
+        }
+        showToast('Conversation archived', 'success')
       },
       renameConversation: (name: string) => {
         const sid = chat.sessionIdRef.current
