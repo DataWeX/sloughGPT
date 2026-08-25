@@ -106,27 +106,35 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     const reconcile = async () => {
       const shell = readTraining()
       if (isTrainingActive(shell)) {
-        _log.info('Shell has active training, starting poll', { phase: shell.phase, method: shell.method })
-        if ((shell.method === 'turbo' || shell.method === 'slonet') && !shell.jobId) {
-          // Auto-train SSE stores state in _turbo_state on the backend
-          startTurboPoll()
-        } else if (shell.method === 'turbo' && shell.jobId) {
-          startTurboPoll()
-        } else if (shell.jobId) {
-          startStandardPoll(shell.jobId)
-        } else {
-          // No jobId — check server for active training
-          const turboStatus = await trainingJobsController.getTurboStatus().catch(() => null)
-          if (turboStatus?.status === 'running') {
-            writeTraining({
-              phase: 'TRAINING', method: 'slonet',
-              progress: turboStatus.progress ?? 0, globalStep: turboStatus.global_step ?? 0,
-              totalSteps: turboStatus.total_steps ?? 0, stepsPerSec: turboStatus.steps_per_sec ?? null,
-              eta: turboStatus.eta_s ?? null, elapsedSeconds: turboStatus.elapsed_s ?? null,
-              jobId: turboStatus.job_id ?? null, avgQuality: turboStatus.avg_quality ?? null,
-            })
-            startTurboPoll()
+        _log.info('Shell has active training, verifying with server', { phase: shell.phase, method: shell.method })
+        // Verify server actually has this training running before trusting localStorage
+        try {
+          const [turboStatus, jobs] = await Promise.all([
+            trainingJobsController.getTurboStatus().catch(() => null),
+            shell.jobId ? trainingJobsController.get(shell.jobId).catch(() => null) : Promise.resolve(null),
+          ])
+          if (cancelled) return
+
+          const turboRunning = turboStatus?.status === 'running'
+          const jobRunning = jobs?.status === 'running'
+
+          if (!turboRunning && !jobRunning) {
+            // Server has no active training — stale localStorage state, clear it
+            _log.info('Shell training is stale (server has no active training), clearing')
+            appShellStore.getState().resetTraining()
+            return
           }
+
+          // Server confirms training is active — start polling
+          if (shell.method === 'turbo' || (shell.method === 'slonet' && !shell.jobId)) {
+            startTurboPoll()
+          } else if (shell.jobId) {
+            startStandardPoll(shell.jobId)
+          }
+        } catch (e: unknown) {
+          _log.warning('Could not verify training state with server', { error: e instanceof Error ? e.message : String(e) })
+          // On verification failure, clear stale state to avoid phantom training
+          appShellStore.getState().resetTraining()
         }
         return
       }

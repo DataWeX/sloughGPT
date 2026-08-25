@@ -142,7 +142,7 @@ describe('ExperimentsPage', () => {
     mockList.mockResolvedValue([{ id: 'distill-run-3' }, { id: 'alpha-run' }])
     render(<ExperimentsPage />)
     await waitFor(() => { expect(screen.getByText('distill-run-3')).toBeTruthy() })
-    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'alpha' } }) })
+    await act(async () => { fireEvent.change(screen.getByPlaceholderText(/Search\.\.\./), { target: { value: 'alpha' } }) })
     expect(screen.getByText('alpha-run')).toBeTruthy()
     expect(screen.queryByText('distill-run-3')).toBeNull()
   })

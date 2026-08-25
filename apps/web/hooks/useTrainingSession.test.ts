@@ -341,4 +341,45 @@ describe('useTrainingSession', () => {
     expect(result.current.progress).toBe(50)
     expect(result.current.loss).toBe(1.1)
   })
+
+  it('clears stale localStorage training state when server has no active training', async () => {
+    vi.useFakeTimers()
+    // Simulate stale localStorage state from a previous session
+    appShellStore.getState().setTraining({
+      phase: 'TRAINING', method: 'turbo', progress: 3,
+      globalStep: 990, totalSteps: 32169, loss: 2.9997,
+    })
+    expect(appShellStore.getState().training.phase).toBe('TRAINING')
+
+    // Server reports no active training (e.g. after server restart)
+    mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+    mockListJobs.mockResolvedValue([])
+
+    const { result } = renderHook(() => useTrainingSession())
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    // Shell state should be cleared — no phantom training
+    expect(result.current.phase).toBe('idle')
+    expect(result.current.trainingRunning).toBe(false)
+    expect(result.current.progress).toBe(0)
+    expect(result.current.loss).toBeNull()
+  })
+
+  it('clears stale standard job state when server confirms job is no longer running', async () => {
+    vi.useFakeTimers()
+    // Simulate stale localStorage with a jobId
+    appShellStore.getState().setTraining({
+      phase: 'TRAINING', method: 'slonet', jobId: 'old-job-1', progress: 45,
+    })
+
+    // Server has no turbo and the job doesn't exist
+    mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+    mockGetJob.mockResolvedValue(null)
+
+    const { result } = renderHook(() => useTrainingSession())
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    expect(result.current.phase).toBe('idle')
+    expect(result.current.trainingRunning).toBe(false)
+  })
 })

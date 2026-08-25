@@ -110,6 +110,15 @@ export default function MemoryPage() {
 
   useEffect(() => { void fetchAll(); void loadArchiveStats() }, [fetchAll, loadArchiveStats])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchAll() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fetchAll])
+
   const doSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults(null); return }
     setSearching(true)

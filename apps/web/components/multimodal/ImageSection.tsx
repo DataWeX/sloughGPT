@@ -123,7 +123,7 @@ export function ImageSection() {
             <CardTitle className="text-base">Last Generated</CardTitle>
           </CardHeader>
           <CardContent>
-            <img src={lastGenerated} alt="Generated" className="w-full max-w-md rounded-md border border-border/60" />
+            <img src={lastGenerated} alt="Generated" loading="lazy" className="w-full max-w-md rounded-md border border-border/60" />
           </CardContent>
         </Card>
       )}

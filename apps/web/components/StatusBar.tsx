@@ -91,7 +91,7 @@ export function StatusBar() {
   }
 
   return (
-    <Link href="/settings" className="flex shrink-0 h-7 sm:h-8 items-center justify-between px-2 sm:px-3 border-t border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 hover:bg-muted/40 transition-colors" aria-label="System health and model status">
+    <Link href="/settings" prefetch={false} className="flex shrink-0 h-7 sm:h-8 items-center justify-between px-2 sm:px-3 border-t border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 hover:bg-muted/40 transition-colors" aria-label="System health and model status">
       <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         <span className="flex items-center gap-1" aria-live="polite" aria-atomic="true">
           <span className={cn("inline-block h-1.5 w-1.5 rounded-full shrink-0", dot)} aria-hidden="true" />

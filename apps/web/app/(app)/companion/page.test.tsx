@@ -219,7 +219,7 @@ describe('CompanionPage — chat flow', () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
-    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hello companion' } })
     const sendBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('send')
@@ -234,7 +234,7 @@ describe('CompanionPage — chat flow', () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
-    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hi' } })
     const sendBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('send')
@@ -249,7 +249,7 @@ describe('CompanionPage — chat flow', () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
-    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hello' } })
     await act(async () => {
       fireEvent.keyDown(chatInput, { key: 'Enter' })

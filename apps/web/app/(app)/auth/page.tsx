@@ -132,7 +132,6 @@ export default function AuthPage() {
                   required
                   aria-required="true"
                   aria-label="Email"
-                  aria-describedby={error ? 'auth-error' : undefined}
                 />
               )}
               <Input
@@ -144,7 +143,6 @@ export default function AuthPage() {
                 required
                 aria-required="true"
                 aria-label="Password"
-                aria-describedby={error ? 'auth-error' : undefined}
               />
               {error && <div id="auth-error" role="alert" className="text-xs text-destructive">{error}</div>}
               <div className="flex items-center gap-3">

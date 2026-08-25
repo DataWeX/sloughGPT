@@ -8,6 +8,7 @@ import { memoryController, type MemoryItem, type MemoryStats } from '@/lib/memor
 import { subscribeMemoryEvents } from '@/lib/memory-events'
 import { formatRelativeTime } from '@/lib/format-bytes'
 import { logger } from '@/lib/dev-log'
+import { useToastStore } from '@/lib/toast-store'
 
 const MAX_VISIBLE = 8
 const HIGHLIGHT_MS = 4000
@@ -52,6 +53,7 @@ export function MemoryTab() {
   const consolidateTimerRef = useRef<number | null>(null)
   const searchRef = useRef('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const addToast = useToastStore(s => s.addToast)
 
   const handleSearch = useCallback(async (q: string) => {
     if (!q.trim()) {

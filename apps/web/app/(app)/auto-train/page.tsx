@@ -76,6 +76,16 @@ export default function AutoTrainPage() {
     })
   }, [canStart, inputMode, sourceText, datasets.selectedDataset, selectedCheckpoint, epochs, learningRate, teacherModel, temperature, session, addToast, checkpoints])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void startTraining() }
+      if (e.key === 'Escape' && trainingRunning) { e.preventDefault(); session.stopTraining() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [canStart, trainingRunning, session, startTraining])
+
   const stopTraining = useCallback(async () => {
     try {
       await trainingJobsController.stopAutoTrain()

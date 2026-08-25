@@ -43,6 +43,16 @@ export default function FeedbackPage() {
     }).finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefreshStats() }
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setTab('conversations') }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   const handleExport = useCallback(async () => {
     try {
       const resp = await feedbackController.exportTrainingData('json')

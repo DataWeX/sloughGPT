@@ -87,7 +87,7 @@ describe('CollectionsPage', () => {
     mockApiGet.mockResolvedValue({ pipelines: [], counts: null })
     render(<CollectionsPage />)
     await waitFor(() => {
-      expect(screen.getByText('No pipelines configured. Create one above.')).toBeInTheDocument()
+      expect(screen.getByText('No pipelines configured.')).toBeInTheDocument()
     }, { timeout: 5000 })
   })
 

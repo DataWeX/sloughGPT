@@ -153,7 +153,7 @@ export default function WorldPage() {
               <CardTitle className="text-base">Render Output</CardTitle>
             </CardHeader>
             <CardContent>
-              <img src={imageUrl} alt="World render" className="w-full rounded border border-border" />
+              <img src={imageUrl} alt="World render" loading="lazy" className="w-full rounded border border-border" />
             </CardContent>
           </Card>
         )}

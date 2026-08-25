@@ -514,7 +514,7 @@ export default function SoulsPage() {
                 <div className="text-center py-8 space-y-2">
                   <p className="text-sm text-muted-foreground">No checkpoints found.</p>
                   <div className="text-xs text-muted-foreground">
-                    <Link href="/training" className="text-primary hover:underline">Train a model</Link>
+                    <Link href="/training" prefetch={false} className="text-primary hover:underline">Train a model</Link>
                     {' '}to create checkpoints.
                   </div>
                 </div>

@@ -428,7 +428,7 @@ export default function HomePage() {
           <CardContent className="py-3">
             <div className="flex items-center gap-2 mb-2">
               <p className="text-sm font-medium">Recent datasets</p>
-              <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+              <Link href="/datasets" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
             </div>
             <div className="space-y-1.5">
               {recentDatasets.map(ds => (
@@ -519,7 +519,7 @@ export default function HomePage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-medium">Datasets</p>
-                  <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+                  <Link href="/datasets" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
@@ -549,7 +549,7 @@ export default function HomePage() {
             <CardContent className="py-3">
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-xs font-medium">System</p>
-                <Link href="/monitoring" className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
+                <Link href="/monitoring" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
