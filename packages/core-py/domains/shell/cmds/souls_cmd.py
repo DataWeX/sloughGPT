@@ -77,13 +77,8 @@ def run(argv: list[str], out: Console, api: ShellCommands,
             return 0
 
     except Exception as e:
-        import requests as _req
-        if isinstance(e, (_req.ConnectionError, ConnectionError)):
-            out.print("  Cannot connect to API server. Use 'api start'.")
-        elif isinstance(e, (_req.Timeout, TimeoutError)):
-            out.print("  Request timed out. Try again.")
-        else:
-            out.print(f"  [souls] {type(e).__name__}: {e}")
+        from domains.shell.error import format_error
+        out.print(format_error(e, "souls", color=False))
         return 1
 
     return 0

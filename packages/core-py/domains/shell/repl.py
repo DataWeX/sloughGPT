@@ -1535,7 +1535,7 @@ class ShellREPL(LinuxCommandsMixin):
                     except Exception as e:
                         self._print(f"  Error at line {line_no}: {self._format_error(e, 'script')}")
         except OSError as e:
-            self._print(f"  Error reading {path}: {e}")
+            self._print(self._format_error(e, "source"))
 
     def _cmd_py(self, args: str = "") -> None:
         """Evaluate a Python expression and print the result.
@@ -3397,7 +3397,7 @@ Examples:
                                 f"completed: {sum(1 for t in tasks if t['status'] == 'completed')}"
                                 f"{_C_RESET}")
             except Exception as e:
-                self._print(self._format_error(e, "status"))
+                self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
 
     def _cmd_ai(self, args: str = "") -> None:
         if not args:
@@ -3750,19 +3750,8 @@ Examples:
 
     def _format_error(self, e: Exception, cmd: str = "") -> str:
         """Format an exception into a user-friendly error message."""
-        import requests as _req
-        etype = type(e).__name__
-        if isinstance(e, (_req.ConnectionError, ConnectionError)):
-            hint = " Is the API server running? Use 'api start'."
-            return f"  Connection failed ({etype}): {e}{hint}"
-        if isinstance(e, (_req.Timeout, TimeoutError)):
-            return f"  Request timed out ({etype}): {e}"
-        if isinstance(e, PermissionError):
-            return f"  Permission denied: {e}"
-        if isinstance(e, FileNotFoundError):
-            return f"  File not found: {e}"
-        prefix = f"  [{cmd}] " if cmd else "  "
-        return f"{prefix}{etype}: {e}"
+        from domains.shell.error import format_error
+        return format_error(e, cmd)
 
     def _cmd_boot(self, args: str = "") -> None:
         """Boot the shell — start kernel + init system + services.
@@ -3899,7 +3888,7 @@ Examples:
             try:
                 source = Path(os.path.expanduser(file_path)).read_text()
             except Exception as e:
-                self._print(self._format_error(e, "asm"))
+                self._print(f"  asm: {e}")
                 self._last_exit_code = 1
                 return
 
@@ -3920,7 +3909,7 @@ Examples:
             self._print(f"  Assembly error: {e}")
             self._last_exit_code = 1
         except Exception as e:
-            self._print(self._format_error(e, "asm"))
+            self._print(f"  VM error: {e}")
             self._last_exit_code = 1
 
     # ── x86 VM (X86VirtualSystem with RBAC) ────────────────────────
@@ -4093,7 +4082,7 @@ nl: db 10
             try:
                 source = Path(os.path.expanduser(file_or_name)).read_text()
             except Exception as e:
-                self._print(self._format_error(e, "vmrun"))
+                self._print(f"  vmrun: {e}")
                 self._last_exit_code = 1
                 return
 
@@ -4155,7 +4144,7 @@ nl: db 10
                 self._print(f"  EIP: 0x{vs.cpu._eip:08x}")
 
         except Exception as e:
-            self._print(self._format_error(e, "vmrun"))
+            self._print(f"  vmrun error: {e}")
             self._last_exit_code = 1
 
     # ── Notes (development journal) ────────────────────────────────
@@ -4602,7 +4591,7 @@ nl: db 10
                 except SystemExit as e:
                     self._last_exit_code = e.code if isinstance(e.code, int) else 1
                 except Exception as e:
-                    self._print(self._format_error(e, cmd))
+                    self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
                     self._last_exit_code = 1
                     self._audit.error(line, repr(e))
                 elapsed_ms = (_time.time() - t0) * 1000 if t0 else None
@@ -4622,7 +4611,7 @@ nl: db 10
             self._aborted = True
             self._last_exit_code = 0
         except Exception as e:
-            self._print(self._format_error(e, "shell"))
+            self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
             self._audit.error(line, repr(e))
 
     def run(self) -> None:

@@ -30,8 +30,8 @@ class AdapterUpdateRequest(BaseModel):
 
 
 class PruneAdaptersRequest(BaseModel):
-    min_feedback_count: int = 1
-    max_age_days: int = 30
+    min_feedback_count: int = Field(default=1, ge=0, le=1000)
+    max_age_days: int = Field(default=30, ge=1, le=3650)
 
 
 class UserAdaptersRouter:

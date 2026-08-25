@@ -13,14 +13,14 @@ Flow:
 from __future__ import annotations
 from typing import Optional
 from fastapi import APIRouter, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 
 
 class LearnSearchRequest(BaseModel):
-    query: str
-    max_results: int = 5
+    query: str = Field(..., min_length=1, max_length=2000)
+    max_results: int = Field(default=5, ge=1, le=100)
 
 
 class LearnerRouter:

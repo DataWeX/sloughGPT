@@ -15,14 +15,8 @@ _VALID_SCHEME = {"symmetric", "asymmetric"}
 
 def _format_error(e: Exception, cmd: str = "") -> str:
     """Format an exception into a user-friendly error message."""
-    import requests as _req
-    etype = type(e).__name__
-    if isinstance(e, (_req.ConnectionError, ConnectionError)):
-        return "Cannot connect to API server. Use 'api start'."
-    if isinstance(e, (_req.Timeout, TimeoutError)):
-        return "Request timed out."
-    prefix = f"[{cmd}] " if cmd else ""
-    return f"{prefix}{etype}: {e}"
+    from domains.shell.error import format_error
+    return format_error(e, cmd, color=False)
 
 
 def run(argv: list[str], out, api, env: dict) -> int:

@@ -5,7 +5,7 @@ Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 """
 import logging
 from typing import Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi import APIRouter
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
@@ -14,10 +14,10 @@ logger = logging.getLogger("slo.api.workflow")
 
 
 class WorkflowStartRequest(BaseModel):
-    aggregate_interval_minutes: int = 60
-    prune_interval_minutes: int = 120
-    export_interval_hours: int = 24
-    health_check_interval_seconds: int = 30
+    aggregate_interval_minutes: int = Field(default=60, ge=1, le=10080)
+    prune_interval_minutes: int = Field(default=120, ge=1, le=10080)
+    export_interval_hours: int = Field(default=24, ge=1, le=720)
+    health_check_interval_seconds: int = Field(default=30, ge=5, le=3600)
 
 
 class WorkflowRouter:

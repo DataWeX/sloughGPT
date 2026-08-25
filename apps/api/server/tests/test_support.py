@@ -20,17 +20,6 @@ os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
 # Disable rate limiting for tests to avoid 429s when running the full suite.
 try:
-    import starlette.middleware.base as _base
-    _orig_init = _base.BaseHTTPMiddleware.__init__
-
-    def _patched_init(self, app, **kwargs):
-        _orig_init(self, app, **kwargs)
-        # Mark this instance as rate-limit-exempt after construction.
-    _base.BaseHTTPMiddleware.__init__ = _patched_init
-except Exception:
-    pass
-
-try:
     from domains.infrastructure.rate_limiter import RateLimitMiddleware as _RLM
     if _RLM is not None:
         _orig_dispatch = _RLM.dispatch

@@ -142,7 +142,7 @@ class TestConversations:
         client = TestClient(_app(fr))
         resp = client.delete("/feedback/conversations/conv-1")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.json()["data"]["status"] == "deleted"
 
 
 class TestGetFeedback:

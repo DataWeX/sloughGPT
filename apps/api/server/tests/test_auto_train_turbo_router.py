@@ -296,9 +296,9 @@ def test_turbo_real_training_end_to_end(tmp_path):
     in well under a second, so the full chain (start -> status -> checkpoint in
     catalog with source=turbo -> load for chat) is exercised for real.
     """
-    ds_dir = tmp_path / "datasets"
-    ds_dir.mkdir(parents=True, exist_ok=True)
-    data = ds_dir / "data.txt"
+    data_dir = tmp_path / "datasets"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    data = data_dir / "data.txt"
     data.write_text("hello turbo world, this is a tiny training corpus. " * 20)
 
     resp = client.post("/auto-train/start-turbo", json={

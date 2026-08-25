@@ -36,11 +36,11 @@ class AgentCreate(BaseModel):
 
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    instructions: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2000)
+    instructions: Optional[str] = Field(default=None, max_length=50000)
     tools: Optional[List[str]] = None
-    avatar: Optional[str] = None
+    avatar: Optional[str] = Field(default=None, max_length=500)
 
 
 class ExecuteRequest(BaseModel):
