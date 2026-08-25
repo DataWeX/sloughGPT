@@ -172,6 +172,15 @@ export default function ModelsPage() {
     : health.model_loaded ? `${modelDisplayName(health.model_type)} · running`
     : 'No model loaded'
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefresh() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [handleRefresh])
+
   return (
     <PageContainer
       title="Models & Personalities"

@@ -78,6 +78,15 @@ export default function SelfTrainPage() {
 
   const isRunning = status?.status === 'running'
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchStatus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fetchStatus])
+
   return (
     <PageContainer
       title="Self-train"

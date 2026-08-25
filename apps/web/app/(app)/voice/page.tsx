@@ -88,6 +88,15 @@ export default function VoicePage() {
     )
   }
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefreshStatus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [handleRefreshStatus])
+
   return (
     <PageContainer title="Voice" subtitle="Text-to-speech via browser speech synthesis">
       <KpiGrid>

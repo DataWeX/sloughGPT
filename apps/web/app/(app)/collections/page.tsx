@@ -103,6 +103,15 @@ export default function CollectionsPage() {
   const sourceTypes = ['file', 'url', 'rss', 'api', 'sse', 'watch', 'generator']
   const storeTypes = ['memory', 'file', 'callback', 'chained', 'stats']
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchPipelines() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fetchPipelines])
+
   return (
     <PageContainer
       title="Collections"

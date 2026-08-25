@@ -138,6 +138,15 @@ export default function DocstorePage() {
   const totalPages = Math.ceil(filtered.length / pageSize)
   const pageDocs = filtered.slice((page - 1) * pageSize, page * pageSize)
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchDocs(selected) }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fetchDocs, selected])
+
   return (
     <PageContainer
       title="Document store"
