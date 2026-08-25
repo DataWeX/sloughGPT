@@ -30,7 +30,9 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
   const [lineageLoading, setLineageLoading] = useState(false)
 
   useEffect(() => {
-    tokenTreeController.getStats().then(setStats).catch(() => setStats(null))
+    let active = true
+    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
+    return () => { active = false }
   }, [])
 
   const load = useCallback(async (nextOffset: number) => {
@@ -48,8 +50,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
 
   useEffect(() => {
     if (stats?.trained) load(offset)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, stats])
+  }, [refreshKey, stats, offset, load])
 
   const handleGoTo = async (nextOffset: number) => {
     setOffset(nextOffset)

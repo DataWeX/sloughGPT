@@ -1,7 +1,7 @@
 'use client'
 
-import { memo, Suspense } from 'react'
-import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from '@/lib/recharts-lazy'
+import { memo } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 
 interface ChartPoint {
   time: string
@@ -43,13 +43,12 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
   }
 
   return (
-    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading chart...</div>}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-          <XAxis
-            dataKey="time"
-            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+        <XAxis
+          dataKey="time"
+          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
             interval="preserveStartEnd"
             tickLine={false}
             axisLine={false}
@@ -121,6 +120,5 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
         )}
       </ComposedChart>
     </ResponsiveContainer>
-    </Suspense>
   )
 })

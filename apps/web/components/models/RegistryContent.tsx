@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
@@ -16,7 +16,7 @@ export default function RegistryContent() {
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
         registryController.list().catch((e) => { addToast('Could not load models', 'error'); return [] }),
@@ -31,9 +31,31 @@ export default function RegistryContent() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [addToast])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const [modelsRes, statsRes, bestRes] = await Promise.all([
+          registryController.list().catch((e) => { addToast('Could not load models', 'error'); return [] }),
+          registryController.stats().catch((e) => { addToast('Could not load registry stats', 'error'); return null }),
+          registryController.best().catch(() => null),
+        ])
+        if (active) {
+          setModels(modelsRes)
+          setStats(statsRes)
+          setBestModel(bestRes)
+        }
+      } catch {
+        if (active) addToast('Could not load registry data', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const filteredModels = models.filter(m =>
     m.model_id.toLowerCase().includes(searchQuery.toLowerCase()) ||

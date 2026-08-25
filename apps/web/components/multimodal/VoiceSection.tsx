@@ -19,10 +19,12 @@ export function VoiceSection() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
+    let active = true
     voiceController.getStatus()
-      .then(d => setStatus(d))
-      .catch(() => { addToast('Could not load voice status', 'error') })
-      .finally(() => setLoading(false))
+      .then(d => { if (active) setStatus(d) })
+      .catch(() => { if (active) addToast('Could not load voice status', 'error') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [])
 
   const handleRefreshStatus = async () => {

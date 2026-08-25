@@ -27,7 +27,22 @@ export function WorkflowSection() {
     }
   }
 
-  useEffect(() => { fetchStatus() }, [])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const s = await workflowController.status()
+        if (active) setStatus(s)
+      } catch {
+        if (active) addToast('Could not load workflow status', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleToggle = async () => {
     setToggling(true)

@@ -87,7 +87,7 @@ describe('LoraEvalPage', () => {
     ])
     render(<LoraEvalPage />)
     await waitFor(() => {
-      expect(screen.getByText('passed')).toBeTruthy()
+      expect(screen.getAllByText('passed').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('failed')).toBeTruthy()
       expect(screen.getByText('120ms')).toBeTruthy()
       expect(screen.getByText('All metrics improved')).toBeTruthy()

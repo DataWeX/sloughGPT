@@ -44,7 +44,25 @@ export default function DownloadsCard() {
     }
   }, [addToast])
 
-  useEffect(() => { fetchDownloads() }, [fetchDownloads])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await modelController.listDownloads()
+        if (active) setDownloads(result.downloads)
+      } catch {
+        if (active) {
+          addToast('Could not load downloads', 'error')
+          setDownloads([])
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   useEffect(() => {
     const hasActive = downloads.some(d => d.status === 'downloading' || d.status === 'queued')

@@ -46,6 +46,7 @@ interface ChatScreenProps {
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: (messageId: string) => void
+  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -58,10 +59,11 @@ interface ChatScreenProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  temperature?: number
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength, temperature }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -175,6 +177,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
                 onRegenerate={showRegenerate ? onRegenerate : undefined}
+                onRegenerateWithOptions={showRegenerate ? onRegenerateWithOptions : undefined}
                 onSuggestionClick={onSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}
@@ -185,6 +188,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onDelete={onDelete}
                 onSaveToKnowledge={onSaveToKnowledge}
                 collapsibleLength={collapsibleLength}
+                temperature={temperature}
               />
               </React.Fragment>
             )

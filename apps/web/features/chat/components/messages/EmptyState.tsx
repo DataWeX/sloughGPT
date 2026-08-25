@@ -2,6 +2,7 @@
 
 import { useEffect, useState, memo } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useLocale } from '@/hooks/useLocale'
 import { cn, Chip, IconBeaker } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -63,6 +64,7 @@ function SuggestionChip({ text, icon, onClick }: { text: string; icon: string; o
 
 export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSuggestionClick }: EmptyStateProps) {
   const { t } = useLocale()
+  const router = useRouter()
   const [greeting, setGreeting] = useState('')
 
   useEffect(() => {
@@ -122,10 +124,10 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
         </div>
       ) : (
         <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onSuggestionClick?.('Show me my datasets')}>
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/datasets')}>
             Datasets
           </Button>
-          <Button size="sm" className="h-8 text-xs" onClick={() => onSuggestionClick?.('Train a model on my data')}>
+          <Button size="sm" className="h-8 text-xs" onClick={() => router.push('/training')}>
             Train model
           </Button>
         </div>

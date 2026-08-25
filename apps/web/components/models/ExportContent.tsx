@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -36,8 +36,10 @@ export default function ExportContent() {
   const [loadingCheckpoints, setLoadingCheckpoints] = useState(false)
 
   useEffect(() => {
+    let active = true
     modelController.getExportFormats?.()
       .then((res: Record<string, string>) => {
+        if (!active) return
         const list = Object.entries(res).map(([key, description]) => ({
           key,
           label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -46,12 +48,14 @@ export default function ExportContent() {
         setFormats(list)
       })
       .catch((err: unknown) => {
+        if (!active) return
         const msg = err instanceof Error ? err.message : String(err)
         setFormatLoadError(`Could not load export formats: ${msg}`)
       })
+    return () => { active = false }
   }, [])
 
-  const fetchCheckpoints = async () => {
+  const fetchCheckpoints = useCallback(async () => {
     setLoadingCheckpoints(true)
     try {
       const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
@@ -61,9 +65,24 @@ export default function ExportContent() {
     } finally {
       setLoadingCheckpoints(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchCheckpoints() }, [])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoadingCheckpoints(true)
+      try {
+        const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+        if (active) setCheckpoints(data?.checkpoints ?? [])
+      } catch {
+        if (active) setCheckpoints([])
+      } finally {
+        if (active) setLoadingCheckpoints(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleExportModel = async () => {
     setExporting(true)

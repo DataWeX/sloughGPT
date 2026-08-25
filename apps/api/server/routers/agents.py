@@ -356,6 +356,8 @@ class AgentsRouter:
                         stream="agent-orchestrate",
                         phase="ERROR",
                         error=str(e),
+                        code="E_INFRA_GENERATION",
+                        http_status=500,
                     )
 
             return StreamingResponse(event_stream(), media_type="text/event-stream")

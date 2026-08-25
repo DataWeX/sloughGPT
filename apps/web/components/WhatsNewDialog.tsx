@@ -46,7 +46,9 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const markStartedRef = useRef(false)
 
   useEffect(() => {
-    getSeenIds().then(setSeen)
+    let active = true
+    getSeenIds().then(s => { if (active) setSeen(s) })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {

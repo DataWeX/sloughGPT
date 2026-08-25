@@ -48,9 +48,14 @@ except ImportError:
         if done and elapsed_ms is not None:
             m["elapsed_ms"] = round(elapsed_ms, 1)
         return _sse_event(stream, phase, status, {"token": token}, m, "")
-    def sse_error(stream, phase, error, meta=None) -> dict:
+    def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
         """sse_error."""
-        return _sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return _sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
 import asyncio
 import datetime
 import uuid
@@ -655,13 +660,13 @@ class InferenceRouter:
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
-                yield sse_error("generate", "IDLE", "Model still loading — please wait.")
+                yield sse_error("generate", "IDLE", "Model still loading — please wait.", code="MODEL_LOADING", http_status=503)
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
         mem_err = _check_memory_pressure()
         if mem_err:
             async def oom_stream() -> AsyncIterator[str]:
-                yield sse_error("generate", "IDLE", mem_err)
+                yield sse_error("generate", "IDLE", mem_err, code="MODEL_OOM", http_status=503)
             return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
@@ -669,7 +674,7 @@ class InferenceRouter:
 
             provider = get_provider("default")
             if provider is None:
-                yield sse_error("generate", "IDLE", "No provider available")
+                yield sse_error("generate", "IDLE", "No provider available", code="E_INFRA_REGISTRY", http_status=503)
                 return
 
             cancel_event = threading.Event()
@@ -707,7 +712,7 @@ class InferenceRouter:
             if existing is not None:
                 await existing.event.wait()
                 if existing.error is not None:
-                    yield sse_error("generate", "ERROR", str(existing.error))
+                    yield sse_error("generate", "ERROR", str(existing.error), code="E_INFRA_GENERATION", http_status=500)
                     return
                 cached = existing.result or ""
                 tokens = cached.split()
@@ -749,7 +754,7 @@ class InferenceRouter:
                         logger.warning("Generate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
                         cancel_event.set()
                         _mgr.finish(_op_id, "timeout")
-                        yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                        yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
                         return
                 if _batch:
                     yield sse_token("generate", "".join(_batch))
@@ -906,14 +911,14 @@ class InferenceRouter:
                 msg = f"Server starting (phase: {phase}). Please wait."
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
-                yield sse_error("chat", "IDLE", msg)
+                yield sse_error("chat", "IDLE", msg, code="MODEL_LOADING", http_status=503)
             return StreamingResponse(error_stream(), media_type="text/event-stream")
 
         mem_err = _check_memory_pressure()
         if mem_err:
             get_server_state().record_memory_pressure_block()
             async def oom_stream() -> AsyncIterator[str]:
-                yield sse_error("chat", "IDLE", mem_err)
+                yield sse_error("chat", "IDLE", mem_err, code="MODEL_OOM", http_status=503)
             return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
@@ -923,7 +928,7 @@ class InferenceRouter:
             cancel_event = threading.Event()
             user_msg = _extract_user_message(req.messages)
             if not user_msg:
-                yield sse_error("chat", "IDLE", "No user message")
+                yield sse_error("chat", "IDLE", "No user message", code="E_VAL_REQUEST", http_status=400)
                 return
 
             _mgr = get_cancel_manager()
@@ -1157,7 +1162,7 @@ class InferenceRouter:
                     if existing is not None:
                         await existing.event.wait()
                         if existing.error is not None:
-                            yield sse_error("chat", "ERROR", str(existing.error))
+                            yield sse_error("chat", "ERROR", str(existing.error), code="E_INFRA_GENERATION", http_status=500)
                             return
                         cached = existing.result or ""
                         tokens = cached.split()
@@ -1200,7 +1205,7 @@ class InferenceRouter:
                                     logger.warning("Token generation stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
                                     cancel_event.set()
                                     _mgr.finish(_op_id, "timeout")
-                                    yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                                    yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
                                     return
                             if _batch:
                                 yield sse_token("chat", "".join(_batch))
@@ -1220,7 +1225,7 @@ class InferenceRouter:
                         logger.warning("Chat stream provider failed: %s", e, extra={"tag": "INF"})
                         classify_and_raise(e, source="chat_stream_provider")
                 else:
-                    yield sse_error("chat", "STREAMING", "No inference provider loaded")
+                    yield sse_error("chat", "STREAMING", "No inference provider loaded", code="E_INFRA_REGISTRY", http_status=503)
 
                 full_response = "".join(full_response_parts)
                 await _coalescer.complete(_coalesce_key, full_response)

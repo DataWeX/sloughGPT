@@ -75,10 +75,12 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
   const chunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
+    let active = true
     setIsBrowserSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
     multimodalController.getCapabilities().then(caps => {
-      if (caps.speech_to_text) setIsServerSupported(true)
+      if (active && caps.speech_to_text) setIsServerSupported(true)
     }).catch(() => /* voice capabilities unavailable — browser-only mode */ {})
+    return () => { active = false }
   }, [])
 
   const startBrowserListening = useCallback(() => {

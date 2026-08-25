@@ -84,9 +84,8 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   // Derive current soul from the query cache instead of a separate API call.
   useEffect(() => {
     if (soulsData) {
-      const data = soulsData as any
-      const active = data.current_soul
-        ? (data.souls || [])?.find((s: Soul) => s.name === data.current_soul)
+      const active = soulsData.current_soul
+        ? (soulsData.souls || [])?.find((s: Soul) => s.name === soulsData.current_soul)
         : null
       setCurrentSoul(active || null)
     }

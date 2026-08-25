@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
@@ -31,7 +31,7 @@ export function ImageSection() {
   const [genError, setGenError] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [galleryRes, stylesRes] = await Promise.all([
         imagesController.gallery().catch(() => null),
@@ -44,9 +44,29 @@ export function ImageSection() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [addToast])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const [galleryRes, stylesRes] = await Promise.all([
+          imagesController.gallery().catch(() => null),
+          imagesController.styles().catch(() => null),
+        ])
+        if (active) {
+          setGallery(galleryRes?.images ?? [])
+          setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+        }
+      } catch {
+        if (active) addToast('Could not load image data', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return

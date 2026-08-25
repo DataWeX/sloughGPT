@@ -168,7 +168,30 @@ export function MemoryCard() {
     }
   }, [addToast])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const [statsResult, listResult, archiveResult] = await Promise.all([
+          memoryController.stats().catch((e) => { addToast('Could not load memory stats', 'error'); return null }),
+          memoryController.list(),
+          memoryController.archiveStats().catch((e) => { addToast('Could not load archive stats', 'error'); return null }),
+        ])
+        if (active) {
+          setStats(statsResult)
+          setItems(listResult.items || [])
+          setArchiveStats(archiveResult)
+        }
+      } catch {
+        if (active) addToast('Could not load memory', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   const fetchConfig = useCallback(async () => {
     setRetentionLoading(true)
@@ -182,7 +205,22 @@ export function MemoryCard() {
     }
   }, [])
 
-  useEffect(() => { fetchConfig() }, [fetchConfig])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setRetentionLoading(true)
+      try {
+        const config = await memoryController.getConfig()
+        if (active) setRetentionDays(config.archive_retention_days ?? 30)
+      } catch {
+        if (active) setRetentionDays(null)
+      } finally {
+        if (active) setRetentionLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleSearch = useCallback(async (q: string) => {
     if (!q.trim()) {

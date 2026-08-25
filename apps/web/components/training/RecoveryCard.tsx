@@ -30,7 +30,22 @@ export function RecoveryCard({ addToast }: Props) {
     }
   }, [])
 
-  useEffect(() => { void fetchRecoverable() }, [fetchRecoverable])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await trainingJobsController.recoverable()
+        if (active) setJobs(result ?? [])
+      } catch {
+        if (active) setJobs([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleRecover = useCallback(async (id: string) => {
     setRecovering(id)

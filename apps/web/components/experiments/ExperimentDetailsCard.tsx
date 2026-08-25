@@ -33,7 +33,23 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
     }
   }
 
-  useEffect(() => { fetchData() }, [experimentId])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await experimentsController.getExperimentData(experimentId)
+        if (active) setData(result)
+      } catch (e: unknown) {
+        if (active) setError(e instanceof Error ? e.message : 'Could not load experiment data')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [experimentId])
 
   if (loading) {
     return (

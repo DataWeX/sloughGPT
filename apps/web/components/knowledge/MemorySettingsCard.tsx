@@ -26,7 +26,21 @@ export function MemorySettingsCard() {
     }
   }, [addToast])
 
-  useEffect(() => { fetchConfig() }, [fetchConfig])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const c = await memoryController.getConfig()
+        if (active) setConfig(c)
+      } catch {
+        if (active) addToast('Could not load memory config', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   const handleToggle = async (enabled: boolean) => {
     setToggling(true)

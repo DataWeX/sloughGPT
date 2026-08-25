@@ -41,8 +41,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, load])
 
   const handleSave = async () => {
     const trimmed = name.trim()

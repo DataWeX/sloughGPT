@@ -56,6 +56,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
       }
       loadVoices()
       window.speechSynthesis.onvoiceschanged = loadVoices
+      return () => { window.speechSynthesis.onvoiceschanged = null }
     }
   }, [])
 

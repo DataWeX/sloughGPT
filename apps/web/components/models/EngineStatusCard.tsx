@@ -40,7 +40,21 @@ export default function EngineStatusCard() {
     }
   }, [addToast])
 
-  useEffect(() => { fetchStatus() }, [fetchStatus])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const result = await modelController.getEngineStatus()
+        if (active) setStatus(result)
+      } catch (err) {
+        if (active) addToast(extractErrorMessage(err, 'Could not load engine status'), 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   const handleReload = async () => {
     setReloading(true)

@@ -27,6 +27,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onRefreshHealth: () => void
   onCopy: (text: string) => void
   onRegenerate?: (messageId: string) => void
+  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -41,6 +42,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  temperature?: number
 }
 
 export interface ChatAreaRef {
@@ -61,6 +63,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onRefreshHealth,
     onCopy,
     onRegenerate,
+    onRegenerateWithOptions,
     onThumbsUp,
     onThumbsDown,
     onEdit,
@@ -78,6 +81,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onDelete,
     onSaveToKnowledge,
     collapsibleLength,
+    temperature,
     ...inputProps
   }, ref) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -142,6 +146,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onRefreshHealth={onRefreshHealth}
             onCopy={onCopy}
             onRegenerate={onRegenerate}
+            onRegenerateWithOptions={onRegenerateWithOptions}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
             onEdit={onEdit}
@@ -154,6 +159,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onDelete={onDelete}
             onSaveToKnowledge={onSaveToKnowledge}
             collapsibleLength={collapsibleLength}
+            temperature={temperature}
           />
 
           {filteredMessages.length > 0 && !isNearBottom && (

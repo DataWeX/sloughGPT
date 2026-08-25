@@ -19,7 +19,9 @@ export function TokenTreeQueryCard() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    tokenTreeController.getStats().then(setStats).catch(() => setStats(null))
+    let active = true
+    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
+    return () => { active = false }
   }, [])
 
   const handleSearch = async () => {

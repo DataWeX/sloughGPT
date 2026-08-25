@@ -204,6 +204,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           onRefreshHealth={refreshHealth}
           onCopy={chat.handleCopy}
           onRegenerate={chat.handleRegenerate}
+          onRegenerateWithOptions={chat.handleRegenerateWithOptions}
           onThumbsUp={chat.handleThumbsUp}
           onThumbsDown={chat.handleThumbsDown}
           onEdit={chat.handleEditMessage}
@@ -228,6 +229,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           onDelete={handleDeleteMessage}
           onSaveToKnowledge={handleSaveToKnowledge}
           collapsibleLength={collapsibleLength}
+          temperature={model.temperature}
         />
       </ImageDropZone>
     </>

@@ -93,6 +93,26 @@ class TestSSEError:
         parsed = json.loads(result.removeprefix("data: ").strip())
         assert parsed["meta"]["step"] == 5
 
+    def test_error_with_code(self):
+        result = sse_error("chat", "TIMEOUT", "stalled", code="MODEL_TIMEOUT", http_status=504)
+        parsed = json.loads(result.removeprefix("data: ").strip())
+        assert parsed["data"]["code"] == "MODEL_TIMEOUT"
+        assert parsed["data"]["http_status"] == 504
+        assert parsed["data"]["error"] == "stalled"
+
+    def test_error_code_optional(self):
+        result = sse_error("chat", "IDLE", "loading")
+        parsed = json.loads(result.removeprefix("data: ").strip())
+        assert "code" not in parsed["data"]
+        assert "http_status" not in parsed["data"]
+
+    def test_error_with_code_and_meta(self):
+        result = sse_error("chat", "IDLE", "oom", code="MODEL_OOM", http_status=503, meta={"mem_pct": 97})
+        parsed = json.loads(result.removeprefix("data: ").strip())
+        assert parsed["data"]["code"] == "MODEL_OOM"
+        assert parsed["data"]["http_status"] == 503
+        assert parsed["meta"]["mem_pct"] == 97
+
 
 class TestSSEComplete:
     def test_complete_event(self):

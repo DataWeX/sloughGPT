@@ -1,6 +1,14 @@
 'use client'
 
-import { PUBLIC_API_URL } from '@/lib/config'
+import { streamSSE } from '@/lib/http-client'
+import { useErrorStore } from '@/lib/error-store'
+import { logger } from '@/lib/dev-log'
+
+const _log = logger.child('stream-chat-response')
+
+const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
+const MAX_RETRIES = 2
+const BASE_DELAY_MS = 500
 
 export interface ToolCallEvent {
   tool: string
@@ -40,77 +48,43 @@ interface StreamChatParams {
   }) => void
 }
 
-export async function streamChatResponse(params: StreamChatParams): Promise<void> {
-  const {
-    messages, model, systemPrompt, maxTokens, temperature,
-    userId, sessionId, images, signal,
-    onToken, onComplete, onError, onKnowledge, onThinking, onToolCall, onMemory, onRagVerification,
-  } = params
-
-  const response = await fetch(`${PUBLIC_API_URL}/chat/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages,
-      model,
-      system_prompt: systemPrompt,
-      max_new_tokens: maxTokens,
-      temperature,
-      user_id: userId,
-      session_id: sessionId,
-      images,
-      knowledge: params.knowledge,
-      agent_id: params.agentId || undefined,
-      use_rag: true,
-    }),
-    signal,
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '')
-    onError(response.status, errorText)
-    return
+function buildBody(params: StreamChatParams) {
+  return {
+    messages: params.messages,
+    model: params.model,
+    system_prompt: params.systemPrompt,
+    max_new_tokens: params.maxTokens,
+    temperature: params.temperature,
+    user_id: params.userId,
+    session_id: params.sessionId,
+    images: params.images,
+    knowledge: params.knowledge,
+    agent_id: params.agentId || undefined,
+    use_rag: true,
   }
+}
 
-  const reader = response.body?.getReader()
-  const decoder = new TextDecoder()
-  let hasContent = false
-  let completed = false
-  let buffer = ''
-
-  if (!reader) return
+export async function streamChatResponse(params: StreamChatParams): Promise<void> {
+  const { signal, onError } = params
+  const body = buildBody(params)
+  let retries = 0
 
   while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+    let hasContent = false
+    let completed = false
+    let shouldRetry = false
 
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
+    try {
+      for await (const event of streamSSE('/chat/stream', { body, signal })) {
+        const d = event.data ?? {}
 
-    for (const line of lines) {
-      const trimmed = line.trimEnd()
-      if (!trimmed.startsWith('data:')) continue
-      const payload = trimmed.slice(5).trim()
-      if (!payload || payload === '[DONE]') continue
-
-      try {
-        const envelope = JSON.parse(payload) as {
-          stream?: string; phase?: string; status?: string
-          data?: Record<string, unknown>
-          error?: string; message?: string
-        }
-
-        if (envelope.status === 'thinking') {
-          onThinking?.()
+        if (event.status === 'thinking') {
+          params.onThinking?.()
           continue
         }
 
-        const d = envelope.data ?? {}
-
-        // ── Post-complete memory event (arrives after status=complete) ──
-        if (envelope.phase === 'MEMORY') {
-          onMemory?.({
+        if (event.phase === 'MEMORY') {
+          params.onMemory?.({
             stored: d.stored === true,
             fact: typeof d.fact === 'string' ? d.fact : undefined,
             facts: Array.isArray(d.facts)
@@ -120,9 +94,8 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           continue
         }
 
-        // ── RAG grounding verification event ──
-        if (envelope.phase === 'RAG_VERIFICATION') {
-          onRagVerification?.({
+        if (event.phase === 'RAG_VERIFICATION') {
+          params.onRagVerification?.({
             confidence: typeof d.confidence === 'number' ? d.confidence : 0,
             is_verified: d.is_verified === true,
             hallucination_rate: typeof d.hallucination_rate === 'number' ? d.hallucination_rate : 0,
@@ -133,51 +106,96 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
           continue
         }
 
-        // ── Tool call events (must come before generic error check) ──
-        if (envelope.phase === 'TOOL') {
+        if (event.phase === 'TOOL') {
           if (d.tool && typeof d.tool === 'string') {
             const toolEvent: ToolCallEvent = {
               tool: d.tool as string,
-              status: (envelope.status === 'complete' ? 'success' : envelope.status === 'error' ? 'error' : 'executing') as ToolCallEvent['status'],
+              status: (event.status === 'complete' ? 'success' : event.status === 'error' ? 'error' : 'executing') as ToolCallEvent['status'],
               output: d.output as string | undefined,
               error: d.error as string | undefined,
               duration_ms: d.duration_ms as number | undefined,
               args: d.args as Record<string, unknown> | undefined,
             }
-            onToolCall?.(toolEvent)
+            params.onToolCall?.(toolEvent)
           }
           continue
         }
 
-        if (envelope.status === 'error') {
-          const errStr = typeof envelope.data?.error === 'string' ? envelope.data.error : undefined
-          onError(500, envelope.message || errStr || 'Stream error')
+        if (event.status === 'error') {
+          const httpStatus = typeof d.http_status === 'number' ? d.http_status as number : 500
+          const errStr = typeof d.error === 'string' ? d.error : undefined
+          const message = event.message || errStr || 'Stream error'
+
+          if (signal?.aborted) {
+            _log.debug('Stream aborted by user')
+            return
+          }
+
+          if (RETRYABLE_STATUSES.has(httpStatus) && retries < MAX_RETRIES) {
+            retries++
+            const delay = BASE_DELAY_MS * Math.pow(2, retries - 1)
+            _log.debug('Retrying chat stream after transient error', { status: httpStatus, retries, delay })
+            shouldRetry = true
+            break
+          }
+
+          useErrorStore.getState().addError(
+            new Error(message),
+            { source: 'chat/stream', title: `Chat stream error (${httpStatus})` },
+          )
+          onError(httpStatus, message)
           return
         }
 
         if (d.source && typeof d.source === 'string') {
           const fc = typeof d.fact_count === 'number' ? d.fact_count : 0
-          onKnowledge?.(d.source, fc)
+          params.onKnowledge?.(d.source, fc)
         }
 
         const token = d.token as string | undefined
         if (token) {
           hasContent = true
-          onToken(token)
+          params.onToken(token)
         }
 
-        if (envelope.status === 'complete') {
-          if (!hasContent) onToken('')
-          onComplete()
+        if (event.status === 'complete') {
+          if (!hasContent) params.onToken('')
+          params.onComplete()
           completed = true
           continue
         }
-      } catch {
-        // skip malformed lines
       }
-    }
-  }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        _log.debug('Stream aborted by user')
+        return
+      }
 
-  if (!hasContent) onToken('')
-  if (!completed) onComplete()
+      const message = err instanceof Error ? err.message : 'Network error'
+
+      if (retries < MAX_RETRIES) {
+        retries++
+        const delay = BASE_DELAY_MS * Math.pow(2, retries - 1)
+        _log.debug('Retrying chat stream after network error', { retries, delay })
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+
+      useErrorStore.getState().addError(
+        err instanceof Error ? err : new Error(message),
+        { source: 'chat/stream', title: 'Connection Error' },
+      )
+      onError(0, message)
+      return
+    }
+
+    if (shouldRetry) {
+      await new Promise(r => setTimeout(r, BASE_DELAY_MS * Math.pow(2, retries - 1)))
+      continue
+    }
+
+    if (!hasContent) params.onToken('')
+    if (!completed) params.onComplete()
+    return
+  }
 }

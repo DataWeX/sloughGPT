@@ -35,8 +35,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
 
   useEffect(() => {
     load(limit, query)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, limit, query, load])
 
   const handleSearch = async () => {
     setExpanded(null)

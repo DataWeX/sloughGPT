@@ -80,7 +80,7 @@ export default function LoraEvalPage() {
       <KpiGrid columns={3}>
         <StatCard label="Total Evals" value={String(history.length)} />
         <StatCard label="Last Status" value={lastResult?.status ?? history[0]?.status ?? '—'} />
-        <StatCard label="Best Verdict" value={history.find(h => (h as any).delta?.verdict)?.status ?? '—'} />
+        <StatCard label="Best Verdict" value={history.find(h => h.delta?.verdict)?.status ?? '—'} />
       </KpiGrid>
 
       <Card>

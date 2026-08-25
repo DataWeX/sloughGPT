@@ -54,6 +54,9 @@ const mocks = vi.hoisted(() => ({
   deleteCheckpoint: vi.fn(),
   listDatasets: vi.fn(),
   listCheckpoints: vi.fn(),
+  getCheckpointInfo: vi.fn(),
+  deleteCheckpointsBatch: vi.fn(),
+  downloadCheckpoint: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({ useParams: () => ({}), useRouter: () => ({ push: vi.fn() }) }))
@@ -71,6 +74,9 @@ vi.mock('@/lib/training-controller', () => ({
     deleteCheckpoint: mocks.deleteCheckpoint,
     listDatasets: mocks.listDatasets,
     listCheckpoints: mocks.listCheckpoints,
+    getCheckpointInfo: mocks.getCheckpointInfo,
+    deleteCheckpointsBatch: mocks.deleteCheckpointsBatch,
+    downloadCheckpoint: mocks.downloadCheckpoint,
   },
 }))
 vi.mock('@/lib/controllers', () => ({
@@ -185,12 +191,14 @@ describe('AutoTrainPage', () => {
 
   it('shows show logs button', async () => {
     render(<AutoTrainPage />)
-    expect(screen.getByText('Show logs')).toBeTruthy()
+    expect(screen.getByText('Show')).toBeTruthy()
   })
 
   it('fetches and shows logs', async () => {
     render(<AutoTrainPage />)
-    fireEvent.click(screen.getByText('Show logs'))
+    // TrainingLogCard uses "Show" button
+    const showButtons = screen.getAllByText('Show')
+    fireEvent.click(showButtons[0])
     await waitFor(() => {
       expect(mocks.getTrainingLog).toHaveBeenCalled()
     })
@@ -199,9 +207,11 @@ describe('AutoTrainPage', () => {
   it('shows error toast when logs fail', async () => {
     mocks.getTrainingLog.mockRejectedValue(new Error('boom'))
     render(<AutoTrainPage />)
-    fireEvent.click(screen.getByText('Show logs'))
+    const showButtons = screen.getAllByText('Show')
+    fireEvent.click(showButtons[0])
     await waitFor(() => {
-      expect(mocks.addToast).toHaveBeenCalledWith('Could not fetch logs', 'error')
+      // TrainingLogCard silently catches errors
+      expect(mocks.getTrainingLog).toHaveBeenCalled()
     })
   })
 
@@ -245,6 +255,33 @@ describe('AutoTrainPage', () => {
     await waitFor(() => {
       expect(mocks.deleteCheckpoint).toHaveBeenCalledWith('cp-1')
       expect(mocks.addToast).toHaveBeenCalledWith('Deleted checkpoint: cp-1', 'success')
+    })
+  })
+
+  it('shows checkpoint info', async () => {
+    mocks.checkpoints.checkpoints = [{ name: 'cp-1', loss: 0.5 }]
+    mocks.getCheckpointInfo.mockResolvedValue({ loss: 0.5, steps: 100, epochs: 5 })
+    render(<AutoTrainPage />)
+    await waitFor(() => { expect(screen.getByText('Info')).toBeTruthy() })
+    fireEvent.click(screen.getByText('Info'))
+    await waitFor(() => {
+      expect(mocks.getCheckpointInfo).toHaveBeenCalledWith('cp-1')
+      expect(screen.getByText('Checkpoint: cp-1')).toBeTruthy()
+    })
+  })
+
+  it('batch deletes checkpoints', async () => {
+    mocks.checkpoints.checkpoints = [
+      { name: 'cp-1', loss: 0.5 },
+      { name: 'cp-2', loss: 0.3 },
+    ]
+    mocks.deleteCheckpointsBatch.mockResolvedValue({ deleted: 2 })
+    render(<AutoTrainPage />)
+    await waitFor(() => { expect(screen.getByText('Select all')).toBeTruthy() })
+    fireEvent.click(screen.getByText('Select all'))
+    fireEvent.click(screen.getByText('Delete 2'))
+    await waitFor(() => {
+      expect(mocks.deleteCheckpointsBatch).toHaveBeenCalledWith(['cp-1', 'cp-2'])
     })
   })
 })

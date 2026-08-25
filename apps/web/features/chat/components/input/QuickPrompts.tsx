@@ -37,7 +37,15 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
     setGrouped(result)
   }, [])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      const result = await listPromptsByCategory()
+      if (active) setGrouped(result)
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return grouped

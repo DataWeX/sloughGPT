@@ -51,9 +51,14 @@ class SessionRouter:
                 if done and elapsed_ms is not None:
                     m["elapsed_ms"] = round(elapsed_ms, 1)
                 return _sse_event(stream, phase, status, {"token": token}, m, "")
-            def sse_error(stream, phase, error, meta=None) -> dict:
+            def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
                 """sse_error."""
-                return _sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+                data = {"error": error}
+                if code is not None:
+                    data["code"] = code
+                if http_status is not None:
+                    data["http_status"] = http_status
+                return _sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
             self._sse_event = _sse_event
             self._sse_token = sse_token
             self._sse_error = sse_error
@@ -212,13 +217,13 @@ class SessionRouter:
                     from domains.infrastructure.session_core import SessionCore
                     msgs = SessionCore.get_messages(session_id)
                     if not msgs:
-                        yield self._sse_error("chat", "REGENERATE", "No session context found")
+                        yield self._sse_error("chat", "REGENERATE", "No session context found", code="E_VAL_REQUEST", http_status=400)
                         return
 
                     from domains.models.provider import get_provider
                     provider = get_provider("default")
                     if provider is None:
-                        yield self._sse_error("chat", "REGENERATE", "Model not loaded")
+                        yield self._sse_error("chat", "REGENERATE", "Model not loaded", code="E_INFRA_REGISTRY", http_status=503)
                         return
 
                     yield self._sse_event("chat", "REGENERATE", "thinking",
@@ -251,7 +256,7 @@ class SessionRouter:
                             elapsed_since_token = time.time() - _token_gen_start
                             if elapsed_since_token > _max_token_wait_s:
                                 logger.warning("Regenerate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "REQ"})
-                                yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                                yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
                                 return
                         yield self._sse_token("chat", "", done=True)
                         _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
@@ -261,7 +266,7 @@ class SessionRouter:
                         return
                     except Exception as e:
                         logger.error("Regenerate stream error: %s", e, exc_info=True, extra={"tag": "REQ"})
-                        yield self._sse_error("chat", "REGENERATE", f"Generation failed: {e}")
+                        yield self._sse_error("chat", "REGENERATE", f"Generation failed: {e}", code="E_INFRA_GENERATION", http_status=500)
                         return
 
                 except Exception as e:

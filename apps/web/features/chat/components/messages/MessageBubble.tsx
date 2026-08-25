@@ -17,6 +17,7 @@ export interface MessageBubbleProps {
   images?: ImageAttachment[]
   onCopy?: (text: string) => void
   onRegenerate?: (messageId: string) => void
+  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -31,6 +32,7 @@ export interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  temperature?: number
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
@@ -42,6 +44,7 @@ export const MessageBubble = memo(function MessageBubble({
   images,
   onCopy,
   onRegenerate,
+  onRegenerateWithOptions,
   onThumbsUp,
   onThumbsDown,
   onEdit,
@@ -56,6 +59,7 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onSaveToKnowledge,
   collapsibleLength = 0,
+  temperature,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isVisible, setIsVisible] = useState(false)
@@ -165,6 +169,14 @@ export const MessageBubble = memo(function MessageBubble({
             {timeAgo(timestamp)}
           </p>
         )}
+        {isStreaming && role === 'assistant' && hasContent && (
+          <div className="flex items-center gap-1.5 mt-1" aria-live="polite">
+            <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+            <span className="text-[10px] text-muted-foreground/50 font-mono">
+              {content.length} chars
+            </span>
+          </div>
+        )}
       </div>
 
       {(showActions || isError) && (
@@ -174,6 +186,7 @@ export const MessageBubble = memo(function MessageBubble({
           role={role}
           onCopy={onCopy}
           onRegenerate={onRegenerate}
+          onRegenerateWithOptions={onRegenerateWithOptions}
           onThumbsUp={onThumbsUp}
           onThumbsDown={onThumbsDown}
           onSuggestionClick={onSuggestionClick}
@@ -181,6 +194,7 @@ export const MessageBubble = memo(function MessageBubble({
           onBookmark={onBookmark}
           onDelete={onDelete}
           onSaveToKnowledge={onSaveToKnowledge}
+          temperature={temperature}
         />
       )}
 

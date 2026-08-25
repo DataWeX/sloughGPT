@@ -30,8 +30,13 @@ except ImportError:
             "stream": stream, "phase": phase, "status": status,
             "data": data or {}, "meta": meta or {}, "message": message
         }) + "\n\n"
-    def sse_error(stream, phase, error, meta=None):
-        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+    def sse_error(stream, phase, error, meta=None, code=None, http_status=None):
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs

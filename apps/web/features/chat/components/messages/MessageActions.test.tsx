@@ -194,6 +194,7 @@ describe('MessageActions', () => {
 
   it('calls onDelete with messageId when delete clicked', () => {
     const onDelete = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<MessageActions content="text" messageId="m1" onDelete={onDelete} />)
     fireEvent.click(screen.getByRole('button', { name: /delete message/i }))
     expect(onDelete).toHaveBeenCalledWith('m1')

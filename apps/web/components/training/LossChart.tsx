@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, memo, Suspense } from 'react'
-import { LineChart, ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from '@/lib/recharts-lazy'
+import { useMemo, memo } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ComposedChart } from 'recharts'
 import { downloadBlob } from '@/lib/download-utils'
 import { IconDownload } from '@sloughgpt/strui'
 import { todayDateString } from '@/lib/format-bytes'
@@ -106,17 +106,16 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           <IconDownload className="h-3 w-3" />
         </button>
       )}
-      <Suspense fallback={<div className="w-full flex items-center justify-center text-xs text-muted-foreground" style={{ height }}>Loading chart...</div>}>
-        <ResponsiveContainer width="100%" height={height}>
-          <Chart data={chartData} margin={{ top: 8, right: hasReward ? 48 : 8, bottom: 8, left: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
-          <XAxis
-            dataKey="step"
-            tick={{ fontSize: 11 }}
-            stroke="hsl(var(--muted-foreground))"
-            tickLine={false}
-            label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }}
-          />
+      <ResponsiveContainer width="100%" height={height}>
+        <Chart data={chartData} margin={{ top: 8, right: hasReward ? 48 : 8, bottom: 8, left: 8 }}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
+        <XAxis
+          dataKey="step"
+          tick={{ fontSize: 11 }}
+          stroke="hsl(var(--muted-foreground))"
+          tickLine={false}
+          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }}
+        />
           <YAxis
             yAxisId="loss"
             tick={{ fontSize: 11 }}
@@ -145,7 +144,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
             }}
             labelStyle={{ color: 'hsl(var(--foreground))' }}
             labelFormatter={(label) => `Step ${label}`}
-            formatter={(value: number, name: string) => [value.toFixed(4), name]}
+            formatter={(value: any, name: any) => [Number(value).toFixed(4), name]}
           />
           {showLegend && <Legend />}
           {hasTrain && (
@@ -187,7 +186,6 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
         </Chart>
       </ResponsiveContainer>
-      </Suspense>
     </div>
   )
 })

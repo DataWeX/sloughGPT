@@ -124,9 +124,16 @@ describe('useTrainingPolling', () => {
 
       result.current.startStandardPoll('job1')
       await vi.advanceTimersByTimeAsync(3000)
-      await vi.advanceTimersByTimeAsync(3000)
 
-      expect(mockGetJob).toHaveBeenCalledTimes(2)
+      expect(mockGetJob).toHaveBeenCalledTimes(1)
+      expect(mockWriteTraining).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(30000)
+
+      expect(mockGetJob.mock.calls.length).toBeGreaterThanOrEqual(2)
+      expect(mockWriteTraining).toHaveBeenCalledWith(
+        expect.objectContaining({ progress: 60 }),
+      )
     })
 
     it('stops after MAX_POLL_RETRIES consecutive errors', async () => {
@@ -135,8 +142,9 @@ describe('useTrainingPolling', () => {
       const { result } = renderHook(() => useTrainingPolling())
 
       result.current.startStandardPoll('job1', { addToast })
+      // Exponential backoff: 3s, 6s, 12s, 24s, 30s cap...
       for (let i = 0; i < 11; i++) {
-        await vi.advanceTimersByTimeAsync(3000)
+        await vi.advanceTimersByTimeAsync(60000)
       }
 
       expect(addToast).toHaveBeenCalledWith(

@@ -40,7 +40,7 @@ interface ErrorReporterDeps {
 export class ErrorReporter {
   private _apiUrl: string
   private _persist: (message: string, source: string) => Promise<unknown>
-  private _logger: { warn: (msg: string, ctx?: unknown) => void } | null = null
+  private _logger: { warning: (msg: string, ctx?: unknown) => void } | null = null
   private _batch: ErrorReport[] = []
   private _timer: ReturnType<typeof setTimeout> | null = null
   private _recentMessages = new Map<string, number>()
@@ -70,9 +70,9 @@ export class ErrorReporter {
     window.addEventListener('beforeunload', () => this._flush())
   }
 
-  private _getLogger(): { warn: (msg: string, ctx?: unknown) => void } | null {
+  private _getLogger(): { warning: (msg: string, ctx?: unknown) => void } | null {
     if (!this._logger) {
-      import('@/lib/dev-log').then(m => { this._logger = m.logger }).catch(() => { /* fallback: no-op */ })
+      import('@/lib/dev-log').then(m => { this._logger = m.logger as unknown as { warning: (msg: string, ctx?: unknown) => void } }).catch(() => { /* fallback: no-op */ })
     }
     return this._logger
   }
@@ -126,7 +126,7 @@ export class ErrorReporter {
       const msg = report.message
       if (!msg.toLowerCase().includes('hydrat') && !msg.includes('did not match')) {
         this._persist(msg.slice(0, 500), 'unhandled').catch((e: unknown) => {
-          this._getLogger()?.warn('error-reporter: failed to persist error to IndexedDB', { error: e })
+          this._getLogger()?.warning('error-reporter: failed to persist error to IndexedDB', { error: e })
         })
       }
     }

@@ -29,7 +29,9 @@ export const TurboCard = memo(function TurboCard({
   const running = session.turboPhase === 'training'
 
   useEffect(() => {
-    experimentsController.list().then(setExperiments).catch(() => addToast('Could not load experiments', 'error'))
+    let active = true
+    experimentsController.list().then(data => { if (active) setExperiments(data) }).catch(() => { if (active) addToast('Could not load experiments', 'error') })
+    return () => { active = false }
   }, [addToast])
 
   const start = () => {

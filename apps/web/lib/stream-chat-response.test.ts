@@ -199,9 +199,82 @@ describe('streamChatResponse', () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: false,
       status: 503,
+      statusText: 'Service Unavailable',
       text: () => Promise.resolve('Service unavailable'),
     } as unknown as Response)
     await streamChatResponse(mockParams)
-    expect(mockParams.onError).toHaveBeenCalledWith(503, 'Service unavailable')
+    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'))
+  })
+
+  it('retries on transient 503 before calling onError', async () => {
+    const encoder = new TextEncoder()
+    const successStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"stream":"chat","phase":"STREAMING","status":"working","data":{"token":"Hi"},"message":""}\n'))
+        controller.enqueue(encoder.encode('data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{},"message":""}\n'))
+        controller.close()
+      },
+    })
+    const errorResponse = {
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+    } as unknown as Response
+    const successResponse = {
+      ok: true,
+      body: successStream,
+    } as unknown as Response
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(errorResponse)
+      .mockResolvedValueOnce(errorResponse)
+      .mockResolvedValue(successResponse)
+
+    await streamChatResponse(mockParams)
+
+    expect(mockParams.onToken).toHaveBeenCalledWith('Hi')
+    expect(mockParams.onComplete).toHaveBeenCalled()
+    expect(mockParams.onError).not.toHaveBeenCalled()
+  })
+
+  it('calls onError after exhausting retries on persistent 503', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+    } as unknown as Response)
+
+    await streamChatResponse(mockParams)
+
+    expect(mockParams.onError).toHaveBeenCalledTimes(1)
+    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'))
+  })
+
+  it('does not retry on non-retryable 400 error', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+    } as unknown as Response)
+
+    await streamChatResponse(mockParams)
+
+    expect(mockParams.onError).toHaveBeenCalledTimes(1)
+    expect(mockParams.onError).toHaveBeenCalledWith(400, expect.stringContaining('400'))
+  })
+
+  it('does not retry when signal is aborted', async () => {
+    const ac = new AbortController()
+    ac.abort()
+    vi.mocked(fetch).mockImplementation(() => {
+      const err = new DOMException('The operation was aborted.', 'AbortError')
+      return Promise.reject(err)
+    })
+
+    await streamChatResponse({ ...mockParams, signal: ac.signal })
+
+    expect(mockParams.onError).not.toHaveBeenCalled()
+    expect(mockParams.onComplete).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 })

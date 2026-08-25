@@ -217,6 +217,11 @@ export function useTrainingForm(
     (method !== 'vlm' || !!datasets.selectedDataset)
 
   const startTraining = useCallback(async (checkpointName?: string) => {
+    // Request notification permission on first training start
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
 

@@ -31,7 +31,26 @@ export const InferencePoolCard = memo(function InferencePoolCard({ onRefresh }: 
     }
   }, [addToast])
 
-  useEffect(() => { void fetchStatus() }, [fetchStatus])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const s = await systemController.getInferencePoolStatus()
+        if (active) setStatus(s)
+      } catch {
+        if (active) {
+          addToast('Could not load inference pool status', 'error')
+          setError('Failed to load')
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   if (loading) return null
 

@@ -196,7 +196,17 @@ export function useChatMessages(config: ChatMessagesConfig) {
         sessionIdRef.current,
         contextMessages.map(m => ({ role: m.role, content: m.content }))
       )) {
-        if (data.error) { showToast('Could not regenerate response', 'error'); break }
+        if (data.error) {
+          flushTokens()
+          setCurrentError(getErrorInfo(0, data.error))
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+              : msg
+          ))
+          showToast('Could not regenerate response', 'error')
+          break
+        }
         if (data.token) {
           tokenBufRef.current.push({ id: assistantId, text: data.token })
           scheduleFlush()
@@ -205,12 +215,93 @@ export function useChatMessages(config: ChatMessagesConfig) {
       }
     } catch (err) {
       _log.error('Regenerate error', { exception: String(err) })
+      setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId
+          ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+          : msg
+      ))
     } finally {
       setLoading(false)
       storeSessionContext(sessionIdRef.current, messagesRef.current)
     }
   }, [showToast, storeSessionContext, scheduleFlush])
   handleRegenerateRef.current = handleRegenerate
+
+  // ── Regenerate with Options ──────────────────────────────────────────────
+  const handleRegenerateWithOptions = useCallback(async (fromMessageId: string, options: { temperature?: number; maxTokens?: number }) => {
+    const currentMessages = messagesRef.current
+    if (currentMessages.length < 2) return
+    const targetIdx = currentMessages.findIndex(m => m.id === fromMessageId)
+    if (targetIdx <= 0) return
+    const contextMessages = currentMessages.slice(0, targetIdx + 1)
+    const assistantId = currentMessages[targetIdx].id
+    const overrideTemp = options.temperature ?? temperature
+
+    // Truncate conversation after this point if regenerating from a non-last message
+    if (targetIdx < currentMessages.length - 1) {
+      setMessages(prev => prev.slice(0, targetIdx).concat({
+        ...currentMessages[targetIdx],
+        content: '',
+        timestamp: new Date(),
+      }))
+    } else {
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId ? { ...msg, content: '', timestamp: new Date() } : msg
+      ))
+    }
+
+    setLoading(true)
+    try {
+      const appState = useAppStore.getState()
+      const customContext = appState.settings.customContext
+      const parts: string[] = []
+      if (customSystemPrompt) parts.push(`[System Override]\n${customSystemPrompt}`)
+      if (customContext) parts.push(`[Custom Instructions]\n${customContext}`)
+      if (currentSoul) {
+        parts.push(`[Personality: ${currentSoul.name}]`)
+        if (currentSoul.description) parts.push(currentSoul.description)
+        if (currentSoul.traits && currentSoul.traits.length > 0) {
+          parts.push(`Traits: ${currentSoul.traits.join(', ')}`)
+        }
+      }
+      const systemPrompt = parts.join('\n\n')
+
+      await streamChatResponse({
+        messages: contextMessages.map(m => ({ role: m.role, content: m.content })),
+        model, systemPrompt, maxTokens, temperature: overrideTemp,
+        userId: userIdRef.current, sessionId: sessionIdRef.current,
+        signal: loadingRef.current?.signal,
+        onToken: (token: string) => {
+          tokenBufRef.current.push({ id: assistantId, text: token })
+          scheduleFlush()
+        },
+        onComplete: () => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId ? { ...msg, content: msg.content || '(empty response)' } : msg
+          ))
+        },
+        onError: (_status, text) => {
+          setCurrentError(getErrorInfo(0, text || 'Stream error'))
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+              : msg
+          ))
+        },
+      })
+    } catch (err) {
+      setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId
+          ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+          : msg
+      ))
+    } finally {
+      setLoading(false)
+      storeSessionContext(sessionIdRef.current, messagesRef.current)
+    }
+  }, [model, temperature, maxTokens, currentSoul, customSystemPrompt, showToast, storeSessionContext, scheduleFlush])
 
   // ── Feedback ──────────────────────────────────────────────────────────────
   const handleFeedback = useCallback(async (messageId: string, rating: 'thumbs_up' | 'thumbs_down') => {
@@ -384,7 +475,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
         let streamComplete = false
         const finalSystemPrompt = knowledgeCtx ? systemPrompt + knowledgeCtx : systemPrompt
         await streamChatResponse({
-          messages: messagesWithNew.map(m => ({ role: m.role, content: m.content })),
+          messages: messagesWithNew
+            .filter(m => m.content.trim().length > 0 || m.role === 'user')
+            .map(m => ({ role: m.role, content: m.content })),
           model, systemPrompt: finalSystemPrompt, maxTokens, temperature,
           userId: userIdRef.current, sessionId: sessionIdRef.current,
           images: userImages.length > 0 ? userImages.map(img => img.dataUrl) : undefined,
@@ -609,6 +702,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     renameSession: sessions.renameSession,
     duplicateSession: sessions.duplicateSession,
     handleRegenerate,
+    handleRegenerateWithOptions,
     handleThumbsUp, handleThumbsDown,
     handleEditMessage,
     handleAddImage, handleRemoveImage,

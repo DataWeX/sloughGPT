@@ -282,6 +282,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number },
     addToast: TrainingToastFn, experimentId?: string,
   ) => {
+    // Request notification permission on first training start
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
     clearAllPolls()
     appShellStore.getState().resetTraining()
     writeTraining({ phase: 'TRAINING', method: 'turbo' })

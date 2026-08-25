@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { imagesController, type GalleryImage } from '@/lib/images-controller'
+import { imagesController, type GalleryImage, type ImageStyle } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -22,7 +22,7 @@ export default function ImagesPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
-  const [selectedStyle, setSelectedStyle] = useState('realistic')
+  const [selectedStyle, setSelectedStyle] = useState<ImageStyle>('realistic')
   const [generating, setGenerating] = useState(false)
   const [lastGenerated, setLastGenerated] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
@@ -53,7 +53,7 @@ export default function ImagesPage() {
     setGenError(null)
     setLastGenerated(null)
     try {
-      const data = await imagesController.generate(prompt, selectedStyle as any)
+      const data = await imagesController.generate(prompt, selectedStyle)
       setLastGenerated(data.image ?? null)
       await fetchData()
     } catch (err) {
@@ -90,7 +90,7 @@ export default function ImagesPage() {
               <button
                 key={s.key}
                 type="button"
-                onClick={() => setSelectedStyle(s.key)}
+                onClick={() => setSelectedStyle(s.key as ImageStyle)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                   selectedStyle === s.key
                     ? 'bg-primary/15 text-primary border border-primary/30'

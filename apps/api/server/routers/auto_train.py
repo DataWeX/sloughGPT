@@ -40,9 +40,14 @@ except ImportError:
             "stream": stream, "phase": phase, "status": status,
             "data": data or {}, "meta": meta or {}, "message": message
         }) + "\n\n"
-    def sse_error(stream, phase, error, meta=None) -> dict:
+    def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
         """sse_error."""
-        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
     def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done") -> dict:
         """sse_complete."""
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
@@ -902,7 +907,7 @@ class AutoTrainRouter:
             """stream."""
             if not self.state.config:
                 return StreamingResponse(
-                    iter([sse_error("auto-train", "IDLE", "No training state - call /auto-train/start first")]),
+                    iter([sse_error("auto-train", "IDLE", "No training state - call /auto-train/start first", code="E_STATE_IDLE", http_status=409)]),
                     media_type="text/event-stream",
                 )
 
@@ -993,7 +998,7 @@ class AutoTrainRouter:
                     while True:
                         if time.time() > deadline:
                             autotrain_logger.error("Auto-train SSE timed out after 1 hour - no completion event received", extra={"tag": "TRAIN"})
-                            yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
+                            yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out", code="E_TIMEOUT", http_status=408)
                             _finish_cm("failed", "SSE timeout")
                             return
                         if await request.is_disconnected():
@@ -1060,12 +1065,12 @@ class AutoTrainRouter:
                 except TimeoutError:
                     autotrain_logger.error("Auto-train SSE queue timed out - no event for 60s", extra={"tag": "TRAIN"})
                     _finish_cm("failed", "SSE queue timeout")
-                    yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
+                    yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds", code="E_TIMEOUT", http_status=408)
                 except Exception as e:
                     autotrain_logger.error("Auto-train SSE stream error: %s", e, extra={"tag": "TRAIN"})
                     _finish_cm("failed", str(e))
                     if not self.state.complete_enqueued:
-                        yield sse_error("auto-train", "FAILED", str(e))
+                        yield sse_error("auto-train", "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500)
                 finally:
                     _auto_train_cancel_event = None
                     _auto_train_pause_event = None
@@ -1455,7 +1460,7 @@ class AutoTrainRouter:
             """stream_from_sessions."""
             if not self.state.config or self.state.config.get("method") != "from-sessions":
                 return StreamingResponse(
-                    iter([sse_error("auto-train", "IDLE", "No training state - call /auto-train/from-sessions/start first")]),
+                    iter([sse_error("auto-train", "IDLE", "No training state - call /auto-train/from-sessions/start first", code="E_STATE_IDLE", http_status=409)]),
                     media_type="text/event-stream",
                 )
 
@@ -1547,7 +1552,7 @@ class AutoTrainRouter:
                     while True:
                         if time.time() > deadline:
                             _finish_cm("failed", "SSE timeout")
-                            yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out")
+                            yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out", code="E_TIMEOUT", http_status=408)
                             return
                         if await request.is_disconnected():
                             await tq.cancel(task_id)
@@ -1612,12 +1617,12 @@ class AutoTrainRouter:
 
                 except TimeoutError:
                     _finish_cm("failed", "SSE queue timeout")
-                    yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds")
+                    yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds", code="E_TIMEOUT", http_status=408)
                 except Exception as e:
                     autotrain_logger.error("From-sessions SSE stream error: %s", e, extra={"tag": "TRAIN"})
                     _finish_cm("failed", str(e))
                     if not self.state.complete_enqueued:
-                        yield sse_error("auto-train", "FAILED", str(e))
+                        yield sse_error("auto-train", "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500)
                 finally:
                     _auto_train_cancel_event = None
                     self.state.running = False

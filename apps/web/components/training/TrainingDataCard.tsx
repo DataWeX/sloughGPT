@@ -39,7 +39,35 @@ export function TrainingDataCard({ addToast }: Props) {
     }
   }, [page, search, addToast])
 
-  useEffect(() => { void fetchData() }, [fetchData])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const [statsResult, pairsResult] = await Promise.all([
+          trainingJobsController.getTrainingStats(),
+          trainingJobsController.listTrainingPairs({ limit, offset: page * limit, search: search || undefined }),
+        ])
+        if (active) {
+          setStats(statsResult)
+          setPairs(pairsResult.pairs ?? [])
+          setTotal(pairsResult.total ?? 0)
+        }
+      } catch {
+        if (active) {
+          addToast('Failed to load training data', 'error')
+          setError('Could not load training data')
+          setStats(null)
+          setPairs([])
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [page, search, addToast])
 
   const handleSearch = useCallback(() => {
     setPage(0)

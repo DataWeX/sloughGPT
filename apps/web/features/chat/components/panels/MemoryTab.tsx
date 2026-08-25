@@ -108,7 +108,39 @@ export function MemoryTab() {
     if (searchRef.current.trim()) void handleSearch(searchRef.current)
   }, [handleSearch])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const [statsResult, listResult] = await Promise.all([
+          memoryController.stats().catch(() => null),
+          memoryController.list().catch(() => ({ items: [], total: 0 })),
+        ])
+        if (active) {
+          setStats(statsResult)
+          setItems(listResult.items || [])
+          const pending = pendingFactRef.current
+          if (pending) {
+            pendingFactRef.current = null
+            const match = (listResult.items || []).find(i => i.content === pending)
+            if (match) {
+              setHighlightedId(match.id)
+              if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
+              highlightTimerRef.current = window.setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS)
+            }
+          }
+        }
+      } catch {
+        // all fetches already fail-soft above; nothing left to surface
+      } finally {
+        if (active) setLoading(false)
+      }
+      if (active && searchRef.current.trim()) void handleSearch(searchRef.current)
+    }
+    void load()
+    return () => { active = false }
+  }, [handleSearch])
 
   useEffect(() => {
     const unsubscribe = subscribeMemoryEvents((info) => {

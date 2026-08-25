@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textare
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { kbController, type KnowledgeItem, type KnowledgeStats, type TopicItem } from '@/lib/kb-controller'
+import { knowledgeController } from '@/lib/knowledge-controller'
 
 type Tab = 'browse' | 'add' | 'search' | 'gaps'
 
@@ -36,6 +37,14 @@ export default function KbPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+
+  const [relatedItems, setRelatedItems] = useState<KnowledgeItem[]>([])
+  const [relatedLoading, setRelatedLoading] = useState<string | null>(null)
+
+  const [urlInput, setUrlInput] = useState('')
+  const [urlLoading, setUrlLoading] = useState(false)
+
+  const [fileLoading, setFileLoading] = useState(false)
 
   const loadStats = useCallback(async () => {
     try {
@@ -137,6 +146,37 @@ export default function KbPage() {
     }
   }
 
+  const handleRelated = async (id: string) => {
+    if (relatedLoading === id) { setRelatedItems([]); setRelatedLoading(null); return }
+    setRelatedLoading(id)
+    try {
+      const result = await knowledgeController.related(id, 5)
+      setRelatedItems(result.items)
+    } catch {
+      addToast('Could not load related items', 'error')
+      setRelatedItems([])
+    } finally {
+      setUrlLoading(false)
+    }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setFileLoading(true)
+    try {
+      const result = await knowledgeController.ingestFile(file)
+      addToast(`Uploaded ${result.filename} (${result.stored} facts, ${result.total_chunks} chunks)`, 'success')
+      void loadItems()
+      void loadStats()
+    } catch (err) {
+      addToast(`File upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+    } finally {
+      setFileLoading(false)
+      e.target.value = ''
+    }
+  }
+
   const handleUpdate = async () => {
     if (!editingItem) return
     try {
@@ -162,16 +202,19 @@ export default function KbPage() {
     }
   }
 
-  const handleIngestUrl = async (url: string) => {
-    setLoading(true)
+  const handleIngestUrl = async () => {
+    if (!urlInput.trim()) return
+    setUrlLoading(true)
     try {
-      await kbController.ingestUrl(url)
+      const result = await kbController.ingestUrl(urlInput)
       addToast('URL ingested', 'success')
+      setUrlInput('')
       void loadItems()
+      void loadStats()
     } catch (e) {
       addToast(`Could not ingest URL: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
     } finally {
-      setLoading(false)
+      setUrlLoading(false)
     }
   }
 
@@ -309,6 +352,14 @@ export default function KbPage() {
                             size="sm"
                             variant="ghost"
                             className="h-6 px-1.5 text-[10px]"
+                            onClick={() => void handleRelated(item.id)}
+                          >
+                            {relatedLoading === item.id ? '...' : 'Related'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-1.5 text-[10px]"
                             onClick={() => { setEditingItem(item); setEditContent(item.content); setEditTopic(item.topic) }}
                           >
                             Edit
@@ -329,6 +380,24 @@ export default function KbPage() {
               </div>
             )}
 
+            {relatedItems.length > 0 && (
+              <div className="rounded border border-border/50 bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">Related items ({relatedItems.length})</p>
+                  <Button size="sm" variant="ghost" className="text-[10px] h-5" onClick={() => { setRelatedItems([]); setRelatedLoading(null) }}>Clear</Button>
+                </div>
+                {relatedItems.map(ri => (
+                  <div key={ri.id} className="text-xs space-y-0.5">
+                    <p className="text-foreground/80">{ri.content.slice(0, 150)}{ri.content.length > 150 ? '...' : ''}</p>
+                    <div className="flex gap-2">
+                      <span className="text-[10px] text-primary">{ri.topic}</span>
+                      <span className="text-[10px] text-muted-foreground">{ri.source}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex justify-center gap-2">
               <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</Button>
               <span className="text-xs text-muted-foreground self-center">Page {page + 1}</span>
@@ -338,6 +407,7 @@ export default function KbPage() {
         )}
 
         {tab === 'add' && (
+          <>
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Add Knowledge Entry</CardTitle>
@@ -368,6 +438,43 @@ export default function KbPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Import from URL</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">Fetch content from a URL and add it to the knowledge base.</p>
+              <div className="flex gap-2">
+                <Input
+                  value={urlInput}
+                  onChange={e => setUrlInput(e.target.value)}
+                  placeholder="https://example.com/article"
+                  className="h-8 text-xs flex-1"
+                  onKeyDown={e => e.key === 'Enter' && void handleIngestUrl()}
+                />
+                <Button size="sm" onClick={() => void handleIngestUrl()} disabled={urlLoading || !urlInput.trim()} className="shrink-0">
+                  {urlLoading ? 'Importing...' : 'Import'}
+                </Button>
+               </div>
+            </CardContent>
+           </Card>
+
+           <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Upload File</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">Upload a text file to add its contents to the knowledge base.</p>
+              <div className="flex items-center gap-2">
+                <label className="flex h-8 cursor-pointer items-center gap-2 rounded border border-border px-3 text-xs hover:bg-muted/30">
+                  <input type="file" accept=".txt,.md,.json,.csv" className="hidden" onChange={e => void handleFileUpload(e)} disabled={fileLoading} />
+                  {fileLoading ? 'Uploading...' : 'Choose file'}
+                </label>
+              </div>
+            </CardContent>
+           </Card>
+          </>
         )}
 
         {tab === 'search' && (

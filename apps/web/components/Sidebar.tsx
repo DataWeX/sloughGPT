@@ -6,6 +6,7 @@ import { cn, Button } from '@sloughgpt/strui'
 import { IconClose } from '@/components/icons/NavIcons'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
+import { TrainingIndicator } from './TrainingIndicator'
 import { useLocale } from '@/hooks/useLocale'
 import { NAV_SECTIONS, SIDEBAR_ICONS } from '@/lib/navigation'
 
@@ -135,7 +136,13 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
 
         {!isDrawer && (
           <div className={cn('shrink-0 border-t border-border/50 px-3 py-3', isCollapsed && 'w-fit')}>
+            {!isCollapsed && <TrainingIndicator />}
             <ThemeSwitcher />
+          </div>
+        )}
+        {isDrawer && (
+          <div className="shrink-0 border-t border-border/50 px-3 py-3">
+            <TrainingIndicator />
           </div>
         )}
       </aside>

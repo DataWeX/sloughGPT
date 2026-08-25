@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, memo, Suspense } from 'react'
-import { ComposedChart, Line, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from '@/lib/recharts-lazy'
+import { useMemo, memo } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
 interface TrendPoint {
@@ -82,11 +82,10 @@ export const TrendChart = memo(function TrendChart({ liveHealth }: TrendChartPro
   }
 
   return (
-    <Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-muted-foreground">Loading chart...</div>}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
-          <XAxis
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
+        <XAxis
             dataKey="ago"
             tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
             interval="preserveStartEnd"
@@ -143,6 +142,5 @@ export const TrendChart = memo(function TrendChart({ liveHealth }: TrendChartPro
         />
       </ComposedChart>
     </ResponsiveContainer>
-    </Suspense>
   )
 })

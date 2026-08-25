@@ -34,7 +34,9 @@ export function KnowledgeTab({
   }, [knowledge, knowledgeSearch])
 
   useEffect(() => {
-    chatDB.getKnowledge().then(items => setKnowledge(items)).catch(e => logger.debug('Could not load knowledge from DB', { exception: String(e) }))
+    let active = true
+    chatDB.getKnowledge().then(items => { if (active) setKnowledge(items) }).catch(e => { if (active) logger.debug('Could not load knowledge from DB', { exception: String(e) }) })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {

@@ -33,18 +33,42 @@ export function SpacedReviewCard({ addToast }: Props) {
     }
   }, [addToast])
 
-  useEffect(() => { void fetchDue() }, [fetchDue])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await knowledgeController.getDueReviews()
+        if (active) {
+          setDueIds(result.due_ids ?? [])
+          setCurrentIndex(0)
+          setCompleted(0)
+          setShowAnswer(false)
+        }
+      } catch {
+        if (active) {
+          addToast('Could not load review items', 'error')
+          setDueIds([])
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   useEffect(() => {
     if (dueIds.length === 0 || currentIndex >= dueIds.length) {
       setCurrentItem(null)
       return
     }
+    let active = true
     const id = dueIds[currentIndex]
     knowledgeController.list(1, 0).then(items => {
-      const item = items.find(i => i.id === id)
-      setCurrentItem(item ?? null)
-    }).catch(() => setCurrentItem(null))
+      if (active) setCurrentItem(items.find(i => i.id === id) ?? null)
+    }).catch(() => { if (active) setCurrentItem(null) })
+    return () => { active = false }
   }, [dueIds, currentIndex])
 
   const handleReview = useCallback(async (performance: number) => {

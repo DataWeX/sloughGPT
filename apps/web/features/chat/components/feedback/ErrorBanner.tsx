@@ -54,6 +54,9 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
           <p className="mt-0.5 text-xs text-destructive/70">
             {error.message}
           </p>
+          <p className="mt-0.5 text-[10px] text-destructive/50">
+            {info.suggestion}
+          </p>
         </div>
         <div className="flex shrink-0 gap-1.5 sm:gap-2">
           {error.canRetry && (
@@ -86,14 +89,32 @@ export function getErrorInfo(status: number, message?: string): { type: ErrorTyp
   if (status === 0) {
     return { type: 'network', message: 'Could not connect to the service.', canRetry: true }
   }
+  if (status === 400) {
+    return { type: 'server', message: message || 'Invalid request.', canRetry: false }
+  }
   if (status === 404) {
     return { type: 'server', message: 'Chat endpoint not found. Please try again.', canRetry: true }
+  }
+  if (status === 408) {
+    return { type: 'timeout', message: message || 'Request timed out.', canRetry: true }
+  }
+  if (status === 422) {
+    return { type: 'server', message: message || 'Invalid request format.', canRetry: false }
+  }
+  if (status === 429) {
+    return { type: 'server', message: message || 'Too many requests. Please slow down.', canRetry: true }
   }
   if (status === 500) {
     return { type: 'server', message: message || 'Internal server error.', canRetry: true }
   }
+  if (status === 502) {
+    return { type: 'server', message: message || 'Service temporarily unavailable.', canRetry: true }
+  }
   if (status === 503) {
     return { type: 'model', message: message || 'Model not available.', canRetry: true }
+  }
+  if (status === 504) {
+    return { type: 'timeout', message: message || 'Generation timed out.', canRetry: true }
   }
   return { type: 'unknown', message: message || `HTTP ${status}`, canRetry: true }
 }

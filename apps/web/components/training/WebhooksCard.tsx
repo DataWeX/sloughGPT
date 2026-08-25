@@ -84,8 +84,42 @@ export function WebhooksCard({ addToast }: Props) {
     }
   }, [])
 
-  useEffect(() => { void fetchWebhooks() }, [fetchWebhooks])
-  useEffect(() => { void fetchRetryData() }, [fetchRetryData])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await trainingJobsController.listWebhooks()
+        if (active) setWebhooks(result ?? [])
+      } catch {
+        if (active) setWebhooks([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const [retries, deads, statsResult] = await Promise.all([
+          trainingJobsController.getWebhookRetryQueue(),
+          trainingJobsController.getWebhookDeadLetters(),
+          trainingJobsController.webhookStats(),
+        ])
+        if (active) {
+          setRetryQueue(retries.retries ?? [])
+          setDeadLetters(deads.dead_letters ?? [])
+          setStats(statsResult)
+        }
+      } catch { /* silent */ }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleAdd = useCallback(async () => {
     if (!newUrl.trim()) return

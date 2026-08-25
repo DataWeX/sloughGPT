@@ -30,6 +30,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
   useEffect(() => {
     if (!datasetId) return
 
+    let active = true
     const fetchData = async () => {
       setLoading(true)
       setError(null)
@@ -37,16 +38,19 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
         const [previewData] = await Promise.all([
           datasetController.preview(datasetId),
         ])
-        setPreview(previewData)
-        setValidation(null)
+        if (active) {
+          setPreview(previewData)
+          setValidation(null)
+        }
       } catch (err) {
-        setError(extractErrorMessage(err, 'Could not load preview'))
+        if (active) setError(extractErrorMessage(err, 'Could not load preview'))
       } finally {
-        setLoading(false)
+        if (active) setLoading(false)
       }
     }
 
-    fetchData()
+    void fetchData()
+    return () => { active = false }
   }, [datasetId])
 
   if (loading) {

@@ -38,7 +38,23 @@ export function FineTunedModelsCard({
     }
   }, [])
 
-  useEffect(() => { void fetchModels() }, [fetchModels])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const list = await trainingJobsController.listFineTuned()
+        if (active) setModels(list)
+      } catch (e) {
+        if (active) setError(extractErrorMessage(e, 'Could not load models'))
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleLoad = async (name: string) => {
     setLoadingName(name)

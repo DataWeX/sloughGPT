@@ -304,7 +304,7 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
   }
 
   if (!res.ok || !res.body) {
-    yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}` }
+    yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`, data: { http_status: res.status, error: `HTTP ${res.status}` } }
     return
   }
 

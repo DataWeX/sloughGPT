@@ -96,8 +96,29 @@ export function VisionStudioDialog({
   }, [])
 
   useEffect(() => {
-    if (open) refreshReport()
-  }, [open, refreshReport])
+    if (!open) return
+    let active = true
+    const load = async () => {
+      try {
+        const { multimodalController } = await import('@/lib/multimodal-controller')
+        const report = await multimodalController.getTrainingReport()
+        if (active) {
+          setTrainingReport({
+            images_learned: report.images_learned,
+            vocab_size: report.vocab_size,
+            caption_history: report.caption_history,
+            accuracy_history: report.accuracy_history,
+            mean_accuracy: report.mean_accuracy,
+            last_accuracy: report.last_accuracy,
+          })
+        }
+      } catch {
+        if (active) logger.warning('VisionStudioDialog: failed to fetch training report', {})
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [open])
 
   const processFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) return

@@ -13,6 +13,8 @@ import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { LossChart, type LossPoint } from '@/components/training/LossChart'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/components/training/formatDuration'
+import { TrainingLogCard } from '@/components/training/TrainingLogCard'
+import { StopTrainingButton } from '@/components/training/StopTrainingButton'
 import { useApiReady } from '@/hooks/useLiveStatus'
 
 type InputMode = 'text' | 'dataset' | 'checkpoint'
@@ -31,10 +33,6 @@ export default function AutoTrainPage() {
   const [learningRate, setLearningRate] = useState(1e-3)
   const [teacherModel, setTeacherModel] = useState('gpt2')
   const [temperature, setTemperature] = useState(1.0)
-  const [jobLogs, setJobLogs] = useState<string[]>([])
-  const [showLogs, setShowLogs] = useState(false)
-  const [logsLoading, setLogsLoading] = useState(false)
-  const logsEndRef = useRef<HTMLDivElement>(null)
 
   const trainingRunning = session.trainingRunning
 
@@ -42,10 +40,6 @@ export default function AutoTrainPage() {
     void datasets.fetchDatasets()
     void checkpoints.fetchCheckpoints()
   }, [])
-
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [jobLogs])
 
   const canStart = !trainingRunning && (
     (inputMode === 'text' && sourceText.trim().length > 0) ||
@@ -131,26 +125,54 @@ export default function AutoTrainPage() {
     }
   }, [addToast, checkpoints])
 
-  const fetchLogs = useCallback(async () => {
-    setLogsLoading(true)
+  const [selectedCps, setSelectedCps] = useState<Set<string>>(new Set())
+
+  const toggleCpSelect = useCallback((name: string) => {
+    setSelectedCps(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }, [])
+
+  const batchDeleteCheckpoints = useCallback(async () => {
+    if (selectedCps.size === 0) return
     try {
-      const logs = await trainingJobsController.getTrainingLog()
-      setJobLogs(logs)
+      const names = Array.from(selectedCps)
+      await trainingJobsController.deleteCheckpointsBatch(names)
+      addToast(`Deleted ${names.length} checkpoints`, 'success')
+      setSelectedCps(new Set())
+      void checkpoints.fetchCheckpoints()
     } catch {
-      addToast('Could not fetch logs', 'error')
-    } finally {
-      setLogsLoading(false)
+      addToast('Batch delete failed', 'error')
+    }
+  }, [selectedCps, addToast, checkpoints])
+
+  const downloadCheckpoint = useCallback(async (name: string) => {
+    try {
+      const blob = await trainingJobsController.downloadCheckpoint(name)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = name; a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      addToast('Download failed', 'error')
     }
   }, [addToast])
 
-  const toggleLogs = useCallback(async () => {
-    if (showLogs) {
-      setShowLogs(false)
-      return
+  const [checkpointInfo, setCheckpointInfo] = useState<Record<string, unknown> | null>(null)
+  const [checkpointInfoName, setCheckpointInfoName] = useState('')
+
+  const fetchCheckpointInfo = useCallback(async (name: string) => {
+    setCheckpointInfoName(name)
+    try {
+      const info = await trainingJobsController.getCheckpointInfo(name)
+      setCheckpointInfo(info)
+    } catch {
+      addToast('Could not load checkpoint info', 'error')
+      setCheckpointInfo(null)
     }
-    await fetchLogs()
-    setShowLogs(true)
-  }, [showLogs, fetchLogs])
+  }, [addToast])
 
   const tickRef = useRef<() => void>(() => {})
   tickRef.current = () => {
@@ -178,9 +200,6 @@ export default function AutoTrainPage() {
       subtitle="Teach your agent from data with knowledge distillation"
       headerRight={
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={toggleLogs}>
-            {showLogs ? 'Hide logs' : 'Show logs'}
-          </Button>
           <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchCheckpoints() }}>
             Refresh
           </Button>
@@ -237,7 +256,7 @@ export default function AutoTrainPage() {
                 {session.message && <span className="col-span-3 truncate">{session.message}</span>}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="destructive" size="sm" onClick={stopTraining}>Stop</Button>
+                <StopTrainingButton onStop={stopTraining} addToast={addToast} />
                 {session.paused ? (
                   <Button variant="outline" size="sm" onClick={resumeTraining}>Resume</Button>
                 ) : (
@@ -352,42 +371,43 @@ export default function AutoTrainPage() {
         </Card>
       )}
 
-      {showLogs && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Training logs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {logsLoading ? (
-              <p className="text-xs text-muted-foreground">Loading logs...</p>
-            ) : jobLogs.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No logs yet.</p>
-            ) : (
-              <div className="max-h-64 overflow-y-auto rounded bg-muted/30 p-3 font-mono text-xs">
-                {jobLogs.map((line, i) => (
-                  <div key={i}>{line}</div>
-                ))}
-                <div ref={logsEndRef} />
-              </div>
-            )}
-            <Button size="sm" variant="ghost" className="mt-2" onClick={fetchLogs} disabled={logsLoading}>
-              Refresh logs
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <TrainingLogCard trainingRunning={trainingRunning} />
 
       {checkpoints.checkpoints.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Checkpoints ({checkpoints.checkpoints.length})</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Checkpoints ({checkpoints.checkpoints.length})</CardTitle>
+              <div className="flex gap-1">
+                {selectedCps.size > 0 && (
+                  <Button size="sm" variant="ghost" className="text-destructive text-[10px]" onClick={() => void batchDeleteCheckpoints()}>
+                    Delete {selectedCps.size}
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" className="text-[10px]" onClick={() => {
+                  if (selectedCps.size === checkpoints.checkpoints.length) setSelectedCps(new Set())
+                  else setSelectedCps(new Set(checkpoints.checkpoints.map(c => c.name)))
+                }}>
+                  {selectedCps.size === checkpoints.checkpoints.length ? 'Deselect all' : 'Select all'}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
               {checkpoints.checkpoints.map(c => (
-                <div key={c.name} className="flex items-center justify-between rounded border p-3 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{c.name}</p>
+                <div key={c.name} className={`flex items-center justify-between rounded border p-3 text-sm ${selectedCps.has(c.name) ? 'border-primary bg-primary/5' : ''}`}>
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedCps.has(c.name)}
+                      onChange={() => toggleCpSelect(c.name)}
+                      aria-label={`Select checkpoint ${c.name}`}
+                      className="h-3.5 w-3.5 rounded border-border"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{c.name}</p>
+                    </div>
                     <div className="flex gap-3 text-xs text-muted-foreground">
                       {c.loss != null && <span>Loss {c.loss.toFixed(4)}</span>}
                       {c.steps != null && <span>{c.steps} steps</span>}
@@ -396,6 +416,8 @@ export default function AutoTrainPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => void fetchCheckpointInfo(c.name)}>Info</Button>
+                    <Button size="sm" variant="ghost" onClick={() => void downloadCheckpoint(c.name)}>Download</Button>
                     <Button size="sm" variant="ghost" onClick={() => loadCheckpoint(c.name)}>Load</Button>
                     <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteCheckpoint(c.name)}>Delete</Button>
                   </div>
@@ -404,6 +426,29 @@ export default function AutoTrainPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {checkpointInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setCheckpointInfo(null)}>
+          <Card className="w-full max-w-lg max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Checkpoint: {checkpointInfoName}</CardTitle>
+                <Button size="sm" variant="ghost" onClick={() => setCheckpointInfo(null)}>Close</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1.5 text-xs">
+                {Object.entries(checkpointInfo).map(([k, v]) => (
+                  <div key={k} className="flex justify-between border-b border-border/30 py-1">
+                    <span className="text-muted-foreground">{k}</span>
+                    <span className="font-mono text-right">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </PageContainer>
   )

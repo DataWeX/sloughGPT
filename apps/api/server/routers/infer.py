@@ -201,7 +201,7 @@ class InferRouter:
             if self._get_model() is None:
                 async def error_stream() -> AsyncIterator[str]:
                     """error_stream."""
-                    yield self._sse_error("infer", "IDLE", "Model still loading — please wait.")
+                    yield self._sse_error("infer", "IDLE", "Model still loading — please wait.", code="MODEL_LOADING", http_status=503)
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
 
             async def generate() -> AsyncIterator[str]:
@@ -209,7 +209,7 @@ class InferRouter:
                 from domains.models.provider import get_provider
                 provider = get_provider("default")
                 if provider is None:
-                    yield self._sse_error("infer", "IDLE", "No provider available")
+                    yield self._sse_error("infer", "IDLE", "No provider available", code="E_INFRA_REGISTRY", http_status=503)
                     return
 
                 provider_messages = [{"role": "user", "content": req.prompt}]
@@ -414,8 +414,13 @@ class InferRouter:
             m["elapsed_ms"] = round(elapsed_ms, 1)
         return self._sse_event(stream, phase, status, {"token": token}, m, "")
 
-    def _sse_error(self, stream: str, phase: str, error: str, meta: dict = None) -> str:
-        return self._sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+    def _sse_error(self, stream: str, phase: str, error: str, meta: dict = None, code: str = None, http_status: int = None) -> str:
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return self._sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
 
 
 router = InferRouter().router

@@ -1274,7 +1274,8 @@ class MobileRouter:
 
         if len(pairs) < 5:
             yield sse_error("training", "GENERATE_DATA",
-                             f"Need at least 5 training pairs, found {len(pairs)} in server logs")
+                             f"Need at least 5 training pairs, found {len(pairs)} in server logs",
+                             code="E_VAL_REQUEST", http_status=400)
             return
 
         # Emit GENERATE_DATA phase
@@ -1314,7 +1315,8 @@ class MobileRouter:
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not venv_python.exists():
-            yield sse_error("training", "TRAIN", "Training environment not found (.venv missing)")
+            yield sse_error("training", "TRAIN", "Training environment not found (.venv missing)",
+                             code="E_ENV_MISSING", http_status=500)
             return
 
         # Launch subprocess with streaming stdout
@@ -1355,7 +1357,8 @@ class MobileRouter:
             while True:
                 if _time.time() > deadline:
                     proc.kill()
-                    yield sse_error("training", "TRAIN", "Training timed out (10 min)")
+                    yield sse_error("training", "TRAIN", "Training timed out (10 min)",
+                                    code="E_TIMEOUT", http_status=408)
                     return
 
                 # Check client disconnect periodically
@@ -1414,7 +1417,8 @@ class MobileRouter:
             if proc.returncode != 0:
                 stderr_tail = (await asyncio.to_thread(proc.stderr.read))[-500:] if proc.stderr else ""
                 logger.error("Training subprocess failed (rc=%d): %s", proc.returncode, stderr_tail, extra={"tag": "REQ"})
-                yield sse_error("training", "TRAIN", f"Training failed (exit code {proc.returncode})")
+                yield sse_error("training", "TRAIN", f"Training failed (exit code {proc.returncode})",
+                                code="E_INFRA_GENERATION", http_status=500)
                 return
 
             # Parse final result if not already captured from stdout
@@ -1422,7 +1426,8 @@ class MobileRouter:
                 # Try reading any remaining stderr for errors
                 stderr_tail = (await asyncio.to_thread(proc.stderr.read))[-500:] if proc.stderr else ""
                 yield sse_error("training", "TRAIN",
-                                f"Training produced no result output. stderr: {stderr_tail[:200]}")
+                                f"Training produced no result output. stderr: {stderr_tail[:200]}",
+                                code="E_INFRA_GENERATION", http_status=500)
                 return
 
             elapsed_ms = round((_time.time() - t0) * 1000)
@@ -1443,7 +1448,8 @@ class MobileRouter:
 
         except Exception as e:
             logger.error("Session training failed: %s", e, extra={"tag": "REQ"})
-            yield sse_error("training", "TRAIN", f"Training failed: {e}")
+            yield sse_error("training", "TRAIN", f"Training failed: {e}",
+                            code="E_INFRA_GENERATION", http_status=500)
         finally:
             if proc.poll() is None:
                 proc.kill()

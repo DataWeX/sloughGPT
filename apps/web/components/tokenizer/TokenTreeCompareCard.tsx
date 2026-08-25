@@ -62,8 +62,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, load])
 
   const handleCompare = async () => {
     if (!a || !b || a === b) return

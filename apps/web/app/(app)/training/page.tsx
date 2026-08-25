@@ -27,6 +27,11 @@ import { RecoveryCard } from '@/components/training/RecoveryCard'
 import { WebhooksCard } from '@/components/training/WebhooksCard'
 import { TrainingBuildsCard } from '@/components/training/TrainingBuildsCard'
 import { TrainingDataCard } from '@/components/training/TrainingDataCard'
+import { SessionTrainingCard } from '@/components/training/SessionTrainingCard'
+import { TrainingLogCard } from '@/components/training/TrainingLogCard'
+import { TrainingHistoryView } from '@/components/training/TrainingHistoryView'
+import { TrainingAnalyticsCard } from '@/components/training/TrainingAnalyticsCard'
+import { StopTrainingButton } from '@/components/training/StopTrainingButton'
 
 type ManualTab = 'train' | 'results' | 'settings'
 
@@ -209,21 +214,13 @@ export default function TrainingPage() {
       headerRight={
         <div className="flex items-center gap-2">
           {runningJob && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={async () => {
-                try {
-                  await trainingJobsController.stop(runningJob.id)
-                  addToast('Training stopped', 'success')
-                  void checkpoints.fetchJobs()
-                } catch {
-                  addToast('Could not stop training', 'error')
-                }
+            <StopTrainingButton
+              onStop={async () => {
+                await trainingJobsController.stop(runningJob.id)
+                void checkpoints.fetchJobs()
               }}
-            >
-              Stop training
-            </Button>
+              addToast={addToast}
+            />
           )}
           <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
           {completedCount > 0 && (
@@ -253,6 +250,8 @@ export default function TrainingPage() {
         <TrainingSummaryCard checkpoints={checkpoints.checkpoints} />
 
         <TrainingHealthCard checkpoints={checkpoints.checkpoints} />
+
+        <TrainingLogCard trainingRunning={session.trainingRunning} />
 
         {/* Manual sub-tabs */}
         <div className="flex flex-wrap gap-1.5">
@@ -297,11 +296,20 @@ export default function TrainingPage() {
             {/* Results tab */}
             {manualTab === 'results' && (
               <>
+                {/* Training analytics */}
+                <TrainingAnalyticsCard addToast={addToast} />
+
+                {/* Training history */}
+                <TrainingHistoryView addToast={addToast} />
+
                 {/* All builds */}
                 <TrainingBuildsCard addToast={addToast} />
 
                 {/* Training data */}
                 <TrainingDataCard addToast={addToast} />
+
+                {/* Session training */}
+                <SessionTrainingCard addToast={addToast} />
               </>
             )}
 

@@ -71,7 +71,7 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                 visionVocabSize={ctx.visionVocabSize}
                 sessionId={sessionId}
                 onGeneratedImage={(dataUrl, prompt) => {
-                  const event = new CustomEvent('generate-image', { detail: { dataUrl, prompt } })
+                  const event = new CustomEvent('insert-generated-image', { detail: { dataUrl, prompt } })
                   window.dispatchEvent(event)
                 }}
                 onSendText={(text) => {

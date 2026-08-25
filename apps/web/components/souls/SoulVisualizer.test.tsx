@@ -8,7 +8,7 @@ import PersonalitySummary from './PersonalitySummary'
 import SoulVisualizer from './SoulVisualizer'
 
 // ── Mock recharts ────────────────────────────────────────────────────
-vi.mock('recharts', () => {
+vi.mock('@/lib/recharts-lazy', () => {
   const MockResponsiveContainer = ({ children }: any) => <div data-testid="responsive-container">{children}</div>
   const MockRadarChart = ({ children }: any) => <div data-testid="radar-chart">{children}</div>
   const MockRadar = () => <div data-testid="radar" />

@@ -125,7 +125,7 @@ export const useOperationsStore = Object.assign(
 const ACTIVE_STATUSES = ['registered', 'running', 'cancelling'] as const
 
 function _activeFilter(op: Operation, type?: OpType): boolean {
-  return ACTIVE_STATUSES.includes(op.status as any) && (!type || op.type === type)
+  return (ACTIVE_STATUSES as readonly string[]).includes(op.status) && (!type || op.type === type)
 }
 
 export function useActiveOperations(type?: OpType): Operation[] {

@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Soul, Checkpoint } from '@/lib/souls-controller'
 
@@ -9,7 +10,7 @@ interface ComposableLayersCardProps {
   checkpoints: Checkpoint[]
 }
 
-export default function ComposableLayersCard({ modelsCount, soulsCount, checkpoints }: ComposableLayersCardProps) {
+export default memo(function ComposableLayersCard({ modelsCount, soulsCount, checkpoints }: ComposableLayersCardProps) {
   const layers = [
     { title: 'Base Models', desc: 'Load any HuggingFace model as the foundation layer', icon: '🧠', count: modelsCount },
     { title: 'Personalities', desc: 'Soul profiles that wrap the model with traits & voice', icon: '🎭', count: soulsCount },
@@ -36,4 +37,4 @@ export default function ComposableLayersCard({ modelsCount, soulsCount, checkpoi
       </CardContent>
     </Card>
   )
-}
+})

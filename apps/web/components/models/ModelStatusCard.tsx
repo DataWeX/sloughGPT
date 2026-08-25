@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Chip, Skeleton } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
@@ -19,7 +20,7 @@ interface ModelStatusCardProps {
   checkpointsLoading: boolean
 }
 
-export default function ModelStatusCard({
+export default memo(function ModelStatusCard({
   isOnline, health, currentSoul, activeCheckpoint,
   modelsCount, soulsCount, checkpointsCount,
   modelsLoading, soulsLoading, checkpointsLoading,
@@ -67,4 +68,4 @@ export default function ModelStatusCard({
       </KpiGrid>
     </>
   )
-}
+})

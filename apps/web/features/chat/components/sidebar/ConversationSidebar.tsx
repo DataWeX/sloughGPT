@@ -8,6 +8,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
 import type { Conversation } from '@/lib/session-controller'
+import { sessionController } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 import { downloadJson, downloadMarkdown } from '@/lib/download-utils'
 import { MS_PER_DAY } from '@/lib/format-bytes'
@@ -67,6 +68,9 @@ function SidebarContent({
   const SORT_KEY = 'sloughgpt:sidebar-sort'
 
   const [search, setSearch] = useState('')
+  const [serverSearchResults, setServerSearchResults] = useState<Conversation[] | null>(null)
+  const [serverSearchLoading, setServerSearchLoading] = useState(false)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>(() => {
     if (typeof window === 'undefined') return 'updated'
@@ -97,13 +101,46 @@ function SidebarContent({
   }, [conversations, sortMode])
 
   const q = search.toLowerCase().trim()
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    if (!q || q.length < 2) {
+      setServerSearchResults(null)
+      setServerSearchLoading(false)
+      return
+    }
+    setServerSearchLoading(true)
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await sessionController.search(q, 30)
+        setServerSearchResults(results.map(r => ({
+          id: r.id,
+          name: r.name || 'Untitled',
+          session_id: r.id,
+          messages: r.matches?.map(m => ({ id: m.timestamp, role: m.role, content: m.content })) || [],
+          updated_at: r.updated_at,
+          created_at: r.created_at,
+          pinned: false,
+          starred: false,
+          message_count: r.match_count,
+        })))
+      } catch {
+        setServerSearchResults(null)
+      } finally {
+        setServerSearchLoading(false)
+      }
+    }, 300)
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
+  }, [q])
+
   const filtered = useMemo(() => {
     if (!q) return sorted
+    if (serverSearchResults) return serverSearchResults
     return sorted.filter(c =>
       c.name?.toLowerCase().includes(q) ||
       c.messages?.some(m => m.content?.toLowerCase().includes(q))
     )
-  }, [sorted, q])
+  }, [sorted, q, serverSearchResults])
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
@@ -285,9 +322,24 @@ function SidebarContent({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations…"
-            className="w-full h-8 rounded-md bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
+            className="w-full h-8 rounded-md bg-muted/50 pl-7 pr-7 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
             aria-label="Search conversations"
           />
+          {serverSearchLoading && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="h-3 w-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+            </div>
+          )}
+          {search && !serverSearchLoading && (
+            <button
+              type="button"
+              onClick={() => { setSearch(''); setServerSearchResults(null) }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <IconX className="h-3 w-3" />
+            </button>
+          )}
         </div>
       )}
       <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1 pb-4">
@@ -608,6 +660,16 @@ const ConvRow = memo(function ConvRow({
       onClick={!editing ? onSelect : undefined}
       role="button"
       tabIndex={0}
+      onFocus={(e) => {
+        // Show action buttons when the row receives focus (keyboard navigation)
+        const buttons = e.currentTarget.querySelectorAll<HTMLElement>('.sm\\:opacity-0')
+        buttons.forEach(btn => btn.classList.remove('sm:opacity-0'))
+      }}
+      onBlur={(e) => {
+        // Restore opacity when focus leaves the row
+        const buttons = e.currentTarget.querySelectorAll<HTMLElement>('.sm\\:opacity-0')
+        buttons.forEach(btn => btn.classList.add('sm:opacity-0'))
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(); return }
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

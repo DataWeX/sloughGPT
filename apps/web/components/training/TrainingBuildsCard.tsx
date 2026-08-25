@@ -36,7 +36,22 @@ export function TrainingBuildsCard({ addToast }: Props) {
     }
   }, [])
 
-  useEffect(() => { void fetchBuilds() }, [fetchBuilds])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await trainingJobsController.listBuilds()
+        if (active) setBuilds(result ?? [])
+      } catch {
+        if (active) setBuilds([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleLoad = useCallback(async (name: string) => {
     setLoadingModel(name)

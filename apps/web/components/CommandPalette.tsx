@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { cn } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
-import { soulsController } from '@/lib/souls-controller'
+import { soulsController, type Soul } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useModels, useSouls } from '@/lib/query/api-hooks'
 import { useToastStore } from '@/lib/toast-store'
@@ -46,15 +46,16 @@ export function CommandPalette() {
   }, [modelsData])
 
   const souls = useMemo(() => {
-    const data = soulsData as any
-    const list = data?.souls || []
-    return list.map((soul: any) => ({ name: soul.name, description: soul.description }))
+    const list = soulsData?.souls || []
+    return list.map((soul: Soul) => ({ name: soul.name, description: soul.description }))
   }, [soulsData])
 
   useEffect(() => {
+    let active = true
     sessionController.list().then(sessions => {
-      setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
-    }).catch(() => { if (!loadError) setLoadError('Some data unavailable') })
+      if (active) setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
+    }).catch(() => { if (active && !loadError) setLoadError('Some data unavailable') })
+    return () => { active = false }
   }, [])
 
   const actions: CommandAction[] = useMemo(() => {

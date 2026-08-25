@@ -33,9 +33,14 @@ except ImportError:
     def sse_token(stream, token, meta=None) -> dict:
         """sse_token."""
         return sse_event(stream, "STREAMING", "working", {"token": token}, meta or {})
-    def sse_error(stream, phase, error, meta=None) -> dict:
+    def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
         """sse_error."""
-        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
     def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done") -> dict:
         """sse_complete."""
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)

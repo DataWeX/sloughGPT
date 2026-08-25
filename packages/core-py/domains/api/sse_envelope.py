@@ -163,13 +163,29 @@ def sse_error(
     phase: str,
     error: str,
     meta: Optional[Dict[str, Any]] = None,
+    code: Optional[str] = None,
+    http_status: Optional[int] = None,
 ) -> str:
-    """Convenience: emit an error event."""
+    """Convenience: emit an error event.
+
+    Args:
+        stream:     stream name (e.g. "chat")
+        phase:      phase name (e.g. "TIMEOUT", "IDLE")
+        error:      human-readable error message
+        meta:       optional diagnostic metadata
+        code:       structured error code (e.g. "MODEL_TIMEOUT", "E_VAL_REQUEST")
+        http_status: suggested HTTP status code for the client (e.g. 503, 400)
+    """
+    data: Dict[str, Any] = {"error": error}
+    if code is not None:
+        data["code"] = code
+    if http_status is not None:
+        data["http_status"] = http_status
     return sse_event(
         stream=stream,
         phase=phase,
         status="error",
-        data={"error": error},
+        data=data,
         meta=meta or {},
         message=f"Error: {error}",
     )

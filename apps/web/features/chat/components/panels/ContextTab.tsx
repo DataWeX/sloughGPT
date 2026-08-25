@@ -77,7 +77,40 @@ export function ContextTab() {
     }
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    let active = true
+    const fetchAll = async () => {
+      setLoading(true)
+      try {
+        const [insp, modeData, traits, knowledge, fb] = await Promise.all([
+          chatController.inspectContext(),
+          soulsController.getModes().catch((e) => { logger.debug('Could not load modes', { e }); return null }),
+          soulsController.getTraitWeights().catch((e) => { logger.debug('Could not load traits', { e }); return null }),
+          chatDB.getKnowledge().catch((e) => { logger.debug('Could not load knowledge', { e }); return null }),
+          feedbackController.getFeedbackStats().then(
+            s => ({ up: s.db_stats?.thumbs_up ?? 0, down: s.db_stats?.thumbs_down ?? 0 }),
+            (e) => { logger.debug('Could not load feedback', { e }); return null },
+          ),
+        ])
+        if (active) {
+          setInspector(insp)
+          setModes(modeData)
+          setTraitWeights(traits)
+          setKnowledgeCount(Array.isArray(knowledge) ? knowledge.length : null)
+          setFeedback(fb)
+        }
+      } catch (err) {
+        if (active) {
+          addToast('Failed to load context inspector', 'error')
+          logger.debug('Could not context inspector fetch', { exception: String(err) })
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void fetchAll()
+    return () => { active = false }
+  }, [])
 
   const hasAnything = Boolean(inspector) || Boolean(modes) || Boolean(traitWeights) || knowledgeCount != null || Boolean(feedback)
   const workingCount = inspector?.working_memory?.length ?? 0
