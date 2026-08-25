@@ -53,6 +53,7 @@ def _reset_turbo(tmp_path):
     (ds_dir / "x.txt").write_text("hello\n")
     mod._test_data_path = str(ds_dir / "x.txt")
     with patch.object(inst, "REPO_ROOT", tmp_path), \
+         patch.object(mod, "REPO_ROOT", tmp_path), \
          patch.object(inst, "TURBO_DIR", tmp_path / "models" / "turbo-trained"), \
          patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "models" / "auto-training"), \
          patch.object(inst, "LORA_DIR", tmp_path / "data" / "user_adapters"):
@@ -295,7 +296,9 @@ def test_turbo_real_training_end_to_end(tmp_path):
     in well under a second, so the full chain (start -> status -> checkpoint in
     catalog with source=turbo -> load for chat) is exercised for real.
     """
-    data = tmp_path / "data.txt"
+    ds_dir = tmp_path / "datasets"
+    ds_dir.mkdir(parents=True, exist_ok=True)
+    data = ds_dir / "data.txt"
     data.write_text("hello turbo world, this is a tiny training corpus. " * 20)
 
     resp = client.post("/auto-train/start-turbo", json={

@@ -123,6 +123,8 @@ export default function TrainingPage() {
 
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const completedCount = form.allJobs.filter(j => j.status === 'completed').length
+  // Use session state for running count even if jobs haven't loaded yet
+  const isRunning = session.trainingRunning || !!runningJob
 
   // If checkpoints polling finds a running job but session isn't tracking it, sync the state
   useEffect(() => {

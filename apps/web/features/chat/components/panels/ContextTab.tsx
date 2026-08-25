@@ -8,6 +8,7 @@ import { soulsController } from '@/lib/souls-controller'
 import { feedbackController } from '@/lib/feedback-controller'
 import { chatDB } from '@/lib/db'
 import { logger } from '@/lib/dev-log'
+import { useToastStore } from '@/lib/app-shell'
 
 interface SteeringMode {
   label: string
@@ -48,17 +49,19 @@ export function ContextTab() {
   const [loading, setLoading] = useState(true)
   const [showPrompt, setShowPrompt] = useState(false)
 
+  const { addToast } = useToastStore()
+
   const fetchAll = async () => {
     setLoading(true)
     try {
       const [insp, modeData, traits, knowledge, fb] = await Promise.all([
         chatController.inspectContext(),
-        soulsController.getModes().catch(() => null),
-        soulsController.getTraitWeights().catch(() => null),
-        chatDB.getKnowledge().catch(() => null),
+        soulsController.getModes().catch((e) => { logger.debug('Could not load modes', { e }); return null }),
+        soulsController.getTraitWeights().catch((e) => { logger.debug('Could not load traits', { e }); return null }),
+        chatDB.getKnowledge().catch((e) => { logger.debug('Could not load knowledge', { e }); return null }),
         feedbackController.getFeedbackStats().then(
           s => ({ up: s.db_stats?.thumbs_up ?? 0, down: s.db_stats?.thumbs_down ?? 0 }),
-          () => null,
+          (e) => { logger.debug('Could not load feedback', { e }); return null },
         ),
       ])
       setInspector(insp)
@@ -67,6 +70,7 @@ export function ContextTab() {
       setKnowledgeCount(Array.isArray(knowledge) ? knowledge.length : null)
       setFeedback(fb)
     } catch (err) {
+      addToast('Failed to load context inspector', 'error')
       logger.debug('Could not context inspector fetch', { exception: String(err) })
     } finally {
       setLoading(false)

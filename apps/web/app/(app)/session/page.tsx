@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
@@ -9,6 +9,7 @@ import { sessionController, type SessionInspector } from '@/lib/session-controll
 export default function SessionPage() {
   const addToast = useToastStore(s => s.addToast)
   const [sessionId, setSessionId] = useState('')
+  const [currentSession, setCurrentSession] = useState<Record<string, unknown> | null>(null)
   const [inspector, setInspector] = useState<SessionInspector | null>(null)
   const [loading, setLoading] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
@@ -49,6 +50,13 @@ export default function SessionPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [createSoul, setCreateSoul] = useState('')
 
+  const loadCurrent = useCallback(async () => {
+    try {
+      const s = await sessionController.getCurrent()
+      setCurrentSession(s as unknown as Record<string, unknown>)
+    } catch { /* silent */ }
+  }, [])
+
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true)
     try {
@@ -57,6 +65,18 @@ export default function SessionPage() {
     } catch { /* silent */ }
     finally { setSessionsLoading(false) }
   }, [])
+
+  const [fetchedMessages, setFetchedMessages] = useState<{ role: string; content: string }[] | null>(null)
+
+  const handleFetchMessages = useCallback(async () => {
+    if (!sessionId.trim()) return
+    try {
+      const msgs = await sessionController.fetchMessages(sessionId)
+      setFetchedMessages(msgs)
+    } catch {
+      addToast('Could not fetch messages', 'error')
+    }
+  }, [sessionId, addToast])
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults(null); return }
@@ -109,6 +129,7 @@ export default function SessionPage() {
         <div className="flex gap-1">
           <Button size="sm" variant="ghost" onClick={() => { void loadSessions(); setShowCreate(!showCreate) }}>Sessions</Button>
           <Button size="sm" variant="ghost" onClick={() => void handleLoadArchived()}>Archived</Button>
+          <Button size="sm" variant="ghost" onClick={() => void loadCurrent()}>Current</Button>
           {inspector && <Button size="sm" variant="ghost" onClick={() => void handleInspect()}>Refresh</Button>}
         </div>
       }
@@ -169,6 +190,27 @@ export default function SessionPage() {
                     {s.name || s.id}{s.created_at ? ` — ${new Date(s.created_at).toLocaleDateString()}` : ''}
                   </button>
                   <Button variant="ghost" size="sm" className="text-[10px] h-6 text-destructive" onClick={() => void handleDelete(s.id)}>Delete</Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
+      {fetchedMessages && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between">
+              Messages ({fetchedMessages.length})
+              <Button size="sm" variant="ghost" onClick={() => setFetchedMessages(null)}>Close</Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-80 overflow-auto">
+              {fetchedMessages.map((m, i) => (
+                <div key={i} className="rounded bg-muted/30 px-2 py-1 text-xs">
+                  <span className="font-medium">{m.role}:</span> {m.content}
                 </div>
               ))}
             </div>
