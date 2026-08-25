@@ -187,6 +187,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
           )}
         </Chart>
       </ResponsiveContainer>
+      </Suspense>
     </div>
   )
 })
