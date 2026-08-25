@@ -46,26 +46,7 @@ export function ImageSection() {
     }
   }
 
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      try {
-        const [galleryRes, stylesRes] = await Promise.all([
-          imagesController.gallery().catch(() => null),
-          imagesController.styles().catch(() => null),
-        ])
-        if (cancelled) return
-        setGallery(galleryRes?.images ?? [])
-        setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
-      } catch {
-        if (!cancelled) addToast('Could not load image data', 'error')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [])
+  useEffect(() => { fetchData() }, [])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return

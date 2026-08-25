@@ -14,14 +14,15 @@ vi.mock('@sloughgpt/strui', () => {
     cn: vi.fn((...a: any[]) => a.join(' ')),
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
-    Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+    Button: ({ children, onClick, disabled, size, variant }: any) => (
+      <button onClick={onClick} disabled={disabled} data-size={size} data-variant={variant}>{children}</button>
     ),
-    Input: ({ value, onChange, type }: any) => (
-      <input value={value} onChange={onChange} type={type} />
+    Input: ({ value, onChange, type, className }: any) => (
+      <input value={value} onChange={onChange} type={type} className={className} />
     ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
 
@@ -48,7 +49,7 @@ import LoraEvalPage from './page'
 afterEach(cleanup)
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.restoreAllMocks()
   mockGetHistory.mockResolvedValue([])
 })
 
@@ -80,24 +81,24 @@ describe('LoraEvalPage', () => {
   })
 
   it('displays eval history items', async () => {
-    mockGetHistory.mockResolvedValue([
+    mockGetHistory.mockResolvedValue({ results: [
       { status: 'passed', elapsed_ms: 120, report: 'All metrics improved', delta: { verdict: 'improved' } },
       { status: 'failed', elapsed_ms: 80 },
-    ])
+    ]})
     render(<LoraEvalPage />)
     await waitFor(() => {
-      expect(screen.getAllByText('passed').length).toBeGreaterThanOrEqual(1)
-      expect(screen.getAllByText('failed').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('passed')).toBeTruthy()
+      expect(screen.getByText('failed')).toBeTruthy()
       expect(screen.getByText('120ms')).toBeTruthy()
       expect(screen.getByText('All metrics improved')).toBeTruthy()
     })
   })
 
   it('displays KPI stats', async () => {
-    mockGetHistory.mockResolvedValue([
+    mockGetHistory.mockResolvedValue({ results: [
       { status: 'passed', delta: { verdict: 'improved' } },
       { status: 'passed' },
-    ])
+    ]})
     render(<LoraEvalPage />)
     await waitFor(() => {
       const totalCard = screen.getByTestId('stat-Total Evals')
@@ -162,6 +163,19 @@ describe('LoraEvalPage', () => {
     expect(screen.getByText('Running...')).toBeTruthy()
 
     await act(async () => { resolveEval!({ status: 'done' }) })
+  })
+
+  it('shows Aggregating... while aggregate is in progress', async () => {
+    let resolveAgg: (v: any) => void
+    mockAggregate.mockReturnValue(new Promise(r => { resolveAgg = r }))
+
+    render(<LoraEvalPage />)
+    await waitFor(() => { expect(screen.getByText('Aggregate')).toBeTruthy() })
+
+    await act(async () => { fireEvent.click(screen.getByText('Aggregate')) })
+    expect(screen.getByText('Aggregating...')).toBeTruthy()
+
+    await act(async () => { resolveAgg!({ status: 'ok' }) })
   })
 
   it('refresh button calls fetchHistory', async () => {

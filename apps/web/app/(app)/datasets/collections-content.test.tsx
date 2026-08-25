@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
@@ -33,8 +33,12 @@ vi.mock('@/lib/http-client', () => ({
 import CollectionsContent from './collections-content'
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  mockApiGet.mockReset()
   mockApiGet.mockResolvedValue({ pipelines: [], counts: null })
+})
+
+afterEach(() => {
+  cleanup()
 })
 
 describe('CollectionsContent', () => {
@@ -77,21 +81,21 @@ describe('CollectionsContent', () => {
   it('renders stats cards when counts are provided', async () => {
     mockApiGet.mockResolvedValue({
       pipelines: [],
-      counts: { pipelines: 5, sources: 3, stores: 2, filters: 1 },
+      counts: { pipelines: 10, sources: 20, stores: 30, filters: 40 },
     })
     render(<CollectionsContent />)
     await waitFor(() => {
-      expect(screen.getByText('5')).toBeDefined()
+      expect(screen.getByText('10')).toBeDefined()
     })
-    expect(screen.getByText('3')).toBeDefined()
-    expect(screen.getByText('2')).toBeDefined()
-    expect(screen.getByText('1')).toBeDefined()
+    expect(screen.getByText('20')).toBeDefined()
+    expect(screen.getByText('30')).toBeDefined()
+    expect(screen.getByText('40')).toBeDefined()
   })
 
   it('toggles create form on New pipeline click', async () => {
     render(<CollectionsContent />)
     await waitFor(() => {
-      expect(screen.getByText(/Pipelines/)).toBeDefined()
+      expect(screen.getByText(/No pipelines configured/)).toBeDefined()
     })
     const buttons = screen.getAllByTestId('button')
     const newBtn = buttons.find(b => b.textContent === 'New pipeline')

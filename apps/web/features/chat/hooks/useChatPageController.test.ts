@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act, cleanup } from '@testing-library/react'
 
 const { mockUseRouter, mockUseSearchParams, mockHealthLegacy } = vi.hoisted(() => ({
   mockUseRouter: { push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() },
@@ -202,6 +202,10 @@ function renderController() {
 describe('useChatPageController', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('returns expected interface keys', () => {
