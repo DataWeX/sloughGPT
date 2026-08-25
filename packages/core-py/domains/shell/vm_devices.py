@@ -809,16 +809,20 @@ class NPUVMDevice(Device):
 
     def _load_model(self, name, source, **kwargs):
         result = self._npu.load_model(str(name), str(source), **kwargs)
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU load_model failed: {result.error}")
+        return result.value
 
     def _unload_model(self, name):
         result = self._npu.unload_model(str(name))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU unload_model failed: {result.error}")
+        return result.value
 
     def _tokenize(self, name, text):
         result = self._npu.tokenize(str(name), str(text))
         if not result.success:
-            return result.error
+            raise DeviceFault(f"NPU tokenize failed: {result.error}")
         return result.value.get("token_ids", [])
 
     def _detokenize(self, name, token_ids):
@@ -828,13 +832,13 @@ class NPUVMDevice(Device):
             token_ids = list(token_ids)
         result = self._npu.detokenize(str(name), token_ids)
         if not result.success:
-            return result.error
+            raise DeviceFault(f"NPU detokenize failed: {result.error}")
         return result.value.get("text", "")
 
     def _generate(self, name, prompt, max_tokens=100, **kwargs):
         result = self._npu.generate(str(name), str(prompt), int(max_tokens), **kwargs)
         if not result.success:
-            return result.error
+            raise DeviceFault(f"NPU generate failed: {result.error}")
         return result.value.get("text", "")
 
     def _forward(self, name, input_ids):
@@ -844,13 +848,13 @@ class NPUVMDevice(Device):
             input_ids = list(input_ids)
         result = self._npu.forward(str(name), input_ids)
         if not result.success:
-            return result.error
+            raise DeviceFault(f"NPU forward failed: {result.error}")
         return result.value.get("logits", None)
 
     def _embed(self, name, text, layer=-1):
         result = self._npu.embed(str(name), str(text), int(layer))
         if not result.success:
-            return result.error
+            raise DeviceFault(f"NPU embed failed: {result.error}")
         return result.value.get("embedding", None)
 
     def _train_step(self, name, input_ids, targets, lr=0.001, **kwargs):
@@ -859,7 +863,9 @@ class NPUVMDevice(Device):
         if hasattr(targets, 'tolist'):
             targets = targets.tolist()
         result = self._npu.train_step(str(name), input_ids, targets, float(lr), **kwargs)
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU train_step failed: {result.error}")
+        return result.value
 
     def _info(self):
         return self._npu.info()
@@ -871,43 +877,63 @@ class NPUVMDevice(Device):
 
     def _checkpoint(self, name="", checkpoint_name=""):
         result = self._npu.checkpoint(str(name), str(checkpoint_name))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU checkpoint failed: {result.error}")
+        return result.value
 
     def _restore(self, name="", checkpoint_name=""):
         result = self._npu.restore(str(name), str(checkpoint_name))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU restore failed: {result.error}")
+        return result.value
 
     def _list_checkpoints(self):
         result = self._npu.list_checkpoints()
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU list_checkpoints failed: {result.error}")
+        return result.value
 
     def _delete_checkpoint(self, checkpoint_name):
         result = self._npu.delete_checkpoint(str(checkpoint_name))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU delete_checkpoint failed: {result.error}")
+        return result.value
 
     def _save_checkpoint(self, name="", path=""):
         result = self._npu.save_checkpoint(str(name), str(path))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU save_checkpoint failed: {result.error}")
+        return result.value
 
     def _load_checkpoint(self, name="", path=""):
         result = self._npu.load_checkpoint(str(name), str(path))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU load_checkpoint failed: {result.error}")
+        return result.value
 
     def _quantize(self, name="", bits=8):
         result = self._npu.quantize(str(name), int(bits))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU quantize failed: {result.error}")
+        return result.value
 
     def _dequantize(self, name=""):
         result = self._npu.dequantize(str(name))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU dequantize failed: {result.error}")
+        return result.value
 
     def _clear_cache(self, name=""):
         result = self._npu.clear_cache(str(name))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU clear_cache failed: {result.error}")
+        return result.value
 
     def _health(self):
         result = self._npu.health()
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU health check failed: {result.error}")
+        return result.value
 
     def _batch(self, name="", prompts=None, max_tokens=50):
         if prompts is None:
@@ -915,25 +941,35 @@ class NPUVMDevice(Device):
         if isinstance(prompts, str):
             prompts = [p.strip() for p in prompts.split("|")]
         result = self._npu.batch(str(name), prompts, int(max_tokens))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU batch failed: {result.error}")
+        return result.value
 
     def _attention_maps(self, name="", text="", layer=-1):
         result = self._npu.attention_maps(str(name), str(text), int(layer))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU attention_maps failed: {result.error}")
+        return result.value
 
     def _compare(self, model_a="", model_b="", prompt="Hello", max_tokens=20):
         result = self._npu.compare(str(model_a), str(model_b), str(prompt), int(max_tokens))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU compare failed: {result.error}")
+        return result.value
 
     def _layers(self, name="", layer=-1):
         result = self._npu.layers(str(name), int(layer))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU layers failed: {result.error}")
+        return result.value
 
     def _benchmark(self, name="", prompt_lengths=None, max_tokens=50):
         if isinstance(prompt_lengths, str):
             prompt_lengths = [int(x) for x in prompt_lengths.split(",")]
         result = self._npu.benchmark(str(name), prompt_lengths, int(max_tokens))
-        return result.value if result.success else result.error
+        if not result.success:
+            raise DeviceFault(f"NPU benchmark failed: {result.error}")
+        return result.value
 
     def info(self):
         return self._npu.info()

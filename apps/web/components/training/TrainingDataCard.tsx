@@ -85,11 +85,11 @@ export function TrainingDataCard({ addToast }: Props) {
           <CardTitle className="text-base">Training data ({total})</CardTitle>
           <div className="flex gap-2">
             {stats && stats.synced > 0 && (
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={handleDeleteSynced}>
+              <Button size="sm" variant="ghost" className="text-destructive" onClick={handleDeleteSynced} aria-label="Delete all synced training data">
                 Delete synced ({stats.synced})
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => void fetchData()}>Refresh</Button>
+            <Button size="sm" variant="ghost" onClick={() => void fetchData()} aria-label="Refresh training data">Refresh</Button>
           </div>
         </div>
       </CardHeader>
@@ -99,7 +99,7 @@ export function TrainingDataCard({ addToast }: Props) {
         ) : error ? (
           <div className="text-center py-4">
             <p className="text-sm text-destructive mb-2">{error}</p>
-            <Button size="sm" variant="ghost" onClick={() => void fetchData()}>Retry</Button>
+            <Button size="sm" variant="ghost" onClick={() => void fetchData()} aria-label="Retry loading training data">Retry</Button>
           </div>
         ) : stats ? (
           <div className="grid grid-cols-4 gap-2 text-center text-xs">
@@ -130,7 +130,7 @@ export function TrainingDataCard({ addToast }: Props) {
             onKeyDown={e => e.key === 'Enter' && handleSearch()}
             className="h-8 text-xs"
           />
-          <Button size="sm" variant="ghost" onClick={handleSearch}>Search</Button>
+          <Button size="sm" variant="ghost" onClick={handleSearch} aria-label="Search training pairs">Search</Button>
         </div>
 
         {loading ? (
@@ -159,7 +159,7 @@ export function TrainingDataCard({ addToast }: Props) {
                     >
                       {[1, 2, 3, 4, 5].map(q => <option key={q} value={q}>{q}</option>)}
                     </select>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(p.id)}>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(p.id)} aria-label={`Delete training pair ${p.id.slice(0, 8)}`}>
                       Delete
                     </Button>
                   </div>
@@ -173,8 +173,8 @@ export function TrainingDataCard({ addToast }: Props) {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Page {page + 1} of {totalPages}</span>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
-              <Button size="sm" variant="ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)} aria-label="Previous page">Prev</Button>
+              <Button size="sm" variant="ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} aria-label="Next page">Next</Button>
             </div>
           </div>
         )}

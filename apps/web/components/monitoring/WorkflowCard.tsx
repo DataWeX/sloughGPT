@@ -123,11 +123,11 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
             <IconRefresh className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
           {status?.running ? (
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleStop}>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleStop} aria-label="Stop background training">
               Stop
             </Button>
           ) : (
-            <Button size="sm" className="h-7 text-xs" onClick={handleStart}>
+            <Button size="sm" className="h-7 text-xs" onClick={handleStart} aria-label="Start background training">
               Start
             </Button>
           )}

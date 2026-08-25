@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import React from 'react'
 
@@ -35,6 +35,27 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: () => mockAddToast,
 }))
 
+vi.mock('@/lib/knowledge-controller', () => ({
+  knowledgeController: {
+    label: vi.fn().mockResolvedValue({ label: 'test', confidence: 0.9, reason: '', scores: {} }),
+    checkDuplicate: vi.fn().mockResolvedValue({ is_duplicate: false, best_match: null, score: 0, threshold: 0.85 }),
+    categorize: vi.fn().mockResolvedValue({ topic: 'test', suggestions: [] }),
+    getEmbedderStatus: vi.fn().mockResolvedValue({ trained: false, info: null }),
+    trainEmbedder: vi.fn().mockResolvedValue({ status: 'ok', texts_used: 0, epochs: 0, final_loss: 0, save_path: '' }),
+    gaps: vi.fn().mockResolvedValue({ gaps: [], total_facts: 0, topics: [] }),
+  },
+}))
+
+vi.mock('@/lib/error-utils', () => ({
+  extractErrorMessage: (_e: unknown, fallback: string) => fallback,
+}))
+
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, confirmLabel }: any) => open ? (
+    <div data-testid="alert-dialog"><button data-testid="confirm-action" onClick={onConfirm}>{confirmLabel}</button></div>
+  ) : null,
+}))
+
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
@@ -51,6 +72,16 @@ vi.mock('@sloughgpt/strui', () => {
     Textarea: ({ value, onChange, rows, className, placeholder }: any) => (
       <textarea value={value} onChange={onChange} rows={rows} className={className} placeholder={placeholder} />
     ),
+    IconRefresh: (props: any) => <svg {...props} />,
+    AlertDialog: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTrigger: ({ children }: any) => <div>{children}</div>,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
   }
 })
 
@@ -58,6 +89,11 @@ vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title, subtitle, headerRight }: any) => (
     <div data-testid="page-container"><h1>{title}</h1><p>{subtitle}</p><div>{headerRight}</div>{children}</div>
   ),
+}))
+
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, confirmLabel }: any) =>
+    open ? <button data-testid="confirm-action" onClick={onConfirm}>{confirmLabel}</button> : null,
 }))
 
 import KbPage from './page'
@@ -70,9 +106,14 @@ const statsResponse = {
 }
 
 describe('KbPage', () => {
+  beforeEach(() => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+  })
+
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('renders title and subtitle', async () => {
@@ -194,8 +235,11 @@ describe('KbPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Fact')).toBeInTheDocument()
     }, { timeout: 5000 })
-    const deleteButtons = screen.getAllByText('Delete')
-    fireEvent.click(deleteButtons[deleteButtons.length - 1])
+    fireEvent.click(screen.getByText('Delete'))
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-action')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('confirm-action'))
     await waitFor(() => {
       expect(mockRemove).toHaveBeenCalledWith('k1')
     }, { timeout: 5000 })

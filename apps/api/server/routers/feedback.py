@@ -76,7 +76,7 @@ class FeedbackRouter:
                 assistant_response=getattr(req, 'assistant_response', None),
             )
             safe_audit_log("feedback.record", resource=req.message_id, detail=f"rating={req.rating}")
-            return FeedbackResponse(**feedback)
+            return success_response(data=FeedbackResponse(**feedback).model_dump())
         except Exception as e:
             logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
             classify_and_raise(e, source="feedback.record")
@@ -92,7 +92,7 @@ class FeedbackRouter:
             stats = ctrl.get_stats()
             result = FeedbackStats(**stats)
             _feedback_stats_cache = (now, result)
-            return result
+            return success_response(data=result.model_dump())
         except Exception as e:
             classify_and_raise(e, source="feedback.get_stats")
 
@@ -105,7 +105,7 @@ class FeedbackRouter:
                 session_id=req.session_id,
             )
             safe_audit_log("feedback.conversation_create", resource=getattr(conv, "id", "unknown"), detail=f"name={req.name}")
-            return conv
+            return success_response(data=conv if isinstance(conv, dict) else conv.model_dump())
         except Exception as e:
             classify_and_raise(e, source="feedback.create_conversation")
 

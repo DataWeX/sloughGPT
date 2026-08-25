@@ -107,6 +107,7 @@ describe('QuickPrompts', () => {
   })
 
   it('calls deletePrompt when Delete clicked', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<QuickPrompts onUsePrompt={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('My Prompt')).toBeDefined())
     const deleteBtns = screen.getAllByText('Delete')
@@ -114,6 +115,7 @@ describe('QuickPrompts', () => {
     await waitFor(() => {
       expect(quickPromptsModule.deletePrompt).toHaveBeenCalledWith('p2')
     })
+    vi.restoreAllMocks()
   })
 
   it('calls resetToDefaults when Reset clicked', async () => {

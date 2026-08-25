@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useCallback , useEffect} from 'react'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { sessionController, type SessionInspector } from '@/lib/session-controller'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function SessionPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -15,6 +17,8 @@ export default function SessionPage() {
   const [inspector, setInspector] = useState<SessionInspector | null>(null)
   const [loading, setLoading] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const handleInspect = useCallback(async () => {
     if (!sessionId.trim()) return
@@ -85,15 +89,24 @@ export default function SessionPage() {
   }, [createSoul, addToast, loadSessions, handleInspect])
 
   const handleDelete = useCallback(async (id: string) => {
+    setPendingDeleteId(id)
+    setConfirmOpen(true)
+  }, [])
+
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDeleteId) return
     try {
-      await sessionController.delete(id)
+      await sessionController.delete(pendingDeleteId)
       addToast('Session deleted', 'success')
-      if (sessionId === id) { setInspector(null); setSessionId('') }
+      if (sessionId === pendingDeleteId) { setInspector(null); setSessionId('') }
       void loadSessions()
     } catch {
       addToast('Could not delete session', 'error')
+    } finally {
+      setConfirmOpen(false)
+      setPendingDeleteId(null)
     }
-  }, [sessionId, addToast, loadSessions])
+  }, [pendingDeleteId, sessionId, addToast, loadSessions])
 
   const handleLoadArchived = useCallback(async () => {
     try {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button, Input } from '@sloughgpt/strui'
 import type { QuickPrompt } from '@/lib/quick-prompts'
 import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
@@ -28,6 +29,8 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     const result = await listPromptsByCategory()
@@ -78,9 +81,17 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
     await refresh()
   }
 
-  const handleDelete = async (id: string) => {
-    await deletePrompt(id)
+  const handleDelete = (id: string) => {
+    setPendingDeleteId(id)
+    setConfirmOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return
+    await deletePrompt(pendingDeleteId)
     await refresh()
+    setConfirmOpen(false)
+    setPendingDeleteId(null)
   }
 
   const handleUse = (p: QuickPrompt) => {
@@ -178,6 +189,15 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
           </div>
         ))
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete quick prompt"
+        description="Delete this quick prompt?"
+        confirmLabel="Delete"
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   )
 }

@@ -26,6 +26,15 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, confirmLabel, title }: any) => open ? (
+    <div data-testid="alert-dialog">
+      <span>{title}</span>
+      <button onClick={onConfirm}>{confirmLabel}</button>
+    </div>
+  ) : null,
+}))
+
 const mocks = vi.hoisted(() => ({
   listWebhooks: vi.fn(),
   createWebhook: vi.fn(),

@@ -27,6 +27,12 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: () => mockAddToast,
 }))
 
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, confirmLabel }: any) => open ? (
+    <div data-testid="alert-dialog"><button data-testid="confirm-action" onClick={onConfirm}>{confirmLabel}</button></div>
+  ) : null,
+}))
+
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
@@ -254,6 +260,10 @@ describe('SessionPage', () => {
     }, { timeout: 5000 })
     const deleteButtons = screen.getAllByText('Delete')
     fireEvent.click(deleteButtons[0])
+    await waitFor(() => {
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+    }, { timeout: 5000 })
+    fireEvent.click(screen.getByTestId('confirm-action'))
     await waitFor(() => {
       expect(mockDelete).toHaveBeenCalledWith('s1')
     }, { timeout: 5000 })

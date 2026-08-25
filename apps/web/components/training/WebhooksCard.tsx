@@ -298,22 +298,14 @@ export function WebhooksCard({ addToast }: Props) {
         )}
       </CardContent>
 
-      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete webhook?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This webhook will stop receiving training notifications. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete Webhook
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null) }}
+        title="Delete webhook"
+        description="This webhook will stop receiving training notifications. This cannot be undone."
+        confirmLabel="Delete Webhook"
+        onConfirm={() => void handleDelete()}
+      />
     </Card>
   )
 }

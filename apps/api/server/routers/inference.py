@@ -330,20 +330,23 @@ from domains.infrastructure.repository import FileRepository, Serializer
 class _SessionDictSerializer(Serializer[dict]):
     """JSON serializer for session dict data."""
 
+    _REQUIRED_KEYS = {"id", "messages"}
+
     def serialize(self, obj: dict) -> dict:
-        try:
-            """serialize."""
-            return obj
+        if not isinstance(obj, dict):
+            raise ValueError(f"Session must be a dict, got {type(obj).__name__}")
+        missing = self._REQUIRED_KEYS - obj.keys()
+        if missing:
+            raise ValueError(f"Session missing required keys: {', '.join(sorted(missing))}")
+        return obj
 
-        except Exception as e:
-            classify_and_raise(e, source="inference.serialize")
     def deserialize(self, data: dict) -> dict:
-        try:
-            """deserialize."""
-            return data
-
-        except Exception as e:
-            classify_and_raise(e, source="inference.deserialize")
+        if not isinstance(data, dict):
+            raise ValueError(f"Session data must be a dict, got {type(data).__name__}")
+        missing = self._REQUIRED_KEYS - data.keys()
+        if missing:
+            raise ValueError(f"Session data missing required keys: {', '.join(sorted(missing))}")
+        return data
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
 
