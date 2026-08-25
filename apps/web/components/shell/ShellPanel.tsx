@@ -167,6 +167,16 @@ export function ShellPanel({
           data-testid="shell-input"
           aria-label="Shell command input"
         />
+        {state.isRunning && (
+          <button
+            type="button"
+            onClick={cancel}
+            className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+            data-testid="shell-cancel"
+          >
+            Cancel
+          </button>
+        )}
         {state.exitCode !== null && !hideExit && (
           <span
             data-testid="shell-exit-code"

@@ -16,7 +16,7 @@ class TestLearnerRouter:
         assert resp.status_code == 200
 
     def test_feed(self):
-        resp = self.client.get("/learn/feed")
+        resp = self.client.get("/learn/feed", params={"action": "list"})
         assert resp.status_code == 200
 
     def test_knowledge(self):
