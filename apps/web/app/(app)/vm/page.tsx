@@ -798,6 +798,9 @@ export default function VMPage() {
         <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'assembly'}
+            aria-label="Assembly mode"
             onClick={() => setMode('assembly')}
             className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
               mode === 'assembly' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
@@ -807,6 +810,9 @@ export default function VMPage() {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'linux'}
+            aria-label="Linux mode"
             onClick={() => setMode('linux')}
             className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
               mode === 'linux' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'

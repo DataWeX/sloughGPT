@@ -258,7 +258,10 @@ export default function TrainingPage() {
           {MANUAL_TABS.map(t => (
             <button
               type="button"
+              role="tab"
               key={t.id}
+              aria-selected={manualTab === t.id}
+              aria-label={`${t.label} tab`}
               onClick={() => setManualTab(t.id)}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 manualTab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'

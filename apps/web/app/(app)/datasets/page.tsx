@@ -229,6 +229,8 @@ export default function DatasetsPage() {
           <button
             key={s}
             type="button"
+            aria-pressed={sortBy === s}
+            aria-label={`Sort by ${s}`}
             onClick={() => setSortBy(s)}
             className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
           >

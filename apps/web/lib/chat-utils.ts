@@ -14,7 +14,7 @@ export interface ChatMessage {
   audio?: AudioAttachment
   reactions?: Record<string, number>
   isError?: boolean
-  toolCalls?: Array<{ id?: string; name?: string; arguments?: string }>
+  toolCalls?: Array<{ id?: string; name?: string; arguments?: string; status?: string }>
 }
 
 export interface ImageAttachment {

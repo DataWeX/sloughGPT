@@ -146,6 +146,8 @@ export default function SelfTrainPage() {
               <button
                 type="button"
                 onClick={() => setForever(!forever)}
+                aria-pressed={forever}
+                aria-label={forever ? 'Switch to single pass mode' : 'Switch to train forever mode'}
                 disabled={isRunning}
                 className={`h-8 rounded border px-2 text-xs transition-colors ${
                   forever ? 'border-primary bg-primary/10 text-primary' : 'border-border'

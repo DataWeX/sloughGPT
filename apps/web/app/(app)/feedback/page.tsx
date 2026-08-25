@@ -136,7 +136,10 @@ export default function FeedbackPage() {
         {(['stats', 'conversations', 'training'] as Tab[]).map(t => (
           <button
             type="button"
+            role="tab"
             key={t}
+            aria-selected={tab === t}
+            aria-label={`${t.charAt(0).toUpperCase() + t.slice(1)} tab`}
             onClick={() => {
               setTab(t)
               if (t === 'conversations') handleLoadConversations()

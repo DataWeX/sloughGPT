@@ -12,8 +12,8 @@ vi.mock('@/lib/chat-controller', () => ({
 }))
 
 const mockMessages = [
-  { id: '1', role: 'user', content: 'Hello', timestamp: Date.now() },
-  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
+  { id: '1', role: 'user' as const, content: 'Hello', timestamp: new Date() },
+  { id: '2', role: 'assistant' as const, content: 'Hi there!', timestamp: new Date() },
 ]
 
 describe('useChatSummary', () => {

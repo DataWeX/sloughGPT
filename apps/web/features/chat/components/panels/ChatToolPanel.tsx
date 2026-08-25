@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt, IconChart } from '@sloughgpt/strui'
+import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt, IconChart, IconDownload } from '@sloughgpt/strui'
 import { useChatContext } from '@/features/chat/contexts/ChatContext'
 import { KnowledgeTab } from './KnowledgeTab'
 import { MemoryTab } from './MemoryTab'
@@ -14,6 +14,7 @@ import { ChatBookmarksPanel } from './ChatBookmarksPanel'
 import { ChatSessionStatsCard } from './ChatSessionStatsCard'
 import { ConversationSummary } from './../ConversationSummary'
 import { ConversationStats } from './../ConversationStats'
+import { ConversationExport } from './../ConversationExport'
 
 interface ChatToolPanelProps {
   open: boolean
@@ -129,6 +130,13 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Statistics</span>
                   </div>
                   <ConversationStats messages={messages} />
+                </section>
+                <section aria-label="Export">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconDownload className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Export</span>
+                  </div>
+                  <ConversationExport messages={messages} model={ctx.model} />
                 </section>
                 <section aria-label="Bookmarks">
                   <ChatBookmarksPanel

@@ -155,6 +155,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             totalSteps: turboStatus.total_steps ?? 0, stepsPerSec: turboStatus.steps_per_sec ?? null,
             eta: turboStatus.eta_s ?? null, elapsedSeconds: turboStatus.elapsed_s ?? null,
             jobId: turboStatus.job_id ?? null, avgQuality: turboStatus.avg_quality ?? null,
+            message: turboStatus.paused ? 'Paused' : '',
           })
           startTurboPoll()
           return
