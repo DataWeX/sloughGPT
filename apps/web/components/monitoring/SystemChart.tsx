@@ -121,5 +121,6 @@ export const SystemChart = memo(function SystemChart({ data, showTokens = true, 
         )}
       </ComposedChart>
     </ResponsiveContainer>
+    </Suspense>
   )
 })

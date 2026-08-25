@@ -65,6 +65,8 @@ export default function SessionPage() {
     finally { setSessionsLoading(false) }
   }, [])
 
+  useRefreshShortcut(() => void loadSessions())
+
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) { setSearchResults(null); return }
     try {

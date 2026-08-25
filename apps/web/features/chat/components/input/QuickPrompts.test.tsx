@@ -23,6 +23,12 @@ const quickPromptsModule = vi.hoisted(() => {
 
 vi.mock('@/lib/quick-prompts', () => quickPromptsModule)
 
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, confirmLabel }: any) => open ? (
+    <div data-testid="alert-dialog"><button data-testid="confirm-action" onClick={onConfirm}>{confirmLabel}</button></div>
+  ) : null,
+}))
+
 import { QuickPrompts } from './QuickPrompts'
 
 describe('QuickPrompts', () => {
@@ -107,15 +113,17 @@ describe('QuickPrompts', () => {
   })
 
   it('calls deletePrompt when Delete clicked', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<QuickPrompts onUsePrompt={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('My Prompt')).toBeDefined())
     const deleteBtns = screen.getAllByText('Delete')
     fireEvent.click(deleteBtns[0])
     await waitFor(() => {
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByTestId('confirm-action'))
+    await waitFor(() => {
       expect(quickPromptsModule.deletePrompt).toHaveBeenCalledWith('p2')
     })
-    vi.restoreAllMocks()
   })
 
   it('calls resetToDefaults when Reset clicked', async () => {
