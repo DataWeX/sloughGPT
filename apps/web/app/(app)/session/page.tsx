@@ -9,6 +9,9 @@ import { sessionController, type SessionInspector } from '@/lib/session-controll
 export default function SessionPage() {
   const addToast = useToastStore(s => s.addToast)
   const [sessionId, setSessionId] = useState('')
+
+  const [currentSession, setCurrentSession] = useState<Record<string, unknown> | null>(null)
+  const [fetchedMessages, setFetchedMessages] = useState<Array<{ role: string; content: string }> | null>(null)
   const [inspector, setInspector] = useState<SessionInspector | null>(null)
   const [loading, setLoading] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
@@ -118,6 +121,8 @@ export default function SessionPage() {
         <div className="flex gap-1">
           <Button size="sm" variant="ghost" onClick={() => { void loadSessions(); setShowCreate(!showCreate) }}>Sessions</Button>
           <Button size="sm" variant="ghost" onClick={() => void handleLoadArchived()}>Archived</Button>
+          <Button size="sm" variant="ghost" onClick={async () => { try { const s = await sessionController.getCurrent(); setCurrentSession(s as unknown as Record<string, unknown>) } catch { /* */ } }}>Current</Button>
+          <Button size="sm" variant="ghost" onClick={async () => { if (!sessionId.trim()) return; try { const m = await sessionController.fetchMessages(sessionId); setFetchedMessages(m) } catch { addToast('Could not fetch messages', 'error') } }}>Messages</Button>
           {inspector && <Button size="sm" variant="ghost" onClick={() => void handleInspect()}>Refresh</Button>}
         </div>
       }
@@ -343,6 +348,35 @@ export default function SessionPage() {
           </>
         )}
       </div>
+
+      {currentSession && (
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Current Session</CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => setCurrentSession(null)}>Close</Button>
+          </CardHeader>
+          <CardContent>
+            <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-80 whitespace-pre-wrap">{JSON.stringify(currentSession, null, 2)}</pre>
+          </CardContent>
+        </Card>
+      )}
+      {fetchedMessages && (
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Messages ({fetchedMessages.length})</CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => setFetchedMessages(null)}>Close</Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1 max-h-80 overflow-auto">
+              {fetchedMessages.map((m, i) => (
+                <div key={i} className="rounded bg-muted/30 px-2 py-1 text-xs">
+                  <span className="font-medium">{m.role}:</span> {m.content}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </PageContainer>
   )
 }

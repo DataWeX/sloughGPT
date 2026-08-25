@@ -23,6 +23,9 @@ export default function DatasetsPage() {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const [datasets, setDatasets] = useState<Dataset[]>([])
+
+  const [showBatchImport, setShowBatchImport] = useState(false)
+  const [batchText, setBatchText] = useState('')
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [search, setSearch] = useState('')
