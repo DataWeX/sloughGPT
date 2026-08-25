@@ -81,10 +81,10 @@ describe('LoraEvalPage', () => {
   })
 
   it('displays eval history items', async () => {
-    mockGetHistory.mockResolvedValue({ results: [
+    mockGetHistory.mockResolvedValue([
       { status: 'passed', elapsed_ms: 120, report: 'All metrics improved', delta: { verdict: 'improved' } },
       { status: 'failed', elapsed_ms: 80 },
-    ]})
+    ])
     render(<LoraEvalPage />)
     await waitFor(() => {
       expect(screen.getByText('passed')).toBeTruthy()
@@ -95,10 +95,10 @@ describe('LoraEvalPage', () => {
   })
 
   it('displays KPI stats', async () => {
-    mockGetHistory.mockResolvedValue({ results: [
+    mockGetHistory.mockResolvedValue([
       { status: 'passed', delta: { verdict: 'improved' } },
       { status: 'passed' },
-    ]})
+    ])
     render(<LoraEvalPage />)
     await waitFor(() => {
       const totalCard = screen.getByTestId('stat-Total Evals')

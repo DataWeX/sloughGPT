@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Button } from '@sloughgpt/strui'
+import { Button, Skeleton } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { writeTraining } from '@/lib/app-shell'
@@ -244,10 +244,10 @@ export default function TrainingPage() {
     >
         {/* Stats */}
         <KpiGrid columns={4}>
-          <StatCard label="Training runs" value={form.allJobs.length} />
-          <StatCard label="Running" value={runningJob ? 1 : 0} />
-          <StatCard label="Completed" value={completedCount} />
-          <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
+          <StatCard label="Training runs" value={checkpoints.loadingJobs ? <Skeleton className="h-5 w-8 inline-block" /> : form.allJobs.length} />
+          <StatCard label="Running" value={checkpoints.loadingJobs ? <Skeleton className="h-5 w-8 inline-block" /> : (runningJob ? 1 : 0)} />
+          <StatCard label="Completed" value={checkpoints.loadingJobs ? <Skeleton className="h-5 w-8 inline-block" /> : completedCount} />
+          <StatCard label="Saved versions" value={checkpoints.loadingCheckpoints ? <Skeleton className="h-5 w-8 inline-block" /> : checkpoints.checkpoints.length} />
         </KpiGrid>
 
         <TrainingSummaryCard checkpoints={checkpoints.checkpoints} />

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Textarea, Progress } from '@sloughgpt/strui'
+import { useState, useCallback, useRef } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -29,44 +29,51 @@ export function KnowledgeIntelligenceCard() {
   const [gaps, setGaps] = useState<{ gaps: Array<{ topic: string; suggestion: string }>; total_facts: number; topics: string[] } | null>(null)
   const [gapsLoading, setGapsLoading] = useState(false)
 
+  const labelTextRef = useRef('')
+  const dupTextRef = useRef('')
+  const catTextRef = useRef('')
+  labelTextRef.current = labelText
+  dupTextRef.current = dupText
+  catTextRef.current = catText
+
   const handleLabel = useCallback(async () => {
-    if (!labelText.trim()) return
+    if (!labelTextRef.current.trim()) return
     setLabelLoading(true)
     try {
-      const result = await knowledgeController.label(labelText)
+      const result = await knowledgeController.label(labelTextRef.current)
       setLabelResult(result)
     } catch (err) {
       addToast(extractErrorMessage(err, 'Labeling failed'), 'error')
     } finally {
       setLabelLoading(false)
     }
-  }, [labelText, addToast])
+  }, [addToast])
 
   const handleCheckDuplicate = useCallback(async () => {
-    if (!dupText.trim()) return
+    if (!dupTextRef.current.trim()) return
     setDupLoading(true)
     try {
-      const result = await knowledgeController.checkDuplicate(dupText)
+      const result = await knowledgeController.checkDuplicate(dupTextRef.current)
       setDupResult(result)
     } catch (err) {
       addToast(extractErrorMessage(err, 'Duplicate check failed'), 'error')
     } finally {
       setDupLoading(false)
     }
-  }, [dupText, addToast])
+  }, [addToast])
 
   const handleCategorize = useCallback(async () => {
-    if (!catText.trim()) return
+    if (!catTextRef.current.trim()) return
     setCatLoading(true)
     try {
-      const result = await knowledgeController.categorize(catText)
+      const result = await knowledgeController.categorize(catTextRef.current)
       setCatResult(result)
     } catch (err) {
       addToast(extractErrorMessage(err, 'Categorization failed'), 'error')
     } finally {
       setCatLoading(false)
     }
-  }, [catText, addToast])
+  }, [addToast])
 
   const handleCheckEmbedder = useCallback(async () => {
     setEmbedderLoading(true)

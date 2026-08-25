@@ -219,7 +219,7 @@ def test_check_duplicate_found(_mock_tl, _mock_rag):
     resp = client.post("/knowledge/check-duplicate", json={"content": "unique fact xyz"})
     assert resp.status_code == 200
     body = _data(resp)
-    assert body.get("duplicate") is True
+    assert body.get("is_duplicate") is True
 
 
 @patch("domains.cognitive.rag_service.get_rag_service", side_effect=Exception("no rag"))
@@ -230,7 +230,7 @@ def test_check_duplicate_not_found(_mock_tl, _mock_rag):
     resp = client.post("/knowledge/check-duplicate", json={"content": "totally unique content"})
     assert resp.status_code == 200
     body = _data(resp)
-    assert body.get("duplicate") is False
+    assert body.get("is_duplicate") is False
 
 
 # ── Context ───────────────────────────────────────────────

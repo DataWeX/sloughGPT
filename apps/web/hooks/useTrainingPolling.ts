@@ -5,6 +5,8 @@ import { trainingJobsController, type TrainingJob } from '@/lib/controllers'
 import { readTraining, writeTraining, type TrainingToastFn } from '@/lib/app-shell'
 
 const MAX_POLL_RETRIES = 10
+const TURBO_BASE_DELAY_MS = 3000
+const TURBO_MAX_DELAY_MS = 60000
 
 export interface TrainingPolling {
   startStandardPoll: (jobId: string, opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string }) => void
@@ -24,13 +26,13 @@ export interface TrainingPolling {
  */
 export function useTrainingPolling(): TrainingPolling {
   const standardPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const turboPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const turboPollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const standardRetryRef = useRef(0)
   const turboRetryRef = useRef(0)
 
   const clearAllPolls = useCallback(() => {
     if (standardPollRef.current) { clearInterval(standardPollRef.current); standardPollRef.current = null }
-    if (turboPollRef.current) { clearInterval(turboPollRef.current); turboPollRef.current = null }
+    if (turboPollRef.current) { clearTimeout(turboPollRef.current); turboPollRef.current = null }
     standardRetryRef.current = 0
     turboRetryRef.current = 0
   }, [])

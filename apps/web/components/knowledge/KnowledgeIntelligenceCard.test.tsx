@@ -88,9 +88,10 @@ describe('KnowledgeIntelligenceCard', () => {
     render(<KnowledgeIntelligenceCard />)
     const input = screen.getByPlaceholderText('Enter text to categorize...')
     fireEvent.change(input, { target: { value: 'machine learning' } })
-    fireEvent.click(screen.getByText('Categorize'))
+    fireEvent.click(screen.getByRole('button', { name: 'Categorize' }))
     await waitFor(() => {
-      expect(screen.getByText('Topic: technology')).toBeDefined()
+      expect(screen.getByText('Topic:')).toBeDefined()
+      expect(screen.getByText('technology')).toBeDefined()
     })
   })
 
@@ -99,7 +100,8 @@ describe('KnowledgeIntelligenceCard', () => {
       trained: true, info: { embed_dim: 128, vocab_size: 5000, path: '/tmp/embed' },
     })
     render(<KnowledgeIntelligenceCard />)
-    fireEvent.click(screen.getAllByRole('button').find(b => b.getAttribute('aria-label') === 'Refresh embeddings') ?? document.querySelector('button[class*="ghost"]')!)
+    const refreshBtn = screen.getAllByRole('button').find(b => b.querySelector('svg'))
+    fireEvent.click(refreshBtn!)
     await waitFor(() => {
       expect(screen.getByText('Trained')).toBeDefined()
     })
