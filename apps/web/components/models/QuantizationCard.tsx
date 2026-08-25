@@ -149,13 +149,13 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
 
                 {showLayers && (
                   <div className="max-h-64 overflow-x-auto overflow-y-auto rounded border border-border/40">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-xs" aria-label="Quantization layer details">
                       <thead className="sticky top-0 bg-muted/50">
                         <tr className="text-left text-muted-foreground">
-                          <th className="px-2 py-1 font-medium">Layer</th>
-                          <th className="px-2 py-1 font-medium text-right">Cosine</th>
-                          <th className="px-2 py-1 font-medium text-right">Scale</th>
-                          <th className="px-2 py-1 font-medium text-right">Zero Pt</th>
+                          <th scope="col" className="px-2 py-1 font-medium">Layer</th>
+                          <th scope="col" className="px-2 py-1 font-medium text-right">Cosine</th>
+                          <th scope="col" className="px-2 py-1 font-medium text-right">Scale</th>
+                          <th scope="col" className="px-2 py-1 font-medium text-right">Zero Pt</th>
                         </tr>
                       </thead>
                       <tbody>

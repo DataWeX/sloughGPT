@@ -110,6 +110,15 @@ export default function TokenTreePage() {
     }
   }, [addToast])
 
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void loadStats() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [loadStats])
   useEffect(() => {
     if (tab === 'vocab') void loadVocab(0)
     if (tab === 'merges') void loadMerges('')
@@ -205,6 +214,8 @@ export default function TokenTreePage() {
     { key: 'compare', label: 'Compare' },
   ]
 
+
+
   return (
     <PageContainer
       title="Token Tree"
@@ -276,13 +287,13 @@ export default function TokenTreePage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="max-h-[400px] overflow-y-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs" aria-label="Vocabulary table">
                   <thead>
                     <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="pb-1.5 font-medium">ID</th>
-                      <th className="pb-1.5 font-medium">Token</th>
-                      <th className="pb-1.5 font-medium">Freq</th>
-                      <th className="pb-1.5 font-medium">Type</th>
+                      <th scope="col" className="pb-1.5 font-medium">ID</th>
+                      <th scope="col" className="pb-1.5 font-medium">Token</th>
+                      <th scope="col" className="pb-1.5 font-medium">Freq</th>
+                      <th scope="col" className="pb-1.5 font-medium">Type</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -320,14 +331,14 @@ export default function TokenTreePage() {
                 <Button onClick={() => void loadMerges(mergeQuery)} disabled={loading} className="shrink-0">Search</Button>
               </div>
               <div className="max-h-[400px] overflow-y-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-xs" aria-label="BPE merge rules table">
                   <thead>
                     <tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="pb-1.5 font-medium">Rank</th>
-                      <th className="pb-1.5 font-medium">Left</th>
-                      <th className="pb-1.5 font-medium">Right</th>
-                      <th className="pb-1.5 font-medium">Result</th>
-                      <th className="pb-1.5 font-medium">Count</th>
+                      <th scope="col" className="pb-1.5 font-medium">Rank</th>
+                      <th scope="col" className="pb-1.5 font-medium">Left</th>
+                      <th scope="col" className="pb-1.5 font-medium">Right</th>
+                      <th scope="col" className="pb-1.5 font-medium">Result</th>
+                      <th scope="col" className="pb-1.5 font-medium">Count</th>
                     </tr>
                   </thead>
                   <tbody>

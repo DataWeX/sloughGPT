@@ -71,6 +71,7 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: () => ({ addToast: vi.fn() }),
 }))
 
+vi.mock('@/lib/dev-log', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 vi.mock('@/lib/download-utils', () => ({
   downloadJson: vi.fn(),
 }))
@@ -86,6 +87,7 @@ vi.mock('@/lib/error-utils', () => ({
 
 vi.mock('@/components/monitoring/StatusCard', () => ({ StatusCard: () => <div data-testid="status-card" /> }))
 vi.mock('@/components/monitoring/ResourceCard', () => ({ ResourceCard: () => <div data-testid="resource-card" /> }))
+vi.mock('@/components/monitoring/InferencePoolCard', () => ({ InferencePoolCard: () => <div data-testid="inference-pool-card" /> }))
 vi.mock('@/components/monitoring/ProcessCard', () => ({ ProcessCard: () => <div data-testid="process-card" /> }))
 vi.mock('@/components/monitoring/TrafficCard', () => ({ TrafficCard: () => <div data-testid="traffic-card" /> }))
 vi.mock('@/components/monitoring/LatencyCard', () => ({ LatencyCard: () => <div data-testid="latency-card" /> }))

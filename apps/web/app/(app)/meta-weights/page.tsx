@@ -50,6 +50,15 @@ export default function MetaWeightsPage() {
     { label: 'Confidence Boost', value: weights.confidence_boost, max: 1.0 },
   ] : []
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchStats() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fetchStats])
+
   return (
     <PageContainer
       title="Meta-Weights"

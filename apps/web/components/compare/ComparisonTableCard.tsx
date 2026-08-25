@@ -22,12 +22,12 @@ export default function ComparisonTableCard({ completedResults, models, bestMetr
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs" aria-label="Model comparison results">
           <thead>
             <tr className="border-b border-border/50">
-              <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Model</th>
+              <th scope="col" className="text-left py-2 pr-4 font-medium text-muted-foreground">Model</th>
               {METRIC_COLUMNS.map(col => (
-                <th key={col.key} className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap">{col.label}</th>
+                <th scope="col" key={col.key} className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap">{col.label}</th>
               ))}
             </tr>
           </thead>

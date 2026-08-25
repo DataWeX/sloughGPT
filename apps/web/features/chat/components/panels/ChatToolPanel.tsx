@@ -81,7 +81,7 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
             ) : (
               <>
                 <ChatSessionStatsCard sessionId={sessionId} />
-                <section>
+                <section aria-label="Knowledge">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Knowledge</span>
@@ -92,28 +92,28 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                     onOpenShortcuts={ctx.onOpenShortcuts}
                   />
                 </section>
-                <section>
+                <section aria-label="Memory">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconSparkle className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Memory</span>
                   </div>
                   <MemoryTab />
                 </section>
-                <section>
+                <section aria-label="Context">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconCode className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Context</span>
                   </div>
                   <ContextTab />
                 </section>
-                <section>
+                <section aria-label="Quick Prompts">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconBolt className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Quick Prompts</span>
                   </div>
                   <QuickPrompts onUsePrompt={(text) => ctx.setInput(text)} />
                 </section>
-                <section>
+                <section aria-label="Bookmarks">
                   <ChatBookmarksPanel
                     bookmarks={bookmarks}
                     onRemove={onRemoveBookmark || (() => {})}
