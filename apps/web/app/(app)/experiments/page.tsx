@@ -51,7 +51,7 @@ export default function ExperimentsPage() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleExport])
+  }, [])
 
   useEffect(() => {
     if (autoRefresh) {
