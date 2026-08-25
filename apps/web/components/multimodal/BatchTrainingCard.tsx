@@ -33,7 +33,7 @@ export default function BatchTrainingCard({ batchUploading, trainStatus, onFileU
             <IconUpload className="h-3.5 w-3.5 mr-1" />
             {batchUploading ? 'Starting…' : 'Upload images'}
           </Button>
-          <input ref={batchFileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => onFileUpload(Array.from(e.target.files || []))} />
+          <input ref={batchFileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => onFileUpload(Array.from(e.target.files || []))} aria-label="Upload images" />
         </div>
         <div className="flex items-center gap-2">
           <Input value={batchDirPath} onChange={e => setBatchDirPath(e.target.value)} placeholder="/path/to/images" className="h-8 text-xs flex-1" aria-label="Folder path for batch training" />

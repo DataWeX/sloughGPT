@@ -129,6 +129,7 @@ export function ShellPanel({
         className="flex-1 overflow-y-auto p-3 font-mono text-xs text-sm"
         data-testid="shell-output"
         role="log"
+        aria-live="polite"
         aria-label="Shell output"
       >
         {visibleLines.length === 0 && !state.isRunning && placeholder && (

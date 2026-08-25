@@ -77,7 +77,7 @@ class LocalImportRequest(BaseModel):
 
 
 class KaggleImportRequest(BaseModel):
-    dataset: str = Field(..., min_length=1, max_length=200)
+    dataset: str = Field(..., min_length=1, max_length=200, pattern=r'^[a-zA-Z0-9_\-/]+$')
     name: Optional[str] = Field(default=None, max_length=200)
 
 

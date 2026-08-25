@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
 import { authController, type UserInfo } from '@/lib/auth-controller'
+import { useToastStore } from '@/lib/toast-store'
 
 type Mode = 'login' | 'register'
 
@@ -19,6 +20,7 @@ export default function AuthPage() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
   const [checking, setChecking] = useState(true)
   const [token, setToken] = useState<string | null>(null)
+  const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     const saved = localStorage.getItem('auth_token')

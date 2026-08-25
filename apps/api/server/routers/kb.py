@@ -710,7 +710,14 @@ class KBRouter:
             Indexes files in the given path and returns results ranked by
             natural-language relevance.
             """
+            from pathlib import Path as _P
             from domains.learner.knowledge_ops import FileIndex
+
+            search_path = _P(req.path).resolve()
+            _allowed_bases = [_P.home(), _P.cwd(), _P("/tmp")]
+            if not any(str(search_path).startswith(str(b)) for b in _allowed_bases if b.exists()):
+                if ".." in req.path or not search_path.exists():
+                    raise_error(f"Path not allowed or not found: {req.path}", "E_BAD_REQUEST", status_code=400)
 
             idx = FileIndex()
             extensions = set(req.extensions) if req.extensions else None

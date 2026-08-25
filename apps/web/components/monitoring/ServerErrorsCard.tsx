@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, memo } from 'react'
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import { useTick } from '@/hooks/useTick'
 import { timeAgo } from '@/lib/time-ago'
 
 interface ServerErrorsCardProps {
@@ -11,12 +12,7 @@ interface ServerErrorsCardProps {
 
 export const ServerErrorsCard = memo(function ServerErrorsCard({ liveHealth }: ServerErrorsCardProps) {
   const errors = liveHealth?.recent_errors ?? []
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10_000)
-    return () => clearInterval(id)
-  }, [])
+  useTick()
 
   return (
     <Card className="p-3">

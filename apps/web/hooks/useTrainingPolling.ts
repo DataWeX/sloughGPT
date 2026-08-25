@@ -138,6 +138,7 @@ export function useTrainingPolling(): TrainingPolling {
             phase: 'complete', progress: 100,
             checkpoint: (s.result?.checkpoint as string) ?? null,
             finalLoss: (s.result?.final_loss as number) ?? null,
+            modelPath: (s.result?.model_path as string) ?? null,
             avgQuality: (s.result?.avg_quality as number) ?? s.avg_quality ?? null,
           })
           addToast?.('Turbo training complete!', 'success')

@@ -188,7 +188,7 @@ describe('useTrainingPolling', () => {
     it('completes on turbo complete', async () => {
       mockGetTurboStatus.mockResolvedValue({
         status: 'complete',
-        result: { checkpoint: 'tcp1', final_loss: 0.05 },
+        result: { checkpoint: 'tcp1', final_loss: 0.05, model_path: '/models/turbo/final.soul' },
       })
       const addToast = vi.fn()
       const { result } = renderHook(() => useTrainingPolling())
@@ -197,7 +197,7 @@ describe('useTrainingPolling', () => {
       await vi.advanceTimersByTimeAsync(3000)
 
       expect(mockWriteTraining).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'complete', checkpoint: 'tcp1' }),
+        expect.objectContaining({ phase: 'complete', checkpoint: 'tcp1', modelPath: '/models/turbo/final.soul' }),
       )
       expect(addToast).toHaveBeenCalledWith('Turbo training complete!', 'success')
     })

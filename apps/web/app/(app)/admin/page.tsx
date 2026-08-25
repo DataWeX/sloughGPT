@@ -456,6 +456,7 @@ export default function AdminPage() {
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     placeholder="Username"
+                    aria-label="Username"
                     required
                   />
                   {authMode === 'register' && (
@@ -464,6 +465,7 @@ export default function AdminPage() {
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       placeholder="Email"
+                      aria-label="Email"
                       required
                     />
                   )}
@@ -472,6 +474,7 @@ export default function AdminPage() {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Password"
+                    aria-label="Password"
                     required
                   />
                   {authError && <div className="text-xs text-destructive">{authError}</div>}

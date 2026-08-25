@@ -120,6 +120,7 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
           ref={scrollRef}
           className={`${h} overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3`}
           role="log"
+          aria-live="polite"
           aria-label="Service output"
         >
           {lines.length === 0 ? (

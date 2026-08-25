@@ -175,6 +175,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             phase: 'complete', method: 'turbo', progress: 100,
             checkpoint: (turboStatus.result?.checkpoint as string) ?? null,
             finalLoss: (turboStatus.result?.final_loss as number) ?? null,
+            modelPath: (turboStatus.result?.model_path as string) ?? null,
             avgQuality: (turboStatus.result?.avg_quality as number) ?? turboStatus.avg_quality ?? null,
             dataQuality: (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
           })

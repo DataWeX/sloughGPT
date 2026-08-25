@@ -89,6 +89,7 @@ export function useTrainingStream() {
               phase: 'complete',
               checkpoint: env.data?.checkpoint ?? null,
               finalLoss: env.data?.final_loss ?? null,
+              modelPath: env.data?.model_path ?? current.modelPath,
               avgQuality: env.data?.avg_quality ?? current.avgQuality,
               dataQuality: env.data?.data_quality ?? current.dataQuality,
             })

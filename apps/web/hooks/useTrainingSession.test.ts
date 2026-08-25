@@ -258,6 +258,8 @@ describe('useTrainingSession', () => {
     expect(result.current.turboPhase).toBe('complete')
     expect(result.current.turboResult?.final_loss).toBe(0.32)
     expect(result.current.turboResult?.total_steps).toBe(100)
+    expect(result.current.turboResult?.model_path).toBe('/models/turbo/final.soul')
+    expect(result.current.finetunedModelPath).toBe('/models/turbo/final.soul')
     expect(result.current.progress).toBe(100)
     expect(result.current.avgQuality).toBe(4.3)
     expect(mockAddToast).toHaveBeenCalledWith('Turbo training complete!', 'success')

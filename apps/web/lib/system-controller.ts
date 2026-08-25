@@ -173,9 +173,9 @@ export const systemController = {
     return apiGet<OutputResponse>(`/system/output?n=${n}`, undefined, { silent: true })
   },
 
-  async *streamOutput(tail: number = 50): AsyncGenerator<OutputLine> {
+  async *streamOutput(tail: number = 50, signal?: AbortSignal): AsyncGenerator<OutputLine> {
     try {
-      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET' })) {
+      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET', signal })) {
         const d = event.data
         if (d && typeof d.text === 'string' && typeof d.level === 'string' && typeof d.source === 'string' && typeof d.ts === 'number') {
           const line: OutputLine = { text: d.text, level: d.level, source: d.source, ts: d.ts }

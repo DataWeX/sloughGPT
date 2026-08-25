@@ -318,6 +318,8 @@ class Kernel:
         if sn is not None:
             # Handle TENSOR_ALLOC directly
             if sn == SyscallNumber.TENSOR_ALLOC:
+                if not args:
+                    return SyscallResult(success=False, error="TENSOR_ALLOC requires at least a shape argument")
                 shape, dtype = args[0], args[1] if len(args) > 1 else "float32"
                 info = self.alloc_tensor(shape, dtype)
                 return SyscallResult(success=True, value=info)

@@ -23,7 +23,7 @@ export default function ImageTrainingCard({ uploading, onUpload }: ImageTraining
             <IconUpload className="h-3.5 w-3.5 mr-1" />
             {uploading ? 'Training…' : 'Upload image'}
           </Button>
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f) }} />
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f) }} aria-label="Upload image" />
         </div>
       </CardContent>
     </Card>

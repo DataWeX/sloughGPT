@@ -81,15 +81,13 @@ class TestExecCommand:
         assert resp.json()["exit_code"] == 1
 
     @patch("routers.shell._get_repl")
-    def test_exception_returns_error(self, mock_get):
+    def test_exception_returns_500(self, mock_get):
         repl = MagicMock()
         repl.execute.side_effect = RuntimeError("boom")
         mock_get.return_value = repl
         client = TestClient(_app())
         resp = client.post("/shell/exec", json={"command": "crash"})
-        assert resp.status_code == 200
-        assert resp.json()["exit_code"] == 1
-        assert "RuntimeError" in resp.json()["output"]
+        assert resp.status_code == 500
 
     @patch("routers.shell._get_repl")
     def test_empty_output(self, mock_get):

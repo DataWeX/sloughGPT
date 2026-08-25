@@ -126,6 +126,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
         ref={scrollRef}
         className="flex-1 overflow-y-auto font-mono text-[11px] p-2 space-y-0.5"
         role="log"
+        aria-live="polite"
         aria-label="Service output panel"
       >
         {filtered.length === 0 ? (

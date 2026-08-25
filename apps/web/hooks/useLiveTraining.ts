@@ -98,7 +98,8 @@ function applyJobToShell(job: TrainingJob) {
       phase: 'complete', progress: 100,
       checkpoint: job.checkpoint ?? null,
       finalLoss: job.loss ?? job.train_loss ?? null,
-      avgQuality: job.avg_quality ?? null,
+      modelPath: job.output_dir ?? null,
+      avgQuality: (job.metrics as Record<string, unknown> | undefined)?.avg_quality as number ?? null,
     })
   } else if (job.status === 'failed') {
     batchWriteTraining({ phase: 'error', error: job.error || 'Could not training' })
@@ -177,6 +178,7 @@ function onEvent(envelope: SSEEnvelope) {
       phase: 'complete', progress: 100,
       checkpoint: (data.checkpoint as string) ?? current.checkpoint,
       finalLoss: data.loss != null ? Number(data.loss) : current.finalLoss,
+      modelPath: (data.model_path as string) ?? current.modelPath,
     })
     return
   }

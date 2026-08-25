@@ -40,13 +40,13 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
 
   useEffect(() => {
     mountedRef.current = true
-    let cancelled = false
+    const ac = new AbortController()
 
     const start = async () => {
       setStreaming(true)
       try {
-        for await (const line of systemController.streamOutput(tail)) {
-          if (cancelled || !mountedRef.current) break
+        for await (const line of systemController.streamOutput(tail, ac.signal)) {
+          if (ac.signal.aborted || !mountedRef.current) break
           if (!pausedRef.current) {
             setLines(prev => {
               const next = [...prev, line]
@@ -60,7 +60,7 @@ export function useServerOutput(opts: UseServerOutputOptions = {}): UseServerOut
 
     start()
     return () => {
-      cancelled = true
+      ac.abort()
       mountedRef.current = false
     }
   }, [tail, maxLines])

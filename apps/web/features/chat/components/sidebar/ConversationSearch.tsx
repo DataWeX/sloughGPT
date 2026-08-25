@@ -114,7 +114,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
         aria-label="Search all conversations"
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
-          <IconSearch className="h-4 w-4 text-muted-foreground shrink-0" />
+          <IconSearch className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
           <Input
             ref={inputRef}
             value={query}

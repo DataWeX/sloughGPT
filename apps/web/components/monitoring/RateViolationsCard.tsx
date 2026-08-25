@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, memo } from 'react'
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import { useTick } from '@/hooks/useTick'
 import { timeAgo } from '@/lib/time-ago'
 
 interface RateViolationsCardProps {
@@ -11,12 +12,7 @@ interface RateViolationsCardProps {
 
 export const RateViolationsCard = memo(function RateViolationsCard({ liveHealth }: RateViolationsCardProps) {
   const violations = liveHealth?.rate_violations ?? []
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10_000)
-    return () => clearInterval(id)
-  }, [])
+  useTick()
 
   if (violations.length === 0) return null
 
