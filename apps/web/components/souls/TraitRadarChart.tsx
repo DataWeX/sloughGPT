@@ -1,6 +1,7 @@
 'use client'
 
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts'
+import { Suspense } from 'react'
+import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from '@/lib/recharts-lazy'
 
 interface TraitRadarChartProps {
   data: Record<string, number>
