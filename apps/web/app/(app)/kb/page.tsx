@@ -6,7 +6,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { kbController, type KnowledgeItem, type KnowledgeStats, type TopicItem } from '@/lib/kb-controller'
 
-type Tab = 'browse' | 'add' | 'search' | 'gaps'
+type Tab = 'browse' | 'add' | 'batch' | 'search' | 'gaps'
 
 export default function KbPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -28,6 +28,10 @@ export default function KbPage() {
   const [searchResults, setSearchResults] = useState<KnowledgeItem[]>([])
 
   const [gapsResult, setGapsResult] = useState<{ gaps: string[]; suggestions: string[] } | null>(null)
+
+  const [batchText, setBatchText] = useState('')
+  const [batchTopic, setBatchTopic] = useState('general')
+  const [batchResult, setBatchResult] = useState<{ ingested: number } | null>(null)
 
   const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null)
   const [editContent, setEditContent] = useState('')
@@ -143,6 +147,26 @@ export default function KbPage() {
     }
   }
 
+  const handleBatchIngest = async () => {
+    const lines = batchText.split('\n').map(l => l.trim()).filter(Boolean)
+    if (lines.length === 0) return
+    setLoading(true)
+    setBatchResult(null)
+    try {
+      const items = lines.map(content => ({ content, source: 'batch', tags: [batchTopic] }))
+      const result = await kbController.batchIngest(items)
+      setBatchResult(result)
+      addToast(`Ingested ${result.ingested} entries`, 'success')
+      setBatchText('')
+      void loadStats()
+      void loadItems()
+    } catch (e) {
+      addToast(`Batch ingest failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleIngestUrl = async (url: string) => {
     setLoading(true)
     try {
@@ -168,6 +192,7 @@ export default function KbPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'browse', label: 'Browse' },
     { key: 'add', label: 'Add Entry' },
+    { key: 'batch', label: 'Batch' },
     { key: 'search', label: 'Search' },
     { key: 'gaps', label: 'Knowledge Gaps' },
   ]
@@ -347,6 +372,40 @@ export default function KbPage() {
                   Suggest Topic
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {tab === 'batch' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Batch Ingest</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Entries (one per line)</Label>
+                <Textarea
+                  value={batchText}
+                  onChange={e => setBatchText(e.target.value)}
+                  rows={8}
+                  className="text-xs font-mono"
+                  placeholder={"Python is a programming language\nSloughGPT is an AI framework\nMemory enables cross-session learning"}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Default Topic</Label>
+                <Input value={batchTopic} onChange={e => setBatchTopic(e.target.value)} className="h-8 text-xs" />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={() => void handleBatchIngest()} disabled={loading || !batchText.trim()} className="flex-1">
+                  {loading ? 'Ingesting...' : `Ingest (${batchText.split('\\n').filter(l => l.trim()).length} entries)`}
+                </Button>
+              </div>
+              {batchResult && (
+                <div className="rounded bg-success/10 px-3 py-2 text-xs text-success">
+                  Successfully ingested {batchResult.ingested} entries.
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
