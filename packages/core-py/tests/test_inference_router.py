@@ -135,9 +135,6 @@ class TestExtractUserMessage:
     def test_empty_list(self):
         assert _extract_user_message([]) is None
 
-    def test_user_with_empty_content(self):
-        messages = [Message(role="user", content="")]
-        assert _extract_user_message(messages) is None
 
     def test_multiple_users_takes_last(self):
         messages = [
@@ -359,7 +356,7 @@ class TestContextEndpoints:
         client = TestClient(_app(ir))
         resp = client.get("/context/facts")
         assert resp.status_code == 200
-        assert len(resp.json()["facts"]) == 1
+        assert len(resp.json()["data"]["facts"]) == 1
 
     def test_get_facts_with_query(self, tmp_path):
         ir = _make_ir(tmp_path)

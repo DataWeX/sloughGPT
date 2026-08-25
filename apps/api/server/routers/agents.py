@@ -28,11 +28,11 @@ class AgentOut(BaseModel):
 
 class AgentCreate(BaseModel):
     id: str = ""
-    name: str = Field(..., min_length=1)
-    description: str = ""
-    instructions: str = ""
-    tools: List[str] = []
-    avatar: str = ""
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    instructions: str = Field(default="", max_length=50000)
+    tools: List[str] = Field(default_factory=list, max_length=50)
+    avatar: str = Field(default="", max_length=500)
 
 
 class AgentUpdate(BaseModel):
@@ -44,15 +44,15 @@ class AgentUpdate(BaseModel):
 
 
 class ExecuteRequest(BaseModel):
-    request: str = Field(..., min_length=1)
-    session_id: str = ""
-    user_id: str = "default"
+    request: str = Field(..., min_length=1, max_length=10000)
+    session_id: str = Field(default="", max_length=200)
+    user_id: str = Field(default="default", max_length=200)
 
 
 class OrchestrateRequest(BaseModel):
-    goal: str = Field(..., min_length=1, description="The goal for multi-agent orchestration")
-    context: str = Field(default="", description="Additional context for the orchestrator")
-    agent_ids: List[str] = Field(default_factory=list, description="Specific agent IDs to use (empty = all agents)")
+    goal: str = Field(..., min_length=1, max_length=10000, description="The goal for multi-agent orchestration")
+    context: str = Field(default="", max_length=5000, description="Additional context for the orchestrator")
+    agent_ids: List[str] = Field(default_factory=list, max_length=20, description="Specific agent IDs to use (empty = all agents)")
 
 
 class AgentsRouter:

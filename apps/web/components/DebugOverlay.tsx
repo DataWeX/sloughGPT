@@ -49,7 +49,7 @@ function Sparkline({ data, width = 80, height = 16 }: { data: number[]; width?: 
     return `${x},${y}`
   }).join(' ')
   return (
-    <svg width={width} height={height} className="inline-block">
+    <svg width={width} height={height} className="inline-block" aria-hidden="true">
       <polyline
         points={points}
         fill="none"

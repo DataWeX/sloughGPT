@@ -33,13 +33,17 @@ export function LearnSection() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
+    let cancelled = false
     learnerController.status().then(s => {
+      if (cancelled) return
       setStatus(s)
       setLoading(false)
     }).catch(() => {
+      if (cancelled) return
       addToast('Failed to load learner status', 'error')
       setLoading(false)
     })
+    return () => { cancelled = true }
   }, [addToast])
 
   const handleSearch = async () => {

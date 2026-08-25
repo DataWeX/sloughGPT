@@ -404,7 +404,7 @@ class MultimodalRouter:
         except Exception as e:
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
-                self._dpo_state["result"] = {"error": str(e)}
+                self._dpo_state["result"] = {"error": "DPO training failed", "error_type": type(e).__name__}
             logger.warning("Multimodal DPO failed: %s", e)
             classify_and_raise(e, source="multimodal_dpo")
 

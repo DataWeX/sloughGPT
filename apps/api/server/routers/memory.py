@@ -19,16 +19,16 @@ logger = logging.getLogger("slo.api.memory")
 class StoreRequest(BaseModel):
     """Body for POST /memory/store."""
 
-    content: str = Field(..., min_length=1)
-    topic: str = "manual"
-    source: str = "api"
+    content: str = Field(..., min_length=1, max_length=50000)
+    topic: str = Field(default="manual", max_length=200)
+    source: str = Field(default="api", max_length=200)
 
 
 class RememberRequest(BaseModel):
     """Body for POST /memory/remember."""
 
-    user_message: str = Field(..., min_length=1)
-    assistant_response: str = Field(..., min_length=1)
+    user_message: str = Field(..., min_length=1, max_length=100000)
+    assistant_response: str = Field(..., min_length=1, max_length=100000)
 
 
 class ConfigRequest(BaseModel):
@@ -41,8 +41,8 @@ class ConfigRequest(BaseModel):
 class UpdateRequest(BaseModel):
     """Body for PATCH /memory/{item_id}."""
 
-    content: str = Field(..., min_length=1, description="New fact text.")
-    topic: Optional[str] = Field(default=None, description="Optional new topic label; keeps existing when omitted.")
+    content: str = Field(..., min_length=1, max_length=50000, description="New fact text.")
+    topic: Optional[str] = Field(default=None, max_length=200, description="Optional new topic label; keeps existing when omitted.")
     importance: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Optional importance score in [0, 1]; keeps existing when omitted.")
 
 

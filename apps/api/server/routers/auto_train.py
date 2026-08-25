@@ -248,9 +248,9 @@ class StartRequest(BaseModel):
     epochs: int = Field(default=20, ge=1, le=1000)
     learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
     batch_size: int = Field(default=16, ge=1, le=1024, description="Chunk size for training")
-    source_text: str | None = Field(default=None, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
-    checkpoint_name: str | None = Field(default=None, description="Load existing checkpoint and continue training")
-    dataset_id: str | None = Field(default=None, description="Dataset ID from /datasets to train on")
+    source_text: str | None = Field(default=None, max_length=5_000_000, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
+    checkpoint_name: str | None = Field(default=None, max_length=200, description="Load existing checkpoint and continue training")
+    dataset_id: str | None = Field(default=None, max_length=200, description="Dataset ID from /datasets to train on")
     early_stopping_patience: int = Field(default=5, ge=0, le=100, description="Stop if no eval improvement for N evaluations (0 = disabled)")
     # Native training architecture params (used when method=native)
     n_embed: int = Field(default=128, ge=16, le=1024, description="Embedding dimension for native training")
@@ -258,8 +258,8 @@ class StartRequest(BaseModel):
     n_head: int = Field(default=4, ge=1, le=64, description="Number of attention heads for native training")
     block_size: int = Field(default=128, ge=8, le=2048, description="Context window size for native training")
     dropout: float = Field(default=0.1, ge=0.0, le=0.9, description="Dropout rate for native training")
-    checkpoint_dir: str | None = Field(default=None, description="Override checkpoint output directory (default: models/auto-training)")
-    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
+    checkpoint_dir: str | None = Field(default=None, max_length=500, description="Override checkpoint output directory (default: models/auto-training)")
+    experiment_id: str | None = Field(default=None, max_length=200, description="Link to an experiment — auto-logs loss/accuracy metrics")
 
 
 class TurboStartRequest(BaseModel):

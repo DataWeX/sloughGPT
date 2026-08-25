@@ -111,7 +111,7 @@ export function useTrainingPolling(): TrainingPolling {
         turboRetryRef.current = 0
         const current = readTraining()
 
-        if (s.status === 'running' || s.status === 'idle') {
+        if (s.status === 'running') {
           writeTraining({
             progress: s.progress ?? current.progress,
             loss: s.loss ?? current.loss,
@@ -126,6 +126,12 @@ export function useTrainingPolling(): TrainingPolling {
         }
 
         clearInterval(pollId); turboPollRef.current = null
+
+        if (s.status === 'idle') {
+          // Turbo service went idle — training was interrupted or never started
+          writeTraining({ phase: 'idle' })
+          return
+        }
 
         if (s.status === 'complete') {
           writeTraining({

@@ -41,6 +41,7 @@ export function ChatSettings({
 }: ChatSettingsProps) {
   return (
     <section
+      aria-label="Chat settings"
       className={cn(
         "shrink-0 border-b border-border/40 bg-muted/20 px-3 py-2 transition-all duration-200 sm:px-4",
         isOpen ? "max-h-20 opacity-100" : "max-h-0 border-transparent p-0 opacity-0 overflow-hidden"

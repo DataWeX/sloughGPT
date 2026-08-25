@@ -118,7 +118,6 @@ describe('useShell', () => {
 
     act(() => { result.current.cancel() })
     expect(result.current.state.isRunning).toBe(false)
-    resolveStream?.()
   })
 
   it('onError sets error state', async () => {

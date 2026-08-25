@@ -91,6 +91,7 @@ export const ChatInput = memo(function ChatInput({
 
   return (
     <section
+      aria-label="Chat input"
       className="shrink-0 bg-background/95 backdrop-blur-sm px-4 sm:px-6 pb-2 pt-1"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >

@@ -67,7 +67,9 @@ export function DatasetSelector({
         open={datasets.importModalOpen}
         onOpenChange={datasets.setImportModalOpen}
         onImportComplete={(datasetId: string) => {
-          void datasets.fetchDatasets().then(() => datasets.setSelectedDataset(datasetId))
+          void datasets.fetchDatasets()
+            .then(() => datasets.setSelectedDataset(datasetId))
+            .catch(() => {})
         }}
       />
     </div>

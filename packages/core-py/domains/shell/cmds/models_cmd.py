@@ -57,7 +57,7 @@ def _models(args, out, api):
         if loaded:
             out.write(f"\n  Loaded: {loaded}")
     except Exception:
-        pass
+        pass  # non-critical; models list already shown
 
     return 0
 

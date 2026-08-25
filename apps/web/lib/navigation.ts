@@ -89,6 +89,8 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/feedback', labelKey: 'nav.feedback', icon: '💬', description: 'Feedback analytics' },
       { path: '/adapters', labelKey: 'nav.adapters', icon: '🔧', description: 'LoRA adapter management' },
+      { path: '/lora-eval', labelKey: 'nav.lora-eval', icon: '🧪', description: 'LoRA adapter evaluation' },
+      { path: '/rate-limit', labelKey: 'nav.rate-limit', icon: '⏱️', description: 'Rate limiting status' },
       { path: '/evaluate', labelKey: 'nav.evaluate', icon: '📊', description: 'Model evaluation' },
       { path: '/learn', labelKey: 'nav.learn', icon: '📖', description: 'Learning pipeline' },
       { path: '/self-train', labelKey: 'nav.self-train', icon: '🏋️', description: 'Self-training loop' },
@@ -150,6 +152,8 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/shell': IconActivity,
   '/feedback': IconActivity,
   '/adapters': IconSettings,
+  '/lora-eval': IconActivity,
+  '/rate-limit': IconSettings,
   '/evaluate': IconActivity,
   '/learn': IconBrain,
   '/self-train': IconTraining,

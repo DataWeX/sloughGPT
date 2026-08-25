@@ -190,7 +190,7 @@ export default function CompanionPage() {
               const polygonPoints = points.map(p => `${p.x},${p.y}`).join(' ')
               return (
                 <div className="flex justify-center">
-                  <svg viewBox="0 0 200 200" className="w-48 h-48">
+                  <svg viewBox="0 0 200 200" className="w-48 h-48" role="img" aria-label="Companion trait radar chart">
                     {/* Grid rings */}
                     {[0.25, 0.5, 0.75, 1].map(scale => (
                       <polygon

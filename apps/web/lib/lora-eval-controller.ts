@@ -1,24 +1,58 @@
-import { apiGet } from './http-client'
+/**
+ * LoRA Eval controller — adapter quality evaluation.
+ */
+import { apiGet, apiPost } from '@/lib/http-client'
 
 export interface LoraEvalResult {
-  adapter_path: string
-  verdict: string
+  status: string
+  adapter_path?: string
+  verdict?: string
+  timestamp?: string
   perplexity?: number
   bleu?: number
-  timestamp?: string
+  baseline?: Record<string, unknown>
+  with_adapter?: Record<string, unknown>
+  delta?: Record<string, unknown>
+  report?: string
+  elapsed_ms?: number
 }
 
-export interface LoraEvalHistory {
-  results: LoraEvalResult[]
+export type LoraEvalHistory = LoraEvalResult[]
+
+export interface LoraAggregationResult {
+  status: string
+  output_path?: string
+  user_count?: number
+  total_feedback?: number
+  eval?: {
+    verdict: string
+    perplexity_delta?: number
+    bleu_delta?: number
+    throughput_delta?: number
+    report?: string
+  }
 }
 
 export const loraEvalController = {
-  async runEval(adapterPath: string): Promise<unknown> {
-    return apiGet(`/lora-eval/run?adapter_path=${encodeURIComponent(adapterPath)}`)
+  async runEval(adapterPath: string, soul?: string): Promise<LoraEvalResult> {
+    const params = new URLSearchParams({ adapter_path: adapterPath })
+    if (soul) params.set('soul', soul)
+    return apiGet<LoraEvalResult>(`/lora-eval/run?${params}`)
   },
 
   async getHistory(limit = 10): Promise<LoraEvalResult[]> {
-    const d = await apiGet<LoraEvalHistory>(`/lora-eval/history?limit=${limit}`)
-    return d?.results ?? []
+    const data = await apiGet<{ results?: LoraEvalResult[] } | LoraEvalResult[]>(`/lora-eval/history?limit=${limit}`)
+    if (Array.isArray(data)) return data
+    return data.results ?? []
+  },
+
+  async aggregate(topK = 10, minFeedback = 5, outputName = 'best_aggregated'): Promise<LoraAggregationResult> {
+    const params = new URLSearchParams({
+      top_k: String(topK),
+      min_feedback: String(minFeedback),
+      output_name: outputName,
+      run_eval: 'true',
+    })
+    return apiPost(`/lora-eval/aggregate?${params}`)
   },
 }

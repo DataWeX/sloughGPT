@@ -26,6 +26,8 @@ import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
 import ModelCacheCard from '@/components/models/ModelCacheCard'
 import ModelUsageCard from '@/components/models/ModelUsageCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
+import DownloadsCard from '@/components/models/DownloadsCard'
+import EngineStatusCard from '@/components/models/EngineStatusCard'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
@@ -284,6 +286,8 @@ export default function ModelsPage() {
           health={health && health !== 'offline' ? health : null}
           onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
         />
+        <DownloadsCard />
+        <EngineStatusCard />
 
         {/* Comparison section */}
         <Card>

@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
 from domains.shell.runtime import DaitRuntime
-from schemas.common import safe_audit_log
+from schemas.common import safe_audit_log, classify_and_raise
 
 logger = logging.getLogger("slo.api.shell")
 
@@ -93,8 +93,7 @@ async def exec_command(req: ShellExecRequest):
         output, exit_code = await asyncio.to_thread(repl.execute, req.command)
     except Exception as e:
         logger.warning("Shell exec error: %s", e, extra={"tag": "SHELL"})
-        output = f"Shell error: {type(e).__name__}: {e}"
-        exit_code = 1
+        classify_and_raise(e, source="shell.exec")
 
     elapsed = (_time.monotonic() - t0) * 1000
 
@@ -126,7 +125,18 @@ async def exec_command_stream(req: ShellExecRequest, request: Request):
             output_lines = output.split("\n") if output else []
         except Exception as e:
             logger.warning("Shell stream exec error: %s", e, extra={"tag": "SHELL"})
-            yield _sse_line("shell", "STREAMING", "error", {"error": str(e)})
+            error_type = type(e).__name__
+            is_conn = isinstance(e, (ConnectionError, OSError)) and "connect" in str(e).lower()
+            is_timeout = isinstance(e, (TimeoutError,) or ())
+            hint = ""
+            if is_conn:
+                hint = " Is the API server running? Use 'api start'."
+            elif is_timeout:
+                hint = " Request timed out."
+            yield _sse_line("shell", "STREAMING", "error", {
+                "error": f"{error_type}: {e}{hint}",
+                "error_type": error_type,
+            })
             return
 
         # Yield output lines

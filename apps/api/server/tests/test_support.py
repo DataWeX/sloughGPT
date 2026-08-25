@@ -65,6 +65,13 @@ def get_test_client():
 
 
 def _data(resp):
-    """Unwrap the success_response() envelope from a TestClient response."""
+    """Unwrap the success_response() envelope from a TestClient response.
+
+    Handles three shapes:
+    - {"status":"success","data":{...}}  → returns the inner data dict/list
+    - [list] or {dict} returned directly → returns as-is
+    """
     body = resp.json()
-    return body.get("data", body)
+    if isinstance(body, dict):
+        return body.get("data", body)
+    return body

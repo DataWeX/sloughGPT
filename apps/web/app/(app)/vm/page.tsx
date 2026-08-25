@@ -1430,10 +1430,10 @@ export default function VMPage() {
                 <table className="w-full text-xs font-mono">
                   <thead>
                     <tr className="text-muted-foreground">
-                      <th className="text-left py-1 px-2">#</th>
-                      <th className="text-left py-1 px-2">EIP</th>
-                      <th className="text-left py-1 px-2">Opcode</th>
-                      <th className="text-left py-1 px-2">Operands</th>
+                      <th scope="col" className="text-left py-1 px-2">#</th>
+                      <th scope="col" className="text-left py-1 px-2">EIP</th>
+                      <th scope="col" className="text-left py-1 px-2">Opcode</th>
+                      <th scope="col" className="text-left py-1 px-2">Operands</th>
                     </tr>
                   </thead>
                   <tbody>

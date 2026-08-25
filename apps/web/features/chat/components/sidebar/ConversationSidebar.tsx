@@ -519,7 +519,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={onClose}
           />
-          <aside className="absolute inset-y-0 left-0 w-[var(--conv-sidebar-width)] flex flex-col bg-background shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-[var(--conv-sidebar-width)] flex flex-col bg-background shadow-xl" aria-label="Conversations">
             <SidebarContent {...props} isDrawer={true} />
           </aside>
         </div>

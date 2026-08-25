@@ -93,7 +93,7 @@ function TraitRadar({ values, size = 80 }: { values: Record<string, number>; siz
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z'
 
   return (
-    <svg width={size} height={size} className="shrink-0">
+    <svg width={size} height={size} className="shrink-0" role="img" aria-label="Soul trait radar chart">
       {[0.25, 0.5, 0.75, 1].map(scale => (
         <polygon
           key={scale}

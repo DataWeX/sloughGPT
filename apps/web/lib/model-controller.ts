@@ -168,6 +168,83 @@ export const modelController = {
   async getExportFormats(): Promise<Record<string, string>> {
     return apiGet<Record<string, string>>('/models/export/formats')
   },
+
+  async getCurrentModel(): Promise<{ model_id: string; model_type: string; device: string; loaded_at: number; quantization?: Record<string, unknown> } | null> {
+    try {
+      return await apiGet('/models/current')
+    } catch (e) {
+      _log.warning('Could not get current model', { exception: String(e) })
+      return null
+    }
+  },
+
+  async getCatalog(): Promise<{ models: Array<{ id: string; name: string; type: string; size_gb: number; cached: boolean; source: string }>; count: number }> {
+    try {
+      return await apiGet('/models/catalog')
+    } catch (e) {
+      _log.warning('Could not get catalog', { exception: String(e) })
+      return { models: [], count: 0 }
+    }
+  },
+
+  async getCatalogStats(): Promise<{ total_models: number; total_size_gb: number; cached_count: number; sources: Record<string, number> }> {
+    try {
+      return await apiGet('/models/catalog/stats')
+    } catch (e) {
+      _log.warning('Could not get catalog stats', { exception: String(e) })
+      return { total_models: 0, total_size_gb: 0, cached_count: 0, sources: {} }
+    }
+  },
+
+  async startDownload(modelId: string, totalBytesHint = 0): Promise<{ status: string; model_id: string }> {
+    return apiPost('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
+  },
+
+  async getDownloadStatus(modelId: string): Promise<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number; error?: string }> {
+    return apiGet(`/models/download/${encodeURIComponent(modelId)}`)
+  },
+
+  async listDownloads(): Promise<{ downloads: Array<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }>; count: number }> {
+    try {
+      return await apiGet('/models/downloads')
+    } catch (e) {
+      _log.warning('Could not list downloads', { exception: String(e) })
+      return { downloads: [], count: 0 }
+    }
+  },
+
+  async cancelDownload(modelId: string): Promise<{ status: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(modelId)}/cancel`)
+  },
+
+  async retryDownload(modelId: string): Promise<{ status: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(modelId)}/retry`)
+  },
+
+  async verifyDownload(modelId: string): Promise<{ verified: boolean; model_id: string; error?: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(modelId)}/verify`)
+  },
+
+  async getEngineStatus(): Promise<{ engine: string; version: string; models_loaded: number; uptime_s: number; memory_usage_mb: number }> {
+    try {
+      return await apiGet('/models/engine/status')
+    } catch (e) {
+      _log.warning('Could not get engine status', { exception: String(e) })
+      return { engine: 'unknown', version: '0.0.0', models_loaded: 0, uptime_s: 0, memory_usage_mb: 0 }
+    }
+  },
+
+  async reloadEngine(): Promise<{ status: string }> {
+    return apiPost('/models/engine/reload')
+  },
+
+  async setPrecision(mode: 'auto' | 'fp32' | 'fp16'): Promise<{ mode: string; applied: boolean }> {
+    return apiPost('/models/precision', { mode })
+  },
+
+  async exportModel(outputPath: string, format: 'sou' | 'safetensors' | 'onnx' | 'gguf' = 'sou', includeTokenizer = true): Promise<{ status: string; output_path: string }> {
+    return apiPost('/models/export', { output_path: outputPath, format, include_tokenizer: includeTokenizer })
+  },
 }
 
 export async function* streamModelEvents(

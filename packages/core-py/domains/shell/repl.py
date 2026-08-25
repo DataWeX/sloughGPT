@@ -3457,8 +3457,17 @@ Examples:
         if isinstance(result, dict) and "text" in result:
             generated = result["text"].strip().split("\n")[0].strip()
             generated = generated.strip('`"\'')
-            self._print(f"  \u2192 {generated}")
+            self._print(f"  → {generated}")
             self._print("")
+
+            # Validate generated command against allowlist
+            gen_cmd = generated.split()[0] if generated.split() else ""
+            known_cmds = set(self.COMMANDS.keys()) | set(self._ext_cmds.keys())
+            if gen_cmd not in known_cmds:
+                self._print(f"  \u26a0\ufe0f AI generated unknown command: {gen_cmd!r}")
+                self._print(f"  Refusing to execute. Use the command directly.")
+                return
+
             # Execute the generated command
             bg = generated.rstrip().endswith("&")
             cmds, _, _ = self._parse_pipeline(generated)

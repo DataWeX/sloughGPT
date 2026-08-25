@@ -215,6 +215,18 @@ describe('useTrainingPolling', () => {
       )
     })
 
+    it('stops and resets phase when turbo goes idle', async () => {
+      mockGetTurboStatus.mockResolvedValue({ status: 'idle' })
+      const { result } = renderHook(() => useTrainingPolling())
+
+      result.current.startTurboPoll()
+      await vi.advanceTimersByTimeAsync(3000)
+
+      expect(mockWriteTraining).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'idle' }),
+      )
+    })
+
     it('stops after MAX_POLL_RETRIES', async () => {
       mockGetTurboStatus.mockRejectedValue(new Error('fail'))
       const addToast = vi.fn()
