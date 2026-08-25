@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Skeleton } from '@sloughgpt/strui'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@sloughgpt/strui'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { trainingJobsController, type Webhook, type WebhookStats } from '@/lib/training-controller'
 
 interface Props {

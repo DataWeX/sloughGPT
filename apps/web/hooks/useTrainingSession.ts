@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import { operationsStore } from '@/lib/operations-store'
 import { appShellStore, readTraining, writeTraining, isTrainingActive, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
+import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useTrainingPolling } from './useTrainingPolling'
@@ -122,6 +123,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             // Server has no active training — stale localStorage state, clear it
             _log.info('Shell training is stale (server has no active training), clearing')
             appShellStore.getState().resetTraining()
+            useToastStore.getState().addToast('Previous training session expired — server was restarted', 'info')
             return
           }
 
@@ -135,6 +137,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
           _log.warning('Could not verify training state with server', { error: e instanceof Error ? e.message : String(e) })
           // On verification failure, clear stale state to avoid phantom training
           appShellStore.getState().resetTraining()
+          useToastStore.getState().addToast('Could not verify training status — showing idle state', 'info')
         }
         return
       }

@@ -72,7 +72,7 @@ export class ErrorReporter {
 
   private _getLogger(): { warn: (msg: string, ctx?: unknown) => void } | null {
     if (!this._logger) {
-      try { this._logger = require('@/lib/dev-log').logger } catch { /* fallback: no-op */ }
+      import('@/lib/dev-log').then(m => { this._logger = m.logger }).catch(() => { /* fallback: no-op */ })
     }
     return this._logger
   }

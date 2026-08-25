@@ -377,6 +377,15 @@ export default function SessionPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete session"
+        description="Delete this session? This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => void confirmDelete()}
+      />
     </PageContainer>
   )
 }

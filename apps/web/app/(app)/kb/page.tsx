@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
@@ -32,6 +33,9 @@ export default function KbPage() {
   const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null)
   const [editContent, setEditContent] = useState('')
   const [editTopic, setEditTopic] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
 
   const loadStats = useCallback(async () => {
     try {
@@ -94,19 +98,32 @@ export default function KbPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
+    setPendingDeleteId(id)
+    setConfirmOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return
     try {
-      await kbController.remove(id)
-      setItems(items.filter(i => i.id !== id))
+      await kbController.remove(pendingDeleteId)
+      setItems(items.filter(i => i.id !== pendingDeleteId))
       addToast('Entry deleted', 'success')
       void loadStats()
     } catch (e) {
       addToast(`Could not delete: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setConfirmOpen(false)
+      setPendingDeleteId(null)
     }
   }
 
-  const handleBatchDelete = async () => {
+  const handleBatchDelete = () => {
     if (selectedIds.size === 0) return
+    setBulkConfirmOpen(true)
+  }
+
+  const confirmBatchDelete = async () => {
     try {
       await kbController.batchDelete(Array.from(selectedIds))
       addToast(`Deleted ${selectedIds.size} entries`, 'success')
@@ -115,6 +132,8 @@ export default function KbPage() {
       void loadStats()
     } catch (e) {
       addToast(`Could not batch delete: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setBulkConfirmOpen(false)
     }
   }
 
@@ -449,6 +468,24 @@ export default function KbPage() {
           </Card>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete knowledge entry"
+        description="Delete this knowledge entry? This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => void confirmDelete()}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onOpenChange={setBulkConfirmOpen}
+        title="Bulk delete entries"
+        description={`Delete ${selectedIds.size} entries? This cannot be undone.`}
+        confirmLabel="Delete all"
+        onConfirm={() => void confirmBatchDelete()}
+      />
     </PageContainer>
   )
 }
