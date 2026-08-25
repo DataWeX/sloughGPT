@@ -22,7 +22,7 @@ export default function CompanionPage() {
   const [presets, setPresets] = useState<CompanionPreset[]>([])
   const [systemPrompt, setSystemPrompt] = useState('')
   const [chatInput, setChatInput] = useState('')
-  const [chatResponse, setChatResponse] = useState('')
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
   const [chatLoading, setChatLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -91,16 +91,22 @@ export default function CompanionPage() {
 
   const handleChat = async () => {
     if (!chatInput.trim() || chatLoading) return
+    const userMsg = chatInput.trim()
+    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }])
     setChatLoading(true)
+    setChatInput('')
     try {
-      const res = await companionController.chat(chatInput)
-      setChatResponse(res.response)
+      const res = await companionController.chat(userMsg)
+      setChatMessages(prev => [...prev, { role: 'assistant', content: res.response }])
     } catch (err) {
-      setChatResponse(`[Error: ${extractErrorMessage(err, 'could not reach model')}]`)
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `[Error: ${extractErrorMessage(err, 'could not reach model')}]` }])
     } finally {
       setChatLoading(false)
-      setChatInput('')
     }
+  }
+
+  const handleClearChat = () => {
+    setChatMessages([])
   }
 
   if (loading) {
@@ -290,28 +296,59 @@ export default function CompanionPage() {
       )}
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Test Chat</CardTitle>
+          {chatMessages.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={handleClearChat} aria-label="Clear chat history">
+              Clear
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
-          {chatResponse && (
-            <div className="rounded-md bg-muted/30 p-3 text-sm">
-              {chatResponse}
+          {chatMessages.length > 0 && (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {chatMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                      msg.role === 'user'
+                        ? 'bg-primary/10 text-foreground'
+                        : 'bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                    Thinking...
+                  </div>
+                </div>
+              )}
             </div>
           )}
+          {chatMessages.length === 0 && !chatLoading && (
+            <p className="text-xs text-muted-foreground text-center py-4">Say something to your companion...</p>
+          )}
+          <div ref={chatEndRef} />
           <div className="flex gap-2">
             <Input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleChat()}
-              placeholder="Say something to your companion..."
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChat()}
+              placeholder="Type a message..."
               disabled={chatLoading}
+              aria-label="Chat message"
             />
             <Button size="sm" onClick={handleChat} disabled={chatLoading || !chatInput.trim()}>
               {chatLoading ? '...' : 'Send'}
             </Button>
           </div>
-          <div ref={chatEndRef} />
         </CardContent>
       </Card>
     </PageContainer>

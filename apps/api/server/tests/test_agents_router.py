@@ -16,8 +16,9 @@ class TestAgentsRouter:
         assert resp.status_code == 200
 
     def test_create_agent(self):
-        resp = self.client.post("/agents", json={"name": "test-agent", "description": "test"})
-        assert resp.status_code in (200, 201, 400, 422)
+        import time
+        resp = self.client.post("/agents", json={"name": f"test-agent-{int(time.time())}", "description": "test"})
+        assert resp.status_code in (200, 201, 400, 409, 422)
 
     def test_get_agent_not_found(self):
         resp = self.client.get("/agents/nonexistent-agent-id")

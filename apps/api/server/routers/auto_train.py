@@ -297,8 +297,15 @@ class FromSessionsRequest(BaseModel):
     experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
 
 
+_VALID_DATASET_ID = re.compile(r'^[a-zA-Z0-9_\-]+$')
+
 def _resolve_dataset_path(dataset_id: str) -> str:
-    ds_candidate = REPO_ROOT / "datasets" / dataset_id
+    if not _VALID_DATASET_ID.match(dataset_id):
+        raise_error(f"Invalid dataset ID: {dataset_id!r}", code="E_BAD_REQUEST", status_code=400)
+    ds_candidate = (REPO_ROOT / "datasets" / dataset_id).resolve()
+    allowed_base = (REPO_ROOT / "datasets").resolve()
+    if not str(ds_candidate).startswith(str(allowed_base)):
+        raise_error("Path traversal detected", code="E_BAD_REQUEST", status_code=400)
     if not ds_candidate.exists():
         return ""
     for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
@@ -598,11 +605,13 @@ class AutoTrainRouter:
             from pathlib import Path as _P
             _dp = _P(data_path).resolve()
             _allowed_bases = [REPO_ROOT / "datasets", REPO_ROOT / "data"]
+            if not _dp.exists():
+                raise_error(f"Data file not found: {data_path}", code="E_NOT_FOUND")
             if not any(str(_dp).startswith(str(b.resolve())) for b in _allowed_bases if b.exists()):
-                if not _dp.exists():
-                    raise_error(f"Data file not found: {data_path}", code="E_NOT_FOUND")
-                # Allow absolute paths that exist but warn — relaxed for dev convenience
-                pass
+                raise_error(
+                    f"Data path must be under datasets/ or data/ directories, got: {data_path}",
+                    code="E_BAD_REQUEST", status_code=400,
+                )
 
             with _turbo_lock:
                 _turbo_state = {

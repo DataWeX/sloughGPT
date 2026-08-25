@@ -28,6 +28,7 @@ export default function FeedbackPage() {
   const [newConvName, setNewConvName] = useState('')
   const [creating, setCreating] = useState(false)
   const [workflowBusy, setWorkflowBusy] = useState(false)
+  const [convSearch, setConvSearch] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -214,11 +215,22 @@ export default function FeedbackPage() {
                 Create
               </Button>
             </div>
+            {conversations.length > 0 && (
+              <Input
+                value={convSearch}
+                onChange={e => setConvSearch(e.target.value)}
+                placeholder="Search conversations..."
+                aria-label="Search conversations"
+                className="h-8 text-xs"
+              />
+            )}
             {conversations.length === 0 ? (
               <p className="text-sm text-muted-foreground">No conversations yet.</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {conversations.map(conv => (
+                {conversations
+                  .filter(c => !convSearch || c.name.toLowerCase().includes(convSearch.toLowerCase()))
+                  .map(conv => (
                   <div key={conv.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">

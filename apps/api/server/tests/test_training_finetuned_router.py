@@ -27,7 +27,8 @@ _FINETUNED = tempfile.mkdtemp(prefix="slough-finetuned-")
 @pytest.fixture(autouse=True)
 def _point_at_tmpdir():
     """Redirect the router's finetuned dir to a temp location and reset it."""
-    import training.router as _rt
+    import importlib
+    _rt = importlib.import_module("training.router")
     base = Path(_FINETUNED)
     for child in base.iterdir():
         if child.is_dir():
@@ -36,7 +37,7 @@ def _point_at_tmpdir():
         else:
             child.unlink()
     _rt._finetuned_models_cache = None
-    with patch("training.router._finetuned_dir", return_value=base):
+    with patch.object(_rt, "_finetuned_dir", return_value=base):
         yield
     _rt._finetuned_models_cache = None
 

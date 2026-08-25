@@ -131,6 +131,7 @@ export default function VoicePage() {
             onChange={e => setTtsText(e.target.value)}
             placeholder="Enter text to speak..."
             rows={3}
+            aria-label="Text to speak"
           />
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={handleGenerate} disabled={generating || !ttsText.trim()}>

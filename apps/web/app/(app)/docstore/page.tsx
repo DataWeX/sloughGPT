@@ -118,7 +118,7 @@ export default function DocstorePage() {
   }, [selected, selectedDoc, editContent, addToast, fetchDocs])
 
   const clearCollection = useCallback(async () => {
-    setPendingClear(true); return
+    setPendingClear(true)
     try {
       await apiDelete(`/docstore/${selected}`)
       addToast(`Cleared ${selected}`, 'success')

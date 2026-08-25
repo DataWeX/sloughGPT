@@ -8,6 +8,22 @@ from __future__ import annotations
 help = "List, unload, or configure models"
 names = ["models", "unload", "precision", "quantize", "dequantize"]
 
+_VALID_PRECISION = {"auto", "fp32", "fp16"}
+_VALID_BITS = {"4", "8"}
+_VALID_SCHEME = {"symmetric", "asymmetric"}
+
+
+def _format_error(e: Exception, cmd: str = "") -> str:
+    """Format an exception into a user-friendly error message."""
+    import requests as _req
+    etype = type(e).__name__
+    if isinstance(e, (_req.ConnectionError, ConnectionError)):
+        return "Cannot connect to API server. Use 'api start'."
+    if isinstance(e, (_req.Timeout, TimeoutError)):
+        return "Request timed out."
+    prefix = f"[{cmd}] " if cmd else ""
+    return f"{prefix}{etype}: {e}"
+
 
 def run(argv: list[str], out, api, env: dict) -> int:
     cmd = argv[0] if argv else "models"
@@ -29,7 +45,7 @@ def _models(args, out, api):
     try:
         models = api.models()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "models"))
         return 1
     if not models:
         out.write("No models available.")
@@ -56,7 +72,7 @@ def _unload(args, out, api):
     try:
         result = api.unload_model()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "unload"))
         return 1
     status = result.get("status", "error")
     if status == "unloaded":
@@ -68,10 +84,13 @@ def _unload(args, out, api):
 
 def _precision(args, out, api):
     mode = args[0] if args else "auto"
+    if mode not in _VALID_PRECISION:
+        out.write(f"Invalid precision: {mode!r}. Must be one of: {', '.join(sorted(_VALID_PRECISION))}")
+        return 1
     try:
         result = api.set_precision(mode)
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "precision"))
         return 1
     out.write(f"Precision set to: {result.get('mode', mode)}")
     return 0
@@ -80,10 +99,16 @@ def _precision(args, out, api):
 def _quantize(args, out, api):
     bits = args[0] if args else "4"
     scheme = args[1] if len(args) > 1 else "symmetric"
+    if bits not in _VALID_BITS:
+        out.write(f"Invalid bits: {bits!r}. Must be one of: {', '.join(sorted(_VALID_BITS))}")
+        return 1
+    if scheme not in _VALID_SCHEME:
+        out.write(f"Invalid scheme: {scheme!r}. Must be one of: {', '.join(sorted(_VALID_SCHEME))}")
+        return 1
     try:
         result = api.quantize_model(bits=bits, scheme=scheme)
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "quantize"))
         return 1
     status = result.get("status", "error")
     if status == "ok":
@@ -97,7 +122,7 @@ def _dequantize(args, out, api):
     try:
         result = api.dequantize_model()
     except Exception as e:
-        out.write(f"Error: {e}")
+        out.write(_format_error(e, "dequantize"))
         return 1
     status = result.get("status", "error")
     if status == "ok":

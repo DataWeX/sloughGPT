@@ -53,6 +53,8 @@ def _make_companion(**overrides):
 def _app():
     app = FastAPI()
     app.include_router(router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 
@@ -190,8 +192,8 @@ class TestChat:
         with patch("domains.models.provider.get_provider", return_value=None):
             client = TestClient(_app())
             resp = client.post("/companion/chat", json={"message": "Hi"})
-        assert resp.status_code == 200
-        assert "[Error:" in resp.json()["response"]
+        assert resp.status_code == 503
+        assert "No model loaded" in resp.json()["error"]
 
     @patch(PATCH_GET)
     def test_chat_with_mood_adjustment(self, mock_get):
@@ -200,4 +202,4 @@ class TestChat:
         with patch("domains.models.provider.get_provider", return_value=None):
             client = TestClient(_app())
             resp = client.post("/companion/chat", json={"message": "Hi", "user_mood": "happy"})
-        assert resp.status_code == 200
+        assert resp.status_code == 503

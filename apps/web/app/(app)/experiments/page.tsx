@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -39,6 +39,19 @@ export default function ExperimentsPage() {
   }
 
   useEffect(() => { fetchExperiments() }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchExperiments() }
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setCreateDialogOpen(true) }
+      if (e.key === 'e' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleExport() }
+      if (e.key === 'Escape') { setSelectedId(null); setSelectedIds(new Set()); setCreateDialogOpen(false) }
+      if (e.key === 'a' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); toggleSelectAll() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [handleExport])
 
   useEffect(() => {
     if (autoRefresh) {
@@ -136,6 +149,24 @@ export default function ExperimentsPage() {
     }
   }
 
+  const handleExport = useCallback(async () => {
+    try {
+      const ids = selectedIds.size > 0 ? Array.from(selectedIds) : experiments.map(e => e.id)
+      if (ids.length === 0) { addToast('No experiments to export', 'error'); return }
+      const data = await Promise.all(ids.map(id => experimentsController.getExperimentData(id)))
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `experiments-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`Exported ${ids.length} experiments`, 'success')
+    } catch {
+      addToast('Could not export experiments', 'error')
+    }
+  }, [selectedIds, experiments, addToast])
+
   if (loading) {
     return (
       <PageContainer
@@ -199,9 +230,12 @@ export default function ExperimentsPage() {
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search..."
+                placeholder="Search... (R refresh, N new, E export)"
                 className="h-9 w-32 text-sm"
               />
+              <Button size="sm" variant="ghost" onClick={() => void handleExport()} aria-label="Export">
+                Export
+              </Button>
               <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
                 {autoRefresh ? 'Auto' : 'Refresh'}
               </Button>

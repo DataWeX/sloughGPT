@@ -34,6 +34,9 @@ export default function CollectionsPage() {
   const [newStoreType, setNewStoreType] = useState('memory')
   const [creating, setCreating] = useState(false)
   const [runningId, setRunningId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editSourceType, setEditSourceType] = useState('')
+  const [editStoreType, setEditStoreType] = useState('')
 
   const fetchPipelines = useCallback(async () => {
     try {
@@ -182,9 +185,16 @@ export default function CollectionsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-xs text-muted-foreground">Loading...</p>
+            <div className="flex justify-center py-8">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
           ) : pipelines.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No pipelines configured. Create one above.</p>
+            <div className="text-center py-6 space-y-2">
+              <p className="text-sm text-muted-foreground">No pipelines configured.</p>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowCreate(true)}>
+                Create Pipeline
+              </Button>
+            </div>
           ) : (
             <div className="space-y-2">
               {pipelines.map(p => (

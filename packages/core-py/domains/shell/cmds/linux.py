@@ -41,6 +41,19 @@ class LinuxCommandsMixin:
             size /= 1024
         return f"{size:>4.1f}P"
 
+    @staticmethod
+    def _fmt_error(e: Exception, cmd: str = "") -> str:
+        """Format an exception into a user-friendly error message."""
+        etype = type(e).__name__
+        if isinstance(e, FileNotFoundError):
+            return f"{cmd}: {e.filename or 'file'} not found"
+        if isinstance(e, PermissionError):
+            return f"{cmd}: permission denied"
+        if isinstance(e, OSError):
+            return f"{cmd}: {e}"
+        prefix = f"{cmd}: " if cmd else ""
+        return f"{prefix}{etype}: {e}"
+
     # ── file system ─────────────────────────────────────────────────
 
     def _cmd_cd(self, args: str = "") -> None:
@@ -3717,7 +3730,7 @@ class LinuxCommandsMixin:
                 self._print(f"  timeout: command timed out after {timeout_sec}s")
                 self._last_exit_code = 124
         except Exception as e:
-            self._print(f"  timeout: {e}")
+            self._print(f"  {self._fmt_error(e, 'timeout')}")
             self._last_exit_code = 1
 
     # ── watch ─────────────────────────────────────────────────────
@@ -3950,7 +3963,7 @@ class LinuxCommandsMixin:
                             self._print(f"  {path}")
                 self._last_exit_code = 0
             except Exception as e:
-                self._print(f"  tar: {e}")
+                self._print(f"  {self._fmt_error(e, 'tar')}")
                 self._last_exit_code = 1
         elif extract:
             try:
@@ -3962,7 +3975,7 @@ class LinuxCommandsMixin:
                             self._print(f"  {m.name}")
                 self._last_exit_code = 0
             except Exception as e:
-                self._print(f"  tar: {e}")
+                self._print(f"  {self._fmt_error(e, 'tar')}")
                 self._last_exit_code = 1
         elif list_mode:
             try:
@@ -3972,7 +3985,7 @@ class LinuxCommandsMixin:
                         self._print(f"  {m.name}")
                 self._last_exit_code = 0
             except Exception as e:
-                self._print(f"  tar: {e}")
+                self._print(f"  {self._fmt_error(e, 'tar')}")
                 self._last_exit_code = 1
         else:
             self._print("  Usage: tar [-ctxvf] [file] [path ...]")
@@ -4013,7 +4026,7 @@ class LinuxCommandsMixin:
                         self._print(f"  {path}")
                     self._last_exit_code = 0
                 except Exception as e:
-                    self._print(f"  gzip: {e}")
+                    self._print(f"  {self._fmt_error(e, 'gzip')}")
                     self._last_exit_code = 1
             else:
                 out_name = target + ".gz"
@@ -4028,7 +4041,7 @@ class LinuxCommandsMixin:
                         self._print(f"  {path}")
                     self._last_exit_code = 0
                 except Exception as e:
-                    self._print(f"  gzip: {e}")
+                    self._print(f"  {self._fmt_error(e, 'gzip')}")
                     self._last_exit_code = 1
 
     def _cmd_gunzip(self, args: str = "") -> None:

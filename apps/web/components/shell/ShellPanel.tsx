@@ -23,7 +23,7 @@ export function ShellPanel({
   placeholder = 'Type a command...',
   maxVisibleLines = 500,
 }: ShellPanelProps) {
-  const { state, execute, clear } = useShell()
+  const { state, execute, clear, cancel } = useShell()
   const [input, setInput] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -42,6 +42,20 @@ export function ShellPanel({
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Auto-cancel after 60s of running
+  const startRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (state.isRunning) {
+      startRef.current = Date.now()
+      const timer = setTimeout(() => {
+        cancel()
+        startRef.current = null
+      }, 60_000)
+      return () => clearTimeout(timer)
+    }
+    startRef.current = null
+  }, [state.isRunning, cancel])
 
   // Auto-hide exit code badge after 5s for success, keep showing for errors
   useEffect(() => {

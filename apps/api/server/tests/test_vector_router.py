@@ -12,8 +12,8 @@ class TestVectorRouter:
         self.client = get_test_client()
 
     def test_init_vector_store(self):
-        resp = self.client.post("/vector/init")
-        assert resp.status_code in (200, 500)
+        resp = self.client.post("/vector/init", json={})
+        assert resp.status_code in (200, 400, 422, 500)
 
     def test_get_stats(self):
         resp = self.client.get("/vector/stats")

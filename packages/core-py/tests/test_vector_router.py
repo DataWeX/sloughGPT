@@ -47,6 +47,8 @@ def app():
     router_instance = VectorRouter()
     app = FastAPI()
     app.include_router(router_instance.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

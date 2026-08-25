@@ -248,7 +248,7 @@ HLT"""
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {
-            "api_job_id": "abc-123",
+            "api_job_id": "",
             "status": "running",
             "progress": 0.5,
             "_result_data": {"status": "completed", "loss": 1.2},

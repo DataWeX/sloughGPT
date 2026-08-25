@@ -142,7 +142,7 @@ async def run_assembly(req: VMRunRequest) -> dict:
 
         if req.keyboard_input:
             for ch in req.keyboard_input:
-                vs.cpu.push_key(ord(ch) & 0xFF)
+                vs.cpu.push_key(ch)
 
         output_buffer: list[str] = []
         original_write = vs._syscall._sys_write
