@@ -132,8 +132,6 @@ function PersonalityBar({ label, value, color = 'bg-primary' }: { label: string;
 
 export default function SoulsPage() {
   const [tab, setTab] = useState<Tab>('souls')
-  const [soulDetail, setSoulDetail] = useState<{ name: string; data: Record<string, unknown> } | null>(null)
-  const [soulStats, setSoulStats] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
 
   // ── Data ──
