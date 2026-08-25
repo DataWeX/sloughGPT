@@ -166,8 +166,8 @@ def test_list_topics(_mock_tl, _mock_rag):
     resp = client.get("/knowledge/topics")
     assert resp.status_code == 200
     body = _data(resp)
-    assert isinstance(body, list)
-    assert len(body) >= 2
+    assert "topics" in body
+    assert body["total"] >= 2
 
 
 # ── Batch ─────────────────────────────────────────────────
