@@ -15,6 +15,7 @@ interface ChatInputRowProps {
   onChange: (value: string) => void
   onSend: () => void
   onStop?: () => void
+  onCancel?: () => void
   loading: boolean
   disabled: boolean
   placeholder: string
@@ -31,7 +32,7 @@ interface ChatInputRowProps {
 }
 
 export function ChatInputRow({
-  value, onChange, onSend, onStop,
+  value, onChange, onSend, onStop, onCancel,
   loading, disabled, placeholder,
   textareaRef, onImage, onTranscript, onAudioRecorded, onAudioTranscript, onGeneratedImage,
   onPDFAnalysis, onPDFError, hasContent, onExecuteCommand,
@@ -139,6 +140,18 @@ export function ChatInputRow({
         >
           ~{estimateTokens(value)}
         </span>
+      )}
+      {loading && onCancel && (
+        <button
+          type="button"
+          className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+          onClick={onCancel}
+          aria-label="Cancel generation"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
+        </button>
       )}
       <ChatSendButton
         loading={loading}

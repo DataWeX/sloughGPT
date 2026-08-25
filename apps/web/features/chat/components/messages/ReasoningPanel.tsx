@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { cn, IconBrain, IconChevronDown } from '@sloughgpt/strui'
 
 interface ContextLayer {
@@ -15,7 +15,7 @@ interface ReasoningPanelProps {
   className?: string
 }
 
-export function ReasoningPanel({ isThinking, contextLayers = [], className }: ReasoningPanelProps) {
+export const ReasoningPanel = memo(function ReasoningPanel({ isThinking, contextLayers = [], className }: ReasoningPanelProps) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -86,4 +86,4 @@ export function ReasoningPanel({ isThinking, contextLayers = [], className }: Re
       )}
     </div>
   )
-}
+})

@@ -104,7 +104,15 @@ async def training_handler(task) -> dict:
     async def _bridge_pause():
         """Propagate task queue pause → threading pause_event."""
         while True:
-            if task.pause_event.is_set():
+            paused = task.pause_event.is_set()
+            try:
+                import routers.auto_train as _at
+                at_pause = getattr(_at, "_auto_train_pause_event", None)
+                if at_pause is not None and at_pause.is_set():
+                    paused = True
+            except Exception:
+                pass
+            if paused:
                 pause_event.clear()  # Paused
             else:
                 pause_event.set()  # Resumed

@@ -18,8 +18,7 @@ export interface MessageBubbleProps {
   showTimestamp: boolean
   images?: ImageAttachment[]
   audio?: AudioAttachment
-  reactions?: Record<string, string[]>
-  edited?: boolean
+  reactions?: Record<string, number>
   onCopy?: (text: string) => void
   onRegenerate?: (messageId: string) => void
   onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
@@ -50,7 +49,6 @@ export const MessageBubble = memo(function MessageBubble({
   images,
   audio,
   reactions,
-  edited,
   onCopy,
   onRegenerate,
   onRegenerateWithOptions,
@@ -178,7 +176,6 @@ export const MessageBubble = memo(function MessageBubble({
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {timeAgo(timestamp)}
-            {edited && <span className="ml-1 italic">(edited)</span>}
           </p>
         )}
         {reactions && Object.keys(reactions).length > 0 && (

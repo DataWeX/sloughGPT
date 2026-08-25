@@ -15,6 +15,7 @@ export interface AppSettings {
   streaming: boolean
   customContext: string
   collapsibleMessageLength: number
+  autoApproveTools: boolean
 }
 
 export interface InjectedKnowledge {
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   streaming: true,
   customContext: '',
   collapsibleMessageLength: 500,
+  autoApproveTools: false,
 }
 
 export const useAppStore = create<AppStore>()(

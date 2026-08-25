@@ -138,7 +138,16 @@ export function useTrainingPolling(): TrainingPolling {
             eta: s.eta_s ?? current.eta,
             elapsedSeconds: s.elapsed_s ?? current.elapsedSeconds,
             avgQuality: s.avg_quality ?? current.avgQuality,
+            message: s.paused ? 'Paused' : (current.message === 'Paused' ? '' : current.message),
           })
+          return
+        }
+
+        if (s.status === 'error' && s.error) {
+          clearInterval(pollId); turboPollRef.current = null
+          writeTraining({ phase: 'error', error: s.error })
+          addToast?.(s.error, 'error')
+          sendBrowserNotification('Turbo Training Failed', s.error)
           return
         }
 

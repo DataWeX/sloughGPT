@@ -3,6 +3,7 @@
 import { useRef, useCallback, useEffect, memo } from 'react'
 import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
+import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -11,7 +12,10 @@ export interface ChatInputProps {
   onChange: (value: string) => void
   onSend: () => void
   onStop?: () => void
+  onCancel?: () => void
   loading: boolean
+  streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
+  streamingToolName?: string
   health: ApiHealthSnapshot
   images?: ImageAttachment[]
   onAddImage?: (dataUrl: string) => void
@@ -29,7 +33,10 @@ export const ChatInput = memo(function ChatInput({
   onChange,
   onSend,
   onStop,
+  onCancel,
   loading,
+  streamingStatus = 'generating',
+  streamingToolName,
   health,
   images = [],
   onAddImage,
@@ -99,12 +106,8 @@ export const ChatInput = memo(function ChatInput({
     >
       <div className="mx-auto max-w-3xl">
         {loading && (
-          <div className="flex justify-center pb-1" role="status" aria-live="polite" aria-atomic="true">
-            <div className="flex gap-[3px] items-center">
-              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
-              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
-              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
-            </div>
+          <div className="flex justify-center pb-1">
+            <StreamingIndicator status={streamingStatus} toolName={streamingToolName} />
           </div>
         )}
 
@@ -125,6 +128,7 @@ export const ChatInput = memo(function ChatInput({
           onChange={onChange}
           onSend={handleSend}
           onStop={onStop}
+          onCancel={onCancel}
           loading={loading}
           disabled={isDisabled}
           placeholder={placeholder}

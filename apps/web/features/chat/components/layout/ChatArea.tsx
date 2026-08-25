@@ -9,13 +9,15 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn, IconChevronDown } from '@sloughgpt/strui'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioRecorded' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
+export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onCancel' | 'onAudioRecorded' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]
   loading: boolean
   sessionLoading?: boolean
   health: ApiHealthSnapshot
   suggestions?: { text: string; icon: string }[]
   toolEvents?: ToolCallEvent[]
+  streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
+  streamingToolName?: string
   ragVerification?: {
     confidence: number
     is_verified: boolean
@@ -87,6 +89,8 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     collapsibleLength,
     temperature,
     contextLayers,
+    streamingStatus,
+    streamingToolName,
     ...inputProps
   }, ref) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -187,6 +191,8 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
         <ChatInput
           {...inputProps}
           loading={loading}
+          streamingStatus={streamingStatus}
+          streamingToolName={streamingToolName}
           health={health}
           images={images}
           onAddImage={onAddImage}

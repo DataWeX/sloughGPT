@@ -1,17 +1,17 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
 
 interface MessageReactionsProps {
-  reactions?: Record<string, string[]>
+  reactions?: Record<string, number>
   onReact: (emoji: string) => void
   className?: string
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😊', '🤔', '👏', '🔥']
 
-export function MessageReactions({ reactions = {}, onReact, className }: MessageReactionsProps) {
+export const MessageReactions = memo(function MessageReactions({ reactions = {}, onReact, className }: MessageReactionsProps) {
   const [showPicker, setShowPicker] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
 
@@ -38,20 +38,20 @@ export function MessageReactions({ reactions = {}, onReact, className }: Message
     setShowPicker(false)
   }, [onReact])
 
-  const entries = Object.entries(reactions).filter(([, users]) => users.length > 0)
+  const entries = Object.entries(reactions).filter(([, count]) => count > 0)
 
   return (
     <div className={cn("flex items-center gap-1 flex-wrap", className)}>
-      {entries.map(([emoji, users]) => (
+      {entries.map(([emoji, count]) => (
         <button
           key={emoji}
           type="button"
           onClick={() => handleReact(emoji)}
           className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          aria-label={`${emoji} reaction, ${users.length} ${users.length === 1 ? 'person' : 'people'}`}
+          aria-label={`${emoji} reaction, ${count} ${count === 1 ? 'person' : 'people'}`}
         >
           <span>{emoji}</span>
-          {users.length > 1 && <span className="tabular-nums">{users.length}</span>}
+          {count > 1 && <span className="tabular-nums">{count}</span>}
         </button>
       ))}
       
@@ -88,4 +88,4 @@ export function MessageReactions({ reactions = {}, onReact, className }: Message
       </div>
     </div>
   )
-}
+})

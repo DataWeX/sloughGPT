@@ -159,6 +159,11 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
           {session.phase !== 'complete' && session.phase !== 'error' && (
             <div className="space-y-2">
+              {session.paused && (
+                <div className="rounded-md bg-warning/10 border border-warning/20 px-3 py-1.5 text-xs text-warning font-medium" role="status">
+                  Paused
+                </div>
+              )}
               <Progress value={displayProgress} max={100} label="Progress" showValue size="sm" />
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 {displayTotalSteps > 0 && (

@@ -6,11 +6,13 @@ import type { ChatPageController } from '@/features/chat/hooks/useChatPageContro
 import { useCallback } from 'react'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
+import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
 import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
 import { ChatToolbar } from '@/features/chat/components/toolbar/ChatToolbar'
 import { logger } from '@/lib/dev-log'
 import { ChatToolbarProvider } from '@/features/chat/contexts/ChatToolbarContext'
+import { useAppStore } from '@/lib/store'
 
 const VoiceChatMode = dynamicNext(() => import('@/features/chat/components/input/VoiceChatMode').then(m => m.VoiceChatMode), { ssr: false })
 const ConversationViewer = dynamicNext(() => import('@/features/chat/components/sidebar/ConversationViewer').then(m => m.ConversationViewer), { ssr: false })
@@ -59,6 +61,8 @@ export function ChatToolbarSection({ controller }: ChatPageSectionProps) {
 
 export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
   const { ui, model, chat, clearChat } = controller
+  const settings = useAppStore(state => state.settings)
+  const updateSettings = useAppStore(state => state.updateSettings)
 
   const handleTemperatureChange = useCallback((temp: number) => {
     model.setTemperature(temp)
@@ -70,6 +74,10 @@ export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
     generationConfigController.update({ max_new_tokens: tokens }).catch(e => { logger.warning('Could not generation config max_tokens save', { exception: String(e) }) })
   }, [model])
 
+  const handleAutoApproveToolsChange = useCallback((value: boolean) => {
+    updateSettings({ autoApproveTools: value })
+  }, [updateSettings])
+
   if (!ui.showSettings) return null
   return (
     <ChatSettings
@@ -77,10 +85,12 @@ export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
       model={model.model}
       temperature={model.temperature}
       maxTokens={model.maxTokens}
+      autoApproveTools={settings.autoApproveTools}
       onModelChange={model.setModel}
       availableModels={model.availableModels}
       onTemperatureChange={handleTemperatureChange}
       onMaxTokensChange={handleMaxTokensChange}
+      onAutoApproveToolsChange={handleAutoApproveToolsChange}
       onClear={clearChat}
       hasMessages={chat.messages.length > 0}
     />
@@ -116,6 +126,15 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
     }
     chat.setLoading(false)
   }, [chat])
+
+  const handleCancel = useCallback(async () => {
+    const sessionId = chat.sessionIdRef.current
+    if (sessionId) {
+      const { chatController } = await import('@/lib/chat-controller')
+      chatController.cancelStream(sessionId).catch(() => {})
+    }
+    handleStop()
+  }, [chat, handleStop])
 
   const handleAudioRecorded = useCallback(async (blob: Blob) => {
     try {
@@ -221,6 +240,14 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
         onTextDropped={handleTextDropped}
         onPDFDropped={handlePDFDropped}
       >
+        {chat.loading && (
+          <div className="px-4 py-2">
+            <ContextInjectionBar
+              onInject={chat.injectContext}
+              disabled={!chat.loading}
+            />
+          </div>
+        )}
         <ChatArea
           messages={chat.messages}
           loading={chat.loading}
@@ -238,11 +265,14 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           searchQuery={ui.searchQuery}
           onSuggestionClick={chat.handleSuggestionClick}
           toolEvents={chat.toolEvents}
+          streamingStatus={chat.pendingToolApproval ? 'tool_call' : 'generating'}
+          streamingToolName={chat.pendingToolApproval?.toolName}
           ragVerification={chat.ragVerification}
           value={chat.input}
           onChange={chat.setInput}
           onSend={handleWriteSend}
           onStop={handleStop}
+          onCancel={handleCancel}
           images={chat.images}
           onAddImage={chat.handleAddImage}
           onRemoveImage={chat.handleRemoveImage}

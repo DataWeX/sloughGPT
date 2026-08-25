@@ -8,7 +8,7 @@ export interface ChatMessage {
   timestamp: Date
   images?: ImageAttachment[]
   audio?: AudioAttachment
-  reactions?: Record<string, string[]>
-  edited?: boolean
+  reactions?: Record<string, number>
   isError?: boolean
+  toolCalls?: Array<{ id?: string; name?: string; arguments?: string }>
 }

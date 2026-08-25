@@ -139,6 +139,9 @@ export function useChatPageController(
       }
     },
     onExportMarkdown: () => chat.handleExportMarkdown(),
+    onCancelStream: () => chat.cancelStream(),
+    onApproveTool: () => chat.handleToolApproval(true),
+    onDenyTool: () => chat.handleToolApproval(false),
     onDuplicateConversation: () => {
       const sid = chat.sessionIdRef.current
       if (sid) {

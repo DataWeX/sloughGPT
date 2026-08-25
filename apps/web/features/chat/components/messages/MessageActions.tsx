@@ -23,7 +23,7 @@ interface MessageActionsProps {
   onBookmark?: (messageId: string) => void
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
-  reactions?: Record<string, string[]>
+  reactions?: Record<string, number>
   onReact?: (messageId: string, emoji: string) => void
   temperature?: number
 }
@@ -116,7 +116,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
   const [showTranslateMenu, setShowTranslateMenu] = useState(false)
   const [showRetryOptions, setShowRetryOptions] = useState(false)
   const [retryTemperature, setRetryTemperature] = useState(temperature)
-  const [localReactions, setLocalReactions] = useState<Record<string, string[]>>(() => getReactions(messageId))
+  const [localReactions, setLocalReactions] = useState<Record<string, number>>(() => getReactions(messageId))
   const addToast = useToastStore(s => s.addToast)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const celebrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -496,18 +496,18 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
 
     {Object.keys(localReactions).length > 0 && (
       <div className="flex flex-wrap gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        {Object.entries(localReactions).map(([emoji, users]) => (
+        {Object.entries(localReactions).map(([emoji, count]) => (
           <button
             type="button"
             key={emoji}
             onClick={() => handleToggleReaction(emoji)}
             className={cn(
               "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors",
-              users.includes('user') ? "bg-primary/15 border-primary/30 text-primary" : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80"
+              count > 0 ? "bg-primary/15 border-primary/30 text-primary" : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80"
             )}
           >
             <span>{emoji}</span>
-            <span>{users.length}</span>
+            <span>{count}</span>
           </button>
         ))}
       </div>

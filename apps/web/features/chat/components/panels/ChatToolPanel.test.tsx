@@ -13,6 +13,11 @@ vi.mock('@sloughgpt/strui', () => ({
   IconSparkle: () => <span data-testid="icon-sparkle">sparkle</span>,
   IconCode: () => <span data-testid="icon-code">code</span>,
   IconBolt: () => <span data-testid="icon-bolt">bolt</span>,
+  IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
+  IconSummary: () => <span data-testid="icon-summary">summary</span>,
+  IconStats: () => <span data-testid="icon-stats">stats</span>,
+  IconCopy: () => <span data-testid="icon-copy">copy</span>,
+  IconCheck: () => <span data-testid="icon-check">check</span>,
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),

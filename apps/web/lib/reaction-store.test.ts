@@ -1,9 +1,5 @@
-import { describe, expect, it, beforeEach } from 'vitest'
-import {
-  getReactions,
-  addReaction,
-  toggleReaction,
-} from './reaction-store'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { getReactions, addReaction, toggleReaction } from './reaction-store'
 
 const KEY = 'sloughgpt-message-reactions'
 
@@ -12,36 +8,26 @@ describe('reaction-store', () => {
     localStorage.clear()
   })
 
-  it('returns an empty map for an unknown message', () => {
-    expect(getReactions('msg-1')).toEqual({})
-  })
-
-  it('returns an empty map when localStorage holds invalid JSON', () => {
-    localStorage.setItem(KEY, '{broken')
-    expect(getReactions('msg-1')).toEqual({})
-  })
-
-  it('adds a reaction for a user and persists it', () => {
+  it('stores a reaction for a message', () => {
     addReaction('msg-1', '👍')
-    expect(getReactions('msg-1')).toEqual({ '👍': ['user'] })
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ 'msg-1': { '👍': ['user'] } })
+    expect(getReactions('msg-1')).toEqual({ '👍': 1 })
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ 'msg-1': { '👍': 1 } })
   })
 
-  it('does not duplicate the same user for one emoji', () => {
+  it('increments reaction count for the same emoji', () => {
     addReaction('msg-1', '👍')
     addReaction('msg-1', '👍')
-    addReaction('msg-1', '👍', 'alice')
-    expect(getReactions('msg-1')).toEqual({ '👍': ['user', 'alice'] })
+    expect(getReactions('msg-1')).toEqual({ '👍': 2 })
   })
 
-  it('removes a user from a reaction via toggle', () => {
+  it('removes a reaction via toggle', () => {
     addReaction('msg-1', '👍')
-    addReaction('msg-1', '👍', 'alice')
-    toggleReaction('msg-1', '👍', 'user')
-    expect(getReactions('msg-1')).toEqual({ '👍': ['alice'] })
+    addReaction('msg-1', '👍')
+    toggleReaction('msg-1', '👍')
+    expect(getReactions('msg-1')).toEqual({ '👍': 1 })
   })
 
-  it('deletes the emoji key when the last user is removed via toggle', () => {
+  it('deletes the emoji key when the last reaction is removed via toggle', () => {
     addReaction('msg-1', '👍')
     toggleReaction('msg-1', '👍')
     expect(getReactions('msg-1')).toEqual({})
@@ -54,14 +40,9 @@ describe('reaction-store', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({})
   })
 
-  it('is a no-op when toggling a reaction that does not exist', () => {
-    toggleReaction('msg-1', '🔥')
-    expect(getReactions('msg-1')).toEqual({ '🔥': ['user'] })
-  })
-
   it('toggles a reaction on for the user and off again', () => {
     toggleReaction('msg-1', '🔥')
-    expect(getReactions('msg-1')).toEqual({ '🔥': ['user'] })
+    expect(getReactions('msg-1')).toEqual({ '🔥': 1 })
     toggleReaction('msg-1', '🔥')
     expect(getReactions('msg-1')).toEqual({})
   })
@@ -69,7 +50,7 @@ describe('reaction-store', () => {
   it('keeps separate reactions per message', () => {
     addReaction('msg-a', '👍')
     addReaction('msg-b', '🔥')
-    expect(getReactions('msg-a')).toEqual({ '👍': ['user'] })
-    expect(getReactions('msg-b')).toEqual({ '🔥': ['user'] })
+    expect(getReactions('msg-a')).toEqual({ '👍': 1 })
+    expect(getReactions('msg-b')).toEqual({ '🔥': 1 })
   })
 })

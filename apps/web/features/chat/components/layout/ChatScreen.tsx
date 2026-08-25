@@ -176,7 +176,6 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 images={message.images}
                 audio={message.audio}
                 reactions={message.reactions}
-                edited={message.edited}
                 onCopy={onCopy}
                 onThumbsUp={onThumbsUp}
                 onThumbsDown={onThumbsDown}

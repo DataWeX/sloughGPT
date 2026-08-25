@@ -104,6 +104,7 @@ _auto_train_pause_event: threading.Event | None = None
 
 _turbo_lock = threading.Lock()
 _turbo_cancel_event = threading.Event()
+_turbo_pause_event = threading.Event()
 _turbo_state: dict[str, Any] = {
     "status": "idle",  # idle | running | complete | error
     "job_id": None,
@@ -118,6 +119,8 @@ _turbo_state: dict[str, Any] = {
     "avg_quality": None,
     "result": None,
     "error": None,
+    "paused": False,
+    "last_heartbeat": 0.0,
 }
 
 
@@ -271,6 +274,7 @@ class TurboStartRequest(BaseModel):
     method: str = Field(default="slonet", description="Training method: 'slonet', 'transformer', 'nanogpt', 'hf'")
     data_path: str = Field(default="", description="Path to training data file")
     dataset_id: str | None = Field(default=None, description="Dataset ID to train on")
+    checkpoint_name: str | None = Field(default=None, description="Resume from existing checkpoint")
     epochs: int = Field(default=3, ge=1, le=1000)
     batch_size: int = Field(default=4, ge=1, le=256)
     learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
@@ -606,6 +610,17 @@ class AutoTrainRouter:
             if not data_path:
                 raise_error("No data_path or dataset_id provided", code="E_VAL_REQUEST")
 
+            resume = False
+            resume_path = ""
+            if req.checkpoint_name:
+                ckpt_soul = self.CHECKPOINTS_DIR / f"{req.checkpoint_name}.soul"
+                if await asyncio.to_thread(ckpt_soul.exists):
+                    resume = True
+                    resume_path = str(ckpt_soul)
+                    autotrain_logger.info("Turbo resume from %s", resume_path, extra={"tag": "TRAIN"})
+                else:
+                    raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
+
             # Validate data_path exists and is under allowed directories
             from pathlib import Path as _P
             _dp = _P(data_path).resolve()
@@ -633,8 +648,11 @@ class AutoTrainRouter:
                     "avg_quality": None,
                     "result": None,
                     "error": None,
+                    "paused": False,
+                    "last_heartbeat": time.time(),
                 }
                 _turbo_cancel_event = threading.Event()
+                _turbo_pause_event = threading.Event()
 
             # Register with CancelManager
             try:
@@ -685,11 +703,14 @@ class AutoTrainRouter:
                     req=req,
                     data_path=data_path,
                     output_dir=str(output_dir),
+                    resume=resume,
+                    resume_path=resume_path,
                 )
             else:
                 threading.Thread(
                     target=self._run_turbo,
                     args=(req, data_path, str(output_dir), job_id),
+                    kwargs={"resume": resume, "resume_path": resume_path},
                     name=f"turbo-train-{job_id}",
                     daemon=True,
                 ).start()
@@ -702,7 +723,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.start_turbo")
-    def _run_turbo(self, req: TurboStartRequest, data_path: str, output_dir: str, job_id: str) -> None:
+    def _run_turbo(self, req: TurboStartRequest, data_path: str, output_dir: str, job_id: str, *, resume: bool = False, resume_path: str = "") -> None:
         """Run SloughGPTTrainer on a daemon thread, publishing progress to _turbo_state."""
         from domains.training.train_pipeline import SloughGPTTrainer
 
@@ -727,6 +748,7 @@ class AutoTrainRouter:
                 _turbo_state["eta_s"] = info.get("eta_s", _turbo_state["eta_s"])
                 _turbo_state["elapsed_s"] = info.get("elapsed_s", _turbo_state["elapsed_s"])
                 _turbo_state["avg_quality"] = info.get("avg_quality", _turbo_state.get("avg_quality"))
+                _turbo_state["last_heartbeat"] = time.time()
             job = get_training_runtime().get(job_id)
             if job is not None:
                 with _turbo_lock:
@@ -758,18 +780,26 @@ class AutoTrainRouter:
             )
 
             autotrain_logger.info(
-                "Starting SloughGPTTrainer with method=%s data=%s",
-                req.method, data_path, extra={"tag": "TRAIN"},
+                "Starting SloughGPTTrainer with method=%s data=%s resume=%s",
+                req.method, data_path, resume, extra={"tag": "TRAIN"},
             )
             _train_t0 = time.monotonic()
-            result = trainer.train(on_progress=on_progress, cancel_event=_turbo_cancel_event)
+            result = trainer.train(
+                on_progress=on_progress,
+                cancel_event=_turbo_cancel_event,
+                pause_event=_turbo_pause_event,
+                resume=resume,
+                resume_path=resume_path or None,
+            )
             _train_elapsed_ms = (time.monotonic() - _train_t0) * 1000
             autotrain_logger.info("SloughGPTTrainer result: %s (elapsed=%dms)", result, _train_elapsed_ms, extra={"tag": "TRAIN"})
 
             if _turbo_cancel_event.is_set():
+                _turbo_pause_event.clear()
                 with _turbo_lock:
                     _turbo_state["status"] = "error"
                     _turbo_state["error"] = "Training cancelled"
+                    _turbo_state["paused"] = False
                 job = get_training_runtime().get(job_id)
                 if job is not None:
                     job["status"] = "cancelled"
@@ -779,9 +809,11 @@ class AutoTrainRouter:
                 return
 
             if isinstance(result, dict) and result.get("status") == "error":
+                _turbo_pause_event.clear()
                 with _turbo_lock:
                     _turbo_state["status"] = "error"
                     _turbo_state["error"] = result.get("message") or "Training failed"
+                    _turbo_state["paused"] = False
                 job = get_training_runtime().get(job_id)
                 if job is not None:
                     job["status"] = "failed"
@@ -791,10 +823,12 @@ class AutoTrainRouter:
                 return
 
             safe_audit_log("training.complete", resource=data_path or req.dataset_id or "turbo", detail=f"turbo elapsed={_train_elapsed_ms:.0f}ms", method=req.method or "", epochs=req.epochs)
+            _turbo_pause_event.clear()
             with _turbo_lock:
                 _turbo_state["status"] = "complete"
                 _turbo_state["result"] = _finite_payload(result)
                 _turbo_state["progress"] = 100.0
+                _turbo_state["paused"] = False
             job = get_training_runtime().get(job_id)
             if job is not None:
                 job["status"] = "completed"
@@ -806,9 +840,11 @@ class AutoTrainRouter:
             _finish_cm("completed")
         except Exception as e:
             autotrain_logger.error("SloughGPTTrainer failed: %s", e, extra={"tag": "TRAIN"})
+            _turbo_pause_event.clear()
             with _turbo_lock:
                 _turbo_state["status"] = "error"
                 _turbo_state["error"] = str(e)
+                _turbo_state["paused"] = False
             job = get_training_runtime().get(job_id)
             if job is not None:
                 job["status"] = "failed"
@@ -821,6 +857,7 @@ class AutoTrainRouter:
     def _run_turbo_pgq(
         self, job_id: str, tree_id: str, point_library: Any,
         is_cancelled: Any, *, req: Any, data_path: str, output_dir: str,
+        resume: bool = False, resume_path: str = "",
     ) -> dict:
         """PGQ-compatible training entry point.
 
@@ -831,14 +868,30 @@ class AutoTrainRouter:
         trainer result dict so ``TrainingExecutor`` can auto-compress
         weights into Points.
         """
-        self._run_turbo(req, data_path, output_dir, job_id)
+        self._run_turbo(req, data_path, output_dir, job_id, resume=resume, resume_path=resume_path)
         return {}
 
     async def turbo_status(self) -> dict:
         try:
             """Return the current turbo training job progress."""
             with _turbo_lock:
-                return success_response(data=_finite_payload(dict(_turbo_state)))
+                state = dict(_turbo_state)
+                # Detect stale training: running but no heartbeat for 30s
+                if (state.get("status") == "running"
+                        and state.get("last_heartbeat", 0) > 0
+                        and (time.time() - state["last_heartbeat"]) > 30):
+                    autotrain_logger.warning(
+                        "Turbo training stale (no heartbeat for %.0fs) — marking failed",
+                        time.time() - state["last_heartbeat"], extra={"tag": "TRAIN"},
+                    )
+                    state["status"] = "error"
+                    state["error"] = "Training process lost — no progress for 30 seconds"
+                    state["paused"] = False
+                    _turbo_state["status"] = "error"
+                    _turbo_state["error"] = state["error"]
+                    _turbo_state["paused"] = False
+                    _turbo_pause_event.clear()
+                return success_response(data=_finite_payload(state))
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.turbo_status")
@@ -849,6 +902,7 @@ class AutoTrainRouter:
             if _auto_train_cancel_event is not None:
                 _auto_train_cancel_event.set()
             _turbo_cancel_event.set()
+            _turbo_pause_event.clear()
             if _auto_train_pgq is not None:
                 job_id = _turbo_state.get("job_id")
                 if job_id:
@@ -872,6 +926,14 @@ class AutoTrainRouter:
     async def pause(self) -> dict:
         try:
             """pause."""
+            if _turbo_state.get("status") == "running":
+                if _turbo_pause_event.is_set():
+                    return success_response(data={"success": False, "message": "Training is already paused"})
+                _turbo_pause_event.set()
+                with _turbo_lock:
+                    _turbo_state["paused"] = True
+                safe_audit_log("training.pause", resource=(self.state.config or {}).get("soul_name", ""), detail="paused")
+                return success_response(data={"success": True, "message": "Training paused"})
             if _auto_train_pause_event is None:
                 return success_response(data={"success": False, "message": "No active training to pause"})
             if _auto_train_pause_event.is_set():
@@ -885,6 +947,14 @@ class AutoTrainRouter:
     async def resume(self) -> dict:
         try:
             """resume."""
+            if _turbo_state.get("status") == "running":
+                if not _turbo_pause_event.is_set():
+                    return success_response(data={"success": False, "message": "Training is not paused"})
+                _turbo_pause_event.clear()
+                with _turbo_lock:
+                    _turbo_state["paused"] = False
+                safe_audit_log("training.resume", resource=(self.state.config or {}).get("soul_name", ""), detail="resumed")
+                return success_response(data={"success": True, "message": "Training resumed"})
             if _auto_train_pause_event is None:
                 return success_response(data={"success": False, "message": "No active training to resume"})
             if not _auto_train_pause_event.is_set():

@@ -139,6 +139,7 @@ export interface TurboTrainStartRequest {
   method?: 'slonet' | 'transformer'
   dataset_id?: string
   data_path?: string
+  checkpoint_name?: string
   epochs?: number
   batch_size?: number
   learning_rate?: number
@@ -178,6 +179,7 @@ export interface TurboJobStatus {
   avg_quality?: number | null
   error?: string | null
   result?: Record<string, unknown> | null
+  paused?: boolean
 }
 
 export interface TrainFromSessionsParams {

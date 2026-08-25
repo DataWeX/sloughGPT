@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconStar, IconTrash, IconX, IconChevronDown } from '@sloughgpt/strui'
 import type { BookmarkedMessage } from '@/features/chat/hooks/useChatBookmarks'
@@ -13,7 +13,7 @@ interface ChatBookmarksPanelProps {
   className?: string
 }
 
-export function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessage, className }: ChatBookmarksPanelProps) {
+export const ChatBookmarksPanel = memo(function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessage, className }: ChatBookmarksPanelProps) {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
@@ -96,4 +96,4 @@ export function ChatBookmarksPanel({ bookmarks, onRemove, onClear, onJumpToMessa
       )}
     </div>
   )
-}
+})

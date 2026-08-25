@@ -77,6 +77,10 @@ export function useChatMessages(config: ChatMessagesConfig) {
     grounded_claims: number
     hallucinated_claims: number
   } | null>(null)
+  const [pendingToolApproval, setPendingToolApproval] = useState<{
+    toolName: string
+    args?: Record<string, unknown>
+  } | null>(null)
 
   // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
@@ -420,14 +424,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setMessages(prev => prev.map(msg => {
       if (msg.id !== messageId) return msg
       const reactions = { ...msg.reactions }
-      if (!reactions[emoji]) {
-        reactions[emoji] = ['user']
-      } else if (reactions[emoji].includes('user')) {
-        reactions[emoji] = reactions[emoji].filter((u: string) => u !== 'user')
-        if (reactions[emoji].length === 0) delete reactions[emoji]
-      } else {
-        reactions[emoji] = [...reactions[emoji], 'user']
-      }
+      reactions[emoji] = (reactions[emoji] || 0) + 1
       return { ...msg, reactions }
     }))
   }, [])
@@ -600,6 +597,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
           onToolCall: (event) => {
             setToolEvents(prev => [...prev, event])
             setContextLayers(prev => [...prev, { type: 'tool', label: `Tool: ${event.tool}`, detail: event.status }])
+            if (event.status === 'executing' && event.args) {
+              const autoApprove = useAppStore.getState().settings.autoApproveTools
+              if (autoApprove) {
+                chatController.approveTool(sessionIdRef.current, event.tool, true)
+              } else {
+                setPendingToolApproval({ toolName: event.tool, args: event.args })
+              }
+            }
           },
           onRagVerification: (info) => {
             setRagVerification(info)
@@ -798,5 +803,12 @@ export function useChatMessages(config: ChatMessagesConfig) {
       chatController.approveTool(sessionIdRef.current, toolName, approved), []),
     injectContext: useCallback((context: string) =>
       chatController.injectContext(sessionIdRef.current, context), []),
+    pendingToolApproval,
+    handleToolApproval: useCallback((approved: boolean) => {
+      if (pendingToolApproval) {
+        chatController.approveTool(sessionIdRef.current, pendingToolApproval.toolName, approved)
+        setPendingToolApproval(null)
+      }
+    }, [pendingToolApproval]),
   }
 }

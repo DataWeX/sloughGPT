@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, memo, useEffect } from 'react'
+import { useState, memo, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/components/training/formatDuration'
@@ -27,6 +27,23 @@ export const TurboCard = memo(function TurboCard({
   const [experiments, setExperiments] = useState<Experiment[]>([])
   const [selectedExperimentId, setSelectedExperimentId] = useState<string>('')
   const running = session.turboPhase === 'training'
+  const turboPaused = session.paused
+
+  const pauseTraining = useCallback(async () => {
+    try {
+      await trainingJobsController.pauseTraining()
+    } catch {
+      addToast('Could not pause training', 'error')
+    }
+  }, [addToast])
+
+  const resumeTraining = useCallback(async () => {
+    try {
+      await trainingJobsController.resumeTraining()
+    } catch {
+      addToast('Could not resume training', 'error')
+    }
+  }, [addToast])
 
   useEffect(() => {
     let active = true
@@ -82,9 +99,16 @@ export const TurboCard = memo(function TurboCard({
             </div>
             {session.turboLoss != null && <p className="text-xs text-muted-foreground">Loss {session.turboLoss.toFixed(4)}</p>}
             {session.avgQuality != null && <p className="text-xs text-muted-foreground">Quality {session.avgQuality.toFixed(1)}/5</p>}
-            <Button variant="destructive" size="sm" onClick={session.stopTurboTrain}>
-              Stop
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="destructive" size="sm" onClick={session.stopTurboTrain}>
+                Stop
+              </Button>
+              {turboPaused ? (
+                <Button variant="outline" size="sm" onClick={resumeTraining}>Resume</Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={pauseTraining}>Pause</Button>
+              )}
+            </div>
           </div>
         ) : session.turboPhase === 'complete' ? (
           <div className="space-y-2 text-sm">

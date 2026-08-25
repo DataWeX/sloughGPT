@@ -15,9 +15,11 @@ interface ChatSettingsProps {
   model: string
   temperature: number
   maxTokens: number
+  autoApproveTools: boolean
   onModelChange: (value: string) => void
   onTemperatureChange: (value: number) => void
   onMaxTokensChange: (value: number) => void
+  onAutoApproveToolsChange: (value: boolean) => void
   onClear: () => void
   hasMessages: boolean
   availableModels?: string[]
@@ -32,9 +34,11 @@ export function ChatSettings({
   model,
   temperature,
   maxTokens,
+  autoApproveTools,
   onModelChange,
   onTemperatureChange,
   onMaxTokensChange,
+  onAutoApproveToolsChange,
   onClear,
   hasMessages,
   availableModels = DEFAULT_MODELS,
@@ -111,6 +115,16 @@ export function ChatSettings({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Button
+          variant={autoApproveTools ? "default" : "outline"}
+          size="sm"
+          onClick={() => onAutoApproveToolsChange(!autoApproveTools)}
+          className="text-xs hover:opacity-80 active:opacity-70"
+          aria-label={`Auto-approve tools: ${autoApproveTools ? 'on' : 'off'}`}
+        >
+          {autoApproveTools ? 'Auto-approve: ON' : 'Auto-approve: OFF'}
+        </Button>
 
         <Button
           variant="outline"

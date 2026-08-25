@@ -19,6 +19,9 @@ interface KeyboardDeps {
   onExportMarkdown?: () => void
   onDuplicateConversation?: () => void
   onToggleBookmarks?: () => void
+  onCancelStream?: () => void
+  onApproveTool?: () => void
+  onDenyTool?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -29,6 +32,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     searchInputRef, handleSearchChange,
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
+    onCancelStream, onApproveTool, onDenyTool,
   } = deps
 
   const depsRef = useRef(deps)
@@ -41,6 +45,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         if (d.loading && d.loadingRef.current) {
           d.loadingRef.current.abort()
           d.setLoading(false)
+          d.onCancelStream?.()
         } else if (d.currentError) {
           d.setCurrentError(null)
         } else if (d.showSettings) {
@@ -94,6 +99,14 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
         e.preventDefault()
         d.onToggleBookmarks?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+        e.preventDefault()
+        d.onApproveTool?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        d.onDenyTool?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

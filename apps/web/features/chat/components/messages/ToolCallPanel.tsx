@@ -68,7 +68,7 @@ const ToolCallCard = memo(function ToolCallCard({ event }: { event: ToolCallEven
   )
 })
 
-export function ToolCallPanel({ events }: ToolCallPanelProps) {
+export const ToolCallPanel = memo(function ToolCallPanel({ events }: ToolCallPanelProps) {
   if (!events.length) return null
 
   return (
@@ -78,4 +78,4 @@ export function ToolCallPanel({ events }: ToolCallPanelProps) {
       ))}
     </div>
   )
-}
+})
