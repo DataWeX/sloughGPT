@@ -10,6 +10,10 @@ vi.mock('@/lib/training-controller', () => ({
   },
 }))
 
+vi.mock('@/lib/download-utils', () => ({
+  downloadJson: vi.fn(),
+}))
+
 const JOBS = [
   { id: '1', name: 'Job 1', status: 'completed', progress: 100, created_at: '2026-01-15T10:00:00Z', method: 'distill', loss: 0.5, epochs: 10, checkpoint: 'cp1' },
   { id: '2', name: 'Job 2', status: 'failed', progress: 50, created_at: '2026-01-14T10:00:00Z', method: 'native', error: 'OOM' },
@@ -71,6 +75,19 @@ describe('TrainingHistoryView', () => {
     render(<TrainingHistoryView addToast={mockToast} />)
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith('Could not fetch training history', 'error')
+    })
+  })
+
+  it('exports training history as JSON', async () => {
+    const { downloadJson } = await import('@/lib/download-utils')
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 1').length).toBeGreaterThan(0)
+    })
+    fireEvent.click(screen.getAllByText('Export')[0])
+    await waitFor(() => {
+      expect(downloadJson).toHaveBeenCalled()
+      expect(mockToast).toHaveBeenCalledWith('Training history exported', 'success')
     })
   })
 })

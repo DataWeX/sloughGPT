@@ -15,6 +15,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
   return (
     <Link
       href="/training"
+      prefetch={false}
       className={cn(
         'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
         'hover:bg-primary/10',
@@ -41,7 +42,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
           )}
         />
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1" role="status" aria-live="polite">
         <div className="truncate text-xs font-medium">
           {phase === 'error'
             ? 'Training failed'

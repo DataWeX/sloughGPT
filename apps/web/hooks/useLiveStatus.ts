@@ -16,7 +16,6 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
 import { createStore } from 'zustand/vanilla'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import type { HealthStatus } from '@/lib/model-controller'

@@ -7,6 +7,7 @@ import { ChatSendButton } from './ChatSendButton'
 import { SlashCommandMenu } from './SlashCommandMenu'
 import { MentionMenu } from './MentionMenu'
 import { cn } from '@sloughgpt/strui'
+import { estimateTokens } from '@/lib/format-bytes'
 import type { ChatCommand } from '@/lib/chat-commands'
 
 interface ChatInputRowProps {
@@ -20,6 +21,7 @@ interface ChatInputRowProps {
   textareaRef: RefObject<HTMLTextAreaElement>
   onImage: (dataUrl: string) => void
   onTranscript: (text: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onAudioTranscript?: (text: string) => void
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
@@ -31,7 +33,7 @@ interface ChatInputRowProps {
 export function ChatInputRow({
   value, onChange, onSend, onStop,
   loading, disabled, placeholder,
-  textareaRef, onImage, onTranscript, onAudioTranscript, onGeneratedImage,
+  textareaRef, onImage, onTranscript, onAudioRecorded, onAudioTranscript, onGeneratedImage,
   onPDFAnalysis, onPDFError, hasContent, onExecuteCommand,
 }: ChatInputRowProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
@@ -106,6 +108,7 @@ export function ChatInputRow({
       <ChatInputAccessories
         onImage={onImage}
         onTranscript={onTranscript}
+        onAudioRecorded={onAudioRecorded}
         disabled={disabled}
         onAudioTranscript={onAudioTranscript}
         onGeneratedImage={onGeneratedImage}
@@ -132,9 +135,9 @@ export function ChatInputRow({
           )}
           aria-live="polite"
           aria-atomic="true"
-          aria-label={`Estimated ${Math.ceil(value.length / 4)} tokens`}
+          aria-label={`Estimated ${estimateTokens(value)} tokens`}
         >
-          ~{Math.ceil(value.length / 4)}
+          ~{estimateTokens(value)}
         </span>
       )}
       <ChatSendButton

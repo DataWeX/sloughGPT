@@ -11,6 +11,8 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   images?: ImageAttachment[]
+  audio?: AudioAttachment
+  reactions?: Record<string, number>
   isError?: boolean
 }
 
@@ -18,6 +20,13 @@ export interface ImageAttachment {
   id: string
   dataUrl: string
   name: string
+}
+
+export interface AudioAttachment {
+  id: string
+  url: string
+  durationMs: number
+  waveform?: number[]
 }
 
 export interface ChatSession {

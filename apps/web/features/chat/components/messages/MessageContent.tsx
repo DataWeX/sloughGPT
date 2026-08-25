@@ -3,6 +3,8 @@
 import { useState, memo } from 'react'
 import { Button, Textarea } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
+import { AudioPlayer } from './AudioPlayer'
+import type { AudioAttachment } from '@/lib/chat-utils'
 
 interface MessageContentProps {
   content: string
@@ -13,6 +15,7 @@ interface MessageContentProps {
   isError?: boolean
   collapsibleLength?: number
   isEditing?: boolean
+  audio?: AudioAttachment
   onEdit?: (messageId: string, newContent: string) => void
   onEditStart?: () => void
   onEditCancel?: () => void
@@ -38,6 +41,7 @@ export const MessageContent = memo(function MessageContent({
   isError = false,
   collapsibleLength = 0,
   isEditing = false,
+  audio,
   onEdit,
   onEditStart,
   onEditCancel,
@@ -65,10 +69,16 @@ export const MessageContent = memo(function MessageContent({
 
   if (role === 'assistant') {
     if (searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightText(content, searchQuery)}</p>
+      return (
+        <div className="space-y-2">
+          {audio && <AudioPlayer src={audio.url} durationMs={audio.durationMs} />}
+          <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightText(content, searchQuery)}</p>
+        </div>
+      )
     }
     return (
       <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
+        {audio && <AudioPlayer src={audio.url} durationMs={audio.durationMs} className="mb-2" />}
         <Markdown content={visibleContent} />
         {isCollapsible && isCollapsed && (
           <span className="text-muted-foreground/40 select-none">…</span>
@@ -131,6 +141,7 @@ export const MessageContent = memo(function MessageContent({
 
   return (
     <div>
+      {audio && <AudioPlayer src={audio.url} durationMs={audio.durationMs} className="mb-2" />}
       <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">
         {searchQuery ? highlightText(visibleContent, searchQuery) : visibleContent}
       </p>

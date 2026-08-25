@@ -50,6 +50,7 @@ interface ChatScreenProps {
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
   className?: string
@@ -60,10 +61,11 @@ interface ChatScreenProps {
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
   temperature?: number
+  contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength, temperature }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onReact, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength, temperature, contextLayers }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -172,10 +174,14 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 showTimestamp={true}
                 model={model}
                 images={message.images}
+                audio={message.audio}
+                reactions={message.reactions}
+                edited={message.edited}
                 onCopy={onCopy}
                 onThumbsUp={onThumbsUp}
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
+                onReact={onReact}
                 onRegenerate={showRegenerate ? onRegenerate : undefined}
                 onRegenerateWithOptions={showRegenerate ? onRegenerateWithOptions : undefined}
                 onSuggestionClick={onSuggestionClick}
@@ -227,7 +233,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
           })()}
 
           {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
-            <ReasoningPanel isThinking={true} className="py-1" />
+            <ReasoningPanel isThinking={true} contextLayers={contextLayers} className="py-1" />
           )}
 
           <div ref={ref} />

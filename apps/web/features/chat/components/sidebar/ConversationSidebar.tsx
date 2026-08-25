@@ -742,7 +742,7 @@ const ConvRow = memo(function ConvRow({
         </div>
         {lastMsg && !editing && (
           <p className="text-[11px] text-muted-foreground/70 mt-0.5 line-clamp-1">
-            {truncateMessage(lastMsg, 36)}
+            {searchQuery ? highlightMatch(truncateMessage(lastMsg, 36), searchQuery) : truncateMessage(lastMsg, 36)}
           </p>
         )}
         {!editing && (

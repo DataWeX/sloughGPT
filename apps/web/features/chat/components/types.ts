@@ -1,4 +1,5 @@
 import type { ImageAttachment } from './input/ImageUpload'
+import type { AudioAttachment } from '@/lib/chat-utils'
 
 export interface ChatMessage {
   id: string
@@ -6,5 +7,8 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   images?: ImageAttachment[]
+  audio?: AudioAttachment
+  reactions?: Record<string, string[]>
+  edited?: boolean
   isError?: boolean
 }

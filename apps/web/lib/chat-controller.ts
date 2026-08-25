@@ -140,6 +140,43 @@ export const chatController = {
       return null
     }
   },
+
+  async sendVoiceMessage(sessionId: string, audioBlob: Blob, language = 'en'): Promise<{
+    audio_path: string
+    audio_duration_ms: number
+    transcript?: string
+  }> {
+    const formData = new FormData()
+    formData.append('file', audioBlob, `voice-${Date.now()}.webm`)
+    formData.append('language', language)
+    return apiPost(`/chat/voice/${sessionId}`, formData, { raw: true })
+  },
+
+  getVoiceAudioUrl(sessionId: string, messageId: string): string {
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    return `${base}/chat/audio/${sessionId}/${messageId}`
+  },
+
+  async cancelStream(sessionId: string): Promise<void> {
+    await apiPost('/chat/control', { session_id: sessionId, action: 'cancel' })
+  },
+
+  async approveTool(sessionId: string, toolName: string, approved: boolean): Promise<void> {
+    await apiPost('/chat/control', {
+      session_id: sessionId,
+      action: 'approve',
+      tool_name: toolName,
+      approved,
+    })
+  },
+
+  async injectContext(sessionId: string, context: string): Promise<void> {
+    await apiPost('/chat/control', {
+      session_id: sessionId,
+      action: 'context',
+      context,
+    })
+  },
 }
 
 export interface ContextInspector {

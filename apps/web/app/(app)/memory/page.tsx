@@ -303,24 +303,6 @@ export default function MemoryPage() {
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
-      
-      {archiveStats && (
-        <Card>
-          <CardContent className="p-3 flex items-center justify-between">
-            <div className="flex gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Archived</p>
-                <p className="text-sm font-medium">{archiveStats.records} items</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Size</p>
-                <p className="text-sm font-medium">{archiveStats.bytes} bytes</p>
-              </div>
-            </div>
-            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handlePruneArchive()}>Prune Old</Button>
-          </CardContent>
-        </Card>
-      )}
       <div className="flex items-center gap-2">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="memory-topic" variant="uppercase">Topic</Label>

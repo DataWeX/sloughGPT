@@ -156,6 +156,49 @@ class ChatResponse(BaseModel):
     session_id: str
     done: bool = True
 
+class ChatControlRequest(BaseModel):
+    session_id: str
+    action: str = Field(..., pattern=r'^(cancel|approve|context)$')
+    tool_name: Optional[str] = None
+    approved: Optional[bool] = None
+    context: Optional[str] = None
+
+# In-memory store for pending control requests per session
+_chat_control_store: dict[str, dict] = {}
+
+def get_chat_control(session_id: str) -> Optional[dict]:
+    """Get and consume pending control for a session."""
+    return _chat_control_store.pop(session_id, None)
+
+def set_chat_control(session_id: str, control: dict) -> None:
+    """Set pending control for a session."""
+    _chat_control_store[session_id] = control
+
+# Cache for partial chat responses (for Last-Event-ID reconnection)
+_chat_response_cache: dict[str, dict] = {}
+_CHAT_CACHE_MAX_SESSIONS = 100
+_CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
+
+def get_chat_response_cache(session_id: str) -> Optional[dict]:
+    """Get cached response for a session."""
+    return _chat_response_cache.get(session_id)
+
+def set_chat_response_cache(session_id: str, response: dict) -> None:
+    """Cache a partial response for a session."""
+    import time
+    # Purge old entries if cache is full
+    if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
+        now = time.time()
+        expired = [k for k, v in _chat_response_cache.items()
+                   if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S]
+        for k in expired[:10]:  # Remove up to 10 expired entries
+            _chat_response_cache.pop(k, None)
+    _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
+
+def clear_chat_response_cache(session_id: str) -> None:
+    """Clear cached response for a session."""
+    _chat_response_cache.pop(session_id, None)
+
 class ContextInspectorResponse(BaseModel):
     system_prompt: str
     session_messages: List[dict]
@@ -925,6 +968,22 @@ class InferenceRouter:
             """generate."""
             logger.debug("chat_stream.generate() ENTERED")
 
+            # Check for Last-Event-ID header for reconnection
+            last_event_id = request.headers.get("last-event-id")
+            if last_event_id:
+                session_id = req.session_id or "default"
+                cached = get_chat_response_cache(session_id)
+                if cached and cached.get("event_counter", 0) > int(last_event_id):
+                    # Replay cached response from the point of disconnection
+                    logger.info("Replaying cached response for session %s from event %s", session_id, last_event_id)
+                    cached_counter = int(last_event_id)
+                    for token in cached.get("tokens", []):
+                        cached_counter += 1
+                        yield sse_token("chat", token)
+                    if cached.get("complete"):
+                        yield sse_token("chat", "", done=True)
+                    return
+
             cancel_event = threading.Event()
             user_msg = _extract_user_message(req.messages)
             if not user_msg:
@@ -1172,8 +1231,14 @@ class InferenceRouter:
                         yield sse_token("chat", "", done=True)
                         return
 
+                    # Event ID counter for Last-Event-ID reconnection
+                    _event_counter = 0
+                    _cached_tokens: list[str] = []
+
                     try:
                         try:
+                            _control_check_interval = 0.1  # Check for controls every 100ms
+                            _last_control_check = time.time()
                             async for token in provider.chat_stream(
                                 provider_messages,
                                 max_tokens=req.max_tokens,
@@ -1183,15 +1248,46 @@ class InferenceRouter:
                             ):
                                 if await request.is_disconnected():
                                     cancel_event.set()
+                                    # Cache partial response for reconnection
+                                    set_chat_response_cache(session_id, {
+                                        "tokens": _cached_tokens,
+                                        "complete": False,
+                                        "event_counter": _event_counter,
+                                    })
                                     logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
                                     _mgr.finish(_op_id)
                                     return
+
+                                # Check for control messages periodically
+                                now = time.time()
+                                if now - _last_control_check >= _control_check_interval:
+                                    _last_control_check = now
+                                    control = get_chat_control(session_id)
+                                    if control:
+                                        if control["action"] == "cancel":
+                                            cancel_event.set()
+                                            _mgr.finish(_op_id)
+                                            yield _sse_event("chat", "CONTROL", "cancelled",
+                                                data={"action": "cancel"},
+                                                message="Stream cancelled by user")
+                                            return
+                                        elif control["action"] == "approve":
+                                            yield _sse_event("chat", "CONTROL", "approved",
+                                                data={"tool": control.get("tool_name"), "approved": control.get("approved", True)},
+                                                message=f"Tool approval: {control.get('tool_name')}")
+                                        elif control["action"] == "context":
+                                            yield _sse_event("chat", "CONTROL", "context",
+                                                data={"context": control.get("context")},
+                                                message="Context injected")
+
                                 if token:
                                     _token_gen_start = time.time()
                                     full_response_parts.append(token)
+                                    _cached_tokens.append(token)
                                     _batch.append(token)
                                     _token_count += 1
                                     if _token_count == 1 or len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                                        _event_counter += 1
                                         yield sse_token("chat", "".join(_batch))
                                         _batch = []
                                         _batch_start = time.time()
@@ -1211,8 +1307,20 @@ class InferenceRouter:
                                 yield sse_token("chat", "".join(_batch))
                                 _batch = []
                             yield sse_token("chat", "", done=True)
+                            # Cache complete response for potential reconnection
+                            set_chat_response_cache(session_id, {
+                                "tokens": _cached_tokens,
+                                "complete": True,
+                                "event_counter": _event_counter,
+                            })
                         except GeneratorExit:
                             cancel_event.set()
+                            # Cache partial response on generator exit
+                            set_chat_response_cache(session_id, {
+                                "tokens": _cached_tokens,
+                                "complete": False,
+                                "event_counter": _event_counter,
+                            })
                             _mgr.finish(_op_id)
                             logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
                             return
@@ -1835,6 +1943,56 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.purge_operations")
+
+    async def chat_control(self, req: ChatControlRequest) -> dict:
+        """chat_control - Send control messages to active chat streams.
+
+        Actions:
+        - cancel: Cancel the active stream for this session
+        - approve: Approve/deny a tool execution
+        - context: Inject additional context into the stream
+        """
+        try:
+            session_id = req.session_id
+
+            if req.action == "cancel":
+                # Find and cancel active inference operations for this session
+                mgr = get_cancel_manager()
+                active = mgr.list_active(op_type=OpType.INFERENCE)
+                cancelled = False
+                for op in active:
+                    if session_id in op.get("label", ""):
+                        mgr.cancel(op["id"])
+                        cancelled = True
+                        logger.info("Cancelled chat stream for session %s", session_id, extra={"tag": "INF"})
+                        break
+                if not cancelled:
+                    logger.debug("No active stream found for session %s", session_id)
+                return success_response(data={"cancelled": cancelled, "session_id": session_id})
+
+            elif req.action == "approve":
+                # Store approval for the streaming endpoint to pick up
+                set_chat_control(session_id, {
+                    "action": "approve",
+                    "tool_name": req.tool_name,
+                    "approved": req.approved if req.approved is not None else True,
+                })
+                logger.info("Stored tool approval for session %s: %s=%s", session_id, req.tool_name, req.approved)
+                return success_response(data={"stored": True, "session_id": session_id})
+
+            elif req.action == "context":
+                # Store context injection for the streaming endpoint to pick up
+                set_chat_control(session_id, {
+                    "action": "context",
+                    "context": req.context,
+                })
+                logger.info("Stored context injection for session %s", session_id)
+                return success_response(data={"stored": True, "session_id": session_id})
+
+            return success_response(data={"error": f"Unknown action: {req.action}"})
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.chat_control")
     def _register_routes(self):
         r = self.router
         r.add_api_route("/inference/generate", self.generate, methods=["POST"], response_model=GenerateResponse)
@@ -1844,6 +2002,7 @@ class InferenceRouter:
         r.add_api_route("/", self.root, methods=["GET"])
         r.add_api_route("/chat/tools", self.list_chat_tools, methods=["GET"])
         r.add_api_route("/chat/stream", self.chat_stream, methods=["POST"])
+        r.add_api_route("/chat/control", self.chat_control, methods=["POST"])
         r.add_api_route("/context/inspect", self.inspect_context, methods=["GET"])
         r.add_api_route("/context/fact", self.store_fact, methods=["POST"])
         r.add_api_route("/context/facts", self.get_facts, methods=["GET"])

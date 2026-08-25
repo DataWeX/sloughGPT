@@ -65,6 +65,7 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
         className,
       )}
       aria-label={`${errorCount} error${errorCount !== 1 ? 's' : ''}. ${latest?.title || ''}`}
+      aria-live="polite"
     >
       <span className={cn(
         'inline-block h-1.5 w-1.5 rounded-full shrink-0',

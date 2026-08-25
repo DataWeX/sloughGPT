@@ -46,6 +46,7 @@ interface StreamChatParams {
     grounded_claims: number
     hallucinated_claims: number
   }) => void
+  onControl?: (event: { action: string; tool?: string; approved?: boolean; context?: string }) => void
 }
 
 function buildBody(params: StreamChatParams) {
@@ -68,6 +69,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   const { signal, onError } = params
   const body = buildBody(params)
   let retries = 0
+  let lastEventId: string | undefined
 
   while (true) {
     let hasContent = false
@@ -75,8 +77,13 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
     let shouldRetry = false
 
     try {
-      for await (const event of streamSSE('/chat/stream', { body, signal })) {
+      for await (const event of streamSSE('/chat/stream', { body, signal, lastEventId })) {
         const d = event.data ?? {}
+
+        // Track last event ID for reconnection
+        if (event.id) {
+          lastEventId = event.id as string
+        }
 
         if (event.status === 'thinking') {
           params.onThinking?.()
@@ -118,6 +125,16 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
             }
             params.onToolCall?.(toolEvent)
           }
+          continue
+        }
+
+        if (event.phase === 'CONTROL') {
+          params.onControl?.({
+            action: event.status || 'unknown',
+            tool: d.tool as string | undefined,
+            approved: d.approved as boolean | undefined,
+            context: d.context as string | undefined,
+          })
           continue
         }
 

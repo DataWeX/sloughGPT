@@ -18,6 +18,7 @@ class TranscriptionResult:
     confidence: float
     language: str
     duration: Optional[float] = None
+    is_valid: bool = True
 
 
 class SpeechRecognizer(Protocol):
@@ -106,6 +107,7 @@ class ServerSpeechRecognizer:
                 text="",
                 confidence=0.0,
                 language=language,
+                is_valid=False,
             )
 
         try:
@@ -123,6 +125,7 @@ class ServerSpeechRecognizer:
             text="",
             confidence=0.0,
             language=language,
+            is_valid=False,
         )
 
     def _decode_vosk(self, audio_data: bytes) -> str:

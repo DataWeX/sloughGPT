@@ -104,6 +104,11 @@ vi.mock('@/components/training/TrainingPipeline', () => ({
     </div>
   ),
 }))
+vi.mock('@/components/training/StopTrainingButton', () => ({
+  StopTrainingButton: ({ onStop }: { onStop: () => Promise<void> }) => (
+    <button data-testid="stop-training-button" onClick={() => void onStop()}>Stop training</button>
+  ),
+}))
 
 import Page from './page'
 

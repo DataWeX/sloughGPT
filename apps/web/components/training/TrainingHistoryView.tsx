@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
+import { downloadJson } from '@/lib/download-utils'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -53,6 +54,30 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
     }
   }, [addToast])
 
+  const handleExport = useCallback(() => {
+    if (jobs.length === 0) return
+    const exportData = jobs.map(j => ({
+      id: j.id,
+      name: j.name,
+      status: j.status,
+      method: j.method,
+      created_at: j.created_at,
+      finished_at: j.finished_at,
+      loss: j.loss,
+      train_loss: j.train_loss,
+      eval_loss: j.eval_loss,
+      epochs: j.epochs,
+      epochs_completed: j.epochs_completed,
+      elapsed_s: j.elapsed_s,
+      checkpoint: j.checkpoint,
+      dataset: j.dataset,
+      model: j.model,
+      error: j.error,
+    }))
+    downloadJson(exportData, `training-history-${new Date().toISOString().slice(0, 10)}.json`)
+    addToast('Training history exported', 'success')
+  }, [jobs, addToast])
+
   useEffect(() => {
     let active = true
     const load = async () => {
@@ -81,7 +106,12 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Training History ({jobs.length})</CardTitle>
-          <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>Refresh</Button>
+          <div className="flex items-center gap-1">
+            {jobs.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={handleExport}>Export</Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>Refresh</Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

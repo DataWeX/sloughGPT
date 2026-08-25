@@ -49,12 +49,12 @@ export function useChatMode({ chat }: UseChatModeOptions) {
 
   const handleCreateImage = useCallback(async (prompt: string) => {
     const userMsg: ChatMessage = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: prompt,
       timestamp: new Date(),
     }
-    const pendingId = (Date.now() + 1).toString()
+    const pendingId = crypto.randomUUID()
     const pendingMsg: ChatMessage = {
       id: pendingId,
       role: 'assistant',

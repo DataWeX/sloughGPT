@@ -26,23 +26,32 @@ class _TTSBackend:
         self._loaded = False
         self._error = None
 
-    def load(self) -> dict:
+    def load(self) -> bool:
+        """Load the TTS model pipeline from HuggingFace transformers."""
+        if self._loaded:
+            return True
         try:
-            """load."""
-            if self._loaded:
-                return True
-            self._error = "Text-to-speech requires transformers, which is not supported"
-            logger.warning("TTS: transformers not available", extra={"tag": "MODEL"})
+            from transformers import pipeline as hf_pipeline
+            self._model_id = "facebook/mms-tts-eng"
+            self._pipeline = hf_pipeline("text-to-speech", model=self._model_id)
+            self._loaded = True
+            self._error = None
+            logger.info("TTS model loaded: %s", self._model_id, extra={"tag": "MODEL"})
+            return True
+        except ImportError:
+            self._error = "Text-to-speech requires transformers package"
+            logger.warning("TTS: transformers not installed", extra={"tag": "MODEL"})
             return False
-
         except Exception as e:
-            classify_and_raise(e, source="voice.load")
+            self._error = f"TTS model load failed: {e}"
+            logger.warning("TTS: model load failed: %s", e, extra={"tag": "MODEL"})
+            return False
     def generate(self, text: str) -> bytes:
+        """Generate WAV audio bytes from text using the loaded TTS pipeline."""
+        if not self._loaded:
+            if not self.load():
+                raise RuntimeError(f"TTS unavailable: {self._error}")
         try:
-            """generate."""
-            if not self._loaded:
-                if not self.load():
-                    raise RuntimeError(f"TTS unavailable: {self._error}")
             result = self._pipeline(text)
             audio_array = result["audio"]
             sample_rate = result["sampling_rate"]
@@ -88,8 +97,8 @@ class VoiceRouter:
         self.router.add_api_route("/status", self.voice_status, methods=["GET"])
 
     async def text_to_speech(self, request: TTSRequest) -> TTSResponse:
+        """Convert text to speech audio."""
         try:
-            """Convert text to speech audio."""
             if not request.text.strip():
                 raise_error("No text provided", "E_BAD_REQUEST", status_code=400)
 

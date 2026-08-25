@@ -93,6 +93,11 @@ vi.mock('@/components/training/DatasetSelector', () => ({
 vi.mock('@/components/training/formatDuration', () => ({
   formatDuration: (n: number) => `${n}s`,
 }))
+vi.mock('@/components/training/StopTrainingButton', () => ({
+  StopTrainingButton: ({ onStop }: { onStop: () => Promise<void> }) => (
+    <button data-testid="stop-training-button" onClick={() => void onStop()}>Stop</button>
+  ),
+}))
 vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="dynamic" /> }))
 
 import AutoTrainPage from './page'

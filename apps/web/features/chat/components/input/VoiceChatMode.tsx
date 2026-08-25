@@ -58,7 +58,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             isProcessing ? 'bg-amber-500 animate-pulse' :
             'bg-muted-foreground/30'
           }`} />
-          <span className="text-sm font-medium">
+          <span className="text-sm font-medium" aria-live="polite">
             {isListening ? 'Listening' :
              isProcessing ? 'Thinking' :
              isSpeaking ? 'Speaking' :

@@ -35,7 +35,7 @@ export const StatusCard = memo(function StatusCard({ liveHealth, detailed, conne
   const soulValue = liveHealth?.soul || detailed?.soul || null
 
   return (
-    <Card className="p-3">
+    <Card className="p-3" role="status" aria-live="polite">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
         {connectionStatus === 'connected' && liveHealth && (

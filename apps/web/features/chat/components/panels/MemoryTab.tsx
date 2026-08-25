@@ -629,6 +629,7 @@ export function MemoryTab() {
 
       <Link
         href="/knowledge"
+        prefetch={false}
         className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
       >
         Manage memory →

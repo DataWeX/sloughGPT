@@ -277,4 +277,31 @@ describe('streamChatResponse', () => {
     expect(mockParams.onComplete).not.toHaveBeenCalled()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
+
+  it('dispatches control event for cancelled', async () => {
+    const onControl = vi.fn()
+    mockSSE([
+      'data: {"stream":"chat","phase":"CONTROL","status":"cancelled","data":{"action":"cancel"},"message":"Stream cancelled"}',
+    ])
+    await streamChatResponse({ ...mockParams, onControl })
+    expect(onControl).toHaveBeenCalledWith({ action: 'cancelled', tool: undefined, approved: undefined, context: undefined })
+  })
+
+  it('dispatches control event for tool approval', async () => {
+    const onControl = vi.fn()
+    mockSSE([
+      'data: {"stream":"chat","phase":"CONTROL","status":"approved","data":{"tool":"calculator","approved":true},"message":"Tool approved"}',
+    ])
+    await streamChatResponse({ ...mockParams, onControl })
+    expect(onControl).toHaveBeenCalledWith({ action: 'approved', tool: 'calculator', approved: true, context: undefined })
+  })
+
+  it('dispatches control event for context injection', async () => {
+    const onControl = vi.fn()
+    mockSSE([
+      'data: {"stream":"chat","phase":"CONTROL","status":"context","data":{"context":"extra info"},"message":"Context injected"}',
+    ])
+    await streamChatResponse({ ...mockParams, onControl })
+    expect(onControl).toHaveBeenCalledWith({ action: 'context', tool: undefined, approved: undefined, context: 'extra info' })
+  })
 })

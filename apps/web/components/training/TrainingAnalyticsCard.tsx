@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
+import { downloadJson } from '@/lib/download-utils'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -76,6 +77,12 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
     return { pieData, lossOverTime, durationBuckets, methodData, avgLoss, avgDuration, total: jobs.length, completed: completed.length, failed: failed.length }
   }, [jobs])
 
+  const handleExport = useCallback(() => {
+    if (!analytics) return
+    downloadJson(analytics, `training-analytics-${new Date().toISOString().slice(0, 10)}.json`)
+    addToast('Analytics exported', 'success')
+  }, [analytics, addToast])
+
   if (loading) {
     return (
       <Card>
@@ -107,7 +114,10 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Training Analytics</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Training Analytics</CardTitle>
+          <Button size="sm" variant="ghost" onClick={handleExport}>Export</Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Summary stats */}

@@ -112,7 +112,7 @@ export function SpacedReviewCard({ addToast }: Props) {
   return (
     <Card className="border-primary/20">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between" role="status" aria-live="polite">
           <CardTitle className="text-sm font-medium">Quick review</CardTitle>
           <span className="text-xs text-muted-foreground">{completed} of {dueIds.length}</span>
         </div>

@@ -42,7 +42,7 @@ export default function BatchTrainingCard({ batchUploading, trainStatus, onFileU
           </Button>
         </div>
         {trainStatus && trainStatus.running && (
-          <div className="space-y-1 pt-2">
+          <div className="space-y-1 pt-2" role="status" aria-live="polite">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{trainStatus.completed}/{trainStatus.total} images</span>
               <span>{trainStatus.progress_pct}%</span>

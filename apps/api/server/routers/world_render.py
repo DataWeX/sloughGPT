@@ -31,6 +31,8 @@ class SimTickRequest(BaseModel):
 class WorldRenderRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/world", tags=["world"])
+        self._world = None
+        self._scene = None
         self._register_routes()
 
     def _register_routes(self):
@@ -40,12 +42,22 @@ class WorldRenderRouter:
         self.router.add_api_route("/tick", self.run_tick, methods=["POST"])
         self.router.add_api_route("/stats", self.get_stats, methods=["GET"])
 
+    def _get_world(self):
+        """Return persistent world state, initializing with default blocks on first call."""
+        if self._world is None:
+            from domains.shell.simulation import WorldGrid
+            self._world = WorldGrid()
+            self._world.material[self._world.idx(32, 0, 32)] = 1
+            self._world.material[self._world.idx(32, 1, 32)] = 1
+            self._world.material[self._world.idx(33, 0, 32)] = 2
+            self._world.energy[self._world.idx(33, 0, 32)] = 5.0
+        return self._world
+
     async def render_world(self, config: RenderConfigRequest | None = None) -> dict:
         """Render the current world state and return state tensors."""
         _t0 = _time.monotonic()
         try:
             from domains.shell.world_render import RenderBridge, RenderConfig
-            from domains.shell.simulation import WorldGrid
 
             cfg = RenderConfig(
                 width=config.width if config else 160,
@@ -56,11 +68,7 @@ class WorldRenderRouter:
             )
             bridge = RenderBridge(cfg)
 
-            world = WorldGrid()
-            world.material[world.idx(32, 0, 32)] = 1
-            world.material[world.idx(32, 1, 32)] = 1
-            world.material[world.idx(33, 0, 32)] = 2
-            world.energy[world.idx(33, 0, 32)] = 5.0
+            world = self._get_world()
 
             bridge.build_scene(world)
             tensors = bridge.render_state_tensors()
@@ -83,7 +91,6 @@ class WorldRenderRouter:
         _t0 = _time.monotonic()
         try:
             from domains.shell.world_render import RenderBridge, RenderConfig
-            from domains.shell.simulation import WorldGrid
             import numpy as np
 
             cfg = RenderConfig(
@@ -93,11 +100,7 @@ class WorldRenderRouter:
             )
             bridge = RenderBridge(cfg)
 
-            world = WorldGrid()
-            world.material[world.idx(32, 0, 32)] = 1
-            world.material[world.idx(32, 1, 32)] = 1
-            world.material[world.idx(33, 0, 32)] = 2
-            world.energy[world.idx(33, 0, 32)] = 5.0
+            world = self._get_world()
 
             bridge.build_scene(world)
             image = bridge.render()
@@ -118,7 +121,6 @@ class WorldRenderRouter:
         _t0 = _time.monotonic()
         try:
             from domains.shell.world_render import NeuralRenderBridge, RenderConfig
-            from domains.shell.simulation import WorldGrid
 
             cfg = RenderConfig(
                 width=config.width if config else 160,
@@ -127,9 +129,7 @@ class WorldRenderRouter:
             )
             bridge = NeuralRenderBridge(cfg)
 
-            world = WorldGrid()
-            world.material[world.idx(32, 0, 32)] = 1
-            world.material[world.idx(32, 1, 32)] = 1
+            world = self._get_world()
 
             bridge.render_tick(world)
             neural_result = bridge.process_neural()
@@ -155,7 +155,9 @@ class WorldRenderRouter:
             from domains.shell.simulation import SimScene, Simulation, WorldParams
 
             params = WorldParams()
-            scene = SimScene(params)
+            if self._scene is None:
+                self._scene = SimScene(params)
+            scene = self._scene
 
             render_bridge = None
             if config and config.render:

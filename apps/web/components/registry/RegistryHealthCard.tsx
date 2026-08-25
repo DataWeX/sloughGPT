@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import type { RegisteredModel, RegistryStats } from '@/lib/registry-controller'
@@ -18,11 +19,11 @@ function statusVariant(status: string): 'success' | 'error' | 'warning' | 'secon
 }
 
 export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {
-  if (models.length === 0) return null
+  const loaded = useMemo(() => models.filter(m => m.status === 'loaded'), [models])
+  const failed = useMemo(() => models.filter(m => m.status === 'failed'), [models])
+  const other = useMemo(() => models.filter(m => m.status !== 'loaded' && m.status !== 'failed'), [models])
 
-  const loaded = models.filter(m => m.status === 'loaded')
-  const failed = models.filter(m => m.status === 'failed')
-  const other = models.filter(m => m.status !== 'loaded' && m.status !== 'failed')
+  if (models.length === 0) return null
 
   return (
     <Card data-testid="registry-health">

@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { FileEntry } from '@/lib/files-controller'
 
@@ -33,21 +34,22 @@ const GROUP_COLORS: Record<string, string> = {
 }
 
 export function FileStatsCard({ files }: FileStatsCardProps) {
-  if (files.length === 0) return null
-
-  const totalSize = files.reduce((s, f) => s + (f.size ?? 0), 0)
-  const indexed = files.filter(f => f.ingested).length
+  const totalSize = useMemo(() => files.reduce((s, f) => s + (f.size ?? 0), 0), [files])
+  const indexed = useMemo(() => files.filter(f => f.ingested).length, [files])
   const notIndexed = files.length - indexed
 
-  const groups: Record<string, { count: number; size: number }> = {}
-  for (const f of files) {
-    const g = extGroup(f.filename)
-    if (!groups[g]) groups[g] = { count: 0, size: 0 }
-    groups[g].count++
-    groups[g].size += f.size ?? 0
-  }
+  const sorted = useMemo(() => {
+    const groups: Record<string, { count: number; size: number }> = {}
+    for (const f of files) {
+      const g = extGroup(f.filename)
+      if (!groups[g]) groups[g] = { count: 0, size: 0 }
+      groups[g].count++
+      groups[g].size += f.size ?? 0
+    }
+    return Object.entries(groups).sort((a, b) => b[1].count - a[1].count)
+  }, [files])
 
-  const sorted = Object.entries(groups).sort((a, b) => b[1].count - a[1].count)
+  if (files.length === 0) return null
 
   return (
     <Card data-testid="file-stats">

@@ -74,8 +74,8 @@ describe('StopTrainingButton', () => {
   })
 
   it('shows stopping state while processing', async () => {
-    let resolveFn: () => void
-    mockOnStop.mockImplementation(() => new Promise(r => { resolveFn = r }))
+    let resolveFn!: () => void
+    mockOnStop.mockImplementation(() => new Promise<void>(r => { resolveFn = r }))
     const { unmount } = render(<StopTrainingButton onStop={mockOnStop} addToast={mockToast} />)
     fireEvent.click(screen.getAllByText('Stop training')[0])
     await waitFor(() => {

@@ -242,8 +242,8 @@ class KBRouter:
         return best if scores[best] > 0 else "general"
 
     def list_knowledge(self, limit: int = Query(200, ge=1, le=5000), offset: int = Query(0, ge=0)) -> dict:
+        """List knowledge items with optional pagination."""
         try:
-            """List knowledge items with optional pagination."""
             memory = self._get_memory()
             entries = memory.list_all(top_k=limit + offset)
             entries = entries[offset:offset + limit]
@@ -252,8 +252,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.list_knowledge")
     def add_knowledge(self, req: KnowledgeCreate) -> dict:
+        """Store a new knowledge fact in KnowledgeMemory."""
         try:
-            """add_knowledge."""
             from domains.learner.knowledge import KnowledgeFact
             memory = self._get_memory()
             topic = req.topic if not req.auto_tag else self._auto_tag(req.content)
@@ -303,8 +303,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.add_knowledge")
     def update_knowledge(self, item_id: str, req: KnowledgeUpdate) -> dict:
+        """Update a knowledge item's content, topic, or importance."""
         try:
-            """Update a knowledge item's content, topic, or importance."""
             memory = self._get_memory()
             all_items = memory.list_all(top_k=5000)
             target = None
@@ -335,8 +335,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.update_knowledge")
     def batch_ingest(self, req: KnowledgeBatchRequest) -> dict:
+        """Store multiple knowledge items in KnowledgeMemory."""
         try:
-            """Store multiple knowledge items in KnowledgeMemory."""
             from domains.learner.knowledge import KnowledgeFact
             memory = self._get_memory()
             stored = 0
@@ -356,8 +356,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.batch_ingest")
     def search_knowledge(self, query: str = "") -> dict:
+        """Search knowledge items by content."""
         try:
-            """search_knowledge."""
             memory = self._get_memory()
             results = memory.search(query, top_k=20) if query else []
             return success_response(data={
@@ -368,11 +368,11 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.search_knowledge")
     def knowledge_stats(self) -> dict:
-        try:
-            """Return knowledge base statistics.
+        """Return knowledge base statistics.
 
-            Aggregates topic/source counts from the full store in a single pass.
-            """
+        Aggregates topic/source counts from the full store in a single pass.
+        """
+        try:
             memory = self._get_memory()
             topics: dict[str, int] = {}
             sources: dict[str, int] = {}
@@ -400,8 +400,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.knowledge_stats")
     def list_topics(self) -> dict:
+        """List all unique topics with item counts."""
         try:
-            """List all unique topics with item counts."""
             memory = self._get_memory()
             all_items = memory.list_all(top_k=5000)
             topics: dict[str, int] = {}
@@ -468,8 +468,8 @@ class KBRouter:
             classify_and_raise(e, source="kb_ingest")
 
     def batch_delete_knowledge(self, req: BatchDeleteRequest) -> dict:
+        """Delete multiple knowledge items by ID."""
         try:
-            """Delete multiple knowledge items by ID."""
             memory = self._get_memory()
             deleted = 0
             for item_id in req.ids:
@@ -481,16 +481,16 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.batch_delete_knowledge")
     def suggest_topic(self, req: SuggestTopicRequest) -> dict:
+        """Return the best auto-detected topic for content without storing."""
         try:
-            """Return the best auto-detected topic for content without storing."""
             topic = self._auto_tag(req.content)
             return success_response(data={"topic": topic, "confidence": "high" if topic != "general" else "low"})
 
         except Exception as e:
             classify_and_raise(e, source="kb.suggest_topic")
     def delete_knowledge(self, item_id: str) -> dict:
+        """Delete a single knowledge item by ID."""
         try:
-            """delete_knowledge."""
             memory = self._get_memory()
             if memory.delete_by_id(item_id):
                 safe_audit_log("knowledge.delete", resource=item_id)
@@ -500,8 +500,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.delete_knowledge")
     def train_knowledge_adapter_route(self) -> dict:
+        """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
         try:
-            """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
             import time as _time
             from domains.infrastructure.knowledge_weight_integrator import train_knowledge_adapter, get_adapter_status
             memory = self._get_memory()
@@ -526,16 +526,16 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.train_knowledge_adapter_route")
     def knowledge_adapter_status(self) -> dict:
+        """Return status of the knowledge weight adapter."""
         try:
-            """Return status of the knowledge weight adapter."""
             from domains.infrastructure.knowledge_weight_integrator import get_adapter_status
             return success_response(data=get_adapter_status())
 
         except Exception as e:
             classify_and_raise(e, source="kb.knowledge_adapter_status")
     def related_knowledge(self, item_id: str, top_k: int = Query(6, ge=1, le=20)) -> dict:
+        """Return semantically related knowledge items, excluding the current one."""
         try:
-            """Return semantically related knowledge items, excluding the current one."""
             memory = self._get_memory()
             all_items = memory.list_all(top_k=5000)
             target = None
@@ -552,8 +552,8 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.related_knowledge")
     def get_context(self) -> dict:
+        """Return the full knowledge context string for injection into prompts."""
         try:
-            """get_context."""
             memory = self._get_memory()
             context = memory.get_context_string(max_items=50)
             all_facts = memory.list_all()

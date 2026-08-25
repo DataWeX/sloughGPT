@@ -106,6 +106,8 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
     handleImageDropped, handleTextDropped, handlePDFDropped,
     isBookmarked, handleToggleBookmark, handleDeleteMessage, handleSaveToKnowledge,
     collapsibleLength,
+    contextLayers,
+    handleReact,
   } = controller
 
   const handleStop = useCallback(() => {
@@ -114,6 +116,31 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
     }
     chat.setLoading(false)
   }, [chat])
+
+  const handleAudioRecorded = useCallback(async (blob: Blob) => {
+    try {
+      const { chatController } = await import('@/lib/chat-controller')
+      const sessionId = chat.sessionIdRef.current
+      if (!sessionId) return
+      const result = await chatController.sendVoiceMessage(sessionId, blob)
+      if (result.audio_path) {
+        const audioUrl = chatController.getVoiceAudioUrl(sessionId, `voice-${Date.now()}`)
+        chat.setMessages(prev => [...prev, {
+          id: `voice-${Date.now()}`,
+          role: 'user',
+          content: result.transcript || '(voice message)',
+          timestamp: new Date(),
+          audio: {
+            id: `audio-${Date.now()}`,
+            url: audioUrl,
+            durationMs: result.audio_duration_ms,
+          },
+        }])
+      }
+    } catch (err) {
+      showToast('Could not save voice message', 'error')
+    }
+  }, [chat, showToast])
 
   const handleAudioTranscript = useCallback((text: string) => {
     chat.setInput(prev => prev ? `${prev} ${text}` : text)
@@ -219,6 +246,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           images={chat.images}
           onAddImage={chat.handleAddImage}
           onRemoveImage={chat.handleRemoveImage}
+          onAudioRecorded={handleAudioRecorded}
           onAudioTranscript={handleAudioTranscript}
           onGeneratedImage={handleGeneratedImage}
           onPDFError={handlePDFError}
@@ -228,8 +256,10 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           onBookmark={handleToggleBookmark}
           onDelete={handleDeleteMessage}
           onSaveToKnowledge={handleSaveToKnowledge}
+          onReact={handleReact}
           collapsibleLength={collapsibleLength}
           temperature={model.temperature}
+          contextLayers={contextLayers}
         />
       </ImageDropZone>
     </>

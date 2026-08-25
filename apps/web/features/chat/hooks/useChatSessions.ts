@@ -10,7 +10,7 @@ import { sessionController } from '@/lib/session-controller'
 import { addGlobalError } from '@/lib/error-store'
 import type { Conversation } from '@/lib/session-controller'
 
-const MAX_STORAGE_MESSAGES = 40
+const MAX_STORAGE_MESSAGES = 200
 
 /** Upper bound on the backend remote-merge phase of loadSession. If the server
  *  is slow or offline, fetchMessages can otherwise hold sessionLoading true for

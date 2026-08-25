@@ -9,7 +9,7 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn, IconChevronDown } from '@sloughgpt/strui'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
+export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioRecorded' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]
   loading: boolean
   sessionLoading?: boolean
@@ -31,6 +31,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
   onAddImage?: (dataUrl: string) => void
@@ -43,6 +44,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
   temperature?: number
+  contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
 }
 
 export interface ChatAreaRef {
@@ -67,11 +69,13 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onThumbsUp,
     onThumbsDown,
     onEdit,
+    onReact,
     searchQuery,
     onSuggestionClick,
     images,
     onAddImage,
     onRemoveImage,
+    onAudioRecorded,
     onAudioTranscript,
     onGeneratedImage,
     className,
@@ -82,6 +86,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onSaveToKnowledge,
     collapsibleLength,
     temperature,
+    contextLayers,
     ...inputProps
   }, ref) {
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -90,9 +95,9 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     const prevMessageCountRef = useRef(messages.length)
     const prevLastContentLenRef = useRef(0)
 
-    const filteredMessages = searchQuery
+    const filteredMessages = useMemo(() => searchQuery
       ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-      : messages
+      : messages, [messages, searchQuery])
 
     useImperativeHandle(ref, () => ({
       scrollToBottom: () => {
@@ -150,6 +155,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
             onEdit={onEdit}
+            onReact={onReact}
             searchQuery={searchQuery}
             onSuggestionClick={onSuggestionClick}
             toolEvents={toolEvents}
@@ -160,6 +166,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onSaveToKnowledge={onSaveToKnowledge}
             collapsibleLength={collapsibleLength}
             temperature={temperature}
+            contextLayers={contextLayers}
           />
 
           {filteredMessages.length > 0 && !isNearBottom && (
@@ -184,6 +191,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
           images={images}
           onAddImage={onAddImage}
           onRemoveImage={onRemoveImage}
+          onAudioRecorded={onAudioRecorded}
           onAudioTranscript={onAudioTranscript}
           onGeneratedImage={onGeneratedImage}
         />

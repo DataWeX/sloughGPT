@@ -101,10 +101,11 @@ class SSEEnvelope:
     message: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         status = self.status.value if isinstance(self.status, StreamStatus) else self.status
-        return {
+        result = {
             "stream": self.stream,
             "phase": self.phase,
             "status": status,
@@ -112,6 +113,9 @@ class SSEEnvelope:
             "data": self.data,
             "meta": self.meta,
         }
+        if self.id is not None:
+            result["id"] = self.id
+        return result
 
 
 def sse_event(
@@ -121,6 +125,7 @@ def sse_event(
     data: Optional[Dict[str, Any]] = None,
     meta: Optional[Dict[str, Any]] = None,
     message: str = "",
+    id: Optional[str] = None,
 ) -> str:
     """
     Build a standard SSE data line.
@@ -132,6 +137,7 @@ def sse_event(
         data:     structured payload (token, loss, step, etc.)
         meta:     diagnostic info (step, epoch, elapsed_ms, etc.)
         message:  human-readable one-liner
+        id:       optional event ID for Last-Event-ID reconnection
 
     Returns:
         SSE data line string: "data: <json>\n\n"
@@ -145,6 +151,7 @@ def sse_event(
         message=message,
         data=data or {},
         meta=meta or {},
+        id=id,
     )
     return "data: " + json.dumps(env.to_dict(), default=_json_safe) + "\n\n"
 

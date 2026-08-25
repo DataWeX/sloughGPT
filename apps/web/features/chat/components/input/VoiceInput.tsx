@@ -54,6 +54,7 @@ declare global {
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onSend?: () => void
   disabled?: boolean
 }
@@ -66,7 +67,7 @@ function WaveformIcon({ className, isActive }: { className?: string; isActive: b
   return <AudioWaveform className={className} isActive={isActive} />
 }
 
-export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) {
+export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
   const [isServerSupported, setIsServerSupported] = useState(false)
@@ -131,9 +132,12 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
         setIsListening(false)
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         if (blob.size === 0) return
-        const fd = new FormData()
-        fd.append('file', blob, 'recording.webm')
-        fd.append('language', 'en')
+
+        // Pass audio blob to parent for voice message saving
+        if (onAudioRecorded) {
+          onAudioRecorded(blob)
+        }
+
         try {
           const result = await multimodalController.transcribeAudio(blob as File)
           if (result.text) onTranscript(result.text)
@@ -162,7 +166,7 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
       }
       logger.error('Could not microphone access', { exception: String(err) })
     }
-  }, [onTranscript])
+  }, [onTranscript, onAudioRecorded])
 
   const toggleListening = useCallback(() => {
     if (isListening) {

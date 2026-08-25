@@ -94,7 +94,7 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       {item.href ? (
-                        <Link href={item.href} onClick={() => onOpenChange(false)} className="text-sm font-medium hover:underline">
+                        <Link href={item.href} prefetch={false} onClick={() => onOpenChange(false)} className="text-sm font-medium hover:underline">
                           {item.title}
                         </Link>
                       ) : (

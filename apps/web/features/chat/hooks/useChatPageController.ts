@@ -21,7 +21,6 @@ import { useChatMode } from '@/features/chat/hooks/useChatMode'
 import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { chatController } from '@/lib/chat-controller'
-import { generationConfigController } from '@/lib/generation-config-controller'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings } from '@/lib/store'
@@ -317,8 +316,8 @@ export function useChatPageController(
   }, [])
 
   const handleCreateImage = useCallback(async (prompt: string) => {
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: prompt, timestamp: new Date() }
-    const pendingId = (Date.now() + 1).toString()
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: prompt, timestamp: new Date() }
+    const pendingId = crypto.randomUUID()
     const pendingMsg: ChatMessage = { id: pendingId, role: 'assistant', content: '✨ **Creating your image...**', timestamp: new Date() }
     chat.setMessages(prev => [...prev, userMsg, pendingMsg])
     chat.setLoading(true)
@@ -529,6 +528,8 @@ export function useChatPageController(
     handleImageDropped,
     handleTextDropped,
     handlePDFDropped,
+    contextLayers: chat.contextLayers,
+    handleReact: chat.handleReact,
   }
 }
 

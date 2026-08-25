@@ -241,6 +241,7 @@ export interface SSEEvent {
   meta?: Record<string, unknown>
   message?: string
   error?: string
+  id?: string
 }
 
 interface AuthFetchOptions extends RequestInit {
@@ -273,6 +274,7 @@ interface StreamSSEOptions {
   body?: unknown
   signal?: AbortSignal
   noAuth?: boolean
+  lastEventId?: string
 }
 
 /**
@@ -287,6 +289,9 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
   if (!opts?.noAuth) {
     const token = useAuthStore.getState().token
     if (token) headers['Authorization'] = `Bearer ${token}`
+  }
+  if (opts?.lastEventId) {
+    headers['Last-Event-ID'] = opts.lastEventId
   }
 
   let res: Response

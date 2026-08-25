@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useMemo } from 'react'
+import { cn } from '@sloughgpt/strui'
 
 interface VoiceWaveformProps {
   /** 0–1 mic or speaker level from useVoiceChat */
@@ -60,7 +61,7 @@ export function VoiceWaveform({
   return (
     <div
       ref={containerRef}
-      className={`flex items-center justify-center gap-[2px] ${className}`}
+      className={cn("flex items-center justify-center gap-[2px]", className)}
       style={{ width, height }}
       role="img"
       aria-label={`Audio ${variant} waveform`}

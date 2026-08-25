@@ -34,9 +34,6 @@ export default function CollectionsPage() {
   const [newStoreType, setNewStoreType] = useState('memory')
   const [creating, setCreating] = useState(false)
   const [runningId, setRunningId] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editSourceType, setEditSourceType] = useState('')
-  const [editStoreType, setEditStoreType] = useState('')
 
   const fetchPipelines = useCallback(async () => {
     try {

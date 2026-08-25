@@ -7,7 +7,9 @@ import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
 import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
+import { MessageReactions } from './MessageReactions'
 import type { ImageAttachment } from './../input/ImageUpload'
+import type { AudioAttachment } from '@/lib/chat-utils'
 
 export interface MessageBubbleProps {
   content: string
@@ -15,12 +17,16 @@ export interface MessageBubbleProps {
   timestamp: Date | string
   showTimestamp: boolean
   images?: ImageAttachment[]
+  audio?: AudioAttachment
+  reactions?: Record<string, string[]>
+  edited?: boolean
   onCopy?: (text: string) => void
   onRegenerate?: (messageId: string) => void
   onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   onSuggestionClick?: (text: string) => void
   messageId?: string
   isStreaming?: boolean
@@ -42,12 +48,16 @@ export const MessageBubble = memo(function MessageBubble({
   timestamp,
   showTimestamp,
   images,
+  audio,
+  reactions,
+  edited,
   onCopy,
   onRegenerate,
   onRegenerateWithOptions,
   onThumbsUp,
   onThumbsDown,
   onEdit,
+  onReact,
   onSuggestionClick,
   messageId,
   isStreaming = false,
@@ -156,6 +166,7 @@ export const MessageBubble = memo(function MessageBubble({
           isError={isError}
           collapsibleLength={collapsibleLength}
           isEditing={isEditing}
+          audio={audio}
           onEdit={onEdit}
           onEditStart={handleEditStart}
           onEditCancel={handleEditCancel}
@@ -167,7 +178,15 @@ export const MessageBubble = memo(function MessageBubble({
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
             {timeAgo(timestamp)}
+            {edited && <span className="ml-1 italic">(edited)</span>}
           </p>
+        )}
+        {reactions && Object.keys(reactions).length > 0 && (
+          <MessageReactions
+            reactions={reactions}
+            onReact={(emoji) => onReact?.(id, emoji)}
+            className="mt-1"
+          />
         )}
         {isStreaming && role === 'assistant' && hasContent && (
           <div className="flex items-center gap-1.5 mt-1" aria-live="polite">

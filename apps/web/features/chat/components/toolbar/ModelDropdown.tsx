@@ -131,7 +131,7 @@ export function ModelDropdown({
               currentModel ? 'bg-success' : 'bg-muted-foreground/30'
             )} />
           )}
-          <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || currentModel || 'Select a model to load'}>
+          <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || currentModel || 'Select a model to load'} aria-live="polite">
             {loadingModel ? shortModelName(loadingModel) : currentModel ? shortModelName(currentModel) : 'Select model'}
           </span>
           {dlProgress?.status === 'downloading' && dlProgress.percentage != null && dlProgress.percentage > 0 && (

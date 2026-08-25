@@ -67,6 +67,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [sessionSaved, setSessionSaved] = useState(false)
   const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
+  const [contextLayers, setContextLayers] = useState<Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>>([])
   const [toolEvents, setToolEvents] = useState<ToolCallEvent[]>([])
   const [ragVerification, setRagVerification] = useState<{
     confidence: number
@@ -134,10 +135,25 @@ export function useChatMessages(config: ChatMessagesConfig) {
     flushTimerRef.current = setTimeout(flushTokens, FLUSH_MS)
   }, [flushTokens])
 
-  // Cleanup on unmount
+  // Cleanup on unmount — flush remaining tokens before clearing
   useEffect(() => {
     return () => {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      // Flush any remaining tokens to avoid data loss
+      const buf = tokenBufRef.current
+      if (buf.length > 0) {
+        tokenBufRef.current = []
+        const byId = new Map<string, string>()
+        for (const { id, text } of buf) {
+          byId.set(id, (byId.get(id) || '') + text)
+        }
+        setMessages(prev => prev.map(m => {
+          const delta = byId.get(m.id)
+          if (!delta) return m
+          const content = m.content === 'Thinking...' ? '' : m.content
+          return { ...m, content: content + delta }
+        }))
+      }
     }
   }, [])
 
@@ -192,27 +208,46 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
     setLoading(true)
     try {
-      for await (const data of chatController.regenerateStream(
-        sessionIdRef.current,
-        contextMessages.map(m => ({ role: m.role, content: m.content }))
-      )) {
-        if (data.error) {
-          flushTokens()
-          setCurrentError(getErrorInfo(0, data.error))
+      const appState = useAppStore.getState()
+      const customContext = appState.settings.customContext
+      const parts: string[] = []
+      if (customSystemPrompt) parts.push(`[System Override]\n${customSystemPrompt}`)
+      if (customContext) parts.push(`[Custom Instructions]\n${customContext}`)
+      if (currentSoul) {
+        parts.push(`[Personality: ${currentSoul.name}]`)
+        if (currentSoul.description) parts.push(currentSoul.description)
+        if (currentSoul.traits && currentSoul.traits.length > 0) {
+          parts.push(`Traits: ${currentSoul.traits.join(', ')}`)
+        }
+      }
+      const systemPrompt = parts.join('\n\n')
+      const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
+
+      await streamChatResponse({
+        messages: contextMessages.map(m => ({ role: m.role, content: m.content })),
+        model, systemPrompt, maxTokens, temperature,
+        userId: userIdRef.current, sessionId: sessionIdRef.current,
+        signal: loadingRef.current?.signal,
+        agentId: currentAgent?.id || undefined,
+        knowledge: knowledgeFacts.length > 0 ? knowledgeFacts : undefined,
+        onToken: (token: string) => {
+          tokenBufRef.current.push({ id: assistantId, text: token })
+          scheduleFlush()
+        },
+        onComplete: () => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId ? { ...msg, content: msg.content || '(empty response)' } : msg
+          ))
+        },
+        onError: (status, text) => {
+          setCurrentError(getErrorInfo(status, text))
           setMessages(prev => prev.map(msg =>
             msg.id === assistantId
               ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
               : msg
           ))
-          showToast('Could not regenerate response', 'error')
-          break
-        }
-        if (data.token) {
-          tokenBufRef.current.push({ id: assistantId, text: data.token })
-          scheduleFlush()
-        }
-        if (data.done) break
-      }
+        },
+      })
     } catch (err) {
       _log.error('Regenerate error', { exception: String(err) })
       setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
@@ -225,7 +260,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       setLoading(false)
       storeSessionContext(sessionIdRef.current, messagesRef.current)
     }
-  }, [showToast, storeSessionContext, scheduleFlush])
+  }, [showToast, storeSessionContext, scheduleFlush, model, temperature, maxTokens, currentSoul, currentAgent, customSystemPrompt])
   handleRegenerateRef.current = handleRegenerate
 
   // ── Regenerate with Options ──────────────────────────────────────────────
@@ -349,7 +384,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   // ── Image handling ────────────────────────────────────────────────────────
   const handleAddImage = useCallback((dataUrl: string) => {
     const newImage: ImageAttachment = {
-      id: Date.now().toString(), dataUrl, name: `image-${Date.now()}.png`,
+      id: crypto.randomUUID(), dataUrl, name: `image-${Date.now()}.png`,
     }
     setImages(prev => [...prev, newImage])
     multimodalController.trainImage(dataUrl, newImage.name).then(res => {
@@ -380,6 +415,23 @@ export function useChatMessages(config: ChatMessagesConfig) {
     showToast(ok ? 'Copied to clipboard' : 'Could not copy', ok ? 'success' : 'error')
   }, [showToast])
 
+  // ── Reactions ──────────────────────────────────────────────────────────
+  const handleReact = useCallback((messageId: string, emoji: string) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== messageId) return msg
+      const reactions = { ...msg.reactions }
+      if (!reactions[emoji]) {
+        reactions[emoji] = ['user']
+      } else if (reactions[emoji].includes('user')) {
+        reactions[emoji] = reactions[emoji].filter((u: string) => u !== 'user')
+        if (reactions[emoji].length === 0) delete reactions[emoji]
+      } else {
+        reactions[emoji] = [...reactions[emoji], 'user']
+      }
+      return { ...msg, reactions }
+    }))
+  }, [])
+
   // ── Suggestion click ──────────────────────────────────────────────────────
   const handleSuggestionClick = useCallback((text: string) => {
     setInput(text)
@@ -396,11 +448,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
     const customContext = appState.settings.customContext
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(), role: 'user', content: text.trim(),
+      id: crypto.randomUUID(), role: 'user', content: text.trim(),
       timestamp: new Date(),
       images: userImages.length > 0 ? userImages : undefined,
     }
-    const assistantId = (Date.now() + 1).toString()
+    const assistantId = crypto.randomUUID()
     const assistantMessage: ChatMessage = {
       id: assistantId, role: 'assistant', content: '', timestamp: new Date(),
     }
@@ -412,6 +464,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setCurrentError(null)
     setToolEvents([])
     setRagVerification(null)
+    setContextLayers([])
     setLoading(true)
 
     const parts: string[] = []
@@ -431,11 +484,22 @@ export function useChatMessages(config: ChatMessagesConfig) {
     if (currentAgent) {
       parts.push(`[Role: ${currentAgent.name}]`)
       if (currentAgent.description) parts.push(currentAgent.description)
-      if (currentAgent.instructions) parts.push(currentAgent.instructions)
     }
     const systemPrompt = parts.join('\n\n')
-    const knowledgeCtx = getKnowledgeContext()
     const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
+
+    // Build context layers for reasoning panel
+    const initialContextLayers: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }> = []
+    if (currentSoul) {
+      initialContextLayers.push({ type: 'soul', label: `Personality: ${currentSoul.name}`, detail: currentSoul.description })
+    }
+    if (currentAgent) {
+      initialContextLayers.push({ type: 'system', label: `Agent: ${currentAgent.name}`, detail: currentAgent.description })
+    }
+    if (knowledgeFacts.length > 0) {
+      initialContextLayers.push({ type: 'knowledge', label: 'Knowledge context', detail: `${knowledgeFacts.length} facts injected` })
+    }
+    setContextLayers(initialContextLayers)
 
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
     sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch((e) => logger.warning('Could not session save', { error: e }))
@@ -473,7 +537,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       } else {
         let assistantContentLen = 0
         let streamComplete = false
-        const finalSystemPrompt = knowledgeCtx ? systemPrompt + knowledgeCtx : systemPrompt
+        const finalSystemPrompt = systemPrompt
         await streamChatResponse({
           messages: messagesWithNew
             .filter(m => m.content.trim().length > 0 || m.role === 'user')
@@ -515,6 +579,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
           onKnowledge: (source: string, count: number) => {
             showToast(`Knowledge: ${count} facts from ${source}`, 'info')
+            setContextLayers(prev => [...prev, { type: 'knowledge', label: `Knowledge: ${source}`, detail: `${count} facts` }])
           },
           onMemory: (info) => {
             publishMemoryEvent(info)
@@ -524,6 +589,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
               const extra = list.length > 1 ? ` +${list.length - 1} more` : ''
               const shown = first && first.length > 140 ? `${first.slice(0, 140)}…` : first
               showToast(shown ? `Remembered: ${shown}${extra}` : 'New fact saved to memory', 'success')
+              setContextLayers(prev => [...prev, { type: 'memory', label: 'Memory updated', detail: first ? `${list.length} fact${list.length > 1 ? 's' : ''} stored` : undefined }])
             }
           },
           onThinking: () => {
@@ -533,9 +599,22 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
           onToolCall: (event) => {
             setToolEvents(prev => [...prev, event])
+            setContextLayers(prev => [...prev, { type: 'tool', label: `Tool: ${event.tool}`, detail: event.status }])
           },
           onRagVerification: (info) => {
             setRagVerification(info)
+            setContextLayers(prev => [...prev, { type: 'rag', label: 'RAG verification', detail: `${(info.confidence * 100).toFixed(0)}% confidence` }])
+          },
+          onControl: (event) => {
+            if (event.action === 'cancelled') {
+              setMessages(prev => prev.map(msg =>
+                msg.id === assistantId
+                  ? { ...msg, content: msg.content || '(cancelled)', isError: true }
+                  : msg
+              ))
+            } else if (event.action === 'context') {
+              setContextLayers(prev => [...prev, { type: 'system', label: 'Context injected', detail: event.context }])
+            }
           },
         })
         if (streamComplete) {
@@ -684,6 +763,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     currentError, setCurrentError,
     toolEvents,
     ragVerification,
+    contextLayers,
     messagesRef,
     loadingRef,
     sessionIdRef,
@@ -711,6 +791,12 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleSuggestionClick,
     handleExportMarkdown,
     handleCopyMarkdown,
+    handleReact,
     sidebarConversations: sessions.sidebarConversations,
+    cancelStream: useCallback(() => chatController.cancelStream(sessionIdRef.current), []),
+    approveTool: useCallback((toolName: string, approved: boolean) =>
+      chatController.approveTool(sessionIdRef.current, toolName, approved), []),
+    injectContext: useCallback((context: string) =>
+      chatController.injectContext(sessionIdRef.current, context), []),
   }
 }

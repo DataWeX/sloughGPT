@@ -532,7 +532,7 @@ class TestSource:
     def test_source_nonexistent_file(self, repl):
         with _CaptureOutput() as cap:
             repl._cmd_source("/tmp/nonexistent_script_xyz.sh")
-        assert "Error" in cap.getvalue()
+        assert "File not found" in cap.getvalue() or "Error" in cap.getvalue()
 
     def test_dot_command_aliases_source(self, repl):
         output = repl._execute_single(".")

@@ -110,6 +110,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                       <li key={route.path}>
                         <Link
                           href={route.path}
+                          prefetch={false}
                           aria-current={active ? 'page' : undefined}
                           className={navLinkClass(active)}
                           onClick={afterNav}

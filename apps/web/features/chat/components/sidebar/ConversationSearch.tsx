@@ -131,7 +131,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
           <kbd className="hidden sm:inline-flex text-xs text-muted-foreground/50 border border-border/40 rounded px-1.5 py-0.5 font-mono">Esc</kbd>
         </div>
 
-        <div className="max-h-[50vh] overflow-y-auto p-2" aria-busy={loading}>
+        <div className="max-h-[50vh] overflow-y-auto p-2" aria-busy={loading} aria-live="polite">
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />

@@ -16,6 +16,7 @@ export interface ChatInputProps {
   images?: ImageAttachment[]
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onAudioTranscript?: (text: string) => void
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
@@ -33,6 +34,7 @@ export const ChatInput = memo(function ChatInput({
   images = [],
   onAddImage,
   onRemoveImage,
+  onAudioRecorded,
   onAudioTranscript,
   onGeneratedImage,
   onPDFAnalysis,
@@ -129,6 +131,7 @@ export const ChatInput = memo(function ChatInput({
           textareaRef={textareaRef}
           onImage={handleAddImage}
           onTranscript={handleVoiceTranscript}
+          onAudioRecorded={onAudioRecorded}
           onAudioTranscript={onAudioTranscript}
           onGeneratedImage={onGeneratedImage}
           onPDFAnalysis={onPDFAnalysis}

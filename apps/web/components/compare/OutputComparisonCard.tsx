@@ -93,7 +93,7 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
           <Button size="sm" onClick={runOutputComparison} disabled={outputLoading || !outputPrompt.trim() || selectedForOutput.size < 1}>
             {outputLoading ? <><Spinner size="sm" className="mr-1" /> Generating…</> : <><IconSend className="h-3.5 w-3.5 mr-1" /> Compare</>}
           </Button>
-          {outputLoading && <span className="text-xs text-muted-foreground animate-pulse">Querying {selectedForOutput.size} model{selectedForOutput.size !== 1 ? 's' : ''}…</span>}
+          {outputLoading && <span className="text-xs text-muted-foreground animate-pulse" aria-live="polite">Querying {selectedForOutput.size} model{selectedForOutput.size !== 1 ? 's' : ''}…</span>}
         </div>
         {(() => {
           const entries = Object.entries(outputResults)

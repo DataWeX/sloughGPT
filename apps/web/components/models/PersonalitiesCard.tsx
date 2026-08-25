@@ -95,7 +95,7 @@ export default function PersonalitiesCard({
                         </SelectContent>
                     </Select>
                   ) : checkpointsLoading ? (
-                    <span className="text-xs text-muted-foreground animate-pulse">loading&hellip;</span>
+                    <span className="text-xs text-muted-foreground animate-pulse" aria-live="polite">loading&hellip;</span>
                   ) : isCurrent ? (
                     <Badge label="Active" variant="success" />
                   ) : (
