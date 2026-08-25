@@ -2802,7 +2802,14 @@ Examples:
         if sub == "auto":
             soul = parts[1] if len(parts) > 1 else ""
             teacher = parts[2] if len(parts) > 2 else "gpt2"
-            epochs = int(parts[3]) if len(parts) > 3 else 10
+            try:
+                epochs = int(parts[3]) if len(parts) > 3 else 10
+            except ValueError:
+                self._print(f"  Invalid epochs: {parts[3]!r} — must be a positive integer")
+                return
+            if not soul:
+                self._print("  Usage: train auto <soul_name> [teacher] [epochs]")
+                return
             r = self._spinner_call("Starting auto-train", lambda: self.cmds.train_auto(soul_name=soul, teacher=teacher, epochs=epochs))
             if "error" in r:
                 self._print(f"  Error: {r['error']}")

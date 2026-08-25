@@ -112,7 +112,9 @@ class TestShellCommands:
 
     def test_load_model_exception(self, monkeypatch):
         monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("x")))
-        assert ShellCommands.load_model("gpt2") == {"error": "x"}
+        result = ShellCommands.load_model("gpt2")
+        assert result["error"] == "x"
+        assert result["error_type"] == "ConnectionError"
 
     def test_unload_model(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_post", lambda p, d=None: {"unloaded": True})

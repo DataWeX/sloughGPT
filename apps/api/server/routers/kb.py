@@ -422,10 +422,10 @@ class KBRouter:
             parsed = urllib.parse.urlparse(req.url)
             if parsed.scheme.lower() in self._BLOCKED_SCHEMES:
                 raise_error(f"URL scheme '{parsed.scheme}' not allowed", "E_BAD_REQUEST", status_code=400)
-            if parsed.hostname and parsed.hostname in self._ALLOWED_HOSTS:
-                raise_error("Internal host URLs not allowed", "E_BAD_REQUEST", status_code=400)
             if not parsed.scheme or parsed.scheme.lower() not in ("http", "https"):
                 raise_error("Only HTTP/HTTPS URLs allowed", "E_BAD_REQUEST", status_code=400)
+            if parsed.hostname and _is_private_ip(parsed.hostname):
+                raise_error("Internal/private host URLs not allowed", "E_BAD_REQUEST", status_code=400)
             from domains.learner.knowledge import get_knowledge_ingestor
             ingestor = get_knowledge_ingestor()
             result = ingestor.ingest_url(req.url)
