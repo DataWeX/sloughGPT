@@ -380,7 +380,7 @@ class DatasetsRouter:
             logger.warning("Dataset import (csv) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
-    async def batch_import(self, request: BatchImportRequest) -> dict:
+    async def batch_import(self, request: BatchImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Import multiple datasets in one request."""
             results = []
@@ -495,7 +495,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="search_github")
 
-    async def import_from_isbn(self, request: ISBNImportRequest) -> dict:
+    async def import_from_isbn(self, request: ISBNImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import book by ISBN. Fetches full text if available on Project Gutenberg."""
         try:
             from domains.training.data_import import ISBNImporter
@@ -597,7 +597,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.get_dataset_stats")
-    async def create_dataset(self, req: DatasetCreate) -> dict:
+    async def create_dataset(self, req: DatasetCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Create a new empty dataset with the given name and description.
 
@@ -621,7 +621,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.create_dataset")
-    async def update_dataset(self, dataset_id: str, req: DatasetUpdate) -> dict:
+    async def update_dataset(self, dataset_id: str, req: DatasetUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Update a dataset's metadata fields (name, description, etc).
 
@@ -649,7 +649,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.update_dataset")
-    async def delete_dataset(self, dataset_id: str) -> dict:
+    async def delete_dataset(self, dataset_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Delete a dataset and all its files from disk.
 
@@ -675,7 +675,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.delete_dataset")
-    async def create_version(self, dataset_id: str) -> dict:
+    async def create_version(self, dataset_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Create a timestamped snapshot of a dataset."""
             self._validate_dataset_id(dataset_id)
@@ -698,7 +698,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.list_versions")
-    async def restore_version(self, dataset_id: str, timestamp: str) -> dict:
+    async def restore_version(self, dataset_id: str, timestamp: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Restore a dataset to a specific version snapshot."""
             self._validate_dataset_id(dataset_id)
@@ -711,7 +711,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.restore_version")
-    async def add_dataset_data(self, dataset_id: str, req: DatasetDataRequest) -> dict:
+    async def add_dataset_data(self, dataset_id: str, req: DatasetDataRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Append data rows to an existing dataset's input file.
 
@@ -765,7 +765,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.preview_dataset")
-    async def export_dataset(self, dataset_id: str, request: DatasetExportRequest) -> dict:
+    async def export_dataset(self, dataset_id: str, request: DatasetExportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Export a dataset as a downloadable file in the requested format.
 
@@ -797,7 +797,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.export_dataset")
-    async def create_dataset_from_chat(self, req: FromChatRequest) -> dict:
+    async def create_dataset_from_chat(self, req: FromChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Create a training dataset from a chat conversation.
 
@@ -836,7 +836,7 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.create_dataset_from_chat")
-    async def convert_to_messages(self, dataset_id: str, system_prompt: str = "You are a helpful assistant.") -> dict:
+    async def convert_to_messages(self, dataset_id: str, system_prompt: str = "You are a helpful assistant.", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Convert a dataset to chat message format for fine-tuning.
 
