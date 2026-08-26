@@ -145,6 +145,7 @@ class ChatRequest(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         """Resolve max_new_tokens alias into max_tokens."""
+        try:
             if self.max_new_tokens is not None and self.max_tokens == 128:
                 object.__setattr__(self, 'max_tokens', self.max_new_tokens)
 
@@ -474,7 +475,8 @@ class InferenceRouter:
         return self._context_core
 
     def set_vector_store_ref(self, store) -> dict:
-        """set_vector_store_ref."""
+        try:
+            """set_vector_store_ref."""
             self._vector_store_ref = store
 
         except Exception as e:
@@ -514,7 +516,8 @@ class InferenceRouter:
             self._session_dirty.discard(session_id)
 
     async def flush_dirty_sessions(self) -> int:
-        """flush_dirty_sessions."""
+        try:
+            """flush_dirty_sessions."""
             dirty = list(self._session_dirty)
             if not dirty:
                 return 0
@@ -842,7 +845,8 @@ class InferenceRouter:
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     async def get_info(self) -> dict:
-        """get_info."""
+        try:
+            """get_info."""
             from host_metrics import sample_host_metrics_async
             import state as server_state
 
@@ -878,7 +882,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_info")
     async def get_info_soul(self) -> dict:
-        """get_info_soul."""
+        try:
+            """get_info_soul."""
             import state as server_state
             cs = server_state.current_soul
             if not cs:
@@ -900,7 +905,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_info_soul")
     async def root(self) -> dict:
-        """root."""
+        try:
+            """root."""
             import state as server_state
             soul_name = None
             if server_state.soul_engine is not None and getattr(server_state.soul_engine, 'slo', None):
@@ -931,7 +937,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.root")
     async def list_chat_tools(self) -> dict:
-        """list_chat_tools."""
+        try:
+            """list_chat_tools."""
             try:
 
                 return success_response(data={"tools": get_tool_registry().list_tools()})
@@ -1114,11 +1121,8 @@ class InferenceRouter:
                                 break
                         if not replaced:
                             provider_messages.insert(0, agent_msg)
-                except Exception as e:
-                    logger.warning("Failed to inject agent instructions: %s", e, exc_info=True, extra={"tag": "INF"})
-                    yield _sse_event("chat", "STREAMING", "warning",
-                        data={"warning": "agent_injection_failed"},
-                        message="Agent instructions could not be loaded")
+                except Exception:
+                    logger.warning("Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"})
 
             tool_result_data = None
             try:
@@ -1160,11 +1164,8 @@ class InferenceRouter:
                                 "role": "system",
                                 "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
                             })
-            except Exception as e:
-                logger.warning("Tool execution failed: %s", e, exc_info=True, extra={"tag": "INF"})
-                yield _sse_event("chat", "TOOL", "error",
-                    data={"error": str(e)},
-                    message=f"Tool execution failed: {e}")
+            except Exception:
+                logger.warning("Tool execution failed", exc_info=True, extra={"tag": "INF"})
 
             if context_info:
                 yield _sse_event("chat", "STREAMING", "working",
@@ -1485,7 +1486,8 @@ class InferenceRouter:
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     async def inspect_context(self) -> dict:
-        """inspect_context."""
+        try:
+            """inspect_context."""
             ctx_core = self._get_context_core()
             if not ctx_core:
                 raise_error("ContextCore not available", "E_INFRA_STARTUP")
@@ -1494,7 +1496,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.inspect_context")
     async def store_fact(self, key: str, value: str) -> dict:
-        """store_fact."""
+        try:
+            """store_fact."""
             ctx_core = self._get_context_core()
             if not ctx_core:
                 raise_error("ContextCore not available", "E_INFRA_STARTUP")
@@ -1504,7 +1507,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.store_fact")
     async def get_facts(self, query: str = "") -> dict:
-        """get_facts."""
+        try:
+            """get_facts."""
             ctx_core = self._get_context_core()
             if not ctx_core:
                 raise_error("ContextCore not available", "E_INFRA_STARTUP")
@@ -1515,7 +1519,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_facts")
     async def reset_context(self, all: bool = False) -> dict:
-        """reset_context."""
+        try:
+            """reset_context."""
             self._context_core = None
             ctx_core = self._get_context_core()
             if not ctx_core:
@@ -1695,7 +1700,8 @@ class InferenceRouter:
         })
 
     async def get_voice_audio(self, session_id: str, message_id: str) -> dict:
-        """get_voice_audio."""
+        try:
+            """get_voice_audio."""
             self._ensure_dirs()
             base = self._VOICE_DIR.resolve()
             audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
@@ -1719,7 +1725,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_voice_audio")
     async def list_sessions(self, archived: Optional[bool] = None) -> dict:
-        """list_sessions."""
+        try:
+            """list_sessions."""
             sessions = await asyncio.to_thread(self._build_session_metadata_index)
             if archived is not None:
                 sessions = [s for s in sessions if s.get("archived", False) == archived]
@@ -1728,7 +1735,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.list_sessions")
     async def search_sessions(self, q: str = "", limit: int = 20) -> dict:
-        """search_sessions."""
+        try:
+            """search_sessions."""
             if not q.strip():
                 return success_response(data=[], meta={"query": q, "total": 0})
             results = await asyncio.to_thread(_search_sessions_sync, q, limit)
@@ -1737,7 +1745,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.search_sessions")
     async def get_current_session(self) -> dict:
-        """get_current_session."""
+        try:
+            """get_current_session."""
             sessions = await asyncio.to_thread(self._build_session_cache)
             if not sessions:
                 return success_response(data=None)
@@ -1746,7 +1755,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_current_session")
     async def upsert_session(self, session_id: str, req: UpsertSessionRequest) -> dict:
-        """upsert_session."""
+        try:
+            """upsert_session."""
             existing = self._get_session(session_id)
             update_data = req.model_dump(exclude_none=True)
             for key, value in update_data.items():
@@ -1772,7 +1782,8 @@ class InferenceRouter:
             classify_and_raise(exc, source="create_session")
 
     async def get_session(self, session_id: str) -> dict:
-        """get_session."""
+        try:
+            """get_session."""
             data = self._get_session(session_id)
             if not data.get("messages"):
                 raise_error("Session not found", "E_NOT_FOUND", status_code=404)
@@ -1781,7 +1792,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_session")
     async def delete_session(self, session_id: str) -> dict:
-        """delete_session."""
+        try:
+            """delete_session."""
             if self._session_repo.delete(session_id):
                 self._session_memory_cache.pop(session_id, None)
                 self._session_dirty.discard(session_id)
@@ -1814,7 +1826,8 @@ class InferenceRouter:
                            session_id, exc, extra={"tag": "KV"})
 
     async def chat_suggestions(self) -> dict:
-        """chat_suggestions."""
+        try:
+            """chat_suggestions."""
             return success_response(data=[
                 {"text": "What can you help me with?", "icon": "chat"},
                 {"text": "Tell me about yourself", "icon": "user"},
@@ -1827,7 +1840,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.chat_suggestions")
     async def list_model_providers(self) -> dict:
-        """list_model_providers."""
+        try:
+            """list_model_providers."""
             from domains.models.provider import list_providers, get_provider
 
             result = {}
@@ -1857,15 +1871,16 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.list_model_providers")
     async def list_operations(self, type: Optional[str] = None) -> dict:
-        """List all tracked operations (active + recently finished).
-
-        Args:
-            type: Optional filter by operation type (training, inference, download, etc.)
-
-        Returns:
-            Dict with 'operations' list and 'counts' by status.
-        """
         try:
+            """List all tracked operations (active + recently finished).
+
+            Args:
+                type: Optional filter by operation type (training, inference, download, etc.)
+
+            Returns:
+                Dict with 'operations' list and 'counts' by status.
+            """
+
             mgr = get_cancel_manager()
             op_type = OpType(type) if type else None
             all_ops = mgr.list_all(op_type=op_type)
@@ -1922,7 +1937,8 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.cancel_all_operations")
     async def purge_operations(self, max_age_s: float = 3600.0) -> dict:
-        """Remove finished operations older than max_age_s."""
+        try:
+            """Remove finished operations older than max_age_s."""
             import time as _time
             _t0 = _time.monotonic()
             removed = get_cancel_manager().purge(max_age_s=max_age_s)
