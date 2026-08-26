@@ -198,8 +198,8 @@ class ModelsController:
                 if active == "fp16":
                     logger.info("GPU precision set to fp16 (auto-selected via benchmark)",
                                 extra={"tag": "MODEL"})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("GPU precision auto-select failed: %s", e, extra={"tag": "MODEL"})
         except Exception as e:
             logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
             raise
@@ -259,8 +259,8 @@ class ModelsController:
         if self._process_guard is not None:
             try:
                 self._process_guard.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("ProcessGuard stop failed: %s", e, extra={"tag": "MODEL"})
             self._process_guard = None
 
         from config import get_process_guard_enabled
@@ -385,14 +385,14 @@ class ModelsController:
             mid = get_model_registry().default_id
             if mid:
                 return mid
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("ModelRegistry default_id lookup failed: %s", e, extra={"tag": "MODEL"})
         try:
             import state as server_state
             if getattr(server_state, "model_type", None):
                 return server_state.model_type
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("server_state.model_type lookup failed: %s", e, extra={"tag": "MODEL"})
         return None
 
     def adopt_process_guard(self, guard: Any, model_id: Optional[str] = None) -> None:
