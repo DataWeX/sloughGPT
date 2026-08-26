@@ -158,8 +158,8 @@ async def lifespan(app_inst: FastAPI):
         try:
             from domains.infrastructure.model_server import get_idle_manager
             get_idle_manager().shutdown()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Idle manager shutdown failed: %s", e)
 
         # Stop auto-trainer
         try:
@@ -210,8 +210,8 @@ def _cancel_stack_dump_timer() -> None:
     """Cancel the faulthandler dump timer installed by ``_install_stack_dump_timer``."""
     try:
         faulthandler.cancel_dump_traceback_later()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Faulthandler cancel failed: %s", e)
 
 
 # ── FastAPI application ─────────────────────────────────────────────
@@ -511,8 +511,8 @@ if __name__ == "__main__":
             with _urllib_request.urlopen(req, timeout=2) as resp:
                 if resp.status == 200:
                     _is_server = True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Health check on port %d failed: %s", bind_port, e)
 
         if _is_server and not args.force:
             logger.info(
@@ -530,8 +530,8 @@ if __name__ == "__main__":
                     if pid and pid != str(os.getpid()):
                         os.kill(int(pid), 9)
                         logger.warning("Killed process %s on port %d (--force)", pid, bind_port, extra={"tag": "START"})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to force-kill processes on port %d: %s", bind_port, e)
         elif not _is_server:
             # Port occupied by a non-server process
             try:
@@ -546,8 +546,8 @@ if __name__ == "__main__":
                         bind_port, ",".join(pids), extra={"tag": "START"},
                     )
                     sys.exit(1)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to detect processes on port %d: %s", bind_port, e)
 
     # Background daemons start AFTER uvicorn binds (moved from pre-uvicorn)
     # They are now started in the lifespan context below.
