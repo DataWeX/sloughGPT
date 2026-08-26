@@ -91,7 +91,7 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.info")
 
-    async def set_personality(self, req: SetPersonalityRequest) -> dict:
+    async def set_personality(self, req: SetPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Set companion personality (full replacement)."""
         try:
             comp = self._get_companion()
@@ -108,7 +108,7 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.set_personality")
 
-    async def patch_personality(self, req: PatchPersonalityRequest) -> dict:
+    async def patch_personality(self, req: PatchPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Partial update to companion personality (only provided fields are changed)."""
         try:
             comp = self._get_companion()
@@ -128,7 +128,7 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.patch")
 
-    async def reset_companion(self) -> dict:
+    async def reset_companion(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset companion to default personality."""
         try:
             from domains.companion import create_companion
@@ -138,7 +138,7 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.reset")
 
-    async def use_preset(self, req: PresetRequest) -> dict:
+    async def use_preset(self, req: PresetRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Replace the current companion with a preset personality.
 
         Args:
@@ -175,7 +175,7 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.prompt")
 
-    async def chat(self, req: ChatRequest) -> dict:
+    async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Chat with companion — generates a response using the active model."""
         comp = self._get_companion()
 
