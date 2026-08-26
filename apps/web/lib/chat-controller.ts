@@ -7,6 +7,7 @@
 import { apiPost, apiGet, streamSSE } from './http-client'
 import { modelController, type ModelStatus } from './model-controller'
 import { logger } from './dev-log'
+import { PUBLIC_API_URL } from './config'
 
 const _log = logger.child('chat-controller')
 
