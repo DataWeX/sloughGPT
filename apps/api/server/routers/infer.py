@@ -151,7 +151,7 @@ class InferRouter:
 
     # --- Endpoints ---
 
-    async def infer(self, req: InferRequest) -> InferResponse:
+    async def infer(self, req: InferRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> InferResponse:
         """Generate text from a prompt.
 
         Single non-streaming generation endpoint. Delegates to the active provider.
@@ -193,7 +193,7 @@ class InferRouter:
             logger.warning("Inference failed: %s", e)
             classify_and_raise(e, source="infer")
 
-    async def infer_stream(self, req: InferRequest, request: Request) -> AsyncGenerator[str, None]:
+    async def infer_stream(self, req: InferRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> AsyncGenerator[str, None]:
         try:
             """Stream generated tokens as SSE.
 
@@ -253,7 +253,7 @@ class InferRouter:
 
         except Exception as e:
             classify_and_raise(e, source="infer.infer_stream")
-    async def infer_embed(self, req: EmbedRequest) -> EmbedResponse:
+    async def infer_embed(self, req: EmbedRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> EmbedResponse:
         try:
             """Return embedding vector for text.
 
@@ -293,7 +293,7 @@ class InferRouter:
 
         except Exception as e:
             classify_and_raise(e, source="infer.infer_embed")
-    async def infer_tokenize(self, req: TokenizeRequest) -> TokenizeResponse:
+    async def infer_tokenize(self, req: TokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> TokenizeResponse:
         try:
             """Tokenize text into token IDs and strings.
 
@@ -324,7 +324,7 @@ class InferRouter:
 
         except Exception as e:
             classify_and_raise(e, source="infer.infer_tokenize")
-    async def infer_detokenize(self, req: DetokenizeRequest) -> DetokenizeResponse:
+    async def infer_detokenize(self, req: DetokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> DetokenizeResponse:
         try:
             """Convert token IDs back to text."""
             _t0 = _time.monotonic()

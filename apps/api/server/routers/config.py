@@ -34,7 +34,7 @@ class ConfigRouter:
         except Exception as e:
             classify_and_raise(e, source="config.get_generation")
 
-    async def update_generation_config(self, req: ConfigUpdate) -> dict:
+    async def update_generation_config(self, req: ConfigUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Update the generation configuration with partial field changes."""
         try:
             ctrl = get_config_controller()

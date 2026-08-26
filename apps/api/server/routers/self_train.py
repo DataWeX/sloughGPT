@@ -44,7 +44,7 @@ class SelfTrainRouter:
         self.router.add_api_route("/stop", self.stop_self_train, methods=["POST"])
         self.router.add_api_route("/status", self.get_self_train_status, methods=["GET"])
 
-    async def start_self_train(self, req: Optional[SelfTrainRequest] = None) -> dict:
+    async def start_self_train(self, req: Optional[SelfTrainRequest] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Start self-training in a subprocess.
 
         Args:
@@ -78,7 +78,7 @@ class SelfTrainRouter:
             logger.warning("Self-training start failed: %s", e)
             classify_and_raise(e, source="self_train_start")
 
-    async def stop_self_train(self) -> dict:
+    async def stop_self_train(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Stop the running self-training subprocess."""
         try:
             proc = server_state._self_train_proc

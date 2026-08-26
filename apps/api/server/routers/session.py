@@ -80,7 +80,7 @@ class SessionRouter:
         from domains.infrastructure.session_core import SessionCore
         return SessionCore.get_messages(session_id)
 
-    async def set_session_context(self, session_id: str, ctx: SessionContext) -> dict:
+    async def set_session_context(self, session_id: str, ctx: SessionContext, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Set session context (messages stored for regeneration)."""
             if ctx.messages:
@@ -199,7 +199,7 @@ class SessionRouter:
             logger.warning("Session inspector failed: %s", e)
             classify_and_raise(e, source="session_inspector")
 
-    async def regenerate_session(self, session_id: str, request: Request) -> StreamingResponse:
+    async def regenerate_session(self, session_id: str, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         try:
             """Regenerate the last assistant response for a session."""
             from domains.infrastructure.cancel_manager import get_cancel_manager, OpType

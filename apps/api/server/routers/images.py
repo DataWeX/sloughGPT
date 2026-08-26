@@ -10,6 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, Field
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.images")
@@ -288,6 +289,7 @@ class ImagesRouter:
         self,
         request: GenerateRequest,
         background_tasks: BackgroundTasks = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Generate an image from text description."""
         import time as _time

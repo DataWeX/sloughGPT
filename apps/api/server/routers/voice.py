@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
 
 logger = logging.getLogger("slo.routers.voice")
@@ -96,7 +97,7 @@ class VoiceRouter:
         self.router.add_api_route("/tts", self.text_to_speech, methods=["POST"], response_model=TTSResponse)
         self.router.add_api_route("/status", self.voice_status, methods=["GET"])
 
-    async def text_to_speech(self, request: TTSRequest) -> TTSResponse:
+    async def text_to_speech(self, request: TTSRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> TTSResponse:
         """Convert text to speech audio."""
         try:
             if not request.text.strip():

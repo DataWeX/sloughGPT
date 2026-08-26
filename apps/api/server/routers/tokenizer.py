@@ -87,7 +87,7 @@ class TokenizerRouter:
         except Exception as e:
             classify_and_raise(e, source="tokenizer.stats")
 
-    async def pretokenize_text(self, req: PretokenizeRequest) -> dict:
+    async def pretokenize_text(self, req: PretokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Show how text splits into pretokens before BPE encoding."""
         try:
             await self._ensure_trained()
@@ -96,7 +96,7 @@ class TokenizerRouter:
         except Exception as e:
             classify_and_raise(e, source="tokenizer.pretokenize")
 
-    async def decompose_token(self, req: DecomposeRequest) -> dict:
+    async def decompose_token(self, req: DecomposeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Show a token's merge tree decomposition."""
         try:
             await self._ensure_trained()
@@ -107,7 +107,7 @@ class TokenizerRouter:
         except Exception as e:
             classify_and_raise(e, source="tokenizer.decompose")
 
-    async def analyze_corpus(self, req: AnalyzeRequest) -> dict:
+    async def analyze_corpus(self, req: AnalyzeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Compute token frequency and compression stats on a corpus."""
         try:
             await self._ensure_trained()
@@ -116,7 +116,7 @@ class TokenizerRouter:
         except Exception as e:
             classify_and_raise(e, source="tokenizer.analyze")
 
-    async def tokenize_text(self, req: TokenizeRequest) -> dict:
+    async def tokenize_text(self, req: TokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Tokenize text into token ids."""
         try:
             await self._ensure_trained()
@@ -128,7 +128,7 @@ class TokenizerRouter:
         except Exception as e:
             classify_and_raise(e, source="tokenizer.tokenize")
 
-    async def detokenize_ids(self, req: DetokenizeRequest) -> dict:
+    async def detokenize_ids(self, req: DetokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Decode token ids back to text."""
         try:
             await self._ensure_trained()
@@ -168,7 +168,7 @@ class TokenizerRouter:
         except Exception as e:
             classify_and_raise(e, source="tokenizer.merges")
 
-    async def train_tokenizer(self, req: TrainTokenizerRequest2) -> dict:
+    async def train_tokenizer(self, req: TrainTokenizerRequest2, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Train the BPE tokenizer on provided text corpus."""
         try:
             import time as _time

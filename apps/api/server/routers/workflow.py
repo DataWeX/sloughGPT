@@ -8,6 +8,7 @@ from typing import Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.api.workflow")
@@ -49,7 +50,7 @@ class WorkflowRouter:
         except Exception as e:
             classify_and_raise(e, source="workflow.status")
 
-    async def start_workflow(self, request: WorkflowStartRequest) -> Dict[str, Any]:
+    async def start_workflow(self, request: WorkflowStartRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """Start the automated feedback workflow."""
         try:
             from domains.feedback import WorkflowConfig
@@ -68,7 +69,7 @@ class WorkflowRouter:
         except Exception as e:
             classify_and_raise(e, source="workflow.start")
 
-    async def stop_workflow(self) -> Dict[str, Any]:
+    async def stop_workflow(self, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """Stop the automated feedback workflow."""
         try:
             workflow = self._get_workflow()
@@ -79,7 +80,7 @@ class WorkflowRouter:
         except Exception as e:
             classify_and_raise(e, source="workflow.stop")
 
-    async def trigger_workflow(self, action: str) -> Dict[str, Any]:
+    async def trigger_workflow(self, action: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """Manually trigger a workflow action (aggregate, prune, export)."""
         try:
             workflow = self._get_workflow()
