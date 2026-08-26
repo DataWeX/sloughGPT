@@ -1,7 +1,7 @@
 """
 Datasets Router - MVC View layer
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import FileResponse
 from pathlib import Path
 from typing import Optional
@@ -20,6 +20,7 @@ from schemas.datasets import (
 )
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from controllers.datasets import get_datasets_controller
+from infrastructure.auth import require_auth_if_enabled
 
 import logging
 import re
@@ -111,7 +112,7 @@ class DatasetsRouter:
             count=len(datasets),
         )
 
-    async def import_from_local(self, request: LocalImportRequest) -> dict:
+    async def import_from_local(self, request: LocalImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from local file or directory."""
         lock = await self._get_import_lock(request.name)
         if lock.locked():
@@ -147,7 +148,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (local) failed: %s", e)
                 classify_and_raise(e, source="dataset_import_local")
 
-    async def import_from_github(self, request: GitHubImportRequest) -> dict:
+    async def import_from_github(self, request: GitHubImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from GitHub repository."""
         lock = await self._get_import_lock(request.name)
         if lock.locked():
@@ -181,7 +182,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (github) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_huggingface(self, request: HuggingFaceImportRequest) -> dict:
+    async def import_from_huggingface(self, request: HuggingFaceImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from HuggingFace Hub."""
         name = request.name or request.dataset_id.split("/")[-1]
         lock = await self._get_import_lock(name)
@@ -214,7 +215,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (huggingface) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_url(self, request: URLImportRequest) -> dict:
+    async def import_from_url(self, request: URLImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Download and import a dataset from a remote URL.
 
         Args:
@@ -263,7 +264,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (url) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_kaggle(self, request: KaggleImportRequest) -> dict:
+    async def import_from_kaggle(self, request: KaggleImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Download and import a dataset from Kaggle using the Kaggle CLI.
 
         Args:
@@ -326,7 +327,7 @@ class DatasetsRouter:
             logger.warning("Dataset import (kaggle) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_csv(self, request: CSVImportRequest) -> dict:
+    async def import_from_csv(self, request: CSVImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from CSV URL."""
         import csv
         import asyncio

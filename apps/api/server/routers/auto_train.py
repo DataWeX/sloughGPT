@@ -58,6 +58,7 @@ def _log_experiment_metric(experiment_id: str, metric: str, value: float, step: 
     try:
         from datetime import datetime, timezone
         exp_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "experiments"
+        exp_dir.mkdir(parents=True, exist_ok=True)
         metrics_file = exp_dir / f"{experiment_id}_metrics.jsonl"
         entry = {
             "experiment_id": experiment_id,
@@ -68,8 +69,8 @@ def _log_experiment_metric(experiment_id: str, metric: str, value: float, step: 
         }
         with open(metrics_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        autotrain_logger.warning("Failed to log experiment metric %s for %s: %s", metric, experiment_id, e, extra={"tag": "TRAIN"})
 
 
 def _log_experiment_param(experiment_id: str, param_name: str, value: Any) -> None:
@@ -77,6 +78,7 @@ def _log_experiment_param(experiment_id: str, param_name: str, value: Any) -> No
     try:
         from datetime import datetime, timezone
         exp_dir = Path(__file__).resolve().parent.parent.parent.parent / "data" / "experiments"
+        exp_dir.mkdir(parents=True, exist_ok=True)
         params_file = exp_dir / f"{experiment_id}_params.jsonl"
         entry = {
             "experiment_id": experiment_id,
@@ -86,8 +88,8 @@ def _log_experiment_param(experiment_id: str, param_name: str, value: Any) -> No
         }
         with open(params_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        autotrain_logger.warning("Failed to log experiment param %s for %s: %s", param_name, experiment_id, e, extra={"tag": "TRAIN"})
 
 
 @dataclass
