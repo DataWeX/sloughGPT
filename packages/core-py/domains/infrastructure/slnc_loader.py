@@ -90,7 +90,16 @@ class SLNCLoader:
         self._tensor_count = struct.unpack("<I", self._mm.read(4))[0]
 
         json_len = struct.unpack("<I", self._mm.read(4))[0]
-        self._config = json.loads(self._mm.read(json_len))
+        pos = self._mm.tell()
+        if json_len < 0 or pos + json_len > self._file_size:
+            raise ValueError(
+                f"Corrupt SLNC header: json_len={json_len} exceeds "
+                f"file bounds (file_size={self._file_size}, pos={pos})"
+            )
+        try:
+            self._config = json.loads(self._mm.read(json_len))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Corrupt SLNC config JSON: {exc}") from exc
 
     def _compute_offsets(self):
         """Compute absolute file offsets for all tensors."""
