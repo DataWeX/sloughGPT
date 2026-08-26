@@ -231,7 +231,8 @@ class LoRAEvaluator:
 
         try:
             from domains.models.provider import get_provider
-        except Exception:
+        except Exception as e:
+            logger.debug("provider import failed: %s", e)
             return None
 
         for name in ("slonet-native", "default"):
@@ -247,8 +248,8 @@ class LoRAEvaluator:
                         temperature=0.7,
                     )
                     return text if isinstance(text, str) else ""
-                except Exception:
-                    logger.debug("Live eval generator failed for %r", prompt,
+                except Exception as e:
+                    logger.debug("Live eval generator failed for %r: %s", prompt, e,
                                  extra={"tag": "INFRA"})
                     return ""
 
@@ -376,7 +377,8 @@ class LoRAEvaluator:
             _, loss = self._model.forward(ids, ids)
             perplexity = float(np.exp(loss.item()))
             return perplexity
-        except Exception:
+        except Exception as e:
+            logger.debug("perplexity eval failed: %s", e)
             return None
 
     def run(

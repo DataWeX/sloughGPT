@@ -379,7 +379,8 @@ def _install_output_buffer_bridge(root: logging.Logger) -> Optional[Any]:
         buf_handler = install_log_bridge()
         install_stdio_bridge()
         return buf_handler
-    except Exception:
+    except Exception as e:
+        logger.debug("OutputBuffer bridge unavailable: %s", e)
         return None
 
 
@@ -429,7 +430,8 @@ def setup_logging(
                 from domains.shared import find_repo_root
                 repo = find_repo_root(Path(__file__).resolve())
                 log_path = repo / "logs"
-            except Exception:
+            except Exception as e:
+                logger.debug("find_repo_root failed, using default log path: %s", e)
                 log_path = Path("logs")
 
     # Install record factory for correlation IDs
