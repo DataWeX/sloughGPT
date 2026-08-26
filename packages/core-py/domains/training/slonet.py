@@ -4116,7 +4116,10 @@ def import_from_sou(path: str) -> SloNet:
     json_len = struct.unpack("<I", raw[8:12])[0]
     # Strip null padding bytes that were added for 4-byte alignment
     meta_bytes = raw[12:12+json_len].rstrip(b"\x00")
-    meta = json.loads(meta_bytes.decode())
+    try:
+        meta = json.loads(meta_bytes.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise ValueError(f"Corrupt .soul file '{path}': failed to parse metadata JSON ({e})") from e
 
     weights = {}
     lineage = meta.get("lineage", meta.get("base_model", "slonet"))
@@ -4161,7 +4164,10 @@ def import_from_sou(path: str) -> SloNet:
         if len(rem) >= 4:
             wl = struct.unpack("<I", rem[:4])[0]
             if 0 < wl <= len(rem) - 4:
-                weights = json.loads(rem[4:4+wl].decode())
+                try:
+                    weights = json.loads(rem[4:4+wl].decode())
+                except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                    raise ValueError(f"Corrupt .soul file '{path}': failed to parse weight JSON ({e})") from e
 
     # Detect SloTransformer from lineage or named weight keys
     is_transformer = (
@@ -4331,7 +4337,16 @@ def load_checkpoint_npz(path: str) -> Dict[str, Any]:
         Dict with ``model_state_dict`` (numpy arrays) + metadata keys.
     """
     data = np.load(path, allow_pickle=False)
-    meta = json.loads(str(data["_meta_json"]))
+    try:
+        raw_meta = data["_meta_json"]
+    except KeyError as e:
+        data.close()
+        raise ValueError(f"Corrupt checkpoint '{path}': missing '_meta_json' field") from e
+    try:
+        meta = json.loads(str(raw_meta))
+    except json.JSONDecodeError as e:
+        data.close()
+        raise ValueError(f"Corrupt checkpoint '{path}': failed to parse metadata JSON ({e})") from e
     state_dict = {k: data[k] for k in data.files if k != "_meta_json"}
     meta["model_state_dict"] = state_dict
     data.close()

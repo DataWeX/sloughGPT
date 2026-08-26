@@ -85,7 +85,7 @@ class TensorDevice(Device):
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
                     return np.array(parsed, dtype=np.float64)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, MemoryError):
                 pass
         return np.array(v, dtype=np.float64)
 
