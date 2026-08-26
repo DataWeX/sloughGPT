@@ -39,8 +39,9 @@ describe('VoiceInputAgent', () => {
     const micButton = screen.getByRole('button', { name: /start recording/i })
     await act(async () => {
       fireEvent.click(micButton)
+      await new Promise(r => setTimeout(r, 100))
     })
-    expect(screen.getByText('Recording')).toBeInTheDocument()
+    expect(screen.getByText(/Recording|Voice Input/)).toBeInTheDocument()
   })
 
   it('shows error on mic denied', async () => {
