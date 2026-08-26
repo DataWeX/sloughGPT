@@ -1996,7 +1996,7 @@ class InferenceRouter:
                 logger.info("Stored context injection for session %s", session_id)
                 return success_response(data={"stored": True, "session_id": session_id})
 
-            return success_response(data={"error": f"Unknown action: {req.action}"})
+            raise_error(f"Unknown action: {req.action}", code="E_BAD_REQUEST", status_code=400)
 
         except Exception as e:
             classify_and_raise(e, source="inference.chat_control")

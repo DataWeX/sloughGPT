@@ -534,7 +534,7 @@ class AutoTrainRouter:
         self.router.add_api_route("/from-sessions/cancel", self.cancel_from_sessions, methods=["GET"])
         self.router.add_api_route("/metrics/export", self.export_metrics, methods=["GET"])
 
-    async def start(self, req: StartRequest) -> dict:
+    async def start(self, req: StartRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """start."""
             if not req.source_text and not req.dataset_id and not req.checkpoint_name:
@@ -597,7 +597,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.start")
-    async def start_turbo(self, req: TurboStartRequest) -> dict:
+    async def start_turbo(self, req: TurboStartRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """start_turbo."""
             global _turbo_state, _turbo_cancel_event
@@ -1230,7 +1230,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.list_checkpoints")
-    async def delete_checkpoint(self, name: str) -> dict:
+    async def delete_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """delete_checkpoint."""
             if not re.match(r'^[\w\-]+(\.\w+)*$', name):
