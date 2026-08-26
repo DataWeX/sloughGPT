@@ -475,12 +475,9 @@ class InferenceRouter:
         return self._context_core
 
     def set_vector_store_ref(self, store) -> dict:
-        try:
-            """set_vector_store_ref."""
-            self._vector_store_ref = store
-
-        except Exception as e:
-            classify_and_raise(e, source="inference.set_vector_store_ref")
+        """set_vector_store_ref."""
+        self._vector_store_ref = store
+        return {"status": "ok"}
     def _load_session_from_disk(self, session_id: str) -> dict:
         data = self._session_repo.get(session_id)
         if data is not None:

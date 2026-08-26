@@ -1264,7 +1264,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.delete_checkpoint")
-    async def load_checkpoint(self, name: str) -> dict:
+    async def load_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """load_checkpoint."""
         from domains.training.slonet import import_from_sou
         from domains.models.provider import SloTransformerProvider, register_provider
@@ -1418,7 +1418,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.export_metrics")
-    async def export_checkpoint_mobile(self, name: str) -> dict:
+    async def export_checkpoint_mobile(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """export_checkpoint_mobile."""
         import numpy as np
         from domains.training.slonet import import_from_sou
@@ -1494,7 +1494,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.auto_train_log")
-    async def start_from_sessions(self, req: FromSessionsRequest) -> dict:
+    async def start_from_sessions(self, req: FromSessionsRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """start_from_sessions."""
             if self.state.running:
