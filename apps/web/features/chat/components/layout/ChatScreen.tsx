@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, memo, useState, useEffect } from 'react'
+import React, { forwardRef, memo, useState, useEffect, useCallback, useMemo } from 'react'
 import { MessageBubble } from './../messages/MessageBubble'
 import { EmptyState } from './../messages/EmptyState'
 import { SystemBanner } from './../messages/SystemBanner'
@@ -87,6 +87,20 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         setEmptyFading(false)
       }
     }, [messages.length])
+
+    // Memoize stable callback references for MessageBubble
+    const stableOnCopy = useCallback((text: string) => onCopy(text), [onCopy])
+    const stableOnThumbsUp = useCallback((id: string) => onThumbsUp?.(id), [onThumbsUp])
+    const stableOnThumbsDown = useCallback((id: string) => onThumbsDown?.(id), [onThumbsDown])
+    const stableOnEdit = useCallback((id: string, content: string) => onEdit?.(id, content), [onEdit])
+    const stableOnReact = useCallback((id: string, emoji: string) => onReact?.(id, emoji), [onReact])
+    const stableOnPin = useCallback((id: string) => onPin?.(id), [onPin])
+    const stableOnBookmark = useCallback((id: string) => onBookmark?.(id), [onBookmark])
+    const stableOnDelete = useCallback((id: string) => onDelete?.(id), [onDelete])
+    const stableOnSaveToKnowledge = useCallback((id: string, content: string) => onSaveToKnowledge?.(id, content), [onSaveToKnowledge])
+    const stableOnThread = useCallback((id: string) => onThread?.(id), [onThread])
+    const stableOnToggleSelection = useCallback((id: string) => onToggleSelection?.(id), [onToggleSelection])
+    const stableOnSuggestionClick = useCallback((text: string) => onSuggestionClick?.(text), [onSuggestionClick])
 
     return (
       <div className={cn("flex flex-col", className)}>
@@ -184,34 +198,34 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 images={message.images}
                 audio={message.audio}
                 reactions={message.reactions}
-                onCopy={onCopy}
-                onThumbsUp={onThumbsUp}
-                onThumbsDown={onThumbsDown}
-                onEdit={onEdit}
-                onReact={onReact}
-                onPin={onPin}
+                onCopy={stableOnCopy}
+                onThumbsUp={stableOnThumbsUp}
+                onThumbsDown={stableOnThumbsDown}
+                onEdit={stableOnEdit}
+                onReact={stableOnReact}
+                onPin={stableOnPin}
                 onRegenerate={showRegenerate ? onRegenerate : undefined}
                 onRegenerateWithOptions={showRegenerate ? onRegenerateWithOptions : undefined}
-                onSuggestionClick={onSuggestionClick}
+                onSuggestionClick={stableOnSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}
                 isError={message.isError}
                 isPinned={message.pinned}
                 aria-live={isStreaming ? 'polite' : undefined}
                 isBookmarked={isBookmarked?.(message.id)}
-                onBookmark={onBookmark}
-                onDelete={onDelete}
-                onSaveToKnowledge={onSaveToKnowledge}
+                onBookmark={stableOnBookmark}
+                onDelete={stableOnDelete}
+                onSaveToKnowledge={stableOnSaveToKnowledge}
                 collapsibleLength={collapsibleLength}
                 temperature={temperature}
                 hasNote={!!noteMap?.[message.id]}
                 note={noteMap?.[message.id]}
                 onAddNote={onAddNote}
                 hasThread={hasThread?.(message.id)}
-                onThread={onThread}
+                onThread={stableOnThread}
                 selectionMode={selectionMode}
                 isSelected={selectedMessageIds?.has(message.id)}
-                onToggleSelection={onToggleSelection}
+                onToggleSelection={stableOnToggleSelection}
               />
               </React.Fragment>
             )

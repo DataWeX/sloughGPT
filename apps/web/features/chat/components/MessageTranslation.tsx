@@ -78,7 +78,7 @@ export const MessageTranslation = memo(function MessageTranslation({
     <div className={cn('mt-1 rounded border bg-muted/30 p-2 space-y-2', className)}>
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium text-muted-foreground">Translate to</span>
-        <Button variant="ghost" size="icon-sm" className="h-4 w-4" onClick={handleClose}>
+        <Button variant="ghost" size="icon-sm" className="h-4 w-4" onClick={handleClose} aria-label="Close translation">
           <IconX className="h-2.5 w-2.5" />
         </Button>
       </div>

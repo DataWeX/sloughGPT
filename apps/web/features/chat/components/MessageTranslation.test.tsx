@@ -54,7 +54,7 @@ describe('MessageTranslation', () => {
   it('closes panel and resets', () => {
     render(<MessageTranslation content="Hello world" onTranslate={mockTranslate} />)
     fireEvent.click(screen.getByText('Translate'))
-    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+    fireEvent.click(screen.getByLabelText('Close translation'))
     expect(screen.getByText('Translate')).toBeInTheDocument()
     expect(screen.queryByText('Translate to')).not.toBeInTheDocument()
   })

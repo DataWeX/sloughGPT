@@ -337,6 +337,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
     systemPromptOpen, setSystemPromptOpen, customSystemPrompt, handleSaveSystemPrompt,
     setChatMode,
     noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
+    noteSearchOpen, setNoteSearchOpen, onNavigateToNote,
     activeThreadMessageId, activeThread, activeThreadMessages, onStartThread, onReplyInThread, onCloseThread,
   } = controller
 
@@ -393,6 +394,14 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
           note={noteDialogNote}
           onSave={onSaveNote}
           onDelete={onDeleteNote}
+        />
+      )}
+
+      {noteSearchOpen && (
+        <NoteSearchPanel
+          open={noteSearchOpen}
+          onClose={() => setNoteSearchOpen(false)}
+          onNavigateToNote={onNavigateToNote}
         />
       )}
 
