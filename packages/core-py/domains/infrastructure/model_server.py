@@ -591,9 +591,10 @@ class IdleManager:
 
     def _ensure_running(self) -> None:
         """Start the background check thread if not already running."""
-        if self._running:
-            return
-        self._running = True
+        with self._lock:
+            if self._running:
+                return
+            self._running = True
         self._thread = Thread(target=self._check_loop, daemon=True, name="idle-manager")
         self._thread.start()
 
@@ -625,7 +626,8 @@ class IdleManager:
 
     def shutdown(self) -> None:
         """Stop the background check thread."""
-        self._running = False
+        with self._lock:
+            self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
 
@@ -634,7 +636,7 @@ class IdleManager:
         self.shutdown()
         with self._lock:
             self._models.clear()
-        self._running = False
+            self._running = False
 
 
 _idle_manager: Optional[IdleManager] = None

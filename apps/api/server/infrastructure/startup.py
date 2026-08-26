@@ -1046,8 +1046,8 @@ def _register_loaded(cfg, process_guard) -> None:
         active = set_accelerator_precision("auto")
         if active == "fp16":
             logger.info("GPU precision set to fp16 (auto-selected via benchmark)", extra={"tag": "START"})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("GPU precision auto-select failed: %s", e, extra={"tag": "START"})
     _sync_soul_traits()
     logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"tag": "START"})
 
@@ -1212,8 +1212,8 @@ def _start_inference_engine(cfg) -> Optional[Any]:
                     server_state._inference_engine_stderr.append(
                         line.decode(errors="replace").rstrip()
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Inference engine stderr capture failed: %s", e, extra={"tag": "START"})
 
         threading.Thread(target=_capture_stderr, daemon=True, name="engine-stderr").start()
         logger.info(
@@ -1244,8 +1244,8 @@ def _start_inference_engine(cfg) -> Optional[Any]:
                 logger.info("Inference engine connected (model=%s)", client.model_id, extra={"tag": "START"})
                 _start_engine_watcher(proc, client)
                 return client
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Inference engine connect attempt failed: %s", e, extra={"tag": "START"})
         time.sleep(1.0)
 
     logger.error("Inference engine: connection timeout after %ds", int(connect_timeout), extra={"tag": "START"})
@@ -1335,8 +1335,8 @@ def _make_engine_restart_fn(cfg):
                 if new_client.connect():
                     _start_engine_watcher(proc, new_client)
                     return new_client
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Inference engine restart connect failed: %s", e, extra={"tag": "START"})
             time.sleep(1.0)
 
         proc.terminate()

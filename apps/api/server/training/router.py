@@ -627,8 +627,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("CancelManager registration failed for %s: %s", job_id, e)
 
     def run_training(job_id_: str = jid) -> None:
         from domains.training.train_pipeline import SloughGPTTrainer
@@ -751,8 +751,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Training failure webhook failed for %s: %s", jid, exc)
 
             # Push notification to mobile devices
             try:
@@ -762,8 +762,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     data={"screen": "Training", "job_id": jid},
                     topics=["training"],
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Training failure push notification failed for %s: %s", jid, exc)
         finally:
             if tracker is not None:
                 try:
@@ -971,8 +971,8 @@ async def start_distillation(request: DistillStartRequest):
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("CancelManager registration failed for distill %s: %s", job_id, e)
 
     def _run_distill(job_id_: str = job_id):
         """Background thread that runs distillation."""
@@ -1258,8 +1258,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             detail="lora",
             extra={"job_id": job_id, "model": model_stem, "rank": request.rank, "epochs": request.epochs},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Audit log failed for LoRA training start %s: %s", job_id, e)
 
     # Webhook notification
     try:
@@ -1290,8 +1290,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     try:
         from training.runtime import get_training_runtime
         get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, request.model_dump())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Training runtime registration failed for %s: %s", job_id, e)
 
     try:
         from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
@@ -1303,8 +1303,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             op_id=job_id,
         )
         get_cancel_manager().start(job_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("CancelManager registration failed for LoRA %s: %s", job_id, e)
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
@@ -1388,8 +1388,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             try:
                 from training.runtime import get_training_runtime
                 get_training_runtime().sync(job_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Training runtime sync failed for %s: %s", job_id, e)
 
             get_training_controller().complete()
 
@@ -1413,8 +1413,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("LoRA training completion webhook failed for %s: %s", job_id, e)
 
         except Exception as exc:
             logger.exception("LoRA fine-tune job %s failed", job_id, extra={"tag": "TRAIN"})
@@ -1465,8 +1465,8 @@ async def load_adapter(request: LoadAdapterRequest):
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
         process_guard = getattr(ctrl, '_process_guard', None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to get process guard for adapter load: %s", e)
 
     if process_guard is None or not hasattr(process_guard, 'load_adapter'):
         raise_error("No subprocess worker found. Load adapter via direct model access instead.", "E_BAD_REQUEST", status_code=400)
@@ -1494,8 +1494,8 @@ async def unload_adapter():
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
         process_guard = getattr(ctrl, '_process_guard', None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to get process guard for adapter unload: %s", e)
 
     if process_guard is None or not hasattr(process_guard, 'unload_adapter'):
         raise_error("No subprocess worker found. Unload adapter via direct model access instead.", "E_BAD_REQUEST", status_code=400)
@@ -1659,10 +1659,8 @@ async def train_from_feedback(req: dict | None = None):
                             },
                         )
                     )
-                except Exception:
-                    pass
-
-        executor = get_training_executor()
+                except Exception as e:
+                    logger.warning("Feedback training failure webhook failed for %s: %s", jid, e)
         executor.submit(run_feedback_training, jid)
 
         safe_out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
@@ -1769,8 +1767,8 @@ def _signal_current_job(pause: bool | None = None, cancel: bool = False) -> dict
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager
             get_cancel_manager().cancel(jid)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("CancelManager.cancel failed for %s: %s", jid, e)
     return signaled
 
 
@@ -1937,8 +1935,8 @@ async def register_webhook(
             resource=url,
             extra={"webhook_id": webhook_id, "events": events_list},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Audit log failed for webhook registration %s: %s", webhook_id, e)
 
     return {
         "id": webhook_id,
@@ -2031,8 +2029,8 @@ async def unregister_webhook(webhook_id: str):
     try:
         from infrastructure.auth import get_audit_logger
         get_audit_logger().log("training.webhook.delete", resource=webhook_id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Audit log failed for webhook deletion %s: %s", webhook_id, e)
 
     return {"status": "deleted", "webhook_id": webhook_id}
 
@@ -2516,8 +2514,8 @@ async def recover_job(job_id: str):
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Recovery webhook failed for %s: %s", jid, e)
 
         except Exception as e:
             logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})

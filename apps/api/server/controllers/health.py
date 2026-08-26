@@ -2,10 +2,13 @@
 Health Controller - Business logic for system health
 """
 import json
+import logging
 import time
 from typing import Dict, Any, Tuple, Optional
 import psutil
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 _health_start_time = datetime.now()
 
@@ -158,8 +161,8 @@ def _get_model_device() -> Optional[str]:
             for m in health.get("models", []):
                 if m.get("is_default") and m.get("device"):
                     return m["device"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("GPU device detection failed: %s", e)
     return None
 
 
@@ -329,8 +332,8 @@ def _get_process_info() -> Dict[str, Any]:
             info["gc_gen0"] = gen0
             info["gc_gen1"] = gen1
             info["gc_gen2"] = gen2
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("GC gen tracking failed: %s", e)
         return info
     except Exception:
         return {}
@@ -348,8 +351,8 @@ class HealthController:
         try:
             psutil.cpu_percent(interval=None)
             psutil.Process().cpu_percent(interval=None)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("CPU percent sampling failed: %s", e)
 
     def get_basic_health(self) -> Dict[str, Any]:
         """Get basic health status with flow-based summary."""
@@ -385,8 +388,8 @@ class HealthController:
                     meta = server_state.provider.metadata()
                     if meta and meta.get("total_params"):
                         result["num_parameters"] = meta["total_params"]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Model parameter counting failed: %s", e)
 
         # Quantization status
         quant_info = _get_quantization_info()

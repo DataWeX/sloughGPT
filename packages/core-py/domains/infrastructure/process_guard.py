@@ -268,11 +268,13 @@ class ProcessGuard:
 
     def on_crash(self, cb: Callable[[str], None]) -> None:
         """Register a callback invoked on worker crash (receives worker_id)."""
-        self._crash_callbacks.append(cb)
+        with self._restart_lock:
+            self._crash_callbacks.append(cb)
 
     def on_restart(self, cb: Callable[[str], None]) -> None:
         """Register a callback invoked after worker restart (receives worker_id)."""
-        self._restart_callbacks.append(cb)
+        with self._restart_lock:
+            self._restart_callbacks.append(cb)
 
     def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = DEFAULT_GENERATE_TIMEOUT) -> dict:
         """Load a LoRA adapter into the worker's model.
