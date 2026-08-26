@@ -40,6 +40,8 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 20
 
   const fetchJobs = useCallback(async () => {
     setLoading(true)
@@ -124,18 +126,18 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
         ) : (
           <>
             <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => setFilter('all')}>
+              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => { setFilter('all'); setPage(0) }}>
                 All ({jobs.length})
               </Button>
               {Object.entries(statusCounts).map(([status, count]) => (
-                <Button key={status} size="sm" variant={filter === status ? 'default' : 'ghost'} onClick={() => setFilter(status)}>
+                <Button key={status} size="sm" variant={filter === status ? 'default' : 'ghost'} onClick={() => { setFilter(status); setPage(0) }}>
                   {status} ({count})
                 </Button>
               ))}
             </div>
 
             <div className="space-y-1">
-              {filtered.map(job => (
+              {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(job => (
                 <div
                   key={job.id}
                   className="rounded border p-2.5 text-xs hover:bg-muted/30 transition-colors cursor-pointer"
@@ -166,6 +168,17 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
                 </div>
               ))}
             </div>
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
+                <span className="text-[10px] text-muted-foreground">
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                </span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
+                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={(page + 1) * PAGE_SIZE >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </CardContent>

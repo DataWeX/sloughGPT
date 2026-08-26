@@ -42,6 +42,8 @@ export interface MessageBubbleProps {
   hasNote?: boolean
   note?: string
   onAddNote?: (messageId: string) => void
+  hasThread?: boolean
+  onThread?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
@@ -75,6 +77,8 @@ export const MessageBubble = memo(function MessageBubble({
   hasNote = false,
   note,
   onAddNote,
+  hasThread = false,
+  onThread,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isVisible, setIsVisible] = useState(false)
@@ -97,6 +101,7 @@ export const MessageBubble = memo(function MessageBubble({
       role={role}
       isBookmarked={isBookmarked}
       hasNote={hasNote}
+      hasThread={hasThread}
       onCopy={onCopy}
       onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
@@ -104,6 +109,7 @@ export const MessageBubble = memo(function MessageBubble({
       onDelete={onDelete}
       onSaveToKnowledge={onSaveToKnowledge}
       onAddNote={onAddNote}
+      onThread={onThread}
     >
     <div
       id={messageId ? `msg-${messageId}` : undefined}

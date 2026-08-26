@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown, IconSpeaker, IconRewrite, IconExplain, IconTranslate, IconPlay, IconMapPin, IconCheckCircle } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown, IconSpeaker, IconRewrite, IconExplain, IconTranslate, IconPlay, IconMapPin, IconCheckCircle, IconMessage } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
@@ -27,6 +27,8 @@ interface MessageActionsProps {
   reactions?: Record<string, number>
   onReact?: (messageId: string, emoji: string) => void
   temperature?: number
+  onAddNote?: (messageId: string) => void
+  hasNote?: boolean
 }
 
 function ThumbsUpIcon({ className, animated }: { className?: string; animated?: boolean }) {
@@ -106,7 +108,7 @@ const TRANSLATE_LANGUAGES = [
   { code: 'ru', label: 'Russian' },
 ]
 
-export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, temperature = 0.7 }: MessageActionsProps) {
+export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, temperature = 0.7, onAddNote, hasNote }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)

@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useRef, useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, Skeleton } from '@sloughgpt/strui'
@@ -126,8 +126,8 @@ export default function TrainingPage() {
     }
   }, [datasets.selectedDataset, form.inputMode])
 
-  const runningJob = form.allJobs.find(j => j.status === 'running')
-  const completedCount = form.allJobs.filter(j => j.status === 'completed').length
+  const runningJob = useMemo(() => form.allJobs.find(j => j.status === 'running'), [form.allJobs])
+  const completedCount = useMemo(() => form.allJobs.filter(j => j.status === 'completed').length, [form.allJobs])
 
   // If checkpoints polling finds a running job but session isn't tracking it, sync the state
   useEffect(() => {

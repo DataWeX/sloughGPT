@@ -16,6 +16,7 @@ vi.mock('@sloughgpt/strui', () => ({
   IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
   IconSummary: () => <span data-testid="icon-summary">summary</span>,
   IconChart: () => <span data-testid="icon-chart">chart</span>,
+  IconDownload: () => <span data-testid="icon-download">download</span>,
   IconCopy: () => <span data-testid="icon-copy">copy</span>,
   IconCheck: () => <span data-testid="icon-check">check</span>,
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (

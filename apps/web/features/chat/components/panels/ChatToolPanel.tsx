@@ -15,6 +15,7 @@ import { ChatSessionStatsCard } from './ChatSessionStatsCard'
 import { ConversationSummary } from './../ConversationSummary'
 import { ConversationStats } from './../ConversationStats'
 import { ConversationExport } from './../ConversationExport'
+import { ChatAnalytics } from './../ChatAnalytics'
 
 interface ChatToolPanelProps {
   open: boolean
@@ -137,6 +138,13 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Export</span>
                   </div>
                   <ConversationExport messages={messages} model={ctx.model} />
+                </section>
+                <section aria-label="Analytics">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconChart className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Analytics</span>
+                  </div>
+                  <ChatAnalytics />
                 </section>
                 <section aria-label="Bookmarks">
                   <ChatBookmarksPanel

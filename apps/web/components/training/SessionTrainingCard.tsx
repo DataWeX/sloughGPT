@@ -114,7 +114,7 @@ export function SessionTrainingCard({ addToast }: Props) {
           <p className="text-xs text-muted-foreground">No chat sessions found.</p>
         ) : (
           <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {sessions.map(s => (
+            {sessions.slice(0, 50).map(s => (
               <div
                 key={s.id}
                 className={`flex items-center gap-3 rounded border px-3 py-2 text-sm transition-colors ${

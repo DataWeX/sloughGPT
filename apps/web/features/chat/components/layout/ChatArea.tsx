@@ -49,6 +49,8 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
   noteMap?: Record<string, string>
   onAddNote?: (messageId: string) => void
+  hasThread?: (id: string) => boolean
+  onThread?: (messageId: string) => void
 }
 
 export interface ChatAreaRef {
@@ -93,6 +95,8 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     contextLayers,
     noteMap,
     onAddNote,
+    hasThread,
+    onThread,
     streamingStatus,
     streamingToolName,
     ...inputProps
@@ -177,6 +181,8 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             contextLayers={contextLayers}
             noteMap={noteMap}
             onAddNote={onAddNote}
+            hasThread={hasThread}
+            onThread={onThread}
           />
 
           {filteredMessages.length > 0 && !isNearBottom && (

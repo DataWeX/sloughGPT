@@ -19,6 +19,7 @@ import { useChatBookmarks } from '@/features/chat/hooks/useChatBookmarks'
 import { useChatMessages } from '@/features/chat/hooks/useChatMessages'
 import { useChatMode } from '@/features/chat/hooks/useChatMode'
 import { useMessageNotes } from '@/features/chat/hooks/useMessageNotes'
+import { useMessageThreads } from '@/features/chat/hooks/useMessageThreads'
 import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { chatController } from '@/lib/chat-controller'
@@ -100,6 +101,9 @@ export function useChatPageController(
   })
 
   const messageNotes = useMessageNotes({ sessionId: chat.sessionIdRef.current })
+
+  const threads = useMessageThreads({ messages: chat.messages })
+  const [activeThreadMessageId, setActiveThreadMessageId] = useState<string | null>(null)
 
   const {
     chatMode, setChatMode,
@@ -451,6 +455,45 @@ export function useChatPageController(
     }
   }, [chatMode, ui])
 
+  const onSaveNote = useCallback((note: string) => {
+    if (noteDialogMessageId) {
+      if (note === '') {
+        messageNotes.removeNote(noteDialogMessageId)
+      } else {
+        messageNotes.setNote(noteDialogMessageId, note)
+      }
+    }
+  }, [noteDialogMessageId, messageNotes])
+
+  const onDeleteNote = useCallback(() => {
+    if (noteDialogMessageId) {
+      messageNotes.removeNote(noteDialogMessageId)
+    }
+  }, [noteDialogMessageId, messageNotes])
+
+  const onAddNote = useCallback((messageId: string) => {
+    setNoteDialogMessageId(messageId)
+    setNoteDialogOpen(true)
+  }, [])
+
+  const onStartThread = useCallback((parentMessageId: string) => {
+    threads.createThread(parentMessageId)
+    setActiveThreadMessageId(parentMessageId)
+  }, [threads])
+
+  const onReplyInThread = useCallback((threadId: string, content: string) => {
+    threads.addToThread(threadId, {
+      id: `thread-msg-${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    })
+  }, [threads])
+
+  const onCloseThread = useCallback(() => {
+    setActiveThreadMessageId(null)
+  }, [])
+
   return {
     health,
     refreshHealth,
@@ -507,24 +550,19 @@ export function useChatPageController(
     setNoteDialogOpen: setNoteDialogOpen,
     noteDialogMessageId: noteDialogMessageId,
     noteDialogNote: noteDialogMessageId ? messageNotes.getNote(noteDialogMessageId) || '' : '',
-    onSaveNote: (note: string) => {
-      if (noteDialogMessageId) {
-        if (note === '') {
-          messageNotes.removeNote(noteDialogMessageId)
-        } else {
-          messageNotes.setNote(noteDialogMessageId, note)
-        }
-      }
-    },
-    onDeleteNote: () => {
-      if (noteDialogMessageId) {
-        messageNotes.removeNote(noteDialogMessageId)
-      }
-    },
-    onAddNote: (messageId: string) => {
-      setNoteDialogMessageId(messageId)
-      setNoteDialogOpen(true)
-    },
+    onSaveNote,
+    onDeleteNote,
+    onAddNote,
+    activeThreadMessageId: activeThreadMessageId,
+    activeThread: activeThreadMessageId ? threads.getThread(activeThreadMessageId) : undefined,
+    activeThreadMessages: activeThreadMessageId && threads.getThread(activeThreadMessageId)
+      ? threads.getThreadMessages(threads.getThread(activeThreadMessageId)!.id)
+      : [],
+    onStartThread,
+    onReplyInThread,
+    onCloseThread,
+    hasThread: threads.hasThread,
+    threadCount: threads.threadCount,
   }
 }
 

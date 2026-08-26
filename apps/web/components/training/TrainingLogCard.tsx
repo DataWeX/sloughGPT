@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@slo
 import { trainingJobsController } from '@/lib/training-controller'
 
 const POLL_INTERVAL_MS = 5000
+const MAX_VISIBLE_LINES = 500
 
 interface TrainingLogCardProps {
   trainingRunning: boolean
@@ -99,7 +100,12 @@ export const TrainingLogCard = memo(function TrainingLogCard({
               ref={scrollRef}
               className="max-h-72 overflow-y-auto rounded bg-muted/30 p-3 font-mono text-xs leading-relaxed"
             >
-              {lines.map((line, i) => (
+              {lines.length > MAX_VISIBLE_LINES && (
+                <div className="mb-2 text-[10px] text-muted-foreground">
+                  Showing last {MAX_VISIBLE_LINES} of {lines.length} lines
+                </div>
+              )}
+              {lines.slice(-MAX_VISIBLE_LINES).map((line, i) => (
                 <div key={i} className="whitespace-pre-wrap break-all">{line}</div>
               ))}
             </div>

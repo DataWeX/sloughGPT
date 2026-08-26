@@ -126,6 +126,8 @@ export default function AutoTrainPage() {
   }, [addToast, checkpoints])
 
   const [selectedCps, setSelectedCps] = useState<Set<string>>(new Set())
+  const [cpPage, setCpPage] = useState(0)
+  const CP_PAGE_SIZE = 10
 
   const toggleCpSelect = useCallback((name: string) => {
     setSelectedCps(prev => {
@@ -395,7 +397,7 @@ export default function AutoTrainPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {checkpoints.checkpoints.map(c => (
+              {checkpoints.checkpoints.slice(cpPage * CP_PAGE_SIZE, (cpPage + 1) * CP_PAGE_SIZE).map(c => (
                 <div key={c.name} className={`flex items-center justify-between rounded border p-3 text-sm ${selectedCps.has(c.name) ? 'border-primary bg-primary/5' : ''}`}>
                   <div className="min-w-0 flex-1 flex items-center gap-2">
                     <input
@@ -424,6 +426,17 @@ export default function AutoTrainPage() {
                 </div>
               ))}
             </div>
+            {checkpoints.checkpoints.length > CP_PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
+                <span className="text-[10px] text-muted-foreground">
+                  {cpPage * CP_PAGE_SIZE + 1}–{Math.min((cpPage + 1) * CP_PAGE_SIZE, checkpoints.checkpoints.length)} of {checkpoints.checkpoints.length}
+                </span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={cpPage === 0} onClick={() => setCpPage(p => p - 1)}>Prev</Button>
+                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={(cpPage + 1) * CP_PAGE_SIZE >= checkpoints.checkpoints.length} onClick={() => setCpPage(p => p + 1)}>Next</Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

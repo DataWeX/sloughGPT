@@ -23,6 +23,8 @@ export function TrainingBuildsCard({ addToast }: Props) {
   const [loading, setLoading] = useState(true)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 10
 
   const fetchBuilds = useCallback(async () => {
     setLoading(true)
@@ -111,18 +113,18 @@ export function TrainingBuildsCard({ addToast }: Props) {
         ) : (
           <>
             <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => setFilter('all')}>
+              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => { setFilter('all'); setPage(0) }}>
                 All ({builds.length})
               </Button>
               {Object.entries(typeCounts).map(([type, count]) => (
-                <Button key={type} size="sm" variant={filter === type ? 'default' : 'ghost'} onClick={() => setFilter(type)}>
+                <Button key={type} size="sm" variant={filter === type ? 'default' : 'ghost'} onClick={() => { setFilter(type); setPage(0) }}>
                   {BUILD_TYPE_LABELS[type] ?? type} ({count})
                 </Button>
               ))}
             </div>
 
             <div className="space-y-2">
-              {filtered.map(b => (
+              {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(b => (
                 <div key={b.name} className="flex items-center justify-between rounded border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -148,6 +150,17 @@ export function TrainingBuildsCard({ addToast }: Props) {
                 </div>
               ))}
             </div>
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
+                <span className="text-[10px] text-muted-foreground">
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                </span>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
+                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={(page + 1) * PAGE_SIZE >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </CardContent>

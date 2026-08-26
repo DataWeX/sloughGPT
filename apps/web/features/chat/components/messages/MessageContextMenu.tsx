@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin, IconMessage } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin, IconMessage, IconChat } from '@sloughgpt/strui'
 
 interface MessageContextMenuProps {
   messageId: string
@@ -10,6 +10,7 @@ interface MessageContextMenuProps {
   role: 'user' | 'assistant'
   isBookmarked?: boolean
   hasNote?: boolean
+  hasThread?: boolean
   onCopy?: (text: string) => void
   onEdit?: (messageId: string) => void
   onBookmark?: (messageId: string) => void
@@ -17,6 +18,7 @@ interface MessageContextMenuProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   onAddNote?: (messageId: string) => void
+  onThread?: (messageId: string) => void
   children: React.ReactNode
 }
 
@@ -51,6 +53,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   role,
   isBookmarked,
   hasNote,
+  hasThread,
   onCopy,
   onEdit,
   onBookmark,
@@ -58,6 +61,7 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   onDelete,
   onSaveToKnowledge,
   onAddNote,
+  onThread,
   children,
 }: MessageContextMenuProps) {
   const [open, setOpen] = useState(false)
@@ -142,6 +146,11 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       label: hasNote ? 'Edit note' : 'Add note',
       icon: <IconMessage className="h-3.5 w-3.5" />,
       onClick: () => { onAddNote(messageId); setOpen(false) },
+    }] : []),
+    ...(onThread ? [{
+      label: hasThread ? 'Open thread' : 'Reply in thread',
+      icon: <IconChat className="h-3.5 w-3.5" />,
+      onClick: () => { onThread(messageId); setOpen(false) },
     }] : []),
     ...(onDelete ? [{
       label: 'Delete',

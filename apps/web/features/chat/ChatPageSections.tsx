@@ -24,6 +24,7 @@ const DownloadDialog = dynamicNext(() => import('@/features/chat/components/dial
 const SystemPromptDialog = dynamicNext(() => import('@/features/chat/components/dialogs/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
 const ReadFileSection = dynamicNext(() => import('@/features/chat/components/dialogs/ReadFileSection'), { ssr: false })
 const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/NoteDialog').then(m => m.NoteDialog), { ssr: false })
+const ThreadPanel = dynamicNext(() => import('@/features/chat/components/ThreadPanel').then(m => m.ThreadPanel), { ssr: false })
 
 interface ChatPageSectionProps {
   controller: ChatPageController
@@ -293,6 +294,8 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           contextLayers={contextLayers}
           noteMap={controller.noteMap}
           onAddNote={controller.onAddNote}
+          hasThread={controller.hasThread}
+          onThread={controller.onStartThread}
         />
       </ImageDropZone>
     </>
@@ -328,6 +331,7 @@ export function ChatDialogSection({ controller }: ChatPageSectionProps) {
     systemPromptOpen, setSystemPromptOpen, customSystemPrompt, handleSaveSystemPrompt,
     setChatMode,
     noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
+    activeThreadMessageId, activeThread, activeThreadMessages, onStartThread, onReplyInThread, onCloseThread,
   } = controller
 
   return (
@@ -383,6 +387,16 @@ export function ChatDialogSection({ controller }: ChatPageSectionProps) {
           note={noteDialogNote}
           onSave={onSaveNote}
           onDelete={onDeleteNote}
+        />
+      )}
+
+      {activeThreadMessageId && activeThread && (
+        <ThreadPanel
+          parentMessage={chat.messages.find(m => m.id === activeThreadMessageId)!}
+          threadMessages={activeThreadMessages}
+          onSend={(content) => onReplyInThread(activeThread.id, content)}
+          onClose={onCloseThread}
+          className="w-80"
         />
       )}
     </>
