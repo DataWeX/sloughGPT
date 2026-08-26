@@ -185,11 +185,12 @@ class ServiceManager:
                 else:
                     proc.terminate()
                 proc.wait(timeout=10)
-            except Exception:
+            except Exception as e:
+                logger.debug("process terminate failed: %s", e)
                 try:
                     proc.kill()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("process kill failed: %s", e)
 
         with self._lock:
             self.instance.state = "stopped"
@@ -219,8 +220,8 @@ class ServiceManager:
             return
         try:
             proc.wait()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("process wait failed: %s", e)
 
         with self._lock:
             was_requested = self._stop_requested

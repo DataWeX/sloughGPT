@@ -121,16 +121,16 @@ class Kernel:
             try:
                 from .addons import neural
                 self.install_addon(neural)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("neural addon install skipped: %s", e)
 
         # Auto-install shell_ui addon if not yet installed
         if "shell_ui" not in self._addons:
             try:
                 from .addons import shell_ui
                 self.install_addon(shell_ui)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("shell_ui addon install skipped: %s", e)
 
         # Register built-in devices
         self._devices.register(NullDevice())

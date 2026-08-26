@@ -691,8 +691,8 @@ class SloNetChatProvider:
                 import ctypes
                 libc = ctypes.CDLL("libc.so.6")
                 libc.malloc_trim(0)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("malloc_trim skipped: %s", e)
 
         # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
         try:
@@ -1282,14 +1282,14 @@ class SloNetChatProvider:
         try:
             import gc as _gc
             _gc.collect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("gc.collect failed: %s", e)
         try:
             import ctypes
             libc = ctypes.CDLL("libc.so.6")
             libc.malloc_trim(0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("malloc_trim failed: %s", e)
         logger.info(
             "SloNetChatProvider.release_model: %s weights released to OS",
             self._model_id, extra={"tag": "INF"},

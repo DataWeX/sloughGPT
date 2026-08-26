@@ -405,8 +405,8 @@ class NativeEngine:
                 if ids:
                     self._stop_ids_cache = {int(i) for i in ids}
                     return self._stop_ids_cache
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("chat_stop_ids unavailable: %s", e)
         eos = self._config.get("eos_token_id", 2)
         self._stop_ids_cache = {int(eos)}
         return self._stop_ids_cache

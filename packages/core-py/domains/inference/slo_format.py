@@ -708,8 +708,8 @@ def load_soul(sou_path: str):
                     for k, v in state_raw.items():
                         arr = np.array(v, dtype=np.float32)
                         state_dict[k] = arr
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("v1/v2 JSON weight parse failed: %s", e)
 
     config = json.loads(config_json)
     soul = SouParser.parse(

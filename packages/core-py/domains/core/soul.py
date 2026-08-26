@@ -337,8 +337,8 @@ class SloEngine:
             try:
                 stats = self._hd_memory.get_stats()
                 lines.append(f"hd_memory: {stats['total_items']} items stored")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("hd_memory stats unavailable: %s", e)
 
         lines.append("[/SOUL_REASONING]")
         lines.append("")

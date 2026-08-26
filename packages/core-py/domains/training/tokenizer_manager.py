@@ -21,8 +21,11 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("slo.training.tokenizer_manager")
 
 
 _TOKENIZER_ALGO_KEY = "_algo"
@@ -248,8 +251,8 @@ class TokenizerManager:
             if at_tok is not None and hasattr(at_tok, "vocab_size") and at_tok.vocab_size > 10:
                 self._tokenizer = at_tok
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("autotrain tokenizer borrow failed: %s", e)
         return False
 
     def adopt(self, tokenizer: Any) -> None:

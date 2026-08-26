@@ -15,8 +15,11 @@ Everything else (parsing, expansion, command dispatch) stays in ShellREPL.
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Callable, Optional, Protocol
+
+logger = logging.getLogger("slo.shell.io")
 
 
 # ── Protocol ────────────────────────────────────────────────────────
@@ -100,8 +103,8 @@ class ConsoleIO:
             readline.parse_and_bind("tab: complete")
             readline.parse_and_bind('"\\C-r": reverse-search-history')
             readline.parse_and_bind('"\\C-s": forward-search-history')
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("readline setup failed: %s", e)
 
     def save_history(self, path: str) -> None:
         if not self._has_readline:
@@ -109,8 +112,8 @@ class ConsoleIO:
         try:
             import readline
             readline.write_history_file(path)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("readline history save failed: %s", e)
 
     def load_history(self, path: str) -> None:
         if not self._has_readline:
@@ -136,8 +139,8 @@ class ConsoleIO:
         if self._tty is not None:
             try:
                 self._tty.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("tty close failed: %s", e)
             self._tty = None
 
 

@@ -146,8 +146,8 @@ def _fetch_model_names() -> list[str]:
             data = r.json()
             models = data if isinstance(data, list) else data.get("models", [])
             return sorted(set(m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("model names fetch failed: %s", e)
     return []
 
 def _fetch_soul_names() -> list[str]:
@@ -160,8 +160,8 @@ def _fetch_soul_names() -> list[str]:
             data = r.json()
             souls = data if isinstance(data, list) else data.get("souls", [])
             return sorted(set(s.get("name", "") for s in souls if isinstance(s, dict)))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("soul names fetch failed: %s", e)
     return []
 
 def _fetch_dataset_names() -> list[str]:
@@ -174,8 +174,8 @@ def _fetch_dataset_names() -> list[str]:
             data = r.json()
             datasets = data if isinstance(data, list) else data.get("datasets", [])
             return sorted(set(d.get("name", "") for d in datasets if isinstance(d, dict)))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("dataset names fetch failed: %s", e)
     return []
 
 def _fetch_checkpoint_names() -> list[str]:
@@ -188,8 +188,8 @@ def _fetch_checkpoint_names() -> list[str]:
             data = r.json()
             cps = data if isinstance(data, list) else data.get("checkpoints", [])
             return sorted(set(c.get("name", "") for c in cps if isinstance(c, dict)))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("checkpoint names fetch failed: %s", e)
     return []
 
 _COMMAND_CACHE_FETCHERS: dict[str, callable] = {
@@ -607,8 +607,8 @@ class ShellREPL(LinuxCommandsMixin):
                     val = str(model).split("/")[-1]
                     self._completion_cache["__model__"] = (now, val)
                     return val
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("current model fetch failed: %s", e)
         return ""
 
     def _get_current_soul(self) -> str:
@@ -629,8 +629,8 @@ class ShellREPL(LinuxCommandsMixin):
                 if soul:
                     self._completion_cache["__soul__"] = (now, soul)
                     return soul
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("current soul fetch failed: %s", e)
         return ""
 
     def _update_color_state(self) -> None:
@@ -694,8 +694,8 @@ class ShellREPL(LinuxCommandsMixin):
                                 with open(histfile, "wb") as wf:
                                     wf.write(tail)
                             readline.set_history_length(_MAX_HIST_LINES)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("readline history trim failed: %s", e)
 
             try:
                 readline.read_history_file(str(histfile))
@@ -708,8 +708,8 @@ class ShellREPL(LinuxCommandsMixin):
             readline.parse_and_bind("tab: complete")
             readline.parse_and_bind('"\\C-r": reverse-search-history')
             readline.parse_and_bind('"\\C-s": forward-search-history')
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("readline setup failed: %s", e)
 
     def _complete(self, text: str, state: int) -> str | None:
         try:
@@ -804,8 +804,8 @@ class ShellREPL(LinuxCommandsMixin):
                 return candidates
             if cmd == "note":
                 return ["new", "list", "show", "edit", "delete", "search", "today", "export", "tags", "status", "sprint", "timeline"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("command completion failed: %s", e)
         return self._complete_path("")
 
     def _complete_path(self, prefix: str) -> list[str]:
@@ -824,8 +824,8 @@ class ShellREPL(LinuxCommandsMixin):
                     if entries is not None:
                         matches = [e + "/" if vfs.isdir(parent + "/" + e if parent else "/dev/" + e) else e for e in entries if not e.startswith(".") and e.startswith(partial)]
                         return sorted(matches)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("vfs completion failed: %s", e)
         if not prefix or prefix == "." or prefix == "..":
             search_dir = Path(".")
             partial = prefix
@@ -2389,8 +2389,8 @@ Examples:
                 models = registry.get("models", []) or registry.get("names", [])
                 if models:
                     self._print(f"  Registry models: {len(models)}")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("registry status fetch failed: %s", e)
         from .permissions import Risk
         granted = self._perms.list_granted()
         policies = []

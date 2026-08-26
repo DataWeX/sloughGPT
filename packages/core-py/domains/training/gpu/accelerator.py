@@ -162,8 +162,8 @@ class _CUDAAccelerator:
             import cupy as cp
             self._cp = cp
             return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("cupy import failed: %s", e)
 
         # Check via nvidia-smi or CUDA_VISIBLE_DEVICES
         if os.environ.get('CUDA_VISIBLE_DEVICES', '') not in ('', '-1'):
