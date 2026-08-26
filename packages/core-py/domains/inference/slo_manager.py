@@ -206,8 +206,8 @@ class SloManager:
                 if name in self._souls_cache:
                     self._current_soul = name
                     logger.info("Restored soul preference: %s", name, extra={"tag": "SOUL"})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load soul preference: %s", e)
 
     def _save_preference(self) -> None:
         """Save current soul preference."""
@@ -215,8 +215,8 @@ class SloManager:
             try:
                 self._preference_file.parent.mkdir(parents=True, exist_ok=True)
                 self._preference_file.write_text(self._current_soul)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to save soul preference: %s", e)
 
     def list_souls(self) -> List[SloInfo]:
         """List all available souls."""
@@ -387,8 +387,8 @@ class SloManager:
                                 for k, v in meta[group].items():
                                     if k in result.get(group, {}):
                                         result[group][k] = v
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to merge trait weights from soul: %s", e)
 
         # Overlay live values from TraitWeightsConfig (feedback-driven)
         try:
@@ -400,8 +400,8 @@ class SloManager:
                     for k, v in live[group].items():
                         if k in result.get(group, {}):
                             result[group][k] = v
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to merge live trait weights: %s", e)
 
         return result
 

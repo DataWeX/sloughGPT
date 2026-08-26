@@ -248,9 +248,24 @@ export const modelController = {
 }
 
 export async function* streamModelEvents(
-  _modelId: string,
+  modelId: string,
 ): AsyncGenerator<{ phase: string; progress: number }> {
-  yield { phase: 'downloading', progress: 0 }
-  yield { phase: 'loading', progress: 50 }
-  yield { phase: 'ready', progress: 100 }
+  const { apiGet } = await import('./http-client')
+  while (true) {
+    try {
+      const data = await apiGet<{ model_id: string; cached?: boolean; status?: string; progress?: number }>(`/models/download/${encodeURIComponent(modelId)}`)
+      if (data.cached) {
+        yield { phase: 'ready', progress: 100 }
+        return
+      }
+      const status = data.status ?? 'downloading'
+      const progress = (data.progress ?? 0) * 100
+      yield { phase: status, progress }
+      if (status === 'complete' || status === 'error') return
+    } catch {
+      yield { phase: 'downloading', progress: 0 }
+      return
+    }
+    await new Promise(r => setTimeout(r, 1000))
+  }
 }

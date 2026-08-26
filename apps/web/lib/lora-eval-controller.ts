@@ -35,9 +35,7 @@ export interface LoraAggregationResult {
 
 export const loraEvalController = {
   async runEval(adapterPath: string, soul?: string): Promise<LoraEvalResult> {
-    const params = new URLSearchParams({ adapter_path: adapterPath })
-    if (soul) params.set('soul', soul)
-    return apiGet<LoraEvalResult>(`/lora-eval/run?${params}`)
+    return apiPost<LoraEvalResult>('/lora-eval/run', { adapter_path: adapterPath, soul })
   },
 
   async getHistory(limit = 10): Promise<LoraEvalResult[]> {

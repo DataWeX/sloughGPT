@@ -37,9 +37,11 @@ export const generateController = {
     onDone: () => void,
     onError?: (error: string) => void,
   ): Promise<void> {
+    let errored = false
     try {
       for await (const event of streamSSE('/inference/generate/stream', { body: req })) {
         if (event.status === 'error') {
+          errored = true
           onError?.(event.message || 'Generation error')
           break
         }
@@ -47,8 +49,9 @@ export const generateController = {
         if (event.status === 'complete') break
       }
     } catch (err) {
+      errored = true
       onError?.(err instanceof Error ? err.message : 'Connection error')
     }
-    onDone()
+    if (!errored) onDone()
   },
 }

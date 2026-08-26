@@ -20,7 +20,7 @@ class LoraEvalRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("/run", self.run_eval, methods=["GET"])
+        self.router.add_api_route("/run", self.run_eval, methods=["POST"])
         self.router.add_api_route("/history", self.get_eval_history, methods=["GET"])
         self.router.add_api_route("/aggregate", self.trigger_aggregation, methods=["POST"])
 

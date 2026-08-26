@@ -128,8 +128,8 @@ def _get_accelerator():
         if acc is not None and acc.name != "cpu":
             _ACCELERATOR = acc
             return _ACCELERATOR
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("slolib GPU accelerator unavailable, trying legacy: %s", e)
     try:
         from domains.training.gpu.accelerator import get_accelerator as _get_old_acc
         _ACCELERATOR = _get_old_acc()
@@ -960,8 +960,8 @@ def silu(x):
     if acc is not None and acc.name != "cpu":
         try:
             t = acc.silu(d)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("GPU silu failed, falling back to CPU: %s", e)
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
         if out.requires_grad and x.requires_grad: x._consumers.append(out)
@@ -992,8 +992,8 @@ def softmax(x, dim=-1):
                 out = Tensor(result, requires_grad=x.requires_grad, _children=(x,), _copy=False)
                 out._backward_fn = lambda g: None
                 return out
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("GPU softmax failed, falling back to CPU: %s", e)
         return _softmax(x, dim)
     d = x - x.max(axis=dim, keepdims=True)
     return np.exp(d) / np.exp(d).sum(axis=dim, keepdims=True)
@@ -3562,8 +3562,8 @@ def _matmul_state_dict(a: Tensor, b: np.ndarray) -> Tensor:
         try:
             result = acc.matmul(a.data, b)
             return Tensor(result)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("GPU matmul failed, falling back to CPU: %s", e)
     return Tensor(a.data @ b)
 
 
@@ -3573,8 +3573,8 @@ def _layernorm_state_dict(x: Tensor, weight: np.ndarray, eps: float = 1e-5) -> T
         try:
             result = acc.layer_norm(x.data, weight, np.ones_like(weight), eps)
             return Tensor(result)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("GPU layer_norm failed, falling back to CPU: %s", e)
     d = x.data
     mean = d.mean(axis=-1, keepdims=True)
     var = d.var(axis=-1, keepdims=True)
@@ -3591,8 +3591,8 @@ def _invalidate_gpu_cache():
         acc = get_accelerator()
         if hasattr(acc, 'clear_cache'):
             acc.clear_cache()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("GPU cache clear failed: %s", e)
 
 
 def clip_grad_norm_(params: Sequence[Tensor], max_norm: float = 1.0,

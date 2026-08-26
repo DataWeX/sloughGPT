@@ -611,7 +611,7 @@ export const trainingJobsController = {
     delta?: { perplexity_delta: number; bleu_delta: number; throughput_delta: number; verdict: string }
     report?: string
   }> {
-    return apiGet('/lora-eval/run', { adapter_path: adapterPath, soul })
+    return apiPost('/lora-eval/run', { adapter_path: adapterPath, soul })
   },
 
   async listTrainingPairs(params?: {

@@ -1160,14 +1160,17 @@ class SloNetChatProvider:
         stopped to release the subprocess copy and avoid double-memory OOM.
 
         Returns:
-            The SloTransformer model, or None if not loadable.
+            The SloTransformer model.
+
+        Raises:
+            RuntimeError: If the model has not been loaded.
         """
         model = getattr(self, "_model", None)
         if model is not None:
             return model
         lock = getattr(self, "_lazy_lock", None)
         if lock is None:
-            return None
+            raise RuntimeError(f"Model '{self._model_id}' not loaded — no lazy lock initialized")
         # If another thread (e.g. parent preload) is already loading, wait
         # for it to finish instead of blocking on the lock.
         mat = getattr(self, "_materializing", None)
