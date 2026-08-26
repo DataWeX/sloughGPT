@@ -2,6 +2,7 @@
 Feedback Router - MVC View layer
 """
 import logging
+import threading
 import time
 from fastapi import APIRouter, Query, Depends
 
@@ -16,6 +17,7 @@ logger = logging.getLogger("slo.api.feedback")
 # Response cache for stats/summary: avoids 3x MogDB count() per call.
 _feedback_stats_cache: tuple[float, dict] | None = None
 _FEEDBACK_STATS_CACHE_TTL = 10.0
+_feedback_stats_lock = threading.Lock()
 
 
 class WorkflowFeedbackRequest(BaseModel):
@@ -86,13 +88,15 @@ class FeedbackRouter:
         """Retrieve aggregate feedback statistics across all conversations."""
         global _feedback_stats_cache
         now = time.monotonic()
-        if _feedback_stats_cache and (now - _feedback_stats_cache[0]) < _FEEDBACK_STATS_CACHE_TTL:
-            return _feedback_stats_cache[1]
+        with _feedback_stats_lock:
+            if _feedback_stats_cache and (now - _feedback_stats_cache[0]) < _FEEDBACK_STATS_CACHE_TTL:
+                return _feedback_stats_cache[1]
         try:
             ctrl = get_feedback_controller()
             stats = ctrl.get_stats()
             result = FeedbackStats(**stats)
-            _feedback_stats_cache = (now, result)
+            with _feedback_stats_lock:
+                _feedback_stats_cache = (now, result)
             return success_response(data=result.model_dump())
         except Exception as e:
             classify_and_raise(e, source="feedback.get_stats")

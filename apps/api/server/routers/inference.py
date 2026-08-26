@@ -81,6 +81,7 @@ def _model_ready() -> bool:
 
 _memory_pressure_cache: Optional[str] = None
 _memory_pressure_cache_ts: float = 0.0
+_memory_pressure_lock = threading.Lock()
 
 
 def _check_memory_pressure() -> Optional[str]:
@@ -92,21 +93,25 @@ def _check_memory_pressure() -> Optional[str]:
     """
     global _memory_pressure_cache, _memory_pressure_cache_ts
     now = time.time()
-    if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
-        return _memory_pressure_cache if _memory_pressure_cache else None
+    with _memory_pressure_lock:
+        if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
+            return _memory_pressure_cache if _memory_pressure_cache else None
     try:
         import psutil
         mem = psutil.virtual_memory()
         if mem.percent > 95:
-            _memory_pressure_cache = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
-            _memory_pressure_cache_ts = now
-            return _memory_pressure_cache
+            result = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+            with _memory_pressure_lock:
+                _memory_pressure_cache = result
+                _memory_pressure_cache_ts = now
+            return result
         if mem.percent > 85:
             logger.warning("Memory pressure: %.0f%% used — inference may be slow", mem.percent, extra={"tag": "INF"})
     except Exception as exc:
         logger.warning("Memory pressure check failed: %s", exc)
-    _memory_pressure_cache = ""
-    _memory_pressure_cache_ts = now
+    with _memory_pressure_lock:
+        _memory_pressure_cache = ""
+        _memory_pressure_cache_ts = now
     return None
 
 class CreateSessionRequest(BaseModel):

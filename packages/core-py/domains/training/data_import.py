@@ -568,8 +568,12 @@ class RepoImporter:
             total_chars = 0
             if Path(output_path).exists():
                 with open(output_path, "r") as f:
-                    for line in f:
-                        data = json.loads(line)
+                    for line_num, line in enumerate(f, 1):
+                        try:
+                            data = json.loads(line)
+                        except (json.JSONDecodeError, ValueError):
+                            logger.warning("Skipping malformed JSONL line %d", line_num)
+                            continue
                         total_chars += data.get("size", 0)
 
             return ImportResult(

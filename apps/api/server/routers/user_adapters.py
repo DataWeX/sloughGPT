@@ -2,6 +2,7 @@
 User Adapters Router - Per-user LoRA adapter management
 """
 import logging
+import threading
 import time
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -16,6 +17,7 @@ logger = logging.getLogger("slo.api.user_adapters")
 # Keyed by a fixed sentinel; TTL 15s.
 _list_cache: tuple[float, dict] | None = None
 _LIST_CACHE_TTL = 15.0
+_list_cache_lock = threading.Lock()
 
 
 class AggregateBestRequest(BaseModel):
@@ -64,15 +66,17 @@ class UserAdaptersRouter:
         """
         global _list_cache
         now = time.monotonic()
-        if _list_cache and (now - _list_cache[0]) < _LIST_CACHE_TTL:
-            return success_response(data=_list_cache[1])
+        with _list_cache_lock:
+            if _list_cache and (now - _list_cache[0]) < _LIST_CACHE_TTL:
+                return success_response(data=_list_cache[1])
         try:
             from domains.feedback import get_per_user_lora
             store = get_per_user_lora()
             adapters = store.get_all_adapters()
             stats = store.get_stats()
             result = {"adapters": adapters, "stats": stats}
-            _list_cache = (now, result)
+            with _list_cache_lock:
+                _list_cache = (now, result)
             return success_response(data=result)
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
