@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from collections import deque
@@ -8,6 +9,8 @@ from pathlib import Path
 from typing import Iterator, Protocol, runtime_checkable
 
 from .sources import Record
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -42,7 +45,8 @@ class FileStore:
                     data = json.loads(line)
                     content = data.pop("content", "")
                     yield Record(content=content, metadata=data)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    logger.debug("Skipping malformed store line: %s", e)
                     continue
 
     def count(self) -> int:

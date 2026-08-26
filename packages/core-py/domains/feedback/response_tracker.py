@@ -153,7 +153,8 @@ class ResponseTracker:
                             continue
 
                         responses.append(ResponseLog(**data))
-                    except (json.JSONDecodeError, ValueError, KeyError):
+                    except (json.JSONDecodeError, ValueError, KeyError) as e:
+                        logger.debug("Skipping malformed response log line: %s", e)
                         continue
 
         return responses[-limit:]

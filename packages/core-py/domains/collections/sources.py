@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -55,7 +58,8 @@ class FileSource:
                     data = json.loads(line)
                     content = data.pop("content", "") if isinstance(data, dict) else str(data)
                     yield Record(content=content, metadata={"source": self.name, "line": i, **(data if isinstance(data, dict) else {})})
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    logger.debug("Skipping malformed JSONL line %d: %s", i, e)
                     yield Record(content=line, metadata={"source": self.name, "line": i})
 
     def _read_json(self) -> Iterator[Record]:
@@ -134,6 +138,7 @@ class UrlSource:
                 link = getattr(entry, "link", "")
                 yield Record(content=content.strip(), metadata={"source": self.name, "index": i, "url": link or self.url, "title": title})
         except ImportError:
+            logger.debug("feedparser not installed, falling back to line-based RSS parsing")
             for i, line in enumerate(body.splitlines()):
                 if line.strip():
                     yield Record(content=line.strip(), metadata={"source": self.name, "line": i, "url": self.url})
@@ -152,12 +157,11 @@ class RssSource:
             req = urllib.request.Request(self.feed_url, headers={"User-Agent": "sloughgpt-culler/1.0"})
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 body = resp.read().decode("utf-8", errors="replace")
-        except (urllib.error.URLError, OSError):
+        except (urllib.error.URLError, OSError) as e:
+            logger.warning("Failed to fetch RSS feed %s: %s", self.feed_url, e)
             return
-
-        try:
-            import feedparser
         except ImportError:
+            logger.debug("feedparser not installed, skipping RSS source %s", self.name)
             return
 
         feed = feedparser.parse(body)
@@ -207,7 +211,8 @@ class ApiSource:
                 yield Record(content=content, metadata={"source": self.name, "index": i, "url": self.url, **(item if isinstance(item, dict) else {})})
             if items:
                 self._last_id = str(items[0].get("id", 0))
-        except (urllib.error.URLError, OSError, json.JSONDecodeError):
+        except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+            logger.warning("Failed to fetch API source %s: %s", self.url, e)
             return
 
 
@@ -240,7 +245,8 @@ class SseSource:
                             yield Record(content=content, metadata={"source": self.name, "event": event_type, "url": self.url})
                             event_type = ""
                             event_data = []
-        except (urllib.error.URLError, OSError):
+        except (urllib.error.URLError, OSError) as e:
+            logger.warning("Failed to fetch SSE stream %s: %s", self.url, e)
             return
 
 
@@ -270,7 +276,8 @@ class WatchSource:
                                 content=content.strip(),
                                 metadata={"source": self.name, "path": str(file_path), "mtime": mtime},
                             )
-                    except OSError:
+                    except OSError as e:
+                        logger.debug("Failed to read file %s: %s", file_path, e)
                         continue
 
     def reset(self):
