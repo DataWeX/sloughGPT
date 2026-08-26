@@ -333,24 +333,34 @@ class DownloadManager:
         start_time = time.time()
 
         def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
-            with self._lock:
-                cur = self._downloads.get(mid)
-                if cur and cur.status == DownloadStatus.CANCELLED:
-                    return
-            pct = (downloaded / total * 100) if total > 0 else 0
-            self._set_progress(
-                mid,
-                bytes_downloaded=downloaded,
-                total_bytes=total,
-                speed_bytes_per_sec=speed,
-                percentage=pct,
-                status=DownloadStatus.DOWNLOADING,
-            )
-            self._notify_callbacks(mid)
+            try:
+                with self._lock:
+                    cur = self._downloads.get(mid)
+                    if cur and cur.status == DownloadStatus.CANCELLED:
+                        return
+                pct = (downloaded / total * 100) if total > 0 else 0
+                self._set_progress(
+                    mid,
+                    bytes_downloaded=downloaded,
+                    total_bytes=total,
+                    speed_bytes_per_sec=speed,
+                    percentage=pct,
+                    status=DownloadStatus.DOWNLOADING,
+                )
+                self._notify_callbacks(mid)
+            except Exception as e:
+                logger.warning("download_manager: progress callback failed", extra={
+                    "model_id": mid, "error": str(e),
+                })
 
         def _file_cb(mid: str, fpath: str):
-            self._set_progress(mid, current_file=fpath)
-            self._notify_callbacks(mid)
+            try:
+                self._set_progress(mid, current_file=fpath)
+                self._notify_callbacks(mid)
+            except Exception as e:
+                logger.warning("download_manager: file callback failed", extra={
+                    "model_id": mid, "file": fpath, "error": str(e),
+                })
 
         def _do_download():
             from domains.infrastructure.hf_hub import download_hf_model

@@ -231,10 +231,72 @@ class ConfigManager:
 
     def __init__(self, config_dir: str | Path | None = None):
         self._config_dir = Path(config_dir) if config_dir else Path.cwd() / "config"
-        self._config_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self._config_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            logger.warning("Could not create config directory: %s", self._config_dir,
+                extra={"tag": "INFRA"})
+        self._write_example_config()
         self._config: AppConfig = self._build()
         self._lock = threading.Lock()
         self._reload_callbacks: list[callable] = []
+
+    def _write_example_config(self) -> None:
+        """Write an example config file if one doesn't already exist."""
+        example_path = self._config_dir / "defaults.yaml.example"
+        if example_path.exists():
+            return
+        defaults = AppConfig()
+        example_config = (
+            "# SloughGPT example config — copy to defaults.yaml and edit.\n"
+            "# All keys are optional; omitted keys use defaults shown below.\n\n"
+            "model:\n"
+            f"  name: \"{defaults.model.name}\"\n"
+            f"  device: \"{defaults.model.device}\"\n"
+            f"  max_length: {defaults.model.max_length}\n"
+            f"  temperature: {defaults.model.temperature}\n"
+            f"  top_p: {defaults.model.top_p}\n"
+            f"  top_k: {defaults.model.top_k}\n"
+            f"  repetition_penalty: {defaults.model.repetition_penalty}\n"
+            f"  max_new_tokens: {defaults.model.max_new_tokens}\n"
+            f"  use_slonet: {str(defaults.model.use_slonet).lower()}\n"
+            f"  autoload: {str(defaults.model.autoload).lower()}\n"
+            f"  use_flash_attention: {str(defaults.model.use_flash_attention).lower()}\n\n"
+            "server:\n"
+            f"  host: \"{defaults.server.host}\"\n"
+            f"  port: {defaults.server.port}\n"
+            f"  log_level: \"{defaults.server.log_level}\"\n"
+            f"  reload: {str(defaults.server.reload).lower()}\n"
+            f"  request_timeout: {defaults.server.request_timeout}\n"
+            f"  inference_pool_size: {defaults.server.inference_pool_size}\n\n"
+            "features:\n"
+            f"  auto_workflow: {str(defaults.features.auto_workflow).lower()}\n"
+            f"  health_monitor: {str(defaults.features.health_monitor).lower()}\n"
+            f"  health_interval: {defaults.features.health_interval}\n"
+            f"  watchdog: {str(defaults.features.watchdog).lower()}\n"
+            f"  web: {str(defaults.features.web).lower()}\n"
+            f"  auto_download: {str(defaults.features.auto_download).lower()}\n\n"
+            "auth:\n"
+            f"  jwt_algorithm: \"{defaults.auth.jwt_algorithm}\"\n"
+            f"  jwt_expiration_hours: {defaults.auth.jwt_expiration_hours}\n"
+            f"  api_keys_enabled: {str(defaults.auth.api_keys_enabled).lower()}\n"
+            f"  auth_required: {str(defaults.auth.auth_required).lower()}\n\n"
+            "tracking:\n"
+            f"  provider: \"{defaults.tracking.provider}\"\n"
+            f"  wandb_project: \"{defaults.tracking.wandb_project}\"\n\n"
+            "embedding:\n"
+            f"  provider: \"{defaults.embedding.provider}\"\n\n"
+            "storage:\n"
+            f"  data_dir: \"{defaults.storage.data_dir}\"\n"
+            f"  datasets_dir: \"{defaults.storage.datasets_dir}\"\n"
+            f"  models_dir: \"{defaults.storage.models_dir}\"\n"
+            f"  checkpoint_dir: \"{defaults.storage.checkpoint_dir}\"\n"
+        )
+        try:
+            example_path.write_text(example_config, encoding="utf-8")
+        except OSError:
+            logger.warning("Could not write example config: %s", example_path,
+                extra={"tag": "INFRA"})
 
     def _build(self) -> AppConfig:
         """Load defaults + file overrides + env overrides."""
