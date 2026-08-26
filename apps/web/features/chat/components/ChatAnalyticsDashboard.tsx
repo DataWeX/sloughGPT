@@ -93,7 +93,7 @@ export const ChatAnalyticsDashboard = memo(function ChatAnalyticsDashboard({
     if (timeRange === 'all') return messages
     const now = Date.now()
     const cutoff = timeRange === '24h' ? now - 86400000 : now - 604800000
-    return messages.filter(m => m.timestamp >= cutoff)
+    return messages.filter(m => m.timestamp.getTime() >= cutoff)
   }, [messages, timeRange])
 
   const analytics = useMemo(() => calculateAnalytics(filteredMessages), [filteredMessages])

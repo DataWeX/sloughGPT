@@ -176,6 +176,7 @@ export function useChatPageController(
     },
     onOpenNoteSearch: () => setNoteSearchOpen(true),
     onOpenShortcuts: () => setShortcutsOpen(true),
+    onOpenTemplates: () => setTemplatesOpen(true),
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────

@@ -26,6 +26,7 @@ const ReadFileSection = dynamicNext(() => import('@/features/chat/components/dia
 const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/NoteDialog').then(m => m.NoteDialog), { ssr: false })
 const ThreadPanel = dynamicNext(() => import('@/features/chat/components/ThreadPanel').then(m => m.ThreadPanel), { ssr: false })
 const KeyboardShortcutsPanel = dynamicNext(() => import('@/features/chat/components/dialogs/KeyboardShortcutsPanel').then(m => m.KeyboardShortcutsPanel), { ssr: false })
+const TemplateDialog = dynamicNext(() => import('@/features/chat/components/dialogs/TemplateDialog').then(m => m.TemplateDialog), { ssr: false })
 
 interface ChatPageSectionProps {
   controller: ChatPageController
@@ -338,6 +339,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
     setChatMode,
     noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
     shortcutsOpen, setShortcutsOpen,
+    templatesOpen, setTemplatesOpen,
     activeThreadMessageId, activeThread, activeThreadMessages, onStartThread, onReplyInThread, onCloseThread,
   } = controller
 
@@ -410,6 +412,15 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
       <KeyboardShortcutsPanel
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
+      />
+
+      <TemplateDialog
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onSelect={(content) => {
+          chat.sendMessage(content)
+          setTemplatesOpen(false)
+        }}
       />
     </>
   )

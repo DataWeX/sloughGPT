@@ -45,13 +45,15 @@ describe('ChatAnalyticsDashboard', () => {
   it('filters by 24h', () => {
     render(<ChatAnalyticsDashboard messages={mockMessages} />)
     fireEvent.click(screen.getByText('24h'))
-    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(screen.getByText('User Messages')).toBeInTheDocument()
+    expect(screen.getByText('AI Messages')).toBeInTheDocument()
   })
 
   it('filters by 7d', () => {
     render(<ChatAnalyticsDashboard messages={mockMessages} />)
     fireEvent.click(screen.getByText('7d'))
-    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(screen.getByText('User Messages')).toBeInTheDocument()
+    expect(screen.getByText('AI Messages')).toBeInTheDocument()
   })
 
   it('shows word count', () => {

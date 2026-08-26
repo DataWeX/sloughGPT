@@ -38,7 +38,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
     onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
-    onAddNoteToLastMessage, onOpenNoteSearch, onOpenShortcuts,
+    onAddNoteToLastMessage, onOpenNoteSearch, onOpenShortcuts, onOpenTemplates,
   } = deps
 
   const depsRef = useRef(deps)
@@ -129,6 +129,10 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === '/' && e.shiftKey) {
         e.preventDefault()
         d.onOpenShortcuts?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenTemplates?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

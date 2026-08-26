@@ -1472,7 +1472,7 @@ async def load_adapter(request: LoadAdapterRequest):
         raise_error("No subprocess worker found. Load adapter via direct model access instead.", "E_BAD_REQUEST", status_code=400)
     try:
         result = process_guard.load_adapter(
-            str(adapter_path), merge=request.merge, timeout=cfg.generate_timeout
+            str(adapter_path), merge=request.merge
         )
         logger.info("Loaded adapter via worker: %s", adapter_path.name, extra={"tag": "TRAIN"})
         return result
@@ -1518,9 +1518,7 @@ async def train_from_feedback():
     2. Starts training with the exported data
     3. Returns the job ID for tracking
     """
-    import os
     import uuid
-    from pathlib import Path
 
     try:
         from domains.feedback.training import FeedbackTrainer
@@ -1945,11 +1943,74 @@ async def register_webhook(
     }
 
 
+# ── Static webhook sub-routes MUST come before /{webhook_id} ──────────
+
+
 @router.get("/training/webhooks/stats")
 async def get_webhook_stats():
     """Get webhook statistics."""
     store = get_webhook_store()
     return store.get_stats()
+
+
+@router.get("/training/webhooks/retry-queue")
+async def get_webhook_retry_queue():
+    """Get pending webhook retries."""
+    store = get_webhook_store()
+    return {"retries": store.get_retry_queue()}
+
+
+@router.get("/training/webhooks/dead-letters")
+async def get_webhook_dead_letters(limit: int = 50):
+    """Get dead-lettered webhook deliveries."""
+    store = get_webhook_store()
+    return {"dead_letters": store.get_dead_letters(limit=limit)}
+
+
+class TestWebhookRequest(BaseModel):
+    url: str
+
+@router.post("/training/webhooks/test")
+async def test_webhook(req: TestWebhookRequest):
+    """
+    Send a test notification to a URL.
+
+    Useful for verifying webhook setup.
+    """
+    store = get_webhook_store()
+
+    # Register temporary webhook for test
+    webhook_id = store.register(
+        url=req.url,
+        events=TRAINING_EVENTS,
+        description="Temporary test webhook",
+    )
+
+    # Send test event
+    delivery = await store.deliver(
+        webhook_id=webhook_id,
+        event="training.completed",
+        payload={
+            "job_id": "test",
+            "job_name": "Test Training",
+            "status": "completed",
+            "message": "This is a test webhook notification",
+        },
+        retries=1,
+    )
+
+    # Clean up
+    store.unregister(webhook_id)
+
+    return {
+        "success": delivery.success,
+        "status_code": delivery.status_code,
+        "error": delivery.error,
+        "response_body": delivery.response_body,
+    }
+
+
+# ── Parameterized webhook routes (after all static sub-routes) ────────
 
 
 @router.delete("/training/webhooks/{webhook_id}")
@@ -2010,63 +2071,6 @@ async def get_webhook_deliveries(webhook_id: str, limit: int = 50):
             for d in deliveries
         ]
     }
-
-
-class TestWebhookRequest(BaseModel):
-    url: str
-
-@router.post("/training/webhooks/test")
-async def test_webhook(req: TestWebhookRequest):
-    """
-    Send a test notification to a URL.
-
-    Useful for verifying webhook setup.
-    """
-    store = get_webhook_store()
-
-    # Register temporary webhook for test
-    webhook_id = store.register(
-        url=req.url,
-        events=TRAINING_EVENTS,
-        description="Temporary test webhook",
-    )
-
-    # Send test event
-    delivery = await store.deliver(
-        webhook_id=webhook_id,
-        event="training.completed",
-        payload={
-            "job_id": "test",
-            "job_name": "Test Training",
-            "status": "completed",
-            "message": "This is a test webhook notification",
-        },
-        retries=1,
-    )
-
-    # Clean up
-    store.unregister(webhook_id)
-
-    return {
-        "success": delivery.success,
-        "status_code": delivery.status_code,
-        "error": delivery.error,
-        "response_body": delivery.response_body,
-    }
-
-
-@router.get("/training/webhooks/retry-queue")
-async def get_webhook_retry_queue():
-    """Get pending webhook retries."""
-    store = get_webhook_store()
-    return {"retries": store.get_retry_queue()}
-
-
-@router.get("/training/webhooks/dead-letters")
-async def get_webhook_dead_letters(limit: int = 50):
-    """Get dead-lettered webhook deliveries."""
-    store = get_webhook_store()
-    return {"dead_letters": store.get_dead_letters(limit=limit)}
 
 
 @router.get("/training/builds")

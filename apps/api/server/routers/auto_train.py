@@ -540,7 +540,6 @@ class AutoTrainRouter:
             if req.source_text:
                 source_lines = _parse_subtitle_text(req.source_text)
                 if source_lines:
-                    import asyncio as _aio
 
                     def _write_src():
                         tmp = self.REPO_ROOT / ".opencode" / "tmp" / f"autotrain_source_{int(time.time())}.txt"
@@ -548,7 +547,7 @@ class AutoTrainRouter:
                         tmp.write_text("\n".join(source_lines), encoding="utf-8")
                         return tmp
 
-                    tmp = await _aio.to_thread(_write_src)
+                    tmp = await asyncio.to_thread(_write_src)
                     data_path = str(tmp)
                     autotrain_logger.info("Wrote %d source lines to %s", len(source_lines), tmp, extra={"tag": "TRAIN", "context": {"source_lines": len(source_lines), "path": str(tmp)}})
             elif req.dataset_id:
@@ -852,7 +851,6 @@ class AutoTrainRouter:
                 get_training_runtime().sync(job_id)
             _finish_cm("failed", str(e))
             autotrain_logger.warning("Turbo training failed: %s", e, extra={"tag": "TRAIN"})
-            classify_and_raise(e, source="auto_train_turbo")
 
     def _run_turbo_pgq(
         self, job_id: str, tree_id: str, point_library: Any,
@@ -1164,7 +1162,6 @@ class AutoTrainRouter:
     async def list_checkpoints(self) -> dict:
         try:
             """list_checkpoints."""
-            import time
             now = time.monotonic()
             if self._checkpoints_cache and (now - self._checkpoints_cache_ts) < 30:
                 return success_response(data=self._checkpoints_cache[0])
@@ -1232,7 +1229,6 @@ class AutoTrainRouter:
     async def delete_checkpoint(self, name: str) -> dict:
         try:
             """delete_checkpoint."""
-            import re
             if not re.match(r'^[\w\-]+(\.\w+)*$', name):
                 raise_error(f"Invalid checkpoint name: {name!r}", code="E_VAL_REQUEST", details={"name": name})
 
@@ -1367,7 +1363,6 @@ class AutoTrainRouter:
     async def export_metrics(self) -> dict:
         try:
             """Export all checkpoint metrics as a downloadable JSON file."""
-            import json
             from fastapi.responses import Response
 
             def _scan():
