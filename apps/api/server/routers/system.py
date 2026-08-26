@@ -7,6 +7,7 @@ import asyncio
 import logging
 import psutil
 import platform
+import threading
 import time
 
 from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
@@ -21,6 +22,7 @@ logger = logging.getLogger("slo.api.system")
 class SystemRouter:
     def __init__(self):
         self._metrics_cache = {"data": None, "ts": 0.0}
+        self._metrics_lock = threading.Lock()
         self._METRICS_TTL = 2.0
         self.router = APIRouter(prefix="/system", tags=["system"])
         self._register_routes()
@@ -43,31 +45,34 @@ class SystemRouter:
         """Get system metrics (cached for 2s)."""
         try:
             now = time.monotonic()
-            if self._metrics_cache["data"] is None or (now - self._metrics_cache["ts"]) > self._METRICS_TTL:
-                import asyncio
+            with self._metrics_lock:
+                if self._metrics_cache["data"] is not None and (now - self._metrics_cache["ts"]) <= self._METRICS_TTL:
+                    return success_response(data=self._metrics_cache["data"])
 
-                def _sample():
-                    try:
-                        from domains.infrastructure.resource_manager import get_resource_manager
-                        rm = get_resource_manager()
-                        logical = rm.topology.logical_cores
-                        physical = rm.topology.physical_cores
-                    except Exception as exc:
-                        logger.debug("system: resource_manager unavailable for metrics: %s", exc)
-                        logical = psutil.cpu_count(logical=True) or 1
-                        physical = psutil.cpu_count(logical=False) or 1
-                    return {
-                        "cpu_percent": psutil.cpu_percent(interval=None),
-                        "memory_percent": psutil.virtual_memory().percent,
-                        "memory_used_gb": psutil.virtual_memory().used / (1024**3),
-                        "memory_total_gb": psutil.virtual_memory().total / (1024**3),
-                        "cpu_count_logical": logical,
-                        "cpu_count_physical": physical,
-                    }
+            def _sample():
+                try:
+                    from domains.infrastructure.resource_manager import get_resource_manager
+                    rm = get_resource_manager()
+                    logical = rm.topology.logical_cores
+                    physical = rm.topology.physical_cores
+                except Exception as exc:
+                    logger.debug("system: resource_manager unavailable for metrics: %s", exc)
+                    logical = psutil.cpu_count(logical=True) or 1
+                    physical = psutil.cpu_count(logical=False) or 1
+                return {
+                    "cpu_percent": psutil.cpu_percent(interval=None),
+                    "memory_percent": psutil.virtual_memory().percent,
+                    "memory_used_gb": psutil.virtual_memory().used / (1024**3),
+                    "memory_total_gb": psutil.virtual_memory().total / (1024**3),
+                    "cpu_count_logical": logical,
+                    "cpu_count_physical": physical,
+                }
 
-                self._metrics_cache["data"] = await asyncio.to_thread(_sample)
+            data = await asyncio.to_thread(_sample)
+            with self._metrics_lock:
+                self._metrics_cache["data"] = data
                 self._metrics_cache["ts"] = now
-            return success_response(data=self._metrics_cache["data"])
+            return success_response(data=data)
         except Exception as e:
             classify_and_raise(e, source="system.metrics")
 

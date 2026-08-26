@@ -415,6 +415,7 @@ class InferenceRouter:
         self.router = APIRouter(prefix="", tags=["inference"])
 
         self._BG_TASKS: set = set()
+        self._bg_tasks_lock = threading.Lock()
 
         _SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
         self._SESSIONS_DIR = _SESSIONS_DIR
@@ -448,6 +449,11 @@ class InferenceRouter:
         self._background_flush_task: Optional[asyncio.Task] = None
 
         self._register_routes()
+
+    def _bg_tasks_lock_discard(self, task: asyncio.Task) -> None:
+        """Thread-safe discard callback for background tasks."""
+        with self._bg_tasks_lock:
+            self._BG_TASKS.discard(task)
 
     def _ensure_dirs(self):
         """Create session/voice directories on first access (lazy)."""
@@ -1474,8 +1480,9 @@ class InferenceRouter:
                 try:
 
                     task = asyncio.create_task(extract_and_store(user_msg or "", full_response))
-                    self._BG_TASKS.add(task)
-                    task.add_done_callback(self._BG_TASKS.discard)
+                    with self._bg_tasks_lock:
+                        self._BG_TASKS.add(task)
+                    task.add_done_callback(self._bg_tasks_lock_discard)
                 except Exception as e:
                     logger.warning("Entity extraction failed: %s", e)
 
