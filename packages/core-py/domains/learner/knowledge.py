@@ -661,8 +661,6 @@ class KnowledgeMemory:
         with self._lock:
             if content_hash in self._visited:
                 return False
-            self._visited.add(content_hash)
-            self._fact_counter += 1
         import asyncio
         try:
             vec = self._get_embedding(fact.content)
@@ -687,6 +685,10 @@ class KnowledgeMemory:
             self._save_entries()
         except Exception as e:
             logger.warning("Vector store upsert failed: %s", e, extra={"tag": "INF"})
+            return False
+        with self._lock:
+            self._visited.add(content_hash)
+            self._fact_counter += 1
         self._save_visited()
         return True
 

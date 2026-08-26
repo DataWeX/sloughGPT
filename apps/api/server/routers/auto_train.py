@@ -16,8 +16,10 @@ import asyncio
 import threading
 from typing import Any, AsyncGenerator
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse, FileResponse
+
+from infrastructure.auth import require_auth_if_enabled
 from fastapi import Request
 from pydantic import BaseModel, Field
 import json

@@ -134,7 +134,7 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.get")
 
-    async def update_agent(self, agent_id: str, req: AgentUpdate) -> dict:
+    async def update_agent(self, agent_id: str, req: AgentUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Update an existing agent by ID with partial field changes."""
         try:
             system = self._get_system()
@@ -154,7 +154,7 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.update")
 
-    async def delete_agent(self, agent_id: str) -> dict:
+    async def delete_agent(self, agent_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete an agent by its unique identifier."""
         try:
             if not await asyncio.to_thread(self._get_system().delete, agent_id):
@@ -164,7 +164,7 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.delete")
 
-    async def execute_agent(self, agent_id: str, req: ExecuteRequest) -> dict:
+    async def execute_agent(self, agent_id: str, req: ExecuteRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Execute an agent on a user request."""
         try:
             result = await self._get_system().execute(
@@ -182,7 +182,7 @@ class AgentsRouter:
 
     # ── Orchestration ─────────────────────────────────────────────────────
 
-    async def orchestrate_agents(self, req: OrchestrateRequest, request: Request) -> AsyncGenerator[str, None]:
+    async def orchestrate_agents(self, req: OrchestrateRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> AsyncGenerator[str, None]:
         try:
             """Orchestrate multiple agents on a goal with SSE streaming.
 
