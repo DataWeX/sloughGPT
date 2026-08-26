@@ -165,39 +165,46 @@ class ChatControlRequest(BaseModel):
 
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
+_chat_control_lock = threading.Lock()
 
 def get_chat_control(session_id: str) -> Optional[dict]:
     """Get and consume pending control for a session."""
-    return _chat_control_store.pop(session_id, None)
+    with _chat_control_lock:
+        return _chat_control_store.pop(session_id, None)
 
 def set_chat_control(session_id: str, control: dict) -> None:
     """Set pending control for a session."""
-    _chat_control_store[session_id] = control
+    with _chat_control_lock:
+        _chat_control_store[session_id] = control
 
 # Cache for partial chat responses (for Last-Event-ID reconnection)
 _chat_response_cache: dict[str, dict] = {}
+_chat_cache_lock = threading.Lock()
 _CHAT_CACHE_MAX_SESSIONS = 100
 _CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
 
 def get_chat_response_cache(session_id: str) -> Optional[dict]:
     """Get cached response for a session."""
-    return _chat_response_cache.get(session_id)
+    with _chat_cache_lock:
+        return _chat_response_cache.get(session_id)
 
 def set_chat_response_cache(session_id: str, response: dict) -> None:
     """Cache a partial response for a session."""
     import time
-    # Purge old entries if cache is full
-    if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
-        now = time.time()
-        expired = [k for k, v in _chat_response_cache.items()
-                   if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S]
-        for k in expired[:10]:  # Remove up to 10 expired entries
-            _chat_response_cache.pop(k, None)
-    _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
+    with _chat_cache_lock:
+        # Purge old entries if cache is full
+        if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
+            now = time.time()
+            expired = [k for k, v in _chat_response_cache.items()
+                       if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S]
+            for k in expired[:10]:  # Remove up to 10 expired entries
+                _chat_response_cache.pop(k, None)
+        _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
 
 def clear_chat_response_cache(session_id: str) -> None:
     """Clear cached response for a session."""
-    _chat_response_cache.pop(session_id, None)
+    with _chat_cache_lock:
+        _chat_response_cache.pop(session_id, None)
 
 class ContextInspectorResponse(BaseModel):
     system_prompt: str
