@@ -190,7 +190,7 @@ class ExperimentsRouter:
         except Exception as e:
             classify_and_raise(e, source="get_experiment_data")
 
-    async def complete_experiment(self, experiment_id: str) -> dict:
+    async def complete_experiment(self, experiment_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Mark experiment as complete and persist status to disk."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
@@ -212,7 +212,7 @@ class ExperimentsRouter:
         except Exception as e:
             classify_and_raise(e, source="complete_experiment")
 
-    async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0) -> dict:
+    async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Log a metric for an experiment."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
