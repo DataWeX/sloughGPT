@@ -21,8 +21,9 @@ import os
 from pathlib import Path as PathLib
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Path, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
 from mogdb import MogDB
 
@@ -131,6 +132,7 @@ class DocStoreRouter:
         collection: str = Path(...),
         doc_id: str = Path(...),
         body: Dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Upsert a document: replace it if it exists, otherwise insert."""
         try:
@@ -153,6 +155,7 @@ class DocStoreRouter:
         collection: str = Path(...),
         doc_id: str = Path(...),
         body: Dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Merge fields into an existing document (no-op if it does not exist)."""
         try:
@@ -172,6 +175,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Delete a single document by ``doc_id``."""
         try:
@@ -184,7 +188,7 @@ class DocStoreRouter:
         except Exception as e:
             classify_and_raise(e, source="docstore.delete")
 
-    def clear_collection(self, collection: str = Path(...)) -> dict:
+    def clear_collection(self, collection: str = Path(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete every document in a collection."""
         try:
             err = self._validate(collection)
@@ -200,6 +204,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         body: Dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Upsert many documents in one request."""
         try:

@@ -8,13 +8,14 @@ import json
 import logging
 import re
 import asyncio
-from fastapi import APIRouter, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import time
 
 logger = logging.getLogger(__name__)
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 
@@ -251,7 +252,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.list_knowledge")
-    def add_knowledge(self, req: KnowledgeCreate) -> dict:
+    def add_knowledge(self, req: KnowledgeCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Store a new knowledge fact in KnowledgeMemory."""
         try:
             from domains.learner.knowledge import KnowledgeFact
@@ -302,7 +303,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.add_knowledge")
-    def update_knowledge(self, item_id: str, req: KnowledgeUpdate) -> dict:
+    def update_knowledge(self, item_id: str, req: KnowledgeUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Update a knowledge item's content, topic, or importance."""
         try:
             memory = self._get_memory()
@@ -334,7 +335,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.update_knowledge")
-    def batch_ingest(self, req: KnowledgeBatchRequest) -> dict:
+    def batch_ingest(self, req: KnowledgeBatchRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Store multiple knowledge items in KnowledgeMemory."""
         try:
             from domains.learner.knowledge import KnowledgeFact
@@ -416,7 +417,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.list_topics")
-    def ingest_url(self, req: UrlIngestRequest) -> dict:
+    def ingest_url(self, req: UrlIngestRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Ingest a URL into the knowledge base."""
         try:
             parsed = urllib.parse.urlparse(req.url)
@@ -467,7 +468,7 @@ class KBRouter:
             logger.warning("KB ingest failed: %s", e)
             classify_and_raise(e, source="kb_ingest")
 
-    def batch_delete_knowledge(self, req: BatchDeleteRequest) -> dict:
+    def batch_delete_knowledge(self, req: BatchDeleteRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete multiple knowledge items by ID."""
         try:
             memory = self._get_memory()
@@ -480,7 +481,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.batch_delete_knowledge")
-    def suggest_topic(self, req: SuggestTopicRequest) -> dict:
+    def suggest_topic(self, req: SuggestTopicRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Return the best auto-detected topic for content without storing."""
         try:
             topic = self._auto_tag(req.content)
@@ -488,7 +489,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.suggest_topic")
-    def delete_knowledge(self, item_id: str) -> dict:
+    def delete_knowledge(self, item_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete a single knowledge item by ID."""
         try:
             memory = self._get_memory()
@@ -499,7 +500,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.delete_knowledge")
-    def train_knowledge_adapter_route(self) -> dict:
+    def train_knowledge_adapter_route(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Train a LoRA adapter on all knowledge facts to bake them into model weights."""
         try:
             import time as _time
@@ -567,6 +568,7 @@ class KBRouter:
         topic: str = Form("imported"),
         chunk_size: int = Form(500),
         overlap: int = Form(50),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Import a textbook or document file as knowledge facts.
 
@@ -703,7 +705,7 @@ class KBRouter:
 
         return chunks
 
-    async def search_files(self, req: FileSearchRequest) -> dict:
+    async def search_files(self, req: FileSearchRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Semantic search across codebase files.
 
@@ -737,7 +739,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.search_files")
-    async def check_duplicate(self, req: DuplicateCheckRequest) -> dict:
+    async def check_duplicate(self, req: DuplicateCheckRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Check if content is a near-duplicate of existing knowledge.
 
@@ -763,7 +765,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.check_duplicate")
-    async def categorize_knowledge(self, req: CategorizeRequest) -> dict:
+    async def categorize_knowledge(self, req: CategorizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Auto-assign a topic to content based on existing knowledge categories."""
             from domains.learner.knowledge_ops import AutoCategorizer
@@ -808,7 +810,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.knowledge_gaps")
-    async def bulk_ingest(self, req: BulkIngestRequest) -> dict:
+    async def bulk_ingest(self, req: BulkIngestRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Bulk ingest texts with automatic deduplication.
 
@@ -841,7 +843,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.bulk_ingest")
-    async def train_embedder_endpoint(self) -> dict:
+    async def train_embedder_endpoint(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Train the SloNet text embedder on all knowledge + dataset texts.
 
@@ -957,7 +959,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.get_due_reviews")
-    def schedule_review(self, item_id: str, performance: float = Query(0.8, ge=0.0, le=1.0)) -> dict:
+    def schedule_review(self, item_id: str, performance: float = Query(0.8, ge=0.0, le=1.0), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Record a review performance and schedule next review."""
             scheduler = self._get_spaced_rep()
@@ -978,7 +980,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.label_text")
-    def rag_ingest(self, req: RAGIngestRequest) -> dict:
+    def rag_ingest(self, req: RAGIngestRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Ingest a document into the production RAG index."""
             import time as _time
@@ -1000,7 +1002,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_ingest")
-    def rag_query(self, req: RAGQueryRequest) -> dict:
+    def rag_query(self, req: RAGQueryRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Query the production RAG index for relevant context."""
             import time as _time
@@ -1014,7 +1016,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_query")
-    def rag_verify(self, req: RAGVerifyRequest) -> dict:
+    def rag_verify(self, req: RAGVerifyRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Verify generated text against the RAG index for hallucinations."""
             import time as _time
@@ -1040,7 +1042,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_list_documents")
-    def rag_clear(self) -> dict:
+    def rag_clear(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Clear the entire RAG index and persisted documents."""
             from domains.cognitive.rag_service import get_rag_service
@@ -1070,7 +1072,7 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_stats")
-    def kg_sync_to_rag(self) -> dict:
+    def kg_sync_to_rag(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Sync all KG triples into the RAG index via the training pipeline."""
             from domains.cognitive.rag_service import KGTrainingPipeline, get_rag_service

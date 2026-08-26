@@ -1,7 +1,7 @@
 """
 Inference Router - Chat and text generation endpoints
 """
-from fastapi import APIRouter, Request, UploadFile, File, Form
+from fastapi import APIRouter, Request, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 from typing import Any, Optional, List, AsyncIterator
@@ -26,6 +26,7 @@ from domains.learner.entity_extractor import extract_and_store
 from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
 from domains.infrastructure.request_coalescer import get_coalescer
 from config import ServerConfig
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.inference")
 
@@ -613,7 +614,7 @@ class InferenceRouter:
 
     # ── Route handlers ──
 
-    async def generate(self, req: GenerateRequest) -> GenerateResponse:
+    async def generate(self, req: GenerateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> GenerateResponse:
         """generate."""
 
         from startup_progress import STARTUP_PHASE
@@ -699,7 +700,7 @@ class InferenceRouter:
             logger.warning("Generate failed: %s", e, extra={"tag": "INF"})
             classify_and_raise(e, source="generate")
 
-    async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
+    async def generate_stream(self, req: GenerateRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """generate_stream."""
         from startup_progress import STARTUP_PHASE
         import state as _stream_state
@@ -945,7 +946,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.list_chat_tools")
-    async def chat_stream(self, req: ChatRequest, request: Request) -> StreamingResponse:
+    async def chat_stream(self, req: ChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """chat_stream."""
         from startup_progress import STARTUP_PHASE
 
@@ -1338,6 +1339,7 @@ class InferenceRouter:
                         classify_and_raise(e, source="chat_stream_provider")
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded", code="E_INFRA_REGISTRY", http_status=503)
+                    return
 
                 full_response = "".join(full_response_parts)
                 await _coalescer.complete(_coalesce_key, full_response)
@@ -1492,7 +1494,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.inspect_context")
-    async def store_fact(self, key: str, value: str) -> dict:
+    async def store_fact(self, key: str, value: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """store_fact."""
             ctx_core = self._get_context_core()
@@ -1515,7 +1517,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.get_facts")
-    async def reset_context(self, all: bool = False) -> dict:
+    async def reset_context(self, all: bool = False, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """reset_context."""
             self._context_core = None
@@ -1532,7 +1534,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.reset_context")
-    async def chat(self, req: ChatRequest) -> ChatResponse:
+    async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> ChatResponse:
         """chat."""
         _chat_t0 = time.monotonic()
         from domains import get_chat_domain
@@ -1662,6 +1664,7 @@ class InferenceRouter:
         session_id: str,
         file: UploadFile = File(...),
         duration_ms: int = Form(0),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """send_voice_message."""
         self._ensure_dirs()
@@ -1751,7 +1754,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.get_current_session")
-    async def upsert_session(self, session_id: str, req: UpsertSessionRequest) -> dict:
+    async def upsert_session(self, session_id: str, req: UpsertSessionRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """upsert_session."""
             existing = self._get_session(session_id)
@@ -1764,7 +1767,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.upsert_session")
-    async def create_session(self, req: CreateSessionRequest) -> dict:
+    async def create_session(self, req: CreateSessionRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """create_session."""
         try:
             session_id = req.session_id or str(uuid.uuid4())
@@ -1788,7 +1791,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.get_session")
-    async def delete_session(self, session_id: str) -> dict:
+    async def delete_session(self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """delete_session."""
             if self._session_repo.delete(session_id):
@@ -1888,7 +1891,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.list_operations")
-    async def cancel_operation(self, op_id: str) -> dict:
+    async def cancel_operation(self, op_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Cancel a single operation by ID.
 
@@ -1914,7 +1917,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.cancel_operation")
-    async def cancel_all_operations(self, type: Optional[str] = None) -> dict:
+    async def cancel_all_operations(self, type: Optional[str] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Cancel all active operations, optionally filtered by type.
 
@@ -1933,7 +1936,7 @@ class InferenceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="inference.cancel_all_operations")
-    async def purge_operations(self, max_age_s: float = 3600.0) -> dict:
+    async def purge_operations(self, max_age_s: float = 3600.0, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Remove finished operations older than max_age_s."""
             import time as _time
@@ -1948,7 +1951,7 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.purge_operations")
 
-    async def chat_control(self, req: ChatControlRequest) -> dict:
+    async def chat_control(self, req: ChatControlRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """chat_control - Send control messages to active chat streams.
 
         Actions:

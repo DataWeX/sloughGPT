@@ -13,7 +13,7 @@ class DatasetsController:
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self.data_dir = repo_root / "data" / "features"
-        self.datasets_dir = repo_root / "datasets"
+        self.datasets_dir = repo_root / "data"
 
     def list_datasets(self, q: Optional[str] = None, dataset_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """List available datasets"""

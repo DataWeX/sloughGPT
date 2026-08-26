@@ -814,7 +814,7 @@ async def start_visual_training(request: VisualTrainRequest):
     import uuid
     job_id = str(uuid.uuid4())[:8]
 
-    datasets_dir = find_repo_root(Path(__file__).resolve()) / "datasets"
+    datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
     data_path = datasets_dir / request.dataset
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
@@ -926,7 +926,7 @@ async def start_distillation(request: DistillStartRequest):
     import uuid
     job_id = str(uuid.uuid4())[:8]
 
-    datasets_dir = find_repo_root(Path(__file__).resolve()) / "datasets"
+    datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
     data_path = datasets_dir / request.dataset
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"

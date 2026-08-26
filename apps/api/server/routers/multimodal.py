@@ -13,10 +13,11 @@ from typing import List, Optional
 from pathlib import Path
 from threading import Lock
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -196,7 +197,7 @@ class MultimodalRouter:
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.status")
-    async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None)) -> dict:
+    async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """train_on_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
             raise_error("Only image files accepted", "E_BAD_REQUEST")
@@ -224,6 +225,7 @@ class MultimodalRouter:
         self,
         files: Optional[List[UploadFile]] = File(None),
         dataset_path: Optional[str] = Form(None),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """train_batch."""
         mgr = self._ensure_initialized()
@@ -299,7 +301,7 @@ class MultimodalRouter:
         _batch_elapsed_ms = (_time.monotonic() - _batch_t0) * 1000
         safe_audit_log("multimodal.train.complete", resource=self._background_job.get("job_id", "unknown"), detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={self._background_job['completed']} errors={self._background_job['errors']}")
 
-    async def train_video(self, req: VideoTrainRequest) -> dict:
+    async def train_video(self, req: VideoTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """train_video."""
             import time as _time
@@ -346,7 +348,7 @@ class MultimodalRouter:
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.train_video")
-    async def video_infer(self, req: VideoInferRequest) -> dict:
+    async def video_infer(self, req: VideoInferRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """video_infer."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
@@ -369,7 +371,7 @@ class MultimodalRouter:
 
     # ── DPO ────────────────────────────────────────────────────────────
 
-    async def trigger_dpo(self, req: DPOTriggerRequest) -> dict:
+    async def trigger_dpo(self, req: DPOTriggerRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """trigger_dpo."""
         model, tokenizer = self._get_active_model_and_tokenizer()
         if model is None or tokenizer is None:
@@ -410,7 +412,7 @@ class MultimodalRouter:
 
     # ── Analysis ──────────────────────────────────────────────────────
 
-    async def analyze_image(self, file: UploadFile = File(...)) -> dict:
+    async def analyze_image(self, file: UploadFile = File(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """analyze_image."""
         import time as _time
         _t0 = _time.monotonic()
@@ -446,6 +448,7 @@ class MultimodalRouter:
         question: str = Form("Summarize this document."),
         per_page: bool = Form(False),
         max_new_tokens: int = Form(512),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """analyze_pdf."""
         import tempfile
@@ -470,7 +473,7 @@ class MultimodalRouter:
         finally:
             await asyncio.to_thread(os.unlink, tmp_path)
 
-    async def process_video(self, file: UploadFile = File(...), num_frames: int = Form(16)) -> dict:
+    async def process_video(self, file: UploadFile = File(...), num_frames: int = Form(16), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """process_video."""
         try:
             from domains.multimodal.video import VideoProcessor
@@ -498,7 +501,7 @@ class MultimodalRouter:
 
     # ── Speech ────────────────────────────────────────────────────────
 
-    async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en")) -> dict:
+    async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en"), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """transcribe_audio."""
         import time as _time
         _t0 = _time.monotonic()
@@ -517,7 +520,7 @@ class MultimodalRouter:
             logger.warning("Multimodal transcribe failed: %s", e)
             classify_and_raise(e, source="multimodal_transcribe")
 
-    async def synthesize_speech(self, text: str = Form(...)) -> dict:
+    async def synthesize_speech(self, text: str = Form(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """synthesize_speech."""
         import time as _time
         _t0 = _time.monotonic()
@@ -544,7 +547,7 @@ class MultimodalRouter:
     # ── Generation ────────────────────────────────────────────────────
 
     async def generate_image(self, prompt: str = Form(...), steps: int = Form(20),
-                            guidance_scale: float = Form(7.5)) -> dict:
+                            guidance_scale: float = Form(7.5), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """generate_image."""
         try:
             from domains.multimodal.diffusion import LatentDiffusionModel
@@ -572,19 +575,19 @@ class MultimodalRouter:
 
     # ── Dataset ───────────────────────────────────────────────────────
 
-    async def create_visual_dataset(self, req: VisualDatasetRequest) -> dict:
+    async def create_visual_dataset(self, req: VisualDatasetRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """create_visual_dataset."""
             import time as _time
             _t0 = _time.monotonic()
             image_dir = Path(req.image_dir).resolve()
             _REPO_ROOT = Path(__file__).resolve().parents[4]
-            allowed_bases = {_REPO_ROOT / "datasets", _REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
+            allowed_bases = {_REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
             if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
                         raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
 
             extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-            datasets_dir = Path(__file__).resolve().parents[4] / "datasets"
+            datasets_dir = Path(__file__).resolve().parents[4] / "data"
             output_path = datasets_dir / f"{req.name}.jsonl"
 
             def _validate_and_list():
@@ -650,7 +653,7 @@ class MultimodalRouter:
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.list_checkpoints")
-    async def load_checkpoint(self, name: str) -> dict:
+    async def load_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """load_checkpoint."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
@@ -674,7 +677,7 @@ class MultimodalRouter:
             logger.warning("Multimodal load checkpoint failed: %s", e)
             classify_and_raise(e, source="multimodal_load_checkpoint")
 
-    async def delete_checkpoint(self, name: str) -> dict:
+    async def delete_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """delete_checkpoint."""
         try:
             from domains.training.video_trainer import list_video_checkpoints
@@ -705,7 +708,7 @@ class MultimodalRouter:
 
     # ── Reset ─────────────────────────────────────────────────────────
 
-    async def reset(self) -> dict:
+    async def reset(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """reset."""
             mgr = self._ensure_initialized()

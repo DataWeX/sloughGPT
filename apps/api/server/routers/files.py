@@ -9,9 +9,10 @@ from pathlib import Path
 from typing import Optional
 import re
 
-from fastapi import APIRouter, UploadFile, File, Form, Query
+from fastapi import APIRouter, UploadFile, File, Form, Query, Depends
 from pydantic import BaseModel
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 logger = logging.getLogger("slo.routers.files")
@@ -173,6 +174,7 @@ class FilesRouter:
         self,
         file: UploadFile = File(...),
         tags: str = Form("[]"),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Upload a file and save it to the server."""
         if not file.filename:
@@ -292,7 +294,7 @@ class FilesRouter:
 
         except Exception as e:
             classify_and_raise(e, source="files.get_file")
-    async def delete_file(self, file_id: str) -> dict:
+    async def delete_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Delete a file and its metadata."""
             meta = await self._async_load_metadata()
@@ -309,7 +311,7 @@ class FilesRouter:
 
         except Exception as e:
             classify_and_raise(e, source="files.delete_file")
-    async def ingest_file(self, file_id: str) -> dict:
+    async def ingest_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Extract text from a file and store it in the knowledge base."""
         meta = await self._async_load_metadata()
         m = meta.get(file_id)

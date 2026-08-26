@@ -383,7 +383,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.logs")
 
-    async def export_model(self, request: ExportRequest) -> dict:
+    async def export_model(self, request: ExportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Export current model to file."""
         import state as server_state
         import time
@@ -534,7 +534,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.download_cancel")
 
-    async def verify_download(self, model_id: str) -> Dict[str, Any]:
+    async def verify_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         """Verify a downloaded model's weight files against Hub SHA-256 checksums.
         Returns verification result and on-disk size."""
         from domains.infrastructure.hf_hub import (
@@ -566,7 +566,7 @@ class ModelsRouter:
             logger.warning("Verify download failed (model=%s): %s", model_id, e)
             classify_and_raise(e, source="verify_download")
 
-    async def retry_download(self, model_id: str) -> Dict[str, Any]:
+    async def retry_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
         try:
             """Redownload a cached model (cleanup + fresh download)."""
             from domains.infrastructure.download_manager import (
@@ -663,7 +663,7 @@ class ModelsRouter:
             logger.warning("Download GGUF failed: %s", e)
             classify_and_raise(e, source="download_gguf")
 
-    async def visual_model_load(self, model_dir: str = "", model_id: str = "") -> dict:
+    async def visual_model_load(self, model_dir: str = "", model_id: str = "", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Load a vision / multimodal model from a local directory.
 
@@ -987,7 +987,7 @@ class ModelsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="models.get_process_guard")
-    async def set_process_guard(self, req: ProcessGuardRequest) -> dict:
+    async def set_process_guard(self, req: ProcessGuardRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Enable or disable ProcessGuard at runtime.
 
@@ -1038,7 +1038,7 @@ class ModelsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="models.get_engine_status")
-    async def reload_engine(self, req: Dict[str, Any]) -> dict:
+    async def reload_engine(self, req: Dict[str, Any], auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Hot-reload the inference engine model.
 

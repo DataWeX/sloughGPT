@@ -2,7 +2,9 @@
 Vector Store Router - Embedding/vector operations
 """
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -58,7 +60,7 @@ class VectorRouter:
 
         except Exception as e:
             classify_and_raise(e, source="vector.get_vector_store")
-    async def init_vector_store(self, config: VectorStoreConfig) -> dict:
+    async def init_vector_store(self, config: VectorStoreConfig, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """init_vector_store."""
         self._vector_store_type = config.provider or "chromadb"
         try:
@@ -98,7 +100,7 @@ class VectorRouter:
 
         except Exception as e:
             classify_and_raise(e, source="vector.get_stats")
-    async def upsert_vectors(self, request: UpsertRequest) -> dict:
+    async def upsert_vectors(self, request: UpsertRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """upsert_vectors."""
             import time as _time
@@ -124,7 +126,7 @@ class VectorRouter:
 
         except Exception as e:
             classify_and_raise(e, source="vector.upsert_vectors")
-    async def search_vectors(self, request: SearchRequest) -> dict:
+    async def search_vectors(self, request: SearchRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """search_vectors."""
             import time as _time

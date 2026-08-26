@@ -6,7 +6,7 @@ Key classes and functions:
   messages format (``corpus.jsonl``) and dialogue text format (``input.txt``).
 - ``get_conversation_logger()`` — module-level singleton accessor.
 
-Both output files live under ``datasets/api_conversations/`` so the dataset
+Both output files live under ``data/api_conversations/`` so the dataset
 manager (``GET /datasets``) lists it and the training pipelines
 (character-level ``train_pipeline.py`` and HF fine-tune) can consume it.
 Capture is opt-out via ``MAN_CAPTURE_CONVERSATIONS=0``.
@@ -24,7 +24,7 @@ from domains.shared import find_repo_root
 logger = logging.getLogger("slo.infrastructure.conversation_log")
 
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
-_DEFAULT_DIR = _REPO_ROOT / "datasets" / "api_conversations"
+_DEFAULT_DIR = _REPO_ROOT / "data" / "api_conversations"
 
 
 class ConversationLogger:

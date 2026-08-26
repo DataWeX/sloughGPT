@@ -246,7 +246,7 @@ Be yourself — let your personality shape how you respond."""
     # Route handlers
     # ------------------------------------------------------------------
 
-    async def soul_chat(self, req: SloChatRequest, request: Request) -> AsyncGenerator[str, None]:
+    async def soul_chat(self, req: SloChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
 
         Loads the .soul file (PyTorch ZIP format), creates a SloughGPTModel with matching
@@ -526,7 +526,7 @@ Be yourself — let your personality shape how you respond."""
             logger.warning("Get trait weights failed: %s", e)
             classify_and_raise(e, source="get_trait_weights")
 
-    async def save_trait_weights(self, body: SaveWeightsRequest) -> dict:
+    async def save_trait_weights(self, body: SaveWeightsRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Save trait weights to the persistent config. Accepts a dict of trait
         groups (personality, cognition, emotion) with trait name → 0.0–1.0 values.
@@ -629,7 +629,7 @@ Be yourself — let your personality shape how you respond."""
         except Exception as e:
             classify_and_raise(e, source="list_weight_snapshots")
 
-    async def save_weight_snapshot(self, name: str) -> dict:
+    async def save_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Save current trait weights as a named snapshot.
 
@@ -652,7 +652,7 @@ Be yourself — let your personality shape how you respond."""
             logger.warning("Save weight snapshot failed: %s", e)
             classify_and_raise(e, source="save_weight_snapshot")
 
-    async def load_weight_snapshot(self, name: str) -> dict:
+    async def load_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Load trait weights from a named snapshot.
 
@@ -675,7 +675,7 @@ Be yourself — let your personality shape how you respond."""
             logger.warning("Load weight snapshot failed: %s", e)
             classify_and_raise(e, source="load_weight_snapshot")
 
-    async def delete_weight_snapshot(self, name: str) -> dict:
+    async def delete_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Delete a trait weight snapshot.
 

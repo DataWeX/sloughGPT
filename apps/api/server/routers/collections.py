@@ -8,10 +8,11 @@ Provides endpoints to:
 - Manage sources, stores, and filters
 """
 import logging
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from typing import List
 from pydantic import BaseModel, Field
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 
@@ -77,7 +78,7 @@ class CollectionsRouter:
         except Exception as e:
             classify_and_raise(e, source="collections.list_pipelines")
 
-    async def create_pipeline(self, req: PipelineConfigRequest) -> dict:
+    async def create_pipeline(self, req: PipelineConfigRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Create and register a new collection pipeline."""
         try:
             from domains.collections.registry import get_registry
@@ -106,7 +107,7 @@ class CollectionsRouter:
             logger.warning("Create pipeline failed: %s", e)
             classify_and_raise(e, source="create_pipeline")
 
-    async def run_pipeline(self, name: str = Query(..., description="Pipeline name")) -> dict:
+    async def run_pipeline(self, name: str = Query(..., description="Pipeline name"), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Run a collection pipeline once."""
         import time as _time
         try:
@@ -131,7 +132,7 @@ class CollectionsRouter:
             logger.warning("Run pipeline failed: %s", e)
             classify_and_raise(e, source="run_pipeline")
 
-    async def collect_direct(self, req: CollectRequest) -> dict:
+    async def collect_direct(self, req: CollectRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Collect data directly without pre-creating a pipeline."""
         import time as _time
         try:
@@ -196,7 +197,7 @@ class CollectionsRouter:
         except Exception as e:
             classify_and_raise(e, source="get_pipeline")
 
-    async def delete_pipeline(self, pipeline_id: str) -> dict:
+    async def delete_pipeline(self, pipeline_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete a pipeline from the registry."""
         try:
             from domains.collections.registry import get_registry

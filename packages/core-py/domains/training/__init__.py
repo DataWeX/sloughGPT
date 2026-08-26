@@ -141,7 +141,7 @@ class DatasetManager:
                 if line.strip():
                     yield json.loads(line)
 
-    def scan_directory(self, directory: str = "datasets") -> int:
+    def scan_directory(self, directory: str = "data") -> int:
         """Auto-discover and register all datasets in a directory.
 
         Scans each subdirectory for .txt, .jsonl, .json files and auto-detects

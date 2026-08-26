@@ -99,7 +99,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         total_len = 0
 
         for ds_name, ratio in datasets_with_ratios:
-            path = Path("datasets") / ds_name / "input.txt"
+            path = Path("data") / ds_name / "input.txt"
             if path.exists():
                 text = path.read_text(encoding="utf-8")
                 target_len = int(len(text) * ratio)
@@ -123,7 +123,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         datasets = data_path
         texts = []
         for ds_name in datasets:
-            path = Path("datasets") / ds_name / "input.txt"
+            path = Path("data") / ds_name / "input.txt"
             if path.exists():
                 texts.append(path.read_text(encoding="utf-8"))
             else:
@@ -134,7 +134,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     else:
         path = Path(data_path)
         if not path.exists():
-            path = Path("datasets") / data_path / "input.txt"
+            path = Path("data") / data_path / "input.txt"
         with open(path, "r", encoding="utf-8") as f:
             text = f.read()
 

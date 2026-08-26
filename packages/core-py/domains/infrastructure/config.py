@@ -95,7 +95,7 @@ class EmbeddingConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     data_dir: str = "data"
-    datasets_dir: str = "datasets"
+    datasets_dir: str = "data"
     models_dir: str = "models"
     checkpoint_dir: str = "models/auto-training"
 

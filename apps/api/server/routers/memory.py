@@ -7,10 +7,11 @@ manage the memory store the chat loop writes to automatically.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel, Field
 
 from domains.memory.memory_service import get_memory_service
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, safe_audit_log, success_response, classify_and_raise
 
 logger = logging.getLogger("slo.api.memory")
@@ -131,7 +132,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.search")
 
-    def store(self, req: StoreRequest) -> dict:
+    def store(self, req: StoreRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Persist one explicit fact."""
         try:
             content = req.content.strip()
@@ -145,7 +146,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.store")
 
-    def remember(self, req: RememberRequest) -> dict:
+    def remember(self, req: RememberRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Persist one completed turn as durable memory."""
         try:
             user_message = req.user_message.strip()
@@ -158,7 +159,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.remember")
 
-    def set_config(self, req: ConfigRequest) -> dict:
+    def set_config(self, req: ConfigRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Update runtime memory settings."""
         try:
             svc = self._service()
@@ -178,7 +179,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.get_config")
 
-    def delete_item(self, item_id: str) -> dict:
+    def delete_item(self, item_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Remove one stored memory item by entry id."""
         try:
             if not item_id or not item_id.strip():
@@ -189,7 +190,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.delete")
 
-    def update_item(self, item_id: str, req: UpdateRequest) -> dict:
+    def update_item(self, item_id: str, req: UpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Edit a stored memory item's text (and optionally its topic/importance)."""
         try:
             if not item_id or not item_id.strip():
@@ -202,7 +203,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.update")
 
-    def clear(self) -> dict:
+    def clear(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Remove every stored memory item."""
         try:
             removed = self._service().clear()
@@ -210,7 +211,7 @@ class MemoryRouter:
             return success_response(data={"cleared": removed})
         except Exception as e:
             classify_and_raise(e, source="memory.clear")
-    def consolidate(self, threshold: Optional[float] = None) -> dict:
+    def consolidate(self, threshold: Optional[float] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Merge near-duplicate facts, keeping the longest in each cluster."""
         try:
             from domains.memory.consolidation import plan_consolidation
@@ -247,7 +248,7 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.archive_stats")
 
-    def archive_prune(self, retain_days: Optional[float] = None) -> dict:
+    def archive_prune(self, retain_days: Optional[float] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete archive records older than the retention window."""
         try:
             from domains.memory.task_memory import prune_archive

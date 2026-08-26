@@ -14,12 +14,13 @@ import logging
 import subprocess
 import time as _time
 from typing import AsyncGenerator
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -499,7 +500,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.get_models")
-    async def switch_model(self, request: Request, body: SwitchRequest) -> dict:
+    async def switch_model(self, request: Request, body: SwitchRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Switch model and/or soul in one call."""
             errors = []
@@ -602,7 +603,7 @@ class MobileRouter:
             "per_page": per_page,
         })
 
-    async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest) -> dict:
+    async def create_knowledge(self, request: Request, body: KnowledgeCreateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Add a knowledge item."""
             try:
@@ -613,7 +614,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.create_knowledge")
-    async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest) -> dict:
+    async def update_knowledge(self, request: Request, item_id: str, body: KnowledgeUpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Update a knowledge item."""
             try:
@@ -624,7 +625,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.update_knowledge")
-    async def delete_knowledge(self, request: Request, item_id: str) -> dict:
+    async def delete_knowledge(self, request: Request, item_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Delete a knowledge item."""
             try:
@@ -636,7 +637,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.delete_knowledge")
-    async def sync_offline(self, request: Request, body: SyncRequest) -> dict:
+    async def sync_offline(self, request: Request, body: SyncRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Sync offline messages when mobile reconnects.
@@ -709,7 +710,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.sync_status")
-    async def register_device(self, body: DeviceRegistrationRequest) -> dict:
+    async def register_device(self, body: DeviceRegistrationRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Register a mobile device for push notifications.
@@ -733,7 +734,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.register_device")
-    async def unregister_device(self, body: UnregisterDeviceRequest) -> dict:
+    async def unregister_device(self, body: UnregisterDeviceRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Unregister a device from push notifications."""
             from domains.mobile.notifications import get_notification_service
@@ -762,7 +763,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.list_devices")
-    async def send_notification(self, body: NotificationSendRequest) -> dict:
+    async def send_notification(self, body: NotificationSendRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Send a push notification to registered devices.
@@ -802,7 +803,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.notification_history")
-    async def cleanup_devices(self) -> dict:
+    async def cleanup_devices(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Remove devices inactive for 30+ days.
@@ -818,7 +819,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.cleanup_devices")
-    async def notify_training_complete(self, request: Request) -> dict:
+    async def notify_training_complete(self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Send a training-complete notification to all registered devices."""
             from domains.mobile.notifications import get_notification_service, NotificationPayload
@@ -841,7 +842,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.notify_training_complete")
-    async def mobile_train(self, body: MobileTrainRequest) -> dict:
+    async def mobile_train(self, body: MobileTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Train the SloNet model on conversation pairs from the mobile app."""
         import time as _time
         from pathlib import Path
@@ -1133,7 +1134,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.get_session_pairs")
-    async def update_pair_quality(self, pair_id: str, body: QualityUpdateRequest) -> dict:
+    async def update_pair_quality(self, pair_id: str, body: QualityUpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Update quality signal on a training pair.
@@ -1159,7 +1160,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.update_pair_quality")
-    async def delete_pair(self, pair_id: str) -> dict:
+    async def delete_pair(self, pair_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Delete a single training pair.
@@ -1185,7 +1186,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.delete_pair")
-    async def delete_synced_pairs(self) -> dict:
+    async def delete_synced_pairs(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """
             Delete all synced training pairs (already used for training).
@@ -1205,7 +1206,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.delete_synced_pairs")
-    async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete")) -> dict:
+    async def delete_pairs_bulk(self, ids: list[str] = Query(..., description="Pair IDs to delete"), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Delete multiple training pairs by ID."""
             from domains.training.mobile_training_store import get_training_store
@@ -1220,7 +1221,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.delete_pairs_bulk")
-    async def compact_training_store(self) -> dict:
+    async def compact_training_store(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Compact the training data store (reclaim space from deleted records)."""
             from domains.training.mobile_training_store import get_training_store
@@ -1231,7 +1232,7 @@ class MobileRouter:
 
         except Exception as e:
             classify_and_raise(e, source="mobile.compact_training_store")
-    async def train_from_sessions(self, body: FromSessionsRequest = FromSessionsRequest(), request: Request = None) -> AsyncGenerator[str, None]:
+    async def train_from_sessions(self, body: FromSessionsRequest = FromSessionsRequest(), request: Request = None, auth_user: dict = Depends(require_auth_if_enabled)) -> AsyncGenerator[str, None]:
         """
         Train the model from server-side inference logs (SSE streaming).
 
@@ -1476,6 +1477,7 @@ class MobileRouter:
         self,
         threshold: int | None = Query(None, ge=1, le=100),
         interval_s: int | None = Query(None, ge=30, le=3600),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """
         Update auto-trainer configuration at runtime.

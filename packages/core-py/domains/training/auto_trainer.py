@@ -26,7 +26,7 @@ logger = logging.getLogger("slo.training.auto_trainer")
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
 _RESPONSE_LOGS_DIR = _REPO_ROOT / "data" / "response_logs"
-_CAPTURED_CORPUS = _REPO_ROOT / "datasets" / "api_conversations" / "corpus.jsonl"
+_CAPTURED_CORPUS = _REPO_ROOT / "data" / "api_conversations" / "corpus.jsonl"
 
 
 class AutoTrainer:

@@ -117,8 +117,9 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
 
     const urls = extractUrls(messages)
     for (const url of urls) {
-      const domain = new URL(url).hostname
-      if (lower.includes(domain)) {
+      let domain: string | null = null
+      try { domain = new URL(url).hostname } catch { continue }
+      if (domain && lower.includes(domain)) {
         results.push({
           id: `url-${url}`,
           type: 'url',

@@ -5,7 +5,7 @@ from domains.training.sloran import SloRAN
 from domains.training.slonet import Tensor, no_grad
 import numpy as np
 
-DATA = os.path.join(os.path.dirname(__file__),'..','..','..','datasets','shakespeare','input.txt')
+DATA = os.path.join(os.path.dirname(__file__),'..','..','..','data','shakespeare','input.txt')
 B, T, V = 8, 64, None
 its = 2000
 

@@ -8,11 +8,12 @@ Includes quality evaluation:
 """
 import logging
 import time as _time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 
@@ -141,7 +142,7 @@ class BenchmarkRouter:
         except Exception as e:
             raise_error(str(e), "E_DOMAIN", details={"model": model})
 
-    async def run_benchmark(self, model: str = "gpt2") -> dict:
+    async def run_benchmark(self, model: str = "gpt2", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Run model benchmark - returns real metrics"""
         try:
             _t0 = _time.monotonic()
@@ -201,7 +202,7 @@ class BenchmarkRouter:
         except Exception as e:
             classify_and_raise(e, source="benchmark.get_benchmark_by_id")
 
-    async def calculate_perplexity(self, text: str = "Sample text for evaluation") -> dict:
+    async def calculate_perplexity(self, text: str = "Sample text for evaluation", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Calculate next-token perplexity on text using the active SloNet model.
 
         Pure NumPy: one causal forward pass, then the negative log-likelihood
@@ -322,7 +323,7 @@ class BenchmarkRouter:
             logger.warning("Tracker stats failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
-    async def clear_history(self) -> dict:
+    async def clear_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear benchmark history and logged responses."""
         try:
             from domains import get_benchmark_domain

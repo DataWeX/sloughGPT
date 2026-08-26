@@ -12,7 +12,9 @@ Flow:
 
 from __future__ import annotations
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+
+from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
@@ -41,7 +43,7 @@ class LearnerRouter:
         self.router.add_api_route("/status", self.learn_status, methods=["GET"])
 
     @staticmethod
-    def learn_search(req: LearnSearchRequest) -> dict:
+    def learn_search(req: LearnSearchRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Search web, fetch full articles, store facts, and fine-tune."""
         try:
             import time as _time
@@ -68,6 +70,7 @@ class LearnerRouter:
         action: str = Query(..., max_length=20),
         url: Optional[str] = Query(None, max_length=2000),
         poll_interval: int = Query(3600, ge=60, le=86400),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Manage RSS feed subscriptions."""
         try:
@@ -92,7 +95,7 @@ class LearnerRouter:
             classify_and_raise(e, source="learner.feed")
 
     @staticmethod
-    def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000)) -> dict:
+    def learn_ingest_url(url: str = Query(..., min_length=1, max_length=2000), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Ingest a single URL: scrape article, store facts, fine-tune."""
         try:
             import time as _time
@@ -130,6 +133,7 @@ class LearnerRouter:
     def learn_ingest(
         text: Optional[str] = None,
         conversations: Optional[list[list[str]]] = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Ingest raw text or conversation pairs into the learner."""
         try:
@@ -149,7 +153,7 @@ class LearnerRouter:
             classify_and_raise(e, source="learner.ingest")
 
     @staticmethod
-    def learn_train() -> dict:
+    def learn_train(auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Force an immediate training step on accumulated data."""
         import time as _time
         _t0 = _time.monotonic()
@@ -161,7 +165,7 @@ class LearnerRouter:
         return success_response(data={**status, "elapsed_ms": round(_elapsed_ms, 1)})
 
     @staticmethod
-    def learn_deploy(name: Optional[str] = None) -> dict:
+    def learn_deploy(name: Optional[str] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Export the learner's SloTransformer as a deployable .soul file."""
         import time as _time
         _t0 = _time.monotonic()
@@ -173,7 +177,7 @@ class LearnerRouter:
         return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
 
     @staticmethod
-    def learn_evaluate(text: Optional[str] = None) -> dict:
+    def learn_evaluate(text: Optional[str] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Evaluate the learner on provided text or ring buffer test split."""
         import time as _time
         _t0 = _time.monotonic()

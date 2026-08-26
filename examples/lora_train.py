@@ -18,7 +18,7 @@ def main():
 
     # Create trainer with LoRA enabled
     trainer = SloughGPTTrainer(
-        data_path='datasets/shakespeare/input.txt',
+        data_path='data/shakespeare/input.txt',
         n_embed=256,
         n_layer=6,
         n_head=8,

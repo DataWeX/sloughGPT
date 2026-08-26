@@ -33,7 +33,7 @@ class DatasetsRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/datasets", tags=["datasets"])
-        self._DATASETS_DIR = Path(__file__).resolve().parents[4] / "datasets"
+        self._DATASETS_DIR = Path(__file__).resolve().parents[4] / "data"
         self._import_locks: dict[str, asyncio.Lock] = {}
         self._import_locks_lock = asyncio.Lock()
         self._DATASET_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]+$')
