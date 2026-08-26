@@ -14,9 +14,11 @@ import threading
 import time as _time
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+from infrastructure.auth import require_auth_if_enabled
 
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
@@ -80,7 +82,7 @@ def _sse_line(stream: str, phase: str, status: str, data: dict, meta: dict = Non
 
 
 @router.post("/exec", response_model=ShellExecResponse)
-async def exec_command(req: ShellExecRequest):
+async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Execute a shell command and return captured output.
 
     Runs the command in a Dait ``ShellREPL`` instance with captured I/O.
@@ -107,7 +109,7 @@ async def exec_command(req: ShellExecRequest):
 
 
 @router.post("/exec/stream")
-async def exec_command_stream(req: ShellExecRequest, request: Request):
+async def exec_command_stream(req: ShellExecRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)):
     """Execute a shell command with SSE streaming output.
 
     Yields lines as they are produced, then a completion event.
