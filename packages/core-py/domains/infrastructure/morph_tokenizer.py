@@ -326,14 +326,20 @@ class MorphTokenizer:
             tok_data = json.load(f)
 
         # Parse vocab
-        raw_vocab = tok_data["model"]["vocab"]
+        try:
+            raw_vocab = tok_data["model"]["vocab"]
+        except (KeyError, TypeError):
+            raw_vocab = {}
         if isinstance(raw_vocab, dict):
             vocab = raw_vocab
         else:
             vocab = {item[0]: item[1] for item in raw_vocab}
 
         # Parse merges
-        raw_merges = tok_data["model"]["merges"]
+        try:
+            raw_merges = tok_data["model"]["merges"]
+        except (KeyError, TypeError):
+            raw_merges = []
         merges = [tuple(m.split(" ", 1)) for m in raw_merges]
 
         # Detect byte-level BPE (GPT-2, Qwen2, etc)
