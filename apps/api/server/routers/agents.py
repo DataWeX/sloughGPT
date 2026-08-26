@@ -5,7 +5,7 @@ Agents Router - Full CRUD for AI agent definitions with execution and orchestrat
 import asyncio
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncGenerator
@@ -13,6 +13,7 @@ from typing import Optional, List, AsyncGenerator
 from domains.api.sse_envelope import sse_event, sse_complete, sse_error
 
 from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -87,7 +88,7 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.list")
 
-    async def create_agent(self, req: AgentCreate) -> dict:
+    async def create_agent(self, req: AgentCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Create a new agent with the given name, description, tools, and instructions.
 
