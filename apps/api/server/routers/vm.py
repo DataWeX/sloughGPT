@@ -10,10 +10,11 @@ from __future__ import annotations
 import time
 import logging
 from typing import Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from pydantic import model_validator
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.api.vm")
 router = APIRouter(prefix="/vm", tags=["vm"])
@@ -91,7 +92,7 @@ class VMTrainingJobResponse(BaseModel):
 
 
 @router.post("/run", response_model=VMRunResponse)
-async def run_assembly(req: VMRunRequest) -> dict:
+async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
     """Run x86 assembly code in the sandboxed VM.
 
     Assembles the source, spawns a user process, and executes it.
