@@ -534,8 +534,8 @@ class KnowledgeMemory:
             self._vector_store = InMemoryVectorStore(dimension=dim)
             try:
                 self._run_async(self._vector_store.connect())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Vector store connect failed: %s", e)
         self._embed_fn = None
         self._fact_counter = 0
         if load_persisted:
@@ -558,8 +558,8 @@ class KnowledgeMemory:
         if VISITED_PATH.exists():
             try:
                 return json.loads(VISITED_PATH.read_text())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load visited paths: %s", e)
         return []
 
     def _save_visited(self):

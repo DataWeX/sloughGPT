@@ -21,8 +21,11 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class Risk:
@@ -223,8 +226,8 @@ class ShellPermissions:
         try:
             self._granted = set(doc.get("granted", []))
             self._policy.update(doc.get("policy", {}))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to load persisted permissions: %s", e)
 
     def _save_persistent(self) -> None:
         try:
@@ -237,5 +240,5 @@ class ShellPermissions:
                 self._col.update_one({"_id": "permissions"}, {"$set": data})
             else:
                 self._col.insert_one({"_id": "permissions", **data})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to save permissions: %s", e)
