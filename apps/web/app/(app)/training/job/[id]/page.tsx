@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -316,7 +316,7 @@ export default function TrainingJobDetailPage() {
                   const improving = avgSecond < avgFirst
                   const pctChange = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : '0'
                   return (
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                    <span className={cn('text-xs font-medium px-2 py-0.5 rounded', improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>
                       {improving ? '↓' : '↑'} {Math.abs(Number(pctChange))}%
                     </span>
                   )

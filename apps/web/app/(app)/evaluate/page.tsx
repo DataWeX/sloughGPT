@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Button } from '@sloughgpt/strui'
+import { Button, cn } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh, IconDownload } from '@sloughgpt/strui'
@@ -301,7 +301,7 @@ export default function EvaluatePage() {
         </>
       )}
       <Button variant="outline" size="sm" onClick={section === 'single' ? handleRefreshMetrics : runAll} disabled={section === 'single' ? smRunning : cmpLoading || cmpRunning.size > 0}>
-        <IconRefresh className={`h-3.5 w-3.5 mr-1 ${(section === 'single' ? smRunning : cmpRunning.size > 0) ? 'animate-spin' : ''}`} />
+        <IconRefresh className={cn('h-3.5 w-3.5 mr-1', (section === 'single' ? smRunning : cmpRunning.size > 0) && 'animate-spin')} />
         {section === 'single' ? 'Refresh' : 'Benchmark all'}
       </Button>
     </div>
@@ -329,9 +329,7 @@ export default function EvaluatePage() {
             key={t.key}
             type="button"
             onClick={() => setSection(t.key)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              section === t.key ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', section === t.key ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.label}
           </button>
@@ -350,9 +348,7 @@ export default function EvaluatePage() {
                   setSmTab(t)
                   if (t === 'responses') handleLoadResponses()
                 }}
-                className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-                  smTab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-                }`}
+                className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', smTab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
               >
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
@@ -374,7 +370,7 @@ export default function EvaluatePage() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">Model Metrics</CardTitle>
                   <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={smRunning} aria-label="Refresh metrics">
-                    <IconRefresh className={`h-4 w-4 ${smRunning ? 'animate-spin' : ''}`} />
+                    <IconRefresh className={cn('h-4 w-4', smRunning && 'animate-spin')} />
                   </Button>
                 </CardHeader>
                 <CardContent>
@@ -429,7 +425,7 @@ export default function EvaluatePage() {
                     ].map(s => (
                       <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                         <div className="text-xs text-muted-foreground">{s.label}</div>
-                        <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                        <div className={cn('text-lg font-mono font-medium', s.color)}>{s.value}</div>
                       </div>
                     ))}
                   </div>

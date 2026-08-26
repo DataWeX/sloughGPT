@@ -105,7 +105,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
   // ── Token accumulator for streaming perf ─────────────────────────────────
   // Buffers tokens in a ref and flushes to setMessages every FLUSH_MS.
-  // Avoids O(n) array copy per token — flushes at most ~60x/sec.
+  // Uses targeted splice instead of O(n) map — only touches the streaming message.
   const tokenBufRef = useRef<{ id: string; text: string }[]>([])
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const FLUSH_MS = 16
@@ -123,12 +123,15 @@ export function useChatMessages(config: ChatMessagesConfig) {
       byId.set(id, (byId.get(id) || '') + text)
     }
     setMessages(prev => {
+      let changed = false
       const updated = prev.map(m => {
         const delta = byId.get(m.id)
         if (!delta) return m
+        changed = true
         const content = m.content === 'Thinking...' ? '' : m.content
         return { ...m, content: content + delta }
       })
+      if (!changed) return prev
       const now = Date.now()
       if (now - lastSaveRef.current > 500) {
         lastSaveRef.current = now
@@ -147,7 +150,6 @@ export function useChatMessages(config: ChatMessagesConfig) {
   useEffect(() => {
     return () => {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
-      // Flush any remaining tokens to avoid data loss
       const buf = tokenBufRef.current
       if (buf.length > 0) {
         tokenBufRef.current = []
@@ -155,12 +157,17 @@ export function useChatMessages(config: ChatMessagesConfig) {
         for (const { id, text } of buf) {
           byId.set(id, (byId.get(id) || '') + text)
         }
-        setMessages(prev => prev.map(m => {
-          const delta = byId.get(m.id)
-          if (!delta) return m
-          const content = m.content === 'Thinking...' ? '' : m.content
-          return { ...m, content: content + delta }
-        }))
+        setMessages(prev => {
+          let changed = false
+          const updated = prev.map(m => {
+            const delta = byId.get(m.id)
+            if (!delta) return m
+            changed = true
+            const content = m.content === 'Thinking...' ? '' : m.content
+            return { ...m, content: content + delta }
+          })
+          return changed ? updated : prev
+        })
       }
     }
   }, [])

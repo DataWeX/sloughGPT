@@ -86,6 +86,9 @@ export const MessageBubble = memo(function MessageBubble({
   onAddNote,
   hasThread = false,
   onThread,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelection,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isVisible, setIsVisible] = useState(false)
@@ -144,6 +147,25 @@ export const MessageBubble = memo(function MessageBubble({
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >
+      {/* Selection checkbox — shown in selection mode */}
+      {selectionMode && (
+        <div className={cn(
+          "flex items-center mb-0.5",
+          role === 'user' ? 'justify-end' : 'justify-start'
+        )}>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleSelection?.(id)}
+              className="h-3.5 w-3.5 rounded border-border/50 text-primary focus:ring-primary/30"
+              aria-label={`Select message`}
+            />
+            <span className="text-[10px] text-muted-foreground/60">Select</span>
+          </label>
+        </div>
+      )}
+
       {/* Role label — outside bubble for clear separation */}
       <span className={cn(
         "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",

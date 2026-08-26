@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useCallback, useRef, useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Button, Skeleton } from '@sloughgpt/strui'
+import { Button, Skeleton, cn } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { writeTraining } from '@/lib/app-shell'
@@ -119,11 +119,15 @@ export default function TrainingPage() {
   }, [ready])
 
   useEffect(() => {
+    let active = true
     if (datasets.selectedDataset && form.inputMode === 'dataset') {
-      datasetController.preview(datasets.selectedDataset, 3).then(datasets.setDatasetPreview).catch(() => datasets.setDatasetPreview(null))
+      datasetController.preview(datasets.selectedDataset, 3).then(preview => {
+        if (active) datasets.setDatasetPreview(preview)
+      }).catch(() => { if (active) datasets.setDatasetPreview(null) })
     } else {
       datasets.setDatasetPreview(null)
     }
+    return () => { active = false }
   }, [datasets.selectedDataset, form.inputMode])
 
   const runningJob = useMemo(() => form.allJobs.find(j => j.status === 'running'), [form.allJobs])
@@ -263,9 +267,7 @@ export default function TrainingPage() {
               aria-selected={manualTab === t.id}
               aria-label={`${t.label} tab`}
               onClick={() => setManualTab(t.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                manualTab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
-              }`}
+              className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', manualTab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
             >
               {t.label}
             </button>

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { feedbackController, type FeedbackStats, type WorkflowStatus, type TrainingStats } from '@/lib/feedback-controller'
@@ -34,7 +34,7 @@ export default function FeedbackPage() {
     Promise.all([
       feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats', e); return null }),
       feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status', e); return null }),
-      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not training stats', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not load training stats', e); return null }),
     ]).then(([s, w, t]) => {
       setStats(s)
       setWorkflow(w)
@@ -66,7 +66,7 @@ export default function FeedbackPage() {
     const [s, w, t] = await Promise.all([
       feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats refresh', e); return null }),
       feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status refresh', e); return null }),
-      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not training stats refresh', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not refresh training stats', e); return null }),
     ])
     setStats(s)
     setWorkflow(w)
@@ -144,9 +144,7 @@ export default function FeedbackPage() {
               setTab(t)
               if (t === 'conversations') handleLoadConversations()
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -180,7 +178,7 @@ export default function FeedbackPage() {
                   ].map(s => (
                     <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                      <div className={cn('text-lg font-mono font-medium', s.color)}>{s.value}</div>
                     </div>
                   ))}
                 </div>
@@ -318,7 +316,7 @@ export default function FeedbackPage() {
                   ].map(s => (
                     <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={`text-lg font-mono font-medium ${s.color ?? ''}`}>{s.value}</div>
+                      <div className={cn('text-lg font-mono font-medium', s.color ?? '')}>{s.value}</div>
                     </div>
                   ))}
                 </div>

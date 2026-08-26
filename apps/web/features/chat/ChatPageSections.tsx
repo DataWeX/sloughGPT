@@ -1,9 +1,9 @@
 'use client'
 
 import dynamicNext from 'next/dynamic'
+import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
-import { useCallback } from 'react'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
@@ -24,13 +24,14 @@ const DownloadDialog = dynamicNext(() => import('@/features/chat/components/dial
 const SystemPromptDialog = dynamicNext(() => import('@/features/chat/components/dialogs/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
 const ReadFileSection = dynamicNext(() => import('@/features/chat/components/dialogs/ReadFileSection'), { ssr: false })
 const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/NoteDialog').then(m => m.NoteDialog), { ssr: false })
+const NoteSearchPanel = dynamicNext(() => import('@/features/chat/components/panels/NoteSearchPanel').then(m => m.NoteSearchPanel), { ssr: false })
 const ThreadPanel = dynamicNext(() => import('@/features/chat/components/ThreadPanel').then(m => m.ThreadPanel), { ssr: false })
 
 interface ChatPageSectionProps {
   controller: ChatPageController
 }
 
-export function ChatSidebarSection({ controller }: ChatPageSectionProps) {
+export const ChatSidebarSection = memo(function ChatSidebarSection({ controller }: ChatPageSectionProps) {
   const { chat, ui, convCollapsed, toggleConv } = controller
   return (
     <ConversationSidebar
@@ -51,17 +52,17 @@ export function ChatSidebarSection({ controller }: ChatPageSectionProps) {
       onToggleCollapse={toggleConv}
     />
   )
-}
+})
 
-export function ChatToolbarSection({ controller }: ChatPageSectionProps) {
+export const ChatToolbarSection = memo(function ChatToolbarSection({ controller }: ChatPageSectionProps) {
   return (
     <ChatToolbarProvider value={controller.toolbarValue}>
       <ChatToolbar />
     </ChatToolbarProvider>
   )
-}
+})
 
-export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
+export const ChatSettingsSection = memo(function ChatSettingsSection({ controller }: ChatPageSectionProps) {
   const { ui, model, chat, clearChat } = controller
   const settings = useAppStore(state => state.settings)
   const updateSettings = useAppStore(state => state.updateSettings)
@@ -97,9 +98,9 @@ export function ChatSettingsSection({ controller }: ChatPageSectionProps) {
       hasMessages={chat.messages.length > 0}
     />
   )
-}
+})
 
-export function ChatChatSection({ controller }: ChatPageSectionProps) {
+export const ChatChatSection = memo(function ChatChatSection({ controller }: ChatPageSectionProps) {
   const {
     chat, ui, model, health, suggestions, refreshHealth, showToast,
     chatMode, setChatMode,
@@ -296,15 +297,18 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           contextLayers={contextLayers}
           noteMap={controller.noteMap}
           onAddNote={controller.onAddNote}
+          selectionMode={controller.selectionMode}
+          selectedMessageIds={controller.selectedMessageIds}
+          onToggleSelection={controller.toggleMessageSelection}
           hasThread={controller.hasThread}
           onThread={controller.onStartThread}
         />
       </ImageDropZone>
     </>
   )
-}
+})
 
-export function ChatSearchSection({ controller }: ChatPageSectionProps) {
+export const ChatSearchSection = memo(function ChatSearchSection({ controller }: ChatPageSectionProps) {
   const { chat, ui } = controller
   return (
     <>
@@ -325,9 +329,9 @@ export function ChatSearchSection({ controller }: ChatPageSectionProps) {
       />
     </>
   )
-}
+})
 
-export function ChatDialogSection({ controller }: ChatPageSectionProps) {
+export const ChatDialogSection = memo(function ChatDialogSection({ controller }: ChatPageSectionProps) {
   const {
     ui, chat, model, bookmarks, removeBookmark, clearAll,
     systemPromptOpen, setSystemPromptOpen, customSystemPrompt, handleSaveSystemPrompt,
@@ -403,4 +407,4 @@ export function ChatDialogSection({ controller }: ChatPageSectionProps) {
       )}
     </>
   )
-}
+})

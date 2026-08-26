@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, cn } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost } from '@/lib/http-client'
 
@@ -149,9 +149,7 @@ export default function SelfTrainPage() {
                 aria-pressed={forever}
                 aria-label={forever ? 'Switch to single pass mode' : 'Switch to train forever mode'}
                 disabled={isRunning}
-                className={`h-8 rounded border px-2 text-xs transition-colors ${
-                  forever ? 'border-primary bg-primary/10 text-primary' : 'border-border'
-                }`}
+                className={cn('h-8 rounded border px-2 text-xs transition-colors', forever ? 'border-primary bg-primary/10 text-primary' : 'border-border')}
               >
                 {forever ? 'Train forever' : 'Single pass'}
               </button>

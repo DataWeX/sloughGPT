@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, EmptyCard } from '@sloughgpt/strui'
+import { Card, CardContent, EmptyCard, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -709,7 +709,7 @@ export default function KnowledgePage() {
                       <button
                         type="button"
                         onClick={() => setActiveTopic(activeTopic === t.name ? null : t.name)}
-                        className={`text-[11px] w-24 text-left truncate transition-colors ${activeTopic === t.name ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                        className={cn('text-[11px] w-24 text-left truncate transition-colors', activeTopic === t.name ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground')}
                       >
                         {t.name}
                       </button>
@@ -733,22 +733,14 @@ export default function KnowledgePage() {
             <Chip
               label={`All (${items.length})`}
               onClick={() => setActiveTopic(null)}
-              className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
-                activeTopic === null
-                  ? 'bg-primary/15 text-primary border-primary/30'
-                  : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80'
-              }`}
+              className={cn('text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors', activeTopic === null ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80')}
             />
             {topics.map(t => (
               <Chip
                 key={t.name}
                 label={`${t.name} (${t.count})`}
                 onClick={() => setActiveTopic(activeTopic === t.name ? null : t.name)}
-                className={`text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
-                  activeTopic === t.name
-                    ? 'bg-primary/15 text-primary border-primary/30'
-                    : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80'
-                }`}
+                className={cn('text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors', activeTopic === t.name ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80')}
               />
             ))}
           </div>
@@ -785,13 +777,7 @@ export default function KnowledgePage() {
               {displayItems.map(item => (
                 <div
                   key={item.id}
-                  className={`group relative p-4 rounded-lg border text-sm leading-relaxed transition-colors ${
-                    selectedIds.has(item.id)
-                      ? 'bg-primary/[0.06] border-primary/30'
-                      : editingId === item.id
-                        ? 'bg-primary/[0.04] border-primary/30'
-                        : 'bg-card border-border/60 hover:bg-muted/30'
-                  }`}
+                  className={cn('group relative p-4 rounded-lg border text-sm leading-relaxed transition-colors', selectedIds.has(item.id) ? 'bg-primary/[0.06] border-primary/30' : editingId === item.id ? 'bg-primary/[0.04] border-primary/30' : 'bg-card border-border/60 hover:bg-muted/30')}
                 >
                   <div className="flex items-start gap-2">
                     <input
@@ -806,7 +792,7 @@ export default function KnowledgePage() {
                         <div className="space-y-2">
                           <div>
                             <textarea
-                              className={`w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${editErrors.content ? 'border-destructive ring-destructive/20' : 'border-input'}`}
+                              className={cn('w-full p-2 text-sm border rounded-lg resize-none h-16 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40', editErrors.content ? 'border-destructive ring-destructive/20' : 'border-input')}
                               value={editContent}
                               onChange={e => {
                                 setEditContent(e.target.value)
@@ -1002,7 +988,7 @@ export default function KnowledgePage() {
             <div className="space-y-3 py-2">
               <div>
                 <textarea
-                  className={`w-full p-2.5 text-sm border rounded-lg resize-none h-24 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40 ${addErrors.content ? 'border-destructive ring-destructive/20' : 'border-input'}`}
+                  className={cn('w-full p-2.5 text-sm border rounded-lg resize-none h-24 bg-background focus:outline-none focus:ring-1 focus:ring-primary/40', addErrors.content ? 'border-destructive ring-destructive/20' : 'border-input')}
                   placeholder="Enter a fact, preference, or piece of context..."
                   value={newContent}
                   onChange={e => {

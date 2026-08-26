@@ -126,7 +126,9 @@ export function useTrainingForm(
   const [configLoaded, setConfigLoaded] = useState(false)
 
   useEffect(() => {
+    let active = true
     chatDB.getKV<SavedConfig>(TRAINING_CONFIG_KEY).then(saved => {
+      if (!active) return
       if (saved) {
         if (saved.method) setMethod(saved.method)
         if (saved.inputMode) setInputMode(saved.inputMode)
@@ -141,6 +143,7 @@ export function useTrainingForm(
       }
       setConfigLoaded(true)
     })
+    return () => { active = false }
   }, [])
 
   const [visualVisionEncoder, setVlmVisionEncoder] = useState('google/siglip-base-patch16-224')
@@ -194,11 +197,14 @@ export function useTrainingForm(
   }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
 
   useEffect(() => {
+    let active = true
     modelController.list().then(models => {
+      if (!active) return
       const ids = models.map(m => m.id)
       setAvailableModels(ids)
       setSelectedModel((prev: string) => prev || ids[0] || '')
-    }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
+    }).catch(() => { if (active) addToast('Could not load model list — training may be limited', 'info') })
+    return () => { active = false }
   }, [addToast])
 
   const applyPreset = useCallback((preset: TrainingPreset) => {

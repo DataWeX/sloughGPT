@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, IconRefresh, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -94,7 +94,7 @@ export default function ExportPage() {
       const blob = await trainingJobsController.exportTrainingPairs()
       downloadBlob(blob, `training-pairs-${Date.now()}.jsonl`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Could not training data export')
+      setExportError(err instanceof Error ? err.message : 'Could not export training data')
     } finally {
       setExportingPairs(false)
     }
@@ -151,11 +151,7 @@ export default function ExportPage() {
                 key={f.key}
                 type="button"
                 onClick={() => setSelectedFormat(f.key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedFormat === f.key
-                    ? 'bg-primary/15 text-primary'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
+                className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors', selectedFormat === f.key ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/80')}
                 title={f.description}
               >
                 {f.label}
@@ -222,7 +218,7 @@ export default function ExportPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Checkpoints</CardTitle>
           <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
-            <IconRefresh className={`h-3.5 w-3.5 ${loadingCheckpoints ? 'animate-spin' : ''}`} />
+            <IconRefresh className={cn('h-3.5 w-3.5', loadingCheckpoints && 'animate-spin')} />
           </Button>
         </CardHeader>
         <CardContent>

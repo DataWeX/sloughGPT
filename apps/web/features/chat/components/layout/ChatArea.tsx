@@ -50,6 +50,9 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   noteMap?: Record<string, string>
   onAddNote?: (messageId: string) => void
   onPin?: (messageId: string) => void
+  selectionMode?: boolean
+  selectedMessageIds?: Set<string>
+  onToggleSelection?: (messageId: string) => void
   hasThread?: (id: string) => boolean
   onThread?: (messageId: string) => void
 }
@@ -97,6 +100,9 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     noteMap,
     onAddNote,
     onPin,
+    selectionMode,
+    selectedMessageIds,
+    onToggleSelection,
     hasThread,
     onThread,
     streamingStatus,
@@ -184,6 +190,9 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             contextLayers={contextLayers}
             noteMap={noteMap}
             onAddNote={onAddNote}
+            selectionMode={selectionMode}
+            selectedMessageIds={selectedMessageIds}
+            onToggleSelection={onToggleSelection}
             hasThread={hasThread}
             onThread={onThread}
           />

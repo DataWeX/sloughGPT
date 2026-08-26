@@ -66,6 +66,7 @@ export function useChatPageController(
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [noteDialogMessageId, setNoteDialogMessageId] = useState<string | null>(null)
+  const [noteSearchOpen, setNoteSearchOpen] = useState(false)
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -171,6 +172,7 @@ export function useChatPageController(
         }
       }
     },
+    onOpenNoteSearch: () => setNoteSearchOpen(true),
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -571,6 +573,20 @@ export function useChatPageController(
     onSaveNote,
     onDeleteNote,
     onAddNote,
+    noteSearchOpen: noteSearchOpen,
+    setNoteSearchOpen: setNoteSearchOpen,
+    onNavigateToNote: (sessionId: string, messageId: string) => {
+      if (sessionId !== chat.sessionIdRef.current) {
+        chat.loadSession(sessionId)
+      }
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${messageId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+        }
+      }, 100)
+    },
     activeThreadMessageId: activeThreadMessageId,
     activeThread: activeThreadMessageId ? threads.getThread(activeThreadMessageId) : undefined,
     activeThreadMessages: activeThreadMessageId && threads.getThread(activeThreadMessageId)

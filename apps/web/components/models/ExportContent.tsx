@@ -110,7 +110,7 @@ export default function ExportContent() {
       const blob = await trainingJobsController.exportTrainingPairs()
       downloadBlob(blob, `training-pairs-${Date.now()}.jsonl`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Could not training data export')
+      setExportError(err instanceof Error ? err.message : 'Could not export training data')
     } finally {
       setExportingPairs(false)
     }

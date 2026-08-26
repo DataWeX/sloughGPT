@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import {
   IconChat,
@@ -273,7 +273,7 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm text-muted-foreground">Ratio</span>
-                    <span className={`text-sm font-medium ${feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning'}`}>
+                    <span className={cn('text-sm font-medium', feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning')}>
                       {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
                     </span>
                   </div>
@@ -413,9 +413,9 @@ export default function HomePage() {
               ))}
               {recentJobs.slice(0, 2).map(j => (
                 <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40'}`} />
+                  <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
                   <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>{j.status}</span>
+                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
                 </div>
               ))}
             </div>

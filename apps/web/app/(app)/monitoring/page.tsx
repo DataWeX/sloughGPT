@@ -121,7 +121,7 @@ export default memo(function SystemHealthPage() {
         multimodalController.getStatus().catch((e) => { logger.warning('Could not multimodal status', e); return null }),
         systemController.getExecutorStatus().catch((e) => { logger.warning('Could not executor status', e); return null }),
         trainingController.getAutoTrainStatus().catch((e) => { logger.warning('auto-train status failed', e); return null }),
-        trainingController.list().catch((e) => { logger.warning('Could not training list', e); return [] }),
+        trainingController.list().catch((e) => { logger.warning('Could not list training jobs', e); return [] }),
       ])
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)

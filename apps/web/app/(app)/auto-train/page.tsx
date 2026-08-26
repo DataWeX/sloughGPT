@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, cn } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { trainingJobsController } from '@/lib/training-controller'
 import { datasetController } from '@/lib/controllers'
@@ -37,8 +37,15 @@ export default function AutoTrainPage() {
   const trainingRunning = session.trainingRunning
 
   useEffect(() => {
-    void datasets.fetchDatasets()
-    void checkpoints.fetchCheckpoints()
+    let active = true
+    const load = async () => {
+      if (active) {
+        await datasets.fetchDatasets()
+        await checkpoints.fetchCheckpoints()
+      }
+    }
+    void load()
+    return () => { active = false }
   }, [])
 
   const canStart = !trainingRunning && (
@@ -398,7 +405,7 @@ export default function AutoTrainPage() {
           <CardContent>
             <div className="space-y-2">
               {checkpoints.checkpoints.slice(cpPage * CP_PAGE_SIZE, (cpPage + 1) * CP_PAGE_SIZE).map(c => (
-                <div key={c.name} className={`flex items-center justify-between rounded border p-3 text-sm ${selectedCps.has(c.name) ? 'border-primary bg-primary/5' : ''}`}>
+                <div key={c.name} className={cn('flex items-center justify-between rounded border p-3 text-sm', selectedCps.has(c.name) && 'border-primary bg-primary/5')}>
                   <div className="min-w-0 flex-1 flex items-center gap-2">
                     <input
                       type="checkbox"

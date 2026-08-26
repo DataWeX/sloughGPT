@@ -51,7 +51,7 @@ export function useTrainingPolling(): TrainingPolling {
     jobId: string,
     opts?: { addToast?: TrainingToastFn; onComplete?: (job: TrainingJob) => void; completeMessage?: string },
   ) => {
-    if (standardPollRef.current) { clearInterval(standardPollRef.current); standardPollRef.current = null }
+    if (standardPollRef.current) { clearTimeout(standardPollRef.current); standardPollRef.current = null }
     standardRetryRef.current = 0
 
     const poll = async () => {

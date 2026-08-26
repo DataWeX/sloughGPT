@@ -7,7 +7,7 @@ import {
   SearchInput, Slider, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   Tabs, TabsList, TabsTrigger, TabsContent, AlertDialog, AlertDialogAction,
   AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
+  AlertDialogHeader, AlertDialogTitle, cn,
 } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -119,10 +119,10 @@ function PersonalityBar({ label, value, color = 'bg-primary' }: { label: string;
     <div>
       <div className="flex items-center justify-between text-xs mb-0.5">
         <span className="text-muted-foreground">{label}</span>
-        <span className={`font-mono font-medium ${traitColor(value)}`}>{(value * 100).toFixed(0)}%</span>
+        <span className={cn('font-mono font-medium', traitColor(value))}>{(value * 100).toFixed(0)}%</span>
       </div>
       <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }} />
+        <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }} />
       </div>
     </div>
   )
@@ -418,11 +418,7 @@ export default function SoulsPage() {
                   {filteredSouls.map(soul => (
                     <div
                       key={soul.name}
-                      className={`flex items-center justify-between rounded-md border px-3 py-2.5 text-sm transition-colors cursor-pointer group ${
-                        currentSoul === soul.name
-                          ? 'border-primary/40 bg-primary/[0.08]'
-                          : 'border-border/60 hover:bg-muted/50'
-                      }`}
+                      className={cn('flex items-center justify-between rounded-md border px-3 py-2.5 text-sm transition-colors cursor-pointer group', currentSoul === soul.name ? 'border-primary/40 bg-primary/[0.08]' : 'border-border/60 hover:bg-muted/50')}
                       onClick={() => setDetailSoul(soul)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailSoul(soul); } }}
                       role="button"
@@ -464,7 +460,7 @@ export default function SoulsPage() {
                       </div>
                       <div className="flex items-center gap-1">
                         {soul.personality && Object.keys(soul.personality).length > 0 && (
-                          <span className={`text-xs font-mono ${traitColor(Object.values(soul.personality).reduce((a, b) => a + b, 0) / Object.values(soul.personality).length)}`}>
+                          <span className={cn('text-xs font-mono', traitColor(Object.values(soul.personality).reduce((a, b) => a + b, 0) / Object.values(soul.personality).length))}>
                             {(Object.values(soul.personality).reduce((a, b) => a + b, 0) / Object.values(soul.personality).length * 100).toFixed(0)}%
                           </span>
                         )}
@@ -527,7 +523,7 @@ export default function SoulsPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{cp.name}</span>
                           {cp.verdict && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${verdictBadge(cp.verdict).className}`}>
+                            <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', verdictBadge(cp.verdict).className)}>
                               {verdictBadge(cp.verdict).label}
                             </span>
                           )}
@@ -757,7 +753,7 @@ export default function SoulsPage() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className={`text-sm font-mono font-medium ${traitColor(avgPersonality)}`}>
+                            <div className={cn('text-sm font-mono font-medium', traitColor(avgPersonality))}>
                               {(avgPersonality * 100).toFixed(0)}%
                             </div>
                             <div className="text-[10px] text-muted-foreground">avg personality</div>
@@ -1003,7 +999,7 @@ export default function SoulsPage() {
                         </div>
                         <span className="w-10 font-mono">{(v2 * 100).toFixed(0)}%</span>
                       </div>
-                      <span className={`w-12 text-right font-mono ${diff > 0 ? 'text-success' : diff < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      <span className={cn('w-12 text-right font-mono', diff > 0 ? 'text-success' : diff < 0 ? 'text-destructive' : 'text-muted-foreground')}>
                         {diff > 0 ? '+' : ''}{(diff * 100).toFixed(0)}%
                       </span>
                     </div>
@@ -1026,7 +1022,7 @@ export default function SoulsPage() {
             <DialogTitle className="flex items-center gap-2">
               {checkpointDetail?.name}
               {checkpointDetail?.verdict && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${verdictBadge(checkpointDetail.verdict).className}`}>
+                <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', verdictBadge(checkpointDetail.verdict).className)}>
                   {verdictBadge(checkpointDetail.verdict).label}
                 </span>
               )}

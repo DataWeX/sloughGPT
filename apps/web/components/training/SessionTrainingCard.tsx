@@ -53,9 +53,19 @@ export function SessionTrainingCard({ addToast }: Props) {
   }, [])
 
   useEffect(() => {
-    for (const id of selected) {
-      if (pairCounts[id] == null) void fetchPairs(id)
+    let active = true
+    const fetchMissing = async () => {
+      for (const id of selected) {
+        if (pairCounts[id] == null) {
+          try {
+            const result = await trainingJobsController.getSessionPairs(id)
+            if (active) setPairCounts(prev => ({ ...prev, [id]: result.count }))
+          } catch { /* silent */ }
+        }
+      }
     }
+    void fetchMissing()
+    return () => { active = false }
   }, [selected, pairCounts, fetchPairs])
 
   const toggleSelect = useCallback((id: string) => {

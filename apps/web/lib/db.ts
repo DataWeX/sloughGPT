@@ -389,6 +389,13 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
       if (breaker.isDead()) return
       try { await apiDelete(docUrl(`message-notes/${sessionId}/${messageId}`)) } catch { /* ignore */ }
     },
+
+    async searchMessageNotes(query: string): Promise<MessageNote[]> {
+      if (breaker.isDead()) return []
+      try {
+        return await apiGet<MessageNote[]>(docUrl('message-notes/search'), { q: query })
+      } catch { return [] }
+    },
   }
 }
 

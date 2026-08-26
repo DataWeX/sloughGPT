@@ -189,7 +189,7 @@ export function VisionStudioDialog({
       setTrainResult({ caption: result.caption, accuracy: result.accuracy })
       refreshReport()
     } catch {
-      setTrainResult({ caption: 'Could not training', accuracy: 0 })
+      setTrainResult({ caption: 'Training failed', accuracy: 0 })
     } finally {
       setTrainLoading(false)
     }

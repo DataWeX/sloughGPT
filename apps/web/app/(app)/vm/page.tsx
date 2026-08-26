@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
-import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, cn } from '@sloughgpt/strui'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -550,7 +550,7 @@ function LinuxTab() {
               </Button>
             </div>
             <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
-              <span className={`inline-block h-2 w-2 rounded-full ${isBooted ? 'bg-success' : 'bg-warning animate-pulse'}`} />
+              <span className={cn('inline-block h-2 w-2 rounded-full', isBooted ? 'bg-success' : 'bg-warning animate-pulse')} />
               {isBooted ? 'Running' : 'Booting...'}
               {stateSaved && <span className="text-success ml-1">Saved</span>}
             </div>
@@ -803,9 +803,7 @@ export default function VMPage() {
             aria-selected={mode === 'assembly'}
             aria-label="Assembly mode"
             onClick={() => setMode('assembly')}
-            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              mode === 'assembly' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors', mode === 'assembly' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
           >
             Assembly
           </button>
@@ -815,9 +813,7 @@ export default function VMPage() {
             aria-selected={mode === 'linux'}
             aria-label="Linux mode"
             onClick={() => setMode('linux')}
-            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              mode === 'linux' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors', mode === 'linux' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
           >
             Linux
           </button>
@@ -1617,9 +1613,7 @@ function VGADisplay({ text, cells }: { text?: string; cells?: { ch: string; fg: 
       </CardHeader>
       <CardContent>
         <div
-          className={`bg-black font-mono text-xs p-3 rounded overflow-y-auto whitespace-pre ${
-            fullScreen ? 'h-[calc(100dvh-8rem)]' : 'h-40'
-          }`}
+          className={cn('bg-black font-mono text-xs p-3 rounded overflow-y-auto whitespace-pre', fullScreen ? 'h-[calc(100dvh-8rem)]' : 'h-40')}
         >
           {cells ? (
             renderCells()

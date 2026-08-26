@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import {
@@ -116,7 +116,7 @@ export default function InferPage() {
       subtitle="Test inference endpoints directly"
       headerRight={
         <div className="flex items-center gap-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${health?.model_loaded ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className={cn('inline-block h-2 w-2 rounded-full', health?.model_loaded ? 'bg-green-500' : 'bg-red-500')} />
           <span className="text-xs text-muted-foreground">{health?.status ?? 'checking...'}</span>
         </div>
       }
@@ -129,9 +129,7 @@ export default function InferPage() {
               type="button"
               onClick={() => setTab(t.key)}
               disabled={!t.available}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
-              }`}
+              className={cn('flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors', tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground disabled:opacity-40')}
             >
               {t.label}
             </button>

@@ -54,6 +54,7 @@ export function APILogsCard({
   const [config, setConfig] = useState<FormConfig>(DEFAULTS)
 
   const start = useCallback(async () => {
+    if (phase === 'extracting' || phase === 'training') return
     setPhase('extracting')
     setProgress(0)
     setLoss(null)
@@ -104,7 +105,7 @@ export function APILogsCard({
       setError(err instanceof Error ? err.message : 'Unknown error')
       addToast('Training failed', 'error')
     }
-  }, [config, addToast])
+  }, [phase, config, addToast])
 
   const stop = useCallback(() => {
     trainingController.cancelFromSessionsSloNet().catch(e => {

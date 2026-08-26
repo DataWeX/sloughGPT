@@ -65,12 +65,15 @@ interface ChatScreenProps {
   noteMap?: Record<string, string>
   onAddNote?: (messageId: string) => void
   onPin?: (messageId: string) => void
+  selectionMode?: boolean
+  selectedMessageIds?: Set<string>
+  onToggleSelection?: (messageId: string) => void
   hasThread?: (id: string) => boolean
   onThread?: (messageId: string) => void
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onReact, onPin, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength, temperature, contextLayers, noteMap, onAddNote, hasThread, onThread }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onReact, onPin, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength, temperature, contextLayers, noteMap, onAddNote, selectionMode, selectedMessageIds, onToggleSelection, hasThread, onThread }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -206,6 +209,9 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onAddNote={onAddNote}
                 hasThread={hasThread?.(message.id)}
                 onThread={onThread}
+                selectionMode={selectionMode}
+                isSelected={selectedMessageIds?.has(message.id)}
+                onToggleSelection={onToggleSelection}
               />
               </React.Fragment>
             )

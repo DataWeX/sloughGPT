@@ -78,7 +78,7 @@ export default function MultimodalPage() {
           if (status.completed > 0) addToast(`Training complete: ${status.completed} images, ${status.errors} errors`, status.errors > 0 ? 'error' : 'success')
         }
       } catch (err) {
-        logger.error('Could not training status poll', { exception: String(err) })
+        logger.error('Could not poll training status', { exception: String(err) })
       }
     }, 2000)
   }, [fetchAll, addToast])
@@ -138,7 +138,7 @@ export default function MultimodalPage() {
       const result = await multimodalController.trainBatchFromDir(dirPath)
       addToast(`Training started: ${result.total_images} images from ${dirPath}`, 'success')
       startPolling()
-    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Could not training'), 'error')
+    } catch (err: unknown) { addToast(extractErrorMessage(err, 'Could not start training'), 'error')
     } finally { setBatchUploading(false) }
   }
 

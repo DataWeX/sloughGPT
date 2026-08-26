@@ -18,7 +18,7 @@ import {
   IconRefresh,
   Skeleton,
 } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, cn } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
@@ -274,7 +274,7 @@ export default function SettingsPage() {
                   }
                 }}
                 placeholder={PUBLIC_API_URL}
-                className={`font-mono text-xs ${settingsErrors.apiUrl ? 'border-destructive ring-destructive/20' : ''}`}
+                className={cn('font-mono text-xs', settingsErrors.apiUrl && 'border-destructive ring-destructive/20')}
                 aria-label="Service URL"
                 aria-invalid={!!settingsErrors.apiUrl}
                 aria-describedby={settingsErrors.apiUrl ? 'apiurl-error' : undefined}
@@ -487,12 +487,12 @@ export default function SettingsPage() {
               <StatCard
                 label="API"
                 value={<span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${apiOk ? 'bg-success' : 'bg-destructive'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', apiOk ? 'bg-success' : 'bg-destructive')} />}
               />
               <StatCard
                 label="Model"
                 value={<span className="font-mono text-xs">{modelLoaded ? (modelType || 'Loaded') : 'None'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${modelLoaded ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', modelLoaded ? 'bg-success' : 'bg-muted-foreground/50')} />}
               />
               <StatCard
                 label="Uptime"
@@ -509,24 +509,24 @@ export default function SettingsPage() {
               <StatCard
                 label="CPU"
                 value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : <Skeleton className="h-5 w-10 inline-block" />}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
               />
               <StatCard
                 label="Memory"
                 value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="Disk"
                 value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
               />
               <StatCard
                 label="GPU"
                 value={<span className="font-mono text-xs">{detailed?.gpu ? `${detailed.gpu.backend.toUpperCase()} · ${detailed.gpu.tier}` : 'None'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50')} />}
               />
             </div>
 

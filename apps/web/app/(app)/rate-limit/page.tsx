@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, KpiGrid, StatCard } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, KpiGrid, StatCard, cn } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { rateLimitController, type RateLimitStatus, type RateLimitCheck } from '@/lib/rate-limit-controller'
 
@@ -61,7 +61,7 @@ export default function RateLimitPage() {
         <StatCard
           label="Status"
           value={status?.enabled ? 'Active' : 'Inactive'}
-          icon={<span className={`inline-block w-2 h-2 rounded-full ${status?.enabled ? 'bg-success' : 'bg-muted-foreground'}`} />}
+          icon={<span className={cn('inline-block w-2 h-2 rounded-full', status?.enabled ? 'bg-success' : 'bg-muted-foreground')} />}
         />
         <StatCard label="Requests/min" value={status?.requests_per_minute?.toString() ?? '—'} />
         <StatCard label="Burst Size" value={status?.burst_size?.toString() ?? '—'} />

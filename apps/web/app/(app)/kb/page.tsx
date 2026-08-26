@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { kbController, type KnowledgeItem, type KnowledgeStats, type TopicItem } from '@/lib/kb-controller'
@@ -281,9 +281,7 @@ export default function KbPage() {
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
-              className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={cn('flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors', tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
             >
               {t.label}
             </button>
@@ -296,9 +294,7 @@ export default function KbPage() {
               <button
                 type="button"
                 onClick={() => { setSelectedTopic(null); setPage(0) }}
-                className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
-                  selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
+                className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors', selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
               >
                 All
               </button>
@@ -307,9 +303,7 @@ export default function KbPage() {
                   key={t.name}
                   type="button"
                   onClick={() => { setSelectedTopic(t.name); setPage(0) }}
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
-                    selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors', selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
                 >
                   {t.name} ({t.count})
                 </button>

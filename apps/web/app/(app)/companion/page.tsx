@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
@@ -256,7 +256,7 @@ export default function CompanionPage() {
             <div className="grid gap-3">
               {Object.entries(TRAIT_LABELS).map(([key, { label, color }]) => (
                 <div key={key} className="flex items-center gap-3">
-                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${color} w-20 text-center`}>
+                  <span className={cn('text-xs font-medium px-1.5 py-0.5 rounded w-20 text-center', color)}>
                     {label}
                   </span>
                    <input
@@ -310,14 +310,10 @@ export default function CompanionPage() {
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
                 >
                   <div
-                    className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
-                      msg.role === 'user'
-                        ? 'bg-primary/10 text-foreground'
-                        : 'bg-muted/50 text-foreground'
-                    }`}
+                    className={cn('max-w-[80%] rounded-lg px-3 py-2 text-sm', msg.role === 'user' ? 'bg-primary/10 text-foreground' : 'bg-muted/50 text-foreground')}
                   >
                     {msg.content}
                   </div>

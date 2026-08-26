@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, cn } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { memoryController, type MemoryItem, type MemoryConfigResult, type MemoryArchiveStats } from '@/lib/memory-controller'
 
@@ -334,15 +334,11 @@ export default function MemoryPage() {
                     key={item.id}
                     type="button"
                     onClick={() => { setSelectedItem(item); setEditContent(item.content); setEditMode(false) }}
-                    className={`w-full rounded border p-2 text-left text-xs transition-colors ${
-                      selectedItem?.id === item.id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:bg-muted/30'
-                    }`}
+                    className={cn('w-full rounded border p-2 text-left text-xs transition-colors', selectedItem?.id === item.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30')}
                   >
                     <div className="flex items-center justify-between">
                       <span className="truncate font-medium max-w-[70%]">{item.topic ?? 'untitled'}</span>
-                      <span className={`text-[10px] ${importanceColor(item.importance ?? 0)}`}>
+                      <span className={cn('text-[10px]', importanceColor(item.importance ?? 0))}>
                         {((item.importance ?? 0) * 100).toFixed(0)}%
                       </span>
                     </div>

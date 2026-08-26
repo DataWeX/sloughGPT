@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse } from '@/lib/benchmark-controller'
@@ -122,9 +122,7 @@ export default function BenchmarkPage() {
               setTab(t)
               if (t === 'responses') handleLoadResponses()
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -146,7 +144,7 @@ export default function BenchmarkPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Model Metrics</CardTitle>
             <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running} aria-label="Refresh metrics">
-              <IconRefresh className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+              <IconRefresh className={cn('h-4 w-4', running && 'animate-spin')} />
             </Button>
           </CardHeader>
           <CardContent>
@@ -201,7 +199,7 @@ export default function BenchmarkPage() {
                 ].map(s => (
                   <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                     <div className="text-xs text-muted-foreground">{s.label}</div>
-                    <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                    <div className={cn('text-lg font-mono font-medium', s.color)}>{s.value}</div>
                   </div>
                 ))}
               </div>

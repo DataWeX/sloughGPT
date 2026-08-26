@@ -2,7 +2,7 @@
 
 import { useState, useCallback , useEffect} from 'react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { sessionController, type SessionInspector } from '@/lib/session-controller'
@@ -347,9 +347,9 @@ export default function SessionPage() {
                 <CardContent>
                   <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {inspector.session.messages.map((msg, i) => (
-                      <div key={i} className={`rounded p-2 text-xs ${msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30'}`}>
+                      <div key={i} className={cn('rounded p-2 text-xs', msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30')}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-[10px] font-medium ${msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground'}`}>
+                          <span className={cn('text-[10px] font-medium', msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground')}>
                             {msg.role}
                           </span>
                         </div>

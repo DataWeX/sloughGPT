@@ -24,6 +24,7 @@ interface KeyboardDeps {
   onDenyTool?: () => void
   onToggleSidebar?: () => void
   onAddNoteToLastMessage?: () => void
+  onOpenNoteSearch?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -35,7 +36,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
     onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
-    onAddNoteToLastMessage,
+    onAddNoteToLastMessage, onOpenNoteSearch,
   } = deps
 
   const depsRef = useRef(deps)
@@ -118,6 +119,10 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'n' && e.shiftKey) {
         e.preventDefault()
         d.onAddNoteToLastMessage?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenNoteSearch?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

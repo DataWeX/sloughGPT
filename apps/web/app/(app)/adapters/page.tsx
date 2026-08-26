@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
@@ -123,7 +123,7 @@ export default function AdaptersPage() {
     <PageContainer
       title="Adapters"
       subtitle="Per-user LoRA adapter management"
-      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
+      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} /></Button>}
     >
       {aggregateResult && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
@@ -161,7 +161,7 @@ export default function AdaptersPage() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Actions</CardTitle>
           <Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh">
-            <IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} />
           </Button>
         </CardHeader>
         <CardContent>
@@ -235,11 +235,7 @@ export default function AdaptersPage() {
                 <div key={i} className="rounded-md border border-border/60 p-3 text-xs space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{String(r.adapter_path ?? '—')}</span>
-                    <span className={`px-1.5 py-0.5 rounded font-medium ${
-                      r.verdict === 'accept' ? 'bg-success/15 text-success' :
-                      r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
+                    <span className={cn('px-1.5 py-0.5 rounded font-medium', r.verdict === 'accept' ? 'bg-success/15 text-success' : r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>
                       {String(r.verdict ?? '—')}
                     </span>
                     {r.timestamp && (

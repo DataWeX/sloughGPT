@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { tokenizerController, type TokenizerStats, type SampleWord } from '@/lib/tokenizer-controller'
@@ -103,7 +103,7 @@ export default function TokenizerPage() {
       setTrainResult(`Trained on ${res.corpus_size} lines. Vocab: ${res.stats.vocab_size}`)
       setStats(res.stats)
     } catch (err) {
-      setTrainResult(err instanceof Error ? err.message : 'Could not training')
+      setTrainResult(err instanceof Error ? err.message : 'Training failed')
     } finally {
       setTraining(false)
     }
@@ -174,9 +174,7 @@ const handleGetMerges = async () => {
             if (t === 'vocab') handleLoadVocab()
             if (t === 'samples') handleLoadSamples()
           }}
-          className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-            tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
+          className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
         >
           {t.charAt(0).toUpperCase() + t.slice(1)}
         </button>

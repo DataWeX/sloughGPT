@@ -35,8 +35,24 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
   }, [addToast])
 
   useEffect(() => {
-    void fetchJobs()
-  }, [fetchJobs])
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await trainingJobsController.list()
+        if (active) setJobs(result ?? [])
+      } catch {
+        if (active) {
+          addToast('Could not fetch training data', 'error')
+          setJobs([])
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   const analytics = useMemo(() => {
     if (jobs.length === 0) return null

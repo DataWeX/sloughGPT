@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { imagesController, type GalleryImage, type ImageStyle } from '@/lib/images-controller'
@@ -91,11 +91,7 @@ export default function ImagesPage() {
                 key={s.key}
                 type="button"
                 onClick={() => setSelectedStyle(s.key as ImageStyle)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  selectedStyle === s.key
-                    ? 'bg-primary/15 text-primary border border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted'
-                }`}
+                className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', selectedStyle === s.key ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted')}
               >
                 {s.name}
               </button>

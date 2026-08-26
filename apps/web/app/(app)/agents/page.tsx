@@ -11,7 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
-import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy } from '@sloughgpt/strui'
+import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy, cn } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
 import { agentsController, type Agent, type OrchestrateTask, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -517,11 +517,7 @@ export default function AgentsPage() {
                   type="button"
                   onClick={() => toggleTool(t, newTools, setNewTools)}
                   aria-pressed={newTools.includes(t)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                    newTools.includes(t)
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                  }`}
+                  className={cn('rounded-full px-3 py-1 text-xs font-medium border transition-colors', newTools.includes(t) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary/50')}
                 >
                   {t.replace(/_/g, ' ')}
                 </button>
@@ -605,7 +601,7 @@ export default function AgentsPage() {
                   </div>
                 ) : (
                   filteredAgents.map(agent => (
-                <div key={agent.id} className={`rounded-lg border p-4 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
+                <div key={agent.id} className={cn('rounded-lg border p-4 space-y-2 transition-colors', execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50')}>
                   {editingId === agent.id ? (
                     <div className="space-y-2">
                       <div>
@@ -638,11 +634,7 @@ export default function AgentsPage() {
                             type="button"
                             onClick={() => toggleTool(t, editTools, setEditTools)}
                             aria-pressed={editTools.includes(t)}
-                            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                              editTools.includes(t)
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                            }`}
+                            className={cn('rounded-full px-3 py-1 text-xs font-medium border transition-colors', editTools.includes(t) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary/50')}
                           >
                             {t.replace(/_/g, ' ')}
                           </button>
@@ -788,11 +780,7 @@ export default function AgentsPage() {
                           prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
                         )
                       }}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
-                        orchAgentIds.includes(a.id)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                      }`}
+                      className={cn('rounded-full px-2.5 py-1 text-xs font-medium border transition-colors', orchAgentIds.includes(a.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary/50')}
                     >
                       {a.name}
                     </button>
@@ -814,11 +802,7 @@ export default function AgentsPage() {
             {/* Phase indicator */}
             {orchPhase && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className={`inline-block h-2 w-2 rounded-full ${
-                  orchPhase === 'COMPLETE' ? 'bg-success' :
-                  orchPhase === 'ERROR' ? 'bg-destructive' :
-                  'bg-warning animate-pulse'
-                }`} />
+                <span className={cn('inline-block h-2 w-2 rounded-full', orchPhase === 'COMPLETE' ? 'bg-success' : orchPhase === 'ERROR' ? 'bg-destructive' : 'bg-warning animate-pulse')} />
                 {orchPhase === 'PLAN' && 'Planning subtasks...'}
                 {orchPhase === 'EXECUTE' && `Executing level ${orchLevel}/${orchTotalLevels}...`}
                 {orchPhase === 'COMPOSE' && 'Composing final response...'}
@@ -835,12 +819,7 @@ export default function AgentsPage() {
                   const status = orchTaskStatuses[task.id] || 'pending'
                   return (
                     <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                        status === 'completed' ? 'bg-success' :
-                        status === 'in_progress' ? 'bg-warning animate-pulse' :
-                        status === 'failed' ? 'bg-destructive' :
-                        'bg-muted-foreground/30'
-                      }`} />
+                      <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', status === 'completed' ? 'bg-success' : status === 'in_progress' ? 'bg-warning animate-pulse' : status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30')} />
                       <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
                       <span className="flex-1 truncate">{task.description}</span>
                       {task.depends_on && task.depends_on.length > 0 && (
@@ -880,14 +859,14 @@ export default function AgentsPage() {
                 <button
                   type="button"
                   onClick={() => setRunViewMode('list')}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
+                  className={cn('text-xs px-2 py-1 rounded transition-colors', runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80')}
                 >
                   List
                 </button>
                 <button
                   type="button"
                   onClick={() => setRunViewMode('timeline')}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
+                  className={cn('text-xs px-2 py-1 rounded transition-colors', runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80')}
                 >
                   Timeline
                 </button>
@@ -916,7 +895,7 @@ export default function AgentsPage() {
                             key={s ?? 'all'}
                             type="button"
                             onClick={() => setRunStatusFilter(s)}
-                            className={`text-xs px-2 py-1 rounded-full border transition-colors ${runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                            className={cn('text-xs px-2 py-1 rounded-full border transition-colors', runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
                           >
                             {s === null ? 'All' : s}
                           </button>
@@ -938,7 +917,7 @@ export default function AgentsPage() {
                           <button
                             type="button"
                             onClick={() => setRunAgentFilter(null)}
-                            className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                            className={cn('text-xs px-2 py-1 rounded border transition-colors', runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
                           >
                             All agents
                           </button>
@@ -947,7 +926,7 @@ export default function AgentsPage() {
                               key={name}
                               type="button"
                               onClick={() => setRunAgentFilter(runAgentFilter === name ? null : name)}
-                              className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                              className={cn('text-xs px-2 py-1 rounded border transition-colors', runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
                             >
                               {name}
                             </button>
@@ -966,14 +945,14 @@ export default function AgentsPage() {
                 const expanded = expandedRun === run.id
                 const statusColor = statusDotColor(run.status)
                 return (
-                  <div key={run.id} className={`rounded-lg border border-border/60 transition-colors ${expanded ? 'border-primary/40' : 'hover:bg-muted/50'}`}>
+                  <div key={run.id} className={cn('rounded-lg border border-border/60 transition-colors', expanded ? 'border-primary/40' : 'hover:bg-muted/50')}>
                     <button
                       type="button"
                       className="w-full flex items-center gap-2 px-3 py-2 text-left"
                       onClick={() => setExpandedRun(expanded ? null : run.id)}
                       aria-expanded={expanded}
                     >
-                      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusColor}`} />
+                      <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', statusColor)} />
                       <span className="flex-1 truncate text-sm">{run.goal}</span>
                       <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                         {run.completed_count}/{run.completed_count + run.failed_count} tasks
@@ -1016,11 +995,7 @@ export default function AgentsPage() {
                                 <p className="text-xs font-medium text-muted-foreground">Tasks ({run.tasks.length})</p>
                                 {run.tasks.map(task => (
                                   <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                                      task.status === 'completed' ? 'bg-success' :
-                                      task.status === 'failed' ? 'bg-destructive' :
-                                      'bg-muted-foreground/30'
-                                    }`} />
+                                    <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', task.status === 'completed' ? 'bg-success' : task.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30')} />
                                     <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
                                     <span className="flex-1 truncate">{task.description}</span>
                                     {task.result_preview && (
@@ -1062,7 +1037,7 @@ export default function AgentsPage() {
                         return (
                           <div key={run.id} className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium ${statusColor}`}>{run.status}</span>
+                              <span className={cn('text-xs font-medium', statusColor)}>{run.status}</span>
                               <span className="text-sm flex-1 truncate">{run.goal}</span>
                               {run.started_at && (
                                 <span className="text-xs text-muted-foreground/70">
@@ -1076,11 +1051,11 @@ export default function AgentsPage() {
                                 const taskColor = taskDotColor(task.status)
                                 return (
                                   <div key={task.id} className="relative flex items-center gap-3">
-                                    <div className={`absolute -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-background ${taskColor}`} />
+                                    <div className={cn('absolute -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-background', taskColor)} />
                                     <span className="text-xs text-muted-foreground w-8 shrink-0">#{i + 1}</span>
                                     <span className="text-xs text-muted-foreground min-w-[64px] shrink-0">{task.agent}</span>
                                     <span className="text-xs flex-1 truncate">{task.description}</span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded ${taskBadgeStyle(task.status)}`}>
+                                    <span className={cn('text-xs px-1.5 py-0.5 rounded', taskBadgeStyle(task.status))}>
                                       {task.status}
                                     </span>
                                   </div>
