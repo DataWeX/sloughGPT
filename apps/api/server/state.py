@@ -22,6 +22,7 @@ from domains.infrastructure.server_state import get_server_state
 _DIRECT_REFS = frozenset({
     "model", "tokenizer", "model_type", "checkpoint",
     "soul_engine", "current_soul", "gen_config", "model_request_logger",
+    "provider",
 })
 
 # Names that map to plain attributes on ServerState
@@ -31,7 +32,7 @@ _PLAIN_ATTRS = frozenset({
 
 # Legacy names that no longer exist on ServerState but may be referenced
 _DEPRECATED = frozenset({
-    "autoload_skipped", "_self_train_proc", "provider",
+    "autoload_skipped", "_self_train_proc",
 })
 
 

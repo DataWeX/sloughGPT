@@ -92,6 +92,7 @@ class ServerState:
         self.current_soul = AtomicRef(None, "current_soul")
         self.gen_config = AtomicRef(None, "gen_config")
         self.model_request_logger = AtomicRef(None, "model_request_logger")
+        self.provider = AtomicRef(None, "provider")
 
         # Non-atomic fields (written once at startup, read-only after)
         self.torch_available: bool = False
