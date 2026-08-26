@@ -28,6 +28,7 @@ interface KeyboardDeps {
   onOpenShortcuts?: () => void
   onOpenTemplates?: () => void
   onOpenConversationSearch?: () => void
+  onOpenStats?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -39,7 +40,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
     onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
-    onAddNoteToLastMessage, onOpenNoteSearch, onOpenShortcuts, onOpenTemplates, onOpenConversationSearch,
+    onAddNoteToLastMessage, onOpenNoteSearch, onOpenShortcuts, onOpenTemplates, onOpenConversationSearch, onOpenStats,
   } = deps
 
   const depsRef = useRef(deps)
@@ -138,6 +139,10 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'c' && e.shiftKey) {
         e.preventDefault()
         d.onOpenConversationSearch?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenStats?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
