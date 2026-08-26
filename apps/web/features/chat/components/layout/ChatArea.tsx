@@ -61,6 +61,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   setConversationSearchQuery?: (query: string) => void
   conversationSearchOpen?: boolean
   setConversationSearchOpen?: (open: boolean) => void
+  onQuickReply?: (messageId: string) => void
 }
 
 export interface ChatAreaRef {

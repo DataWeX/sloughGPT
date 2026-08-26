@@ -46,6 +46,9 @@ export interface MessageBubbleProps {
   onAddNote?: (messageId: string) => void
   hasThread?: boolean
   onThread?: (messageId: string) => void
+  onForward?: (content: string) => void
+  onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
+  onQuickReply?: (messageId: string) => void
   selectionMode?: boolean
   isSelected?: boolean
   onToggleSelection?: (messageId: string) => void
@@ -86,6 +89,9 @@ export const MessageBubble = memo(function MessageBubble({
   onAddNote,
   hasThread = false,
   onThread,
+  onForward,
+  onExportMessageAsMarkdown,
+  onQuickReply,
   selectionMode = false,
   isSelected = false,
   onToggleSelection,
@@ -280,6 +286,7 @@ export const MessageBubble = memo(function MessageBubble({
           temperature={temperature}
           onAddNote={onAddNote}
           hasNote={hasNote}
+          onQuickReply={onQuickReply}
         />
       )}
 
