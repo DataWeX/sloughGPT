@@ -29,13 +29,14 @@ interface ChatInputRowProps {
   onPDFError?: (error: string) => void
   hasContent: boolean
   onExecuteCommand?: (cmd: ChatCommand, args: string[]) => void
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
 export const ChatInputRow = memo(function ChatInputRow({
   value, onChange, onSend, onStop, onCancel,
   loading, disabled, placeholder,
   textareaRef, onImage, onTranscript, onAudioRecorded, onAudioTranscript, onGeneratedImage,
-  onPDFAnalysis, onPDFError, hasContent, onExecuteCommand,
+  onPDFAnalysis, onPDFError, hasContent, onExecuteCommand, onKeyDown,
 }: ChatInputRowProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false)
@@ -127,6 +128,7 @@ export const ChatInputRow = memo(function ChatInputRow({
         disabled={disabled}
         textareaRef={textareaRef}
         suppressEnter={showSlash || showMention}
+        onKeyDown={onKeyDown}
       />
       {value.length > 0 && (
         <span

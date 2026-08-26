@@ -80,9 +80,9 @@ export function WebhooksCard({ addToast }: Props) {
       setDeadLetters(deads.dead_letters ?? [])
       setStats(statsResult)
     } catch {
-      // Silently fail
+      addToast('Could not load webhook retry data', 'error')
     }
-  }, [])
+  }, [addToast])
 
   useEffect(() => {
     let active = true

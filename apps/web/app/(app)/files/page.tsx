@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -21,7 +21,7 @@ export default function FilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     try {
       setLoadError(null)
       setFiles(await filesController.list())
@@ -30,9 +30,9 @@ export default function FilesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchFiles() }, [])
+  useEffect(() => { fetchFiles() }, [fetchFiles])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

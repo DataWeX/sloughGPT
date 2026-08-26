@@ -78,7 +78,7 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <DialogDescription>Recent features and improvements across builds.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+        <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar-container">
           {whatsNewItems.map(item => {
             const isUnseen = !seen.has(item.id)
             return (

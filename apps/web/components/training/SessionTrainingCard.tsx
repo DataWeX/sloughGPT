@@ -48,8 +48,10 @@ export function SessionTrainingCard({ addToast }: Props) {
     try {
       const result = await trainingJobsController.getSessionPairs(sessionId)
       setPairCounts(prev => ({ ...prev, [sessionId]: result.count }))
-    } catch { /* silent */ }
-  }, [])
+    } catch {
+      addToast('Could not load pair count', 'error')
+    }
+  }, [addToast])
 
   useEffect(() => {
     let active = true
@@ -59,13 +61,15 @@ export function SessionTrainingCard({ addToast }: Props) {
           try {
             const result = await trainingJobsController.getSessionPairs(id)
             if (active) setPairCounts(prev => ({ ...prev, [id]: result.count }))
-          } catch { /* silent */ }
+          } catch {
+            if (active) addToast('Could not load pair count', 'error')
+          }
         }
       }
     }
     void fetchMissing()
     return () => { active = false }
-  }, [selected, pairCounts, fetchPairs])
+  }, [selected])
 
   const toggleSelect = useCallback((id: string) => {
     setSelected(prev => {

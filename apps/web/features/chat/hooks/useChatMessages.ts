@@ -515,6 +515,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setContextLayers([])
     setLoading(true)
 
+    // Auto-name conversation from first user message
+    if (messagesRef.current.length === 0 && text.trim()) {
+      const title = text.trim().slice(0, 50).replace(/[^\w\s-]/g, '').trim()
+      if (title.length > 5) {
+        sessions.renameSession(sessionIdRef.current!, title)
+      }
+    }
+
     const parts: string[] = []
     if (customSystemPrompt) {
       parts.push(`[System Override]\n${customSystemPrompt}`)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { downloadJson } from '@/lib/download-utils'
 import { formatDuration } from './formatDuration'
@@ -110,7 +110,11 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <p className="text-xs text-muted-foreground">Loading...</p>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         ) : jobs.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">
             No training jobs yet. Start training to see history.

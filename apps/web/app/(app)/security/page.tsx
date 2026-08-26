@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -49,7 +49,7 @@ export default function SecurityPage() {
     return f ? `&event_type=${encodeURIComponent(f)}` : ''
   }
 
-  const fetchData = async (useHistory = false) => {
+  const fetchData = useCallback(async (useHistory = false) => {
     setLoading(true)
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
@@ -65,7 +65,7 @@ export default function SecurityPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const toggleHistory = () => {
     const next = !historyMode
@@ -93,7 +93,7 @@ export default function SecurityPage() {
     }
   }
 
-  useEffect(() => { fetchData(false) }, [])
+  useEffect(() => { fetchData(false) }, [fetchData])
 
   const filteredLogs = filter.trim()
     ? logs.filter(l => l.event_type?.toLowerCase().includes(filter.toLowerCase()))

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingBuild } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
 
@@ -107,7 +107,11 @@ export function TrainingBuildsCard({ addToast }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <p className="text-xs text-muted-foreground">Loading...</p>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
         ) : builds.length === 0 ? (
           <p className="text-xs text-muted-foreground">No builds found. Start training to create builds.</p>
         ) : (

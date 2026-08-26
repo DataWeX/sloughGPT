@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -17,7 +17,7 @@ export default function RegistryPage() {
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
         registryController.list().catch(() => []),
@@ -32,9 +32,9 @@ export default function RegistryPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const filteredModels = models.filter(m =>
     m.model_id.toLowerCase().includes(searchQuery.toLowerCase()) ||

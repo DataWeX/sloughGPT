@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -17,7 +17,7 @@ export default function WorkflowPage() {
   const [triggering, setTriggering] = useState(false)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     setLoading(true)
     try {
       setStatus(await workflowController.status())
@@ -26,9 +26,9 @@ export default function WorkflowPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchStatus() }, [])
+  useEffect(() => { fetchStatus() }, [fetchStatus])
 
   const handleToggle = async () => {
     setToggling(true)

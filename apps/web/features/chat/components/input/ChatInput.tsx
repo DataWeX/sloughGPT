@@ -1,11 +1,26 @@
 'use client'
 
-import { useRef, useCallback, useEffect, memo } from 'react'
+import { useRef, useCallback, useEffect, useState, memo } from 'react'
 import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
 import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
+
+const HISTORY_KEY = 'chat-input-history'
+const MAX_HISTORY = 50
+
+function loadHistory(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function saveHistory(history: string[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY)))
+}
 
 export interface ChatInputProps {
   value: string
@@ -50,13 +65,27 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pendingSendRef = useRef(false)
+  const [history, setHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    setHistory(loadHistory())
+  }, [])
 
   const handleSend = useCallback(() => {
+    if (value.trim()) {
+      const newHistory = [...history, value.trim()]
+      saveHistory(newHistory)
+      setHistory(newHistory)
+      setHistoryIndex(-1)
+      setDraft('')
+    }
     onSend()
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [onSend])
+  }, [onSend, value, history])
 
   const handleVoiceTranscript = useCallback((text: string) => {
     onChange(value ? `${value} ${text}` : text)
@@ -88,6 +117,29 @@ export const ChatInput = memo(function ChatInput({
       onRemoveImage(id)
     }
   }, [onRemoveImage])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'ArrowUp' && !e.shiftKey && value === '' && history.length > 0) {
+      e.preventDefault()
+      const newIndex = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1)
+      if (historyIndex === -1) setDraft(value)
+      setHistoryIndex(newIndex)
+      onChange(history[newIndex])
+    } else if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex !== -1) {
+      e.preventDefault()
+      if (historyIndex === history.length - 1) {
+        setHistoryIndex(-1)
+        onChange(draft)
+      } else {
+        const newIndex = historyIndex + 1
+        setHistoryIndex(newIndex)
+        onChange(history[newIndex])
+      }
+    } else if (e.key === 'Escape' && historyIndex !== -1) {
+      setHistoryIndex(-1)
+      onChange(draft)
+    }
+  }, [value, history, historyIndex, draft, onChange])
 
   const isDisabled = loading || health === 'offline'
   const hasModel = health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
@@ -142,6 +194,7 @@ export const ChatInput = memo(function ChatInput({
           onPDFError={onPDFError}
           hasContent={hasContent}
           onExecuteCommand={onExecuteCommand}
+          onKeyDown={handleKeyDown}
         />
 
         {!loading && !value && hasModel && (
