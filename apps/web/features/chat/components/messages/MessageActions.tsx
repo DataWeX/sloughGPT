@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown, IconSpeaker, IconRewrite, IconExplain, IconTranslate, IconPlay, IconMapPin, IconCheckCircle, IconMessage } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconThumbUp, IconThumbDown, IconSpeaker, IconRewrite, IconExplain, IconTranslate, IconPlay, IconMapPin, IconCheckCircle, IconMessage, IconExport, IconExternalLink } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
@@ -30,6 +30,8 @@ interface MessageActionsProps {
   onAddNote?: (messageId: string) => void
   hasNote?: boolean
   onQuickReply?: (messageId: string) => void
+  onForward?: (content: string) => void
+  onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
 }
 
 function ThumbsUpIcon({ className, animated }: { className?: string; animated?: boolean }) {
@@ -109,7 +111,7 @@ const TRANSLATE_LANGUAGES = [
   { code: 'ru', label: 'Russian' },
 ]
 
-export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, temperature = 0.7, onAddNote, hasNote, onQuickReply }: MessageActionsProps) {
+export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, temperature = 0.7, onAddNote, hasNote, onQuickReply, onForward, onExportMessageAsMarkdown }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)
@@ -259,6 +261,30 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           aria-label="Reply to this message"
         >
           <IconMessage className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
+      )}
+
+      {onForward && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onForward(content)}
+          className="p-2"
+          aria-label="Forward message"
+        >
+          <IconExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
+      )}
+
+      {onExportMessageAsMarkdown && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onExportMessageAsMarkdown(messageId, content, role || 'user', '')}
+          className="p-2"
+          aria-label="Export as Markdown"
+        >
+          <IconExport className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       )}
 
