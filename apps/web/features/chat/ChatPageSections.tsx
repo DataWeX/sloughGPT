@@ -27,6 +27,7 @@ const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/
 const ThreadPanel = dynamicNext(() => import('@/features/chat/components/ThreadPanel').then(m => m.ThreadPanel), { ssr: false })
 const KeyboardShortcutsPanel = dynamicNext(() => import('@/features/chat/components/dialogs/KeyboardShortcutsPanel').then(m => m.KeyboardShortcutsPanel), { ssr: false })
 const TemplateDialog = dynamicNext(() => import('@/features/chat/components/dialogs/TemplateDialog').then(m => m.TemplateDialog), { ssr: false })
+const ChatStatsPanel = dynamicNext(() => import('@/features/chat/components/dialogs/ChatStatsPanel').then(m => m.ChatStatsPanel), { ssr: false })
 
 interface ChatPageSectionProps {
   controller: ChatPageController
@@ -340,6 +341,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
     noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
     shortcutsOpen, setShortcutsOpen,
     templatesOpen, setTemplatesOpen,
+    statsOpen, setStatsOpen,
     activeThreadMessageId, activeThread, activeThreadMessages, onStartThread, onReplyInThread, onCloseThread,
   } = controller
 
@@ -421,6 +423,12 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
           chat.sendMessage(content)
           setTemplatesOpen(false)
         }}
+      />
+
+      <ChatStatsPanel
+        open={statsOpen}
+        onClose={() => setStatsOpen(false)}
+        messages={chat.messages}
       />
     </>
   )

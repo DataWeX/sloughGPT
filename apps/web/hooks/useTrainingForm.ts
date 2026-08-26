@@ -262,6 +262,8 @@ export function useTrainingForm(
       progress: 0, created_at: now, status_message: 'Starting...',
     }])
 
+    const clearOptimistic = () => setOptimisticJobs(prev => prev.filter(j => j.id !== tempId))
+
     if (method === 'finetune') {
       session.startFineTune({
         model: selectedModel || 'gpt2',
@@ -287,6 +289,8 @@ export function useTrainingForm(
         checkpoints.fetchCheckpoints()
       })
     }
+
+    setTimeout(clearOptimistic, 5000)
   }, [method, inputMode, textInput, trainingEpochs, trainingLR, trainingBatchSize,
       selectedModel, useLoRA, datasets.selectedDataset, visualVisionEncoder, visualLLM,
       visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints, resumeCheckpoint])

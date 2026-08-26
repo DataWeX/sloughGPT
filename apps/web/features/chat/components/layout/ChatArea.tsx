@@ -118,6 +118,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     const scrollRef = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const [isNearBottom, setIsNearBottom] = useState(true)
+    const [autoScroll, setAutoScroll] = useState(true)
     const prevMessageCountRef = useRef(messages.length)
     const prevLastContentLenRef = useRef(0)
 
@@ -147,7 +148,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
       const contentGrew = lastContentLen > prevLastContentLenRef.current
       const msgAdded = messages.length > prevMessageCountRef.current
 
-      if (isNearBottom && (msgAdded || contentGrew)) {
+      if (isNearBottom && autoScroll && (msgAdded || contentGrew)) {
         cancelAnimationFrame(rafRef.current)
         rafRef.current = requestAnimationFrame(() => {
           scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
@@ -210,17 +211,33 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
           />
 
           {filteredMessages.length > 0 && !isNearBottom && (
-            <button
-              type="button"
-              onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
-              aria-label="Jump to latest messages"
-            >
-              <IconChevronDown className="h-3.5 w-3.5" />
-              {filteredMessages.length > 0 && (
-                <span className="text-muted-foreground">{filteredMessages.length}</span>
-              )}
-            </button>
+            <div className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAutoScroll(!autoScroll)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1.5 text-[10px] font-medium rounded-full border backdrop-blur-sm shadow-lg transition-all",
+                  autoScroll
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-background/80 border-border text-muted-foreground"
+                )}
+                aria-label={autoScroll ? "Disable auto-scroll" : "Enable auto-scroll"}
+              >
+                <IconChevronDown className="h-3 w-3" />
+                {autoScroll ? 'Auto' : 'Manual'}
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
+                aria-label="Jump to latest messages"
+              >
+                <IconChevronDown className="h-3.5 w-3.5" />
+                {filteredMessages.length > 0 && (
+                  <span className="text-muted-foreground">{filteredMessages.length}</span>
+                )}
+              </button>
+            </div>
           )}
         </div>
 

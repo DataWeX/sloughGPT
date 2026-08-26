@@ -203,7 +203,7 @@ export function APILogsCard({
               <Button size="sm" onClick={loadForChat} disabled={loadingModel}>
                 {loadingModel ? 'Loading...' : 'Load for chat'}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setPhase('idle')}>
+            <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setError(null) }}>
                 Train another
               </Button>
             </div>

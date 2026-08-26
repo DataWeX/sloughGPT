@@ -155,7 +155,7 @@ export function FeedbackTrainCard({ addToast }: Props) {
               <Button size="sm" onClick={handleLoad} disabled={loadingModel}>
                 {loadingModel ? 'Loading...' : 'Load for chat'}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setJob(null) }}>
+            <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setJob(null); setError(null) }}>
                 Train again
               </Button>
             </div>

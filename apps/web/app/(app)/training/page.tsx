@@ -160,7 +160,7 @@ export default function TrainingPage() {
     for (const job of form.allJobs) {
       const prevStatus = prev.get(job.id)
       if (prevStatus === 'running' && job.status === 'completed') {
-        if (Notification.permission === 'granted') {
+        if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Training Complete', {
             body: `${job.name || 'Training job'} finished successfully`,
             icon: '/favicon.svg',

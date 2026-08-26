@@ -29,6 +29,7 @@ interface MessageActionsProps {
   temperature?: number
   onAddNote?: (messageId: string) => void
   hasNote?: boolean
+  onQuickReply?: (messageId: string) => void
 }
 
 function ThumbsUpIcon({ className, animated }: { className?: string; animated?: boolean }) {
@@ -108,7 +109,7 @@ const TRANSLATE_LANGUAGES = [
   { code: 'ru', label: 'Russian' },
 ]
 
-export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, temperature = 0.7, onAddNote, hasNote }: MessageActionsProps) {
+export const MessageActions = memo(function MessageActions({ content, messageId, role, onCopy, onRegenerate, onRegenerateWithOptions, onThumbsUp, onThumbsDown, onEdit, onSuggestionClick, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, temperature = 0.7, onAddNote, hasNote, onQuickReply }: MessageActionsProps) {
   const [copied, setCopied] = useState(false)
   const [thumbsUp, setThumbsUp] = useState(false)
   const [thumbsDown, setThumbsDown] = useState(false)
@@ -246,6 +247,18 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
           aria-pressed={copied}
         >
           {copied ? <IconCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <IconCopy className="h-3.5 w-3.5" aria-hidden="true" />}
+        </Button>
+      )}
+
+      {onQuickReply && role === 'assistant' && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onQuickReply(messageId)}
+          className="p-2"
+          aria-label="Reply to this message"
+        >
+          <IconMessage className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       )}
 
