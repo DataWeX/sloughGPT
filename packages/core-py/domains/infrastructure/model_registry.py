@@ -169,11 +169,12 @@ class ModelRegistry:
         """List all registered models with their status and metrics."""
         with self._lock:
             servers = list(self._servers.items())
+            default_id = self._default_id
         result = []
         for mid, server in servers:
             entry = server.get_metrics_snapshot()
             entry["model_id"] = mid
-            entry["is_default"] = mid == self._default_id
+            entry["is_default"] = mid == default_id
             result.append(entry)
         return result
 

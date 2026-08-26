@@ -183,6 +183,14 @@ class ModelLoader:
                     "quant_bits": quant_bits if quantize else None,
                 },
             )
+        except FileNotFoundError as e:
+            logger.warning("SloNet .slnc file vanished during load: %s", e, extra={"tag": "MODEL"})
+            return LoadResult(
+                success=False,
+                model_id=model_id,
+                model_type="slonet",
+                error=f"Model file disappeared during loading: {e}",
+            )
         except Exception as e:
             logger.warning("SloNet load failed: %s", e, extra={"tag": "MODEL"})
             return LoadResult(
@@ -206,8 +214,11 @@ class ModelLoader:
         if not native_dir.exists():
             return None
 
-        # Find all .soul files, sorted by modification time (newest first)
-        soul_files = sorted(native_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True)
+        try:
+            soul_files = sorted(native_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True)
+        except FileNotFoundError as e:
+            logger.warning("Native .soul directory removed during scan: %s", e, extra={"tag": "MODEL"})
+            return None
         if not soul_files:
             return None
 
