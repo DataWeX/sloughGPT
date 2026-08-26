@@ -1260,6 +1260,8 @@ class InferenceRouter:
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "result": "ERROR", "error": str(e)}})
 
             try:
+                logger.info("CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start", corr_id,
+                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "PROVIDER_SETUP"}})
 
                 provider = get_provider("default")
 
@@ -1287,9 +1289,17 @@ class InferenceRouter:
                     import state as _cs_state
                     _coalescer = get_coalescer()
                     _coalesce_key = _coalescer.hash(provider_messages, gen_params, req.max_tokens, _cs_state.model_type)
+                    logger.info("CHAT_PIPELINE corr=%s step=COALESCER_START key=%s", corr_id, _coalesce_key[:16],
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_START", "key": _coalesce_key[:16]}})
                     existing = await _coalescer.start(_coalesce_key)
+                    logger.info("CHAT_PIPELINE corr=%s step=COALESCER_START done existing=%s", corr_id, existing is not None,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_START", "result": "DONE", "existing": existing is not None}})
                     if existing is not None:
+                        logger.info("CHAT_PIPELINE corr=%s step=COALESCER_JOIN existing_key=%s", corr_id, _coalesce_key[:16],
+                            extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_JOIN", "key": _coalesce_key[:16]}})
                         await existing.event.wait()
+                        logger.info("CHAT_PIPELINE corr=%s step=COALESCER_JOIN done error=%s", corr_id, existing.error,
+                            extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_JOIN", "result": "DONE", "error": str(existing.error) if existing.error else None}})
                         if existing.error is not None:
                             yield sse_error("chat", "ERROR", str(existing.error), code="E_INFRA_GENERATION", http_status=500)
                             return
@@ -1305,6 +1315,8 @@ class InferenceRouter:
                     _event_counter = 0
                     _cached_tokens: list[str] = []
 
+                    logger.info("CHAT_PIPELINE corr=%s step=COALESCER_WAIT done ready_for_provider", corr_id,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_WAIT", "result": "DONE"}})
                     try:
                         try:
                             _control_check_interval = 0.1  # Check for controls every 100ms
