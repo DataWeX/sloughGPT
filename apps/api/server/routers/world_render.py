@@ -34,6 +34,7 @@ class WorldRenderRouter:
         self.router = APIRouter(prefix="/world", tags=["world"])
         self._world = None
         self._scene = None
+        self._last_render_bridge = None
         self._register_routes()
 
     def _register_routes(self):
@@ -93,11 +94,15 @@ class WorldRenderRouter:
         try:
             from domains.shell.world_render import RenderBridge, RenderConfig
             import numpy as np
+            from PIL import Image
+            import io
 
             cfg = RenderConfig(
                 width=config.width if config else 160,
                 height=config.height if config else 120,
                 samples=config.samples if config else 16,
+                camera_height=config.camera_height if config else 40.0,
+                camera_distance=config.camera_distance if config else 30.0,
             )
             bridge = RenderBridge(cfg)
 
@@ -107,13 +112,15 @@ class WorldRenderRouter:
             image = bridge.render()
 
             img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
-            header = f"P6\n{img_uint8.shape[1]} {img_uint8.shape[0]}\n255\n"
-            ppm_data = header.encode() + img_uint8.tobytes()
+            pil_img = Image.fromarray(img_uint8, 'RGB')
+            buf = io.BytesIO()
+            pil_img.save(buf, format='PNG')
+            png_data = buf.getvalue()
 
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("world.render_image", resource="ppm", detail=f"elapsed={_elapsed_ms:.0f}ms size={img_uint8.shape}")
+            safe_audit_log("world.render_image", resource="png", detail=f"elapsed={_elapsed_ms:.0f}ms size={img_uint8.shape}")
 
-            return Response(content=ppm_data, media_type="image/x-portable-pixmap")
+            return Response(content=png_data, media_type="image/png")
         except Exception as e:
             classify_and_raise(e, source="render_world_image")
 
@@ -127,10 +134,19 @@ class WorldRenderRouter:
                 width=config.width if config else 160,
                 height=config.height if config else 120,
                 samples=config.samples if config else 16,
+                camera_height=config.camera_height if config else 40.0,
+                camera_distance=config.camera_distance if config else 30.0,
             )
-            bridge = NeuralRenderBridge(cfg)
 
             world = self._get_world()
+
+            if self._last_render_bridge is not None:
+                bridge = NeuralRenderBridge(cfg)
+                bridge._scene = self._last_render_bridge._scene
+                bridge.build_scene(world)
+            else:
+                bridge = NeuralRenderBridge(cfg)
+                bridge.build_scene(world)
 
             bridge.render_tick(world)
             neural_result = bridge.process_neural()
@@ -164,6 +180,7 @@ class WorldRenderRouter:
             if config and config.render:
                 from domains.shell.world_render import RenderBridge
                 render_bridge = RenderBridge()
+                self._last_render_bridge = render_bridge
 
             sim = Simulation(scene, max_ticks=config.max_ticks if config else 1,
                            render_bridge=render_bridge)
@@ -183,9 +200,15 @@ class WorldRenderRouter:
     async def get_stats(self) -> dict:
         """Get world rendering statistics."""
         try:
+            world = self._get_world()
+            solid_count = int((world.material > 0).sum()) if world is not None else 0
             return success_response(data={
                 "status": "available",
                 "components": ["RenderBridge", "NeuralRenderBridge", "WorldToSceneMapper"],
+                "world": {
+                    "solid_blocks": solid_count,
+                    "tick": self._scene.tick if self._scene else 0,
+                },
                 "materials": {
                     "air": 0, "ground": 1, "food": 2, "toxic": 3,
                     "signal": 4, "nest": 5, "water": 6,

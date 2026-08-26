@@ -27,6 +27,7 @@ class AtomicRef:
         self._lock = Lock()
         self._name = name
         self._listeners: list[Callable[[T, T], None]] = []
+        self._listeners_lock = Lock()
         self._version = 0
 
     def get(self) -> T:
@@ -38,7 +39,9 @@ class AtomicRef:
             old = self._value
             self._value = value
             self._version += 1
-        for listener in self._listeners:
+        with self._listeners_lock:
+            listeners = list(self._listeners)
+        for listener in listeners:
             try:
                 listener(old, value)
             except Exception as e:
@@ -51,7 +54,9 @@ class AtomicRef:
             new = fn(old)
             self._value = new
             self._version += 1
-        for listener in self._listeners:
+        with self._listeners_lock:
+            listeners = list(self._listeners)
+        for listener in listeners:
             try:
                 listener(old, new)
             except Exception as e:
@@ -64,7 +69,8 @@ class AtomicRef:
             return self._version
 
     def on_change(self, listener: Callable[[T, T], None]) -> None:
-        self._listeners.append(listener)
+        with self._listeners_lock:
+            self._listeners.append(listener)
 
 
 class ServerState:

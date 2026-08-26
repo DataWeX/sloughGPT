@@ -41,7 +41,7 @@ export const worldController = {
   },
 
   async renderImage(config?: RenderConfig): Promise<Blob> {
-    const res = await fetch(`${PUBLIC_API_URL}/world/render/image`, {
+    const res = await authFetch(`${PUBLIC_API_URL}/world/render/image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config ?? {}),
