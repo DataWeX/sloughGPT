@@ -344,7 +344,12 @@ def _search_sessions_sync(q: str, limit: int) -> list:
     for sdir in search_dirs:
         if not sdir.is_dir():
             continue
-        for f in sorted(sdir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        def _safe_mtime(p: Path) -> float:
+            try:
+                return p.stat().st_mtime
+            except (OSError, ValueError):
+                return 0.0
+        for f in sorted(sdir.glob("*.json"), key=_safe_mtime, reverse=True):
             if len(results) >= limit:
                 break
             try:

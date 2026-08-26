@@ -199,12 +199,15 @@ class SoulsRouter:
             if not self._VALID_CKPT_NAME.match(checkpoint_name) or '..' in checkpoint_name:
                 return {"status": "invalid_name"}
             checkpoint_file = (checkpoints_dir / checkpoint_name).resolve()
-            if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str(checkpoints_dir.resolve())):
+            if not str(checkpoint_file).startswith(str(checkpoints_dir.resolve())):
                 return {"status": "not_found", "path": str(checkpoint_file)}
 
             # Use SloNet import for .soul files
             from domains.training.slonet import import_from_sou
-            soul_net = import_from_sou(str(checkpoint_file))
+            try:
+                soul_net = import_from_sou(str(checkpoint_file))
+            except FileNotFoundError:
+                return {"status": "not_found", "path": str(checkpoint_file)}
             soul_meta = soul_net.soul_signature()
             model_state = soul_net.state_dict()
 
@@ -265,11 +268,14 @@ Be yourself — let your personality shape how you respond."""
             if not checkpoint_file.exists():
                 checkpoint_file = (repo_root / "models" / (req.checkpoint_name + ".soul")).resolve()
 
-            if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str((repo_root / "models").resolve())):
+            if not str(checkpoint_file).startswith(str((repo_root / "models").resolve())):
                 raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
 
             # Load checkpoint into SloughGPTModel
-            model = self._load_slough_model(checkpoint_file)
+            try:
+                model = self._load_slough_model(checkpoint_file)
+            except FileNotFoundError:
+                raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
 
             chars = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?'-")
             stoi = {c: i for i, c in enumerate(chars)}
