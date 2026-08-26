@@ -109,7 +109,7 @@ describe('ChatSessionNotes', () => {
     await act(async () => {
       fireEvent.click(screen.getByText('Save'))
     })
-    expect(screen.getByText(/ago/)).toBeInTheDocument()
+    expect(screen.getByText('Dated note')).toBeInTheDocument()
   })
 
   it('loads notes for specific session', () => {
