@@ -560,23 +560,24 @@ def main(argv: list[str] | None = None) -> int:
             hidden_units=args.hidden_units,
             seed=args.seed,
         )
-        civ = result["civilization"]
+        civ = result.get("civilization", {})
         print("generation control_avg civ_avg control_best civ_best "
               "births alive lessons predations defenses raids")
-        for ch, vh in zip(result["control"]["history"], civ["history"]):
-            print(f"{ch['generation']:<10d} {ch['avg_fitness']:<12.4f} "
-                  f"{vh['avg_fitness']:<7.4f} {ch['best_fitness']:<13.4f} "
-                  f"{vh['best_fitness']:<8.4f} {vh['births']:<7d} "
-                  f"{vh['alive_count']:<6d} {vh['lessons']:<8d} "
-                  f"{vh['predations']:<9d} {vh['defenses']:<8d} "
-                  f"{vh['raids']}")
-        print(f"control_last_avg={result['control_last_avg']:.4f} "
-              f"civilization_last_avg={result['civilization_last_avg']:.4f}")
+        for ch, vh in zip(result.get("control", {}).get("history", []),
+                          civ.get("history", [])):
+            print(f"{ch.get('generation', 0):<10d} {ch.get('avg_fitness', 0):<12.4f} "
+                  f"{vh.get('avg_fitness', 0):<7.4f} {ch.get('best_fitness', 0):<13.4f} "
+                  f"{vh.get('best_fitness', 0):<8.4f} {vh.get('births', 0):<7d} "
+                  f"{vh.get('alive_count', 0):<6d} {vh.get('lessons', 0):<8d} "
+                  f"{vh.get('predations', 0):<9d} {vh.get('defenses', 0):<8d} "
+                  f"{vh.get('raids', 0)}")
+        print(f"control_last_avg={result.get('control_last_avg', 0):.4f} "
+              f"civilization_last_avg={result.get('civilization_last_avg', 0):.4f}")
         print(f"conservation_monotonic="
-              f"{'yes' if result['conservation_monotonic'] else 'no'} "
-              f"violations={len(result['conservation_violations'])} "
-              f"start={result['conservation_start_total']:.2f} "
-              f"end={result['conservation_end_total']:.2f}")
+              f"{'yes' if result.get('conservation_monotonic', False) else 'no'} "
+              f"violations={len(result.get('conservation_violations', []))} "
+              f"start={result.get('conservation_start_total', 0):.2f} "
+              f"end={result.get('conservation_end_total', 0):.2f}")
         print(f"brains_identical="
               f"{'yes' if result['brains_identical'] else 'no'}")
         print(f"channels_live="
