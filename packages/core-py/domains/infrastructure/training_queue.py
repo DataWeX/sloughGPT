@@ -110,8 +110,9 @@ async def training_handler(task) -> dict:
                 at_pause = getattr(_at, "_auto_train_pause_event", None)
                 if at_pause is not None and at_pause.is_set():
                     paused = True
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Pause bridge auto_train event check failed: %s", exc)
+                paused = True
             if paused:
                 pause_event.clear()  # Paused
             else:
