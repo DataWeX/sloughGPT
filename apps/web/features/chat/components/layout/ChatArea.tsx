@@ -132,7 +132,9 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
       setIsNearBottom(distFromBottom < NEAR_BOTTOM_THRESHOLD)
     }, [])
 
-    // Auto-scroll on new messages AND during streaming when user is near bottom
+    // Auto-scroll on new messages AND during streaming when user is near bottom.
+    // Uses requestAnimationFrame to batch scroll calls during fast token flushes.
+    const rafRef = useRef<number>(0)
     useEffect(() => {
       const lastMsg = messages[messages.length - 1]
       const lastContentLen = lastMsg?.content?.length ?? 0
@@ -140,10 +142,14 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
       const msgAdded = messages.length > prevMessageCountRef.current
 
       if (isNearBottom && (msgAdded || contentGrew)) {
-        scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = requestAnimationFrame(() => {
+          scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
+        })
       }
       prevMessageCountRef.current = messages.length
       prevLastContentLenRef.current = lastContentLen
+      return () => cancelAnimationFrame(rafRef.current)
     }, [messages, isNearBottom])
 
     // Scroll to bottom on initial load

@@ -5,7 +5,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -576,7 +576,7 @@ export const MemoryCard = memo(function MemoryCard() {
           <IconBrain className="h-4 w-4 text-primary" />
           Memory
           {stats && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${stats.enabled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'}`}>
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', stats.enabled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>
               {stats.enabled ? 'Active' : 'Off'}
             </span>
           )}
@@ -755,7 +755,7 @@ export const MemoryCard = memo(function MemoryCard() {
             <button
               type="button"
               onClick={() => setActiveTopic(null)}
-              className={`text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+              className={cn('text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
             >
               All
             </button>
@@ -764,7 +764,7 @@ export const MemoryCard = memo(function MemoryCard() {
                 key={topic}
                 type="button"
                 onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
-                className={`text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+                className={cn('text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
               >
                 {topic}
               </button>
@@ -849,11 +849,9 @@ export const MemoryCard = memo(function MemoryCard() {
               {visibleList.map(item => (
                 <div
                   key={item.id}
-                  className={`group flex items-start justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${
-                    selectedIds.has(item.id)
+                  className={cn('group flex items-start justify-between gap-2 rounded-lg border px-3 py-2 transition-colors', selectedIds.has(item.id)
                       ? 'bg-primary/[0.06] border-primary/30'
-                      : 'border-border/60 hover:bg-muted/40'
-                  }`}
+                      : 'border-border/60 hover:bg-muted/40')}
                 >
                   <input
                     type="checkbox"
@@ -1150,7 +1148,7 @@ export const MemoryCard = memo(function MemoryCard() {
                       className="w-full text-left px-3 py-2 hover:bg-muted/40 transition-colors rounded-lg"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${archiveBadgeClass(record.task_type)}`}>
+                        <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', archiveBadgeClass(record.task_type))}>
                           {archiveTypeLabel(record.task_type)}
                         </span>
                         <div className="flex items-center gap-2">
@@ -1159,7 +1157,7 @@ export const MemoryCard = memo(function MemoryCard() {
                               {new Date(record.ts * 1000).toLocaleString()}
                             </span>
                           )}
-                          <IconChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                          <IconChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform', expanded ? 'rotate-180' : '')} />
                         </div>
                       </div>
                       <p className="text-sm mt-1 line-clamp-2 break-words">{summary.text || '—'}</p>

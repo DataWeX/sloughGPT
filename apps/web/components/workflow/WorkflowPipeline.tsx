@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
 import { timeAgo } from '@/lib/time-ago'
@@ -84,11 +84,9 @@ export function WorkflowPipeline({ status }: WorkflowPipelineProps) {
           {steps.map((step, i) => (
             <div key={step.key} className="flex items-center">
               <div className="flex flex-col items-center min-w-[80px]">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                  step.enabled
+                <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-medium', step.enabled
                     ? 'bg-primary/15 text-primary'
-                    : 'bg-muted text-muted-foreground'
-                }`}>
+                    : 'bg-muted text-muted-foreground')}>
                   {i + 1}
                 </div>
                 <span className="text-[11px] font-medium mt-1.5">{step.label}</span>
@@ -96,7 +94,7 @@ export function WorkflowPipeline({ status }: WorkflowPipelineProps) {
                 <span className="text-[9px] text-muted-foreground/60">{timeAgo(step.lastRun)}</span>
               </div>
               {i < steps.length - 1 && (
-                <div className={`h-px w-6 mx-0.5 ${step.enabled ? 'bg-primary/30' : 'bg-border'}`} />
+                <div className={cn('h-px w-6 mx-0.5', step.enabled ? 'bg-primary/30' : 'bg-border')} />
               )}
             </div>
           ))}

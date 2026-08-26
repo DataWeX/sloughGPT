@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
+  cn,
   Card,
   CardHeader,
   CardTitle,
@@ -31,7 +32,7 @@ function ExampleList({ title, examples, accent }: { title: string; examples: [st
       ) : (
         <div className="flex flex-wrap gap-1">
           {examples.map(([token, freq]) => (
-            <span key={token} className={`text-xs font-mono px-1.5 py-0.5 rounded ${accent}`}>
+            <span key={token} className={cn('text-xs font-mono px-1.5 py-0.5 rounded', accent)}>
               {token} <span className="opacity-70">×{freq}</span>
             </span>
           ))}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
 
 interface TrainingHealthCardProps {
@@ -96,7 +96,7 @@ export function TrainingHealthCard({ checkpoints }: TrainingHealthCardProps) {
     <Card className={styles.border}>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Training health</CardTitle>
-        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${styles.badge}`}>
+        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', styles.badge)}>
           {STATUS_LABELS[result.status]}
         </span>
       </CardHeader>

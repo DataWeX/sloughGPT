@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 
 interface BenchQuality {
@@ -26,9 +26,7 @@ interface QualityCardProps {
 
 function QualityDot({ score }: { score: number }) {
   return (
-    <span className={`inline-block w-2 h-2 rounded-full ${
-      score > 0.7 ? 'bg-success' : score > 0.4 ? 'bg-warning' : 'bg-destructive'
-    }`} />
+    <span className={cn('inline-block w-2 h-2 rounded-full', score > 0.7 ? 'bg-success' : score > 0.4 ? 'bg-warning' : 'bg-destructive')} />
   )
 }
 

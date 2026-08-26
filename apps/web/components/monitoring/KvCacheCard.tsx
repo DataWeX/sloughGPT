@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import type { KvSessionsInfo } from '@/lib/system-controller'
 
@@ -26,7 +26,7 @@ export const KvCacheCard = memo(function KvCacheCard({ kvSessions }: KvCacheCard
           <StatCard
             label="Active"
             value={kvSessions.active_sessions ?? 0} numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${(kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', (kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard label="Cached tokens" value={kvSessions.cached_tokens ?? 0} numeric />
           <StatCard label="TTL" value={(kvSessions.ttl_seconds ?? 0) / 60 + "m"} numeric />

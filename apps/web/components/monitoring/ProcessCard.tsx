@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 
 interface ProcessCardProps {
@@ -72,7 +72,7 @@ export const ProcessCard = memo(function ProcessCard({ detailed }: ProcessCardPr
               <StatCard
                 label="GPU"
                 value={<span className="font-mono">{detailed.gpu.backend ?? 'N/A'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${detailed.gpu.backend && detailed.gpu.backend !== 'none' ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', detailed.gpu.backend && detailed.gpu.backend !== 'none' ? 'bg-success' : 'bg-muted-foreground/50')} />}
               />
               <StatCard
                 label="VRAM"

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { CompanionTraits } from '@/lib/companion-controller'
 
 interface CompanionInsightsCardProps {
@@ -71,11 +71,9 @@ export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCard
           {(Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name').map(([key, value]) => (
             <span
               key={key}
-              className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                value >= 0.7 ? 'bg-primary/15 text-primary' :
+              className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', value >= 0.7 ? 'bg-primary/15 text-primary' :
                 value >= 0.4 ? 'bg-muted text-muted-foreground' :
-                'bg-muted/50 text-muted-foreground/60'
-              }`}
+                'bg-muted/50 text-muted-foreground/60')}
             >
               {key} {(value * 100).toFixed(0)}%
             </span>

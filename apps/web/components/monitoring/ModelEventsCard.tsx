@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { useTick } from '@/hooks/useTick'
 import { timeAgo } from '@/lib/time-ago'
@@ -31,9 +31,7 @@ export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: Mod
           <div key={`${e.ts}-${i}`} className="border border-border/60 hover:bg-muted/50 transition-colors rounded-md p-2">
             <div className="flex items-center justify-between gap-2">
               <span
-                className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium uppercase ${
-                  EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground'
-                }`}
+                className={cn('shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium uppercase', EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground')}
               >
                 {e.type}
               </span>

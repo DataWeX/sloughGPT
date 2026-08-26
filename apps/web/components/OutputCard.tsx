@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useServerOutput } from '@/hooks/useServerOutput'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconDownload } from '@sloughgpt/strui'
 import type { OutputLine } from '@/lib/system-controller'
@@ -69,7 +69,7 @@ const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
       ) : (
         <span className="shrink-0 w-[96px] sm:w-[160px]" />
       )}
-      <span className={`flex-1 min-w-0 break-all ${line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : ''}`}>
+      <span className={cn('flex-1 min-w-0 break-all', line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : '')}>
         {line.text}
       </span>
     </div>
@@ -82,7 +82,7 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
 
   const controls = (
     <div className="flex items-center gap-2">
-      <span className={`inline-block w-2 h-2 rounded-full ${paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50'}`} />
+      <span className={cn('inline-block w-2 h-2 rounded-full', paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50')} />
       <span className="text-[11px] text-muted-foreground font-mono">{paused ? 'Paused' : streaming ? 'Live' : 'Off'}</span>
       <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
         {paused ? '▶' : '⏸'}
@@ -118,7 +118,7 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
       <CardContent>
         <div
           ref={scrollRef}
-          className={`${h} overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3`}
+          className={cn(h, 'overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3')}
           role="log"
           aria-live="polite"
           aria-label="Service output"

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { experimentsController } from '@/lib/experiments-controller'
 
@@ -101,9 +101,7 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
           <div className="flex items-center gap-2">
             <CardTitle className="text-base">Experiment Data</CardTitle>
             {status?.status && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                status.status === 'completed' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
-              }`}>
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', status.status === 'completed' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning')}>
                 {status.status}
               </span>
             )}

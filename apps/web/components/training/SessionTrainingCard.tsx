@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Label } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Label } from '@sloughgpt/strui'
 import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -127,9 +127,7 @@ export function SessionTrainingCard({ addToast }: Props) {
             {sessions.slice(0, 50).map(s => (
               <div
                 key={s.id}
-                className={`flex items-center gap-3 rounded border px-3 py-2 text-sm transition-colors ${
-                  selected.has(s.id) ? 'border-primary bg-primary/5' : 'border-border/50 hover:bg-muted/30'
-                }`}
+                className={cn('flex items-center gap-3 rounded border px-3 py-2 text-sm transition-colors', selected.has(s.id) ? 'border-primary bg-primary/5' : 'border-border/50 hover:bg-muted/30')}
               >
                 <input
                   type="checkbox"

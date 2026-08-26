@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useEffect, useCallback } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { systemController, type InferencePoolStatus } from '@/lib/system-controller'
@@ -87,7 +87,7 @@ export const InferencePoolCard = memo(function InferencePoolCard({ onRefresh }: 
           <StatCard
             label="Status"
             value={status.initialized ? 'Active' : 'Inactive'}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${status.initialized ? 'bg-success' : 'bg-muted-foreground'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', status.initialized ? 'bg-success' : 'bg-muted-foreground')} />}
           />
           {status.max_workers != null && (
             <StatCard label="Max Workers" value={status.max_workers.toString()} numeric />

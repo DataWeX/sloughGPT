@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Input } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -174,7 +174,7 @@ export function KnowledgeIntelligenceCard() {
             </Button>
           </div>
           {dupResult && (
-            <div className={`rounded px-3 py-2 text-xs ${dupResult.is_duplicate ? 'bg-warning/10' : 'bg-success/10'}`}>
+            <div className={cn('rounded px-3 py-2 text-xs', dupResult.is_duplicate ? 'bg-warning/10' : 'bg-success/10')}>
               {dupResult.is_duplicate ? (
                 <div className="space-y-1">
                   <p className="font-medium text-warning">Duplicate found</p>
@@ -229,7 +229,7 @@ export function KnowledgeIntelligenceCard() {
             <p className="text-xs font-medium text-muted-foreground">Embedder</p>
             <div className="flex gap-1">
               <Button size="sm" variant="ghost" onClick={() => void handleCheckEmbedder()} disabled={embedderLoading}>
-                <IconRefresh className={`h-3 w-3 ${embedderLoading ? 'animate-spin' : ''}`} />
+                <IconRefresh className={cn('h-3 w-3', embedderLoading ? 'animate-spin' : '')} />
               </Button>
               <Button size="sm" variant="outline" onClick={() => void handleTrainEmbedder()} disabled={trainingEmbedder}>
                 {trainingEmbedder ? 'Training...' : 'Train'}
@@ -239,7 +239,7 @@ export function KnowledgeIntelligenceCard() {
           {embedderStatus && (
             <div className="rounded bg-muted/30 px-3 py-2 text-xs space-y-1">
               <div className="flex items-center gap-2">
-                <span className={`inline-block h-2 w-2 rounded-full ${embedderStatus.trained ? 'bg-success' : 'bg-muted-foreground'}`} />
+                <span className={cn('inline-block h-2 w-2 rounded-full', embedderStatus.trained ? 'bg-success' : 'bg-muted-foreground')} />
                 <span>{embedderStatus.trained ? 'Trained' : 'Not trained'}</span>
               </div>
               {embedderStatus.info && (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import type { GPUInfo, DiskUsage, SystemInfo } from '@/lib/system-controller'
 
 export function GpuCard({ gpu }: { gpu?: GPUInfo }) {
@@ -48,7 +48,7 @@ export function DiskCard({ disk }: { disk?: DiskUsage }) {
           <span>{disk.total_gb.toFixed(1)} GB total</span>
         </div>
         <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-          <div className={`absolute inset-y-0 left-0 ${color} rounded-full transition-all duration-300`} style={{ width: `${pct}%` }} />
+          <div className={cn('absolute inset-y-0 left-0', color, 'rounded-full transition-all duration-300')} style={{ width: `${pct}%` }} />
         </div>
         <div className="flex justify-between text-[11px] text-muted-foreground font-mono">
           <span>{disk.free_gb.toFixed(1)} GB free</span>

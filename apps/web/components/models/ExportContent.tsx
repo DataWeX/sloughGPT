@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
@@ -167,11 +167,9 @@ export default function ExportContent() {
                 type="button"
                 key={f.key}
                 onClick={() => setSelectedFormat(f.key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedFormat === f.key
+                className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors', selectedFormat === f.key
                     ? 'bg-primary/15 text-primary'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80')}
                 title={f.description}
               >
                 {f.label}
@@ -238,7 +236,7 @@ export default function ExportContent() {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Checkpoints</CardTitle>
           <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
-            <IconRefresh className={`h-3.5 w-3.5 ${loadingCheckpoints ? 'animate-spin' : ''}`} />
+            <IconRefresh className={cn('h-3.5 w-3.5', loadingCheckpoints ? 'animate-spin' : '')} />
           </Button>
         </CardHeader>
         <CardContent>

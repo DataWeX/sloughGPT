@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import type { RegisteredModel, RegistryStats } from '@/lib/registry-controller'
 import { timeAgo } from '@/lib/time-ago'
@@ -52,11 +52,9 @@ export function RegistryHealthCard({ models, stats }: RegistryHealthCardProps) {
             return (
               <div key={m.model_id} className="flex items-center justify-between text-[11px] py-1 border-b border-border/30 last:border-0">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                    m.status === 'loaded' ? 'bg-success' :
+                  <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', m.status === 'loaded' ? 'bg-success' :
                     m.status === 'failed' ? 'bg-destructive' :
-                    'bg-muted-foreground/30'
-                  }`} />
+                    'bg-muted-foreground/30')} />
                   <span className="font-medium truncate">{m.model_id}</span>
                   <Badge label={m.status} variant={statusVariant(m.status)} size="sm" />
                 </div>

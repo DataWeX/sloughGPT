@@ -37,8 +37,8 @@ export function ChatMoreMenu() {
             {ctx.agent.agents.map(a => {
               const isActive = ctx.agent.current?.id === a.id || ctx.agent.current?.name === a.name
               return (
-                <DropdownMenuItem key={a.id || a.name} onSelect={() => ctx.agent.onSelect(a)} className={`flex items-start gap-2 px-3 py-2 ${isActive ? 'bg-primary/8' : ''}`}>
-                  <span className={`mt-0.5 h-4 w-4 shrink-0 inline-flex items-center justify-center ${isActive ? 'text-primary' : 'text-muted-foreground/40'}`}>
+                <DropdownMenuItem key={a.id || a.name} onSelect={() => ctx.agent.onSelect(a)} className={cn('flex items-start gap-2 px-3 py-2', isActive ? 'bg-primary/8' : '')}>
+                  <span className={cn('mt-0.5 h-4 w-4 shrink-0 inline-flex items-center justify-center', isActive ? 'text-primary' : 'text-muted-foreground/40')}>
                     {isActive ? (
                       <IconCheck className="h-3.5 w-3.5" />
                     ) : (

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@sloughgpt/strui'
+import { cn, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconChevronDown, IconCheck, IconHeart, IconChevronRight } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
@@ -52,9 +52,9 @@ export function SoulSelectorDropdown() {
               <DropdownMenuItem
                 key={s.name}
                 onSelect={() => onSelect(s)}
-                className={`flex items-start gap-2 px-3 py-2 text-xs ${isActive ? 'bg-primary/8' : ''}`}
+                className={cn('flex items-start gap-2 px-3 py-2 text-xs', isActive ? 'bg-primary/8' : '')}
               >
-                <IconHeart className={`h-3 w-3 mt-0.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                <IconHeart className={cn('h-3 w-3 mt-0.5 shrink-0', isActive ? 'text-primary' : 'text-muted-foreground')} />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium capitalize truncate">{s.name}</div>
                   {s.description && (

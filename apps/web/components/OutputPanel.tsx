@@ -7,7 +7,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Button, Input } from '@sloughgpt/strui'
+import { cn, Button, Input } from '@sloughgpt/strui'
 import { useServerOutput } from '@/hooks/useServerOutput'
 
 interface OutputPanelProps {
@@ -65,7 +65,7 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
     <div className="fixed bottom-12 right-4 w-[calc(100vw-2rem)] max-w-[520px] max-h-[400px] z-50 bg-background border rounded-lg shadow-lg flex flex-col" role="region" aria-label="Service output">
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="flex items-center gap-2">
-          <span className={`inline-block w-2 h-2 rounded-full ${streaming && !paused ? 'bg-success animate-pulse' : paused ? 'bg-warning' : 'bg-muted-foreground/50'}`} />
+          <span className={cn('inline-block w-2 h-2 rounded-full', streaming && !paused ? 'bg-success animate-pulse' : paused ? 'bg-warning' : 'bg-muted-foreground/50')} />
           <span className="text-sm font-medium">Service Output</span>
           <span className="text-xs text-muted-foreground">({filtered.length}/{lines.length})</span>
         </div>
@@ -92,13 +92,11 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
               key={level}
               type="button"
               onClick={() => toggleLevel(level)}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                filterLevel.size === 0 || filterLevel.has(level)
+              className={cn('px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors', filterLevel.size === 0 || filterLevel.has(level)
                   ? level === 'error' ? 'bg-destructive/15 text-destructive' :
                     level === 'warning' ? 'bg-warning/15 text-warning' :
                     'bg-muted text-muted-foreground'
-                  : 'bg-muted/30 text-muted-foreground/50'
-              }`}
+                  : 'bg-muted/30 text-muted-foreground/50')}
             >
               {level}
             </button>
@@ -141,11 +139,9 @@ export function OutputPanel({ open, onClose }: OutputPanelProps) {
               <span className="text-muted-foreground shrink-0 w-14">
                 {new Date(line.ts * 1000).toLocaleTimeString()}
               </span>
-              <span className={`shrink-0 w-10 ${
-                line.level === 'error' ? 'text-destructive' :
+              <span className={cn('shrink-0 w-10', line.level === 'error' ? 'text-destructive' :
                 line.level === 'warning' ? 'text-warning' :
-                'text-muted-foreground'
-              }`}>
+                'text-muted-foreground')}>
                 {line.level}
               </span>
               <span className="text-muted-foreground/60 shrink-0 w-16 truncate" title={line.source}>

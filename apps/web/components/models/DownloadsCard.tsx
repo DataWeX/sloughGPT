@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Progress, Button } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -127,12 +127,10 @@ export default function DownloadsCard() {
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-medium truncate text-xs">{d.model_id}</span>
-                    <span className={`text-[10px] px-1 rounded ${
-                      isActive ? 'bg-primary/10 text-primary' :
+                    <span className={cn('text-[10px] px-1 rounded', isActive ? 'bg-primary/10 text-primary' :
                       isFailed ? 'bg-destructive/10 text-destructive' :
                       d.status === 'completed' ? 'bg-success/10 text-success' :
-                      'bg-muted text-muted-foreground'
-                    }`}>{d.status}</span>
+                      'bg-muted text-muted-foreground')}>{d.status}</span>
                   </div>
                   <div className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
                     <span>{formatBytes(d.bytes_downloaded)} / {formatBytes(d.total_bytes)}</span>

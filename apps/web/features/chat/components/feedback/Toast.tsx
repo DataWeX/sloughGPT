@@ -106,7 +106,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
   return (
     <div
-      className={`sl-toast${exiting ? ' sl-toast--exit' : ''}`}
+      className={cn('sl-toast', exiting ? ' sl-toast--exit' : '')}
       role="alert"
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       aria-atomic="true"
@@ -120,10 +120,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         {toast.type === 'info' && 'Information: '}
       </span>
 
-      <div className={`sl-toast__bar ${styles.bar}`} />
+      <div className={cn('sl-toast__bar', styles.bar)} />
 
       <span className="sl-toast__body">
-        <ToastIcon type={toast.type} className={`sl-toast__icon ${styles.icon}`} />
+        <ToastIcon type={toast.type} className={cn('sl-toast__icon', styles.icon)} />
         <span className="sl-toast__message">
           {toast.message}
           {toast.verbose && (
@@ -161,7 +161,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
       <span className="sl-toast__track">
         <span
-          className={`sl-toast__fill ${styles.bar}`}
+          className={cn('sl-toast__fill', styles.bar)}
           style={{ width: `${progress}%` }}
         />
       </span>

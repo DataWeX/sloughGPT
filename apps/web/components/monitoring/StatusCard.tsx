@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
 import type { LiveHealthSnapshot, ConnectionStatus } from '@/hooks/useLiveStatus'
@@ -68,12 +68,12 @@ export const StatusCard = memo(function StatusCard({ liveHealth, detailed, conne
           <StatCard
             label="API"
             value={!loaded ? <Skeleton className="h-5 w-16" /> : <span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', !loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive')} />}
           />
           <StatCard
             label="Model"
             value={!loaded ? <Skeleton className="h-5 w-20" /> : <span className="font-mono">{modelValue}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', !loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning')} />}
           />
           <StatCard
             label="Uptime"
@@ -93,13 +93,13 @@ export const StatusCard = memo(function StatusCard({ liveHealth, detailed, conne
             label="Tokens/s"
             value={!loaded ? <Skeleton className="h-5 w-12" /> : liveHealth?.tokens_per_sec != null ? liveHealth.tokens_per_sec.toFixed(1) : <Skeleton className="h-5 w-12" />}
             numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard
             label="Errors"
             value={!loaded ? <Skeleton className="h-5 w-8" /> : String(liveHealth?.error_count ?? 0)}
             numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.error_count ?? 0) > 0 ? 'bg-destructive' : 'bg-success'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', (liveHealth?.error_count ?? 0) > 0 ? 'bg-destructive' : 'bg-success')} />}
           />
           <StatCard
             label="Soul"

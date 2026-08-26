@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
@@ -40,7 +40,7 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
               </div>
               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 rounded-full ${usagePercent > 80 ? 'bg-warning' : 'bg-primary'}`}
+                  className={cn('h-full transition-all duration-300 rounded-full', usagePercent > 80 ? 'bg-warning' : 'bg-primary')}
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>

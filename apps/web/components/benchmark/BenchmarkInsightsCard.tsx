@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface BenchmarkInsightsCardProps {
@@ -45,14 +45,14 @@ export function BenchmarkInsightsCard({ metrics, quality, stats }: BenchmarkInsi
           {quality && (
             <div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Quality</div>
-              <div className={`text-lg font-semibold ${qualityInfo?.color}`}>{(quality.quality_score * 100).toFixed(0)}%</div>
+              <div className={cn('text-lg font-semibold', qualityInfo?.color)}>{(quality.quality_score * 100).toFixed(0)}%</div>
               <div className="text-[10px] text-muted-foreground">{qualityInfo?.label}</div>
             </div>
           )}
           {quality && (
             <div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Coherence</div>
-              <div className={`text-lg font-semibold ${coherenceInfo?.color}`}>{(quality.coherence_score * 100).toFixed(0)}%</div>
+              <div className={cn('text-lg font-semibold', coherenceInfo?.color)}>{(quality.coherence_score * 100).toFixed(0)}%</div>
               <div className="text-[10px] text-muted-foreground">{coherenceInfo?.label}</div>
             </div>
           )}

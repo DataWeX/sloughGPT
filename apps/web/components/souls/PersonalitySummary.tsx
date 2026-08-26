@@ -1,5 +1,7 @@
 'use client'
 
+import { cn } from '@sloughgpt/strui'
+
 interface PersonalitySummaryProps {
   traitWeights: Record<string, Record<string, number>>
   currentSoulName: string | null
@@ -147,7 +149,7 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
             </div>
             <div className="flex flex-col items-center shrink-0">
               <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Overall</span>
-              <span className={`text-2xl font-bold ${ratingColor(overall)}`}>{overall}</span>
+              <span className={cn('text-2xl font-bold', ratingColor(overall))}>{overall}</span>
               <span className="text-[8px] text-muted-foreground/50">/100</span>
             </div>
           </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import type { SystemMetrics, DetailedHealth } from '@/lib/system-controller'
@@ -17,9 +17,7 @@ interface ResourceCardProps {
 
 function StatusDot({ value, threshold }: { value: number; threshold: number }) {
   return (
-    <span className={`inline-block w-2 h-2 rounded-full ${
-      value > threshold ? 'bg-warning' : 'bg-success'
-    }`} />
+    <span className={cn('inline-block w-2 h-2 rounded-full', value > threshold ? 'bg-warning' : 'bg-success')} />
   )
 }
 

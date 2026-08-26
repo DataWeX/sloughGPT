@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { datasetController, type ImportSource, type GitHubRepo, type BookResult, type ImportResponse } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { reportError } from '@/lib/error-reporter'
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Label } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -267,9 +267,7 @@ export function DatasetImportModal({
                     setSelectedBook(null)
                     setSelectedRepo(null)
                   }}
-                  className={`h-auto flex-col items-start p-3 ${
-                    source === option.value ? 'border-primary' : ''
-                  }`}
+                  className={cn('h-auto flex-col items-start p-3', source === option.value ? 'border-primary' : '')}
                   role="radio"
                   aria-checked={source === option.value}
                   aria-label={`${option.label}: ${option.description}`}
@@ -336,9 +334,7 @@ export function DatasetImportModal({
                   key={repo.id}
                   variant="ghost"
                   onClick={() => selectRepo(repo)}
-                  className={`flex w-full items-start justify-between border-b px-3 py-2.5 text-left last:border-b-0 ${
-                    selectedRepo?.id === repo.id ? 'bg-primary/10' : ''
-                  }`}
+                  className={cn('flex w-full items-start justify-between border-b px-3 py-2.5 text-left last:border-b-0', selectedRepo?.id === repo.id ? 'bg-primary/10' : '')}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{repo.full_name}</div>
@@ -418,9 +414,7 @@ export function DatasetImportModal({
                     setUrl(book.isbn)
                     setBookResults([])
                   }}
-                  className={`flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0 ${
-                    selectedBook?.key === book.key ? 'bg-primary/10' : ''
-                  }`}
+                  className={cn('flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0', selectedBook?.key === book.key ? 'bg-primary/10' : '')}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{book.title}</div>

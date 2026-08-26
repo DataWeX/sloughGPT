@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
 interface AuthSessionInfoCardProps {
   token: string | null
@@ -54,11 +54,9 @@ export function AuthSessionInfoCard({ token, user, onLogout }: AuthSessionInfoCa
           {exp && (
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">Token expires:</span>
-              <span className={`text-[10px] font-mono ${
-                exp * 1000 < Date.now() ? 'text-destructive' :
+              <span className={cn('text-[10px] font-mono', exp * 1000 < Date.now() ? 'text-destructive' :
                 exp * 1000 - Date.now() < 3600000 ? 'text-warning' :
-                'text-success'
-              }`}>
+                'text-success')}>
                 {formatExpiry(exp)}
               </span>
             </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController } from '@/lib/workflow-controller'
 import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
@@ -124,12 +124,10 @@ export function WorkflowSection() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-              status?.running
+            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium', status?.running
                 ? 'bg-success/15 text-success'
-                : 'bg-muted text-muted-foreground'
-            }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${status?.running ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                : 'bg-muted text-muted-foreground')}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', status?.running ? 'bg-success' : 'bg-muted-foreground/40')} />
               {status?.running ? 'Running' : 'Stopped'}
             </span>
             <Button size="sm" onClick={handleToggle} disabled={toggling}>

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 
 interface KnowledgeCardProps {
@@ -22,7 +22,7 @@ export const KnowledgeCard = memo(function KnowledgeCard({ knowledgeStats, adapt
           <StatCard
             label="AI training"
             value={!adapterStatus ? <Skeleton className="h-5 w-14" /> : <span className="font-mono">{adapterStatus.adapter_exists ? 'Trained' : 'Not'}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!adapterStatus ? 'bg-warning' : adapterStatus.adapter_exists ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', !adapterStatus ? 'bg-warning' : adapterStatus.adapter_exists ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
         </KpiGrid>
         {adapterStatus && adapterStatus.adapter_exists && (

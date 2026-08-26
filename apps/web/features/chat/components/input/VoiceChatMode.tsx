@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/features/chat/hooks/useVoiceChat'
 import { VoiceWaveform, VoiceOrb, ListeningIndicator, ListeningBars } from '@/features/chat/components/input/VoiceWaveform'
-import { Slider } from '@sloughgpt/strui'
+import { cn, Slider } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { IconX, IconRefresh, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
 
@@ -52,12 +52,10 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${
-            isListening ? 'bg-primary animate-pulse' :
+          <div className={cn('w-2 h-2 rounded-full', isListening ? 'bg-primary animate-pulse' :
             isSpeaking ? 'bg-emerald-500 animate-pulse' :
             isProcessing ? 'bg-amber-500 animate-pulse' :
-            'bg-muted-foreground/30'
-          }`} />
+            'bg-muted-foreground/30')} />
           <span className="text-sm font-medium" aria-live="polite">
             {isListening ? 'Listening' :
              isProcessing ? 'Thinking' :
@@ -134,13 +132,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 role="switch"
                 aria-checked={settings.autoResume}
                 aria-label="Auto-resume listening"
-                className={`w-9 h-5 rounded-full transition-colors ${
-                  settings.autoResume ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
+                className={cn('w-9 h-5 rounded-full transition-colors', settings.autoResume ? 'bg-primary' : 'bg-muted-foreground/30')}
               >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  settings.autoResume ? 'translate-x-4.5' : 'translate-x-0.5'
-                }`} />
+                <div className={cn('w-4 h-4 rounded-full bg-white shadow transition-transform', settings.autoResume ? 'translate-x-4.5' : 'translate-x-0.5')} />
               </button>
             </div>
 
@@ -152,13 +146,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 role="switch"
                 aria-checked={settings.pushToTalk}
                 aria-label="Push-to-talk"
-                className={`w-9 h-5 rounded-full transition-colors ${
-                  settings.pushToTalk ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
+                className={cn('w-9 h-5 rounded-full transition-colors', settings.pushToTalk ? 'bg-primary' : 'bg-muted-foreground/30')}
               >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  settings.pushToTalk ? 'translate-x-4.5' : 'translate-x-0.5'
-                }`} />
+                <div className={cn('w-4 h-4 rounded-full bg-white shadow transition-transform', settings.pushToTalk ? 'translate-x-4.5' : 'translate-x-0.5')} />
               </button>
             </div>
 
@@ -170,13 +160,9 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
                 role="switch"
                 aria-checked={settings.streamingTTS}
                 aria-label="Stream speech"
-                className={`w-9 h-5 rounded-full transition-colors ${
-                  settings.streamingTTS ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
+                className={cn('w-9 h-5 rounded-full transition-colors', settings.streamingTTS ? 'bg-primary' : 'bg-muted-foreground/30')}
               >
-                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  settings.streamingTTS ? 'translate-x-4.5' : 'translate-x-0.5'
-                }`} />
+                <div className={cn('w-4 h-4 rounded-full bg-white shadow transition-transform', settings.streamingTTS ? 'translate-x-4.5' : 'translate-x-0.5')} />
               </button>
             </div>
 
@@ -250,16 +236,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             type="button"
             onClick={handleToggle}
             disabled={isProcessing}
-            className={`
-              w-full h-full rounded-full flex items-center justify-center
-              transition-all duration-200
-              ${isListening
-                ? 'bg-primary text-primary-foreground'
-                : isProcessing
-                  ? 'bg-muted text-muted-foreground cursor-wait'
-                  : 'bg-primary/10 text-primary hover:bg-primary/20'
-              }
-            `}
+            className={cn('w-full h-full rounded-full flex items-center justify-center transition-all duration-200', isListening ? 'bg-primary text-primary-foreground' : isProcessing ? 'bg-muted text-muted-foreground cursor-wait' : 'bg-primary/10 text-primary hover:bg-primary/20')}
             aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
           >
             {isProcessing ? (

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
@@ -117,11 +117,9 @@ export default function RegistryContent() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium truncate">{m.model_id}</span>
-                        <span className={`text-xs px-1 rounded ${
-                          m.status === 'loaded' ? 'bg-success/10 text-success' :
+                        <span className={cn('text-xs px-1 rounded', m.status === 'loaded' ? 'bg-success/10 text-success' :
                           m.status === 'failed' ? 'bg-destructive/10 text-destructive' :
-                          'bg-muted text-muted-foreground'
-                        }`}>{m.status}</span>
+                          'bg-muted text-muted-foreground')}>{m.status}</span>
                       </div>
                       {m.registered_at && (
                         <div className="text-xs text-muted-foreground mt-0.5">

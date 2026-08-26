@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController, type WorkflowStatus } from '@/lib/workflow-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -136,7 +136,7 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       <CardContent>
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${status?.running ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+            <div className={cn('h-2 w-2 rounded-full', status?.running ? 'bg-success' : 'bg-muted-foreground/40')} />
             <span className="text-xs text-muted-foreground">
               {status?.running ? 'Running' : 'Stopped'}
             </span>

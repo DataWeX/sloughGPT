@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 
 interface VoicePreset {
   name: string
@@ -182,11 +182,9 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className={`text-left font-medium text-xs px-2 py-0.5 rounded transition-colors ${
-                        activeName === p.name
+                      className={cn('text-left font-medium text-xs px-2 py-0.5 rounded transition-colors', activeName === p.name
                           ? 'bg-primary/15 text-primary'
-                          : 'hover:bg-muted'
-                      }`}
+                          : 'hover:bg-muted')}
                       onClick={() => handleApply(p)}
                     >
                       {p.name}

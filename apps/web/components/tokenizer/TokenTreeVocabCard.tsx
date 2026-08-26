@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import {
   tokenTreeController,
@@ -126,7 +126,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
                   aria-label={`Toggle lineage for ${display(entry.token)}`}
                 >
                   <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">{entry.id}</span>
-                  <span className={`font-mono flex-1 ${entry.is_special ? 'text-primary' : ''}`}>
+                  <span className={cn('font-mono flex-1', entry.is_special ? 'text-primary' : '')}>
                     {display(entry.token)}
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums">{entry.freq}</span>

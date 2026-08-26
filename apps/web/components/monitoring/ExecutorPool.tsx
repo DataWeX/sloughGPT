@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { systemController, type ExecutorStatus } from '@/lib/system-controller'
@@ -29,7 +29,7 @@ export const ExecutorPool = memo(function ExecutorPool({ status, onRefresh }: Ex
           <StatCard
             label="Active"
             value={status.active_jobs.toString()} numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${status.active_jobs > 0 ? 'bg-warning' : 'bg-success'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', status.active_jobs > 0 ? 'bg-warning' : 'bg-success')} />}
           />
           <StatCard label="Workers" value={status.max_workers.toString()} numeric />
           <StatCard label="Tracked" value={status.total_tracked.toString()} numeric />
@@ -41,10 +41,8 @@ export const ExecutorPool = memo(function ExecutorPool({ status, onRefresh }: Ex
               const ds = j.cancel_requested && j.status === 'running' ? 'cancelling' : j.status
               return (
                 <div key={j.job_id} className="flex items-center gap-1.5 px-1 py-0.5 rounded hover:bg-muted/30 transition-colors">
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                    ds === 'running' ? 'bg-warning/15 text-warning' : ds === 'cancelling' ? 'bg-warning/15 text-warning' :
-                    ds === 'completed' ? 'bg-success/15 text-success' : ds === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'
-                  }`}>{ds}</span>
+                  <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', ds === 'running' ? 'bg-warning/15 text-warning' : ds === 'cancelling' ? 'bg-warning/15 text-warning' :
+                    ds === 'completed' ? 'bg-success/15 text-success' : ds === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{ds}</span>
                   <span className="truncate">{j.job_id}</span>
                   {j.elapsed_s != null && <span className="text-muted-foreground/60">{j.elapsed_s.toFixed(1)}s</span>}
                   {(j.status === 'running' || j.status === 'queued') && !j.cancel_requested && (

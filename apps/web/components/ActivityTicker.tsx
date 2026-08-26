@@ -119,7 +119,7 @@ export function ErrorList({ className }: { className?: string }) {
         </button>
       </div>
       {errors.map(e => (
-        <div key={e.id} className={`flex items-start gap-2 p-2 rounded border text-xs ${severityColor[e.severity] || severityColor.error}`}>
+        <div key={e.id} className={cn('flex items-start gap-2 p-2 rounded border text-xs', severityColor[e.severity] || severityColor.error)}>
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate flex items-center gap-1.5">
               {e.title}

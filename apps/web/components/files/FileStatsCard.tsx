@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { FileEntry } from '@/lib/files-controller'
 
 interface FileStatsCardProps {
@@ -66,7 +66,7 @@ export function FileStatsCard({ files }: FileStatsCardProps) {
           {sorted.map(([group, { count, size }]) => (
             <div key={group} className="flex items-center justify-between text-[11px] py-0.5">
               <div className="flex items-center gap-2">
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${GROUP_COLORS[group] ?? GROUP_COLORS.Other}`}>
+                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', GROUP_COLORS[group] ?? GROUP_COLORS.Other)}>
                   {group}
                 </span>
                 <span className="text-muted-foreground">{count} file{count !== 1 ? 's' : ''}</span>

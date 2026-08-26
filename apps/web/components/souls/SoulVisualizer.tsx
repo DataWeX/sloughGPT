@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { cn } from '@sloughgpt/strui'
 import TraitRadarChart from './TraitRadarChart'
 import PersonalitySummary from './PersonalitySummary'
 
@@ -50,18 +51,14 @@ export default function SoulVisualizer({ traitWeights, currentSoulName }: SoulVi
         <div className="flex flex-wrap items-center gap-1 mb-3">
           <button
             type="button"
-            className={`text-[10px] px-2 py-1 rounded-md transition-colors ${
-              view === 'summary' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('text-[10px] px-2 py-1 rounded-md transition-colors', view === 'summary' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground')}
             onClick={() => setView('summary')}
           >
             List
           </button>
           <button
             type="button"
-            className={`text-[10px] px-2 py-1 rounded-md transition-colors ${
-              view === 'chart' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('text-[10px] px-2 py-1 rounded-md transition-colors', view === 'chart' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground')}
             onClick={() => setView('chart')}
           >
             Radar

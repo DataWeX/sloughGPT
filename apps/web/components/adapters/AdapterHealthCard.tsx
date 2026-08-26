@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { UserAdapterInfo } from '@/lib/user-adapters-controller'
 
 interface AdapterHealthCardProps {
@@ -47,9 +47,7 @@ export function AdapterHealthCard({ adapters }: AdapterHealthCardProps) {
             <div className="text-[10px] text-muted-foreground mb-1">By Rank</div>
             <div className="flex flex-wrap gap-1.5">
               {sortedRanks.map(([rank, count]) => (
-                <span key={rank} className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                  Number(rank) > 0 ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-                }`}>
+                <span key={rank} className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', Number(rank) > 0 ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>
                   Rank {rank} ({count})
                 </span>
               ))}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 
 const STORAGE_KEY = 'sloughgpt-export-history'
@@ -90,7 +90,7 @@ export function ExportHistoryCard() {
           {history.slice(0, 5).map((r, idx) => (
             <div key={idx} className="flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-2">
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${formatColor(r.format)}`}>
+                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', formatColor(r.format))}>
                   {r.label}
                 </span>
                 <span className="text-muted-foreground">{r.fileCount} file{r.fileCount !== 1 ? 's' : ''}</span>

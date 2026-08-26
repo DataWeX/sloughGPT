@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { KnowledgeItem, KnowledgeStats } from '@/lib/knowledge-controller'
 
 interface KnowledgeCategoryChartProps {
@@ -70,7 +70,7 @@ export function KnowledgeCategoryChart({ items, stats }: KnowledgeCategoryChartP
                   <span className="text-[11px] text-muted-foreground w-24 truncate">{t.topic}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted/50 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${topicColor(idx)}`}
+                      className={cn('h-full rounded-full transition-all', topicColor(idx))}
                       style={{ width: `${t.pct * 100}%` }}
                     />
                   </div>
@@ -89,12 +89,10 @@ export function KnowledgeCategoryChart({ items, stats }: KnowledgeCategoryChartP
                   <span className="text-[11px] text-muted-foreground w-24">{i.label}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted/50 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${
-                        i.label === 'Critical' ? 'bg-success' :
+                      className={cn('h-full rounded-full transition-all', i.label === 'Critical' ? 'bg-success' :
                         i.label === 'High' ? 'bg-primary' :
                         i.label === 'Medium' ? 'bg-warning' :
-                        'bg-muted-foreground/40'
-                      }`}
+                        'bg-muted-foreground/40')}
                       style={{ width: `${i.pct * 100}%` }}
                     />
                   </div>

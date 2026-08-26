@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
@@ -115,11 +115,9 @@ export function ImageSection() {
                 key={s.key}
                 type="button"
                 onClick={() => setSelectedStyle(s.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  selectedStyle === s.key
+                className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', selectedStyle === s.key
                     ? 'bg-primary/15 text-primary border border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted'
-                }`}
+                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted')}
               >
                 {s.name}
               </button>

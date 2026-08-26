@@ -1,6 +1,6 @@
 'use client'
 
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { IconAlert, IconInfo, IconCloudOff } from '@sloughgpt/strui'
 
 export type SystemBannerType = 'offline' | 'warning' | 'info'
@@ -29,7 +29,7 @@ const ICONS: Record<SystemBannerType, React.ReactNode> = {
 export function SystemBanner({ type, title, message, actionLabel, onAction, onDismiss }: SystemBannerProps) {
   return (
     <div
-      className={`mb-3 rounded-lg border p-3 text-xs ${STYLES[type]}`}
+      className={cn('mb-3 rounded-lg border p-3 text-xs', STYLES[type])}
       role="alert"
       aria-live="assertive"
     >

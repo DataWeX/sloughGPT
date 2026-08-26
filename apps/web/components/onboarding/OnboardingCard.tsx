@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 
 const ONBOARDING_KEY = 'sloughgpt-onboarded'
 
@@ -77,9 +77,7 @@ export function OnboardingCard({ onComplete }: Props) {
           {STEPS.map((_, i) => (
             <div
               key={i}
-              className={`h-1.5 rounded-full transition-all ${
-                i === step ? 'bg-primary w-6' : i < step ? 'bg-primary/40 w-1.5' : 'bg-muted w-1.5'
-              }`}
+              className={cn('h-1.5 rounded-full transition-all', i === step ? 'bg-primary w-6' : i < step ? 'bg-primary/40 w-1.5' : 'bg-muted w-1.5')}
             />
           ))}
         </div>

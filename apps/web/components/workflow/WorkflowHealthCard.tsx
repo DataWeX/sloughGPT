@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
 
 interface WorkflowHealthCardProps {
@@ -61,7 +61,7 @@ export function WorkflowHealthCard({ status }: WorkflowHealthCardProps) {
           {lastOps.map(op => (
             <div key={op.label} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0">
               <span className="text-muted-foreground">{op.label}</span>
-              <span className={`font-mono ${!op.time ? 'text-warning' : ''}`}>{timeSince(op.time)}</span>
+              <span className={cn('font-mono', !op.time ? 'text-warning' : '')}>{timeSince(op.time)}</span>
             </div>
           ))}
         </div>

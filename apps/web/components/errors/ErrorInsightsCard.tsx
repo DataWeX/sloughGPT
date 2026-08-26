@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
 interface GroupedError {
   message: string
@@ -87,7 +87,7 @@ export function ErrorInsightsCard({ grouped, recent, total }: ErrorInsightsCardP
             <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">By Severity</div>
             {severityEntries.map(([label, count]) => (
               <div key={label} className="flex items-center gap-2">
-                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${severityEntriesColors[label] ?? 'bg-muted text-muted-foreground'}`}>
+                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', severityEntriesColors[label] ?? 'bg-muted text-muted-foreground')}>
                   {label}
                 </span>
                 <div className="flex-1 h-1.5 rounded-full bg-muted/50 overflow-hidden">

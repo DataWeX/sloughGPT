@@ -441,7 +441,7 @@ export function MemoryTab() {
               <button
                 type="button"
                 onClick={() => setActiveTopic(null)}
-                className={`shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+                className={cn('shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
               >
                 All
               </button>
@@ -450,7 +450,7 @@ export function MemoryTab() {
                   key={topic}
                   type="button"
                   onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
-                  className={`shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+                  className={cn('shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
                 >
                   {topic}
                 </button>

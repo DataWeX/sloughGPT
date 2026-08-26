@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import type { TrainingJob } from '@/lib/training-controller'
 
@@ -12,12 +12,10 @@ interface TrainingHistoryProps {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-      status === 'completed' ? 'bg-success/15 text-success' :
+    <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', status === 'completed' ? 'bg-success/15 text-success' :
       status === 'running' ? 'bg-warning/15 text-warning' :
       status === 'failed' ? 'bg-destructive/15 text-destructive' :
-      'bg-muted text-muted-foreground'
-    }`}>{status}</span>
+      'bg-muted text-muted-foreground')}>{status}</span>
   )
 }
 

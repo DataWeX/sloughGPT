@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
@@ -164,9 +164,7 @@ export function LearnSection() {
               if (t === 'knowledge') handleLoadKnowledge()
               if (t === 'feeds') handleLoadFeeds()
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -222,7 +220,7 @@ export function LearnSection() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
             <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
-              <IconRefresh className={`h-4 w-4 ${loadingKnowledge ? 'animate-spin' : ''}`} />
+              <IconRefresh className={cn('h-4 w-4', loadingKnowledge ? 'animate-spin' : '')} />
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">

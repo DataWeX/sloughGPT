@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
@@ -31,12 +31,12 @@ export const TrafficCard = memo(function TrafficCard({ liveHealth }: TrafficCard
           <StatCard
             label="Requests/min"
             value={rpm > 0 ? rpm.toFixed(1) : '0'} numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${rpm > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', rpm > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard
             label="Total tokens"
             value={formatTokens(totalTokens)} numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${totalTokens > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', totalTokens > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard
             label="Avg tokens/req"
