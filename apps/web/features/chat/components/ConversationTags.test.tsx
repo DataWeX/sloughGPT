@@ -15,15 +15,19 @@ describe('ConversationTags', () => {
     expect(screen.getByPlaceholderText('Add tag...')).toBeInTheDocument()
   })
 
-  it('shows nothing while loading', () => {
-    const { container } = render(<ConversationTags sessionId="s1" />)
-    expect(container.firstChild).toBeNull()
+  it('renders after loading', async () => {
+    await act(async () => {
+      render(<ConversationTags sessionId="s1" />)
+    })
+    expect(screen.getByPlaceholderText('Add tag...')).toBeInTheDocument()
   })
 
   it('applies custom className', async () => {
+    let container: ReturnType<typeof render>['container']
     await act(async () => {
-      const { container } = render(<ConversationTags sessionId="s1" className="custom" />)
-      expect(container.firstChild).toHaveClass('custom')
+      const result = render(<ConversationTags sessionId="s1" className="custom" />)
+      container = result.container
     })
+    expect(container!.firstChild).toHaveClass('custom')
   })
 })

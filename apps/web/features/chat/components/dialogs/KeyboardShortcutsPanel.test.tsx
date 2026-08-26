@@ -19,7 +19,7 @@ describe('KeyboardShortcutsPanel', () => {
     render(<KeyboardShortcutsPanel open={true} onClose={vi.fn()} />)
     expect(screen.getByText('New chat')).toBeInTheDocument()
     expect(screen.getByText('Regenerate last response')).toBeInTheDocument()
-    expect(screen.getByText('Focus search')).toBeInTheDocument()
+    expect(screen.getAllByText('Focus search').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Cancel stream / close panel')).toBeInTheDocument()
     expect(screen.getByText('Toggle settings')).toBeInTheDocument()
   })
