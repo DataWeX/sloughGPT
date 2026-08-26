@@ -287,6 +287,8 @@ export const MessageBubble = memo(function MessageBubble({
           onAddNote={onAddNote}
           hasNote={hasNote}
           onQuickReply={onQuickReply}
+          onForward={onForward}
+          onExportMessageAsMarkdown={onExportMessageAsMarkdown}
         />
       )}
 
@@ -301,6 +303,8 @@ export const MessageBubble = memo(function MessageBubble({
           onDelete={onDelete}
           onAddNote={onAddNote}
           hasNote={hasNote}
+          onForward={onForward}
+          onExportMessageAsMarkdown={onExportMessageAsMarkdown}
         />
       )}
     </div>
