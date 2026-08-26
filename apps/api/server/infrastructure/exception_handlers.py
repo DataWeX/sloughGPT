@@ -164,8 +164,8 @@ def register_app_error_handler(app: FastAPI):
             try:
                 from domains.infrastructure.errors import emit_error_event
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error event emission failed: %s", e)
             return JSONResponse(
                 status_code=exc.http_status,
                 content=error_response(
@@ -191,8 +191,8 @@ def register_all_handlers(app: FastAPI):
             try:
                 from domains.infrastructure.errors import emit_error_event
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Error event emission failed: %s", e)
             log_fn = logger.warning if exc.http_status >= 500 else logger.info
             log_fn(
                 "%s [%s] on %s %s", exc.code, exc.message, request.method, request.url.path,
