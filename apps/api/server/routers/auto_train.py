@@ -197,11 +197,19 @@ def _enforce_checkpoint_budget():
                 files.append(f)
         if not files:
             return
-        total = sum(f.stat().st_size for f in files)
+        total = 0
+        alive_files = []
+        for f in files:
+            try:
+                total += f.stat().st_size
+                alive_files.append(f)
+            except FileNotFoundError:
+                continue
+        files = alive_files
         budget_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
         if total <= budget_bytes:
             return
-        files.sort(key=lambda p: p.stat().st_mtime)
+        files.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0)
         if len(files) > 1:
             files_to_prune = files[:-1]
         else:
@@ -210,8 +218,11 @@ def _enforce_checkpoint_budget():
         for f in files_to_prune:
             if total - freed <= budget_bytes:
                 break
-            size = f.stat().st_size
-            f.unlink()
+            try:
+                size = f.stat().st_size
+                f.unlink()
+            except FileNotFoundError:
+                continue
             freed += size
             meta = Path(str(f) + ".meta.json")
             if meta.exists():

@@ -120,12 +120,12 @@ class FilesRouter:
     # ── Metadata persistence ──
 
     def _load_metadata(self) -> dict[str, dict]:
-        if self.METADATA_FILE.exists():
-            try:
-                return json.loads(self.METADATA_FILE.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
-        return {}
+        try:
+            return json.loads(self.METADATA_FILE.read_text())
+        except FileNotFoundError:
+            return {}
+        except (json.JSONDecodeError, OSError):
+            return {}
 
     def _save_metadata(self, meta: dict[str, dict]) -> None:
         self.METADATA_FILE.write_text(json.dumps(meta, indent=2))
@@ -154,7 +154,9 @@ class FilesRouter:
         items = []
         for fid, m in meta.items():
             file_path = self.UPLOADS_DIR / m["filename"]
-            if not file_path.exists():
+            try:
+                file_path.stat()
+            except FileNotFoundError:
                 continue
             if tag and tag not in m.get("tags", []):
                 continue
@@ -242,7 +244,9 @@ class FilesRouter:
         items = []
         for fid, m in meta.items():
             file_path = self.UPLOADS_DIR / m["filename"]
-            if not file_path.exists():
+            try:
+                file_path.stat()
+            except FileNotFoundError:
                 continue
             name = m.get("original_name", m["filename"]).lower()
             if query not in name:
@@ -269,10 +273,10 @@ class FilesRouter:
                 raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
             file_path = self.UPLOADS_DIR / m["filename"]
-            if not file_path.exists():
+            try:
+                content = await asyncio.to_thread(file_path.read_bytes)
+            except FileNotFoundError:
                 raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
-
-            content = await asyncio.to_thread(file_path.read_bytes)
             text, pages = self._extract_text(content, m.get("extension", ""))
             chars = len(text)
 
@@ -303,8 +307,10 @@ class FilesRouter:
                 raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
             file_path = self.UPLOADS_DIR / m["filename"]
-            if file_path.exists():
+            try:
                 await asyncio.to_thread(file_path.unlink)
+            except FileNotFoundError:
+                pass
             await self._async_save_metadata(meta)
             safe_audit_log("file.delete", resource=file_id, detail=f"filename={m['filename']}")
             return success_response(data={"status": "deleted", "file_id": file_id})
@@ -319,10 +325,10 @@ class FilesRouter:
             raise_error("File not found", "E_NOT_FOUND", status_code=404)
 
         file_path = self.UPLOADS_DIR / m["filename"]
-        if not file_path.exists():
+        try:
+            content = await asyncio.to_thread(file_path.read_bytes)
+        except FileNotFoundError:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
-
-        content = await asyncio.to_thread(file_path.read_bytes)
         text, pages = self._extract_text(content, m.get("extension", ""))
         if not text.strip():
             return IngestResponse(id=file_id, filename=m.get("original_name", m["filename"]), chars=0, facts_stored=0)
