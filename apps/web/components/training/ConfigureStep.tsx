@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGr
 import { TrainingPresets } from '@/components/training/TrainingPresets'
 import type { StepProps } from './DataStep'
 
-export function ConfigureStep({ form, onNext, onBack }: StepProps) {
+export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
   const hpErrors = useMemo(() => {
     const errors: string[] = []
     if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
@@ -168,6 +168,28 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {checkpoints && checkpoints.checkpoints.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="resume-checkpoint" className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Resume from checkpoint (optional)
+                </label>
+                <select
+                  id="resume-checkpoint"
+                  value={form.resumeCheckpoint}
+                  onChange={e => form.setResumeCheckpoint(e.target.value)}
+                  aria-label="Resume from checkpoint"
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+                >
+                  <option value="">Start fresh</option>
+                  {checkpoints.checkpoints.map(c => (
+                    <option key={c.name} value={c.name}>
+                      {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </>

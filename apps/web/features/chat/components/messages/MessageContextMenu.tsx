@@ -2,19 +2,21 @@
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
-import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin } from '@sloughgpt/strui'
+import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconPin, IconMessage } from '@sloughgpt/strui'
 
 interface MessageContextMenuProps {
   messageId: string
   content: string
   role: 'user' | 'assistant'
   isBookmarked?: boolean
+  hasNote?: boolean
   onCopy?: (text: string) => void
   onEdit?: (messageId: string) => void
   onBookmark?: (messageId: string) => void
   onRegenerate?: (messageId: string) => void
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
+  onAddNote?: (messageId: string) => void
   children: React.ReactNode
 }
 
@@ -48,12 +50,14 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   content,
   role,
   isBookmarked,
+  hasNote,
   onCopy,
   onEdit,
   onBookmark,
   onRegenerate,
   onDelete,
   onSaveToKnowledge,
+  onAddNote,
   children,
 }: MessageContextMenuProps) {
   const [open, setOpen] = useState(false)
@@ -77,6 +81,11 @@ export const MessageContextMenu = memo(function MessageContextMenu({
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
     document.addEventListener('keydown', handleKey)
     document.addEventListener('click', close)
+    // Auto-focus first menu item
+    setTimeout(() => {
+      const firstItem = menuRef.current?.querySelector('[role="menuitem"]:not([disabled])') as HTMLElement
+      firstItem?.focus()
+    }, 0)
     return () => {
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('click', close)
@@ -129,6 +138,11 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       icon: <IconPin className="h-3.5 w-3.5" />,
       onClick: () => { onSaveToKnowledge(messageId, content); setOpen(false) },
     }] : []),
+    ...(onAddNote ? [{
+      label: hasNote ? 'Edit note' : 'Add note',
+      icon: <IconMessage className="h-3.5 w-3.5" />,
+      onClick: () => { onAddNote(messageId); setOpen(false) },
+    }] : []),
     ...(onDelete ? [{
       label: 'Delete',
       icon: <IconTrash className="h-3.5 w-3.5" />,
@@ -159,6 +173,12 @@ export const MessageContextMenu = memo(function MessageContextMenu({
               e.preventDefault()
               const prev = currentIndex > 0 ? currentIndex - 1 : menuItems.length - 1
               ;(menuItems[prev] as HTMLElement).focus()
+            } else if (e.key === 'Home') {
+              e.preventDefault()
+              ;(menuItems[0] as HTMLElement).focus()
+            } else if (e.key === 'End') {
+              e.preventDefault()
+              ;(menuItems[menuItems.length - 1] as HTMLElement).focus()
             } else if (e.key === 'Escape') {
               e.preventDefault()
               setOpen(false)

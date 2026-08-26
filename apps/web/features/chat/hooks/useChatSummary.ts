@@ -5,7 +5,6 @@ import { chatController } from '@/lib/chat-controller'
 import type { ChatMessage } from '@/lib/chat-utils'
 
 interface UseChatSummaryOptions {
-  model: string
   temperature?: number
 }
 
@@ -18,9 +17,8 @@ interface UseChatSummaryReturn {
 }
 
 export function useChatSummary({
-  model,
   temperature = 0.3,
-}: UseChatSummaryOptions): UseChatSummaryReturn {
+}: UseChatSummaryOptions = {}): UseChatSummaryReturn {
   const [summary, setSummary] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +56,7 @@ Summary:`
     } finally {
       setIsGenerating(false)
     }
-  }, [model, temperature])
+  }, [temperature])
 
   const clearSummary = useCallback(() => {
     setSummary(null)

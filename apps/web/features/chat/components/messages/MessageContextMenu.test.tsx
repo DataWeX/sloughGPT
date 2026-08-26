@@ -11,6 +11,7 @@ vi.mock('@sloughgpt/strui', () => ({
   IconStar: ({ className }: any) => <span className={className}>star</span>,
   IconTrash: ({ className }: any) => <span className={className}>trash</span>,
   IconPin: ({ className }: any) => <span className={className}>pin</span>,
+  IconMessage: ({ className }: any) => <span className={className}>message</span>,
 }))
 
 import { MessageContextMenu } from './MessageContextMenu'

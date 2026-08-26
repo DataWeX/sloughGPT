@@ -8,17 +8,14 @@ import type { ChatMessage } from '@/lib/chat-utils'
 
 interface ConversationSummaryProps {
   messages: ChatMessage[]
-  model: string
   className?: string
 }
 
 export const ConversationSummary = memo(function ConversationSummary({
   messages,
-  model,
   className,
 }: ConversationSummaryProps) {
   const { summary, isGenerating, error, generateSummary, clearSummary } = useChatSummary({
-    model,
     temperature: 0.3,
   })
   const [copied, setCopied] = useState(false)

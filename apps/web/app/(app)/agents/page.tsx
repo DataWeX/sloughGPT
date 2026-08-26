@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -466,6 +467,7 @@ export default function AgentsPage() {
         </KpiGrid>
 
         {/* Create */}
+        <SectionErrorBoundary sectionName="Agent creator">
         <Card>
           <CardHeader><CardTitle className="text-base">New Agent</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -531,6 +533,7 @@ export default function AgentsPage() {
             </Button>
           </CardContent>
         </Card>
+        </SectionErrorBoundary>
 
         {/* List */}
         <Card>
@@ -742,6 +745,7 @@ export default function AgentsPage() {
         </Card>
 
         {/* Orchestration */}
+        <SectionErrorBoundary sectionName="Orchestrator panel">
         <Card>
           <CardHeader><CardTitle className="text-base">Multi-Agent Orchestration</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -864,8 +868,10 @@ export default function AgentsPage() {
             )}
           </CardContent>
         </Card>
+        </SectionErrorBoundary>
 
         {/* Run history */}
+        <SectionErrorBoundary sectionName="Run history viewer">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -1093,6 +1099,7 @@ export default function AgentsPage() {
             )}
           </CardContent>
         </Card>
+        </SectionErrorBoundary>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
         <AlertDialogContent>

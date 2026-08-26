@@ -83,6 +83,8 @@ export interface TrainingFormState {
   saveCustomPreset: (preset: TrainingPreset) => void
   deleteCustomPreset: (name: string) => void
   canStart: boolean
+  resumeCheckpoint: string
+  setResumeCheckpoint: (s: string) => void
   startTraining: (checkpointName?: string) => void
 }
 
@@ -120,6 +122,7 @@ export function useTrainingForm(
   const [loraRank, setLoraRank] = useState(8)
   const [loraAlpha, setLoraAlpha] = useState(16)
   const [textInput, setTextInput] = useState('')
+  const [resumeCheckpoint, setResumeCheckpoint] = useState('')
   const [configLoaded, setConfigLoaded] = useState(false)
 
   useEffect(() => {
@@ -222,11 +225,13 @@ export function useTrainingForm(
       Notification.requestPermission()
     }
 
+    const effectiveCheckpoint = checkpointName || resumeCheckpoint || undefined
+
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
 
-    if (!hasDataset && !hasText && !checkpointName) {
-      addToast('Select a dataset or paste text to train on', 'error'); return
+    if (!hasDataset && !hasText && !effectiveCheckpoint) {
+      addToast('Select a dataset, paste text, or choose a checkpoint to resume', 'error'); return
     }
 
     if (method === 'finetune' && !hasDataset) {
@@ -237,13 +242,13 @@ export function useTrainingForm(
       addToast('Vision model training requires a dataset with image-text pairs', 'error'); return
     }
 
-    if (method === 'native' && !hasDataset && !hasText) {
-      addToast('Select a dataset or paste text for native training', 'error'); return
+    if (method === 'native' && !hasDataset && !hasText && !effectiveCheckpoint) {
+      addToast('Select a dataset, paste text, or choose a checkpoint for native training', 'error'); return
     }
 
     const body: Record<string, unknown> = { algo, epochs: trainingEpochs, learning_rate: trainingLR }
     if (trainingBatchSize) body.batch_size = trainingBatchSize
-    if (checkpointName) body.checkpoint_name = checkpointName
+    if (effectiveCheckpoint) body.checkpoint_name = effectiveCheckpoint
     if (hasDataset) body.dataset_id = datasets.selectedDataset
     if (hasText) body.source_text = textInput.trim()
 
@@ -289,7 +294,7 @@ export function useTrainingForm(
     }
   }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
       selectedModel, useLoRA, datasets.selectedDataset, visualVisionEncoder, visualLLM,
-      visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints])
+      visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints, resumeCheckpoint])
 
   return {
     method, inputMode, textInput, showAdvanced, algo,
@@ -307,6 +312,6 @@ export function useTrainingForm(
     setLoadingFinetunedModel,
     applyPreset,
     customPresets, saveCustomPreset, deleteCustomPreset,
-    canStart, startTraining,
+    canStart, resumeCheckpoint, setResumeCheckpoint, startTraining,
   }
 }

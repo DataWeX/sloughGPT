@@ -122,7 +122,7 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Summary</span>
                   </div>
-                  <ConversationSummary messages={messages} model={ctx.model} />
+                  <ConversationSummary messages={messages} />
                 </section>
                 <section aria-label="Statistics">
                   <div className="flex items-center gap-1.5 mb-2">

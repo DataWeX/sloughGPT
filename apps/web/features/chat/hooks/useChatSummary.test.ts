@@ -22,7 +22,7 @@ describe('useChatSummary', () => {
   })
 
   it('initializes with default state', () => {
-    const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
+    const { result } = renderHook(() => useChatSummary())
     expect(result.current.summary).toBeNull()
     expect(result.current.isGenerating).toBe(false)
     expect(result.current.error).toBeNull()
@@ -30,7 +30,7 @@ describe('useChatSummary', () => {
 
   it('generates summary successfully', async () => {
     vi.mocked(chatController.send).mockResolvedValue({ message: 'Test summary', session_id: 'test', done: true })
-    const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
+    const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
       await result.current.generateSummary(mockMessages)
@@ -42,7 +42,7 @@ describe('useChatSummary', () => {
   })
 
   it('handles empty messages', async () => {
-    const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
+    const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
       await result.current.generateSummary([])
@@ -54,7 +54,7 @@ describe('useChatSummary', () => {
 
   it('handles errors', async () => {
     vi.mocked(chatController.send).mockRejectedValue(new Error('API error'))
-    const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
+    const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
       await result.current.generateSummary(mockMessages)
@@ -66,7 +66,7 @@ describe('useChatSummary', () => {
 
   it('clears summary', async () => {
     vi.mocked(chatController.send).mockResolvedValue({ message: 'Test summary', session_id: 'test', done: true })
-    const { result } = renderHook(() => useChatSummary({ model: 'test-model' }))
+    const { result } = renderHook(() => useChatSummary())
 
     await act(async () => {
       await result.current.generateSummary(mockMessages)

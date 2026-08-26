@@ -22,13 +22,8 @@ import { IconBrain, IconRefresh, IconTrash, IconPlus, IconSearch, IconX, IconFil
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { todayDateString, formatRelativeTime } from '@/lib/format-bytes'
-import {
-  memoryController,
-  type MemoryItem,
-  type MemoryStats,
-  type MemoryArchiveStats,
-  type MemoryArchiveRecord,
-} from '@/lib/memory-controller'
+import { memoryController, type MemoryItem, type MemoryStats, type MemoryArchiveStats, type MemoryArchiveRecord } from '@/lib/memory-controller'
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -707,6 +702,7 @@ export const MemoryCard = memo(function MemoryCard() {
         )}
 
         {editingItem && (
+          <SectionErrorBoundary sectionName="Memory editor">
           <div className="rounded-lg border border-primary/40 p-3 mb-3 space-y-2">
             <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
               <IconEdit className="h-3.5 w-3.5 text-muted-foreground" />
@@ -751,6 +747,7 @@ export const MemoryCard = memo(function MemoryCard() {
               </Button>
             </div>
           </div>
+          </SectionErrorBoundary>
         )}
 
         {topics.length > 0 && (
@@ -936,6 +933,7 @@ export const MemoryCard = memo(function MemoryCard() {
           </div>
         )}
 
+        <SectionErrorBoundary sectionName="Archive panel">
         <FoldSection heading={
           <span className="flex items-center gap-2">
             <IconSettings className="h-4 w-4 text-muted-foreground" />
@@ -1057,6 +1055,7 @@ export const MemoryCard = memo(function MemoryCard() {
             </div>
           </div>
         </FoldSection>
+        </SectionErrorBoundary>
       </CardContent>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
@@ -1110,6 +1109,7 @@ export const MemoryCard = memo(function MemoryCard() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <SectionErrorBoundary sectionName="Import dialog">
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1192,6 +1192,7 @@ export const MemoryCard = memo(function MemoryCard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </SectionErrorBoundary>
     </Card>
   )
 })

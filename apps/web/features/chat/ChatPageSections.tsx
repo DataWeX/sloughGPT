@@ -23,6 +23,7 @@ const ChatToolPanel = dynamicNext(() => import('@/features/chat/components/panel
 const DownloadDialog = dynamicNext(() => import('@/features/chat/components/dialogs/DownloadDialog').then(m => m.DownloadDialog), { ssr: false })
 const SystemPromptDialog = dynamicNext(() => import('@/features/chat/components/dialogs/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
 const ReadFileSection = dynamicNext(() => import('@/features/chat/components/dialogs/ReadFileSection'), { ssr: false })
+const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/NoteDialog').then(m => m.NoteDialog), { ssr: false })
 
 interface ChatPageSectionProps {
   controller: ChatPageController
@@ -290,6 +291,8 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           collapsibleLength={collapsibleLength}
           temperature={model.temperature}
           contextLayers={contextLayers}
+          noteMap={controller.noteMap}
+          onAddNote={controller.onAddNote}
         />
       </ImageDropZone>
     </>
@@ -324,6 +327,7 @@ export function ChatDialogSection({ controller }: ChatPageSectionProps) {
     ui, chat, model, bookmarks, removeBookmark, clearAll,
     systemPromptOpen, setSystemPromptOpen, customSystemPrompt, handleSaveSystemPrompt,
     setChatMode,
+    noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
   } = controller
 
   return (
@@ -369,6 +373,16 @@ export function ChatDialogSection({ controller }: ChatPageSectionProps) {
           onOpenChange={setSystemPromptOpen}
           value={customSystemPrompt}
           onSave={handleSaveSystemPrompt}
+        />
+      )}
+
+      {noteDialogOpen && (
+        <NoteDialog
+          open={noteDialogOpen}
+          onOpenChange={setNoteDialogOpen}
+          note={noteDialogNote}
+          onSave={onSaveNote}
+          onDelete={onDeleteNote}
         />
       )}
     </>

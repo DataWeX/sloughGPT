@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn, IconStar } from '@sloughgpt/strui'
+import { IconMessage } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
@@ -38,6 +39,9 @@ export interface MessageBubbleProps {
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
   temperature?: number
+  hasNote?: boolean
+  note?: string
+  onAddNote?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
@@ -68,6 +72,9 @@ export const MessageBubble = memo(function MessageBubble({
   onSaveToKnowledge,
   collapsibleLength = 0,
   temperature,
+  hasNote = false,
+  note,
+  onAddNote,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isVisible, setIsVisible] = useState(false)
@@ -89,12 +96,14 @@ export const MessageBubble = memo(function MessageBubble({
       content={content}
       role={role}
       isBookmarked={isBookmarked}
+      hasNote={hasNote}
       onCopy={onCopy}
       onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
       onRegenerate={showActions ? onRegenerate : undefined}
       onDelete={onDelete}
       onSaveToKnowledge={onSaveToKnowledge}
+      onAddNote={onAddNote}
     >
     <div
       id={messageId ? `msg-${messageId}` : undefined}
@@ -129,6 +138,11 @@ export const MessageBubble = memo(function MessageBubble({
         {isBookmarked && (
           <span className="ml-1.5 text-warning" aria-label="Bookmarked">
             <IconStar className="h-2.5 w-2.5 inline" filled aria-hidden="true" />
+          </span>
+        )}
+        {hasNote && (
+          <span className="ml-1.5 text-primary/70" aria-label="Has note">
+            <IconMessage className="h-2.5 w-2.5 inline" aria-hidden="true" />
           </span>
         )}
         {role === 'assistant' && model && !isError && (
@@ -184,6 +198,12 @@ export const MessageBubble = memo(function MessageBubble({
             onReact={(emoji) => onReact?.(id, emoji)}
             className="mt-1"
           />
+        )}
+        {note && (
+          <div className="mt-1.5 px-2 py-1.5 rounded-md bg-warning/10 border border-warning/20 text-xs">
+            <span className="font-medium text-warning/80">Note:</span>{' '}
+            <span className="text-foreground/80 line-clamp-3">{note}</span>
+          </div>
         )}
         {isStreaming && role === 'assistant' && hasContent && (
           <div className="flex items-center gap-1.5 mt-1" aria-live="polite">

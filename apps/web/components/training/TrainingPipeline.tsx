@@ -91,7 +91,8 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   const completeStep = (id: StepId) => setCompletedSteps(prev => new Set(prev).add(id))
 
   const runningJob = form.allJobs.find(j => j.status === 'running')
-  const isTraining = session.trainingRunning || !!runningJob
+  const isTurbo = session.method === 'turbo' && session.trainingRunning
+  const isTraining = (session.trainingRunning || !!runningJob) && !isTurbo
 
   // Derive display values from the best available source:
   // session data (from polling) takes priority; fall back to runningJob data.
@@ -124,7 +125,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
   const goToTrain = () => setStep('train')
 
-  const stepProps = { form, datasets, onNext: advance, onBack: goBack, addToast }
+  const stepProps = { form, datasets, checkpoints, onNext: advance, onBack: goBack, addToast }
 
   if (isTraining) {
     return (

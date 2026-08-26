@@ -47,6 +47,8 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   collapsibleLength?: number
   temperature?: number
   contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
+  noteMap?: Record<string, string>
+  onAddNote?: (messageId: string) => void
 }
 
 export interface ChatAreaRef {
@@ -89,6 +91,8 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     collapsibleLength,
     temperature,
     contextLayers,
+    noteMap,
+    onAddNote,
     streamingStatus,
     streamingToolName,
     ...inputProps
@@ -171,6 +175,8 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             collapsibleLength={collapsibleLength}
             temperature={temperature}
             contextLayers={contextLayers}
+            noteMap={noteMap}
+            onAddNote={onAddNote}
           />
 
           {filteredMessages.length > 0 && !isNearBottom && (

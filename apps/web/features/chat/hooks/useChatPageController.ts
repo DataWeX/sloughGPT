@@ -18,6 +18,7 @@ import { useChatKeyboard } from '@/features/chat/hooks/useChatKeyboard'
 import { useChatBookmarks } from '@/features/chat/hooks/useChatBookmarks'
 import { useChatMessages } from '@/features/chat/hooks/useChatMessages'
 import { useChatMode } from '@/features/chat/hooks/useChatMode'
+import { useMessageNotes } from '@/features/chat/hooks/useMessageNotes'
 import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { chatController } from '@/lib/chat-controller'
@@ -62,6 +63,8 @@ export function useChatPageController(
     })
   }, [])
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [noteDialogMessageId, setNoteDialogMessageId] = useState<string | null>(null)
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -96,6 +99,8 @@ export function useChatPageController(
     },
   })
 
+  const messageNotes = useMessageNotes({ sessionId: chat.sessionIdRef.current })
+
   const {
     chatMode, setChatMode,
     writeTone, setWriteTone,
@@ -107,6 +112,7 @@ export function useChatPageController(
     brainstormTopic, setBrainstormTopic,
     wellnessType, setWellnessType,
     createStyle, setCreateStyle,
+    handleSend: handleModeSend,
   } = useChatMode({
     chat: {
       input: chat.input,
@@ -341,47 +347,8 @@ export function useChatPageController(
   const handleWriteSend = useCallback(async () => {
     const input = chat.input.trim()
     if (!input && chatMode !== 'read') { chat.sendMessage(); return }
-    if (chatMode === 'write') {
-      chat.sendMessage(`Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'rewrite') {
-      const rewritePrompts: Record<string, string> = {
-        'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
-        'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
-        'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
-        'Make Professional': 'Rewrite this text in a professional, formal tone',
-        'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
-      }
-      chat.sendMessage(`${rewritePrompts[rewriteStyle] || 'Rewrite this text'}:\n\n${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'decide') {
-      chat.sendMessage(`Help me decide using ${decideStructure.toLowerCase()}: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'explain') {
-      chat.sendMessage(`Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'translate') {
-      const [src, tgt] = translateLangPair.split('→')
-      chat.sendMessage(`Translate this from ${src} to ${tgt}: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'brainstorm') {
-      chat.sendMessage(`Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'wellness') {
-      const prompts: Record<string, string> = { 'Sleep Story': 'Tell me a calming sleep story', 'Meditation': 'Guide me through a short meditation', 'Breathing': 'Guide me through a breathing exercise', 'Affirmation': 'Share a positive affirmation' }
-      chat.sendMessage(`Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'create') {
-      chat.setInput('')
-      await handleCreateImage(input)
-    } else if (chatMode === 'read') {
-      if (!readFileData) { useToastStore.getState().addToast('Upload a file first, then ask your question', 'info'); return }
-      chat.setInput('')
-      chat.sendMessage(`[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, MAX_FILE_CONTENT_CHARS)}\n\n---\n\nMy question: ${input}`)
-    } else {
-      chat.sendMessage()
-    }
-  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, readFileData, chat, handleCreateImage])
+    await handleModeSend(readFileData)
+  }, [chatMode, readFileData, chat, handleModeSend])
 
   const handleToggleBookmark = useCallback((messageId: string) => {
     const msg = chat.messages.find(m => m.id === messageId)
@@ -535,6 +502,29 @@ export function useChatPageController(
     handlePDFDropped,
     contextLayers: chat.contextLayers,
     handleReact: chat.handleReact,
+    noteMap: messageNotes.notes,
+    noteDialogOpen: noteDialogOpen,
+    setNoteDialogOpen: setNoteDialogOpen,
+    noteDialogMessageId: noteDialogMessageId,
+    noteDialogNote: noteDialogMessageId ? messageNotes.getNote(noteDialogMessageId) || '' : '',
+    onSaveNote: (note: string) => {
+      if (noteDialogMessageId) {
+        if (note === '') {
+          messageNotes.removeNote(noteDialogMessageId)
+        } else {
+          messageNotes.setNote(noteDialogMessageId, note)
+        }
+      }
+    },
+    onDeleteNote: () => {
+      if (noteDialogMessageId) {
+        messageNotes.removeNote(noteDialogMessageId)
+      }
+    },
+    onAddNote: (messageId: string) => {
+      setNoteDialogMessageId(messageId)
+      setNoteDialogOpen(true)
+    },
   }
 }
 

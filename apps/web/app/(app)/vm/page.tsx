@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } from '@sloughgpt/strui'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
@@ -822,7 +823,7 @@ export default function VMPage() {
           </button>
         </div>
 
-        {mode === 'linux' && <LinuxTab />}
+        {mode === 'linux' && <SectionErrorBoundary sectionName="Linux VM"><LinuxTab /></SectionErrorBoundary>}
 
         {mode === 'assembly' && (<>
         {/* Top bar: program selector + run */}
@@ -1027,6 +1028,7 @@ export default function VMPage() {
 
           {/* Results */}
           <div className="space-y-4">
+            <SectionErrorBoundary sectionName="Results panel">
             {/* Status */}
             {result && (
               <Card>
@@ -1406,7 +1408,9 @@ export default function VMPage() {
 
             {/* VGA memory */}
             {result && result.success && (
-              <VGADisplay text={result.vga_text} cells={result.vga_cells} />
+              <SectionErrorBoundary sectionName="VGA Display">
+                <VGADisplay text={result.vga_text} cells={result.vga_cells} />
+              </SectionErrorBoundary>
             )}
 
             {/* Memory dump */}
@@ -1422,6 +1426,7 @@ export default function VMPage() {
                 </CardContent>
               </Card>
             )}
+            </SectionErrorBoundary>
           </div>
         </div>
 

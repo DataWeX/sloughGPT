@@ -7,9 +7,12 @@ import { datasetController } from '@/lib/controllers'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
 
+import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
+
 export interface StepProps {
   form: TrainingFormState
   datasets: UseTrainingDatasetsReturn
+  checkpoints?: UseTrainingCheckpointsReturn
   onNext: () => void
   onBack: () => void
   addToast?: (msg: string, type?: 'success' | 'error' | 'info') => void
