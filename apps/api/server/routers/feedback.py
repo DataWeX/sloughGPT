@@ -3,8 +3,9 @@ Feedback Router - MVC View layer
 """
 import logging
 import time
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 
+from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
@@ -63,7 +64,7 @@ class FeedbackRouter:
             logger.error("Failed to record workflow feedback (conversation=%s): %s", req.conversation_id, e)
             classify_and_raise(e, source="feedback.record_workflow")
 
-    async def record_feedback(self, req: FeedbackRequest) -> dict:
+    async def record_feedback(self, req: FeedbackRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Record user feedback and pipe into learning systems."""
         try:
             ctrl = get_feedback_controller()
@@ -96,7 +97,7 @@ class FeedbackRouter:
         except Exception as e:
             classify_and_raise(e, source="feedback.get_stats")
 
-    async def create_conversation(self, req: ConversationCreate) -> dict:
+    async def create_conversation(self, req: ConversationCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Create a new conversation to associate feedback with."""
         try:
             ctrl = get_feedback_controller()
@@ -131,7 +132,7 @@ class FeedbackRouter:
         except Exception as e:
             classify_and_raise(e, source="feedback.get_conversation")
 
-    async def update_conversation(self, conv_id: str, req: ConversationUpdate) -> dict:
+    async def update_conversation(self, conv_id: str, req: ConversationUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Update a conversation's metadata (name, session_id, etc.)."""
         try:
             ctrl = get_feedback_controller()
@@ -143,7 +144,7 @@ class FeedbackRouter:
         except Exception as e:
             classify_and_raise(e, source="feedback.update_conversation")
 
-    async def delete_conversation(self, conv_id: str) -> dict:
+    async def delete_conversation(self, conv_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Delete a conversation and its associated feedback records."""
         try:
             ctrl = get_feedback_controller()
