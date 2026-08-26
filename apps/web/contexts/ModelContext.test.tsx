@@ -159,7 +159,7 @@ describe('ModelContext', () => {
       const res = await result.current.unloadModel('m1')
       expect(res).toEqual({ success: true })
     })
-    expect(mockController.modelController.unloadModel).toHaveBeenCalledWith('m1')
+    expect(mockController.modelController.unloadModel).toHaveBeenCalledWith()
   })
 
   it('unloadModel surfaces errors', async () => {

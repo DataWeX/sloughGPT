@@ -41,7 +41,7 @@ describe('modelController', () => {
 
   it('unloadModel posts to /models/unload', async () => {
     apiClient.apiPost.mockResolvedValue({})
-    const result = await modelController.unloadModel('gpt2')
+    const result = await modelController.unloadModel()
     expect(apiClient.apiPost).toHaveBeenCalledWith('/models/unload')
   })
 

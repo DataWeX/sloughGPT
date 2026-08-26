@@ -146,7 +146,7 @@ export function useChatModelSettings(
     if (!model) return
     setLoadingModel(model)
     try {
-      await modelController.unloadModel(model)
+      await modelController.unloadModel()
       await refreshHealth()
       setModel('')
       showToast('Model stopped', 'info')

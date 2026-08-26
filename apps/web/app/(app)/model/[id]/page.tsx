@@ -127,7 +127,7 @@ export default function ModelDetailPage() {
 
   const handleUnload = async () => {
     try {
-      await modelController.unloadModel(modelId)
+      await modelController.unloadModel()
       setLoadState('idle')
       setHealth(prev => prev ? { ...prev, model_loaded: false, model_type: '' } : null)
       addToast('Model stopped', 'info')

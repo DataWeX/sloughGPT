@@ -154,7 +154,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      await modelController.unloadModel(modelId)
+      await modelController.unloadModel()
 
       await refreshModels()
       await refreshHealth()

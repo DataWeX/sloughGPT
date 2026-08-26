@@ -138,7 +138,7 @@ export const modelController = {
     return this.load(modelPath, 'cpu')
   },
 
-  async unloadModel(modelId: string): Promise<Record<string, unknown>> {
+  async unloadModel(): Promise<Record<string, unknown>> {
     return await apiPost('/models/unload')
   },
 

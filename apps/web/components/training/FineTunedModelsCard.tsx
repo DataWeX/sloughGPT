@@ -82,7 +82,7 @@ export function FineTunedModelsCard({
   const handleUnload = async (name: string) => {
     setLoadingName(name)
     try {
-      await modelController.unloadModel(name)
+      await modelController.unloadModel()
       addToast(`${name} unloaded`, 'info')
       onLoaded?.()
     } catch (e) {
