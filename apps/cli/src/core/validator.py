@@ -86,7 +86,7 @@ class Doctor:
 
     def _check_required_dirs(self):
         """Check required directories exist."""
-        for dir_name in ["models", "datasets", "data"]:
+        for dir_name in ["models", "data"]:
             path = self.root / dir_name
             if path.exists():
                 self.result.add_pass(dir_name)

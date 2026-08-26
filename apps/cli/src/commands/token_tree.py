@@ -36,10 +36,10 @@ def _resolve_corpus_file(path_or_name: str) -> Path:
     if p.is_file():
         return p
     name = path_or_name.strip("/")
-    for candidate in (Path("datasets") / name / "input.txt", Path(name)):
+    for candidate in (Path("data") / name / "input.txt", Path(name)):
         if candidate.is_file():
             return candidate
-    available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
+    available = sorted(d.name for d in Path("data").glob("*") if d.is_dir())
     hint = f" Available datasets: {', '.join(available)}." if available else ""
     log.error(f"Corpus not found: {path_or_name}.{hint}")
     sys.exit(2)

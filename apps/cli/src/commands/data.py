@@ -15,7 +15,7 @@ from utils.formatting import format_size, format_number
 
 def cmd_datasets(args):
     """List available datasets."""
-    datasets_dir = Path("datasets")
+    datasets_dir = Path("data")
     registry_file = datasets_dir / "registry.json"
     registry = {}
     if registry_file.exists():
@@ -44,7 +44,7 @@ def cmd_datasets(args):
 
 def cmd_dataset_import(args, source: str):
     """Import datasets from various sources."""
-    datasets_dir = Path("datasets")
+    datasets_dir = Path("data")
     datasets_dir.mkdir(exist_ok=True)
 
     log.header(f"Import Dataset ({source})")
@@ -88,7 +88,7 @@ def cmd_dataset_import(args, source: str):
             result = hf.download_dataset(
                 dataset_id=dataset_id,
                 name=name,
-                output_dir="datasets",
+                output_dir="data",
             )
 
             if result.success:
@@ -226,7 +226,7 @@ def cmd_data_tool(args, subcmd: str):
 def cmd_dataset_stats(args):
     """Show detailed dataset statistics."""
     name = args.name
-    dataset_path = Path("datasets") / name
+    dataset_path = Path("data") / name
 
     if not dataset_path.exists():
         log.error(f"Dataset not found: {name}")
@@ -273,7 +273,7 @@ def cmd_dataset_export(args):
     name = args.name
     output = args.output or f"{name}.zip"
 
-    dataset_path = Path("datasets") / name
+    dataset_path = Path("data") / name
     if not dataset_path.exists():
         log.error(f"Dataset not found: {name}")
         return

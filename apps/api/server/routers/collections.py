@@ -210,7 +210,7 @@ class CollectionsRouter:
         except Exception as e:
             classify_and_raise(e, source="collections.delete_pipeline")
 
-    async def collect(self, pipeline_id: str) -> dict:
+    async def collect(self, pipeline_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Run collection for a specific pipeline."""
         try:
             from domains.collections.registry import get_registry
