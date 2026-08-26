@@ -264,6 +264,7 @@ def _extract_user_message(messages: List[Message]) -> Optional[str]:
 
 _META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
+_META_WEIGHT_CACHE_LOCK = threading.Lock()
 
 def _apply_meta_weights(
     temperature: float,
@@ -285,10 +286,11 @@ def _apply_meta_weights(
     cache_key = f"{user_id}:{hash(user_message)}"
     now = time.monotonic()
 
-    if cache_key in _META_WEIGHT_CACHE:
-        cached_time, cached_params = _META_WEIGHT_CACHE[cache_key]
-        if now - cached_time < _META_WEIGHT_CACHE_TTL:
-            return cached_params
+    with _META_WEIGHT_CACHE_LOCK:
+        if cache_key in _META_WEIGHT_CACHE:
+            cached_time, cached_params = _META_WEIGHT_CACHE[cache_key]
+            if now - cached_time < _META_WEIGHT_CACHE_TTL:
+                return cached_params
 
     try:
         from domains.feedback.meta_weights import get_meta_weight_manager
@@ -302,11 +304,12 @@ def _apply_meta_weights(
             "top_k": adj.top_k,
             "repetition_penalty": adj.repetition_penalty,
         }
-        _META_WEIGHT_CACHE[cache_key] = (now, result)
-        if len(_META_WEIGHT_CACHE) > 1000:
-            logger.info("Meta-weight cache overflow, clearing %d entries", len(_META_WEIGHT_CACHE))
-            safe_audit_log("inference.meta_weight_cache_clear", resource="meta_weight_cache", detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}")
-            _META_WEIGHT_CACHE.clear()
+        with _META_WEIGHT_CACHE_LOCK:
+            _META_WEIGHT_CACHE[cache_key] = (now, result)
+            if len(_META_WEIGHT_CACHE) > 1000:
+                logger.info("Meta-weight cache overflow, clearing %d entries", len(_META_WEIGHT_CACHE))
+                safe_audit_log("inference.meta_weight_cache_clear", resource="meta_weight_cache", detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}")
+                _META_WEIGHT_CACHE.clear()
         return result
     except Exception as e:
         logger.debug("Meta-weight adjustment failed: %s", e)
@@ -964,6 +967,18 @@ class InferenceRouter:
             classify_and_raise(e, source="inference.list_chat_tools")
     async def chat_stream(self, req: ChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """chat_stream."""
+        corr_id = request.scope.get("correlation_id", "-")
+        logger.info(
+            "CHAT_STREAM ENTER corr=%s session=%s msgs=%d images=%d max_tokens=%d temp=%.2f",
+            corr_id, req.session_id, len(req.messages), len(req.images or []),
+            req.max_tokens, req.temperature,
+            extra={"tag": "CHAT", "context": {
+                "corr": corr_id, "session_id": req.session_id,
+                "msg_count": len(req.messages), "has_images": bool(req.images),
+                "max_tokens": req.max_tokens, "temperature": req.temperature,
+                "use_context": req.use_context_core, "use_rag": req.use_rag,
+            }},
+        )
         from startup_progress import STARTUP_PHASE
 
         import state as _check_state
@@ -987,7 +1002,8 @@ class InferenceRouter:
 
         async def generate() -> AsyncIterator[str]:
             """generate."""
-            logger.debug("chat_stream.generate() ENTERED")
+            corr_id = request.scope.get("correlation_id", "-")
+            logger.debug("chat_stream.generate() ENTERED corr=%s", corr_id)
 
             # Check for Last-Event-ID header for reconnection
             last_event_id_raw = request.headers.get("last-event-id")
@@ -1264,6 +1280,15 @@ class InferenceRouter:
                         try:
                             _control_check_interval = 0.1  # Check for controls every 100ms
                             _last_control_check = time.time()
+                            logger.info(
+                                "CHAT_PROVIDER_CALL corr=%s provider=%s session=%s msg_count=%d max_tokens=%d",
+                                corr_id, "default", session_id, len(provider_messages), req.max_tokens,
+                                extra={"tag": "CHAT", "context": {
+                                    "corr": corr_id, "provider": "default",
+                                    "session_id": session_id, "msg_count": len(provider_messages),
+                                    "max_tokens": req.max_tokens, "gen_params": gen_params,
+                                }},
+                            )
                             async for token in provider.chat_stream(
                                 provider_messages,
                                 max_tokens=req.max_tokens,
@@ -1307,6 +1332,13 @@ class InferenceRouter:
 
                                 if token:
                                     _token_gen_start = time.time()
+                                    if _token_count == 0:
+                                        logger.info(
+                                            "CHAT_FIRST_TOKEN corr=%s session=%s after=%.1fms",
+                                            corr_id, session_id,
+                                            (time.time() - _token_gen_start) * 1000,
+                                            extra={"tag": "CHAT", "context": {"corr": corr_id}},
+                                        )
                                     full_response_parts.append(token)
                                     _cached_tokens.append(token)
                                     _batch.append(token)
@@ -1332,6 +1364,14 @@ class InferenceRouter:
                                 yield sse_token("chat", "".join(_batch))
                                 _batch = []
                             yield sse_token("chat", "", done=True)
+                            logger.info(
+                                "CHAT_STREAM_DONE corr=%s session=%s tokens=%d events=%d",
+                                corr_id, session_id, _token_count, _event_counter,
+                                extra={"tag": "CHAT", "context": {
+                                    "corr": corr_id, "session_id": session_id,
+                                    "tokens": _token_count, "events": _event_counter,
+                                }},
+                            )
                             # Cache complete response for potential reconnection
                             set_chat_response_cache(session_id, {
                                 "tokens": _cached_tokens,
@@ -1355,7 +1395,15 @@ class InferenceRouter:
                         except Exception:
                             pass
                         _mgr.finish(_op_id, str(e))
-                        logger.warning("Chat stream provider failed: %s", e, extra={"tag": "INF"})
+                        logger.error(
+                            "CHAT_STREAM_ERROR corr=%s session=%s error=%s tokens_received=%d",
+                            corr_id, session_id, str(e), _token_count,
+                            extra={"tag": "CHAT", "context": {
+                                "corr": corr_id, "session_id": session_id,
+                                "error": str(e), "tokens_received": _token_count,
+                                "error_type": type(e).__name__,
+                            }},
+                        )
                         classify_and_raise(e, source="chat_stream_provider")
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded", code="E_INFRA_REGISTRY", http_status=503)
