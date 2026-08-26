@@ -1251,6 +1251,7 @@ class ModelServer:
         self._status_lock = Lock()
 
         # Lifecycle hooks
+        self._hooks_lock = Lock()
         self._pre_generate_hooks: list[Callable[[], None]] = []
         self._post_generate_hooks: list[Callable[[], None]] = []
         self._on_error_hooks: list[Callable[[Exception], None]] = []
@@ -1534,13 +1535,16 @@ class ModelServer:
     # --- Lifecycle hooks ---
 
     def add_pre_generate_hook(self, hook: Callable[[], None]) -> None:
-        self._pre_generate_hooks.append(hook)
+        with self._hooks_lock:
+            self._pre_generate_hooks.append(hook)
 
     def add_post_generate_hook(self, hook: Callable[[], None]) -> None:
-        self._post_generate_hooks.append(hook)
+        with self._hooks_lock:
+            self._post_generate_hooks.append(hook)
 
     def add_on_error_hook(self, hook: Callable[[Exception], None]) -> None:
-        self._on_error_hooks.append(hook)
+        with self._hooks_lock:
+            self._on_error_hooks.append(hook)
 
     # --- Status ---
 
@@ -1718,7 +1722,9 @@ class ModelServer:
             )
 
         # Pre-generation hooks (OOM check, cache warm)
-        for hook in self._pre_generate_hooks:
+        with self._hooks_lock:
+            pre_hooks = list(self._pre_generate_hooks)
+        for hook in pre_hooks:
             try:
                 hook()
             except Exception as e:
@@ -1907,7 +1913,9 @@ class ModelServer:
             )
 
         # Pre-generation hooks
-        for hook in self._pre_generate_hooks:
+        with self._hooks_lock:
+            pre_hooks = list(self._pre_generate_hooks)
+        for hook in pre_hooks:
             try:
                 hook()
             except Exception as e:
@@ -2069,7 +2077,9 @@ class ModelServer:
             raise
         finally:
             # Post-generation hooks (KV cache reset, memory cleanup)
-            for hook in self._post_generate_hooks:
+            with self._hooks_lock:
+                post_hooks = list(self._post_generate_hooks)
+            for hook in post_hooks:
                 try:
                     hook()
                 except Exception as e:
@@ -2115,7 +2125,9 @@ class ModelServer:
 
     def _on_generation_error(self, error: Exception) -> None:
         self.set_status(ModelStatus.DEGRADED)
-        for hook in self._on_error_hooks:
+        with self._hooks_lock:
+            error_hooks = list(self._on_error_hooks)
+        for hook in error_hooks:
             try:
                 hook(error)
             except Exception as e:

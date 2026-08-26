@@ -167,6 +167,7 @@ class TaskQueue:
         self._cancelled: dict[str, Task] = {}
         self._lock = asyncio.Lock()
         self._sse_callbacks: list[Callable[[str, Task], None]] = []
+        self._callbacks_lock = threading.Lock()
         self._dispatcher_task: asyncio.Task | None = None
         self._started = False
         self._started_loop: asyncio.AbstractEventLoop | None = None
@@ -249,14 +250,18 @@ class TaskQueue:
     # ── SSE subscriptions ──
 
     def subscribe(self, callback: Callable[[str, Task], None]):
-        self._sse_callbacks.append(callback)
+        with self._callbacks_lock:
+            self._sse_callbacks.append(callback)
 
     def unsubscribe(self, callback: Callable[[str, Task], None]):
-        if callback in self._sse_callbacks:
-            self._sse_callbacks.remove(callback)
+        with self._callbacks_lock:
+            if callback in self._sse_callbacks:
+                self._sse_callbacks.remove(callback)
 
     def _emit(self, event: str, task: Task):
-        for cb in self._sse_callbacks:
+        with self._callbacks_lock:
+            snapshot = list(self._sse_callbacks)
+        for cb in snapshot:
             try:
                 cb(event, task)
             except Exception as exc:
