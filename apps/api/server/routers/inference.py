@@ -1040,10 +1040,13 @@ class InferenceRouter:
 
             start_time = datetime.datetime.now()
 
-            logger.debug("chat_stream: yielding thinking event")
+            logger.info("CHAT_PIPELINE corr=%s step=THINKING", corr_id,
+                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "THINKING"}})
             yield _sse_event("chat", "STREAMING", "thinking",
                 data={}, message="Thinking...")
 
+            logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_INJECT start", corr_id,
+                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_INJECT"}})
             if req.knowledge:
                 try:
                     def _store_knowledge(k_list):
@@ -1083,6 +1086,9 @@ class InferenceRouter:
                 "timestamp": datetime.datetime.now().isoformat(),
             })
 
+            logger.info("CHAT_PIPELINE corr=%s step=SESSION_LOADED session=%s", corr_id, session_id,
+                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "SESSION_LOADED", "session_id": session_id}})
+
             ctx_core = self._get_context_core()
             context_info = {}
             frame = None
@@ -1095,6 +1101,8 @@ class InferenceRouter:
                 except Exception as e:
                     logger.debug("Knowledge memory check failed: %s", e)
             if ctx_core and req.use_context_core and not skip_context:
+                logger.info("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD start session=%s", corr_id, session_id,
+                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "session_id": session_id}})
                 ctx_core.set_session_id(session_id)
                 ctx_core.add_message("user", user_msg)
                 try:
@@ -1107,13 +1115,17 @@ class InferenceRouter:
                         timeout=5.0,
                     )
                 except asyncio.TimeoutError:
-                    logger.debug("Context frame building timed out, proceeding without context")
+                    logger.warning("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s", corr_id,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "result": "TIMEOUT"}})
                     frame = None
                 context_info = {
                     "layers": [l.layer_type for l in frame.layers],
                     "total_tokens": frame.total_tokens,
                     "max_tokens": frame.max_tokens,
                 }
+                logger.info("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD done layers=%d tokens=%d", corr_id,
+                    len(context_info.get("layers", [])), context_info.get("total_tokens", 0),
+                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "result": "DONE", "layers": context_info.get("layers", []), "tokens": context_info.get("total_tokens", 0)}})
                 if frame.system_prompt:
                     for i, m in enumerate(provider_messages):
                         if m["role"] == "system":
@@ -1126,7 +1138,8 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-
+                    logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY start", corr_id,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY"}})
                     rag_svc = get_rag_service()
                     if rag_svc.stats().get("total_chunks", 0) > 0:
                         rag_result = await asyncio.to_thread(rag_svc.query, user_msg, 5)
@@ -1137,8 +1150,12 @@ class InferenceRouter:
                             # Prepend as user context before the conversation
                             provider_messages.insert(0, {"role": "system", "content": rag_block})
                             logger.debug("RAG injected %d passages into chat context", rag_result["num_results"])
+                    logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY done chunks=%d", corr_id,
+                        rag_svc.stats().get("total_chunks", 0),
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY", "result": "DONE", "total_chunks": rag_svc.stats().get("total_chunks", 0)}})
                 except Exception as e:
-                    logger.debug("RAG query skipped: %s", e)
+                    logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY error=%s", corr_id, e,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY", "result": "ERROR", "error": str(e)}})
 
             if req.agent_id:
                 try:
@@ -1160,7 +1177,8 @@ class InferenceRouter:
 
             tool_result_data = None
             try:
-
+                logger.info("CHAT_PIPELINE corr=%s step=TOOL_DETECT start", corr_id,
+                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "TOOL_DETECT"}})
                 tool_reg = get_tool_registry()
                 tool_intent = tool_reg.detect_tool_intent(user_msg)
                 if tool_intent:
@@ -1200,6 +1218,8 @@ class InferenceRouter:
                             })
             except Exception:
                 logger.warning("Tool execution failed", exc_info=True, extra={"tag": "INF"})
+            logger.info("CHAT_PIPELINE corr=%s step=TOOL_DETECT done", corr_id,
+                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "TOOL_DETECT", "result": "DONE"}})
 
             if context_info:
                 yield _sse_event("chat", "STREAMING", "working",
@@ -1215,20 +1235,29 @@ class InferenceRouter:
             knowledge_retrieved = []
             if not frame_context:
                 try:
+                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH start", corr_id,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH"}})
                     enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
                     if enrichment.get("facts"):
                         knowledge_retrieved = enrichment["facts"]
+                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d", corr_id, len(knowledge_retrieved),
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH", "result": "DONE", "facts": len(knowledge_retrieved)}})
                 except Exception as e:
-                    logger.debug("Knowledge enrichment failed: %s", e)
+                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH error=%s", corr_id, e,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH", "result": "ERROR", "error": str(e)}})
 
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
                 try:
-
+                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC start count=%d", corr_id, len(all_knowledge),
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "count": len(all_knowledge)}})
                     k_proc = KnowledgeProcessor(knowledge=all_knowledge)
                     provider_messages = await apply_processors(provider_messages, [k_proc])
+                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC done", corr_id,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "result": "DONE"}})
                 except Exception as e:
-                    logger.debug("Knowledge processor failed: %s", e)
+                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC error=%s", corr_id, e,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "result": "ERROR", "error": str(e)}})
 
             try:
 
