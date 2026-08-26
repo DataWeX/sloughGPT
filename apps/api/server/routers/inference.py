@@ -1095,11 +1095,16 @@ class InferenceRouter:
             skip_context = False
             if ctx_core and req.use_context_core:
                 try:
-
+                    logger.info("CHAT_PIPELINE corr=%s step=MEMORY_CHECK start", corr_id,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK"}})
                     if get_memory_service().stats().get("total_facts", 0) == 0 and not req.knowledge:
                         skip_context = True
                 except Exception as e:
+                    logger.info("CHAT_PIPELINE corr=%s step=MEMORY_CHECK error=%s", corr_id, e,
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK", "result": "ERROR", "error": str(e)}})
                     logger.debug("Knowledge memory check failed: %s", e)
+            logger.info("CHAT_PIPELINE corr=%s step=MEMORY_CHECK done skip_context=%s ctx_core=%s", corr_id, skip_context, ctx_core is not None,
+                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK", "result": "DONE", "skip_context": skip_context, "ctx_core": ctx_core is not None}})
             if ctx_core and req.use_context_core and not skip_context:
                 logger.info("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD start session=%s", corr_id, session_id,
                     extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "session_id": session_id}})
