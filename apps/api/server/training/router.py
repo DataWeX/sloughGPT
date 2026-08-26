@@ -519,7 +519,10 @@ async def export_feedback_pairs(request: ExportTextRequest):
     if feedback_file.exists():
         with open(feedback_file) as f:
             for line in f:
-                fb = json.loads(line)
+                try:
+                    fb = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 if fb.get("user_message") and fb.get("assistant_response"):
                     pairs.append(fb)
                     if len(pairs) >= request.target_count:

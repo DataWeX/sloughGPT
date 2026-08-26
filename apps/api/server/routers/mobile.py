@@ -914,7 +914,11 @@ class MobileRouter:
                 logger.error("Training subprocess failed: %s", proc.stderr[-500:], extra={"tag": "REQ"})
                 raise_error(f"Training failed: {proc.stderr[-200:]}", "E_INFRA_STARTUP", status_code=500)
 
-            result = json.loads(proc.stdout.strip().split("\n")[-1])
+            try:
+                result = json.loads(proc.stdout.strip().split("\n")[-1])
+            except json.JSONDecodeError:
+                logger.error("Non-JSON subprocess output: %s", proc.stdout[-500:], extra={"tag": "REQ"})
+                raise_error(f"Training produced invalid output: {proc.stdout[-200:]}", "E_INFRA_STARTUP", status_code=500)
 
             if not result.get("success"):
                 raise_error(f"Training failed: {result.get('error', 'unknown')}", "E_INFRA_STARTUP", status_code=500)
