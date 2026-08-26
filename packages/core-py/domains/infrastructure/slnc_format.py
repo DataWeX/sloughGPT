@@ -31,6 +31,7 @@ Usage:
 
 import json
 import logging
+import os
 import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -343,7 +344,17 @@ def read_slnc_header(path: str) -> dict:
         tensor_count = struct.unpack("<I", f.read(4))[0]
 
         json_len = struct.unpack("<I", f.read(4))[0]
-        config = json.loads(f.read(json_len))
+        pos = f.tell()
+        file_size = os.fstat(f.fileno()).st_size
+        if json_len < 0 or pos + json_len > file_size:
+            raise ValueError(
+                f"Corrupt SLNC header: json_len={json_len} exceeds "
+                f"file bounds (file_size={file_size}, pos={pos})"
+            )
+        try:
+            config = json.loads(f.read(json_len))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Corrupt SLNC config JSON: {exc}") from exc
 
     return {
         "version": version,

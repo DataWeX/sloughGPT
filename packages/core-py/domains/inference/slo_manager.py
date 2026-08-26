@@ -130,8 +130,20 @@ class SloManager:
                 if header == b"SOUL":
                     ver = struct.unpack("<I", f.read(4))[0]
                     config_len = struct.unpack("<I", f.read(4))[0]
+                    file_size = os.path.getsize(sou_path)
+                    if config_len > file_size - 12:
+                        raise ValueError(
+                            f"config_len ({config_len}) exceeds remaining file size "
+                            f"({file_size - 12}) in {sou_path}"
+                        )
                     config_bytes = f.read(config_len)
-                    config = json.loads(config_bytes.decode("utf-8"))
+                    try:
+                        config = json.loads(config_bytes.decode("utf-8"))
+                    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                        raise ValueError(
+                            f"Corrupted config header in {sou_path}: "
+                            f"config_len={config_len}, read={len(config_bytes)} bytes: {exc}"
+                        ) from exc
                     name = config.get("name", Path(sou_path).stem)
                     description = config.get("description", "") or config.get("tagline", "") or name
                     traits = config.get("traits", config.get("personality_traits", []))
