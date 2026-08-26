@@ -122,6 +122,16 @@ class ConsoleIO:
         except FileNotFoundError:
             pass
 
+    def __del__(self) -> None:
+        """Close the TTY handle if not already closed."""
+        self.close()
+
+    def __enter__(self) -> "ConsoleIO":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
     def close(self) -> None:
         if self._tty is not None:
             try:
