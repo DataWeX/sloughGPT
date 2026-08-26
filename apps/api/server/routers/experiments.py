@@ -9,10 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.experiments")
 
@@ -43,7 +44,7 @@ class ExperimentsRouter:
         self.router.add_api_route("/{experiment_id}/log_metric", self.log_metric, methods=["POST"])
         self.router.add_api_route("/{experiment_id}/log_param", self.log_param, methods=["POST"])
 
-    async def create_experiment(self, req: ExperimentCreate) -> dict:
+    async def create_experiment(self, req: ExperimentCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Create a new ML experiment with a timestamped directory."""
         try:
             exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -107,7 +108,7 @@ class ExperimentsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="experiments.get_experiment")
-    async def delete_experiment(self, experiment_id: str) -> dict:
+    async def delete_experiment(self, experiment_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Delete an experiment and all its data."""
             import shutil
