@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
@@ -18,7 +18,7 @@ logger = logging.getLogger("slo.routers.images")
 # ── Schema ────────────────────────────────────────────────────────────────
 
 class GenerateRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1, max_length=2000)
     style: Literal["realistic", "cartoon", "watercolor", "sketch", "fantasy"] = "realistic"
 
 
