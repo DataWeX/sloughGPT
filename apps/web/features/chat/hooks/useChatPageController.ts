@@ -69,6 +69,8 @@ export function useChatPageController(
   const [noteSearchOpen, setNoteSearchOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [conversationSearchQuery, setConversationSearchQuery] = useState('')
+  const [conversationSearchOpen, setConversationSearchOpen] = useState(false)
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -177,6 +179,7 @@ export function useChatPageController(
     onOpenNoteSearch: () => setNoteSearchOpen(true),
     onOpenShortcuts: () => setShortcutsOpen(true),
     onOpenTemplates: () => setTemplatesOpen(true),
+    onOpenConversationSearch: () => setConversationSearchOpen(true),
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -605,6 +608,10 @@ export function useChatPageController(
     setShortcutsOpen: setShortcutsOpen,
     templatesOpen: templatesOpen,
     setTemplatesOpen: setTemplatesOpen,
+    conversationSearchQuery: conversationSearchQuery,
+    setConversationSearchQuery: setConversationSearchQuery,
+    conversationSearchOpen: conversationSearchOpen,
+    setConversationSearchOpen: setConversationSearchOpen,
   }
 }
 

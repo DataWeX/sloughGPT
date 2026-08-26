@@ -19,6 +19,7 @@ vi.mock('@sloughgpt/strui', () => ({
   CardTitle: ({ children, ...p }: any) => <div data-testid="card-title" {...p}>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
   Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
+  Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
 }))
 
 import { TrainingBuildsCard } from './TrainingBuildsCard'

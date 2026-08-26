@@ -14,6 +14,11 @@ vi.mock('@/lib/download-utils', () => ({
   downloadJson: vi.fn(),
 }))
 
+vi.mock('@sloughgpt/strui', async () => {
+  const actual = await vi.importActual('@sloughgpt/strui')
+  return { ...actual, Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} /> }
+})
+
 const JOBS = [
   { id: '1', name: 'Job 1', status: 'completed', progress: 100, created_at: '2026-01-15T10:00:00Z', method: 'distill', loss: 0.5, epochs: 10, checkpoint: 'cp1' },
   { id: '2', name: 'Job 2', status: 'failed', progress: 50, created_at: '2026-01-14T10:00:00Z', method: 'native', error: 'OOM' },
@@ -31,7 +36,7 @@ describe('TrainingHistoryView', () => {
   it('shows loading state', () => {
     mockList.mockImplementation(() => new Promise(() => {}))
     render(<TrainingHistoryView addToast={mockToast} />)
-    expect(screen.getByText('Loading...')).toBeTruthy()
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0)
   })
 
   it('shows empty state when no jobs', async () => {

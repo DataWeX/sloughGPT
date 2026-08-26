@@ -55,6 +55,12 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onToggleSelection?: (messageId: string) => void
   hasThread?: (id: string) => boolean
   onThread?: (messageId: string) => void
+  onForward?: (content: string) => void
+  onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
+  conversationSearchQuery?: string
+  setConversationSearchQuery?: (query: string) => void
+  conversationSearchOpen?: boolean
+  setConversationSearchOpen?: (open: boolean) => void
 }
 
 export interface ChatAreaRef {

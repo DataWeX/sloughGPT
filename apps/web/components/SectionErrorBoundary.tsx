@@ -23,8 +23,8 @@ export class SectionErrorBoundary extends Component<Props, State> {
     return { hasError: true, error }
   }
 
-  componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
-    console.error(`SectionErrorBoundary (${this.props.sectionName || 'section'}) caught:`, error, errorInfo)
+  componentDidCatch(_error: Error, _errorInfo: { componentStack?: string }) {
+    // Error is handled visually by the fallback UI
   }
 
   reset() {

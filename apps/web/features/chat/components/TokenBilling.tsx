@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, memo } from 'react'
 import { Button, IconX, IconRefresh, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { logger } from '@/lib/dev-log'
 
 interface TokenBalance {
   userId: string
@@ -84,7 +85,7 @@ export const TokenBilling = memo(function TokenBilling({
       setUsage(usageRes)
       setHistory(historyRes.records || [])
     } catch (e) {
-      console.error('Failed to fetch token data:', e)
+      logger.warning('Failed to fetch token data', { error: e instanceof Error ? e.message : String(e) })
     } finally {
       setLoading(false)
     }

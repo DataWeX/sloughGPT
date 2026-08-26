@@ -10,6 +10,7 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatMessage } from './../types'
 import { cn } from '@sloughgpt/strui'
+import { IconPin, IconX } from '@sloughgpt/strui'
 import { MS_PER_DAY } from '@/lib/format-bytes'
 
 function formatDateLabel(date: Date): string {
@@ -70,6 +71,12 @@ interface ChatScreenProps {
   onToggleSelection?: (messageId: string) => void
   hasThread?: (id: string) => boolean
   onThread?: (messageId: string) => void
+  onForward?: (content: string) => void
+  onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
+  conversationSearchQuery?: string
+  setConversationSearchQuery?: (query: string) => void
+  conversationSearchOpen?: boolean
+  setConversationSearchOpen?: (open: boolean) => void
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(

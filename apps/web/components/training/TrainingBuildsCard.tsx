@@ -55,10 +55,14 @@ export function TrainingBuildsCard({ addToast }: Props) {
     return () => { active = false }
   }, [])
 
-  const handleLoad = useCallback(async (name: string) => {
+  const handleLoad = useCallback(async (name: string, buildType: string) => {
     setLoadingModel(name)
     try {
-      await soulsController.loadCheckpoint(name)
+      if (buildType === 'hf-finetune' || buildType === 'hf-finetuned-dir') {
+        await trainingJobsController.loadFineTuned(name)
+      } else {
+        await soulsController.loadCheckpoint(name)
+      }
       addToast(`Loaded: ${name}`, 'success')
     } catch {
       addToast('Could not load checkpoint', 'error')
@@ -145,7 +149,7 @@ export function TrainingBuildsCard({ addToast }: Props) {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => void handleLoad(b.name)} disabled={loadingModel === b.name}>
+                    <Button size="sm" variant="ghost" onClick={() => void handleLoad(b.name, b.build_type)} disabled={loadingModel === b.name}>
                       {loadingModel === b.name ? 'Loading...' : 'Load'}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void handleDownload(b.name)}>Download</Button>
