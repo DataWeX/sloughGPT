@@ -623,6 +623,13 @@ export function useChatPageController(
     setConversationSearchOpen: setConversationSearchOpen,
     statsOpen: statsOpen,
     setStatsOpen: setStatsOpen,
+    onQuickReply: (messageId: string) => {
+      const msg = chat.messages.find(m => m.id === messageId)
+      if (msg) {
+        const snippet = msg.content.slice(0, 200).replace(/\n/g, ' ')
+        chat.setInput(prev => prev ? `${prev}\n> ${snippet}\n\n` : `> ${snippet}\n\n`)
+      }
+    },
   }
 }
 

@@ -154,8 +154,7 @@ export const chatController = {
   },
 
   getVoiceAudioUrl(sessionId: string, messageId: string): string {
-    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    return `${base}/chat/audio/${sessionId}/${messageId}`
+    return `${PUBLIC_API_URL}/chat/audio/${sessionId}/${messageId}`
   },
 
   async cancelStream(sessionId: string): Promise<void> {

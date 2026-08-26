@@ -304,6 +304,7 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
           onToggleSelection={controller.toggleMessageSelection}
           hasThread={controller.hasThread}
           onThread={controller.onStartThread}
+          onQuickReply={controller.onQuickReply}
         />
       </ImageDropZone>
     </>

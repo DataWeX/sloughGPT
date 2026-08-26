@@ -1,6 +1,7 @@
 'use client'
 
-import { apiGet, apiPost } from './http-client'
+import { apiGet, apiPost, authFetch } from './http-client'
+import { PUBLIC_API_URL } from './config'
 
 export interface RenderConfig {
   width?: number
@@ -40,7 +41,7 @@ export const worldController = {
   },
 
   async renderImage(config?: RenderConfig): Promise<Blob> {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/world/render/image`, {
+    const res = await fetch(`${PUBLIC_API_URL}/world/render/image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config ?? {}),
