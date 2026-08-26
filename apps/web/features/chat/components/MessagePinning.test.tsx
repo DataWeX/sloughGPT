@@ -9,8 +9,8 @@ beforeEach(() => {
 })
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Hello world', timestamp: Date.now() - 60000 },
-  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
+  { id: '1', role: 'user', content: 'Hello world', timestamp: new Date(Date.now() - 60000) },
+  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: new Date() },
 ]
 
 describe('MessagePinning', () => {

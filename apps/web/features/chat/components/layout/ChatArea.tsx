@@ -57,6 +57,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onThread?: (messageId: string) => void
   onForward?: (content: string) => void
   onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
+  onQuickReply?: (messageId: string) => void
   conversationSearchQuery?: string
   setConversationSearchQuery?: (query: string) => void
   conversationSearchOpen?: boolean

@@ -16,22 +16,28 @@ const mockSessions = [
     id: '1',
     name: 'Chat 1',
     messages: [
-      { role: 'user', content: 'Hello world' },
-      { role: 'assistant', content: 'Hi there!' },
+      { id: 'm1', role: 'user' as const, content: 'Hello world', timestamp: new Date() },
+      { id: 'm2', role: 'assistant' as const, content: 'Hi there!', timestamp: new Date() },
     ],
     createdAt: '2024-01-15T10:00:00Z',
     updatedAt: '2024-01-15T10:05:00Z',
+    synced: true,
+    starred: false,
+    pinned: false,
   },
   {
     id: '2',
     name: 'Chat 2',
     messages: [
-      { role: 'user', content: 'How are you?' },
-      { role: 'assistant', content: 'I am good, thanks!' },
-      { role: 'user', content: 'Great!' },
+      { id: 'm3', role: 'user' as const, content: 'How are you?', timestamp: new Date() },
+      { id: 'm4', role: 'assistant' as const, content: 'I am good, thanks!', timestamp: new Date() },
+      { id: 'm5', role: 'user' as const, content: 'Great!', timestamp: new Date() },
     ],
     createdAt: '2024-01-16T10:00:00Z',
     updatedAt: '2024-01-16T10:05:00Z',
+    synced: true,
+    starred: false,
+    pinned: false,
   },
 ]
 

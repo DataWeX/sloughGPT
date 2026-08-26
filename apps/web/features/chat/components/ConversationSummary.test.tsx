@@ -16,8 +16,8 @@ vi.mock('@/features/chat/hooks/useChatSummary', () => ({
 }))
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Hello', timestamp: Date.now(), reactions: {} },
-  { id: '2', role: 'assistant', content: 'Hi there', timestamp: Date.now(), reactions: {} },
+  { id: '1', role: 'user', content: 'Hello', timestamp: new Date(), reactions: {} },
+  { id: '2', role: 'assistant', content: 'Hi there', timestamp: new Date(), reactions: {} },
 ]
 
 describe('ConversationSummary', () => {

@@ -9,7 +9,7 @@ beforeEach(() => {
 })
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Hello world', timestamp: Date.now() },
+  { id: '1', role: 'user', content: 'Hello world', timestamp: new Date() },
 ]
 
 describe('MessageBookmarking', () => {

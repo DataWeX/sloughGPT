@@ -6,8 +6,8 @@ import type { ChatMessage } from '@/lib/chat-utils'
 afterEach(cleanup)
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Hello', timestamp: Date.now() },
-  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
+  { id: '1', role: 'user', content: 'Hello', timestamp: new Date() },
+  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: new Date() },
 ]
 
 describe('useMessageThreads', () => {
@@ -38,7 +38,7 @@ describe('useMessageThreads', () => {
       threadId = result.current.createThread('1')
     })
 
-    const reply: ChatMessage = { id: '3', role: 'user', content: 'Reply', timestamp: Date.now() }
+    const reply: ChatMessage = { id: '3', role: 'user', content: 'Reply', timestamp: new Date() }
     act(() => {
       result.current.addToThread(threadId!, reply)
     })

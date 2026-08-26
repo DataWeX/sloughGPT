@@ -6,9 +6,9 @@ import type { ChatMessage } from '@/lib/chat-utils'
 afterEach(cleanup)
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Hello world', timestamp: Date.now() },
-  { id: '2', role: 'assistant', content: 'Hi there! How can I help?', timestamp: Date.now() },
-  { id: '3', role: 'user', content: 'Tell me about TypeScript', timestamp: Date.now() },
+  { id: '1', role: 'user', content: 'Hello world', timestamp: new Date() },
+  { id: '2', role: 'assistant', content: 'Hi there! How can I help?', timestamp: new Date() },
+  { id: '3', role: 'user', content: 'Tell me about TypeScript', timestamp: new Date() },
 ]
 
 describe('AdvancedSearch', () => {

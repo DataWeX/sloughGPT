@@ -29,6 +29,7 @@ interface KeyboardDeps {
   onOpenTemplates?: () => void
   onOpenConversationSearch?: () => void
   onOpenStats?: () => void
+  onQuickReply?: (messageId: string) => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {

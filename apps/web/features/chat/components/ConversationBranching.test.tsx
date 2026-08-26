@@ -6,9 +6,9 @@ import type { ChatMessage } from '@/lib/chat-utils'
 afterEach(cleanup)
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'First message', timestamp: Date.now() - 60000 },
-  { id: '2', role: 'assistant', content: 'First response', timestamp: Date.now() - 30000 },
-  { id: '3', role: 'user', content: 'Second message', timestamp: Date.now() },
+  { id: '1', role: 'user', content: 'First message', timestamp: new Date(Date.now() - 60000) },
+  { id: '2', role: 'assistant', content: 'First response', timestamp: new Date(Date.now() - 30000) },
+  { id: '3', role: 'user', content: 'Second message', timestamp: new Date() },
 ]
 
 describe('ConversationBranching', () => {

@@ -6,7 +6,6 @@ const mockSearchMessageNotes = vi.fn()
 
 vi.mock('@/lib/db', () => ({
   chatDB: { searchMessageNotes: (...args: any[]) => mockSearchMessageNotes(...args) },
-  type MessageNote: {},
 }))
 
 vi.mock('@/lib/conversations-utils', () => ({

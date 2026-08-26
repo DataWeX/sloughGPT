@@ -20,7 +20,7 @@ const mockExecutions = [
     output: 'Hello',
     exitCode: 0,
     duration: 150,
-    timestamp: Date.now(),
+    timestamp: new Date(),
   },
   {
     id: '2',
@@ -29,7 +29,7 @@ const mockExecutions = [
     output: 'World',
     exitCode: 0,
     duration: 50,
-    timestamp: Date.now(),
+    timestamp: new Date(),
   },
   {
     id: '3',
@@ -39,7 +39,7 @@ const mockExecutions = [
     error: 'SyntaxError: invalid syntax',
     exitCode: 1,
     duration: 10,
-    timestamp: Date.now(),
+    timestamp: new Date(),
   },
 ]
 

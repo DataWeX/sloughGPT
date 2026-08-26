@@ -15,12 +15,12 @@ const mockParentMessage: ChatMessage = {
   id: '1',
   role: 'user',
   content: 'Original message',
-  timestamp: Date.now(),
+  timestamp: new Date(),
 }
 
 const mockThreadMessages: ChatMessage[] = [
-  { id: '2', role: 'assistant', content: 'Reply 1', timestamp: Date.now() },
-  { id: '3', role: 'user', content: 'Reply 2', timestamp: Date.now() },
+  { id: '2', role: 'assistant', content: 'Reply 1', timestamp: new Date() },
+  { id: '3', role: 'user', content: 'Reply 2', timestamp: new Date() },
 ]
 
 describe('ThreadPanel', () => {

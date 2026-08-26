@@ -6,8 +6,8 @@ import type { ChatMessage } from '@/lib/chat-utils'
 afterEach(cleanup)
 
 const mockMessages: ChatMessage[] = [
-  { id: '1', role: 'user', content: 'Hello world', timestamp: Date.now() },
-  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
+  { id: '1', role: 'user', content: 'Hello world', timestamp: new Date() },
+  { id: '2', role: 'assistant', content: 'Hi there!', timestamp: new Date() },
 ]
 
 describe('ConversationShare', () => {

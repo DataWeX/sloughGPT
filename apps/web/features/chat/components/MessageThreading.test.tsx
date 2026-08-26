@@ -9,7 +9,7 @@ const makeMsg = (role: 'user' | 'assistant', content: string): ChatMessage => ({
   id: crypto.randomUUID(),
   role,
   content,
-  timestamp: Date.now(),
+  timestamp: new Date(),
 })
 
 const mockMessages = [

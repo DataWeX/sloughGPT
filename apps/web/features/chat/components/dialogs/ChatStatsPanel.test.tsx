@@ -7,9 +7,9 @@ afterEach(cleanup)
 
 const makeMessages = (overrides?: Partial<ChatMessage>[]): ChatMessage[] => {
   const base: ChatMessage[] = [
-    { id: '1', role: 'user', content: 'Hello world', timestamp: new Date('2024-01-01T10:00:00').toISOString(), reactions: {} },
-    { id: '2', role: 'assistant', content: 'Hi there! How can I help?', timestamp: new Date('2024-01-01T10:01:00').toISOString(), reactions: { '👍': 1 } },
-    { id: '3', role: 'user', content: 'Tell me about testing', timestamp: new Date('2024-01-01T10:02:00').toISOString(), pinned: true, reactions: {} },
+    { id: '1', role: 'user', content: 'Hello world', timestamp: new Date('2024-01-01T10:00:00'), reactions: {} },
+    { id: '2', role: 'assistant', content: 'Hi there! How can I help?', timestamp: new Date('2024-01-01T10:01:00'), reactions: { '👍': 1 } },
+    { id: '3', role: 'user', content: 'Tell me about testing', timestamp: new Date('2024-01-01T10:02:00'), pinned: true, reactions: {} },
   ]
   return overrides ? base.map((m, i) => ({ ...m, ...overrides[i] })) : base
 }

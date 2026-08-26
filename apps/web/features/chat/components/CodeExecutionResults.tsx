@@ -12,7 +12,7 @@ interface CodeExecution {
   error?: string
   exitCode: number
   duration: number
-  timestamp: number
+  timestamp: Date
 }
 
 interface CodeExecutionResultsProps {
