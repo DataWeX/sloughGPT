@@ -1108,8 +1108,9 @@ def setup_providers(
                     text_provider_name = "slonet-native"
                     logger.info("Auto-detected slonet-native provider: %s", default_model,
                                 extra={"tag": "MODEL"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Auto-detect slonet-native failed for %s: %s", default_model, e,
+                           extra={"tag": "MODEL"})
 
     # Build default ProviderRouter with full processor pipeline
     existing = _providers.get("default")

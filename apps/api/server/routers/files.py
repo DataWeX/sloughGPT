@@ -136,7 +136,9 @@ class FilesRouter:
         await asyncio.to_thread(self._save_metadata, meta)
 
     def _file_id(self, filename: str) -> str:
-        return f"{int(time.time())}_{filename}"
+        import re
+        safe_name = re.sub(r'[^\w\-]', '_', filename)
+        return f"{int(time.time())}_{safe_name}"
 
     # ── Endpoints ──
 

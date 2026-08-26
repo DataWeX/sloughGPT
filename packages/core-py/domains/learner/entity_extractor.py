@@ -224,7 +224,8 @@ async def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=
                 )
                 if knowledge_memory.add_fact(fact):
                     stored += 1
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to store extracted fact: %s", e, extra={"tag": "INF"})
                 continue
 
         if stored > 0:
@@ -232,5 +233,5 @@ async def extract_and_store(user_msg: str, assistant_msg: str, knowledge_memory=
 
         return stored
     except Exception as e:
-        logger.debug("Entity extraction skipped: %s", e, extra={"tag": "INF"})
+        logger.warning("Entity extraction failed: %s", e, extra={"tag": "INF"})
         return 0
