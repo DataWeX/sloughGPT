@@ -82,7 +82,7 @@ describe('APILogsCard', () => {
     await vi.waitFor(() => {
       expect(screen.getByText('boom')).toBeInTheDocument()
     })
-    expect(toast).toHaveBeenCalledWith('Could not training', 'error')
+    expect(toast).toHaveBeenCalledWith('Training failed', 'error')
   })
 
   it('dismiss error returns to idle', async () => {

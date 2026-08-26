@@ -95,20 +95,20 @@ export function APILogsCard({
           addToast('Training complete!', 'success')
         } else if (status === 'error') {
           setPhase('error')
-          setError(message || 'Could not training')
-          addToast('Could not training', 'error')
+          setError(message || 'Training failed')
+          addToast('Training failed', 'error')
         }
       }
     } catch (err: unknown) {
       setPhase('error')
       setError(err instanceof Error ? err.message : 'Unknown error')
-      addToast('Could not training', 'error')
+      addToast('Training failed', 'error')
     }
   }, [config, addToast])
 
   const stop = useCallback(() => {
     trainingController.cancelFromSessionsSloNet().catch(e => {
-      logger.error('Could not training cancel', { exception: String(e) })
+      logger.error('Could not cancel training', { exception: String(e) })
       addToast('Could not cancel training', 'error')
     })
     setPhase('idle')

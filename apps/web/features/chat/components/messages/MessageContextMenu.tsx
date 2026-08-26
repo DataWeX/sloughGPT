@@ -9,11 +9,13 @@ interface MessageContextMenuProps {
   content: string
   role: 'user' | 'assistant'
   isBookmarked?: boolean
+  isPinned?: boolean
   hasNote?: boolean
   hasThread?: boolean
   onCopy?: (text: string) => void
   onEdit?: (messageId: string) => void
   onBookmark?: (messageId: string) => void
+  onPin?: (messageId: string) => void
   onRegenerate?: (messageId: string) => void
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
@@ -52,11 +54,13 @@ export const MessageContextMenu = memo(function MessageContextMenu({
   content,
   role,
   isBookmarked,
+  isPinned,
   hasNote,
   hasThread,
   onCopy,
   onEdit,
   onBookmark,
+  onPin,
   onRegenerate,
   onDelete,
   onSaveToKnowledge,
@@ -131,6 +135,11 @@ export const MessageContextMenu = memo(function MessageContextMenu({
       label: isBookmarked ? 'Remove bookmark' : 'Bookmark',
       icon: <IconStar className={cn('h-3.5 w-3.5', isBookmarked && 'fill-current')} />,
       onClick: () => { onBookmark(messageId); setOpen(false) },
+    }] : []),
+    ...(onPin ? [{
+      label: isPinned ? 'Unpin message' : 'Pin message',
+      icon: <IconPin className={cn('h-3.5 w-3.5', isPinned && 'fill-current')} />,
+      onClick: () => { onPin(messageId); setOpen(false) },
     }] : []),
     ...(role === 'assistant' && onRegenerate ? [{
       label: 'Regenerate',

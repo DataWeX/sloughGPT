@@ -532,7 +532,7 @@ export const trainingJobsController = {
       if (event.status === 'complete') {
         finalResult = event.data ?? {}
       } else if (event.status === 'error') {
-        throw new Error(event.message || 'Could not training')
+        throw new Error(event.message || 'Training request failed')
       }
     }
     return {

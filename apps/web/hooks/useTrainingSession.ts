@@ -184,7 +184,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             dataQuality: (turboStatus.result?.data_quality as TrainingShellState['dataQuality']) ?? null,
           })
         }
-      } catch (e: unknown) { logger.warning('Could not training service reconciliation', { exception: String((e instanceof Error ? e.message : e) || e) }) }
+      } catch (e: unknown) { logger.warning('Could not reconcile training service', { exception: String((e instanceof Error ? e.message : e) || e) }) }
     }
     reconcile()
     return () => { cancelled = true }
@@ -206,7 +206,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const stopTraining = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Could not stop training', e))
-    operationsStore.getState().cancelAll('training').catch((e) => logger.warning('Could not training cancelall', { exception: String(e?.message || e) }))
+    operationsStore.getState().cancelAll('training').catch((e) => logger.warning('Could not cancel all training', { exception: String(e?.message || e) }))
     resetTraining()
   }, [resetTraining])
 
@@ -296,11 +296,11 @@ export function useTrainingSession(): UseTrainingSessionReturn {
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
       experiment_id: experimentId,
     }).then(result => {
-      if (result.status === 'error') { writeTraining({ error: result.message || 'Could not training', phase: 'error' }); return }
+      if (result.status === 'error') { writeTraining({ error: result.message || 'Could not start turbo training', phase: 'error' }); return }
       addToast('Turbo training started', 'info')
       operationsStore.getState().fetch().catch((e) => _log.debug('Could not fetch operations', { error: e instanceof Error ? e.message : String(e) }))
       startTurboPoll(addToast)
-    }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Could not training request'), phase: 'error' }) })
+    }).catch((e: unknown) => { writeTraining({ error: extractErrorMessage(e, 'Could not start turbo training'), phase: 'error' }) })
   }, [clearAllPolls, startTurboPoll])
 
   const stopTurboTrain = useCallback(() => {

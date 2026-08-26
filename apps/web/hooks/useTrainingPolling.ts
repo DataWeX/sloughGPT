@@ -98,8 +98,8 @@ export function useTrainingPolling(): TrainingPolling {
           sendBrowserNotification('Training Complete', `${job.name || 'Training job'} finished successfully`)
           opts?.onComplete?.(job)
         } else {
-          writeTraining({ phase: 'error', error: job.error || 'Could not training' })
-          opts?.addToast?.(job.error || 'Could not training', 'error')
+          writeTraining({ phase: 'error', error: job.error || 'Could not train' })
+          opts?.addToast?.(job.error || 'Could not train', 'error')
           sendBrowserNotification('Training Failed', job.error || 'Training encountered an error')
         }
       } catch (e) {
@@ -176,8 +176,8 @@ export function useTrainingPolling(): TrainingPolling {
           addToast?.('Turbo training complete!', 'success')
           sendBrowserNotification('Turbo Training Complete', 'Your turbo training finished successfully')
         } else {
-          writeTraining({ phase: 'error', error: s.error || 'Could not training' })
-          addToast?.(s.error || 'Could not training', 'error')
+          writeTraining({ phase: 'error', error: s.error || 'Could not train' })
+          addToast?.(s.error || 'Could not train', 'error')
           sendBrowserNotification('Turbo Training Failed', s.error || 'Turbo training encountered an error')
         }
       } catch (e) {

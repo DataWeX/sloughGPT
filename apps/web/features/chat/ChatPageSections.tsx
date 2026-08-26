@@ -120,6 +120,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
     collapsibleLength,
     contextLayers,
     handleReact,
+    handlePin,
   } = controller
 
   const handleStop = useCallback(() => {

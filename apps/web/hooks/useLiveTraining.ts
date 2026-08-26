@@ -102,7 +102,7 @@ function applyJobToShell(job: TrainingJob) {
       avgQuality: (job.metrics as Record<string, unknown> | undefined)?.avg_quality as number ?? null,
     })
   } else if (job.status === 'failed') {
-    batchWriteTraining({ phase: 'error', error: job.error || 'Could not training' })
+    batchWriteTraining({ phase: 'error', error: job.error || 'Training failed' })
   }
 }
 
@@ -184,7 +184,7 @@ function onEvent(envelope: SSEEnvelope) {
   }
 
   if (event === 'failed' && jobId) {
-    batchWriteTraining({ phase: 'error', error: (data.error as string) || 'Could not training' })
+    batchWriteTraining({ phase: 'error', error: (data.error as string) || 'Training failed' })
     return
   }
 }

@@ -82,6 +82,10 @@ export function useChatMessages(config: ChatMessagesConfig) {
     args?: Record<string, unknown>
   } | null>(null)
 
+  // ── Message selection for bulk operations ──────────────────────────────────
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
+  const [selectionMode, setSelectionMode] = useState(false)
+
   // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
   const loadingRef = useRef<AbortController | null>(null)
@@ -436,6 +440,38 @@ export function useChatMessages(config: ChatMessagesConfig) {
       return { ...msg, pinned: !msg.pinned }
     }))
   }, [])
+
+  // ── Message Selection ──────────────────────────────────────────────────
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => !prev)
+    setSelectedMessageIds(new Set())
+  }, [])
+
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds(prev => {
+      const next = new Set(prev)
+      if (next.has(messageId)) {
+        next.delete(messageId)
+      } else {
+        next.add(messageId)
+      }
+      return next
+    })
+  }, [])
+
+  const selectAllMessages = useCallback(() => {
+    setSelectedMessageIds(new Set(messages.filter(m => !m.isError).map(m => m.id)))
+  }, [messages])
+
+  const clearSelection = useCallback(() => {
+    setSelectedMessageIds(new Set())
+  }, [])
+
+  const deleteSelectedMessages = useCallback(() => {
+    setMessages(prev => prev.filter(msg => !selectedMessageIds.has(msg.id)))
+    setSelectedMessageIds(new Set())
+    setSelectionMode(false)
+  }, [selectedMessageIds])
 
   // ── Suggestion click ──────────────────────────────────────────────────────
   const handleSuggestionClick = useCallback((text: string) => {
@@ -806,6 +842,13 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleCopyMarkdown,
     handleReact,
     handlePin,
+    selectedMessageIds,
+    selectionMode,
+    toggleSelectionMode,
+    toggleMessageSelection,
+    selectAllMessages,
+    clearSelection,
+    deleteSelectedMessages,
     sidebarConversations: sessions.sidebarConversations,
     cancelStream: useCallback(() => chatController.cancelStream(sessionIdRef.current), []),
     approveTool: useCallback((toolName: string, approved: boolean) =>

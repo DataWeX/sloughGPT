@@ -54,8 +54,8 @@ export function FeedbackTrainCard({ addToast }: Props) {
           addToast('Feedback training complete', 'success')
         } else {
           setPhase('error')
-          setError(j.error || 'Could not training')
-          addToast('Could not feedback training', 'error')
+          setError(j.error || 'Training failed')
+          addToast('Feedback training failed', 'error')
         }
       } catch {
         // Transient error, keep polling

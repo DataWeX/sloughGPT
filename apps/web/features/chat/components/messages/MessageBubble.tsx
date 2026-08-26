@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn, IconStar } from '@sloughgpt/strui'
-import { IconMessage } from '@sloughgpt/strui'
+import { IconMessage, IconPin } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
@@ -27,10 +27,12 @@ export interface MessageBubbleProps {
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
   onReact?: (messageId: string, emoji: string) => void
+  onPin?: (messageId: string) => void
   onSuggestionClick?: (text: string) => void
   messageId?: string
   isStreaming?: boolean
   isError?: boolean
+  isPinned?: boolean
   searchQuery?: string
   model?: string
   isBookmarked?: boolean
@@ -44,6 +46,9 @@ export interface MessageBubbleProps {
   onAddNote?: (messageId: string) => void
   hasThread?: boolean
   onThread?: (messageId: string) => void
+  selectionMode?: boolean
+  isSelected?: boolean
+  onToggleSelection?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
@@ -62,10 +67,12 @@ export const MessageBubble = memo(function MessageBubble({
   onThumbsDown,
   onEdit,
   onReact,
+  onPin,
   onSuggestionClick,
   messageId,
   isStreaming = false,
   isError = false,
+  isPinned = false,
   searchQuery,
   model,
   isBookmarked = false,
@@ -100,11 +107,13 @@ export const MessageBubble = memo(function MessageBubble({
       content={content}
       role={role}
       isBookmarked={isBookmarked}
+      isPinned={isPinned}
       hasNote={hasNote}
       hasThread={hasThread}
       onCopy={onCopy}
       onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
+      onPin={onPin}
       onRegenerate={showActions ? onRegenerate : undefined}
       onDelete={onDelete}
       onSaveToKnowledge={onSaveToKnowledge}
@@ -149,6 +158,11 @@ export const MessageBubble = memo(function MessageBubble({
         {hasNote && (
           <span className="ml-1.5 text-primary/70" aria-label="Has note">
             <IconMessage className="h-2.5 w-2.5 inline" aria-hidden="true" />
+          </span>
+        )}
+        {isPinned && (
+          <span className="ml-1.5 text-primary/70" aria-label="Pinned">
+            <IconPin className="h-2.5 w-2.5 inline" aria-hidden="true" />
           </span>
         )}
         {role === 'assistant' && model && !isError && (

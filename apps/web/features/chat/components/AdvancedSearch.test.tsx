@@ -84,7 +84,7 @@ describe('AdvancedSearch', () => {
       fireEvent.click(screen.getByTitle('Whole word'))
     })
     
-    fireEvent.change(screen.getByPlaceholderText('Search messages...'), { target: { value: 'hi' } })
+    fireEvent.change(screen.getByPlaceholderText('Search messages...'), { target: { value: 'el' } })
     expect(screen.getByText('No matches')).toBeInTheDocument()
   })
 })
