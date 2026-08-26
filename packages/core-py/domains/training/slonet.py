@@ -4134,15 +4134,25 @@ def import_from_sou(path: str) -> SloNet:
             num_params = struct.unpack("<I", rem[:4])[0]
             pos = 4
             for _ in range(num_params):
+                if pos + 4 > len(rem):
+                    raise ValueError(f"Corrupt .soul file: truncated at offset {pos}")
                 name_len = struct.unpack("<I", rem[pos:pos+4])[0]
                 pos += 4
+                if pos + name_len > len(rem):
+                    raise ValueError(f"Corrupt .soul file: truncated name at offset {pos}")
                 name = rem[pos:pos+name_len].decode("utf-8")
                 pos += name_len
+                if pos + 4 > len(rem):
+                    raise ValueError(f"Corrupt .soul file: truncated ndim at offset {pos}")
                 ndim = struct.unpack("<I", rem[pos:pos+4])[0]
                 pos += 4
+                if pos + 4 * ndim > len(rem):
+                    raise ValueError(f"Corrupt .soul file: truncated shape at offset {pos}")
                 shape = tuple(struct.unpack("<I", rem[pos+4*i:pos+4*i+4])[0] for i in range(ndim))
                 pos += 4 * ndim
                 count = int(np.prod(shape))
+                if pos + count * 4 > len(rem):
+                    raise ValueError(f"Corrupt .soul file: truncated weights at offset {pos}")
                 weights[name] = np.frombuffer(rem[pos:pos+count*4], dtype=np.float32).copy().reshape(shape)
                 pos += count * 4
     else:

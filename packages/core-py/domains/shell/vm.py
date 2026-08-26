@@ -417,6 +417,21 @@ class FileDevice(Device):
     def info(self):
         return {"type": "file", "open_files": len(self._files)}
 
+    def close_all(self):
+        for fh in self._files.values():
+            try:
+                fh.close()
+            except Exception:
+                pass
+        self._files.clear()
+
+    def __del__(self):
+        for fh in self._files.values():
+            try:
+                fh.close()
+            except Exception:
+                pass
+
     def call(self, method, *args):
         if method == "open":
             path, mode = args[0], args[1] if len(args) > 1 else "r"
