@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, Field
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log

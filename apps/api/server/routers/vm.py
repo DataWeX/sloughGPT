@@ -333,7 +333,7 @@ async def training_job_status(job_id: str) -> dict:
 
 
 @router.post("/training/jobs/{job_id}/stop")
-async def training_job_stop(job_id: str) -> dict:
+async def training_job_stop(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
     """Request a stop for a running training job launched via VM syscall."""
     try:
         try:

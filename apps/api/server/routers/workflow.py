@@ -6,7 +6,7 @@ Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 import logging
 from typing import Dict, Any
 from pydantic import BaseModel, Field
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 

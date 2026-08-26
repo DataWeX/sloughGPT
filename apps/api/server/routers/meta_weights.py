@@ -4,9 +4,10 @@ Meta Weights Router - Feedback-driven weight adaptation.
 import asyncio
 import logging
 import time as _time
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
 
 logger = logging.getLogger("slo.routers.meta_weights")
@@ -38,7 +39,7 @@ class MetaWeightsRouter:
         self.router.add_api_route("/get", self.get_meta_weights, methods=["POST"], response_model=MetaWeightResponse)
         self.router.add_api_route("/stats", self.get_meta_weight_stats, methods=["GET"])
 
-    async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request) -> dict:
+    async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get meta-weight adjustments based on similar past feedback."""
         try:
             _t0 = _time.monotonic()

@@ -5,11 +5,12 @@ Endpoints to manage and chat with the AI companion.
 """
 import logging
 import time as _time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.companion")
 

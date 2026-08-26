@@ -106,7 +106,7 @@ class UserAdaptersRouter:
             logger.warning("Get adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.get")
 
-    async def update_adapter(self, user_id: str, req: AdapterUpdateRequest) -> dict:
+    async def update_adapter(self, user_id: str, req: AdapterUpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Update a user's LoRA adapter with new feedback rating.
 
         Args:
@@ -136,7 +136,7 @@ class UserAdaptersRouter:
             logger.warning("Update adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.update")
 
-    async def reset_adapter(self, user_id: str) -> dict:
+    async def reset_adapter(self, user_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset a user's LoRA adapter to its initial zero-weight state.
 
         Clears all accumulated feedback deltas and resets the adapter's
@@ -168,7 +168,7 @@ class UserAdaptersRouter:
             logger.warning("Reset adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.reset")
 
-    async def merge_adapters(self) -> dict:
+    async def merge_adapters(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Merge all per-user LoRA adapters into a single combined adapter.
 
         Weight-deltas from all users are averaged and applied to produce
@@ -279,7 +279,7 @@ class UserAdaptersRouter:
             logger.warning("Delete adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.delete")
 
-    async def prune_low_quality_adapters(self, request: PruneAdaptersRequest, req: Request) -> dict:
+    async def prune_low_quality_adapters(self, request: PruneAdaptersRequest, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Remove adapters with too few feedback or too old."""
         try:
             from domains.feedback import get_per_user_lora

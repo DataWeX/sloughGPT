@@ -3,9 +3,10 @@ Config Router - MVC View layer
 """
 import logging
 import time as _time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from schemas.config import ConfigUpdate
+from infrastructure.auth import require_auth_if_enabled
 from controllers.config import get_config_controller
 from schemas.common import success_response, classify_and_raise, safe_audit_log
 

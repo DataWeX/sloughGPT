@@ -6,12 +6,13 @@ import asyncio
 import json
 import logging
 import time
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, AsyncIterator
 
 from schemas.common import success_response, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 from config import ServerConfig
 
 logger = logging.getLogger(__name__)

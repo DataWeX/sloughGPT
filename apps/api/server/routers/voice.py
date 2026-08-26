@@ -7,7 +7,7 @@ import logging
 import time as _time
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise

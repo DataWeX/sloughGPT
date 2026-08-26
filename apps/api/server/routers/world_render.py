@@ -3,11 +3,12 @@ World Render Router — rendering endpoints for the programmable world.
 """
 import logging
 import time as _time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.world_render")
 
@@ -53,7 +54,7 @@ class WorldRenderRouter:
             self._world.energy[self._world.idx(33, 0, 32)] = 5.0
         return self._world
 
-    async def render_world(self, config: RenderConfigRequest | None = None) -> dict:
+    async def render_world(self, config: RenderConfigRequest | None = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Render the current world state and return state tensors."""
         _t0 = _time.monotonic()
         try:
@@ -86,7 +87,7 @@ class WorldRenderRouter:
         except Exception as e:
             classify_and_raise(e, source="render_world")
 
-    async def render_world_image(self, config: RenderConfigRequest | None = None) -> Response:
+    async def render_world_image(self, config: RenderConfigRequest | None = None, auth_user: dict = Depends(require_auth_if_enabled)) -> Response:
         """Render the world and return a PNG image."""
         _t0 = _time.monotonic()
         try:
@@ -116,7 +117,7 @@ class WorldRenderRouter:
         except Exception as e:
             classify_and_raise(e, source="render_world_image")
 
-    async def neural_process(self, config: RenderConfigRequest | None = None) -> dict:
+    async def neural_process(self, config: RenderConfigRequest | None = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Render the world and process through the neural pipeline."""
         _t0 = _time.monotonic()
         try:
@@ -148,7 +149,7 @@ class WorldRenderRouter:
         except Exception as e:
             classify_and_raise(e, source="neural_process")
 
-    async def run_tick(self, config: SimTickRequest | None = None) -> dict:
+    async def run_tick(self, config: SimTickRequest | None = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Run a simulation tick with optional rendering."""
         _t0 = _time.monotonic()
         try:

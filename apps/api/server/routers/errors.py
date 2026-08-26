@@ -20,9 +20,10 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import re
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, safe_audit_log, classify_and_raise
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -159,7 +160,7 @@ class ErrorsRouter:
 
     # ── Route handlers ──────────────────────────────────────────────────
 
-    async def log_errors(self, batch: ErrorBatch, request: Request) -> dict:
+    async def log_errors(self, batch: ErrorBatch, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Log one or more client-side JavaScript errors for server-side monitoring."""
         try:
             now_ts = datetime.now(timezone.utc)
@@ -232,7 +233,7 @@ class ErrorsRouter:
         except Exception as e:
             classify_and_raise(e, source="errors.log")
 
-    async def ingest_frontend_logs(self, batch: FrontendLogBatch) -> dict:
+    async def ingest_frontend_logs(self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Ingest frontend logs into the server buffer."""
         try:
             from domains.infrastructure.output_buffer import get_server_buffer
@@ -373,7 +374,7 @@ class ErrorsRouter:
         except Exception as e:
             classify_and_raise(e, source="errors.export")
 
-    async def clear_errors(self) -> dict:
+    async def clear_errors(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear all errors."""
         try:
             self._error_buffer.clear()

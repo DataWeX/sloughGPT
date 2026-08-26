@@ -5,8 +5,9 @@ import asyncio
 import logging
 import re
 from pathlib import Path
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 
 _VALID_ADAPTER_PATH = re.compile(r'^[\w\-/]+\.npz$')
@@ -115,6 +116,7 @@ class LoraEvalRouter:
         min_feedback: int = Query(default=5, ge=1),
         output_name: str = Query(default="best_aggregated"),
         run_eval: bool = Query(default=True),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """
         Trigger aggregation of top-k best user adapters.

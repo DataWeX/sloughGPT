@@ -12,13 +12,14 @@ Single language-agnostic entrypoint for all inference operations:
 
 Thin adapter: delegates to provider/domain logic, no business logic here.
 """
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator, AsyncGenerator
 import datetime
 import logging
 from schemas.common import raise_error, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 from domains.infrastructure.errors import AppError
 import time as _time
 

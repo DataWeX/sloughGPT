@@ -4,7 +4,7 @@ Self-Train Router - Start/stop/status for self-training subprocess.
 import asyncio
 import logging
 import re
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 import state as server_state
 import subprocess
@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 

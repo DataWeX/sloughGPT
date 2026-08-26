@@ -6,10 +6,11 @@ This router just exposes manager methods as HTTP endpoints.
 """
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from domains.training.tokenizer_manager import get_tokenizer_manager
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
 
 
