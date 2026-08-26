@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
@@ -299,13 +299,7 @@ export default function ExperimentsPage() {
                     .map(exp => (
                     <div
                       key={exp.id}
-                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer ${
-                        selectedId === exp.id
-                          ? 'border-primary/40 bg-primary/5'
-                          : selectedIds.has(exp.id)
-                            ? 'border-primary/40 bg-primary/5'
-                            : 'border-border/60 hover:bg-muted/50'
-                      }`}
+                      className={cn('flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer', selectedId === exp.id || selectedIds.has(exp.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 hover:bg-muted/50')}
                       onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(selectedId === exp.id ? null : exp.id); } }}
                       role="button"

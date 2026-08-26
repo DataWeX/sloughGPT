@@ -89,4 +89,27 @@ describe('TrainingBuildsCard', () => {
       expect(screen.getByText('No builds found. Start training to create builds.')).toBeDefined()
     })
   })
+
+  it('paginates builds at 10 per page', async () => {
+    const manyBuilds = Array.from({ length: 15 }, (_, i) => ({
+      name: `build-${i}`, build_type: 'auto-train', loss: 0.1 * i, epochs: 5, size_mb: 10, model: 'gpt2',
+    }))
+    vi.mocked(trainingJobsController.listBuilds).mockResolvedValue(manyBuilds as any[])
+    render(<TrainingBuildsCard addToast={mockToast} />)
+    await waitFor(() => { expect(screen.getByText('build-0')).toBeDefined() })
+    expect(screen.queryByText('build-10')).toBeNull()
+    expect(screen.getByText('1–10 of 15')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => { expect(screen.getByText('build-10')).toBeDefined() })
+    expect(screen.queryByText('build-0')).toBeNull()
+    expect(screen.getByText('11–15 of 15')).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Prev' }))
+    await waitFor(() => { expect(screen.getByText('build-0')).toBeDefined() })
+  })
+
+  it('does not show pagination when 10 or fewer builds', async () => {
+    render(<TrainingBuildsCard addToast={mockToast} />)
+    await waitFor(() => { expect(screen.getByText('build-1')).toBeDefined() })
+    expect(screen.queryByText('1–3 of 3')).toBeNull()
+  })
 })

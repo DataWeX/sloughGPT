@@ -289,4 +289,27 @@ describe('AutoTrainPage', () => {
       expect(mocks.deleteCheckpointsBatch).toHaveBeenCalledWith(['cp-1', 'cp-2'])
     })
   })
+
+  it('paginates checkpoints at 10 per page', async () => {
+    mocks.checkpoints.checkpoints = Array.from({ length: 15 }, (_, i) => ({
+      name: `cp-${i}`, loss: 0.1 * i,
+    }))
+    render(<AutoTrainPage />)
+    await waitFor(() => { expect(screen.getByText('cp-0')).toBeTruthy() })
+    expect(screen.queryByText('cp-10')).toBeNull()
+    expect(screen.getByText('1–10 of 15')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => { expect(screen.getByText('cp-10')).toBeTruthy() })
+    expect(screen.queryByText('cp-0')).toBeNull()
+    expect(screen.getByText('11–15 of 15')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Prev' }))
+    await waitFor(() => { expect(screen.getByText('cp-0')).toBeTruthy() })
+  })
+
+  it('does not show pagination when 10 or fewer checkpoints', async () => {
+    mocks.checkpoints.checkpoints = [{ name: 'cp-1', loss: 0.5 }]
+    render(<AutoTrainPage />)
+    await waitFor(() => { expect(screen.getByText('cp-1')).toBeTruthy() })
+    expect(screen.queryByText('1–1 of 1')).toBeNull()
+  })
 })

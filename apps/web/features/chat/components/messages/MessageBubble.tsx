@@ -237,6 +237,8 @@ export const MessageBubble = memo(function MessageBubble({
           onDelete={onDelete}
           onSaveToKnowledge={onSaveToKnowledge}
           temperature={temperature}
+          onAddNote={onAddNote}
+          hasNote={hasNote}
         />
       )}
 
@@ -249,6 +251,8 @@ export const MessageBubble = memo(function MessageBubble({
           onEdit={handleEditStart}
           onSuggestionClick={onSuggestionClick}
           onDelete={onDelete}
+          onAddNote={onAddNote}
+          hasNote={hasNote}
         />
       )}
     </div>

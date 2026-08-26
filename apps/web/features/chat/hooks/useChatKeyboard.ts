@@ -23,6 +23,7 @@ interface KeyboardDeps {
   onApproveTool?: () => void
   onDenyTool?: () => void
   onToggleSidebar?: () => void
+  onAddNoteToLastMessage?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -34,6 +35,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
     onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
+    onAddNoteToLastMessage,
   } = deps
 
   const depsRef = useRef(deps)
@@ -112,6 +114,10 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault()
         d.onToggleSidebar?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && e.shiftKey) {
+        e.preventDefault()
+        d.onAddNoteToLastMessage?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

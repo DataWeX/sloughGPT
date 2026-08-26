@@ -289,6 +289,7 @@ export function ChatChatSection({ controller }: ChatPageSectionProps) {
           onDelete={handleDeleteMessage}
           onSaveToKnowledge={handleSaveToKnowledge}
           onReact={handleReact}
+          onPin={handlePin}
           collapsibleLength={collapsibleLength}
           temperature={model.temperature}
           contextLayers={contextLayers}

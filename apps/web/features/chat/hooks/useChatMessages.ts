@@ -429,6 +429,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
     }))
   }, [])
 
+  // ── Pin/Unpin Messages ──────────────────────────────────────────────────
+  const handlePin = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== messageId) return msg
+      return { ...msg, pinned: !msg.pinned }
+    }))
+  }, [])
+
   // ── Suggestion click ──────────────────────────────────────────────────────
   const handleSuggestionClick = useCallback((text: string) => {
     setInput(text)
@@ -797,6 +805,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleExportMarkdown,
     handleCopyMarkdown,
     handleReact,
+    handlePin,
     sidebarConversations: sessions.sidebarConversations,
     cancelStream: useCallback(() => chatController.cancelStream(sessionIdRef.current), []),
     approveTool: useCallback((toolName: string, approved: boolean) =>

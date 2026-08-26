@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPut, apiDelete, apiPatch } from '@/lib/http-client'
 
@@ -164,11 +164,7 @@ export default function DocstorePage() {
             key={c}
             type="button"
             onClick={() => setSelected(c)}
-            className={`rounded border px-2 py-1.5 text-xs text-left transition-colors ${
-              selected === c
-                ? 'border-primary bg-primary/10 text-primary font-medium'
-                : 'border-border hover:bg-muted/50'
-            }`}
+            className={cn('rounded border px-2 py-1.5 text-xs text-left transition-colors', selected === c ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50')}
           >
             <span className="block truncate">{c}</span>
             {collectionMeta[c] != null && (
@@ -231,11 +227,7 @@ export default function DocstorePage() {
                     key={d._id}
                     type="button"
                     onClick={() => { setSelectedDoc(d); setEditMode(false); setEditContent(JSON.stringify(d, null, 2)) }}
-                    className={`w-full rounded border p-2 text-left text-xs transition-colors ${
-                      selectedDoc?._id === d._id
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:bg-muted/30'
-                    }`}
+                    className={cn('w-full rounded border p-2 text-left text-xs transition-colors', selectedDoc?._id === d._id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30')}
                   >
                     <span className="block truncate font-mono">{d._id}</span>
                   </button>

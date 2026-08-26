@@ -161,6 +161,16 @@ export function useChatPageController(
     },
     onToggleBookmarks: () => ui.setToolPanelOpen(prev => !prev),
     onToggleSidebar: () => ui.setSidebarOpen(prev => !prev),
+    onAddNoteToLastMessage: () => {
+      const messages = chat.messages
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1]
+        if (lastMsg.id) {
+          setNoteDialogMessageId(lastMsg.id)
+          setNoteDialogOpen(true)
+        }
+      }
+    },
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -545,6 +555,7 @@ export function useChatPageController(
     handlePDFDropped,
     contextLayers: chat.contextLayers,
     handleReact: chat.handleReact,
+    handlePin: chat.handlePin,
     noteMap: messageNotes.notes,
     noteDialogOpen: noteDialogOpen,
     setNoteDialogOpen: setNoteDialogOpen,

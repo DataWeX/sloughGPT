@@ -353,6 +353,18 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
         </Button>
       )}
 
+      {onAddNote && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => onAddNote(messageId)}
+          className={cn('p-2', hasNote && 'text-primary/70')}
+          aria-label={hasNote ? 'Edit note' : 'Add note'}
+        >
+          <IconMessage className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
+      )}
+
       {onSaveToKnowledge && (
         <Button
           variant="ghost"

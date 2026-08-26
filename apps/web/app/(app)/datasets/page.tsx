@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, EmptyCard, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -232,7 +232,7 @@ export default function DatasetsPage() {
             aria-pressed={sortBy === s}
             aria-label={`Sort by ${s}`}
             onClick={() => setSortBy(s)}
-            className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+            className={cn('text-xs px-2 py-1 rounded border transition-colors', sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
           >
             {s}
           </button>
@@ -339,7 +339,7 @@ export default function DatasetsPage() {
             {filtered.map(ds => (
               <div key={ds.id}>
               <Card
-                className={`group transition-colors ${expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40'}`}
+                className={cn('group transition-colors', expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40')}
                 onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
               >
                   <CardContent className="flex items-center justify-between py-3 px-4">
@@ -404,7 +404,7 @@ export default function DatasetsPage() {
                       </Button>
                       <button
                         type="button"
-                        className={`h-6 w-6 rounded border transition-colors flex items-center justify-center ${compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50'}`}
+                        className={cn('h-6 w-6 rounded border transition-colors flex items-center justify-center', compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50')}
                         onClick={() => toggleCompare(ds.id)}
                         aria-label={`Select ${ds.name} for comparison`}
                       >
@@ -417,7 +417,7 @@ export default function DatasetsPage() {
                         onClick={(e) => handlePreview(ds, e)}
                         aria-label={expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`}
                       >
-                        <IconChevronDown className={`h-4 w-4 transition-transform ${expandedId === ds.id ? 'rotate-180' : ''}`} />
+                        <IconChevronDown className={cn('h-4 w-4 transition-transform', expandedId === ds.id && 'rotate-180')} />
                       </Button>
                       <Button
                         variant="ghost"

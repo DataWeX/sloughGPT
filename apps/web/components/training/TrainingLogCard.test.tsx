@@ -116,4 +116,21 @@ describe('TrainingLogCard', () => {
     expect(screen.queryByText('live')).toBeNull()
     unmount()
   })
+
+  it('caps visible log lines at 500 and shows overflow message', async () => {
+    const manyLines = Array.from({ length: 600 }, (_, i) => `line ${i}`)
+    mockGetTrainingLog.mockResolvedValue(manyLines)
+    const { unmount } = render(<TrainingLogCard trainingRunning={false} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show' }))
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Showing last 500 of 600 lines')).toBeTruthy()
+    })
+    expect(screen.queryByText('line 0')).toBeNull()
+    expect(screen.queryByText('line 99')).toBeNull()
+    expect(screen.queryByText('line 100')).toBeTruthy()
+    expect(screen.queryByText('line 599')).toBeTruthy()
+    unmount()
+  })
 })

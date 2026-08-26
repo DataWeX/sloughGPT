@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { useToastStore } from '@/lib/toast-store'
 
 interface NoteDialogProps {
   open: boolean
@@ -15,6 +16,7 @@ interface NoteDialogProps {
 export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteDialogProps) {
   const [draft, setDraft] = useState(note)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     setDraft(note)
@@ -28,11 +30,13 @@ export function NoteDialog({ open, onOpenChange, note, onSave, onDelete }: NoteD
 
   const handleSave = () => {
     onSave(draft.trim())
+    addToast('Note saved', 'success')
     onOpenChange(false)
   }
 
   const handleDelete = () => {
     onDelete?.()
+    addToast('Note deleted', 'success')
     onOpenChange(false)
   }
 

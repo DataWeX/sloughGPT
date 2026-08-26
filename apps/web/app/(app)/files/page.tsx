@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry } from '@/lib/files-controller'
@@ -209,7 +209,7 @@ export default function FilesPage() {
                     Select all ({filtered.length})
                   </label>
                   {filtered.map(f => (
-                    <div key={f.id} className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors ${selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60'}`}>
+                    <div key={f.id} className={cn('flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors', selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60')}>
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <input
                           type="checkbox"

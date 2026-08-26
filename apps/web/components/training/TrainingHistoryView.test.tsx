@@ -90,4 +90,37 @@ describe('TrainingHistoryView', () => {
       expect(mockToast).toHaveBeenCalledWith('Training history exported', 'success')
     })
   })
+
+  it('paginates jobs at 20 per page', async () => {
+    const manyJobs = Array.from({ length: 25 }, (_, i) => ({
+      id: `${i}`, name: `Job ${i}`, status: 'completed', progress: 100,
+      created_at: `2026-01-${String(15 - (i % 15)).padStart(2, '0')}T10:00:00Z`,
+    }))
+    mockList.mockResolvedValue(manyJobs as any[])
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 0').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText('Job 20')).toBeNull()
+    expect(screen.getByText('1–20 of 25')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 20').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText('Job 0')).toBeNull()
+    expect(screen.getByText('21–25 of 25')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Prev' }))
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 0').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('does not show pagination when 20 or fewer jobs', async () => {
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 1').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByText('1–2 of 2')).toBeNull()
+  })
 })
