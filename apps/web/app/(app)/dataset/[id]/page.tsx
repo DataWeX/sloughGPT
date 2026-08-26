@@ -285,6 +285,7 @@ export default function DatasetDetailPage() {
                       onClick={() => setExportOpen(!exportOpen)}
                       onKeyDown={(e) => { if (e.key === 'Escape') setExportOpen(false) }}
                       aria-expanded={exportOpen}
+                      aria-pressed={exportOpen}
                       aria-haspopup="true"
                     >
                       <IconDownload className="h-4 w-4 mr-1" /> Export <IconChevronDown className="h-3 w-3 ml-1" />

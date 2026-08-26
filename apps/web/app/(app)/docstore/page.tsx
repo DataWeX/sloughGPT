@@ -181,7 +181,7 @@ export default function DocstorePage() {
           placeholder={`Search ${selected}...`}
           className="h-8 text-xs"
         />
-        <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)}>
+        <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
           {showCreate ? 'Cancel' : 'New doc'}
         </Button>
       </div>

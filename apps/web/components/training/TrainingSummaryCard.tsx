@@ -3,15 +3,10 @@
 import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
+import { formatDuration } from './formatDuration'
 
 interface TrainingSummaryCardProps {
   checkpoints: Checkpoint[]
-}
-
-function fmtDuration(totalS: number): string {
-  if (totalS < 60) return `${totalS.toFixed(0)}s`
-  if (totalS < 3600) return `${Math.floor(totalS / 60)}m ${Math.round(totalS % 60)}s`
-  return `${Math.floor(totalS / 3600)}h ${Math.floor((totalS % 3600) / 60)}m`
 }
 
 interface Stat {
@@ -50,8 +45,8 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
     const spread = Math.max(...withLoss.map(c => c.loss!)) - bestLoss!
     stats.push({ label: 'Loss spread', value: spread.toFixed(4) })
   }
-  if (totalDuration > 0) stats.push({ label: 'Total training time', value: fmtDuration(totalDuration) })
-  if (bestDuration != null) stats.push({ label: 'Fastest run', value: fmtDuration(bestDuration) })
+  if (totalDuration > 0) stats.push({ label: 'Total training time', value: formatDuration(totalDuration) })
+  if (bestDuration != null) stats.push({ label: 'Fastest run', value: formatDuration(bestDuration) })
   if (avgQuality != null) stats.push({ label: 'Avg quality', value: `${avgQuality.toFixed(1)}/5` })
   if (withVocab.length > 0) {
     const maxVocab = Math.max(...withVocab.map(c => c.vocab_size!))

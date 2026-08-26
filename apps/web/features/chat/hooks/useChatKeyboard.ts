@@ -26,6 +26,7 @@ interface KeyboardDeps {
   onAddNoteToLastMessage?: () => void
   onOpenNoteSearch?: () => void
   onOpenShortcuts?: () => void
+  onOpenTemplates?: () => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {

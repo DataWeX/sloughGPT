@@ -169,7 +169,7 @@ export default function CollectionsContent() {
             <CardTitle className="text-base">Pipelines ({pipelines.length})</CardTitle>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="ghost" onClick={() => void fetchPipelines()}>Refresh</Button>
-              <Button size="sm" onClick={() => setShowCreate(!showCreate)}>
+              <Button size="sm" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
                 {showCreate ? 'Cancel' : 'New pipeline'}
               </Button>
             </div>

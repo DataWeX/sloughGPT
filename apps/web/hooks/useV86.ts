@@ -37,7 +37,9 @@ export function useV86(): UseV86Result {
 
   // Check for persisted state on mount
   useEffect(() => {
-    new V86Controller().loadPersistedState().then((s) => setStateSaved(!!s))
+    let active = true
+    new V86Controller().loadPersistedState().then((s) => { if (active) setStateSaved(!!s) })
+    return () => { active = false }
   }, [])
 
   const init = useCallback(async (container: HTMLElement) => {

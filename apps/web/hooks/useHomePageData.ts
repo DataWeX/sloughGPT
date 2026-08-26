@@ -1,9 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
-import { soulsController, type Soul } from '@/lib/souls-controller'
+import { type Soul } from '@/lib/souls-controller'
 import { sessionController } from '@/lib/session-controller'
 import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'

@@ -913,6 +913,7 @@ export default function VMPage() {
                   size="sm"
                   variant={showRef ? 'default' : 'ghost'}
                   onClick={() => setShowRef(!showRef)}
+                  aria-pressed={showRef}
                 >
                   Ref
                 </Button>
@@ -1606,6 +1607,7 @@ function VGADisplay({ text, cells }: { text?: string; cells?: { ch: string; fg: 
             size="sm"
             variant="ghost"
             onClick={() => setFullScreen(!fullScreen)}
+            aria-pressed={fullScreen}
           >
             {fullScreen ? 'Exit' : 'Fullscreen'}
           </Button>

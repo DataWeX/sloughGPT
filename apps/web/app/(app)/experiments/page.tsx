@@ -236,7 +236,7 @@ export default function ExperimentsPage() {
               <Button size="sm" variant="ghost" onClick={() => void handleExport()} aria-label="Export">
                 Export
               </Button>
-              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
+              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)} aria-pressed={autoRefresh}>
                 {autoRefresh ? 'Auto' : 'Refresh'}
               </Button>
               <Button size="sm" variant="ghost" onClick={fetchExperiments} aria-label="Refresh">
@@ -255,7 +255,7 @@ export default function ExperimentsPage() {
             ) : (
               <>
                 <div className="flex items-center gap-2 mb-3">
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(!createDialogOpen)}>
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(!createDialogOpen)} aria-pressed={createDialogOpen}>
                     {createDialogOpen ? 'Cancel' : 'New Experiment'}
                   </Button>
                 </div>

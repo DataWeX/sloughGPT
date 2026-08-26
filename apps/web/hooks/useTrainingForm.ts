@@ -83,6 +83,7 @@ export interface TrainingFormState {
 }
 
 const TRAINING_CONFIG_KEY = 'sloughgpt-training-config'
+const TRAINING_PRESETS_KEY = 'sloughgpt-training-presets'
 
 interface SavedConfig {
   method?: Method
@@ -147,13 +148,13 @@ export function useTrainingForm(
   const [nativeBlockSize, setNativeBlockSize] = useState(128)
 
   const [customPresets, setCustomPresets] = useState<TrainingPreset[]>(() => {
-    try { return JSON.parse(localStorage.getItem('sloughgpt-training-presets') || '[]') } catch { return [] }
+    try { return JSON.parse(localStorage.getItem(TRAINING_PRESETS_KEY) || '[]') } catch { return [] }
   })
 
   const saveCustomPreset = useCallback((preset: TrainingPreset) => {
     setCustomPresets(prev => {
       const next = [...prev.filter(p => p.name !== preset.name), preset]
-      localStorage.setItem('sloughgpt-training-presets', JSON.stringify(next))
+      localStorage.setItem(TRAINING_PRESETS_KEY, JSON.stringify(next))
       return next
     })
   }, [])
@@ -161,7 +162,7 @@ export function useTrainingForm(
   const deleteCustomPreset = useCallback((name: string) => {
     setCustomPresets(prev => {
       const next = prev.filter(p => p.name !== name)
-      localStorage.setItem('sloughgpt-training-presets', JSON.stringify(next))
+      localStorage.setItem(TRAINING_PRESETS_KEY, JSON.stringify(next))
       return next
     })
   }, [])

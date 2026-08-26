@@ -133,7 +133,7 @@ export default function ErrorsPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Actions</CardTitle>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
+              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)} aria-pressed={autoRefresh}>
                 {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
               </Button>
               <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">

@@ -6,7 +6,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
+import { trainingJobsController } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
 
 interface Props {

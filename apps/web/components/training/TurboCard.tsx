@@ -56,7 +56,11 @@ export const TurboCard = memo(function TurboCard({
       addToast('Select a dataset first', 'error')
       return
     }
-    session.startTurboTrain(datasets.selectedDataset, config, addToast, selectedExperimentId || undefined)
+    try {
+      session.startTurboTrain(datasets.selectedDataset, config, addToast, selectedExperimentId || undefined)
+    } catch {
+      addToast('Could not start turbo training', 'error')
+    }
   }
 
   const loadForChat = async () => {
