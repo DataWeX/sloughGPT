@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, memo } from 'react'
 import { cn, Dialog, DialogContent, DialogHeader, DialogTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Tabs } from '@sloughgpt/strui'
@@ -36,7 +36,7 @@ interface AnalyzeResult {
   mean_accuracy: number
 }
 
-export function VisionStudioDialog({
+export const VisionStudioDialog = memo(function VisionStudioDialog({
   open, onOpenChange, sessionId, onGeneratedImage, onSendText, initialCaps,
 }: VisionStudioDialogProps) {
   const [tab, setTab] = useState('analyze')
@@ -605,4 +605,4 @@ export function VisionStudioDialog({
       </DialogContent>
     </Dialog>
   )
-}
+})
