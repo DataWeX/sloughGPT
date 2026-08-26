@@ -3021,7 +3021,7 @@ class SimScene:
         entities = [Entity.from_dict(e) for e in data["entities"]]
         by_id = {e.id: e for e in entities}
         babies = [
-            SimBaby.from_dict(b, params, entity=by_id.get(b["entity"]["id"]))
+            SimBaby.from_dict(b, params, entity=by_id.get((b.get("entity") or {}).get("id")))
             for b in data["babies"]
         ]
         scene = cls(params)

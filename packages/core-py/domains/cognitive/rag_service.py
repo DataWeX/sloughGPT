@@ -75,9 +75,12 @@ class RAGService:
                     if not line:
                         continue
                     doc = json.loads(line)
+                    content = doc.get("content")
+                    if not content:
+                        continue
                     self._documents.append(doc)
                     self.rag.add_document(
-                        content=doc["content"],
+                        content=content,
                         metadata=doc.get("metadata", {}),
                         chunk_size=doc.get("chunk_size", 512),
                         overlap=doc.get("overlap", 50),
