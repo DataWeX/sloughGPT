@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Iterator
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from .sources import Record, Source, FileSource, UrlSource, RssSource, ApiSource, SseSource, WatchSource, GeneratorSource
 from .stores import Store, FileStore, MemoryStore, CallbackStore, ChainedStore, StatsStore
@@ -268,7 +271,8 @@ class DataTransformer:
             try:
                 record = t(record)
                 self.stats["transformed"] += 1
-            except Exception:
+            except Exception as e:
+                logger.debug("Transform error: %s", e)
                 self.stats["errors"] += 1
         return record
 
