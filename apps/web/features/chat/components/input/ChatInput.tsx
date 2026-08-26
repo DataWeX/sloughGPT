@@ -143,6 +143,25 @@ export const ChatInput = memo(function ChatInput({
           hasContent={hasContent}
           onExecuteCommand={onExecuteCommand}
         />
+
+        {!loading && !value && hasModel && (
+          <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1" aria-hidden="true">
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
+              <span>send</span>
+            </span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Shift+Enter</kbd>
+              <span>newline</span>
+            </span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">/</kbd>
+              <span>commands</span>
+            </span>
+          </div>
+        )}
       </div>
     </section>
   )

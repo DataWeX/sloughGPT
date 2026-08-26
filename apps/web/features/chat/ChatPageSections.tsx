@@ -24,8 +24,8 @@ const DownloadDialog = dynamicNext(() => import('@/features/chat/components/dial
 const SystemPromptDialog = dynamicNext(() => import('@/features/chat/components/dialogs/SystemPromptDialog').then(m => m.SystemPromptDialog), { ssr: false })
 const ReadFileSection = dynamicNext(() => import('@/features/chat/components/dialogs/ReadFileSection'), { ssr: false })
 const NoteDialog = dynamicNext(() => import('@/features/chat/components/dialogs/NoteDialog').then(m => m.NoteDialog), { ssr: false })
-const NoteSearchPanel = dynamicNext(() => import('@/features/chat/components/panels/NoteSearchPanel').then(m => m.NoteSearchPanel), { ssr: false })
 const ThreadPanel = dynamicNext(() => import('@/features/chat/components/ThreadPanel').then(m => m.ThreadPanel), { ssr: false })
+const KeyboardShortcutsPanel = dynamicNext(() => import('@/features/chat/components/dialogs/KeyboardShortcutsPanel').then(m => m.KeyboardShortcutsPanel), { ssr: false })
 
 interface ChatPageSectionProps {
   controller: ChatPageController
@@ -337,7 +337,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
     systemPromptOpen, setSystemPromptOpen, customSystemPrompt, handleSaveSystemPrompt,
     setChatMode,
     noteDialogOpen, setNoteDialogOpen, noteDialogNote, onSaveNote, onDeleteNote,
-    noteSearchOpen, setNoteSearchOpen, onNavigateToNote,
+    shortcutsOpen, setShortcutsOpen,
     activeThreadMessageId, activeThread, activeThreadMessages, onStartThread, onReplyInThread, onCloseThread,
   } = controller
 
@@ -397,14 +397,6 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
         />
       )}
 
-      {noteSearchOpen && (
-        <NoteSearchPanel
-          open={noteSearchOpen}
-          onClose={() => setNoteSearchOpen(false)}
-          onNavigateToNote={onNavigateToNote}
-        />
-      )}
-
       {activeThreadMessageId && activeThread && (
         <ThreadPanel
           parentMessage={chat.messages.find(m => m.id === activeThreadMessageId)!}
@@ -414,6 +406,11 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
           className="w-80"
         />
       )}
+
+      <KeyboardShortcutsPanel
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
     </>
   )
 })

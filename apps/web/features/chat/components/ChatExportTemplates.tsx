@@ -79,7 +79,6 @@ function saveTemplates(templates: ExportTemplate[]) {
 
 function filterMessages(messages: ChatMessage[], template: ExportTemplate): ChatMessage[] {
   return messages.filter(msg => {
-    if (!template.includeSystemMessages && msg.role === 'system') return false
     if (template.messageFilter === 'user' && msg.role !== 'user') return false
     if (template.messageFilter === 'assistant' && msg.role !== 'assistant') return false
     return true
@@ -313,6 +312,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
           size="icon-sm"
           className="h-5 w-5"
           onClick={() => setShowCustom(!showCustom)}
+          aria-label="Create template"
         >
           <IconDownload className="h-3 w-3" />
         </Button>
@@ -324,6 +324,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
             type="text"
             value={customName}
             onChange={(e) => setCustomName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSaveCustom()}
             placeholder="Template name..."
             className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />

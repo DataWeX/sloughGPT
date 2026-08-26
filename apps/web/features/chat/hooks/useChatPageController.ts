@@ -174,6 +174,7 @@ export function useChatPageController(
       }
     },
     onOpenNoteSearch: () => setNoteSearchOpen(true),
+    onOpenShortcuts: () => setShortcutsOpen(true),
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────

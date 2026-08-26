@@ -126,7 +126,7 @@ describe('useTrainingForm', () => {
         useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
       )
       await act(async () => { await result.current.startTraining() })
-      expect(addToast).toHaveBeenCalledWith('Select a dataset or paste text to train on', 'error')
+      expect(addToast).toHaveBeenCalledWith('Select a dataset, paste text, or choose a checkpoint to resume', 'error')
     })
 
     it('shows error for VLM without dataset (even with text)', async () => {

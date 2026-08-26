@@ -37,8 +37,6 @@ export interface TrainingFormState {
   method: Method
   inputMode: InputMode
   textInput: string
-  showAdvanced: boolean
-  algo: string
   trainingEpochs: number
   trainingLR: number
   trainingBatchSize: number
@@ -55,13 +53,10 @@ export interface TrainingFormState {
   nativeLayers: number
   nativeHeads: number
   nativeBlockSize: number
-  loadingFinetunedModel: boolean
   allJobs: TrainingJob[]
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
   setTextInput: (s: string) => void
-  setShowAdvanced: (v: boolean) => void
-  setAlgo: (a: string) => void
   setTrainingEpochs: (n: number) => void
   setTrainingLR: (n: number) => void
   setTrainingBatchSize: (n: number) => void
@@ -77,7 +72,6 @@ export interface TrainingFormState {
   setNativeLayers: (n: number) => void
   setNativeHeads: (n: number) => void
   setNativeBlockSize: (n: number) => void
-  setLoadingFinetunedModel: (v: boolean) => void
   applyPreset: (preset: TrainingPreset) => void
   customPresets: TrainingPreset[]
   saveCustomPreset: (preset: TrainingPreset) => void
@@ -93,7 +87,6 @@ const TRAINING_CONFIG_KEY = 'sloughgpt-training-config'
 interface SavedConfig {
   method?: Method
   inputMode?: InputMode
-  algo?: string
   trainingEpochs?: number
   trainingLR?: number
   trainingBatchSize?: number
@@ -111,8 +104,6 @@ export function useTrainingForm(
 ): TrainingFormState {
   const [method, setMethod] = useState<Method>('distill')
   const [inputMode, setInputMode] = useState<InputMode>('dataset')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [algo, setAlgo] = useState('bpe')
   const [trainingEpochs, setTrainingEpochs] = useState(5)
   const [trainingLR, setTrainingLR] = useState(1e-3)
   const [trainingBatchSize, setTrainingBatchSize] = useState(64)
@@ -132,7 +123,6 @@ export function useTrainingForm(
       if (saved) {
         if (saved.method) setMethod(saved.method)
         if (saved.inputMode) setInputMode(saved.inputMode)
-        if (saved.algo) setAlgo(saved.algo)
         if (saved.trainingEpochs) setTrainingEpochs(saved.trainingEpochs)
         if (saved.trainingLR) setTrainingLR(saved.trainingLR)
         if (saved.trainingBatchSize) setTrainingBatchSize(saved.trainingBatchSize)
@@ -155,8 +145,6 @@ export function useTrainingForm(
   const [nativeLayers, setNativeLayers] = useState(4)
   const [nativeHeads, setNativeHeads] = useState(4)
   const [nativeBlockSize, setNativeBlockSize] = useState(128)
-
-  const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
 
   const [customPresets, setCustomPresets] = useState<TrainingPreset[]>(() => {
     try { return JSON.parse(localStorage.getItem('sloughgpt-training-presets') || '[]') } catch { return [] }
@@ -191,10 +179,10 @@ export function useTrainingForm(
   useEffect(() => {
     if (!configLoaded) return
     chatDB.setKV(TRAINING_CONFIG_KEY, {
-      method, inputMode, algo, trainingEpochs, trainingLR,
+      method, inputMode, trainingEpochs, trainingLR,
       trainingBatchSize, selectedModel, useLoRA,
     })
-  }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
+  }, [method, inputMode, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
 
   useEffect(() => {
     let active = true
@@ -252,7 +240,7 @@ export function useTrainingForm(
       addToast('Select a dataset, paste text, or choose a checkpoint for native training', 'error'); return
     }
 
-    const body: Record<string, unknown> = { algo, epochs: trainingEpochs, learning_rate: trainingLR }
+    const body: Record<string, unknown> = { algo: 'bpe', epochs: trainingEpochs, learning_rate: trainingLR }
     if (trainingBatchSize) body.batch_size = trainingBatchSize
     if (effectiveCheckpoint) body.checkpoint_name = effectiveCheckpoint
     if (hasDataset) body.dataset_id = datasets.selectedDataset
@@ -298,24 +286,22 @@ export function useTrainingForm(
         checkpoints.fetchCheckpoints()
       })
     }
-  }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
+  }, [method, inputMode, textInput, trainingEpochs, trainingLR, trainingBatchSize,
       selectedModel, useLoRA, datasets.selectedDataset, visualVisionEncoder, visualLLM,
       visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints, resumeCheckpoint])
 
   return {
-    method, inputMode, textInput, showAdvanced, algo,
+    method, inputMode, textInput,
     trainingEpochs, trainingLR, trainingBatchSize, availableModels, selectedModel, useLoRA,
     loraRank, loraAlpha,
     visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs,
     nativeEmbed, nativeLayers, nativeHeads, nativeBlockSize,
-    loadingFinetunedModel,
     allJobs,
-    setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
+    setMethod, setInputMode, setTextInput,
     setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
     setLoraRank, setLoraAlpha,
     setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs,
     setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
-    setLoadingFinetunedModel,
     applyPreset,
     customPresets, saveCustomPreset, deleteCustomPreset,
     canStart, resumeCheckpoint, setResumeCheckpoint, startTraining,

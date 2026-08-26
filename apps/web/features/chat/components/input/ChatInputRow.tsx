@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, type RefObject } from 'react'
+import { useState, useCallback, useRef, memo, type RefObject } from 'react'
 import { ChatInputAccessories } from './ChatInputAccessories'
 import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
@@ -31,7 +31,7 @@ interface ChatInputRowProps {
   onExecuteCommand?: (cmd: ChatCommand, args: string[]) => void
 }
 
-export function ChatInputRow({
+export const ChatInputRow = memo(function ChatInputRow({
   value, onChange, onSend, onStop, onCancel,
   loading, disabled, placeholder,
   textareaRef, onImage, onTranscript, onAudioRecorded, onAudioTranscript, onGeneratedImage,
@@ -163,4 +163,4 @@ export function ChatInputRow({
       </div>
     </div>
   )
-}
+})
