@@ -437,7 +437,7 @@ export const trainingJobsController = {
   },
 
   async trainFromFeedback(params?: { epochs?: number; batch_size?: number; learning_rate?: number; use_lora?: boolean }): Promise<{
-    status: string; job_id?: string; samples?: number; message?: string
+    status: string; job_id?: string; samples?: number; checkpoint?: string; message?: string
   }> {
     return apiPost('/training/from-feedback', params ?? {})
   },

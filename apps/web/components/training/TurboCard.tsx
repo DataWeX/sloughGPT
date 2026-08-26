@@ -64,7 +64,7 @@ export const TurboCard = memo(function TurboCard({
   }
 
   const loadForChat = async () => {
-    const path = session.turboResult?.model_path
+    const path = session.turboResult?.model_path ?? session.turboResult?.checkpoint
     const name = path ? path.split('/').pop() : null
     if (!name) {
       addToast('No model path to load', 'error')

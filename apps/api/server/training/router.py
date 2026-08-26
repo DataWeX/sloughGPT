@@ -1510,7 +1510,7 @@ async def unload_adapter():
 
 
 @router.post("/training/from-feedback")
-async def train_from_feedback():
+async def train_from_feedback(req: dict | None = None):
     """Train a model from collected feedback data.
 
     This endpoint:
@@ -1519,6 +1519,10 @@ async def train_from_feedback():
     3. Returns the job ID for tracking
     """
     import uuid
+
+    epochs = (req or {}).get("epochs", 3)
+    learning_rate = (req or {}).get("learning_rate", 1e-4)
+    batch_size = (req or {}).get("batch_size", 16)
 
     try:
         from domains.feedback.training import FeedbackTrainer
@@ -1550,7 +1554,7 @@ async def train_from_feedback():
             "progress": 0,
             "dataset": str(sft_path),
             "data_source": "feedback",
-            "epochs": 3,
+            "epochs": epochs,
             "checkpoint_interval": 100,
             "output_checkpoint_stem": out_stem,
             "_cancel_event": cancel_event,
@@ -1583,9 +1587,9 @@ async def train_from_feedback():
                     n_layer=6,
                     n_head=8,
                     block_size=256,
-                    epochs=3,
-                    batch_size=16,
-                    lr=1e-4,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    lr=learning_rate,
                     use_lora=True,
                     lora_rank=8,
                     lora_alpha=16,
@@ -1661,11 +1665,13 @@ async def train_from_feedback():
         executor = get_training_executor()
         executor.submit(run_feedback_training, jid)
 
+        safe_out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
         return {
             "status": "started",
             "job_id": jid,
             "samples": count,
             "data_path": str(sft_path),
+            "checkpoint": f"models/{safe_out_stem}.soul",
             "message": "Training started from feedback data",
         }
 

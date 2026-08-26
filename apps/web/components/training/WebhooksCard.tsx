@@ -10,7 +10,7 @@ interface Props {
 }
 
 const AVAILABLE_EVENTS = [
-  { key: 'training.complete', label: 'Training Completed' },
+  { key: 'training.completed', label: 'Training Completed' },
   { key: 'training.failed', label: 'Training Failed' },
   { key: 'training.started', label: 'Training Started' },
 ]
@@ -45,7 +45,7 @@ export function WebhooksCard({ addToast }: Props) {
   const [webhooks, setWebhooks] = useState<Webhook[]>([])
   const [loading, setLoading] = useState(true)
   const [newUrl, setNewUrl] = useState('')
-  const [newEvents, setNewEvents] = useState<string[]>(['training.complete'])
+  const [newEvents, setNewEvents] = useState<string[]>(['training.completed'])
   const [adding, setAdding] = useState(false)
   const [testingUrl, setTestingUrl] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -128,7 +128,7 @@ export function WebhooksCard({ addToast }: Props) {
       await trainingJobsController.createWebhook(newUrl, newEvents)
       addToast('Webhook added', 'success')
       setNewUrl('')
-      setNewEvents(['training.complete'])
+      setNewEvents(['training.completed'])
       void fetchWebhooks()
     } catch {
       addToast('Could not add webhook', 'error')

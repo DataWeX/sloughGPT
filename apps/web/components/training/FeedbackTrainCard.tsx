@@ -15,7 +15,7 @@ interface Props {
 
 export function FeedbackTrainCard({ addToast }: Props) {
   const [phase, setPhase] = useState<'idle' | 'starting' | 'training' | 'complete' | 'error'>('idle')
-  const [job, setJob] = useState<{ job_id?: string; samples?: number } | null>(null)
+  const [job, setJob] = useState<{ job_id?: string; samples?: number; checkpoint?: string } | null>(null)
   const [progress, setProgress] = useState(0)
   const [loss, setLoss] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +97,7 @@ export function FeedbackTrainCard({ addToast }: Props) {
   }, [job, stopPolling])
 
   const handleLoad = useCallback(async () => {
-    const checkpoint = job?.job_id ? `feedback-trained-${job.job_id}.soul` : null
+    const checkpoint = job?.checkpoint ?? null
     if (!checkpoint) return
     setLoadingModel(true)
     try {

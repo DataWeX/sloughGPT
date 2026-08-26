@@ -102,7 +102,7 @@ describe('WebhooksCard', () => {
 
   it('displays webhooks', async () => {
     mocks.listWebhooks.mockResolvedValue([
-      { id: 'w1', url: 'https://example.com/hook', events: ['training.complete'], active: true },
+      { id: 'w1', url: 'https://example.com/hook', events: ['training.completed'], active: true },
     ])
     renderCard()
     await waitFor(() => {
@@ -120,7 +120,7 @@ describe('WebhooksCard', () => {
     fireEvent.click(getAllButtons('Add webhook')[0])
 
     await waitFor(() => {
-      expect(mocks.createWebhook).toHaveBeenCalledWith('https://my.app/hook', ['training.complete'])
+      expect(mocks.createWebhook).toHaveBeenCalledWith('https://my.app/hook', ['training.completed'])
     })
     expect(mockToast).toHaveBeenCalledWith('Webhook added', 'success')
   })
@@ -142,7 +142,7 @@ describe('WebhooksCard', () => {
   it('tests a webhook', async () => {
     mocks.testWebhook.mockResolvedValue({})
     mocks.listWebhooks.mockResolvedValue([
-      { id: 'w1', url: 'https://example.com/hook', events: ['training.complete'], active: true },
+      { id: 'w1', url: 'https://example.com/hook', events: ['training.completed'], active: true },
     ])
     renderCard()
     await waitFor(() => { expect(screen.getAllByText('https://example.com/hook').length).toBeGreaterThanOrEqual(1) })
@@ -157,7 +157,7 @@ describe('WebhooksCard', () => {
   it('shows error toast on test failure', async () => {
     mocks.testWebhook.mockRejectedValue(new Error('fail'))
     mocks.listWebhooks.mockResolvedValue([
-      { id: 'w1', url: 'https://example.com/hook', events: ['training.complete'], active: true },
+      { id: 'w1', url: 'https://example.com/hook', events: ['training.completed'], active: true },
     ])
     renderCard()
     await waitFor(() => { expect(screen.getAllByText('https://example.com/hook').length).toBeGreaterThanOrEqual(1) })
@@ -171,7 +171,7 @@ describe('WebhooksCard', () => {
   it('opens delete dialog and deletes', async () => {
     mocks.deleteWebhook.mockResolvedValue({})
     mocks.listWebhooks.mockResolvedValue([
-      { id: 'w1', url: 'https://example.com/hook', events: ['training.complete'], active: true },
+      { id: 'w1', url: 'https://example.com/hook', events: ['training.completed'], active: true },
     ])
     renderCard()
     await waitFor(() => { expect(screen.getAllByText('https://example.com/hook').length).toBeGreaterThanOrEqual(1) })
@@ -188,10 +188,10 @@ describe('WebhooksCard', () => {
 
   it('displays delivery history', async () => {
     mocks.listWebhooks.mockResolvedValue([
-      { id: 'w1', url: 'https://example.com/hook', events: ['training.complete'], active: true },
+      { id: 'w1', url: 'https://example.com/hook', events: ['training.completed'], active: true },
     ])
     mocks.getWebhookDeliveries.mockResolvedValue([
-      { id: 'd1', event: 'training.complete', status: 200, success: true, delivered_at: '2026-08-20T12:00:00Z' },
+      { id: 'd1', event: 'training.completed', status: 200, success: true, delivered_at: '2026-08-20T12:00:00Z' },
     ])
     renderCard()
     await waitFor(() => { expect(screen.getAllByText('https://example.com/hook').length).toBeGreaterThanOrEqual(1) })
@@ -206,7 +206,7 @@ describe('WebhooksCard', () => {
   it('displays retry queue', async () => {
     mocks.listWebhooks.mockResolvedValue([])
     mocks.getWebhookRetryQueue.mockResolvedValue({ retries: [
-      { delivery_id: 'd1', webhook_id: 'w1', event: 'training.complete', attempt_count: 2, next_retry_at: 1724150400 },
+      { delivery_id: 'd1', webhook_id: 'w1', event: 'training.completed', attempt_count: 2, next_retry_at: 1724150400 },
     ] })
     renderCard()
     await waitFor(() => {
