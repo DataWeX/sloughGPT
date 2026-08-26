@@ -8,6 +8,9 @@ from typing import Optional
 import asyncio
 import json
 import time
+import socket
+import ipaddress
+from urllib.parse import urlparse
 
 from schemas.datasets import (
     DatasetInfo, DatasetCreate, DatasetUpdate, DatasetDataRequest,
@@ -26,6 +29,31 @@ import logging
 import re
 
 logger = logging.getLogger("slo.routers.datasets")
+
+
+def _is_private_ip(hostname: str) -> bool:
+    """Check if hostname resolves to a private/loopback IP (SSRF protection)."""
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _, _, _, sockaddr in addrinfos:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return True
+    except (socket.gaierror, ValueError):
+        pass
+    return False
+
+
+def _validate_url_not_private(url: str) -> None:
+    """Validate that a URL does not point to a private/internal IP (SSRF protection)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.hostname and _is_private_ip(parsed.hostname):
+            raise_error(f"URL points to a private/internal address: {url}", "E_BAD_REQUEST", status_code=400)
+    except Exception as e:
+        if "E_BAD_REQUEST" in str(e):
+            raise
+        logger.warning("URL validation failed: %s", e)
 
 
 class DatasetsRouter:
@@ -150,6 +178,7 @@ class DatasetsRouter:
 
     async def import_from_github(self, request: GitHubImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from GitHub repository."""
+        _validate_url_not_private(request.url)
         lock = await self._get_import_lock(request.name)
         if lock.locked():
             raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
@@ -234,6 +263,7 @@ class DatasetsRouter:
             Logs an audit entry on success.
             Raises 429 if an import is already in progress for this name.
         """
+        _validate_url_not_private(request.url)
         lock = await self._get_import_lock(request.name)
         if lock.locked():
             raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
@@ -329,6 +359,7 @@ class DatasetsRouter:
 
     async def import_from_csv(self, request: CSVImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from CSV URL."""
+        _validate_url_not_private(request.url)
         import csv
         import asyncio
         import urllib.request

@@ -5,6 +5,7 @@ Storage backed by MogDB (the project's embedded document DB). User
 records are stored in a ``users`` collection instead of a raw JSON file.
 """
 import uuid, os, hashlib, secrets, logging
+import time
 from datetime import datetime, timezone
 from fastapi import APIRouter, Header, Request, Depends
 from pydantic import BaseModel, Field
@@ -13,6 +14,33 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
+
+
+# ---------- rate limiting for auth endpoints ----------
+
+class _AuthRateLimiter:
+    """Simple in-memory rate limiter for auth endpoints."""
+
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
+        self._max_attempts = max_attempts
+        self._window_seconds = window_seconds
+        self._attempts: dict[str, list[float]] = {}
+
+    def check(self, key: str) -> bool:
+        """Returns True if request is allowed, False if rate limited."""
+        now = time.time()
+        cutoff = now - self._window_seconds
+        if key in self._attempts:
+            self._attempts[key] = [t for t in self._attempts[key] if t > cutoff]
+        else:
+            self._attempts[key] = []
+        if len(self._attempts[key]) >= self._max_attempts:
+            return False
+        self._attempts[key].append(now)
+        return True
+
+_login_limiter = _AuthRateLimiter(max_attempts=5, window_seconds=300)
+_register_limiter = _AuthRateLimiter(max_attempts=3, window_seconds=600)
 
 
 # ---------- request / response models ----------
@@ -159,7 +187,7 @@ class AuthRouter:
     def _register_routes(self):
         current_user_dep = Depends(self._get_current_user)
 
-        async def login(req: LoginRequest) -> dict:
+        async def login(req: LoginRequest, request: Request) -> dict:
             """Authenticate a user with username and password.
 
             Args:
@@ -173,6 +201,9 @@ class AuthRouter:
                 Upgrades legacy SHA-256 hashes to PBKDF2 on first login.
                 Raises 401 if credentials are invalid.
             """
+            client_ip = request.client.host if request.client else "unknown"
+            if not _login_limiter.check(client_ip):
+                raise_error("Too many login attempts. Please try again later.", "E_RATE_LIMITED", status_code=429)
             user = self._users.find_one({"username": req.username})
             if not user:
                 safe_audit_log("auth.login_failed", resource=req.username, detail="user_not_found")
@@ -192,7 +223,7 @@ class AuthRouter:
                 user=UserInfo(id=uid, username=user["username"], email=user["email"]),
             )
 
-        async def register(req: RegisterRequest) -> dict:
+        async def register(req: RegisterRequest, request: Request) -> dict:
             """Register a new user account with username, email, and password.
 
             Args:
@@ -207,6 +238,9 @@ class AuthRouter:
                 Hashes the password with PBKDF2 + random salt.
                 Raises 409 if the username already exists.
             """
+            client_ip = request.client.host if request.client else "unknown"
+            if not _register_limiter.check(client_ip):
+                raise_error("Too many registration attempts. Please try again later.", "E_RATE_LIMITED", status_code=429)
             existing = self._users.find_one({"username": req.username})
             if existing:
                 raise_error("Username already exists", "E_INFRA_BUSY", status_code=409)

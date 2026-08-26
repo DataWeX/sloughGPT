@@ -236,6 +236,11 @@ class MultimodalRouter:
         if dataset_path:
             import glob
             dataset_path = os.path.expanduser(dataset_path)
+            resolved_path = Path(dataset_path).resolve()
+            _REPO_ROOT = Path(__file__).resolve().parents[4]
+            allowed_bases = {_REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
+            if not any(resolved_path == base or str(resolved_path).startswith(str(base) + "/") for base in allowed_bases):
+                raise_error(f"Directory not in allowed paths: {dataset_path}", "E_AUTH_FORBIDDEN")
 
             def _scan_dataset():
                 if not os.path.isdir(dataset_path):
