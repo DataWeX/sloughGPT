@@ -148,7 +148,8 @@ class SoulsRouter:
 
         vocab = sd["tok_emb.weight"].shape[0]
         hidden = sd["tok_emb.weight"].shape[1]
-        n_blocks = max(int(k.split(".")[1]) for k in sd if k.startswith("blocks.")) + 1
+        block_indices = [int(k.split(".")[1]) for k in sd if k.startswith("blocks.")]
+        n_blocks = (max(block_indices) + 1) if block_indices else 0
 
         n_head = 8
         q_w = sd.get("blocks.0.attn.q_proj.weight")

@@ -985,14 +985,18 @@ class InferenceRouter:
             logger.debug("chat_stream.generate() ENTERED")
 
             # Check for Last-Event-ID header for reconnection
-            last_event_id = request.headers.get("last-event-id")
+            last_event_id_raw = request.headers.get("last-event-id")
+            try:
+                last_event_id = int(last_event_id_raw) if last_event_id_raw else 0
+            except (ValueError, TypeError):
+                last_event_id = 0
             if last_event_id:
                 session_id = req.session_id or "default"
                 cached = get_chat_response_cache(session_id)
-                if cached and cached.get("event_counter", 0) > int(last_event_id):
+                if cached and cached.get("event_counter", 0) > last_event_id:
                     # Replay cached response from the point of disconnection
                     logger.info("Replaying cached response for session %s from event %s", session_id, last_event_id)
-                    cached_counter = int(last_event_id)
+                    cached_counter = last_event_id
                     for token in cached.get("tokens", []):
                         cached_counter += 1
                         yield sse_token("chat", token)
