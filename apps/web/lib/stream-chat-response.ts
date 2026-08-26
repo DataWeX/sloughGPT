@@ -211,7 +211,10 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
       continue
     }
 
-    if (!hasContent) params.onToken('')
+    if (!hasContent && !completed) {
+      onError(0, 'Stream ended without response')
+      return
+    }
     if (!completed) params.onComplete()
     return
   }

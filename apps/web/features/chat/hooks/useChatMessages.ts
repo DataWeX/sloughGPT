@@ -865,7 +865,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     clearSelection,
     deleteSelectedMessages,
     sidebarConversations: sessions.sidebarConversations,
-    cancelStream: useCallback(() => chatController.cancelStream(sessionIdRef.current), []),
+    cancelStream: useCallback(() => chatController.cancelStream(sessionIdRef.current).catch(() => {}), []),
     approveTool: useCallback((toolName: string, approved: boolean) =>
       chatController.approveTool(sessionIdRef.current, toolName, approved), []),
     injectContext: useCallback((context: string) =>

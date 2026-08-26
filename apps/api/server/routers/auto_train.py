@@ -897,7 +897,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.turbo_status")
-    async def stop(self) -> dict:
+    async def stop(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """stop."""
             self.state.running = False
@@ -925,7 +925,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.stop")
-    async def pause(self) -> dict:
+    async def pause(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """pause."""
             if _turbo_state.get("status") == "running":
@@ -946,7 +946,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.pause")
-    async def resume(self) -> dict:
+    async def resume(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """resume."""
             if _turbo_state.get("status") == "running":
@@ -1706,7 +1706,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.stream_from_sessions")
-    async def cancel_from_sessions(self) -> dict:
+    async def cancel_from_sessions(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """cancel_from_sessions."""
             if _auto_train_cancel_event is not None:
