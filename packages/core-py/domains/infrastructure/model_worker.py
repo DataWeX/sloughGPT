@@ -45,7 +45,7 @@ import threading
 from typing import Any, Optional, Generator
 from dataclasses import dataclass
 
-from .constants import DEFAULT_GENERATE_TIMEOUT
+from .constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STARTUP_TIMEOUT
 
 logger = logging.getLogger("slo.infrastructure.model_worker")
 
@@ -263,7 +263,7 @@ def _slo_worker_main(
     except Exception as e:
         logger.error("Worker[%s]: SloNet load failed: %s", worker_id, e,
             extra={"tag": "INFRA"})
-        resp_q.put_nowait(("error", f"Model load failed: {e}"))
+        resp_q.put_nowait(("error", None, f"Model load failed: {e}"))
         hb_q.put_nowait(("dead", os.getpid()))
         return
 
@@ -677,6 +677,7 @@ class ModelWorkerProcess:
         self,
         worker_id: str = "worker",
         generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+        startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
         stall_timeout: float = _STALL_TIMEOUT_S,
         extra_sys_paths: Optional[list] = None,
         # SloNet mode (preferred)
@@ -692,6 +693,7 @@ class ModelWorkerProcess:
     ):
         self.worker_id = worker_id
         self._generate_timeout = generate_timeout
+        self._startup_timeout = startup_timeout
         self._stall_timeout = stall_timeout
         self._extra_sys_paths = extra_sys_paths or []
 
@@ -777,8 +779,8 @@ class ModelWorkerProcess:
         self._health.alive = True
         self._health.started_at = self._started_at
 
-        # Wait for ready signal
-        deadline = time.time() + self._generate_timeout
+        # Wait for ready signal (use startup timeout, not generate timeout)
+        deadline = time.time() + self._startup_timeout
         ready = False
         while time.time() < deadline:
             try:
@@ -796,7 +798,7 @@ class ModelWorkerProcess:
 
         if not ready:
             raise RuntimeError(
-                f"Worker[{self.worker_id}]: failed to start within 120s"
+                f"Worker[{self.worker_id}]: failed to start within {self._startup_timeout}s"
             )
 
         logger.info(

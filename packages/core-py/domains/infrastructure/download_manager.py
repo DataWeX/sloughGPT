@@ -271,6 +271,8 @@ class DownloadManager:
         Unlike the old implementation (which cleaned up and restarted on every
         resume), this delegates to ``downcraft`` which preserves partial
         downloads across restarts via ``~/.downcraft/state.json``.
+
+        Registers with CancelManager so downloads appear in /operations.
         """
         if is_download_complete(model_id):
             return {"status": "already_cached", "model_id": model_id}
@@ -303,15 +305,33 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
+        # Register with CancelManager
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        mgr = get_cancel_manager()
+        cancel_event = threading.Event()
+        op_id = mgr.register(
+            op_type=OpType.DOWNLOAD,
+            label=f"download:{model_id}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        mgr.start(op_id)
+
         loop = asyncio.get_event_loop()
-        task = asyncio.create_task(self._download_worker(model_id, total_est))
+        task = asyncio.create_task(self._download_worker(model_id, total_est, cancel_event))
         self._tasks[model_id] = task
 
         try:
             result = await task
+            if result.get("status") == "complete":
+                mgr.finish(op_id)
+            elif result.get("status") == "cancelled":
+                mgr.finish(op_id, "cancelled")
+            else:
+                mgr.finish(op_id, result.get("error", "unknown"))
             return result
         except asyncio.CancelledError:
             self._set_progress(model_id, status=DownloadStatus.CANCELLED)
+            mgr.finish(op_id, "cancelled")
             return {"status": "cancelled", "model_id": model_id}
         except Exception as e:
             self._set_progress(
@@ -320,9 +340,10 @@ class DownloadManager:
                 error=str(e),
             )
             self._notify_callbacks(model_id)
+            mgr.finish(op_id, str(e))
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
-    async def _download_worker(self, model_id: str, total_bytes_hint: int):
+    async def _download_worker(self, model_id: str, total_bytes_hint: int, cancel_event: Optional[threading.Event] = None):
         """Run the downcraft in a thread executor, updating progress."""
         with self._lock:
             entry = self._downloads.get(model_id)
@@ -364,6 +385,11 @@ class DownloadManager:
 
         def _do_download():
             from domains.infrastructure.hf_hub import download_hf_model
+
+            def _cancel_check():
+                if cancel_event and cancel_event.is_set():
+                    raise InterruptedError("Download cancelled")
+
             download_hf_model(
                 model_id,
                 on_progress=_progress_cb,

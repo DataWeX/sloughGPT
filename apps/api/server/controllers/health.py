@@ -55,10 +55,18 @@ def _get_mps_monitor_info() -> Optional[Dict[str, Any]]:
 def _is_model_loading() -> bool:
     """Check if the server is currently loading a model in the background.
 
-    Returns True when the model isn't loaded yet but the server has been
-    running for less than 90s (the typical model load window).
+    Returns True when:
+    1. ModelLoader reports a load in progress, OR
+    2. Model isn't loaded yet but the server has been running for less than 90s
+       (the typical model load window).
     """
     try:
+        # Check if ModelLoader has a load in progress
+        from domains.infrastructure.model_loader import ModelLoader
+        if ModelLoader.is_loading():
+            return True
+
+        # Fallback: time-based heuristic
         import state as server_state
         if server_state.model is not None:
             return False

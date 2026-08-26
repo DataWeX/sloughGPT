@@ -14,6 +14,25 @@ import { logger } from './dev-log'
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
 
+// ── Correlation ID propagation ───────────────────────────────────────
+// Generate a short UUID for each request so the frontend can correlate
+// with server-side logs via `X-Correlation-ID`. The server reads this
+// header and includes it in every log line.
+
+function _corrId(): string {
+  // 8-char hex ID matching server-side format
+  return Math.random().toString(16).slice(2, 10)
+}
+
+// Store last N correlation IDs for debugging
+const _recentCorrIds: Array<{ id: string; url: string; ts: number }> = []
+const MAX_RECENT = 20
+
+/** Get the last N correlation IDs for debugging. */
+export function getRecentCorrelationIds(): Array<{ id: string; url: string; ts: number }> {
+  return _recentCorrIds.slice()
+}
+
 export interface RequestOptions {
   signal?: AbortSignal
   timeout?: number
@@ -36,6 +55,7 @@ async function request<T>(
   opts?: RequestOptions,
 ): Promise<T> {
   const apiUrl = `${PUBLIC_API_URL}${url}`
+  const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (!opts?.raw) headers['Content-Type'] = 'application/json'
   if (opts?.headers) Object.assign(headers, opts.headers)
@@ -43,6 +63,13 @@ async function request<T>(
     const token = useAuthStore.getState().token
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
+  headers['X-Correlation-ID'] = corrId
+
+  // Track for debugging
+  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
+
+  logger.debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
   const timeoutMs = opts?.timeout ?? DEFAULT_TIMEOUT_MS
   let retries = 0
@@ -62,6 +89,8 @@ async function request<T>(
         signal,
       })
       if (timer) clearTimeout(timer)
+
+      logger.debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, { corrId, method, url, status: res.status })
 
       if (!res.ok) {
         const status = res.status
@@ -254,6 +283,7 @@ interface AuthFetchOptions extends RequestInit {
  * unsuitable.
  */
 export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<Response> {
+  const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (!opts?.noAuth) {
     const token = useAuthStore.getState().token
@@ -266,6 +296,9 @@ export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<R
       Object.assign(headers, opts.headers)
     }
   }
+  headers['X-Correlation-ID'] = corrId
+  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
   return fetch(url, { ...opts, headers })
 }
 
@@ -284,6 +317,7 @@ interface StreamSSEOptions {
  */
 export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGenerator<SSEEvent> {
   const method = opts?.method ?? 'POST'
+  const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (method !== 'GET') headers['Content-Type'] = 'application/json'
   if (!opts?.noAuth) {
@@ -293,6 +327,12 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
   if (opts?.lastEventId) {
     headers['Last-Event-ID'] = opts.lastEventId
   }
+  headers['X-Correlation-ID'] = corrId
+
+  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
+
+  logger.debug(`>>> SSE ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
   let res: Response
   try {
@@ -304,9 +344,12 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Network error'
+    logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
     yield { status: 'error', message: `Connection error: ${msg}` }
     return
   }
+
+  logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, { corrId, status: res.status })
 
   if (!res.ok || !res.body) {
     yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`, data: { http_status: res.status, error: `HTTP ${res.status}` } }

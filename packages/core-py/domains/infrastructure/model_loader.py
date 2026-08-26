@@ -46,7 +46,18 @@ class ModelLoader:
     """SloNet model loader — detects .slnc format and routes accordingly.
 
     Falls back to auto-conversion from safetensors when no .slnc file exists.
+
+    Thread safety: ``load()`` is protected by ``_load_lock`` to prevent
+    concurrent model loads from corrupting shared state.
     """
+
+    _load_lock = threading.Lock()
+    _loading = False  # True while a load is in progress
+
+    @classmethod
+    def is_loading(cls) -> bool:
+        """Check if a model load is currently in progress."""
+        return cls._loading
 
     def __init__(self, models_dir: Optional[Path] = None):
         self.models_dir = models_dir or _REPO_ROOT / "models"
@@ -72,7 +83,33 @@ class ModelLoader:
 
         Returns:
             LoadResult with provider, model, tokenizer, and metrics
+
+        Thread safety: Only one model can load at a time.
         """
+        if not self._load_lock.acquire(blocking=False):
+            return LoadResult(
+                success=False,
+                model_id=model_id,
+                model_type="unknown",
+                error="Another model is currently loading. Please wait.",
+            )
+        try:
+            ModelLoader._loading = True
+            return self._load_inner(model_id, device, quantize, quant_bits, quant_mode, verify)
+        finally:
+            ModelLoader._loading = False
+            self._load_lock.release()
+
+    def _load_inner(
+        self,
+        model_id: str,
+        device: str,
+        quantize: bool,
+        quant_bits: int,
+        quant_mode: str,
+        verify: bool,
+    ) -> LoadResult:
+        """Internal load implementation (caller holds _load_lock)."""
         import time as _time
         load_start = _time.monotonic()
 
@@ -348,6 +385,8 @@ class ModelLoader:
             return True
         except Exception as e:
             logger.warning("Model verification failed: %s", e, extra={"tag": "MODEL"})
+            result.success = False
+            result.error = f"Verification failed: {e}"
             result.metrics["verified"] = False
             return False
 

@@ -258,6 +258,10 @@ Version: {format_version_display()}
 """)
 
 
+from commands.logs import logs as _logs_cmd
+cli.add_command(_logs_cmd, 'logs')
+
+
 @cli.command(help="Launch interactive terminal UI (split-pane curses)")
 @click.pass_context
 def tui(ctx):

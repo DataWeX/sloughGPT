@@ -9,6 +9,7 @@ const _log = logger.child('stream-chat-response')
 const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY_MS = 500
+const MODEL_LOADING_DELAY_MS = 3000  // Longer delay for model loading (503)
 
 export interface ToolCallEvent {
   tool: string
@@ -70,6 +71,15 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
   const body = buildBody(params)
   let retries = 0
   let lastEventId: string | undefined
+  let tokenCount = 0
+  let startTime = Date.now()
+
+  _log.debug('streamChatResponse START', {
+    msgCount: params.messages.length,
+    maxTokens: params.maxTokens,
+    sessionId: params.sessionId,
+    hasImages: !!params.images?.length,
+  })
 
   while (true) {
     let hasContent = false
@@ -150,8 +160,17 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
 
           if (RETRYABLE_STATUSES.has(httpStatus) && retries < MAX_RETRIES) {
             retries++
-            const delay = BASE_DELAY_MS * Math.pow(2, retries - 1)
-            _log.debug('Retrying chat stream after transient error', { status: httpStatus, retries, delay })
+            // Use longer delay for model loading (503 with MODEL_LOADING code)
+            const isModelLoading = httpStatus === 503 && (
+              message.includes('loading') || message.includes('Loading') ||
+              d.code === 'MODEL_LOADING'
+            )
+            const delay = isModelLoading
+              ? MODEL_LOADING_DELAY_MS * retries
+              : BASE_DELAY_MS * Math.pow(2, retries - 1)
+            _log.debug('Retrying chat stream after transient error', {
+              status: httpStatus, retries, delay, isModelLoading,
+            })
             shouldRetry = true
             break
           }
@@ -171,11 +190,16 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
 
         const token = d.token as string | undefined
         if (token) {
+          if (tokenCount === 0) {
+            _log.debug('First token received', { elapsed: Date.now() - startTime })
+          }
+          tokenCount++
           hasContent = true
           params.onToken(token)
         }
 
         if (event.status === 'complete') {
+          _log.debug('Stream complete', { tokens: tokenCount, elapsed: Date.now() - startTime })
           if (!hasContent) params.onToken('')
           params.onComplete()
           completed = true
@@ -198,6 +222,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         continue
       }
 
+      _log.error('Stream network error after retries', { retries, message })
       useErrorStore.getState().addError(
         err instanceof Error ? err : new Error(message),
         { source: 'chat/stream', title: 'Connection Error' },

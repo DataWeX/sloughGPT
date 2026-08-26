@@ -119,6 +119,14 @@ class ModelsController:
         if model_id.endswith('.gguf'):
             return self._load_gguf_model(model_id, device)
 
+        # Check if another load is in progress
+        from domains.infrastructure.model_loader import ModelLoader
+        if ModelLoader.is_loading():
+            return {
+                "status": "error",
+                "error": "Another model is currently loading. Please wait.",
+            }
+
         import state as server_state
 
         logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"})
@@ -206,7 +214,7 @@ class ModelsController:
 
         # Publish the SloNet provider to server_state so the inference/chat
         # readiness guards (``state.model is not None``) accept the loaded
-        # model. Mirrors the autoload path in startup._autoload_model.
+        # model. state.py delegates to ServerState so only one write needed.
         try:
             from domains.models.provider import get_provider
             slonet_provider = get_provider("slonet-native") or get_provider("slonet")
@@ -222,15 +230,7 @@ class ModelsController:
             server_state.model = slonet_provider
             server_state.provider = slonet_provider
             server_state.model_type = model_id
-
-            # Mirror to the core ServerState singleton — the source for
-            # get_health_score() — so /health/detailed reports a loaded model
-            # consistently across both model slots (Bug D).
-            from domains.infrastructure.server_state import get_server_state
-            core = get_server_state()
-            core.model.set(slonet_provider)
-            core.model_type.set(model_id)
-            logger.info("SloNet provider published to server_state and ServerState: %s", model_id, extra={"tag": "MODEL"})
+            logger.info("SloNet provider published to server_state: %s", model_id, extra={"tag": "MODEL"})
         except Exception as e:
             logger.error("Failed to publish SloNet provider for %s to server_state: %s", model_id, e, extra={"tag": "MODEL"})
             raise

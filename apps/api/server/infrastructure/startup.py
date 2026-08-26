@@ -1053,8 +1053,16 @@ def _register_loaded(cfg, process_guard) -> None:
 
 
 def _autoload_model(cfg: ServerConfig):
-    """Load model weights into server_state. Registration handled by caller."""
+    """Load model weights into server_state. Registration handled by caller.
+
+    Retries transient failures with exponential backoff.
+    """
     import state as server_state
+    import time as _time
+    from domains.infrastructure.constants import DEFAULT_LOAD_MAX_RETRIES, DEFAULT_LOAD_RETRY_DELAY
+
+    max_retries = DEFAULT_LOAD_MAX_RETRIES
+    retry_delay_s = DEFAULT_LOAD_RETRY_DELAY
 
     if server_state.model is not None:
         return
@@ -1079,31 +1087,45 @@ def _autoload_model(cfg: ServerConfig):
 
     model_id = cfg.autoload_model
 
-    # 1) Try local .slnc / safetensors via ModelLoader
+    # 1) Try local .slnc / safetensors via ModelLoader (with retries)
     from domains.infrastructure.model_loader import ModelLoader
 
     loader = ModelLoader()
-    result = loader.load(
-        model_id=model_id,
-        device=cfg.autoload_device,
-        quantize=cfg.quantize_slonet,
-        quant_bits=cfg.quant_bits,
-        quant_mode=cfg.quant_mode,
-        verify=True,
-    )
 
-    if result.success:
-        server_state.model = result.model
-        server_state.model_type = result.model_id
-        if result.tokenizer is not None:
-            server_state.tokenizer = result.tokenizer
-        if result.provider is not None:
-            server_state.provider = result.provider
-        logger.info("Autoload ok: %s (%s)", model_id, result.model_type, extra={"tag": "START"})
-        return
+    for attempt in range(max_retries + 1):
+        result = loader.load(
+            model_id=model_id,
+            device=cfg.autoload_device,
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+            verify=True,
+        )
 
-    # 2) No local file — download from HuggingFace via downcraft (resume-aware),
-    #    then load via ModelLoader
+        if result.success:
+            server_state.model = result.model
+            server_state.model_type = result.model_id
+            if result.tokenizer is not None:
+                server_state.tokenizer = result.tokenizer
+            if result.provider is not None:
+                server_state.provider = result.provider
+            logger.info(
+                "Autoload ok: %s (%s) attempt=%d",
+                model_id, result.model_type, attempt + 1,
+                extra={"tag": "START"},
+            )
+            return
+
+        if attempt < max_retries:
+            delay = retry_delay_s * (2 ** attempt)
+            logger.warning(
+                "Autoload attempt %d/%d failed: %s — retrying in %.1fs",
+                attempt + 1, max_retries + 1, result.error, delay,
+                extra={"tag": "START"},
+            )
+            _time.sleep(delay)
+
+    # 2) All local load attempts failed — download from HuggingFace
     logger.info("No local .slnc/safetensors for %s — downloading from HuggingFace", model_id, extra={"tag": "START"})
     try:
         from domains.infrastructure.hf_hub import download_hf_model
@@ -1117,25 +1139,40 @@ def _autoload_model(cfg: ServerConfig):
         logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
         return
 
-    # 3) Retry load now that safetensors are cached
-    result = loader.load(
-        model_id=model_id,
-        device=cfg.autoload_device,
-        quantize=cfg.quantize_slonet,
-        quant_bits=cfg.quant_bits,
-        quant_mode=cfg.quant_mode,
-        verify=True,
-    )
-    if result.success:
-        server_state.model = result.model
-        server_state.model_type = result.model_id
-        if result.tokenizer is not None:
-            server_state.tokenizer = result.tokenizer
-        if result.provider is not None:
-            server_state.provider = result.provider
-        logger.info("Autoload ok (after download): %s (%s)", model_id, result.model_type, extra={"tag": "START"})
-    else:
-        logger.warning("Autoload failed after download: %s", result.error, extra={"tag": "START"})
+    # 3) Retry load now that safetensors are cached (with retries)
+    for attempt in range(max_retries + 1):
+        result = loader.load(
+            model_id=model_id,
+            device=cfg.autoload_device,
+            quantize=cfg.quantize_slonet,
+            quant_bits=cfg.quant_bits,
+            quant_mode=cfg.quant_mode,
+            verify=True,
+        )
+        if result.success:
+            server_state.model = result.model
+            server_state.model_type = result.model_id
+            if result.tokenizer is not None:
+                server_state.tokenizer = result.tokenizer
+            if result.provider is not None:
+                server_state.provider = result.provider
+            logger.info(
+                "Autoload ok (after download): %s (%s) attempt=%d",
+                model_id, result.model_type, attempt + 1,
+                extra={"tag": "START"},
+            )
+            return
+
+        if attempt < max_retries:
+            delay = retry_delay_s * (2 ** attempt)
+            logger.warning(
+                "Post-download load attempt %d/%d failed: %s — retrying in %.1fs",
+                attempt + 1, max_retries + 1, result.error, delay,
+                extra={"tag": "START"},
+            )
+            _time.sleep(delay)
+
+    logger.error("Autoload failed after all attempts: %s", result.error, extra={"tag": "START"})
 
 
 # ── Standalone inference engine ───────────────────────────────────────

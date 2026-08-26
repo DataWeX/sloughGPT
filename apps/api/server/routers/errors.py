@@ -237,31 +237,55 @@ class ErrorsRouter:
             classify_and_raise(e, source="errors.log")
 
     async def ingest_frontend_logs(self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Ingest frontend logs into the server buffer."""
+        """Ingest frontend logs into the server buffer AND write to log file."""
         try:
             from domains.infrastructure.output_buffer import get_server_buffer
+            import json as _json
+            from datetime import datetime, timezone
 
             buf = get_server_buffer()
             level_map = {
-                "debug": "debug", "info": "info", "warning": "warning",
-                "error": "error", "critical": "critical",
+                "debug": "DEBUG", "info": "INFO", "warning": "WARNING",
+                "error": "ERROR", "critical": "CRITICAL",
             }
 
             for entry in batch.logs:
-                lvl = level_map.get(entry.level, "info")
+                lvl = level_map.get(entry.level.upper(), "INFO")
                 context: dict = {}
                 if entry.context:
                     context.update(entry.context)
                 if entry.exception:
                     context["exception"] = entry.exception
 
+                # Write to OutputBuffer for SSE streaming
                 buf.append_log(
                     text=f"{entry.logger} {entry.message}",
-                    level=lvl,
+                    level=entry.level,
                     source=f"web.{entry.logger}",
                     tag="WEB",
                     context=context,
                 )
+
+                # Also write to log file for CLI querying
+                log_record = {
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "level": lvl,
+                    "logger": f"slo.web.{entry.logger}",
+                    "msg": entry.message,
+                    "tag": "WEB",
+                    "ctx": context,
+                }
+                # Extract correlation ID from context if present
+                if "corrId" in context:
+                    log_record["request_id"] = context["corrId"]
+
+                try:
+                    log_file = _REPO_ROOT / "logs" / "sloughgpt.log"
+                    log_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(_json.dumps(log_record, default=str) + "\n")
+                except Exception:
+                    pass  # Don't fail ingestion if file write fails
 
             return success_response(data={"status": "ok", "ingested": len(batch.logs)})
         except Exception as e:

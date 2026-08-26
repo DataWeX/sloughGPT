@@ -221,16 +221,16 @@ class ProcessGuard:
         Uses the same restart budget as crash recovery. Callbacks are fired
         as for a crash. Raises RuntimeError when the budget is exhausted.
         """
-        if self._restart_count >= self.max_restarts:
-            logger.error(
-                "ProcessGuard[%s]: worker stalled and restart budget exhausted",
-                self.worker_id, extra={"tag": "INFRA"},
-            )
-            raise RuntimeError(
-                f"ProcessGuard[{self.worker_id}]: worker restart budget exhausted "
-                f"({self.max_restarts} restarts)"
-            )
         with self._restart_lock:
+            if self._restart_count >= self.max_restarts:
+                logger.error(
+                    "ProcessGuard[%s]: worker stalled and restart budget exhausted",
+                    self.worker_id, extra={"tag": "INFRA"},
+                )
+                raise RuntimeError(
+                    f"ProcessGuard[{self.worker_id}]: worker restart budget exhausted "
+                    f"({self.max_restarts} restarts)"
+                )
             self._restart_worker_locked("stalled")
 
     def _memory_mb(self) -> Optional[float]:
