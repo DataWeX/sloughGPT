@@ -228,7 +228,7 @@ class ExperimentsRouter:
         except Exception as e:
             classify_and_raise(e, source="log_metric")
 
-    async def log_param(self, experiment_id: str, param_name: str, value: Any) -> dict:
+    async def log_param(self, experiment_id: str, param_name: str = Field(..., min_length=1, max_length=200), value: Any = None) -> dict:
         """Log a parameter for an experiment."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
