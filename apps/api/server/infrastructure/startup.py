@@ -378,7 +378,7 @@ class StartupOrchestrator:
                 return
 
             try:
-                _autoload_model(cfg)
+                loaded_provider = _autoload_model(cfg)
             except Exception as e:
                 logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
                 return
@@ -386,7 +386,7 @@ class StartupOrchestrator:
             # After model is loaded, register with registry + providers
             try:
                 process_guard = _build_guard_for_model(cfg, server_state.model_type)
-                _register_loaded(cfg, process_guard)
+                _register_loaded(cfg, process_guard, preloaded_provider=loaded_provider)
             except Exception as e:
                 logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
 
@@ -1001,7 +1001,7 @@ def _build_guard_for_model(cfg, model_type: str):
         return None
 
 
-def _register_loaded(cfg, process_guard) -> None:
+def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     """Register a fully-loaded (eager) model with registry + providers."""
     import state as server_state
     from domains.infrastructure.model_registry import get_model_registry
@@ -1028,11 +1028,15 @@ def _register_loaded(cfg, process_guard) -> None:
                 quant_mode=cfg.quant_mode,
             )
 
-    # Pass pre-loaded provider to avoid duplicate SLNC load (~6s)
-    preloaded = getattr(server_state, 'provider', None)
+    # Use the provider passed from _autoload_model to avoid re-loading.
+    # The state.py module delegation is broken (module __setattr__ doesn't
+    # reach ServerState), so we pass it explicitly instead of reading from
+    # server_state.provider.
+    if preloaded_provider is None:
+        preloaded_provider = getattr(server_state, 'provider', None)
     setup_providers(
         slonet_hf_id=server_state.model_type,
-        slonet_provider=preloaded,
+        slonet_provider=preloaded_provider,
         model_registry=registry,
         process_guard=process_guard,
         quantize=cfg.quantize_slonet,
@@ -1055,6 +1059,10 @@ def _register_loaded(cfg, process_guard) -> None:
 def _autoload_model(cfg: ServerConfig):
     """Load model weights into server_state. Registration handled by caller.
 
+    Returns the loaded provider (or None) so the caller can pass it to
+    ``_register_loaded`` without going through the broken ``state.py``
+    delegation.
+
     Retries transient failures with exponential backoff.
     """
     import state as server_state
@@ -1065,7 +1073,7 @@ def _autoload_model(cfg: ServerConfig):
     retry_delay_s = DEFAULT_LOAD_RETRY_DELAY
 
     if server_state.model is not None:
-        return
+        return None
 
     # 0) Explicit native .soul path — skip HuggingFace entirely
     if cfg.native_soul_path:
@@ -1079,7 +1087,7 @@ def _autoload_model(cfg: ServerConfig):
                 server_state.model_type = "native-soul"
                 server_state.provider = provider
                 logger.info("Autoload native soul: %s", soul_path, extra={"tag": "START"})
-                return
+                return provider
             except Exception as e:
                 logger.warning("Native soul load failed (%s), falling back to standard autoload", e, extra={"tag": "START"})
         else:
@@ -1114,7 +1122,7 @@ def _autoload_model(cfg: ServerConfig):
                 model_id, result.model_type, attempt + 1,
                 extra={"tag": "START"},
             )
-            return
+            return result.provider
 
         if attempt < max_retries:
             delay = retry_delay_s * (2 ** attempt)
@@ -1137,7 +1145,7 @@ def _autoload_model(cfg: ServerConfig):
         logger.info("Download complete: %s", model_id, extra={"tag": "START"})
     except Exception as e:
         logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
-        return
+        return None
 
     # 3) Retry load now that safetensors are cached (with retries)
     for attempt in range(max_retries + 1):
@@ -1161,7 +1169,7 @@ def _autoload_model(cfg: ServerConfig):
                 model_id, result.model_type, attempt + 1,
                 extra={"tag": "START"},
             )
-            return
+            return result.provider
 
         if attempt < max_retries:
             delay = retry_delay_s * (2 ** attempt)
