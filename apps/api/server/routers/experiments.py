@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
@@ -229,7 +229,7 @@ class ExperimentsRouter:
         except Exception as e:
             classify_and_raise(e, source="log_metric")
 
-    async def log_param(self, experiment_id: str, param_name: str = Field(..., min_length=1, max_length=200), value: Any = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def log_param(self, experiment_id: str, param_name: str = Query(..., min_length=1, max_length=200), value: Any = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Log a parameter for an experiment."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:

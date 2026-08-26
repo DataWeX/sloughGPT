@@ -1145,9 +1145,9 @@ class InferenceRouter:
                 try:
                     logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY start", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY"}})
-                    rag_svc = get_rag_service()
+                    rag_svc = await asyncio.wait_for(asyncio.to_thread(get_rag_service), timeout=10.0)
                     if rag_svc.stats().get("total_chunks", 0) > 0:
-                        rag_result = await asyncio.to_thread(rag_svc.query, user_msg, 5)
+                        rag_result = await asyncio.wait_for(asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0)
                         if rag_result.get("num_results", 0) > 0:
                             rag_context = rag_result["context"]
                             # Inject RAG context into system prompt or as a user context message
