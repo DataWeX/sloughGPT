@@ -1661,6 +1661,8 @@ async def train_from_feedback(req: dict | None = None):
                     )
                 except Exception as e:
                     logger.warning("Feedback training failure webhook failed for %s: %s", jid, e)
+
+        executor = get_training_executor()
         executor.submit(run_feedback_training, jid)
 
         safe_out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
