@@ -5,6 +5,7 @@ Import datasets from various sources: GitHub, HuggingFace, URLs, local files.
 
 import json
 import os
+import re
 import subprocess
 import urllib.request
 import logging
@@ -82,6 +83,9 @@ class RepoImporter:
             logger.info("Repo already exists: %s", target,
                 extra={"tag": "TRAIN"},)
             return target
+
+        if branch and not re.match(r'^[a-zA-Z0-9_\-/.]+$', branch):
+            raise ValueError(f"Invalid branch name: {branch}")
 
         cmd = ["git", "clone", url, str(target)]
         if branch:

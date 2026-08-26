@@ -529,20 +529,20 @@ class GroundingOrchestrator:
 
         # 1. Check against knowledge graph
         kg_result = self.kg.verify_statement(response)
-        result["verified"] = kg_result["verified"]
-        result["metadata"]["kg_verified"] = kg_result["verified"]
+        result["verified"] = kg_result.get("verified", False)
+        result["metadata"]["kg_verified"] = kg_result.get("verified", False)
 
         # 2. Check against RAG
         rag_result = self.rag.ground_response(response, query)
-        result["grounding_applied"] = rag_result["grounded"]
-        result["metadata"]["rag_confidence"] = rag_result["confidence"]
+        result["grounding_applied"] = rag_result.get("grounded", False)
+        result["metadata"]["rag_confidence"] = rag_result.get("confidence", 0.0)
         result["metadata"]["supporting_docs"] = rag_result.get("supporting_docs", [])
 
         # 3. Calculate overall confidence
         if result["verified"]:
             result["confidence"] = 0.9
         elif result["grounding_applied"]:
-            result["confidence"] = rag_result["confidence"]
+            result["confidence"] = rag_result.get("confidence", 0.0)
         else:
             result["confidence"] = 0.5  # Uncertain
 
