@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, memo } from 'react'
 import { Button, IconRefresh } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
+import type { ChatSession } from '@/lib/db'
 
 interface AnalyticsData {
   totalSessions: number
@@ -22,7 +23,7 @@ interface ChatAnalyticsProps {
   className?: string
 }
 
-function computeAnalytics(sessions: any[]): AnalyticsData {
+function computeAnalytics(sessions: ChatSession[]): AnalyticsData {
   if (sessions.length === 0) {
     return {
       totalSessions: 0,
