@@ -89,6 +89,7 @@ class MultimodalRouter:
             "started_at": None,
             "finished_at": None,
         }
+        self._bg_lock = Lock()
 
         self._tts = None
         self._vae = None
@@ -158,6 +159,9 @@ class MultimodalRouter:
             with self._dpo_lock:
                 dpo = dict(self._dpo_state)
 
+            with self._bg_lock:
+                bg = dict(self._background_job)
+
             return success_response(data={
                 "engine": {
                     "speech_to_text": caps.speech_to_text,
@@ -180,14 +184,14 @@ class MultimodalRouter:
                     "last_accuracy": round(accuracy_history[-1], 2) if accuracy_history else 0.0,
                 },
                 "batch": {
-                    "running": self._background_job["running"],
-                    "job_id": self._background_job["job_id"],
-                    "total": self._background_job["total"],
-                    "completed": self._background_job["completed"],
-                    "errors": self._background_job["errors"],
-                    "progress_pct": round(self._background_job["completed"] / max(self._background_job["total"], 1) * 100, 1) if self._background_job["total"] > 0 else 0,
-                    "current_caption": self._background_job["current_caption"],
-                    "current_image": self._background_job["current_image"],
+                    "running": bg["running"],
+                    "job_id": bg["job_id"],
+                    "total": bg["total"],
+                    "completed": bg["completed"],
+                    "errors": bg["errors"],
+                    "progress_pct": round(bg["completed"] / max(bg["total"], 1) * 100, 1) if bg["total"] > 0 else 0,
+                    "current_caption": bg["current_caption"],
+                    "current_image": bg["current_image"],
                 },
                 "dpo": dpo,
                 "video": video,
@@ -229,8 +233,9 @@ class MultimodalRouter:
     ) -> dict:
         """train_batch."""
         mgr = self._ensure_initialized()
-        if self._background_job["running"]:
-            raise_error("Training job already running", "E_INFRA_BUSY")
+        with self._bg_lock:
+            if self._background_job["running"]:
+                raise_error("Training job already running", "E_INFRA_BUSY")
 
         image_paths = []
         if dataset_path:
@@ -264,11 +269,12 @@ class MultimodalRouter:
             raise_error("No images provided", "E_BAD_REQUEST")
 
         job_id = f"batch_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self._background_job.update(
-            job_id=job_id, running=True, total=len(image_paths),
-            completed=0, errors=0, current_caption="", current_image="",
-            started_at=datetime.datetime.now().isoformat(), finished_at=None,
-        )
+        with self._bg_lock:
+            self._background_job.update(
+                job_id=job_id, running=True, total=len(image_paths),
+                completed=0, errors=0, current_caption="", current_image="",
+                started_at=datetime.datetime.now().isoformat(), finished_at=None,
+            )
         asyncio.create_task(self._run_batch_training(mgr, image_paths))
         safe_audit_log("multimodal.train", resource=job_id, detail="batch", total_images=len(image_paths), dataset_path=dataset_path or "")
         return success_response(data={"status": "started", "job_id": job_id, "total_images": len(image_paths)})
@@ -278,8 +284,9 @@ class MultimodalRouter:
         _batch_t0 = _time.monotonic()
         loop = asyncio.get_event_loop()
         for src in image_sources:
-            if not self._background_job["running"]:
-                break
+            with self._bg_lock:
+                if not self._background_job["running"]:
+                    break
             try:
                 is_upload = isinstance(src, tuple) and src[0] == "upload"
                 if is_upload:
@@ -292,19 +299,27 @@ class MultimodalRouter:
                 else:
                     name = src.split("/")[-1]
                     caption = await loop.run_in_executor(None, mgr.train_on_path, src)
-                self._background_job["current_image"] = name
-                self._background_job["current_caption"] = caption.text
-                self._background_job["completed"] += 1
+                with self._bg_lock:
+                    self._background_job["current_image"] = name
+                    self._background_job["current_caption"] = caption.text
+                    self._background_job["completed"] += 1
             except Exception as exc:
-                self._background_job["errors"] += 1
-                self._background_job["completed"] += 1
+                with self._bg_lock:
+                    self._background_job["errors"] += 1
+                    self._background_job["completed"] += 1
                 logger.warning("Batch image training failed for %s: %s", name, exc)
-            if self._background_job["completed"] % 5 == 0:
+            with self._bg_lock:
+                completed = self._background_job["completed"]
+            if completed % 5 == 0:
                 await asyncio.sleep(0)
-        self._background_job["running"] = False
-        self._background_job["finished_at"] = datetime.datetime.now().isoformat()
+        with self._bg_lock:
+            self._background_job["running"] = False
+            self._background_job["finished_at"] = datetime.datetime.now().isoformat()
+            _job_id = self._background_job.get("job_id", "unknown")
+            _completed = self._background_job["completed"]
+            _errors = self._background_job["errors"]
         _batch_elapsed_ms = (_time.monotonic() - _batch_t0) * 1000
-        safe_audit_log("multimodal.train.complete", resource=self._background_job.get("job_id", "unknown"), detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={self._background_job['completed']} errors={self._background_job['errors']}")
+        safe_audit_log("multimodal.train.complete", resource=_job_id, detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={_completed} errors={_errors}")
 
     async def train_video(self, req: VideoTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:

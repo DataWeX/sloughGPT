@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import hashlib
+import threading
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -78,6 +79,7 @@ class ErrorsRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/errors", tags=["errors"])
+        self._errors_lock = threading.Lock()
         self._error_buffer: list[dict] = []
         self._error_count_since_clear = 0
         self._dedup_map: dict[str, float] = {}
@@ -171,60 +173,61 @@ class ErrorsRouter:
             logged = 0
             batch_fps: set = set()
             records_to_persist: list = []
-            for entry in batch.errors:
-                message = entry.message or ""
-                fp = self._fingerprint(message)
+            with self._errors_lock:
+                for entry in batch.errors:
+                    message = entry.message or ""
+                    fp = self._fingerprint(message)
 
-                last_seen = self._dedup_map.get(fp)
-                if (fp not in batch_fps
-                        and last_seen is not None
-                        and (now_epoch - last_seen) < self._DEDUP_WINDOW_S):
-                    for rec in reversed(self._error_buffer):
-                        if rec.get("fingerprint") == fp:
-                            rec["count"] = rec.get("count", 1) + 1
-                            rec["timestamp"] = entry.timestamp or now_iso
-                            break
-                    continue
+                    last_seen = self._dedup_map.get(fp)
+                    if (fp not in batch_fps
+                            and last_seen is not None
+                            and (now_epoch - last_seen) < self._DEDUP_WINDOW_S):
+                        for rec in reversed(self._error_buffer):
+                            if rec.get("fingerprint") == fp:
+                                rec["count"] = rec.get("count", 1) + 1
+                                rec["timestamp"] = entry.timestamp or now_iso
+                                break
+                        continue
 
-                batch_fps.add(fp)
-                self._dedup_map[fp] = now_epoch
-                if len(self._dedup_map) > 500:
-                    cutoff = now_epoch - self._DEDUP_WINDOW_S * 10
-                    self._dedup_map = {k: v for k, v in self._dedup_map.items() if v > cutoff}
+                    batch_fps.add(fp)
+                    self._dedup_map[fp] = now_epoch
+                    if len(self._dedup_map) > 500:
+                        cutoff = now_epoch - self._DEDUP_WINDOW_S * 10
+                        self._dedup_map = {k: v for k, v in self._dedup_map.items() if v > cutoff}
 
-                error_record = {
-                    "id": uuid.uuid4().hex[:12],
-                    "message": entry.message,
-                    "source": entry.source or "web",
-                    "stack": entry.stack,
-                    "url": entry.url,
-                    "line": entry.line,
-                    "col": entry.col,
-                    "client_host": client_host,
-                    "timestamp": entry.timestamp or now_iso,
-                    "metadata": entry.metadata or {},
-                    "fingerprint": fp,
-                    "count": 1,
-                }
-                self._error_buffer.append(error_record)
-                self._error_count_since_clear += 1
-                records_to_persist.append(error_record)
+                    error_record = {
+                        "id": uuid.uuid4().hex[:12],
+                        "message": entry.message,
+                        "source": entry.source or "web",
+                        "stack": entry.stack,
+                        "url": entry.url,
+                        "line": entry.line,
+                        "col": entry.col,
+                        "client_host": client_host,
+                        "timestamp": entry.timestamp or now_iso,
+                        "metadata": entry.metadata or {},
+                        "fingerprint": fp,
+                        "count": 1,
+                    }
+                    self._error_buffer.append(error_record)
+                    self._error_count_since_clear += 1
+                    records_to_persist.append(error_record)
 
-                is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
-                is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
-                log_fn = logger.debug if (is_extension or is_vague) else logger.error
-                log_fn(
-                    "CLIENT ERROR [%s] %s | %s:%s %s",
-                    error_record["id"],
-                    entry.message[:120],
-                    entry.url or "?",
-                    entry.line or 0,
-                    entry.col or 0,
-                )
-                logged += 1
+                    is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
+                    is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
+                    log_fn = logger.debug if (is_extension or is_vague) else logger.error
+                    log_fn(
+                        "CLIENT ERROR [%s] %s | %s:%s %s",
+                        error_record["id"],
+                        entry.message[:120],
+                        entry.url or "?",
+                        entry.line or 0,
+                        entry.col or 0,
+                    )
+                    logged += 1
 
-            while len(self._error_buffer) > MAX_ERRORS:
-                self._error_buffer.pop(0)
+                while len(self._error_buffer) > MAX_ERRORS:
+                    self._error_buffer.pop(0)
 
             if records_to_persist:
                 await asyncio.to_thread(self._persist_batch, records_to_persist)
@@ -267,12 +270,15 @@ class ErrorsRouter:
     async def get_recent_errors(self, limit: int = 50, offset: int = 0) -> dict:
         """Get recent errors from the buffer."""
         try:
-            total = len(self._error_buffer)
-            start = max(0, total - offset - limit)
-            end = max(0, total - offset)
+            with self._errors_lock:
+                total = len(self._error_buffer)
+                start = max(0, total - offset - limit)
+                end = max(0, total - offset)
+                errors = list(reversed(self._error_buffer[start:end]))
+                unread_count = self._error_count_since_clear
             return success_response(data={
-                "errors": list(reversed(self._error_buffer[start:end])),
-                "unread_count": self._error_count_since_clear,
+                "errors": errors,
+                "unread_count": unread_count,
                 "total": total,
                 "offset": offset,
                 "limit": limit,
@@ -283,8 +289,10 @@ class ErrorsRouter:
     async def get_grouped_errors(self) -> dict:
         """Get errors grouped by fingerprint."""
         try:
+            with self._errors_lock:
+                buffer_snapshot = list(self._error_buffer)
             groups: dict[str, dict] = {}
-            for entry in reversed(self._error_buffer):
+            for entry in reversed(buffer_snapshot):
                 fp = entry.get("fingerprint") or self._fingerprint(entry.get("message", ""))
                 count = entry.get("count", 1)
                 if fp in groups:
@@ -319,7 +327,9 @@ class ErrorsRouter:
                 key = t.strftime("%Y-%m-%dT%H:00")
                 buckets[key] = 0
 
-            for entry in self._error_buffer:
+            with self._errors_lock:
+                buffer_snapshot = list(self._error_buffer)
+            for entry in buffer_snapshot:
                 ts = entry.get("timestamp", "")
                 if not ts:
                     continue
@@ -364,9 +374,11 @@ class ErrorsRouter:
     async def export_errors(self, limit: int = 500) -> dict:
         """Export errors as JSON."""
         try:
-            errors = list(reversed(self._error_buffer[-limit:]))
+            with self._errors_lock:
+                errors = list(reversed(self._error_buffer[-limit:]))
+                total = len(self._error_buffer)
             return JSONResponse(
-                content={"errors": errors, "total": len(self._error_buffer), "exported": len(errors)},
+                content={"errors": errors, "total": total, "exported": len(errors)},
                 headers={
                     "Content-Disposition": f'attachment; filename="errors-{datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")}.json"'
                 },
@@ -377,10 +389,11 @@ class ErrorsRouter:
     async def clear_errors(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear all errors."""
         try:
-            self._error_buffer.clear()
+            with self._errors_lock:
+                self._error_buffer.clear()
+                self._error_count_since_clear = 0
+                self._dedup_map.clear()
             await asyncio.to_thread(self._clear_disk)
-            self._error_count_since_clear = 0
-            self._dedup_map.clear()
             safe_audit_log("errors.clear", resource="all")
             return success_response(data={"status": "ok", "cleared": True})
         except Exception as e:
@@ -389,7 +402,9 @@ class ErrorsRouter:
     async def unread_count(self) -> dict:
         """Get unread error count."""
         try:
-            return success_response(data={"unread_count": self._error_count_since_clear})
+            with self._errors_lock:
+                count = self._error_count_since_clear
+            return success_response(data={"unread_count": count})
         except Exception as e:
             classify_and_raise(e, source="errors.unread")
 
