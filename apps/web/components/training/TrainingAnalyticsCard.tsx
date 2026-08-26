@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts'
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { downloadJson } from '@/lib/download-utils'
 

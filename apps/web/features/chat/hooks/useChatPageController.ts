@@ -67,6 +67,7 @@ export function useChatPageController(
   const [noteDialogOpen, setNoteDialogOpen] = useState(false)
   const [noteDialogMessageId, setNoteDialogMessageId] = useState<string | null>(null)
   const [noteSearchOpen, setNoteSearchOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -597,6 +598,8 @@ export function useChatPageController(
     onCloseThread,
     hasThread: threads.hasThread,
     threadCount: threads.threadCount,
+    shortcutsOpen: shortcutsOpen,
+    setShortcutsOpen: setShortcutsOpen,
   }
 }
 

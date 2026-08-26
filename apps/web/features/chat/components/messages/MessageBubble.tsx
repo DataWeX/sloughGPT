@@ -172,6 +172,11 @@ export const MessageBubble = memo(function MessageBubble({
         role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
       )}>
         {role === 'user' ? 'You' : 'Assistant'}
+        {timestamp && (
+          <span className="ml-2 text-[9px] font-normal normal-case tracking-normal opacity-0 group-hover:opacity-100 transition-opacity">
+            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
         {isBookmarked && (
           <span className="ml-1.5 text-warning" aria-label="Bookmarked">
             <IconStar className="h-2.5 w-2.5 inline" filled aria-hidden="true" />

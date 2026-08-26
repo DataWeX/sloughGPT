@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, memo } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { downloadJson } from '@/lib/download-utils'
+import { formatDuration } from './formatDuration'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void

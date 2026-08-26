@@ -101,6 +101,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
           size="icon-sm"
           className="h-5 w-5"
           onClick={() => setShowAddCategory(!showAddCategory)}
+          aria-label="Add category"
         >
           <IconPlus className="h-3 w-3" />
         </Button>
@@ -122,7 +123,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
             className="h-6 w-6"
             onClick={handleAddCategory}
             disabled={!customCategory.trim()}
-            aria-label="Add category"
+            aria-label="Save category"
           >
             <IconCheck className="h-3 w-3" />
           </Button>

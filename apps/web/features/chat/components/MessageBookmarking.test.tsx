@@ -33,23 +33,23 @@ describe('MessageBookmarking', () => {
 
   it('opens add category form', () => {
     render(<MessageBookmarking messages={mockMessages} onJumpToMessage={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByLabelText('Add category'))
     expect(screen.getByPlaceholderText('Category name...')).toBeInTheDocument()
   })
 
   it('adds custom category', async () => {
     render(<MessageBookmarking messages={mockMessages} onJumpToMessage={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByLabelText('Add category'))
     fireEvent.change(screen.getByPlaceholderText('Category name...'), { target: { value: 'Custom' } })
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Add category'))
+      fireEvent.click(screen.getByLabelText('Save category'))
     })
     expect(screen.getByText(/Custom/)).toBeInTheDocument()
   })
 
   it('adds category on Enter', async () => {
     render(<MessageBookmarking messages={mockMessages} onJumpToMessage={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByLabelText('Add category'))
     const input = screen.getByPlaceholderText('Category name...')
     fireEvent.change(input, { target: { value: 'Test' } })
     await act(async () => {
@@ -60,10 +60,10 @@ describe('MessageBookmarking', () => {
 
   it('persists to localStorage', async () => {
     render(<MessageBookmarking messages={mockMessages} onJumpToMessage={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button'))
+    fireEvent.click(screen.getByLabelText('Add category'))
     fireEvent.change(screen.getByPlaceholderText('Category name...'), { target: { value: 'Saved' } })
     await act(async () => {
-      fireEvent.click(screen.getByLabelText('Add category'))
+      fireEvent.click(screen.getByLabelText('Save category'))
     })
     const stored = JSON.parse(localStorage.getItem('message-bookmarks') || '[]')
     expect(stored).toEqual([])
