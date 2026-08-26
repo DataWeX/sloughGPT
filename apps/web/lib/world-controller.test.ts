@@ -2,14 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockApiPost = vi.fn()
 const mockApiGet = vi.fn()
-const mockFetch = vi.fn()
+const mockAuthFetch = vi.fn()
 
 vi.mock('@/lib/http-client', () => ({
   apiPost: (...args: unknown[]) => mockApiPost(...args),
   apiGet: (...args: unknown[]) => mockApiGet(...args),
+  authFetch: (...args: unknown[]) => mockAuthFetch(...args),
 }))
-
-vi.stubGlobal('fetch', mockFetch)
 
 const { worldController } = await import('@/lib/world-controller')
 
@@ -31,11 +30,11 @@ describe('worldController', () => {
     expect(mockApiPost).toHaveBeenCalledWith('/world/render', {})
   })
 
-  it('renderImage calls fetch and returns blob', async () => {
+  it('renderImage calls authFetch and returns blob', async () => {
     const fakeBlob = new Blob(['image data'], { type: 'image/png' })
-    mockFetch.mockResolvedValue({ ok: true, blob: () => Promise.resolve(fakeBlob) })
+    mockAuthFetch.mockResolvedValue({ ok: true, blob: () => Promise.resolve(fakeBlob) })
     const result = await worldController.renderImage({ width: 80 })
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockAuthFetch).toHaveBeenCalledWith(
       expect.stringContaining('/world/render/image'),
       expect.objectContaining({ method: 'POST' })
     )
@@ -43,7 +42,7 @@ describe('worldController', () => {
   })
 
   it('renderImage throws on non-ok response', async () => {
-    mockFetch.mockResolvedValue({ ok: false, status: 500 })
+    mockAuthFetch.mockResolvedValue({ ok: false, status: 500 })
     await expect(worldController.renderImage()).rejects.toThrow('Render failed')
   })
 
