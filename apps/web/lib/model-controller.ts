@@ -92,6 +92,13 @@ export interface ProviderDiagnostics {
   startup_phase: string
 }
 
+export interface StartupProgress {
+  phase: string
+  step: number
+  total: number
+  message: string
+}
+
 export const modelController = {
   _listInFlight: null as Promise<ModelInfo[]> | null,
 
@@ -262,6 +269,14 @@ export const modelController = {
       return await apiGet<ProviderDiagnostics>('/models/debug/providers')
     } catch (e) {
       _log.warning('Could not get provider diagnostics', { exception: String(e) })
+      return null
+    }
+  },
+
+  async getStartupProgress(): Promise<StartupProgress | null> {
+    try {
+      return await apiGet<StartupProgress>('/health/startup-progress')
+    } catch {
       return null
     }
   },
