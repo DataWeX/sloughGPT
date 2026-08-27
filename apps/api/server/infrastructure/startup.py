@@ -1044,6 +1044,26 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
         quant_mode=cfg.quant_mode,
     )
 
+    # Sync state.py writes to the ServerState singleton.
+    # state.py.__setattr__ is a no-op for modules (Python stores directly
+    # into __dict__), so get_server_state() reads would see stale/None values.
+    try:
+        from domains.infrastructure.server_state import get_server_state
+        core = get_server_state()
+        if server_state.model is not None:
+            core.model.set(server_state.model)
+        if server_state.model_type:
+            core.model_type.set(server_state.model_type)
+        if getattr(server_state, 'tokenizer', None) is not None:
+            core.tokenizer.set(server_state.tokenizer)
+        if preloaded_provider is not None:
+            core.model.set(preloaded_provider)
+        logger.debug("Synced state.py → ServerState (model=%s, type=%s)",
+                     server_state.model is not None, server_state.model_type,
+                     extra={"tag": "START"})
+    except Exception as e:
+        logger.debug("ServerState sync failed: %s", e, extra={"tag": "START"})
+
     # Auto-select precision on GPU (fp16 benchmark)
     try:
         from domains.slolib.gpu import set_accelerator_precision
