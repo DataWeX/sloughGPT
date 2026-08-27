@@ -1381,14 +1381,15 @@ class InferenceRouter:
                                                 message="Context injected")
 
                                 if token:
-                                    _token_gen_start = time.time()
                                     if _token_count == 0:
+                                        _first_token_elapsed_ms = (time.time() - _token_gen_start) * 1000
                                         logger.info(
                                             "CHAT_FIRST_TOKEN corr=%s session=%s after=%.1fms",
                                             corr_id, session_id,
-                                            (time.time() - _token_gen_start) * 1000,
-                                            extra={"tag": "CHAT", "context": {"corr": corr_id}},
+                                            _first_token_elapsed_ms,
+                                            extra={"tag": "CHAT", "context": {"corr": corr_id, "elapsed_ms": round(_first_token_elapsed_ms, 1)}},
                                         )
+                                    _token_gen_start = time.time()
                                     full_response_parts.append(token)
                                     _cached_tokens.append(token)
                                     _batch.append(token)
