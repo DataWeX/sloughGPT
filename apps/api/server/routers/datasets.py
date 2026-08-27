@@ -223,7 +223,7 @@ class DatasetsRouter:
                 importer = HuggingFaceImporter()
                 _t0 = time.monotonic()
                 result = await asyncio.to_thread(
-                    importer.downloadDataset,
+                    importer.download_dataset,
                     dataset_id=request.dataset_id,
                     name=name,
                     output_dir=str(self._DATASETS_DIR),
