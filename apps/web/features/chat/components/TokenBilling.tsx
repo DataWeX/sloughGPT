@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useMemo, memo } from 'react'
 import { Button, IconX, IconRefresh, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { logger } from '@/lib/dev-log'
+import { apiGet } from '@/lib/http-client'
 
 interface TokenBalance {
   userId: string
@@ -77,9 +78,9 @@ export const TokenBilling = memo(function TokenBilling({
     setLoading(true)
     try {
       const [balanceRes, usageRes, historyRes] = await Promise.all([
-        fetch('/api/tokens/balance').then(r => r.json()),
-        fetch('/api/tokens/usage/summary').then(r => r.json()),
-        fetch('/api/tokens/usage/history?limit=50').then(r => r.json()),
+        apiGet<TokenBalance>('/tokens/balance'),
+        apiGet<UsageSummary>('/tokens/usage/summary'),
+        apiGet<{ records: UsageRecord[] }>('/tokens/usage/history?limit=50'),
       ])
       setBalance(balanceRes)
       setUsage(usageRes)
