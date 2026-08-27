@@ -8,6 +8,7 @@ import ProviderDiagnosticsCard from './ProviderDiagnosticsCard'
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
     debugProviders: vi.fn(),
+    getStartupProgress: vi.fn(),
   },
 }))
 
@@ -40,7 +41,10 @@ const mockData = {
 
 describe('ProviderDiagnosticsCard', () => {
   afterEach(cleanup)
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(modelController.getStartupProgress).mockResolvedValue({ phase: 'ready', step: 9, total: 9, message: 'Server ready' })
+  })
 
   it('renders provider chain on load', async () => {
     vi.mocked(modelController.debugProviders).mockResolvedValue(mockData)
@@ -78,11 +82,22 @@ describe('ProviderDiagnosticsCard', () => {
     })
   })
 
-  it('shows startup phase', async () => {
+  it('shows startup progress bar when loading', async () => {
     vi.mocked(modelController.debugProviders).mockResolvedValue(mockData)
+    vi.mocked(modelController.getStartupProgress).mockResolvedValue({ phase: 'loading_model', step: 4, total: 9, message: 'Loading model weights...' })
     render(<ProviderDiagnosticsCard />)
     await vi.waitFor(() => {
-      expect(screen.getByText(/Startup phase:/)).toBeDefined()
+      expect(screen.getByText('Loading model weights...')).toBeDefined()
+      expect(screen.getByText('4/9')).toBeDefined()
+    })
+  })
+
+  it('shows complete when startup phase is ready', async () => {
+    vi.mocked(modelController.debugProviders).mockResolvedValue(mockData)
+    vi.mocked(modelController.getStartupProgress).mockResolvedValue({ phase: 'ready', step: 9, total: 9, message: 'Server ready' })
+    render(<ProviderDiagnosticsCard />)
+    await vi.waitFor(() => {
+      expect(screen.getByText('complete')).toBeDefined()
     })
   })
 
