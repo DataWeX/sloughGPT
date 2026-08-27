@@ -404,18 +404,22 @@ class _SessionDictSerializer(Serializer[dict]):
     def serialize(self, obj: dict) -> dict:
         if not isinstance(obj, dict):
             raise ValueError(f"Session must be a dict, got {type(obj).__name__}")
-        missing = self._REQUIRED_KEYS - obj.keys()
-        if missing:
-            raise ValueError(f"Session missing required keys: {', '.join(sorted(missing))}")
-        return obj
+        result = dict(obj)
+        if "id" not in result:
+            result["id"] = str(uuid.uuid4())
+        if "messages" not in result:
+            result["messages"] = []
+        return result
 
     def deserialize(self, data: dict) -> dict:
         if not isinstance(data, dict):
             raise ValueError(f"Session data must be a dict, got {type(data).__name__}")
-        missing = self._REQUIRED_KEYS - data.keys()
-        if missing:
-            raise ValueError(f"Session data missing required keys: {', '.join(sorted(missing))}")
-        return data
+        result = dict(data)
+        if "id" not in result:
+            result["id"] = str(uuid.uuid4())
+        if "messages" not in result:
+            result["messages"] = []
+        return result
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
 

@@ -89,6 +89,7 @@ class ModelsRouter:
         self.router.add_api_route(path="/process-guard", endpoint=self.set_process_guard, methods=["POST"])
         self.router.add_api_route(path="/engine/status", endpoint=self.get_engine_status, methods=["GET"])
         self.router.add_api_route(path="/engine/reload", endpoint=self.reload_engine, methods=["POST"])
+        self.router.add_api_route(path="/debug/providers", endpoint=self.debug_providers, methods=["GET"])
 
     @staticmethod
     def _audit_model_id(provider) -> str:
@@ -1061,5 +1062,51 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.reload_engine")
 
+    async def debug_providers(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Diagnostic endpoint: full provider chain status.
 
+        Returns the registered providers, their types, text provider wiring,
+        and model state — useful for debugging "no provider" or text generation
+        failures.
+        """
+        import state as server_state
+        from domains.models.provider import list_providers, get_provider
+
+        providers = {}
+        for name in list_providers():
+            p = get_provider(name)
+            info: Dict[str, Any] = {
+                "type": type(p).__name__,
+                "module": type(p).__module__,
+            }
+            # ProviderRouter-specific: show text provider name
+            if hasattr(p, '_text_name'):
+                info["text_provider"] = p._text_name
+            if hasattr(p, '_processors'):
+                info["processors"] = [type(proc).__name__ for proc in p._processors]
+            # SloNetChatProvider-specific
+            if hasattr(p, '_model_id'):
+                info["model_id"] = p._model_id
+            if hasattr(p, '_server'):
+                srv = p._server
+                info["server"] = {
+                    "type": type(srv).__name__,
+                    "has_circuit_breaker": hasattr(srv, '_circuit_breaker'),
+                }
+            providers[name] = info
+
+        model_state = {
+            "model": type(server_state.model).__name__ if server_state.model is not None else None,
+            "model_type": getattr(server_state, 'model_type', None),
+            "tokenizer": type(server_state.tokenizer).__name__ if getattr(server_state, 'tokenizer', None) is not None else None,
+            "provider": type(server_state.provider).__name__ if getattr(server_state, 'provider', None) is not None else None,
+        }
+
+        from startup_progress import STARTUP_PHASE
+        return success_response(data={
+            "providers": providers,
+            "default_provider": list_providers()[0] if "default" in list_providers() else None,
+            "model_state": model_state,
+            "startup_phase": STARTUP_PHASE.get("phase", "unknown"),
+        })
 router = ModelsRouter().router

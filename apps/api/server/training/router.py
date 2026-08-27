@@ -2522,6 +2522,11 @@ async def recover_job(job_id: str):
             except Exception as e:
                 logger.warning("Recovery webhook failed for %s: %s", jid, e)
 
+        except FileNotFoundError as e:
+            logger.error("Recovery failed (missing file): %s", e, extra={"tag": "TRAIN"})
+            _finish_job(jid, "failed", f"Data file not found: {e}")
+            store.mark_failed(job_id, f"Data file not found: {e}")
+            controller.fail()
         except Exception as e:
             logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(jid, "failed", str(e))

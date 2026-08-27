@@ -132,9 +132,20 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         text = "".join(texts)
 
     else:
+        if data_path is None:
+            raise FileNotFoundError(
+                "No data_path provided and no default dataset found"
+            )
         path = Path(data_path)
-        if not path.exists():
-            path = Path("data") / data_path / "input.txt"
+        if not path.is_file():
+            # Try as a dataset name under data/
+            alt = Path("data") / data_path / "input.txt"
+            if alt.is_file():
+                path = alt
+            else:
+                raise FileNotFoundError(
+                    f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
+                )
         with open(path, "r", encoding="utf-8") as f:
             text = f.read()
 
