@@ -473,11 +473,15 @@ class SloNetChatProvider:
         Returns:
             SloNetChatProvider using mmap-backed (optionally quantized) weights
         """
+        import time as _time
+
         from domains.infrastructure.slnc.parser import SLNCParser
         from domains.training.slonet import SloTransformer
 
+        _t0 = _time.monotonic()
         parser = SLNCParser(slnc_path)
         config = parser.config
+        _t_parse = _time.monotonic()
 
         n_embed = config.get("n_embd", config.get("hidden_size", 768))
         n_head = config.get("n_head", config.get("num_attention_heads", 12))
@@ -525,13 +529,18 @@ class SloNetChatProvider:
             activation=activation,
             _lazy=True,
         )
+        _t_model = _time.monotonic()
 
         # Load weights directly from mmap (zero copy)
         weights_dict = parser.get_weights_dict()
+        _t_weights = _time.monotonic()
 
         # Convert and load into model
         mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config)
+        _t_convert = _time.monotonic()
+
         model.load_state_dict(mapped)
+        _t_load = _time.monotonic()
 
         # Drop the transient conversion buffers immediately — they are copies
         # (2x the fp32 weight bytes) and would otherwise pin peak RSS until
@@ -539,6 +548,13 @@ class SloNetChatProvider:
         # the model's parameters.
         del weights_dict
         del mapped
+
+        logger.info(
+            "from_slnc timing: parse=%.2fs model=%.2fs weights=%.2fs convert=%.2fs load_state=%.2fs total=%.2fs",
+            _t_parse - _t0, _t_model - _t_parse, _t_weights - _t_model,
+            _t_convert - _t_weights, _t_load - _t_convert, _t_load - _t0,
+            extra={"tag": "INF"},
+        )
 
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)
@@ -704,12 +720,14 @@ class SloNetChatProvider:
             logger.warning("ResourceManager.apply_blas_env skipped: %s", e)
 
         # Load tokenizer
+        _t_tok_start = _time.monotonic()
         instance._tokenizer = instance._load_tokenizer(
             Path(slnc_path).parent, config
         )
+        _t_tok = _time.monotonic()
 
-        logger.info("SloNetChatProvider.from_slnc: %s, %d layers",
-                     slnc_path, n_layer, extra={"tag": "INF"})
+        logger.info("SloNetChatProvider.from_slnc: %s, %d layers (tokenizer=%.2fs)",
+                     slnc_path, n_layer, _t_tok - _t_tok_start, extra={"tag": "INF"})
 
         # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
         instance._kv_states: Dict[str, Any] = {}
