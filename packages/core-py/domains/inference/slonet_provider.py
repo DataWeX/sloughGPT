@@ -239,7 +239,10 @@ def convert_hf_to_slonet(
         Dict mapping SloTransformer canonical names → weight arrays.
         Empty dict when param_map is provided (writes done in-place).
     """
+    import time as _time
     from domains.infrastructure.arch_config import build_arch
+
+    _t0 = _time.monotonic()
 
     # Auto-detect architecture
     if config is None:
@@ -249,11 +252,7 @@ def convert_hf_to_slonet(
         config=config,
         weight_keys=set(hf_state_dict.keys()),
     )
-
-    logger.info("convert_hf_to_slonet: arch=%s (norm=%s, pos=%s, act=%s, attn=%s, transpose=%s, fused=%s)",
-                arch.name, arch.norm, arch.positional, arch.activation, arch.attention,
-                arch.transpose_weights, param_map is not None,
-                extra={"tag": "INF"})
+    _t_arch = _time.monotonic()
 
     result = {} if param_map is None else None
     W = arch.weight_map
@@ -267,17 +266,44 @@ def convert_hf_to_slonet(
     # Build the full mapping: shared + FFN-specific
     arch_to_slonet = dict(_ARCH_TO_SLONET_SHARED)
     if arch.activation == "swiglu":
-        # SwiGLU: has separate gate_proj + up_proj → w1 + w3
         arch_to_slonet.update(_ARCH_TO_SLONET_SWIGLU)
     else:
-        # GELU: up_proj → w1, w3 synthesized as identity
         arch_to_slonet.update(_ARCH_TO_SLONET_GELU)
 
-    # LayerNorm has bias — include norm bias mappings (RMSNorm drops them via None)
     if arch.norm == "layer_norm":
         arch_to_slonet["layers.{i}.attn_norm.bias"] = "blocks.{i}.attn_norm.bias"
         arch_to_slonet["layers.{i}.ff_norm.bias"] = "blocks.{i}.ff_norm.bias"
         arch_to_slonet["final_norm.bias"] = "norm.bias"
+
+    # Pre-compute reverse mapping: HF key → (slo_target, canonical, layer_idx|None)
+    # Eliminates O(n_keys × n_mappings × n_layer) nested loop
+    hf_to_slo: Dict[str, Tuple[str, str, Optional[int]]] = {}
+    for canonical, slo_target in arch_to_slonet.items():
+        mapped_hf_key = W.get(canonical)
+        if mapped_hf_key is None:
+            continue
+        if slo_target is None:
+            # None targets: fused QKV, dropped bias, positional — handle via special paths
+            continue
+        if "{i}" in mapped_hf_key:
+            for i in range(n_layer):
+                concrete = mapped_hf_key.replace("{i}", str(i))
+                slo_key = slo_target.replace("{i}", str(i))
+                hf_to_slo[concrete] = (slo_key, canonical, i)
+        else:
+            hf_to_slo[mapped_hf_key] = (slo_target, canonical, None)
+
+    # Pre-compute fused QKV HF keys (weight + bias) for O(1) lookup
+    fused_qkv_hf_keys: set = set()
+    if has_fused_qkv:
+        for canonical in ["layers.{i}.qkv.weight", "layers.{i}.qkv.bias"]:
+            qkv_mapped = W.get(canonical, "")
+            if qkv_mapped:
+                fused_qkv_hf_keys.add(qkv_mapped.replace("{i}", ""))
+                for i in range(n_layer):
+                    fused_qkv_hf_keys.add(qkv_mapped.replace("{i}", str(i)))
+
+    _t_precomp = _time.monotonic()
 
     def _write_param(slo_key, w):
         """Write weight into model parameter or result dict."""
@@ -295,53 +321,27 @@ def convert_hf_to_slonet(
         elif result is not None:
             result[slo_key] = w
 
+    n_mapped = 0
     for hf_key, arr in hf_state_dict.items():
-        mapped = False
+        # Fast path: check pre-computed reverse mapping first (O(1) lookup)
+        if hf_key in hf_to_slo:
+            slo_key, canonical, _layer_idx = hf_to_slo[hf_key]
+            w = arr
+            if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
+                w = w.T
+            _write_param(slo_key, w)
+            n_mapped += 1
+            continue
 
-        for canonical, slo_target in arch_to_slonet.items():
-            if slo_target is None:
-                # Skip dropped keys (bias, fused QKV, positional)
-                if has_fused_qkv and "qkv" in canonical:
-                    # Handle fused QKV separately
-                    if hf_key == W.get(canonical, "").replace("{i}", "") or \
-                       any(hf_key == W.get(canonical, "").replace("{i}", str(i)) for i in range(n_layer)):
-                        fused = _split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict)
-                        for k, v in fused.items():
-                            _write_param(k, v)
-                        mapped = True
-                        break
-                continue
+        # Fused QKV path (weight + bias)
+        if has_fused_qkv and hf_key in fused_qkv_hf_keys:
+            fused = _split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict)
+            for k, v in fused.items():
+                _write_param(k, v)
+            n_mapped += 1
+            continue
 
-            # Resolve canonical → actual HF key via weight map
-            mapped_hf_key = W.get(canonical)
-            if mapped_hf_key is None:
-                continue
-
-            if "{i}" in mapped_hf_key:
-                # Per-layer key
-                for i in range(n_layer):
-                    concrete = mapped_hf_key.replace("{i}", str(i))
-                    if hf_key == concrete:
-                        slo_key = slo_target.replace("{i}", str(i))
-                        w = arr
-                        # Transpose if arch stores (in, out) but SloTransformer expects (out, in)
-                        # Embeddings and lm_head are NOT linear weights — skip transposition
-                        if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
-                            w = w.T
-                        _write_param(slo_key, w)
-                        mapped = True
-                        break
-            else:
-                # Global key (embed, final norm, lm_head)
-                if hf_key == mapped_hf_key:
-                    w = arr
-                    if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
-                        w = w.T  # pragma: no cover — no global 2D key outside NO_TRANSPOSE_KEYS
-                    _write_param(slo_target, w)
-                    mapped = True
-                    break
-
-        # Handle fused QKV for GPT-2 style (matched in the canonical None-branch above).
+    _t_main = _time.monotonic()
 
     # GELU: synthesize SwiGLU gate (w3) as identity — w3=identity means
     # w2(act(w1(x)) * w3(x)) = w2(act(w1(x)) * 1) = w2(act(w1(x)))
@@ -373,8 +373,17 @@ def convert_hf_to_slonet(
         if "lm_head.weight" not in result and "tok_emb.weight" in result:
             result["lm_head.weight"] = result["tok_emb.weight"]
 
+    _t_end = _time.monotonic()
     count = len(result) if result is not None else (len(param_map) if param_map else 0)
-    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s, fused=%s)", count, arch.name, param_map is not None, extra={"tag": "INF"})
+    logger.info(
+        "convert_hf_to_slonet: arch=%s norm=%s act=%s transpose=%s fused=%s "
+        "mapped=%d keys (arch=%.3fs precomp=%.3fs main=%.3fs synth=%.3fs total=%.3fs)",
+        arch.name, arch.norm, arch.activation, arch.transpose_weights,
+        param_map is not None, count,
+        _t_arch - _t0, _t_precomp - _t_arch, _t_main - _t_precomp,
+        _t_end - _t_main, _t_end - _t0,
+        extra={"tag": "INF"},
+    )
     return result if result is not None else {}
 
 
@@ -573,8 +582,8 @@ class SloNetChatProvider:
         )
         _t_model = _time.monotonic()
 
-        # Load weights directly from mmap (zero copy)
-        weights_dict = parser.get_weights_dict()
+        # Load weights from mmap (parallel for multi-core CPUs)
+        weights_dict = parser.get_weights_dict_parallel()
         _t_weights = _time.monotonic()
 
         # Fused convert+load: write directly into model parameters

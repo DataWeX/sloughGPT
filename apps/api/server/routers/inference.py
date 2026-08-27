@@ -1129,21 +1129,22 @@ class InferenceRouter:
                     logger.warning("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "result": "TIMEOUT"}})
                     frame = None
-                context_info = {
-                    "layers": [l.layer_type for l in frame.layers],
-                    "total_tokens": frame.total_tokens,
-                    "max_tokens": frame.max_tokens,
-                }
-                logger.debug("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD done layers=%d tokens=%d", corr_id,
-                    len(context_info.get("layers", [])), context_info.get("total_tokens", 0),
-                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "result": "DONE", "layers": context_info.get("layers", []), "tokens": context_info.get("total_tokens", 0)}})
-                if frame.system_prompt:
-                    for i, m in enumerate(provider_messages):
-                        if m["role"] == "system":
-                            provider_messages[i] = {"role": "system", "content": frame.system_prompt}
-                            break
-                    else:
-                        provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
+                if frame is not None:
+                    context_info = {
+                        "layers": [l.layer_type for l in frame.layers],
+                        "total_tokens": frame.total_tokens,
+                        "max_tokens": frame.max_tokens,
+                    }
+                    logger.debug("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD done layers=%d tokens=%d", corr_id,
+                        len(context_info.get("layers", [])), context_info.get("total_tokens", 0),
+                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "result": "DONE", "layers": context_info.get("layers", []), "tokens": context_info.get("total_tokens", 0)}})
+                    if frame.system_prompt:
+                        for i, m in enumerate(provider_messages):
+                            if m["role"] == "system":
+                                provider_messages[i] = {"role": "system", "content": frame.system_prompt}
+                                break
+                        else:
+                            provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
 
             # Production RAG: query for relevant context from ingested documents
             rag_context = ""

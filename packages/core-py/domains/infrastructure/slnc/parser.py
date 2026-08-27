@@ -18,6 +18,7 @@ import logging
 import mmap
 import os
 import struct
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -187,6 +188,30 @@ class SLNCParser:
     def get_weights_dict(self) -> Dict[str, np.ndarray]:
         """Get all weights as a dict (backward compatibility)."""
         return {name: self.get_tensor(name) for name in self._tensor_map}
+
+    def get_weights_dict_parallel(self, max_workers: Optional[int] = None) -> Dict[str, np.ndarray]:
+        """Get all weights as a dict using parallel tensor loading.
+
+        Numpy operations release the GIL, so a thread pool can load multiple
+        tensors concurrently. For models with many tensors (e.g. 0.5B+),
+        this can significantly reduce wall-clock load time on multi-core CPUs.
+
+        Args:
+            max_workers: Thread pool size. Defaults to min(32, os.cpu_count() + 4).
+
+        Returns:
+            Dict mapping tensor names → numpy arrays (copies from mmap).
+        """
+        names = list(self._tensor_map.keys())
+
+        def _load(name):
+            return name, self.get_tensor(name)
+
+        result = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            for name, arr in pool.map(lambda n: _load(n), names):
+                result[name] = arr
+        return result
 
     def release_file_pages(self) -> bool:
         """Discard resident file-backed pages back to the OS.

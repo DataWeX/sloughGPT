@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { trainingJobsController } from '@/lib/training-controller'
 import { useTrainingSession } from '@/hooks/useTrainingSession'
@@ -14,6 +14,8 @@ import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/components/training/formatDuration'
 import { TrainingLogCard } from '@/components/training/TrainingLogCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
+import { CheckpointManager } from '@/components/training/CheckpointManager'
+import { AutoTrainKpiGrid } from '@/components/training/AutoTrainKpiGrid'
 import { useApiReady } from '@/hooks/useLiveStatus'
 
 type InputMode = 'text' | 'dataset' | 'checkpoint'
@@ -112,76 +114,6 @@ export default function AutoTrainPage() {
     }
   }, [session, addToast])
 
-  const loadCheckpoint = useCallback(async (name: string) => {
-    try {
-      await trainingJobsController.loadCheckpoint(name)
-      addToast(`Loaded checkpoint: ${name}`, 'success')
-    } catch {
-      addToast('Could not load checkpoint', 'error')
-    }
-  }, [addToast])
-
-  const deleteCheckpoint = useCallback(async (name: string) => {
-    try {
-      await trainingJobsController.deleteCheckpoint(name)
-      addToast(`Deleted checkpoint: ${name}`, 'success')
-      void checkpoints.fetchCheckpoints()
-    } catch {
-      addToast('Could not delete checkpoint', 'error')
-    }
-  }, [addToast, checkpoints])
-
-  const [selectedCps, setSelectedCps] = useState<Set<string>>(new Set())
-  const [cpPage, setCpPage] = useState(0)
-  const CP_PAGE_SIZE = 10
-
-  const toggleCpSelect = useCallback((name: string) => {
-    setSelectedCps(prev => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name); else next.add(name)
-      return next
-    })
-  }, [])
-
-  const batchDeleteCheckpoints = useCallback(async () => {
-    if (selectedCps.size === 0) return
-    try {
-      const names = Array.from(selectedCps)
-      await trainingJobsController.deleteCheckpointsBatch(names)
-      addToast(`Deleted ${names.length} checkpoints`, 'success')
-      setSelectedCps(new Set())
-      void checkpoints.fetchCheckpoints()
-    } catch {
-      addToast('Batch delete failed', 'error')
-    }
-  }, [selectedCps, addToast, checkpoints])
-
-  const downloadCheckpoint = useCallback(async (name: string) => {
-    try {
-      const blob = await trainingJobsController.downloadCheckpoint(name)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = name; a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      addToast('Download failed', 'error')
-    }
-  }, [addToast])
-
-  const [checkpointInfo, setCheckpointInfo] = useState<Record<string, unknown> | null>(null)
-  const [checkpointInfoName, setCheckpointInfoName] = useState('')
-
-  const fetchCheckpointInfo = useCallback(async (name: string) => {
-    setCheckpointInfoName(name)
-    try {
-      const info = await trainingJobsController.getCheckpointInfo(name)
-      setCheckpointInfo(info)
-    } catch {
-      addToast('Could not load checkpoint info', 'error')
-      setCheckpointInfo(null)
-    }
-  }, [addToast])
-
   const tickRef = useRef<() => void>(() => {})
   tickRef.current = () => {
     if (!document.hidden) {
@@ -214,36 +146,13 @@ export default function AutoTrainPage() {
         </div>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Checkpoints</p>
-            <p className="text-base font-medium">{checkpoints.checkpoints.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Trained</p>
-            <p className="text-base font-medium">{completedCount}</p>
-          </CardContent>
-        </Card>
-        <Card role="status" aria-live="polite">
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Status</p>
-            <p className="text-base font-medium">
-              {trainingRunning ? 'Training' : 'Idle'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Current loss</p>
-            <p className="text-base font-medium font-mono">
-              {session.loss != null ? session.loss.toFixed(4) : '--'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <AutoTrainKpiGrid
+        checkpointCount={checkpoints.checkpoints.length}
+        completedCount={completedCount}
+        trainingRunning={trainingRunning}
+        loss={session.loss}
+        loading={false}
+      />
 
       <Card>
         <CardHeader className="pb-3">
@@ -381,94 +290,7 @@ export default function AutoTrainPage() {
 
       <TrainingLogCard trainingRunning={trainingRunning} />
 
-      {checkpoints.checkpoints.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Checkpoints ({checkpoints.checkpoints.length})</CardTitle>
-              <div className="flex gap-1">
-                {selectedCps.size > 0 && (
-                  <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={() => void batchDeleteCheckpoints()}>
-                    Delete {selectedCps.size}
-                  </Button>
-                )}
-                <Button size="sm" variant="ghost" className="text-xs" onClick={() => {
-                  if (selectedCps.size === checkpoints.checkpoints.length) setSelectedCps(new Set())
-                  else setSelectedCps(new Set(checkpoints.checkpoints.map(c => c.name)))
-                }}>
-                  {selectedCps.size === checkpoints.checkpoints.length ? 'Deselect all' : 'Select all'}
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {checkpoints.checkpoints.slice(cpPage * CP_PAGE_SIZE, (cpPage + 1) * CP_PAGE_SIZE).map(c => (
-                <div key={c.name} className={cn('flex items-center justify-between rounded border p-3 text-sm', selectedCps.has(c.name) && 'border-primary bg-primary/5')}>
-                  <div className="min-w-0 flex-1 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedCps.has(c.name)}
-                      onChange={() => toggleCpSelect(c.name)}
-                      aria-label={`Select checkpoint ${c.name}`}
-                      className="h-3.5 w-3.5 rounded border-border"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{c.name}</p>
-                    </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground">
-                      {c.loss != null && <span>Loss {c.loss.toFixed(4)}</span>}
-                      {c.steps != null && <span>{c.steps} steps</span>}
-                      {c.epochs != null && <span>{c.epochs} epochs</span>}
-                      {c.size_mb != null && <span>{c.size_mb.toFixed(1)} MB</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => void fetchCheckpointInfo(c.name)}>Info</Button>
-                    <Button size="sm" variant="ghost" onClick={() => void downloadCheckpoint(c.name)}>Download</Button>
-                    <Button size="sm" variant="ghost" onClick={() => loadCheckpoint(c.name)}>Load</Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteCheckpoint(c.name)}>Delete</Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {checkpoints.checkpoints.length > CP_PAGE_SIZE && (
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
-                <span className="text-xs text-muted-foreground">
-                  {cpPage * CP_PAGE_SIZE + 1}–{Math.min((cpPage + 1) * CP_PAGE_SIZE, checkpoints.checkpoints.length)} of {checkpoints.checkpoints.length}
-                </span>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="text-xs" disabled={cpPage === 0} onClick={() => setCpPage(p => p - 1)}>Prev</Button>
-                  <Button size="sm" variant="ghost" className="text-xs" disabled={(cpPage + 1) * CP_PAGE_SIZE >= checkpoints.checkpoints.length} onClick={() => setCpPage(p => p + 1)}>Next</Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {checkpointInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setCheckpointInfo(null)}>
-          <Card className="w-full max-w-lg max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Checkpoint: {checkpointInfoName}</CardTitle>
-                <Button size="sm" variant="ghost" onClick={() => setCheckpointInfo(null)}>Close</Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1.5 text-xs">
-                {Object.entries(checkpointInfo).map(([k, v]) => (
-                  <div key={k} className="flex justify-between border-b border-border/30 py-1">
-                    <span className="text-muted-foreground">{k}</span>
-                    <span className="font-mono text-right">{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <CheckpointManager checkpoints={checkpoints.checkpoints} addToast={addToast} onRefresh={() => void checkpoints.fetchCheckpoints()} />
     </PageContainer>
   )
 }
