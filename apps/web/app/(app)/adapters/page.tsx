@@ -147,7 +147,7 @@ export default function AdaptersPage() {
               ].map(s => (
                 <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">{s.label}</div>
-                  <div className="text-lg font-mono font-medium">{s.value}</div>
+                  <div className="text-base font-mono font-medium">{s.value}</div>
                 </div>
               ))}
             </div>

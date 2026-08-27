@@ -199,7 +199,7 @@ export default function BenchmarkPage() {
                 ].map(s => (
                   <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                     <div className="text-xs text-muted-foreground">{s.label}</div>
-                    <div className={cn('text-lg font-mono font-medium', s.color)}>{s.value}</div>
+                    <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
                   </div>
                 ))}
               </div>
@@ -272,15 +272,15 @@ export default function BenchmarkPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Perplexity</div>
-                  <div className="text-lg font-mono font-medium">{pplxResult.perplexity}</div>
+                  <div className="text-base font-mono font-medium">{pplxResult.perplexity}</div>
                 </div>
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Loss</div>
-                  <div className="text-lg font-mono font-medium">{pplxResult.loss}</div>
+                  <div className="text-base font-mono font-medium">{pplxResult.loss}</div>
                 </div>
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Tokens</div>
-                  <div className="text-lg font-mono font-medium">{pplxResult.tokens}</div>
+                  <div className="text-base font-mono font-medium">{pplxResult.tokens}</div>
                 </div>
               </div>
             )}

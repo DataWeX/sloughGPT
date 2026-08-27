@@ -105,12 +105,12 @@ export default function WorldPage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats?.components.map(c => (
             <div key={c} className="rounded-md bg-muted/30 p-3 text-center">
-              <div className="text-[10px] text-muted-foreground">Component</div>
+              <div className="text-xs text-muted-foreground">Component</div>
               <div className="text-xs font-medium">{c}</div>
             </div>
           ))}
           <div className="rounded-md bg-muted/30 p-3 text-center">
-            <div className="text-[10px] text-muted-foreground">Ticks Run</div>
+            <div className="text-xs text-muted-foreground">Ticks Run</div>
             <div className="text-xs font-medium">{tickCount}</div>
           </div>
         </div>
@@ -176,7 +176,7 @@ export default function WorldPage() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {renderResult.tensorKeys.map(k => (
                   <div key={k} className="rounded bg-muted/30 p-2">
-                    <div className="text-[10px] text-muted-foreground">{k}</div>
+                    <div className="text-xs text-muted-foreground">{k}</div>
                     <div className="text-xs font-mono">{String(renderResult.shapes[k])}</div>
                   </div>
                 ))}
@@ -193,12 +193,12 @@ export default function WorldPage() {
             <CardContent>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div className="rounded bg-muted/30 p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground">Tick</div>
-                  <div className="text-lg font-mono font-medium">{tickResult.tick}</div>
+                  <div className="text-xs text-muted-foreground">Tick</div>
+                  <div className="text-base font-mono font-medium">{tickResult.tick}</div>
                 </div>
                 <div className="rounded bg-muted/30 p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground">Babies</div>
-                  <div className="text-lg font-mono font-medium">{tickResult.babies}</div>
+                  <div className="text-xs text-muted-foreground">Babies</div>
+                  <div className="text-base font-mono font-medium">{tickResult.babies}</div>
                 </div>
               </div>
             </CardContent>
@@ -213,7 +213,7 @@ export default function WorldPage() {
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded bg-muted/30 p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground">Embedding Shape</div>
+                  <div className="text-xs text-muted-foreground">Embedding Shape</div>
                   <div className="text-xs font-mono">{neuralResult.embedding_shape ? String(neuralResult.embedding_shape) : 'N/A'}</div>
                 </div>
               </div>

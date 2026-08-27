@@ -159,19 +159,19 @@ export default function WorkflowPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-md bg-muted/30 p-3 text-center">
                 <div className="text-xs text-muted-foreground">Feedback Recorded</div>
-                <div className="text-lg font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
+                <div className="text-base font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
               </div>
               <div className="rounded-md bg-muted/30 p-3 text-center">
                 <div className="text-xs text-muted-foreground">Auto-train Steps</div>
-                <div className="text-lg font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
+                <div className="text-base font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
               </div>
               <div className="rounded-md bg-muted/30 p-3 text-center">
                 <div className="text-xs text-muted-foreground">Workflow Runs</div>
-                <div className="text-lg font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
+                <div className="text-base font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
               </div>
               <div className="rounded-md bg-muted/30 p-3 text-center">
                 <div className="text-xs text-muted-foreground">DPO Train Steps</div>
-                <div className="text-lg font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
+                <div className="text-base font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
               </div>
             </div>
           </CardContent>

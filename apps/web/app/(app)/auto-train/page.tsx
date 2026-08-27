@@ -218,19 +218,19 @@ export default function AutoTrainPage() {
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Checkpoints</p>
-            <p className="text-lg font-medium">{checkpoints.checkpoints.length}</p>
+            <p className="text-base font-medium">{checkpoints.checkpoints.length}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Trained</p>
-            <p className="text-lg font-medium">{completedCount}</p>
+            <p className="text-base font-medium">{completedCount}</p>
           </CardContent>
         </Card>
         <Card role="status" aria-live="polite">
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Status</p>
-            <p className="text-lg font-medium">
+            <p className="text-base font-medium">
               {trainingRunning ? 'Training' : 'Idle'}
             </p>
           </CardContent>
@@ -238,7 +238,7 @@ export default function AutoTrainPage() {
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Current loss</p>
-            <p className="text-lg font-medium font-mono">
+            <p className="text-base font-medium font-mono">
               {session.loss != null ? session.loss.toFixed(4) : '--'}
             </p>
           </CardContent>
@@ -388,11 +388,11 @@ export default function AutoTrainPage() {
               <CardTitle className="text-base">Checkpoints ({checkpoints.checkpoints.length})</CardTitle>
               <div className="flex gap-1">
                 {selectedCps.size > 0 && (
-                  <Button size="sm" variant="ghost" className="text-destructive text-[10px]" onClick={() => void batchDeleteCheckpoints()}>
+                  <Button size="sm" variant="ghost" className="text-destructive text-xs" onClick={() => void batchDeleteCheckpoints()}>
                     Delete {selectedCps.size}
                   </Button>
                 )}
-                <Button size="sm" variant="ghost" className="text-[10px]" onClick={() => {
+                <Button size="sm" variant="ghost" className="text-xs" onClick={() => {
                   if (selectedCps.size === checkpoints.checkpoints.length) setSelectedCps(new Set())
                   else setSelectedCps(new Set(checkpoints.checkpoints.map(c => c.name)))
                 }}>
@@ -434,12 +434,12 @@ export default function AutoTrainPage() {
             </div>
             {checkpoints.checkpoints.length > CP_PAGE_SIZE && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
-                <span className="text-[10px] text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   {cpPage * CP_PAGE_SIZE + 1}–{Math.min((cpPage + 1) * CP_PAGE_SIZE, checkpoints.checkpoints.length)} of {checkpoints.checkpoints.length}
                 </span>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={cpPage === 0} onClick={() => setCpPage(p => p - 1)}>Prev</Button>
-                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={(cpPage + 1) * CP_PAGE_SIZE >= checkpoints.checkpoints.length} onClick={() => setCpPage(p => p + 1)}>Next</Button>
+                  <Button size="sm" variant="ghost" className="text-xs" disabled={cpPage === 0} onClick={() => setCpPage(p => p - 1)}>Prev</Button>
+                  <Button size="sm" variant="ghost" className="text-xs" disabled={(cpPage + 1) * CP_PAGE_SIZE >= checkpoints.checkpoints.length} onClick={() => setCpPage(p => p + 1)}>Next</Button>
                 </div>
               </div>
             )}

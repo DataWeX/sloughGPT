@@ -99,7 +99,7 @@ export default function SelfTrainPage() {
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Status</p>
-            <p className="text-lg font-medium">
+            <p className="text-base font-medium">
               {loading ? '...' : status?.status === 'running' ? 'Running' : status?.status === 'exited' ? 'Exited' : 'Not started'}
             </p>
           </CardContent>
@@ -107,19 +107,19 @@ export default function SelfTrainPage() {
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">PID</p>
-            <p className="text-lg font-medium font-mono">{status?.pid ?? '--'}</p>
+            <p className="text-base font-medium font-mono">{status?.pid ?? '--'}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Exit code</p>
-            <p className="text-lg font-medium">{status?.returncode ?? '--'}</p>
+            <p className="text-base font-medium">{status?.returncode ?? '--'}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">History lines</p>
-            <p className="text-lg font-medium">{status?.history?.length ?? 0}</p>
+            <p className="text-base font-medium">{status?.history?.length ?? 0}</p>
           </CardContent>
         </Card>
       </div>

@@ -178,7 +178,7 @@ export default function FeedbackPage() {
                   ].map(s => (
                     <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={cn('text-lg font-mono font-medium', s.color)}>{s.value}</div>
+                      <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
                     </div>
                   ))}
                 </div>
@@ -316,7 +316,7 @@ export default function FeedbackPage() {
                   ].map(s => (
                     <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={cn('text-lg font-mono font-medium', s.color ?? '')}>{s.value}</div>
+                      <div className={cn('text-base font-mono font-medium', s.color ?? '')}>{s.value}</div>
                     </div>
                   ))}
                 </div>

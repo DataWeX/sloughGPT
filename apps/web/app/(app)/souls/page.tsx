@@ -430,10 +430,10 @@ export default function SoulsPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-medium truncate">{soul.name}</span>
                             {currentSoul === soul.name && (
-                              <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">active</span>
+                              <span className="text-xs font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">active</span>
                             )}
                             {soul.version && (
-                              <span className="text-[10px] font-mono text-muted-foreground">v{soul.version}</span>
+                              <span className="text-xs font-mono text-muted-foreground">v{soul.version}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
@@ -443,16 +443,16 @@ export default function SoulsPage() {
                             {soul.epochs_trained != null && soul.epochs_trained > 0 && <span>{soul.epochs_trained} epochs</span>}
                             {soul.final_val_loss != null && <span>val {soul.final_val_loss.toFixed(3)}</span>}
                             {soul.training_dataset && (
-                              <span className="font-mono text-[10px]">{sourceDir(soul.training_dataset)}</span>
+                              <span className="font-mono text-xs">{sourceDir(soul.training_dataset)}</span>
                             )}
                           </div>
                           {soul.traits && soul.traits.length > 0 && (
                             <div className="flex gap-1 mt-1.5 flex-wrap">
                               {soul.traits.slice(0, 5).map(trait => (
-                                <span key={trait} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{trait}</span>
+                                <span key={trait} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{trait}</span>
                               ))}
                               {soul.traits.length > 5 && (
-                                <span className="text-[10px] text-muted-foreground">+{soul.traits.length - 5}</span>
+                                <span className="text-xs text-muted-foreground">+{soul.traits.length - 5}</span>
                               )}
                             </div>
                           )}
@@ -523,15 +523,15 @@ export default function SoulsPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{cp.name}</span>
                           {cp.verdict && (
-                            <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', verdictBadge(cp.verdict).className)}>
+                            <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', verdictBadge(cp.verdict).className)}>
                               {verdictBadge(cp.verdict).label}
                             </span>
                           )}
                           {cp.is_loaded && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">loaded</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">loaded</span>
                           )}
                           {cp.model_type && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{cp.model_type}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{cp.model_type}</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
@@ -601,7 +601,7 @@ export default function SoulsPage() {
                           style={{ width: `${Math.max(0, Math.min(100, mode.confidence * 100))}%` }}
                         />
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {(mode.confidence * 100).toFixed(0)}% confidence
                       </div>
                     </div>
@@ -616,7 +616,7 @@ export default function SoulsPage() {
               <div className="flex items-center gap-2">
                 <CardTitle className="text-base">Trait Weights</CardTitle>
                 {weightsDirty && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium">unsaved</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning font-medium">unsaved</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -744,7 +744,7 @@ export default function SoulsPage() {
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{soul.name}</span>
                               {currentSoul === soul.name && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">active</span>
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">active</span>
                               )}
                             </div>
                             <div className="text-xs text-muted-foreground">
@@ -756,7 +756,7 @@ export default function SoulsPage() {
                             <div className={cn('text-sm font-mono font-medium', traitColor(avgPersonality))}>
                               {(avgPersonality * 100).toFixed(0)}%
                             </div>
-                            <div className="text-[10px] text-muted-foreground">avg personality</div>
+                            <div className="text-xs text-muted-foreground">avg personality</div>
                           </div>
                         </div>
                       )
@@ -794,7 +794,7 @@ export default function SoulsPage() {
                           ))
                         })()}
                       </div>
-                      <div className="flex gap-3 mt-2 text-[10px] text-muted-foreground">
+                      <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
                         {souls.map(soul => (
                           <span key={soul.name} className="flex items-center gap-1">
                             <span className="w-2 h-2 rounded-full bg-primary/60" />
@@ -811,20 +811,20 @@ export default function SoulsPage() {
                       <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Checkpoint Summary</div>
                       <div className="grid grid-cols-3 gap-3 text-sm">
                         <div className="rounded-md border border-border/60 p-2 text-center">
-                          <div className="text-lg font-bold">{checkpoints.length}</div>
-                          <div className="text-[10px] text-muted-foreground">Total</div>
+                          <div className="text-base font-bold">{checkpoints.length}</div>
+                          <div className="text-xs text-muted-foreground">Total</div>
                         </div>
                         <div className="rounded-md border border-border/60 p-2 text-center">
-                          <div className="text-lg font-bold text-success">
+                          <div className="text-base font-bold text-success">
                             {checkpoints.filter(c => c.verdict === 'improved').length}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">Improved</div>
+                          <div className="text-xs text-muted-foreground">Improved</div>
                         </div>
                         <div className="rounded-md border border-border/60 p-2 text-center">
-                          <div className="text-lg font-bold text-destructive">
+                          <div className="text-base font-bold text-destructive">
                             {checkpoints.filter(c => c.verdict === 'degraded').length}
                           </div>
-                          <div className="text-[10px] text-muted-foreground">Degraded</div>
+                          <div className="text-xs text-muted-foreground">Degraded</div>
                         </div>
                       </div>
                     </div>
@@ -864,7 +864,7 @@ export default function SoulsPage() {
                     {(detailSoul.epochs_trained != null && detailSoul.epochs_trained > 0) && <div><span className="text-muted-foreground">Epochs:</span> <span className="font-medium">{detailSoul.epochs_trained}</span></div>}
                     {detailSoul.final_train_loss != null && <div><span className="text-muted-foreground">Train loss:</span> <span className="font-medium">{detailSoul.final_train_loss.toFixed(4)}</span></div>}
                     {detailSoul.final_val_loss != null && <div><span className="text-muted-foreground">Val loss:</span> <span className="font-medium">{detailSoul.final_val_loss.toFixed(4)}</span></div>}
-                    {detailSoul.training_dataset && <div className="col-span-2"><span className="text-muted-foreground">Dataset:</span> <span className="font-medium font-mono text-[10px]">{detailSoul.training_dataset.split('/').pop()}</span></div>}
+                    {detailSoul.training_dataset && <div className="col-span-2"><span className="text-muted-foreground">Dataset:</span> <span className="font-medium font-mono text-xs">{detailSoul.training_dataset.split('/').pop()}</span></div>}
                   </div>
                 </div>
               )}
@@ -951,7 +951,7 @@ export default function SoulsPage() {
 
               {/* Source Path */}
               {detailSoul.path && (
-                <div className="text-[10px] text-muted-foreground font-mono truncate pt-1 border-t border-border/30">
+                <div className="text-xs text-muted-foreground font-mono truncate pt-1 border-t border-border/30">
                   {detailSoul.path}
                 </div>
               )}
@@ -1005,7 +1005,7 @@ export default function SoulsPage() {
                     </div>
                   )
                 })}
-                <div className="flex gap-4 text-[10px] text-muted-foreground pt-2 border-t border-border/30">
+                <div className="flex gap-4 text-xs text-muted-foreground pt-2 border-t border-border/30">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary/40" /> {activeSoul.name}</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent/60" /> {compareSoul.name}</span>
                 </div>
@@ -1022,7 +1022,7 @@ export default function SoulsPage() {
             <DialogTitle className="flex items-center gap-2">
               {checkpointDetail?.name}
               {checkpointDetail?.verdict && (
-                <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', verdictBadge(checkpointDetail.verdict).className)}>
+                <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', verdictBadge(checkpointDetail.verdict).className)}>
                   {verdictBadge(checkpointDetail.verdict).label}
                 </span>
               )}

@@ -480,7 +480,7 @@ export default function KnowledgePage() {
               style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
             />
           </div>
-          <span className="text-[10px] text-muted-foreground font-mono">
+          <span className="text-xs text-muted-foreground font-mono">
             {importProgress.current}/{importProgress.total}
           </span>
         </div>
@@ -596,9 +596,9 @@ export default function KnowledgePage() {
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Memory Training</p>
                   {adapterStatus.adapter_exists ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Ready</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">Ready</span>
                   ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Not trained</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">Not trained</span>
                   )}
                 </div>
                 <Button
@@ -632,7 +632,7 @@ export default function KnowledgePage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Deep Memory</p>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-success/15 text-success font-medium">
                     {ragStats.total_chunks} pieces
                   </span>
                 </div>
@@ -700,7 +700,7 @@ export default function KnowledgePage() {
         {topics.length > 0 && (
           <Card>
             <CardContent className="p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-2">What we talk about</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">What we talk about</p>
               <div className="space-y-1.5">
                 {topics.slice(0, 8).map(t => {
                   const pct = stats ? Math.round((t.count / stats.total_items) * 100) : 0
@@ -719,7 +719,7 @@ export default function KnowledgePage() {
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="text-[10px] text-muted-foreground w-8 text-right">{t.count}</span>
+                      <span className="text-xs text-muted-foreground w-8 text-right">{t.count}</span>
                     </div>
                   )
                 })}
@@ -733,14 +733,14 @@ export default function KnowledgePage() {
             <Chip
               label={`All (${items.length})`}
               onClick={() => setActiveTopic(null)}
-              className={cn('text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors', activeTopic === null ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80')}
+              className={cn('text-xs px-2 py-0.5 rounded-full cursor-pointer transition-colors', activeTopic === null ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80')}
             />
             {topics.map(t => (
               <Chip
                 key={t.name}
                 label={`${t.name} (${t.count})`}
                 onClick={() => setActiveTopic(activeTopic === t.name ? null : t.name)}
-                className={cn('text-[10px] px-2 py-0.5 rounded-full cursor-pointer transition-colors', activeTopic === t.name ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80')}
+                className={cn('text-xs px-2 py-0.5 rounded-full cursor-pointer transition-colors', activeTopic === t.name ? 'bg-primary/15 text-primary border-primary/30' : 'bg-muted text-muted-foreground border-border/40 hover:bg-muted/80')}
               />
             ))}
           </div>
@@ -805,7 +805,7 @@ export default function KnowledgePage() {
                               aria-label="Edit knowledge content"
                             />
                             {editErrors.content && (
-                              <p id="edit-content-error" className="text-[10px] text-destructive mt-1" role="alert">{editErrors.content}</p>
+                              <p id="edit-content-error" className="text-xs text-destructive mt-1" role="alert">{editErrors.content}</p>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
@@ -831,12 +831,12 @@ export default function KnowledgePage() {
                           </p>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                             {item.topic && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
+                              <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
                                 {item.topic}
                               </span>
                             )}
                             {item.source && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
+                              <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
                                 {item.source}
                               </span>
                             )}
@@ -852,7 +852,7 @@ export default function KnowledgePage() {
                                   aria-label="Importance value"
                                   className="w-16 h-1 accent-primary"
                                 />
-                                <span className="text-[10px] font-mono w-6 text-right">{importanceValue.toFixed(1)}</span>
+                                <span className="text-xs font-mono w-6 text-right">{importanceValue.toFixed(1)}</span>
                                 <button type="button" onClick={() => handleSaveImportance(item.id)} aria-label="Save importance" className="text-primary hover:text-primary/80">
                                   <IconCheck className="h-3 w-3" />
                                 </button>
@@ -864,12 +864,12 @@ export default function KnowledgePage() {
                               <button
                                 type="button"
                                 onClick={() => { setEditingImportanceId(item.id); setImportanceValue(item.importance) }}
-                                className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
+                                className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer"
                               >
                                 importance: {item.importance.toFixed(1)}
                               </button>
                             )}
-                            <span className="text-[10px] text-muted-foreground/50">
+                            <span className="text-xs text-muted-foreground/50">
                               {new Date(item.timestamp * MS_PER_SECOND).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </div>
@@ -963,7 +963,7 @@ export default function KnowledgePage() {
                     key={t.name}
                     type="button"
                     onClick={() => setBulkTopic(t.name)}
-                    className="text-[10px] px-2 py-0.5 rounded-full border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
+                    className="text-xs px-2 py-0.5 rounded-full border border-border/40 text-muted-foreground hover:bg-muted/50 transition-colors"
                   >
                     {t.name}
                   </button>
@@ -1005,7 +1005,7 @@ export default function KnowledgePage() {
                   aria-label="New knowledge content"
                 />
                 {addErrors.content && (
-                  <p id="add-content-error" className="text-[10px] text-destructive mt-1" role="alert">{addErrors.content}</p>
+                  <p id="add-content-error" className="text-xs text-destructive mt-1" role="alert">{addErrors.content}</p>
                 )}
               </div>
               <div className="flex items-center gap-2">

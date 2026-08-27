@@ -168,7 +168,7 @@ export default function DocstorePage() {
           >
             <span className="block truncate">{c}</span>
             {collectionMeta[c] != null && (
-              <span className="text-[10px] text-muted-foreground">{collectionMeta[c]}</span>
+              <span className="text-xs text-muted-foreground">{collectionMeta[c]}</span>
             )}
           </button>
         ))}

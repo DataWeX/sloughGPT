@@ -268,8 +268,8 @@ export default function KbPage() {
               { label: 'Sources', value: Object.keys(stats.sources).length },
             ].map(s => (
               <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-[10px] text-muted-foreground">{s.label}</div>
-                <div className="text-lg font-mono font-medium">{s.value}</div>
+                <div className="text-xs text-muted-foreground">{s.label}</div>
+                <div className="text-base font-mono font-medium">{s.value}</div>
               </div>
             ))}
           </div>
@@ -294,7 +294,7 @@ export default function KbPage() {
               <button
                 type="button"
                 onClick={() => { setSelectedTopic(null); setPage(0) }}
-                className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors', selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
+                className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors', selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
               >
                 All
               </button>
@@ -303,7 +303,7 @@ export default function KbPage() {
                   key={t.name}
                   type="button"
                   onClick={() => { setSelectedTopic(t.name); setPage(0) }}
-                  className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors', selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
+                  className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors', selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
                 >
                   {t.name} ({t.count})
                 </button>
@@ -336,16 +336,16 @@ export default function KbPage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs">{item.content.slice(0, 200)}{item.content.length > 200 ? '...' : ''}</p>
                           <div className="mt-1.5 flex gap-2">
-                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{item.topic}</span>
-                            <span className="text-[10px] text-muted-foreground">{item.source}</span>
-                            <span className="text-[10px] text-muted-foreground">{item.importance.toFixed(1)} importance</span>
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{item.topic}</span>
+                            <span className="text-xs text-muted-foreground">{item.source}</span>
+                            <span className="text-xs text-muted-foreground">{item.importance.toFixed(1)} importance</span>
                           </div>
                         </div>
                         <div className="flex gap-1">
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-1.5 text-[10px]"
+                            className="h-6 px-1.5 text-xs"
                             onClick={() => void handleRelated(item.id)}
                           >
                             {relatedLoading === item.id ? '...' : 'Related'}
@@ -353,7 +353,7 @@ export default function KbPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-1.5 text-[10px]"
+                            className="h-6 px-1.5 text-xs"
                             onClick={() => { setEditingItem(item); setEditContent(item.content); setEditTopic(item.topic) }}
                           >
                             Edit
@@ -361,7 +361,7 @@ export default function KbPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-1.5 text-[10px] text-destructive"
+                            className="h-6 px-1.5 text-xs text-destructive"
                             onClick={() => void handleDelete(item.id)}
                           >
                             Delete
@@ -378,14 +378,14 @@ export default function KbPage() {
               <div className="rounded border border-border/50 bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-muted-foreground">Related items ({relatedItems.length})</p>
-                  <Button size="sm" variant="ghost" className="text-[10px] h-5" onClick={() => { setRelatedItems([]); setRelatedLoading(null) }}>Clear</Button>
+                  <Button size="sm" variant="ghost" className="text-xs h-5" onClick={() => { setRelatedItems([]); setRelatedLoading(null) }}>Clear</Button>
                 </div>
                 {relatedItems.map(ri => (
                   <div key={ri.id} className="text-xs space-y-0.5">
                     <p className="text-foreground/80">{ri.content.slice(0, 150)}{ri.content.length > 150 ? '...' : ''}</p>
                     <div className="flex gap-2">
-                      <span className="text-[10px] text-primary">{ri.topic}</span>
-                      <span className="text-[10px] text-muted-foreground">{ri.source}</span>
+                      <span className="text-xs text-primary">{ri.topic}</span>
+                      <span className="text-xs text-muted-foreground">{ri.source}</span>
                     </div>
                   </div>
                 ))}
@@ -415,7 +415,7 @@ export default function KbPage() {
                 <div className="space-y-2">
                   <Label className="text-xs">Topic</Label>
                   <Input value={newTopic} onChange={e => setNewTopic(e.target.value)} className="h-8 text-xs" />
-                  {suggestResult && <p className="text-[10px] text-muted-foreground">Suggested: {suggestResult}</p>}
+                  {suggestResult && <p className="text-xs text-muted-foreground">Suggested: {suggestResult}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="importance-slider" className="text-xs">Importance ({newImportance.toFixed(1)})</Label>
@@ -488,8 +488,8 @@ export default function KbPage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs">{item.content.slice(0, 300)}{item.content.length > 300 ? '...' : ''}</p>
                           <div className="mt-1.5 flex gap-2">
-                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{item.topic}</span>
-                            <span className="text-[10px] text-muted-foreground">Score: {item.score.toFixed(3)}</span>
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{item.topic}</span>
+                            <span className="text-xs text-muted-foreground">Score: {item.score.toFixed(3)}</span>
                           </div>
                         </div>
                       </div>

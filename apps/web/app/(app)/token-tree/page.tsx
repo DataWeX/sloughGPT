@@ -237,7 +237,7 @@ export default function TokenTreePage() {
               { label: 'Embed Dim', value: stats.embed_dim },
             ].map(s => (
               <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                <div className="text-xs text-muted-foreground">{s.label}</div>
                 <div className="text-sm font-mono font-medium">{s.value}</div>
               </div>
             ))}
@@ -301,8 +301,8 @@ export default function TokenTreePage() {
                         <td className="py-1 font-mono">{e.token}</td>
                         <td className="py-1">{e.freq}</td>
                         <td className="py-1">
-                          {e.is_special && <span className="rounded bg-yellow-500/10 px-1 py-0.5 text-[10px] text-yellow-600">special</span>}
-                          {e.is_merged && <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[10px] text-blue-600">merged</span>}
+                          {e.is_special && <span className="rounded bg-yellow-500/10 px-1 py-0.5 text-xs text-yellow-600">special</span>}
+                          {e.is_merged && <span className="rounded bg-blue-500/10 px-1 py-0.5 text-xs text-blue-600">merged</span>}
                         </td>
                       </tr>
                     ))}
@@ -373,13 +373,13 @@ export default function TokenTreePage() {
                     {similarResult.neighbors.map(n => (
                       <div key={n.id} className="flex items-center gap-3 rounded bg-muted/30 px-3 py-2">
                         <span className="font-mono text-xs">{n.token}</span>
-                        <span className="text-[10px] text-muted-foreground">ID: {n.id}</span>
+                        <span className="text-xs text-muted-foreground">ID: {n.id}</span>
                         <div className="flex-1">
                           <div className="h-1.5 rounded-full bg-muted">
                             <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, n.score * 100)}%` }} />
                           </div>
                         </div>
-                        <span className="font-mono text-[10px] text-muted-foreground">{n.score.toFixed(4)}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{n.score.toFixed(4)}</span>
                       </div>
                     ))}
                   </div>
@@ -403,15 +403,15 @@ export default function TokenTreePage() {
                 <div className="space-y-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-[10px] text-muted-foreground">Token</div>
+                      <div className="text-xs text-muted-foreground">Token</div>
                       <div className="text-xs font-mono font-medium">{embedResult.token}</div>
                     </div>
                     <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-[10px] text-muted-foreground">Dimension</div>
+                      <div className="text-xs text-muted-foreground">Dimension</div>
                       <div className="text-xs font-mono font-medium">{embedResult.dim}</div>
                     </div>
                     <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-[10px] text-muted-foreground">Norm</div>
+                      <div className="text-xs text-muted-foreground">Norm</div>
                       <div className="text-xs font-mono font-medium">{embedResult.norm.toFixed(4)}</div>
                     </div>
                   </div>
@@ -425,7 +425,7 @@ export default function TokenTreePage() {
                   </div>
                   <div className="grid grid-cols-2 gap-1">
                     {embedResult.top.map(([val, idx], i) => (
-                      <div key={i} className="flex items-center gap-1 text-[10px]">
+                      <div key={i} className="flex items-center gap-1 text-xs">
                         <span className="text-muted-foreground">dim {idx}:</span>
                         <span className="font-mono">{val.toFixed(4)}</span>
                       </div>
@@ -455,10 +455,10 @@ export default function TokenTreePage() {
                     <div key={t.name} className="flex items-center gap-3 rounded bg-muted/30 px-3 py-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium">{t.name}</div>
-                        <div className="text-[10px] text-muted-foreground">{t.vocab_size} vocab, {t.num_merges} merges</div>
+                        <div className="text-xs text-muted-foreground">{t.vocab_size} vocab, {t.num_merges} merges</div>
                       </div>
-                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px]" onClick={() => void handleLoad(t.name)}>Load</Button>
-                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] text-destructive" onClick={() => void handleDeleteTree(t.name)}>Delete</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => void handleLoad(t.name)}>Load</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs text-destructive" onClick={() => void handleDeleteTree(t.name)}>Delete</Button>
                     </div>
                   ))}
                 </div>
@@ -475,27 +475,27 @@ export default function TokenTreePage() {
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Matrix Shape</div>
+                  <div className="text-xs text-muted-foreground">Matrix Shape</div>
                   <div className="text-xs font-mono">{matrixResult.matrix ? `${matrixResult.matrix[0]}×${matrixResult.matrix[1]}` : 'N/A'}</div>
                 </div>
                 <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Dead Tokens</div>
+                  <div className="text-xs text-muted-foreground">Dead Tokens</div>
                   <div className="text-xs font-mono">{matrixResult.dead_tokens}</div>
                 </div>
                 <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Live Tokens</div>
+                  <div className="text-xs text-muted-foreground">Live Tokens</div>
                   <div className="text-xs font-mono">{matrixResult.live_tokens}</div>
                 </div>
                 <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Norm Range</div>
+                  <div className="text-xs text-muted-foreground">Norm Range</div>
                   <div className="text-xs font-mono">{matrixResult.norm_min.toFixed(3)}–{matrixResult.norm_max.toFixed(3)}</div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">Most Energetic</p>
+                  <p className="text-xs text-muted-foreground mb-1">Most Energetic</p>
                   {matrixResult.most_energetic.map(([token, id, norm], i) => (
-                    <div key={i} className="flex items-center gap-2 text-[10px]">
+                    <div key={i} className="flex items-center gap-2 text-xs">
                       <span className="font-mono">{token}</span>
                       <span className="text-muted-foreground">ID:{id}</span>
                       <span className="font-mono text-primary">{norm.toFixed(3)}</span>
@@ -503,9 +503,9 @@ export default function TokenTreePage() {
                   ))}
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">Least Energetic</p>
+                  <p className="text-xs text-muted-foreground mb-1">Least Energetic</p>
                   {matrixResult.least_energetic.map(([token, id, norm], i) => (
-                    <div key={i} className="flex items-center gap-2 text-[10px]">
+                    <div key={i} className="flex items-center gap-2 text-xs">
                       <span className="font-mono">{token}</span>
                       <span className="text-muted-foreground">ID:{id}</span>
                       <span className="font-mono text-muted-foreground">{norm.toFixed(3)}</span>
@@ -548,28 +548,28 @@ export default function TokenTreePage() {
                       { label: 'Only B Merges', value: compareResult.only_b_merges },
                     ].map(s => (
                       <div key={s.label} className="rounded bg-muted/30 p-2 text-center">
-                        <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                        <div className="text-xs text-muted-foreground">{s.label}</div>
                         <div className="text-xs font-mono font-medium">{s.value}</div>
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <p className="text-[10px] text-muted-foreground mb-1">Shared</p>
+                      <p className="text-xs text-muted-foreground mb-1">Shared</p>
                       {compareResult.shared_examples.map(([t, c], i) => (
-                        <div key={i} className="text-[10px] font-mono">{t} ({c})</div>
+                        <div key={i} className="text-xs font-mono">{t} ({c})</div>
                       ))}
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground mb-1">Only {compareResult.a.name}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Only {compareResult.a.name}</p>
                       {compareResult.only_a_examples.map(([t, c], i) => (
-                        <div key={i} className="text-[10px] font-mono">{t} ({c})</div>
+                        <div key={i} className="text-xs font-mono">{t} ({c})</div>
                       ))}
                     </div>
                     <div>
-                      <p className="text-[10px] text-muted-foreground mb-1">Only {compareResult.b.name}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Only {compareResult.b.name}</p>
                       {compareResult.only_b_examples.map(([t, c], i) => (
-                        <div key={i} className="text-[10px] font-mono">{t} ({c})</div>
+                        <div key={i} className="text-xs font-mono">{t} ({c})</div>
                       ))}
                     </div>
                   </div>

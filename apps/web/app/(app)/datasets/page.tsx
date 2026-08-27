@@ -290,19 +290,19 @@ export default function DatasetsPage() {
                     <p className="text-sm font-medium truncate">{d.name}</p>
                     {d.preview ? (
                       <>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {d.preview.total_samples} samples · {d.preview.total_chars.toLocaleString()} chars
                         </div>
                         <div className="space-y-1">
                           {d.preview.samples.slice(0, 2).map((s, i) => (
-                            <pre key={i} className="text-[10px] bg-muted/30 rounded p-1.5 overflow-x-auto max-h-16 font-mono whitespace-pre-wrap">
+                            <pre key={i} className="text-xs bg-muted/30 rounded p-1.5 overflow-x-auto max-h-16 font-mono whitespace-pre-wrap">
                               {s.content.slice(0, 150)}{s.content.length > 150 ? '…' : ''}
                             </pre>
                           ))}
                         </div>
                       </>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground">No preview</p>
+                      <p className="text-xs text-muted-foreground">No preview</p>
                     )}
                   </div>
                 ))}
@@ -347,22 +347,22 @@ export default function DatasetsPage() {
                       <p className="text-sm font-medium truncate">{ds.name}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {ds.source && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                             {ds.source}
                           </span>
                         )}
                         {ds.type && ds.type !== 'text' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                             {ds.type}
                           </span>
                         )}
                         {ds.vlm_metadata && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
                             VLM · {ds.vlm_metadata.image_count} images
                           </span>
                         )}
                         {ds.tags && ds.tags.length > 0 && ds.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
+                          <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
                             {tag}
                           </span>
                         ))}
@@ -370,13 +370,13 @@ export default function DatasetsPage() {
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
                         <span>{formatBytes(ds.size)}</span>
                         {ds.size > 100 * 1024 * 1024 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
                             Large dataset
                           </span>
                         )}
                         {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
                         {versionCounts[ds.id] != null && versionCounts[ds.id] > 0 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                             {versionCounts[ds.id]} version{versionCounts[ds.id] !== 1 ? 's' : ''}
                           </span>
                         )}
@@ -448,7 +448,7 @@ export default function DatasetsPage() {
                             onChange={e => setPreviewSearch(e.target.value)}
                             placeholder="Filter samples..."
                             aria-label="Filter samples"
-                            className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                           />
                         )}
                         {previewData.samples

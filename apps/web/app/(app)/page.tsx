@@ -253,7 +253,7 @@ export default function HomePage() {
               <CardContent className="pb-4 px-4">
                 <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
                 {inferenceCount !== null && inferenceCount !== undefined && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
                 )}
               </CardContent>
             </Card>
@@ -415,7 +415,7 @@ export default function HomePage() {
                 <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
                   <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
                   <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
                 </div>
               ))}
             </div>
@@ -428,7 +428,7 @@ export default function HomePage() {
           <CardContent className="py-3">
             <div className="flex items-center gap-2 mb-2">
               <p className="text-sm font-medium">Recent datasets</p>
-              <Link href="/datasets" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+              <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
             </div>
             <div className="space-y-1.5">
               {recentDatasets.map(ds => (
@@ -441,7 +441,7 @@ export default function HomePage() {
                   <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
                   <span className="text-xs truncate flex-1">{ds.name}</span>
                   {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
-                  <span className="text-[10px] text-primary shrink-0">Train →</span>
+                  <span className="text-xs text-primary shrink-0">Train →</span>
                 </button>
               ))}
             </div>
@@ -467,10 +467,10 @@ export default function HomePage() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
-              {recentSessions[0].starred && <span className="text-[10px]">★</span>}
-              {recentSessions[0].pinned && <span className="text-[10px] text-primary">📌</span>}
+              {recentSessions[0].starred && <span className="text-xs">★</span>}
+              {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
               {new Date(recentSessions[0].updated_at).toLocaleDateString()}
             </p>
@@ -486,28 +486,28 @@ export default function HomePage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-medium">Your stats</p>
-                  <p className="text-[10px] text-muted-foreground">Usage overview</p>
+                  <p className="text-xs text-muted-foreground">Usage overview</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.totalConversations}</p>
-                    <p className="text-[10px] text-muted-foreground">Conversations</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalConversations}</p>
+                    <p className="text-xs text-muted-foreground">Conversations</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Messages</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Messages</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Words</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Words</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.activeDays}</p>
-                    <p className="text-[10px] text-muted-foreground">Active days</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.activeDays}</p>
+                    <p className="text-xs text-muted-foreground">Active days</p>
                   </div>
                 </div>
                 {convStats.mostActiveHour !== null && (
-                  <p className="text-[10px] text-muted-foreground mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     Most active at {convStats.mostActiveHour}:00
                   </p>
                 )}
@@ -519,22 +519,22 @@ export default function HomePage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-medium">Datasets</p>
-                  <Link href="/datasets" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+                  <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
-                    <p className="text-[10px] text-muted-foreground">Datasets</p>
+                    <p className="text-base font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
+                    <p className="text-xs text-muted-foreground">Datasets</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">
+                    <p className="text-base font-semibold tabular-nums">
                       {formatBytes(datasetStats.totalSize)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">Total size</p>
+                    <p className="text-xs text-muted-foreground">Total size</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Samples</p>
+                    <p className="text-base font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Samples</p>
                   </div>
                 </div>
               </CardContent>
@@ -549,30 +549,30 @@ export default function HomePage() {
             <CardContent className="py-3">
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-xs font-medium">System</p>
-                <Link href="/monitoring" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
+                <Link href="/monitoring" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">Details →</Link>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <p className="text-sm font-semibold tabular-nums">
                     {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">CPU</p>
+                  <p className="text-xs text-muted-foreground">CPU</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums">
                     {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">Memory</p>
+                  <p className="text-xs text-muted-foreground">Memory</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground">Requests</p>
+                  <p className="text-xs text-muted-foreground">Requests</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums">
                     {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">Uptime</p>
+                  <p className="text-xs text-muted-foreground">Uptime</p>
                 </div>
               </div>
             </CardContent>
@@ -656,7 +656,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <p className="text-xs sm:text-sm font-semibold">Datasets</p>
                 {datasetStats && datasetStats.totalDatasets > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
                 )}
               </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
@@ -678,7 +678,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <p className="text-xs sm:text-sm font-semibold">Teach me</p>
                 {datasetStats && datasetStats.totalDatasets > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
                 )}
               </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>

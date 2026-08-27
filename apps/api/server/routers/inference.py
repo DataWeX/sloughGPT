@@ -69,14 +69,20 @@ if _server_parent not in _sys.path:
     _sys.path.insert(0, _server_parent)
 
 def _model_ready() -> bool:
-    """True when a model or a lazy guard-backed provider is available.
+    """True when a model is actually materialized and ready for inference.
 
-    Lazy mode deliberately leaves ``server_state.model`` as ``None`` while the
-    ProcessGuard worker serves inference — readiness must also accept a
-    registered provider so guarded inference is not blocked.
+    Checks both server_state.model (direct load) and the provider's _model
+    attribute.  For lazy-guard providers, the model lives on the provider
+    (not the SloNetServer) until first use, so we must check the provider
+    directly.
     """
     import state as server_state
-    return server_state.model is not None or server_state.provider is not None
+    if server_state.model is not None:
+        return True
+    provider = server_state.provider
+    if provider is None:
+        return False
+    return getattr(provider, '_model', None) is not None
 
 
 _memory_pressure_cache: Optional[str] = None
@@ -1044,13 +1050,9 @@ class InferenceRouter:
 
             start_time = datetime.datetime.now()
 
-            logger.info("CHAT_PIPELINE corr=%s step=THINKING", corr_id,
-                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "THINKING"}})
             yield _sse_event("chat", "STREAMING", "thinking",
                 data={}, message="Thinking...")
 
-            logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_INJECT start", corr_id,
-                extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_INJECT"}})
             if req.knowledge:
                 try:
                     def _store_knowledge(k_list):
@@ -1090,7 +1092,7 @@ class InferenceRouter:
                 "timestamp": datetime.datetime.now().isoformat(),
             })
 
-            logger.info("CHAT_PIPELINE corr=%s step=SESSION_LOADED session=%s", corr_id, session_id,
+            logger.debug("CHAT_PIPELINE corr=%s step=SESSION_LOADED session=%s", corr_id, session_id,
                 extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "SESSION_LOADED", "session_id": session_id}})
 
             ctx_core = self._get_context_core()
@@ -1099,18 +1101,18 @@ class InferenceRouter:
             skip_context = False
             if ctx_core and req.use_context_core:
                 try:
-                    logger.info("CHAT_PIPELINE corr=%s step=MEMORY_CHECK start", corr_id,
+                    logger.debug("CHAT_PIPELINE corr=%s step=MEMORY_CHECK start", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK"}})
                     if get_memory_service().stats().get("total_facts", 0) == 0 and not req.knowledge:
                         skip_context = True
                 except Exception as e:
-                    logger.info("CHAT_PIPELINE corr=%s step=MEMORY_CHECK error=%s", corr_id, e,
+                    logger.debug("CHAT_PIPELINE corr=%s step=MEMORY_CHECK error=%s", corr_id, e,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK", "result": "ERROR", "error": str(e)}})
                     logger.debug("Knowledge memory check failed: %s", e)
-            logger.info("CHAT_PIPELINE corr=%s step=MEMORY_CHECK done skip_context=%s ctx_core=%s", corr_id, skip_context, ctx_core is not None,
+            logger.debug("CHAT_PIPELINE corr=%s step=MEMORY_CHECK done skip_context=%s ctx_core=%s", corr_id, skip_context, ctx_core is not None,
                 extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK", "result": "DONE", "skip_context": skip_context, "ctx_core": ctx_core is not None}})
             if ctx_core and req.use_context_core and not skip_context:
-                logger.info("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD start session=%s", corr_id, session_id,
+                logger.debug("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD start session=%s", corr_id, session_id,
                     extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "session_id": session_id}})
                 ctx_core.set_session_id(session_id)
                 ctx_core.add_message("user", user_msg)
@@ -1132,7 +1134,7 @@ class InferenceRouter:
                     "total_tokens": frame.total_tokens,
                     "max_tokens": frame.max_tokens,
                 }
-                logger.info("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD done layers=%d tokens=%d", corr_id,
+                logger.debug("CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD done layers=%d tokens=%d", corr_id,
                     len(context_info.get("layers", [])), context_info.get("total_tokens", 0),
                     extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "CONTEXTCORE_BUILD", "result": "DONE", "layers": context_info.get("layers", []), "tokens": context_info.get("total_tokens", 0)}})
                 if frame.system_prompt:
@@ -1184,7 +1186,7 @@ class InferenceRouter:
 
             tool_result_data = None
             try:
-                logger.info("CHAT_PIPELINE corr=%s step=TOOL_DETECT start", corr_id,
+                logger.debug("CHAT_PIPELINE corr=%s step=TOOL_DETECT start", corr_id,
                     extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "TOOL_DETECT"}})
                 tool_reg = get_tool_registry()
                 tool_intent = tool_reg.detect_tool_intent(user_msg)
@@ -1225,7 +1227,7 @@ class InferenceRouter:
                             })
             except Exception:
                 logger.warning("Tool execution failed", exc_info=True, extra={"tag": "INF"})
-            logger.info("CHAT_PIPELINE corr=%s step=TOOL_DETECT done", corr_id,
+            logger.debug("CHAT_PIPELINE corr=%s step=TOOL_DETECT done", corr_id,
                 extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "TOOL_DETECT", "result": "DONE"}})
 
             if context_info:
@@ -1242,32 +1244,32 @@ class InferenceRouter:
             knowledge_retrieved = []
             if not frame_context:
                 try:
-                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH start", corr_id,
+                    logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH start", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH"}})
                     enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
                     if enrichment.get("facts"):
                         knowledge_retrieved = enrichment["facts"]
-                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d", corr_id, len(knowledge_retrieved),
+                    logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d", corr_id, len(knowledge_retrieved),
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH", "result": "DONE", "facts": len(knowledge_retrieved)}})
                 except Exception as e:
-                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH error=%s", corr_id, e,
+                    logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH error=%s", corr_id, e,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH", "result": "ERROR", "error": str(e)}})
 
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
                 try:
-                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC start count=%d", corr_id, len(all_knowledge),
+                    logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC start count=%d", corr_id, len(all_knowledge),
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "count": len(all_knowledge)}})
                     k_proc = KnowledgeProcessor(knowledge=all_knowledge)
                     provider_messages = await apply_processors(provider_messages, [k_proc])
-                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC done", corr_id,
+                    logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC done", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "result": "DONE"}})
                 except Exception as e:
-                    logger.info("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC error=%s", corr_id, e,
+                    logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC error=%s", corr_id, e,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_PROC", "result": "ERROR", "error": str(e)}})
 
             try:
-                logger.info("CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start", corr_id,
+                logger.debug("CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start", corr_id,
                     extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "PROVIDER_SETUP"}})
 
                 provider = get_provider("default")
@@ -1296,16 +1298,16 @@ class InferenceRouter:
                     import state as _cs_state
                     _coalescer = get_coalescer()
                     _coalesce_key = _coalescer.hash(provider_messages, gen_params, req.max_tokens, _cs_state.model_type)
-                    logger.info("CHAT_PIPELINE corr=%s step=COALESCER_START key=%s", corr_id, _coalesce_key[:16],
+                    logger.debug("CHAT_PIPELINE corr=%s step=COALESCER_START key=%s", corr_id, _coalesce_key[:16],
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_START", "key": _coalesce_key[:16]}})
                     existing = await _coalescer.start(_coalesce_key)
-                    logger.info("CHAT_PIPELINE corr=%s step=COALESCER_START done existing=%s", corr_id, existing is not None,
+                    logger.debug("CHAT_PIPELINE corr=%s step=COALESCER_START done existing=%s", corr_id, existing is not None,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_START", "result": "DONE", "existing": existing is not None}})
                     if existing is not None:
-                        logger.info("CHAT_PIPELINE corr=%s step=COALESCER_JOIN existing_key=%s", corr_id, _coalesce_key[:16],
+                        logger.debug("CHAT_PIPELINE corr=%s step=COALESCER_JOIN existing_key=%s", corr_id, _coalesce_key[:16],
                             extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_JOIN", "key": _coalesce_key[:16]}})
                         await existing.event.wait()
-                        logger.info("CHAT_PIPELINE corr=%s step=COALESCER_JOIN done error=%s", corr_id, existing.error,
+                        logger.debug("CHAT_PIPELINE corr=%s step=COALESCER_JOIN done error=%s", corr_id, existing.error,
                             extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_JOIN", "result": "DONE", "error": str(existing.error) if existing.error else None}})
                         if existing.error is not None:
                             yield sse_error("chat", "ERROR", str(existing.error), code="E_INFRA_GENERATION", http_status=500)
@@ -1322,7 +1324,7 @@ class InferenceRouter:
                     _event_counter = 0
                     _cached_tokens: list[str] = []
 
-                    logger.info("CHAT_PIPELINE corr=%s step=COALESCER_WAIT done ready_for_provider", corr_id,
+                    logger.debug("CHAT_PIPELINE corr=%s step=COALESCER_WAIT done ready_for_provider", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "COALESCER_WAIT", "result": "DONE"}})
                     try:
                         try:

@@ -173,7 +173,7 @@ export default function AuthPage() {
             <div className="space-y-2">
               <div className="rounded-md bg-muted/30 p-3">
                 <div className="text-xs text-muted-foreground mb-1">JWT Token</div>
-                <div className="text-[10px] font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
+                <div className="text-xs font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
               </div>
               <Button
                 size="sm"

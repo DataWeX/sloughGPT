@@ -118,12 +118,12 @@ export default function MetaWeightsPage() {
 
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <div className="border rounded-md p-3">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Top K</span>
-                  <p className="text-lg font-semibold tabular-nums">{weights.top_k}</p>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Top K</span>
+                  <p className="text-base font-semibold tabular-nums">{weights.top_k}</p>
                 </div>
                 <div className="border rounded-md p-3">
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Based on Samples</span>
-                  <p className="text-lg font-semibold tabular-nums">{weights.based_on_samples}</p>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Based on Samples</span>
+                  <p className="text-base font-semibold tabular-nums">{weights.based_on_samples}</p>
                 </div>
               </div>
             </div>

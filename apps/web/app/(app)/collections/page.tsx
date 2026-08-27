@@ -127,25 +127,25 @@ export default function CollectionsPage() {
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Pipelines</p>
-              <p className="text-lg font-medium">{stats.pipelines}</p>
+              <p className="text-base font-medium">{stats.pipelines}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Sources</p>
-              <p className="text-lg font-medium">{stats.sources}</p>
+              <p className="text-base font-medium">{stats.sources}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Stores</p>
-              <p className="text-lg font-medium">{stats.stores}</p>
+              <p className="text-base font-medium">{stats.stores}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Filters</p>
-              <p className="text-lg font-medium">{stats.filters}</p>
+              <p className="text-base font-medium">{stats.filters}</p>
             </CardContent>
           </Card>
         </div>

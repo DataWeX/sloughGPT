@@ -199,7 +199,7 @@ export default function LearnPage() {
           ].map(s => (
             <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
               <div className="text-xs text-muted-foreground">{s.label}</div>
-              <div className="text-lg font-mono font-medium">{s.value}</div>
+              <div className="text-base font-mono font-medium">{s.value}</div>
             </div>
           ))}
         </div>
@@ -354,7 +354,7 @@ export default function LearnPage() {
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(evalResult).map(([key, value]) => (
                   <div key={key} className="rounded bg-muted/30 p-2 text-center">
-                    <div className="text-[10px] text-muted-foreground">{key}</div>
+                    <div className="text-xs text-muted-foreground">{key}</div>
                     <div className="text-xs font-mono font-medium">{String(value)}</div>
                   </div>
                 ))}

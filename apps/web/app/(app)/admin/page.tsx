@@ -504,7 +504,7 @@ export default function AdminPage() {
                 <div className="space-y-2">
                   <div className="rounded-md bg-muted/30 p-3">
                     <div className="text-xs text-muted-foreground mb-1">JWT Token</div>
-                    <div className="text-[10px] font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
+                    <div className="text-xs font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
                   </div>
                   <Button
                     size="sm"
@@ -630,7 +630,7 @@ export default function AdminPage() {
                           <span className="text-xs font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
                             ×{g.count}
                           </span>
-                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                          <div className="text-xs text-muted-foreground mt-0.5">
                             {g.latest && new Date(g.latest).toLocaleDateString()}
                           </div>
                         </div>

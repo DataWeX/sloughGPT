@@ -222,8 +222,8 @@ export default function ComparePage() {
                     <button type="button" onClick={() => loadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
                       {snap.name}
                     </button>
-                    <span className="text-[10px] text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
-                    <button type="button" onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-[10px] text-muted-foreground hover:text-destructive ml-1">×</button>
+                    <span className="text-xs text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
+                    <button type="button" onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-xs text-muted-foreground hover:text-destructive ml-1">×</button>
                   </div>
                 ))}
               </div>
@@ -242,7 +242,7 @@ export default function ComparePage() {
               <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runAll} disabled={loading || models.length === 0}>
                 Benchmark all
               </Button>
-              <div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground/50 pt-2">
+              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground/50 pt-2">
                 <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">R</kbd> Benchmark all</span>
                 <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+S</kbd> Save snapshot</span>
                 <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+E</kbd> Export</span>

@@ -244,7 +244,7 @@ export default function InferPage() {
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-1">
                 {tokenResult.tokens.map((t, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-[10px]">
+                  <span key={i} className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-xs">
                     <span className="font-mono text-muted-foreground">{tokenResult.ids[i]}</span>
                     <span>{t}</span>
                   </span>
@@ -273,7 +273,7 @@ export default function InferPage() {
                   { label: 'Embedding', value: modelInfo.has_embedding ? 'Yes' : 'No' },
                 ].map(item => (
                   <div key={item.label} className="rounded bg-muted/30 p-2">
-                    <div className="text-[10px] text-muted-foreground">{item.label}</div>
+                    <div className="text-xs text-muted-foreground">{item.label}</div>
                     <div className="text-xs font-medium">{String(item.value)}</div>
                   </div>
                 ))}

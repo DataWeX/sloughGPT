@@ -169,11 +169,11 @@ export default function VectorPage() {
                 <div key={r.id || i} className="border rounded-md p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-sm">{r.text}</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary tabular-nums">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary tabular-nums">
                       {(r.score * 100).toFixed(1)}%
                     </span>
                   </div>
-                  {r.id && <p className="text-[10px] text-muted-foreground font-mono">{r.id}</p>}
+                  {r.id && <p className="text-xs text-muted-foreground font-mono">{r.id}</p>}
                 </div>
               ))}
             </div>

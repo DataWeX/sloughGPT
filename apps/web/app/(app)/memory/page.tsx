@@ -203,25 +203,25 @@ export default function MemoryPage() {
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Facts</p>
-              <p className="text-lg font-medium">{stats.total_facts}</p>
+              <p className="text-base font-medium">{stats.total_facts}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Topics</p>
-              <p className="text-lg font-medium">{stats.topics}</p>
+              <p className="text-base font-medium">{stats.topics}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">URLs visited</p>
-              <p className="text-lg font-medium">{stats.visited_urls}</p>
+              <p className="text-base font-medium">{stats.visited_urls}</p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Enabled</p>
-              <p className="text-lg font-medium">{stats.enabled ? 'Yes' : 'No'}</p>
+              <p className="text-base font-medium">{stats.enabled ? 'Yes' : 'No'}</p>
             </CardContent>
           </Card>
         </div>
@@ -338,7 +338,7 @@ export default function MemoryPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="truncate font-medium max-w-[70%]">{item.topic ?? 'untitled'}</span>
-                      <span className={cn('text-[10px]', importanceColor(item.importance ?? 0))}>
+                      <span className={cn('text-xs', importanceColor(item.importance ?? 0))}>
                         {((item.importance ?? 0) * 100).toFixed(0)}%
                       </span>
                     </div>

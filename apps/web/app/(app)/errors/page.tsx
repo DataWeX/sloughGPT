@@ -222,7 +222,7 @@ export default function ErrorsPage() {
                         <span className="text-xs font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
                           ×{g.count}
                         </span>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                        <div className="text-xs text-muted-foreground mt-0.5">
                           {g.latest && new Date(g.latest).toLocaleDateString()}
                         </div>
                       </div>

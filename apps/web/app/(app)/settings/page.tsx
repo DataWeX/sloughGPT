@@ -280,7 +280,7 @@ export default function SettingsPage() {
                 aria-describedby={settingsErrors.apiUrl ? 'apiurl-error' : undefined}
               />
               {settingsErrors.apiUrl && (
-                <p id="apiurl-error" className="text-[10px] text-destructive" role="alert">{settingsErrors.apiUrl}</p>
+                <p id="apiurl-error" className="text-xs text-destructive" role="alert">{settingsErrors.apiUrl}</p>
               )}
               <p className="text-[11px] text-muted-foreground">Service address. Changes take effect on next request.</p>
             </div>

@@ -299,7 +299,7 @@ export default memo(function SystemHealthPage() {
         <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono" aria-live="polite" aria-atomic="true">Updated {lastUpdated}</span>
       )}
       <div className="flex items-center gap-1.5">
-        <label className="text-[10px] text-muted-foreground">Auto</label>
+        <label className="text-xs text-muted-foreground">Auto</label>
         <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-75" />
       </div>
       <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
@@ -448,7 +448,7 @@ export default memo(function SystemHealthPage() {
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
-                  <button type="button" onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
+                  <button type="button" onClick={handleExportHistory} className="text-xs text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
                     Export
                   </button>
                 </div>
