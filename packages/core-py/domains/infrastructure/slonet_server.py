@@ -353,13 +353,26 @@ class SloNetServer:
         # IPC queue + stall detection causes false-positive restarts on
         # slow CPU generation.  Non-streaming generate() still uses the
         # guard for crash isolation.
+        import time as _time
+        _t0 = _time.monotonic()
+        logger.debug("PUMP_STREAM: _generate_stream_sync started, prompt_len=%d", len(prompt))
         model = self._acquire_model()
+        logger.debug("PUMP_STREAM: _acquire_model returned in %.1fms, model=%s",
+                      (_time.monotonic() - _t0) * 1000, type(model).__name__ if model else None)
         try:
+            _t_enc = _time.monotonic()
             tokens = self._tokenizer.encode(prompt)
+            logger.debug("PUMP_STREAM: encode done in %.1fms, tokens=%d",
+                          (_time.monotonic() - _t_enc) * 1000, len(tokens))
             input_ids = np.array([tokens], dtype=np.int64)
             eos_id = self._tokenizer.eos_token_id or 0
+            _t_kv = _time.monotonic()
             kv_state = self._resolve_kv_state(session_id)
+            logger.debug("PUMP_STREAM: kv_state resolved in %.1fms, session=%s",
+                          (_time.monotonic() - _t_kv) * 1000, session_id)
 
+            _t_gen = _time.monotonic()
+            _first_token = True
             for tok_id in model.generate_numpy_stream(
                 input_ids,
                 max_new_tokens=max_new_tokens,
@@ -372,11 +385,19 @@ class SloNetServer:
                 kv_state=kv_state,
                 quantize_kv=self._quantize_kv,
             ):
+                if _first_token:
+                    logger.debug("PUMP_STREAM: first token from generate_numpy_stream in %.1fms",
+                                  (_time.monotonic() - _t_gen) * 1000)
+                    _first_token = False
                 if cancel_event and cancel_event.is_set():
+                    logger.debug("PUMP_STREAM: cancel_event set, stopping after %d tokens",
+                                  sum(1 for _ in []))
                     return
                 decoded = self._tokenizer.decode([tok_id])
                 if decoded:
                     yield decoded
+            logger.debug("PUMP_STREAM: generation complete in %.1fms",
+                          (_time.monotonic() - _t_gen) * 1000)
         finally:
             self._release_model(model)
 
@@ -485,9 +506,11 @@ class SloNetServer:
 
         pump_thread = threading.Thread(target=_pump, daemon=True)
         pump_thread.start()
+        logger.debug("STREAM_CONSUMER: pump thread started, session=%s", session_id)
 
         start = time.monotonic()
         tokens = 0
+        _timeout_count = 0
         try:
             while True:
                 try:
@@ -496,6 +519,12 @@ class SloNetServer:
                         timeout=30.0,
                     )
                 except asyncio.TimeoutError:
+                    _timeout_count += 1
+                    elapsed = time.monotonic() - start
+                    logger.warning(
+                        "STREAM_CONSUMER: 30s timeout #%d at %.1fs elapsed, pump_alive=%s, tokens=%d, session=%s",
+                        _timeout_count, elapsed, pump_thread.is_alive(), tokens, session_id,
+                    )
                     # Defensive race guard: a dead pump always pushes the sentinel,
                     # so a timeout with a dead pump is unreachable in practice.
                     if not pump_thread.is_alive():  # pragma: no cover
