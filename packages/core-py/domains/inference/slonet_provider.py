@@ -360,22 +360,15 @@ def convert_hf_to_slonet(
                         result[w3_bias_key] = np.ones(w1_val.shape[0], dtype=np.float32)
                 elif param_map is not None:
                     if w3_key in param_map and w3_bias_key in param_map:
-                        p_w3 = param_map[w3_key]
-                        p_w3_bias = param_map[w3_bias_key]
-                        if np.all(p_w3.data == 0):
-                            continue
-                        p_w3.data[:] = 0
-                        p_w3_bias.data[:] = 1
+                        param_map[w3_key].data[:] = 0
+                        param_map[w3_bias_key].data[:] = 1
 
     # Tie lm_head to token embedding if not separate
     if param_map is not None:
-        if "lm_head.weight" not in param_map or param_map.get("lm_head.weight") is None:
-            if "tok_emb.weight" in param_map:
-                tok_emb_p = param_map["tok_emb.weight"]
-                lm_head_key = "lm_head.weight"
-                if lm_head_key in param_map:
-                    p = param_map[lm_head_key]
-                    p.data[:] = tok_emb_p.data
+        if "tok_emb.weight" in param_map and "lm_head.weight" in param_map:
+            tok_emb_p = param_map["tok_emb.weight"]
+            lm_head_p = param_map["lm_head.weight"]
+            lm_head_p.data[:] = tok_emb_p.data
     else:
         if "lm_head.weight" not in result and "tok_emb.weight" in result:
             result["lm_head.weight"] = result["tok_emb.weight"]
