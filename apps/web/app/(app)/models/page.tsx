@@ -28,6 +28,7 @@ import ModelUsageCard from '@/components/models/ModelUsageCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
 import DownloadsCard from '@/components/models/DownloadsCard'
 import EngineStatusCard from '@/components/models/EngineStatusCard'
+import ProviderDiagnosticsCard from '@/components/models/ProviderDiagnosticsCard'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
@@ -288,6 +289,7 @@ export default function ModelsPage() {
         />
         <DownloadsCard />
         <EngineStatusCard />
+        <ProviderDiagnosticsCard />
 
         {/* Comparison section */}
         <Card>

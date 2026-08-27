@@ -73,6 +73,25 @@ export interface QuantizationResult {
   avx2_enabled: boolean
 }
 
+export interface ProviderDiagnostics {
+  providers: Record<string, {
+    type: string
+    module: string
+    text_provider?: string
+    processors?: string[]
+    model_id?: string
+    server?: { type: string; has_circuit_breaker: boolean }
+  }>
+  default_provider: string | null
+  model_state: {
+    model: string | null
+    model_type: string | null
+    tokenizer: string | null
+    provider: string | null
+  }
+  startup_phase: string
+}
+
 export const modelController = {
   _listInFlight: null as Promise<ModelInfo[]> | null,
 
@@ -236,6 +255,15 @@ export const modelController = {
 
   async reloadEngine(): Promise<{ status: string }> {
     return apiPost('/models/engine/reload')
+  },
+
+  async debugProviders(): Promise<ProviderDiagnostics | null> {
+    try {
+      return await apiGet<ProviderDiagnostics>('/models/debug/providers')
+    } catch (e) {
+      _log.warning('Could not get provider diagnostics', { exception: String(e) })
+      return null
+    }
   },
 
   async setPrecision(mode: 'auto' | 'fp32' | 'fp16'): Promise<{ mode: string; applied: boolean }> {
