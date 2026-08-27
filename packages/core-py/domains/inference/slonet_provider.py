@@ -210,6 +210,7 @@ def convert_hf_to_slonet(
     hf_state_dict: Dict[str, np.ndarray],
     n_layer: int,
     config: Optional[dict] = None,
+    param_map: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, np.ndarray]:
     """Universal HF → SloTransformer weight converter.
 
@@ -229,9 +230,14 @@ def convert_hf_to_slonet(
         n_layer: Number of transformer layers.
         config: Optional HuggingFace config.json dict. If None, auto-detected
             from weight keys via ArchConfig.
+        param_map: Optional dict mapping SloTransformer parameter names →
+            Parameter objects. When provided, weights are written directly
+            into model parameters (fused convert+load), eliminating the
+            intermediate mapped dict. Returns empty dict.
 
     Returns:
         Dict mapping SloTransformer canonical names → weight arrays.
+        Empty dict when param_map is provided (writes done in-place).
     """
     from domains.infrastructure.arch_config import build_arch
 
@@ -244,11 +250,12 @@ def convert_hf_to_slonet(
         weight_keys=set(hf_state_dict.keys()),
     )
 
-    logger.info("convert_hf_to_slonet: arch=%s (norm=%s, pos=%s, act=%s, attn=%s, transpose=%s)",
-                arch.name, arch.norm, arch.positional, arch.activation, arch.attention, arch.transpose_weights,
+    logger.info("convert_hf_to_slonet: arch=%s (norm=%s, pos=%s, act=%s, attn=%s, transpose=%s, fused=%s)",
+                arch.name, arch.norm, arch.positional, arch.activation, arch.attention,
+                arch.transpose_weights, param_map is not None,
                 extra={"tag": "INF"})
 
-    result = {}
+    result = {} if param_map is None else None
     W = arch.weight_map
 
     # Embeddings and lm_head are NOT weight matrices — never transpose them
@@ -272,6 +279,22 @@ def convert_hf_to_slonet(
         arch_to_slonet["layers.{i}.ff_norm.bias"] = "blocks.{i}.ff_norm.bias"
         arch_to_slonet["final_norm.bias"] = "norm.bias"
 
+    def _write_param(slo_key, w):
+        """Write weight into model parameter or result dict."""
+        if param_map is not None and slo_key in param_map:
+            p = param_map[slo_key]
+            if w.dtype != np.float32:
+                w = w.astype(np.float32)
+            if p.data.shape == w.shape:
+                p.data[:] = w
+            elif p.data.ndim == 2 and w.ndim == 2 and p.data.shape[1] == w.shape[1]:
+                p.data[:w.shape[0]] = w[:p.data.shape[0]]
+            elif p.data.ndim == 1 and w.ndim == 1:
+                min_d = min(p.data.shape[0], w.shape[0])
+                p.data[:min_d] = w[:min_d]
+        elif result is not None:
+            result[slo_key] = w
+
     for hf_key, arr in hf_state_dict.items():
         mapped = False
 
@@ -282,7 +305,9 @@ def convert_hf_to_slonet(
                     # Handle fused QKV separately
                     if hf_key == W.get(canonical, "").replace("{i}", "") or \
                        any(hf_key == W.get(canonical, "").replace("{i}", str(i)) for i in range(n_layer)):
-                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
+                        fused = _split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict)
+                        for k, v in fused.items():
+                            _write_param(k, v)
                         mapped = True
                         break
                 continue
@@ -303,7 +328,7 @@ def convert_hf_to_slonet(
                         # Embeddings and lm_head are NOT linear weights — skip transposition
                         if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
                             w = w.T
-                        result[slo_key] = w
+                        _write_param(slo_key, w)
                         mapped = True
                         break
             else:
@@ -312,7 +337,7 @@ def convert_hf_to_slonet(
                     w = arr
                     if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
                         w = w.T  # pragma: no cover — no global 2D key outside NO_TRANSPOSE_KEYS
-                    result[slo_target] = w
+                    _write_param(slo_target, w)
                     mapped = True
                     break
 
@@ -323,17 +348,41 @@ def convert_hf_to_slonet(
     if arch.activation != "swiglu":
         for i in range(n_layer):
             w1_key = f"blocks.{i}.ff.w1.weight"
-            if w1_key in result and f"blocks.{i}.ff.w3.weight" not in result:
-                w1 = result[w1_key]
-                result[f"blocks.{i}.ff.w3.weight"] = np.zeros_like(w1)
-                result[f"blocks.{i}.ff.w3.bias"] = np.ones(w1.shape[0], dtype=np.float32)
+            w3_key = f"blocks.{i}.ff.w3.weight"
+            w3_bias_key = f"blocks.{i}.ff.w3.bias"
+            w1_val = result[w1_key] if result is not None else (
+                param_map[w1_key].data if param_map is not None and w1_key in param_map else None
+            )
+            if w1_val is not None:
+                if result is not None:
+                    if w3_key not in result:
+                        result[w3_key] = np.zeros_like(w1_val)
+                        result[w3_bias_key] = np.ones(w1_val.shape[0], dtype=np.float32)
+                elif param_map is not None:
+                    if w3_key in param_map and w3_bias_key in param_map:
+                        p_w3 = param_map[w3_key]
+                        p_w3_bias = param_map[w3_bias_key]
+                        if np.all(p_w3.data == 0):
+                            continue
+                        p_w3.data[:] = 0
+                        p_w3_bias.data[:] = 1
 
     # Tie lm_head to token embedding if not separate
-    if "lm_head.weight" not in result and "tok_emb.weight" in result:
-        result["lm_head.weight"] = result["tok_emb.weight"]
+    if param_map is not None:
+        if "lm_head.weight" not in param_map or param_map.get("lm_head.weight") is None:
+            if "tok_emb.weight" in param_map:
+                tok_emb_p = param_map["tok_emb.weight"]
+                lm_head_key = "lm_head.weight"
+                if lm_head_key in param_map:
+                    p = param_map[lm_head_key]
+                    p.data[:] = tok_emb_p.data
+    else:
+        if "lm_head.weight" not in result and "tok_emb.weight" in result:
+            result["lm_head.weight"] = result["tok_emb.weight"]
 
-    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s)", len(result), arch.name, extra={"tag": "INF"})
-    return result
+    count = len(result) if result is not None else (len(param_map) if param_map else 0)
+    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s, fused=%s)", count, arch.name, param_map is not None, extra={"tag": "INF"})
+    return result if result is not None else {}
 
 
 class SloNetChatProvider:
@@ -535,11 +584,14 @@ class SloNetChatProvider:
         weights_dict = parser.get_weights_dict()
         _t_weights = _time.monotonic()
 
-        # Convert and load into model
-        mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config)
+        # Fused convert+load: write directly into model parameters
+        param_map = dict(model._named_parameters())
+        mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config, param_map=param_map)
         _t_convert = _time.monotonic()
 
-        model.load_state_dict(mapped)
+        # mapped is empty when fused path was used (writes done in-place)
+        if mapped:
+            model.load_state_dict(mapped)
         _t_load = _time.monotonic()
 
         # Drop the transient conversion buffers immediately — they are copies
@@ -548,6 +600,7 @@ class SloNetChatProvider:
         # the model's parameters.
         del weights_dict
         del mapped
+        del param_map
 
         logger.info(
             "from_slnc timing: parse=%.2fs model=%.2fs weights=%.2fs convert=%.2fs load_state=%.2fs total=%.2fs",
