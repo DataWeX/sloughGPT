@@ -125,7 +125,17 @@ class MultimodalRouter:
         mgr = get_multimodal_manager()
         if not getattr(mgr, "_initialized", False):
             speech_server = False
-            mgr.initialize(vision_model="slonet", speech_server=speech_server)
+            try:
+                mgr.initialize(vision_model="slonet", speech_server=speech_server)
+            except Exception as e:
+                logger.debug("Multimodal init deferred: %s", e)
+        return mgr
+
+    def _get_initialized_manager(self):
+        """Return manager only if already initialized; avoids blocking on lazy init."""
+        mgr = get_multimodal_manager()
+        if not getattr(mgr, "_initialized", False):
+            return None
         return mgr
 
     @staticmethod
@@ -142,7 +152,15 @@ class MultimodalRouter:
     async def status(self) -> dict:
         try:
             """status."""
-            mgr = self._ensure_initialized()
+            mgr = self._get_initialized_manager()
+            if mgr is None:
+                return success_response(data={
+                    "engine": {"status": "not_initialized"},
+                    "learning": {"images_learned": 0},
+                    "batch": {"running": False, "job_id": None, "total": 0, "completed": 0, "errors": 0},
+                    "video_training": {},
+                    "dpo": {"status": "idle"},
+                })
             caps = mgr.capabilities
             engine = getattr(mgr, "_multimodal_engine", None)
             learning = getattr(mgr, "_learning_count", 0)
