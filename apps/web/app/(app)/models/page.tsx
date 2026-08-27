@@ -189,6 +189,7 @@ export default function ModelsPage() {
       title="Models & Personalities"
       subtitle={subtitle}
       className="items-start"
+      loading={modelsLoading && soulsLoading}
       headerRight={
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>

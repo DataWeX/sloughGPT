@@ -215,6 +215,7 @@ export default function TrainingPage() {
       title="Teach me"
       subtitle="Teach your agent from your data"
       className="items-start"
+      loading={checkpoints.loadingJobs && form.allJobs.length === 0}
       headerRight={
         <div className="flex items-center gap-2">
           {runningJob && (
