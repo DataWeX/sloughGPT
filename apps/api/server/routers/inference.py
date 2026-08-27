@@ -1147,24 +1147,22 @@ class InferenceRouter:
             rag_context = ""
             if req.use_rag:
                 try:
-                    logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY start", corr_id,
-                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY"}})
-                    rag_svc = await asyncio.wait_for(asyncio.to_thread(get_rag_service), timeout=10.0)
-                    if rag_svc.stats().get("total_chunks", 0) > 0:
-                        rag_result = await asyncio.wait_for(asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0)
-                        if rag_result.get("num_results", 0) > 0:
-                            rag_context = rag_result["context"]
-                            # Inject RAG context into system prompt or as a user context message
-                            rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
-                            # Prepend as user context before the conversation
-                            provider_messages.insert(0, {"role": "system", "content": rag_block})
-                            logger.debug("RAG injected %d passages into chat context", rag_result["num_results"])
-                    logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY done chunks=%d", corr_id,
-                        rag_svc.stats().get("total_chunks", 0),
-                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY", "result": "DONE", "total_chunks": rag_svc.stats().get("total_chunks", 0)}})
+                    from domains.cognitive.rag_service import is_rag_service_ready
+                    if not is_rag_service_ready():
+                        logger.debug("RAG service not ready yet, skipping query")
+                    else:
+                        rag_svc = await asyncio.wait_for(asyncio.to_thread(get_rag_service), timeout=10.0)
+                        if rag_svc.stats().get("total_chunks", 0) > 0:
+                            rag_result = await asyncio.wait_for(asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0)
+                            if rag_result.get("num_results", 0) > 0:
+                                rag_context = rag_result["context"]
+                                # Inject RAG context into system prompt or as a user context message
+                                rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
+                                # Prepend as user context before the conversation
+                                provider_messages.insert(0, {"role": "system", "content": rag_block})
+                                logger.debug("RAG injected %d passages into chat context", rag_result["num_results"])
                 except Exception as e:
-                    logger.info("CHAT_PIPELINE corr=%s step=RAG_QUERY error=%s", corr_id, e,
-                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "RAG_QUERY", "result": "ERROR", "error": str(e)}})
+                    logger.debug("RAG query skipped: %s", e)
 
             if req.agent_id:
                 try:

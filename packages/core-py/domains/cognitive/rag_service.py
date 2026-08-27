@@ -541,11 +541,28 @@ class KGTrainingPipeline:
 # ---------------------------------------------------------------------------
 
 _rag_service: Optional[RAGService] = None
+_rag_service_lock = threading.Lock()
+
+
+def is_rag_service_ready() -> bool:
+    """Return True if the RAG service singleton has been initialized.
+
+    Non-blocking check — does NOT create the service if absent.
+    """
+    return _rag_service is not None
 
 
 def get_rag_service() -> RAGService:
-    """Get or create the singleton RAGService."""
+    """Get or create the singleton RAGService.
+
+    Thread-safe: the first caller initializes the instance while
+    subsequent callers wait on a lock instead of creating duplicates.
+    """
     global _rag_service
-    if _rag_service is None:
+    if _rag_service is not None:
+        return _rag_service
+    with _rag_service_lock:
+        if _rag_service is not None:
+            return _rag_service
         _rag_service = RAGService()
     return _rag_service
