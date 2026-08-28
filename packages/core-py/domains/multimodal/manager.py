@@ -59,6 +59,7 @@ class MultimodalManager:
         self._replay_buffer = ReplayBuffer(capacity=200)
         self._caption_history: list = []
         self._accuracy_history: list = []
+        self._embed_cache: dict = {}
 
     def initialize(
         self,
@@ -136,7 +137,7 @@ class MultimodalManager:
         return MultimodalCapabilities(
             speech_to_text=server_asr_ready,
             image_caption=self._multimodal_engine is not None,
-            object_detection=False,
+            object_detection=self._multimodal_engine is not None,
             vqa=False,
             speech_model="whisper" if server_asr_ready else "browser",
             vision_model="slonet",
@@ -157,6 +158,12 @@ class MultimodalManager:
         img = image.convert("RGB").resize((224, 224))
         arr = np.array(img, dtype=np.float32) / 255.0
         return arr.reshape(1, 224, 224, 3)
+
+    @staticmethod
+    def _image_hash(img_np: np.ndarray) -> int:
+        """Fast hash of image array for embedding cache lookup."""
+        h = img_np.tobytes()
+        return hash(h)
 
     _SEED_CAPTIONS = [
         "a bright red rectangle on a dark background",
@@ -332,20 +339,17 @@ class MultimodalManager:
         image,
         prompt: str = "",
         ground_truth: Optional[str] = None,
+        generate_only: bool = False,
     ) -> ImageCaption:
         """
         Generate caption for image. Supports self-supervised and supervised learning.
 
-        Each call runs a three-part training loop:
-        1. Contrastive step — vision encoder learns meaningful embeddings
-           by comparing augmented views of this image against past images
-        2. Caption generation — decoder produces or picks a caption
-        3. Decoder training — decoder learns to predict caption tokens
-           from the image embedding; also samples diverse past pairs
-           from the replay buffer to prevent mode collapse
-
-        When ground_truth is provided, uses it as the training target
-        instead of self-generated text, and computes BLEU accuracy.
+        Args:
+            image: PIL Image to caption
+            prompt: Optional prompt text
+            ground_truth: Optional ground truth caption for supervised training
+            generate_only: If True, skip all training and only generate caption.
+                This is the fast path for inference throughput.
         """
         if self._multimodal_engine is None:
             self._multimodal_engine = get_multimodal_engine(embed_dim=256, hidden_dim=512)
@@ -355,6 +359,27 @@ class MultimodalManager:
             engine = self._multimodal_engine
             buf = self._replay_buffer
 
+            # Fast inference path: skip all training
+            if generate_only:
+                cached = self._embed_cache.get(self._image_hash(img_np))
+                if cached is not None:
+                    raw_text = cached
+                else:
+                    result = engine.generate(img_np, max_len=16, temperature=0.8)
+                    raw_text = result.text.strip()
+                    if not raw_text or len(raw_text.split()) < 2:
+                        raw_text = self._pick_seed_caption(engine.vision.forward(img_np).data)
+                    self._embed_cache[self._image_hash(img_np)] = raw_text
+                    if len(self._embed_cache) > 512:
+                        self._embed_cache.clear()
+                return ImageCaption(
+                    text=raw_text,
+                    confidence=0.5,
+                    tags=["vision", "generated"],
+                    accuracy=0.0,
+                )
+
+            # Training path (unchanged for learning)
             # Step 1: Contrastive learning on vision encoder
             contrastive_loss_val = contrastive_step(engine, img_np, buf)
             logger.debug(f"Contrastive loss: {contrastive_loss_val:.4f}")
@@ -365,10 +390,8 @@ class MultimodalManager:
             # Supervised mode: use ground truth as target
             if ground_truth and ground_truth.strip():
                 raw_text = ground_truth.strip()
-                # Still generate to compute accuracy
                 result = engine.generate(img_np, max_len=16, temperature=0.8)
                 generated_text = result.text.strip()
-                # Compute BLEU accuracy
                 from domains.feedback.lora_eval import BLEUScorer
                 accuracy = BLEUScorer.score(generated_text, raw_text)
                 self._accuracy_history.append(accuracy)
@@ -405,15 +428,18 @@ class MultimodalManager:
             self._learning_count += 1
             self._caption_history.append(raw_text)
 
-            # Auto-save every 5 images
+            # Async auto-save every 5 images (non-blocking)
             if self._learning_count % 5 == 0:
-                try:
-                    engine.save(extra_meta={
-                        "images_learned": self._learning_count,
-                        "last_caption": raw_text,
-                    })
-                except Exception as save_err:
-                    logger.warning(f"Auto-save failed: {save_err}", extra={"tag": "MODEL"})
+                import threading
+                def _async_save():
+                    try:
+                        engine.save(extra_meta={
+                            "images_learned": self._learning_count,
+                            "last_caption": raw_text,
+                        })
+                    except Exception as save_err:
+                        logger.warning(f"Auto-save failed: {save_err}", extra={"tag": "MODEL"})
+                threading.Thread(target=_async_save, daemon=True).start()
 
             confidence = min(float(np.mean(np.abs(embed.data))) * 2.0, 1.0)
 
