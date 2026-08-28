@@ -7,6 +7,7 @@ import { PDFUpload } from './PDFUpload'
 import { Button } from '@sloughgpt/strui'
 import { IconUpload } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/multimodal-controller'
+import { useChatVision } from '@/features/chat/hooks/useChatVision'
 
 interface ChatInputAccessoriesProps {
   onImage: (dataUrl: string) => void
@@ -37,6 +38,8 @@ export function ChatInputAccessories({
 }: ChatInputAccessoriesProps) {
   const audioInputRef = useRef<HTMLInputElement>(null)
   const [audioLoading, setAudioLoading] = useState(false)
+  const { visionCaps } = useChatVision()
+  const visionAvailable = visionCaps?.image_caption && visionCaps?.vision_model !== null
 
   const handleCodeBlock = () => {
     if (onCodeBlock) {
@@ -78,7 +81,7 @@ export function ChatInputAccessories({
 
   return (
     <div className="flex items-center shrink-0">
-      <ImageUpload onImage={onImage} disabled={disabled} />
+      <ImageUpload onImage={onImage} disabled={disabled || !visionAvailable} />
       {onTranscript && <VoiceInput onTranscript={onTranscript} disabled={disabled} />}
       {onPDFAnalysis && onPDFError && (
         <PDFUpload onAnalysis={onPDFAnalysis} onError={onPDFError} disabled={disabled} />
