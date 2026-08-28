@@ -1,0 +1,30 @@
+app = "sloughgpt-api"
+primary_region = "iad"
+
+[build]
+  dockerfile = "infra/docker/Dockerfile"
+
+[env]
+  SLO_ENV = "production"
+  SLO_LOG_LEVEL = "INFO"
+  SLO_HOST = "0.0.0.0"
+  SLO_PORT = "8000"
+  SLO_AUTO_WORKFLOW = "false"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
