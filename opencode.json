@@ -57,6 +57,11 @@
       "description": "Elite UI/UX engineering agent for the Noir Violet design system. Specializes in Next.js pages, @sloughgpt/strui components, responsive layout, accessibility, and design-system enforcement.",
       "mode": "subagent",
       "hidden": false
+    },
+    "qa-developer": {
+      "description": "QA developer agent for core backend infrastructure. Finds regressions, fixes backend logic bugs, and improves test coverage in packages/core-py/domains/.",
+      "mode": "subagent",
+      "hidden": false
     }
   }
 }

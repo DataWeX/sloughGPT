@@ -111,7 +111,7 @@ class InferRouter:
 
     def _register_routes(self):
         self.router.add_api_route("", self.infer, methods=["POST"], response_model=InferResponse)
-        self.router.add_api_route("/stream", self.infer_stream, methods=["POST"])
+        self.router.add_api_route("/stream", self.infer_stream, methods=["POST"], response_model=None)
         self.router.add_api_route("/embed", self.infer_embed, methods=["POST"], response_model=EmbedResponse)
         self.router.add_api_route("/tokenize", self.infer_tokenize, methods=["POST"], response_model=TokenizeResponse)
         self.router.add_api_route("/detokenize", self.infer_detokenize, methods=["POST"], response_model=DetokenizeResponse)

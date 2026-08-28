@@ -56,7 +56,7 @@ class HealthRouter:
         self.router.add_api_route("/debug", self.debug_info, methods=["GET"])
         self.router.add_api_route("/model", self.model_health, methods=["GET"])
         self.router.add_api_route("/summary", self.health_summary, methods=["GET"])
-        self.router.add_api_route("/stream", self.health_stream, methods=["GET"])
+        self.router.add_api_route("/stream", self.health_stream, methods=["GET"], response_model=None)
 
     async def health(self) -> dict:
         """Basic health status.

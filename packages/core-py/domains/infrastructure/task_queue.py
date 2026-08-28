@@ -175,8 +175,8 @@ class TaskQueue:
         try:
             from domains.infrastructure.event_bus import get_event_bus
             self._event_bus = get_event_bus()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("TaskQueue event bus unavailable: %s", e, extra={"tag": "INFRA"})
 
         # Stop event
         self._stop_event = asyncio.Event()
@@ -205,8 +205,8 @@ class TaskQueue:
                 asyncio.ensure_future(
                     self._event_bus.emit(event_name, data, source="task_queue")
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Silent exception: %s", e, extra={"tag": "INFRA"})
 
     # ── Lifecycle ──
 
@@ -258,8 +258,8 @@ class TaskQueue:
         for cb in self._sse_callbacks:
             try:
                 cb(event, task)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Silent exception: %s", e, extra={"tag": "INFRA"})
         bus_event = f"task.{event}"
         self._emit_event(bus_event, task)
 
@@ -292,8 +292,8 @@ class TaskQueue:
             else:
                 message = task.error or f"Task failed: {task.task_type}"
                 sse_queue.put_nowait(sse_error(stream_name, "FAILED", message))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Silent exception: %s", e, extra={"tag": "INFRA"})
 
     # ── Enqueue ──
 

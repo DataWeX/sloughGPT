@@ -25,7 +25,7 @@ class SystemRouter:
         self.router.add_api_route("/info", self.get_info, methods=["GET"])
         self.router.add_api_route("/disk", self.get_disk, methods=["GET"])
         self.router.add_api_route("/lifecycle", self.get_lifecycle_status, methods=["GET"])
-        self.router.add_api_route("/stream", self.stream_output, methods=["GET"])
+        self.router.add_api_route("/stream", self.stream_output, methods=["GET"], response_model=None)
         self.router.add_api_route("/output", self.tail_output, methods=["GET"])
         self.router.add_api_route("/executor", self.get_executor_status, methods=["GET"])
         self.router.add_api_route("/executor/{job_id}", self.get_executor_job, methods=["GET"])
