@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button, Textarea } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
 
@@ -49,6 +49,10 @@ export function MessageContent({
   const hasContent = content && content.trim().length > 0
   const isCollapsible = collapsibleLength > 0 && content.length > collapsibleLength && !isEditing && !isStreaming
   const visibleContent = isCollapsible && isCollapsed ? content.slice(0, collapsibleLength) : content
+  const highlightedContent = useMemo(() => {
+    if (!searchQuery || !content) return null
+    return highlightText(content, searchQuery)
+  }, [content, searchQuery])
 
   if (!hasContent) {
     if (role === 'assistant') {
@@ -65,7 +69,7 @@ export function MessageContent({
 
   if (role === 'assistant') {
     if (searchQuery && content.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightText(content, searchQuery)}</p>
+      return <p className="whitespace-pre-wrap break-words leading-relaxed text-sm">{highlightedContent}</p>
     }
     return (
       <article className="leading-relaxed text-sm" aria-label={`${role} message`}>

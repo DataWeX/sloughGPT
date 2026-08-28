@@ -68,17 +68,29 @@ export const MessageBubble = memo(function MessageBubble({
   collapsibleLength = 0,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
-  const [isVisible, setIsVisible] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const bubbleRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => { setIsVisible(true) }, [])
-
-
+  const articlesRef = useRef<HTMLElement[]>([])
 
   const hasContent = content && content.trim().length > 0
   const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
   const id = messageId || 'msg'
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (articlesRef.current.length === 0) return
+      const idx = articlesRef.current.indexOf(e.currentTarget as HTMLElement)
+      const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1
+      if (next >= 0 && next < articlesRef.current.length) articlesRef.current[next].focus()
+    }
+  }, [])
+
+  useEffect(() => {
+    const feed = document.getElementById('chat-messages')
+    if (!feed) return
+    articlesRef.current = Array.from(feed.querySelectorAll<HTMLElement>('[role="article"]'))
+  })
 
   return (
     <MessageContextMenu
@@ -100,20 +112,9 @@ export const MessageBubble = memo(function MessageBubble({
       tabIndex={0}
       aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
       aria-live={isStreaming ? 'polite' : ariaLive}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          const feed = document.getElementById('chat-messages')
-          if (!feed) return
-          const articles = Array.from(feed.querySelectorAll<HTMLElement>('[role="article"]'))
-          const idx = articles.indexOf(e.currentTarget as HTMLElement)
-          const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1
-          if (next >= 0 && next < articles.length) articles[next].focus()
-        }
-      }}
+      onKeyDown={handleKeyDown}
       className={cn(
         "group flex flex-col transition-all duration-300 ease-out",
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >

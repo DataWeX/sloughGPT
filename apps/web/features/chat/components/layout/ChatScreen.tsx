@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, memo, useState, useEffect } from 'react'
+import React, { forwardRef, memo, useState, useEffect, useCallback, useMemo } from 'react'
 import { MessageBubble } from './../messages/MessageBubble'
 import { EmptyState } from './../messages/EmptyState'
 import { SystemBanner } from './../messages/SystemBanner'
@@ -65,6 +65,34 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
+
+    const handleRegenerate = useCallback((messageId: string) => {
+      onRegenerate?.(messageId)
+    }, [onRegenerate])
+
+    const handleSuggestionClick = useCallback((text: string) => {
+      onSuggestionClick?.(text)
+    }, [onSuggestionClick])
+
+    const memoizedSuggestions = useMemo(() => {
+      if (!onSuggestionClick || loading || messages.length === 0 || messages[messages.length - 1].role !== 'assistant') return null
+      const last = messages[messages.length - 1].content.toLowerCase()
+      const secondToLast = messages.length > 1 ? messages[messages.length - 2].content.toLowerCase() : ''
+      const hasCode = last.includes('```')
+      const isFileUpload = secondToLast.includes('📎') || secondToLast.includes('uploaded')
+      const isSummary = last.length > 200 && !hasCode && !isFileUpload
+      let suggestionsList: string[]
+      if (isFileUpload) {
+        suggestionsList = ['Summarize this', 'What are the key points?', 'Explain in simple terms', 'What does this mean for me?']
+      } else if (hasCode) {
+        suggestionsList = ['Explain this code', 'Simplify this', 'How do I test this?']
+      } else if (isSummary) {
+        suggestionsList = ['Summarize this', 'Explain like I\'m 5', 'Tell me more', 'Give an example']
+      } else {
+        suggestionsList = ['Tell me more', 'Give an example', 'Why is that?']
+      }
+      return suggestionsList
+    }, [messages, loading, onSuggestionClick])
 
     useEffect(() => {
       if (messages.length > 0) {
@@ -174,7 +202,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onThumbsUp={onThumbsUp}
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
-                onRegenerate={showRegenerate ? () => onRegenerate?.(message.id) : undefined}
+                onRegenerate={showRegenerate ? handleRegenerate : undefined}
                 onSuggestionClick={onSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}
@@ -190,36 +218,19 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
             )
           })}
 
-          {!loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && onSuggestionClick && (() => {
-            const last = messages[messages.length - 1].content.toLowerCase()
-            const secondToLast = messages.length > 1 ? messages[messages.length - 2].content.toLowerCase() : ''
-            const hasCode = last.includes('```')
-            const isFileUpload = secondToLast.includes('📎') || secondToLast.includes('uploaded')
-            const isSummary = last.length > 200 && !hasCode && !isFileUpload
-            let suggestions: string[]
-            if (isFileUpload) {
-              suggestions = ['Summarize this', 'What are the key points?', 'Explain in simple terms', 'What does this mean for me?']
-            } else if (hasCode) {
-              suggestions = ['Explain this code', 'Simplify this', 'How do I test this?']
-            } else if (isSummary) {
-              suggestions = ['Summarize this', 'Explain like I\'m 5', 'Tell me more', 'Give an example']
-            } else {
-              suggestions = ['Tell me more', 'Give an example', 'Why is that?']
-            }
-            return (
-              <div className="flex flex-wrap gap-1 px-4 sm:px-6" role="group" aria-label="Suggested follow-ups">
-                {suggestions.map(s => (
-                  <button
-                    key={s}
-                    onClick={() => onSuggestionClick(s)}
-                    className="px-2.5 py-1 rounded-full border border-border/50 bg-muted/30 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )
-          })()}
+          {memoizedSuggestions && (
+            <div className="flex flex-wrap gap-1 px-4 sm:px-6" role="group" aria-label="Suggested follow-ups">
+              {memoizedSuggestions.map(s => (
+                <button
+                  key={s}
+                  onClick={() => handleSuggestionClick(s)}
+                  className="px-2.5 py-1 rounded-full border border-border/50 bg-muted/30 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
 
           {loading && messages.length > 0 && messages[messages.length - 1].role !== 'assistant' && (
             <ReasoningPanel isThinking={true} className="py-1" />
