@@ -71,16 +71,6 @@ export default function HomePage() {
     }
   }, [onboardingDismissed])
 
-  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
-
-  const defer = useCallback((fn: () => void, delay = 0) => {
-    if (isMobile && delay === 0) {
-      setTimeout(() => requestIdleCallback?.(fn), 100)
-    } else {
-      setTimeout(fn, delay)
-    }
-  }, [isMobile])
-
   const [convStats, setConvStats] = useState<{ totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null>(null)
 
   const [datasetStats, setDatasetStats] = useState<{ totalDatasets: number; totalSize: number; totalSamples: number } | null>(null)
@@ -88,53 +78,49 @@ export default function HomePage() {
   useEffect(() => {
     if (apiStatus !== 'online') return
     let cancelled = false
-    defer(() => {
-      sessionController.list().then(sessions => {
-        if (cancelled) return
-        let totalMessages = 0
-        let totalWords = 0
-        const days = new Set<string>()
-        const hourCounts = new Array(24).fill(0)
-        for (const s of sessions) {
-          totalMessages += s.messages?.length || 0
-          for (const m of s.messages || []) {
-            totalWords += m.content ? m.content.split(/\s+/).length : 0
-            if (m.timestamp) {
-              const d = new Date(m.timestamp)
-              days.add(d.toISOString().slice(0, 10))
-              hourCounts[d.getHours()]++
-            }
+    sessionController.list().then(sessions => {
+      if (cancelled) return
+      let totalMessages = 0
+      let totalWords = 0
+      const days = new Set<string>()
+      const hourCounts = new Array(24).fill(0)
+      for (const s of sessions) {
+        totalMessages += s.messages?.length || 0
+        for (const m of s.messages || []) {
+          totalWords += m.content ? m.content.split(/\s+/).length : 0
+          if (m.timestamp) {
+            const d = new Date(m.timestamp)
+            days.add(d.toISOString().slice(0, 10))
+            hourCounts[d.getHours()]++
           }
-          if (s.updated_at) days.add(new Date(s.updated_at).toISOString().slice(0, 10))
         }
-        const maxHour = hourCounts.indexOf(Math.max(...hourCounts))
-        setConvStats({
-          totalConversations: sessions.length,
-          totalMessages,
-          totalWords,
-          activeDays: days.size,
-          mostActiveHour: days.size > 0 ? maxHour : null,
-        })
-      }).catch(() => { /* session stats non-critical */ })
-    }, isMobile ? 200 : 0)
+        if (s.updated_at) days.add(new Date(s.updated_at).toISOString().slice(0, 10))
+      }
+      const maxHour = hourCounts.indexOf(Math.max(...hourCounts))
+      setConvStats({
+        totalConversations: sessions.length,
+        totalMessages,
+        totalWords,
+        activeDays: days.size,
+        mostActiveHour: days.size > 0 ? maxHour : null,
+      })
+    }).catch(() => { /* session stats non-critical */ })
     return () => { cancelled = true }
-  }, [apiStatus, defer, isMobile])
+  }, [apiStatus])
 
   useEffect(() => {
     if (apiStatus !== 'online') return
     let cancelled = false
-    defer(() => {
-      datasetController.list().then(list => {
-        if (cancelled) return
-        setDatasetStats({
-          totalDatasets: list.length,
-          totalSize: list.reduce((sum, ds) => sum + (ds.size || 0), 0),
-          totalSamples: list.reduce((sum, ds) => sum + (ds.samples || 0), 0),
-        })
-      }).catch(() => { /* dataset stats non-critical */ })
-    }, isMobile ? 400 : 0)
+    datasetController.list().then(list => {
+      if (cancelled) return
+      setDatasetStats({
+        totalDatasets: list.length,
+        totalSize: list.reduce((sum, ds) => sum + (ds.size || 0), 0),
+        totalSamples: list.reduce((sum, ds) => sum + (ds.samples || 0), 0),
+      })
+    }).catch(() => { /* dataset stats non-critical */ })
     return () => { cancelled = true }
-  }, [apiStatus, defer, isMobile])
+  }, [apiStatus])
 
   useEffect(() => {
     if (apiStatus !== 'offline') return
