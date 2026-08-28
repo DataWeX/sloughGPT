@@ -261,6 +261,9 @@ Version: {format_version_display()}
 from commands.logs import logs as _logs_cmd
 cli.add_command(_logs_cmd, 'logs')
 
+from commands.monitor import monitor as _monitor_cmd
+cli.add_command(_monitor_cmd, 'monitor')
+
 
 @cli.command(help="Launch interactive terminal UI (split-pane curses)")
 @click.pass_context

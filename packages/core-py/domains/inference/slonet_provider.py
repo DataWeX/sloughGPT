@@ -755,6 +755,13 @@ class SloNetChatProvider:
         # API routes concurrently, so check-then-set races must be serialized.
         instance._kv_lock = threading.Lock()
 
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            get_event_buffer().record("MODEL", f"loaded {model_id} ({n_layer} layers)")
+        except Exception:
+            pass
+
         return instance
 
     @classmethod
@@ -1321,6 +1328,12 @@ class SloNetChatProvider:
             "SloNetChatProvider.release_model: %s weights released to OS",
             self._model_id, extra={"tag": "INF"},
         )
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            get_event_buffer().record("MODEL", f"unloaded {self._model_id}")
+        except Exception:
+            pass
         return True
 
     def num_parameters(self) -> int:

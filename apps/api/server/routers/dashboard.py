@@ -106,6 +106,41 @@ def _get_active_processes() -> dict:
     except Exception:
         pass
 
+    # Active downloads
+    try:
+        from domains.infrastructure.download_manager import get_download_manager
+        mgr = get_download_manager()
+        downloads = mgr.list_downloads()
+        for model_id, dl in downloads.items():
+            status = dl.get("status", "unknown")
+            if status in ("complete", "failed", "cancelled"):
+                continue
+            pct = dl.get("percentage", 0)
+            speed = dl.get("speed_mb_per_sec", 0)
+            eta = dl.get("eta_seconds", 0)
+            current_file = dl.get("current_file", "")
+            detail = f"{pct:.0f}%"
+            if speed > 0:
+                detail += f" {speed:.1f}MB/s"
+            if eta > 0:
+                detail += f" ETA {eta:.0f}s"
+            if current_file:
+                # Show just filename, not full path
+                fname = current_file.rsplit("/", 1)[-1] if "/" in current_file else current_file
+                if len(fname) > 20:
+                    fname = fname[:18] + "..."
+                detail += f" {fname}"
+            progress = pct
+            processes[f"dl:{model_id[:20]}"] = {
+                "type": "download",
+                "status": status,
+                "label": model_id[:14],
+                "detail": detail,
+                "progress": progress,
+            }
+    except Exception:
+        pass
+
     return processes
 
 

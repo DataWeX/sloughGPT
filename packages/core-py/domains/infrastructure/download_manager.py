@@ -332,6 +332,12 @@ class DownloadManager:
         except asyncio.CancelledError:
             self._set_progress(model_id, status=DownloadStatus.CANCELLED)
             mgr.finish(op_id, "cancelled")
+            # Record dashboard event
+            try:
+                from domains.infrastructure.event_buffer import get_event_buffer
+                get_event_buffer().record("DOWNLOAD", f"{model_id} cancelled")
+            except Exception:
+                pass
             return {"status": "cancelled", "model_id": model_id}
         except Exception as e:
             self._set_progress(
@@ -341,6 +347,12 @@ class DownloadManager:
             )
             self._notify_callbacks(model_id)
             mgr.finish(op_id, str(e))
+            # Record dashboard event
+            try:
+                from domains.infrastructure.event_buffer import get_event_buffer
+                get_event_buffer().record("ERROR", f"download {model_id} failed: {str(e)[:40]}")
+            except Exception:
+                pass
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
     async def _download_worker(self, model_id: str, total_bytes_hint: int, cancel_event: Optional[threading.Event] = None):
@@ -352,6 +364,19 @@ class DownloadManager:
         self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
         self._notify_callbacks(model_id)
         start_time = time.time()
+
+        # Record dashboard event with size info
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            size_str = ""
+            if total_est > 0:
+                if total_est > 1e9:
+                    size_str = f" ({total_est / 1e9:.1f}GB)"
+                elif total_est > 1e6:
+                    size_str = f" ({total_est / 1e6:.0f}MB)"
+            get_event_buffer().record("DOWNLOAD", f"{model_id} started{size_str}")
+        except Exception:
+            pass
 
         def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
             try:
@@ -412,6 +437,13 @@ class DownloadManager:
             percentage=100.0,
         )
         self._notify_callbacks(model_id)
+
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            get_event_buffer().record("DOWNLOAD", f"{model_id} complete ({elapsed:.1f}s)")
+        except Exception:
+            pass
 
         logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir,
             extra={"tag": "INFRA"})

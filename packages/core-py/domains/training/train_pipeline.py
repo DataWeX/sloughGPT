@@ -1126,6 +1126,16 @@ class SloughGPTTrainer:
 
         self._is_training = True
         self._training_start_time = time.time()
+
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            epochs = self.config.epochs
+            max_steps = self.config.max_steps or "unlimited"
+            get_event_buffer().record("TRAIN", f"started epochs={epochs} max_steps={max_steps}")
+        except Exception:
+            pass
+
         for epoch in range(self.current_epoch, self.config.epochs):
             self.current_epoch = epoch
 
@@ -1291,6 +1301,14 @@ class SloughGPTTrainer:
                 )
 
         self._is_training = False
+
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            final_loss_str = f"{final_loss:.4f}" if final_loss is not None else "n/a"
+            get_event_buffer().record("TRAIN", f"completed step={self.global_step} loss={final_loss_str}")
+        except Exception:
+            pass
 
         # final_loss: prefer best eval loss, fall back to last train loss
         final_loss = self._best_val_loss

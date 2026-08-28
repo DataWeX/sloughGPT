@@ -72,6 +72,7 @@ class CmdModule:
 # users already have those in their terminal.
 _MODULE_NAMES: dict[str, list[str]] = {
     "data_cmds": ["datasets", "checkpoints", "finetuned", "knowledge", "remember", "recall", "tokenizer"],
+    "dashboard": ["dashboard"],
     "health": ["health"],
     "models_cmd": ["models", "unload", "precision", "quantize", "dequantize"],
     "souls_cmd": ["souls", "switch", "whoami"],
