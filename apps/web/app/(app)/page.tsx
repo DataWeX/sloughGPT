@@ -13,7 +13,7 @@ import {
   IconChat,
   IconModels,
 } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve } from '@sloughgpt/strui'
+import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve, IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -159,24 +159,60 @@ export default function HomePage() {
       </div>
 
       {apiStatus === 'online' && modelStatus.loaded && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {[
-            { icon: '✍️', label: 'Write something', href: '/chat?mode=write' },
-            { icon: '📄', label: 'Read a file', href: '/chat?mode=read' },
-            { icon: '🎨', label: 'Create an image', href: '/chat?mode=create' },
-            { icon: '💡', label: 'Brainstorm ideas', href: '/chat?mode=brainstorm' },
-            { icon: '🎙️', label: 'Talk instead', href: '/chat?mode=talk' },
-          ].map(action => (
-            <Link
-              key={action.label}
-              href={action.href}
-              className="flex flex-col items-center gap-1.5 rounded-lg border border-border/40 bg-muted/20 p-3 text-center hover:bg-muted/40 hover:border-border/60 transition-all"
-            >
-              <span className="text-lg">{action.icon}</span>
-              <span className="text-[11px] font-medium text-muted-foreground">{action.label}</span>
-            </Link>
-          ))}
-        </div>
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                  </span>
+                  <span className="text-xs font-medium text-success uppercase tracking-wider">Active Model</span>
+                </div>
+                <h3 className="text-sm font-semibold truncate">{healthSummary || 'Unknown'}</h3>
+                {currentSoul && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Personality: <span className="text-foreground/80">{currentSoul.name}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/models"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 transition-colors"
+                >
+                  <IconModels className="h-3 w-3" />
+                  Switch
+                </Link>
+                <Link
+                  href="/chat"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-accent-foreground bg-accent/15 hover:bg-accent/25 transition-colors"
+                >
+                  <IconChat className="h-3 w-3" />
+                  Chat
+                </Link>
+              </div>
+            </div>
+            {inferenceCount !== null && inferenceCount !== undefined && (
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/40">
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground/80 tabular-nums">{inferenceCount.toLocaleString()}</span> conversations
+                </span>
+                {liveHealth?.tokens_per_sec && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground/80 tabular-nums">{liveHealth.tokens_per_sec.toFixed(1)}</span> tok/s
+                  </span>
+                )}
+                {liveHealth?.uptime_seconds && liveHealth.uptime_seconds > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Uptime: <span className="font-medium text-foreground/80">{formatUptime(liveHealth.uptime_seconds)}</span>
+                  </span>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {apiStatus === 'offline' ? (
@@ -268,8 +304,8 @@ export default function HomePage() {
                     <span className="text-sm font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-success">👍 {feedbackStats.db_stats.thumbs_up}</span>
-                    <span className="text-sm text-destructive">👎 {feedbackStats.db_stats.thumbs_down}</span>
+                    <span className="text-sm text-success flex items-center gap-1"><IconThumbUp className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_up}</span>
+                    <span className="text-sm text-destructive flex items-center gap-1"><IconThumbDown className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_down}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm text-muted-foreground">Ratio</span>

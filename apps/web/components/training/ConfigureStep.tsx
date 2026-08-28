@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox } from '@sloughgpt/strui'
 import { TrainingPresets } from '@/components/training/TrainingPresets'
 import type { StepProps } from './DataStep'
 
@@ -148,7 +148,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
             {form.method === 'finetune' && (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={form.useLoRA} onChange={e => form.setUseLoRA(e.target.checked)}
+                  <Checkbox checked={form.useLoRA} onCheckedChange={e => form.setUseLoRA(e === true)}
                     className="rounded border-border" aria-label="Enable LoRA" />
                   Use LoRA (parameter-efficient fine-tuning)
                 </label>

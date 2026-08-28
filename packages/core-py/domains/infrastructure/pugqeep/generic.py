@@ -698,9 +698,12 @@ class PGQGeneric:
         shape = self._shapes.get(name)
         if shape:
             return int(np.prod(shape))
+        # Use point's stored shape
+        if point.shape:
+            return int(np.prod(point.shape))
         if "centroids" in point.params:
             return len(point.params["centroids"]) * 100
-        return 1000
+        return 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════

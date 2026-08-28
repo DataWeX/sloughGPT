@@ -310,6 +310,12 @@ def _apply_meta_weights(
             "top_k": adj.top_k,
             "repetition_penalty": adj.repetition_penalty,
         }
+        if adj.temperature > 1.2 or adj.top_k < 10:
+            logger.warning(
+                "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
+                adj.temperature, adj.top_k, user_id,
+                extra={"tag": "INF", "context": {"temperature": adj.temperature, "top_k": adj.top_k, "user_id": user_id}},
+            )
         with _META_WEIGHT_CACHE_LOCK:
             _META_WEIGHT_CACHE[cache_key] = (now, result)
             if len(_META_WEIGHT_CACHE) > 1000:
@@ -748,6 +754,7 @@ class InferenceRouter:
 
         async def generate() -> AsyncIterator[str]:
             """generate."""
+            _gen_corr_id = f"gen-{int(time.time() * 1000) % 100000}"
 
             provider = get_provider("default")
             if provider is None:
@@ -812,6 +819,13 @@ class InferenceRouter:
                         _mgr.finish(_op_id)
                         return
                     if token:
+                        if _token_count == 0:
+                            _first_token_ms = (time.time() - _token_gen_start) * 1000
+                            logger.info(
+                                "GEN_FIRST_TOKEN corr=%s after=%.1fms",
+                                _gen_corr_id, _first_token_ms,
+                                extra={"tag": "INF", "context": {"corr": _gen_corr_id, "elapsed_ms": round(_first_token_ms, 1)}},
+                            )
                         _token_gen_start = time.time()
                         token_count += 1
                         _token_count += 1
@@ -828,7 +842,11 @@ class InferenceRouter:
                             _last_heartbeat = now
                     elapsed_since_token = time.time() - _token_gen_start
                     if elapsed_since_token > _max_token_wait_s:
-                        logger.warning("Generate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
+                        logger.warning(
+                            "Generate stream stalled for %.1fs (limit=%.1fs) corr=%s",
+                            elapsed_since_token, _max_token_wait_s, _gen_corr_id,
+                            extra={"tag": "INF", "context": {"corr": _gen_corr_id, "elapsed_s": round(elapsed_since_token, 1), "limit_s": _max_token_wait_s}},
+                        )
                         cancel_event.set()
                         _mgr.finish(_op_id, "timeout")
                         yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
@@ -843,7 +861,8 @@ class InferenceRouter:
                     pass
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
-                classify_and_raise(e, source="generate_stream")
+                yield sse_error("generate", "ERROR", str(e),
+                    code="E_INFRA_GENERATION", http_status=500)
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
 
@@ -1247,7 +1266,10 @@ class InferenceRouter:
                 try:
                     logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH start", corr_id,
                         extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH"}})
-                    enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+                    enrichment = await asyncio.wait_for(
+                        asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
+                        timeout=10.0,
+                    )
                     if enrichment.get("facts"):
                         knowledge_retrieved = enrichment["facts"]
                     logger.debug("CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d", corr_id, len(knowledge_retrieved),
@@ -1407,7 +1429,11 @@ class InferenceRouter:
                                         _last_heartbeat = now
                                 elapsed_since_token = time.time() - _token_gen_start
                                 if elapsed_since_token > _max_token_wait_s:
-                                    logger.warning("Token generation stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
+                                    logger.warning(
+                                        "Token generation stalled for %.1fs (limit=%.1fs), aborting corr=%s session=%s",
+                                        elapsed_since_token, _max_token_wait_s, corr_id, session_id,
+                                        extra={"tag": "INF", "context": {"corr": corr_id, "session_id": session_id, "elapsed_s": round(elapsed_since_token, 1), "limit_s": _max_token_wait_s}},
+                                    )
                                     cancel_event.set()
                                     _mgr.finish(_op_id, "timeout")
                                     yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
@@ -1456,7 +1482,8 @@ class InferenceRouter:
                                 "error_type": type(e).__name__,
                             }},
                         )
-                        classify_and_raise(e, source="chat_stream_provider")
+                        yield sse_error("chat", "ERROR", str(e),
+                            code="E_INFRA_GENERATION", http_status=500)
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded", code="E_INFRA_REGISTRY", http_status=503)
                     return
@@ -1495,22 +1522,33 @@ class InferenceRouter:
 
                 duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
                 tokens = len(full_response.split())
-                _post_gen_tasks = []
 
-                # Production RAG: verify response against knowledge base (parallel)
+                # ── Fire-and-forget post-gen tasks (don't block response) ──
+                def _post_gen_done(task_name):
+                    def _cb(fut):
+                        try:
+                            fut.result()
+                        except Exception as e:
+                            logger.debug("Post-gen task %s failed: %s", task_name, e)
+                    return _cb
+
+                # Production RAG: verify response against knowledge base
                 rag_verification = None
                 if req.use_rag and full_response.strip():
                     try:
                         rag_svc = get_rag_service()
                         if rag_svc.stats().get("total_chunks", 0) > 0:
-                            _post_gen_tasks.append(asyncio.to_thread(
+                            _rag_v_task = asyncio.create_task(asyncio.to_thread(
                                 rag_svc.verify_and_ground, full_response, user_msg or "",
                             ))
+                            with self._bg_tasks_lock:
+                                self._BG_TASKS.add(_rag_v_task)
+                            _rag_v_task.add_done_callback(self._bg_tasks_lock_discard)
                     except Exception as e:
                         logger.debug("RAG verification skipped: %s", e)
 
                 try:
-                    _post_gen_tasks.append(asyncio.to_thread(
+                    _cap_task = asyncio.create_task(asyncio.to_thread(
                         capture,
                         user_msg or "",
                         full_response,
@@ -1520,13 +1558,15 @@ class InferenceRouter:
                         temperature=req.temperature,
                         meta={"session_id": session_id},
                     ))
+                    with self._bg_tasks_lock:
+                        self._BG_TASKS.add(_cap_task)
+                    _cap_task.add_done_callback(self._bg_tasks_lock_discard)
                 except Exception as e:
                     logger.warning("Failed to capture conversation: %s", e)
 
                 try:
-
                     tracker = get_response_tracker()
-                    _post_gen_tasks.append(asyncio.to_thread(
+                    _track_task = asyncio.create_task(asyncio.to_thread(
                         tracker.log,
                         user_message=user_msg or "",
                         assistant_response=full_response,
@@ -1538,6 +1578,9 @@ class InferenceRouter:
                         duration_ms=duration_ms,
                         has_images=bool(req.images),
                     ))
+                    with self._bg_tasks_lock:
+                        self._BG_TASKS.add(_track_task)
+                    _track_task.add_done_callback(self._bg_tasks_lock_discard)
                 except Exception as e:
                     logger.warning("ResponseTracker.log failed: %s", e)
 
@@ -1555,36 +1598,14 @@ class InferenceRouter:
                         logger.warning("ContextCore.add_response failed: %s", e)
 
                 try:
-
-                    _post_gen_tasks.append(asyncio.to_thread(
+                    _learner_task = asyncio.create_task(asyncio.to_thread(
                         get_learner().ingest_conversation, [(user_msg, full_response)]
                     ))
+                    with self._bg_tasks_lock:
+                        self._BG_TASKS.add(_learner_task)
+                    _learner_task.add_done_callback(self._bg_tasks_lock_discard)
                 except Exception as e:
                     logger.warning("Continual learner ingest failed: %s", e)
-
-                if _post_gen_tasks:
-                    results = await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
-                    # Extract RAG verification result if it was in the tasks
-                    if req.use_rag and full_response.strip():
-                        for r in results:
-                            if isinstance(r, dict) and "confidence" in r:
-                                rag_verification = r
-                                break
-
-                # Send RAG verification results as a separate SSE event
-                if rag_verification is not None:
-                    yield _sse_event(
-                        "chat", "RAG_VERIFICATION", "success",
-                        data={
-                            "confidence": rag_verification.get("confidence", 0),
-                            "is_verified": rag_verification.get("is_verified", False),
-                            "hallucination_rate": rag_verification.get("verification", {}).get("hallucination_rate", 0),
-                            "citations": rag_verification.get("citations", ""),
-                            "grounded_claims": len(rag_verification.get("verification", {}).get("grounded_claims", [])),
-                            "hallucinated_claims": len(rag_verification.get("verification", {}).get("hallucinations", [])),
-                        },
-                        message="RAG grounding verification complete",
-                    )
 
                 try:
 
@@ -1601,7 +1622,8 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
-                classify_and_raise(e, source="chat_stream_outer")
+                yield sse_error("chat", "ERROR", str(e),
+                    code="E_INFRA_GENERATION", http_status=500)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -1716,7 +1738,10 @@ class InferenceRouter:
             system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}" if system_prompt else f"Use the following context to answer:\n{knowledge_str}"
 
         try:
-            enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+            enrichment = await asyncio.wait_for(
+                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
+                timeout=10.0,
+            )
             if enrichment.get("facts"):
                 k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
                 system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}" if system_prompt else f"Use the following context to answer:\n{k_text}"

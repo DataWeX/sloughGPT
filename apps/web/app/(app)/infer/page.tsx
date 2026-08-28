@@ -116,7 +116,7 @@ export default function InferPage() {
       subtitle="Test inference endpoints directly"
       headerRight={
         <div className="flex items-center gap-2">
-          <span className={cn('inline-block h-2 w-2 rounded-full', health?.model_loaded ? 'bg-green-500' : 'bg-red-500')} />
+          <span className={cn('inline-block h-2 w-2 rounded-full', health?.model_loaded ? 'bg-success' : 'bg-destructive')} />
           <span className="text-xs text-muted-foreground">{health?.status ?? 'checking...'}</span>
         </div>
       }

@@ -5,14 +5,16 @@ import { cn } from '../../lib/cn'
 
 export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> {
   onCheckedChange?: (checked: boolean) => void
-  /** Size variant */
   size?: 'sm' | 'default' | 'lg'
-  /** Label rendered inline */
   label?: React.ReactNode
-  /** Description rendered below label */
   description?: string
-  /** Indeterminate state */
   indeterminate?: boolean
+}
+
+const sizeMap = {
+  sm: { box: 'h-4 w-4', icon: 12, stroke: 2 },
+  default: { box: 'h-[18px] w-[18px]', icon: 14, stroke: 2 },
+  lg: { box: 'h-5 w-5', icon: 16, stroke: 2.5 },
 }
 
 const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
@@ -27,13 +29,17 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
       indeterminate,
       id,
       disabled,
+      checked,
+      defaultChecked,
       ...props
     },
     ref,
   ) => {
     const innerRef = React.useRef<HTMLInputElement | null>(null)
+    const [internalChecked, setInternalChecked] = React.useState(defaultChecked ?? false)
+    const isControlled = checked !== undefined
+    const isChecked = isControlled ? checked : internalChecked
 
-    // Sync indeterminate imperatively (no HTML attribute for it)
     React.useEffect(() => {
       const el = innerRef.current
       if (!el) return
@@ -42,67 +48,107 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       onChange?.(e)
-      onCheckedChange?.(e.target.checked)
+      const next = e.target.checked
+      if (!isControlled) setInternalChecked(next)
+      onCheckedChange?.(next)
     }
 
-    const sizeMap = {
-      sm: 'h-3.5 w-3.5',
-      default: 'h-4 w-4',
-      lg: 'h-5 w-5',
-    }
+    const s = sizeMap[size]
+    const showCheck = isChecked && !indeterminate
 
     const input = (
-      <input
-        ref={(node) => {
-          ;(innerRef as React.MutableRefObject<HTMLInputElement | null>).current = node
-          if (typeof ref === 'function') ref(node)
-          else if (ref) ref.current = node
-        }}
-        type="checkbox"
-        id={id}
-        disabled={disabled}
-        className={cn(
-          sizeMap[size],
-          'shrink-0 rounded-sm border border-input',
-          'bg-background text-primary',
-          'transition-colors duration-150',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-          'checked:bg-primary checked:border-primary',
-          'indeterminate:bg-primary/60 indeterminate:border-primary/60',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          // Custom check indicator via accent-color
-          'accent-primary',
-          !label && className,
+      <span className={cn('relative inline-flex shrink-0 items-center justify-center', s.box, disabled && 'opacity-50')}>
+        <input
+          ref={(node) => {
+            ;(innerRef as React.MutableRefObject<HTMLInputElement | null>).current = node
+            if (typeof ref === 'function') ref(node)
+            else if (ref) ref.current = node
+          }}
+          type="checkbox"
+          id={id}
+          disabled={disabled}
+          checked={isChecked}
+          className={cn(
+            'peer absolute inset-0 cursor-pointer appearance-none',
+            'rounded border transition-all duration-150',
+            isChecked
+              ? 'border-primary bg-primary'
+              : 'border-input bg-background',
+            'hover:border-primary/60',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+            'disabled:cursor-not-allowed disabled:hover:border-input',
+            !label && className,
+          )}
+          onChange={handleChange}
+          {...props}
+        />
+        {/* Checkmark */}
+        <svg
+          className={cn(
+            'pointer-events-none absolute text-primary-foreground',
+            showCheck ? 'scale-100 opacity-100' : 'scale-50 opacity-0',
+            'transition-all duration-150',
+          )}
+          width={s.icon}
+          height={s.icon}
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M3.5 8.5L6.5 11.5L12.5 4.5"
+            stroke="currentColor"
+            strokeWidth={s.stroke}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        {/* Indeterminate dash */}
+        {indeterminate && (
+          <svg
+            className="pointer-events-none absolute text-primary-foreground"
+            width={s.icon}
+            height={s.icon}
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M4 8H12"
+              stroke="currentColor"
+              strokeWidth={s.stroke}
+              strokeLinecap="round"
+            />
+          </svg>
         )}
-        onChange={handleChange}
-        {...props}
-      />
+      </span>
     )
 
     if (!label && !description) return input
 
     return (
-      <div className={cn('flex items-start gap-2.5', className)}>
-        <div className="mt-0.5">{input}</div>
-        <div className="flex flex-col gap-0.5">
+      <label
+        htmlFor={id}
+        className={cn(
+          'inline-flex items-start gap-2.5',
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+          className,
+        )}
+      >
+        <span className="mt-0.5">{input}</span>
+        <span className="flex flex-col gap-0.5">
           {label && (
-            <label
-              htmlFor={id}
-              className={cn(
-                'text-sm font-medium leading-snug text-foreground select-none',
-                disabled && 'cursor-not-allowed opacity-50',
-              )}
-            >
+            <span className="text-sm font-medium leading-snug text-foreground select-none">
               {label}
-            </label>
+            </span>
           )}
           {description && (
-            <p className={cn('text-xs text-muted-foreground leading-relaxed', disabled && 'opacity-50')}>
+            <span className="text-xs text-muted-foreground leading-relaxed">
               {description}
-            </p>
+            </span>
           )}
-        </div>
-      </div>
+        </span>
+      </label>
     )
   },
 )

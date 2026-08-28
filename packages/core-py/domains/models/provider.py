@@ -857,6 +857,7 @@ class SloTransformerProvider:
     def load_from_sou(cls, path: str, model_id_str: str = "") -> "SloTransformerProvider":
         """Load a trained SloTransformer from a .slo checkpoint."""
         from domains.inference import load_soul
+        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
@@ -875,31 +876,15 @@ class SloTransformerProvider:
             stoi = {ch: i for i, ch in enumerate(chars)}
             itos = {i: ch for i, ch in enumerate(chars)}
 
-        vocab = sd["tok_emb.weight"].shape[0]
-        n_embed = sd["tok_emb.weight"].shape[1]
-
-        n_layer = 1
-        for key in sd:
-            if key.startswith("blocks."):
-                idx = int(key.split(".")[1])
-                n_layer = max(n_layer, idx + 1)
-
-        n_head = 8
-        q_w = sd.get("blocks.0.attn.q_proj.weight")
-        if q_w is not None:
-            head_dim = n_embed // 8
-            if head_dim > 0:
-                detected = q_w.shape[0] // head_dim
-                if detected >= 1:
-                    n_head = detected
+        arch = infer_arch_from_state_dict(sd)
 
         from domains.training.slonet import SloTransformer
 
         model = SloTransformer(
-            vocab_size=vocab,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
+            vocab_size=arch["vocab_size"],
+            n_embed=arch["n_embed"],
+            n_layer=arch["n_layer"],
+            n_head=arch["n_head"],
             dropout=0.0,
             tie_weights=False,
         )

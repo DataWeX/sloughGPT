@@ -1,21 +1,9 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect, memo } from 'react'
+import { memo } from 'react'
 import { Button, IconX, IconPlus, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
-
-interface SessionGroup {
-  id: string
-  name: string
-  color: string
-  sessionIds: string[]
-  createdAt: number
-}
-
-interface Session {
-  id: string
-  title: string
-}
+import { useSessionGroups, COLORS, type Session } from './useSessionGroups'
 
 interface ChatSessionGroupsProps {
   sessions: Session[]
@@ -23,120 +11,17 @@ interface ChatSessionGroupsProps {
   className?: string
 }
 
-const COLORS = [
-  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
-  '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#84cc16',
-]
-
-const STORAGE_KEY = 'chat-session-groups'
-
-function loadGroups(): SessionGroup[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-}
-
-function saveGroups(groups: SessionGroup[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups))
-}
-
 export const ChatSessionGroups = memo(function ChatSessionGroups({
   sessions,
   onAssignGroup,
   className,
 }: ChatSessionGroupsProps) {
-  const [groups, setGroups] = useState<SessionGroup[]>([])
-  const [creating, setCreating] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newColor, setNewColor] = useState(COLORS[0])
-  const [selectedColor, setSelectedColor] = useState<string | null>(null)
-  const [assigningTo, setAssigningTo] = useState<string | null>(null)
-
-  useEffect(() => {
-    setGroups(loadGroups())
-  }, [])
-
-  const sessionsByGroup = useMemo(() => {
-    const map: Record<string, Session[]> = {}
-    const ungrouped: Session[] = []
-
-    for (const session of sessions) {
-      const group = groups.find(g => g.sessionIds.includes(session.id))
-      if (group) {
-        if (!map[group.id]) map[group.id] = []
-        map[group.id].push(session)
-      } else {
-        ungrouped.push(session)
-      }
-    }
-
-    return { map, ungrouped }
-  }, [sessions, groups])
-
-  const handleCreate = useCallback(() => {
-    const trimmed = newName.trim()
-    if (!trimmed) return
-
-    const newGroup: SessionGroup = {
-      id: crypto.randomUUID(),
-      name: trimmed,
-      color: newColor,
-      sessionIds: [],
-      createdAt: Date.now(),
-    }
-
-    const next = [...groups, newGroup]
-    setGroups(next)
-    saveGroups(next)
-    setNewName('')
-    setNewColor(COLORS[0])
-    setCreating(false)
-  }, [newName, newColor, groups])
-
-  const handleDelete = useCallback((id: string) => {
-    const next = groups.filter(g => g.id !== id)
-    setGroups(next)
-    saveGroups(next)
-  }, [groups])
-
-  const handleAssign = useCallback((sessionId: string, groupId: string) => {
-    const next = groups.map(g => {
-      if (g.id === groupId) {
-        return { ...g, sessionIds: [...g.sessionIds, sessionId] }
-      }
-      return { ...g, sessionIds: g.sessionIds.filter(id => id !== sessionId) }
-    })
-    setGroups(next)
-    saveGroups(next)
-    onAssignGroup(sessionId, groupId)
-    setAssigningTo(null)
-  }, [groups, onAssignGroup])
-
-  const handleUnassign = useCallback((sessionId: string, groupId: string) => {
-    const next = groups.map(g => {
-      if (g.id === groupId) {
-        return { ...g, sessionIds: g.sessionIds.filter(id => id !== sessionId) }
-      }
-      return g
-    })
-    setGroups(next)
-    saveGroups(next)
-    onAssignGroup(sessionId, null)
-  }, [groups, onAssignGroup])
-
-  const filteredSessions = useMemo(() => {
-    if (!selectedColor) return sessions
-    const groupIds = groups.filter(g => g.color === selectedColor).map(g => g.id)
-    return sessions.filter(s => {
-      const group = groups.find(g => g.sessionIds.includes(s.id))
-      return group && groupIds.includes(group.id)
-    })
-  }, [sessions, selectedColor, groups])
+  const {
+    groups, creating, newName, newColor, selectedColor, assigningTo,
+    sessionsByGroup,
+    setCreating, setNewName, setNewColor, setSelectedColor, setAssigningTo,
+    handleCreate, handleDelete, handleAssign, handleUnassign,
+  } = useSessionGroups(sessions, onAssignGroup)
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -272,7 +157,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                         variant="ghost"
                         size="icon-sm"
                         className="h-4 w-4 opacity-0 group-hover:opacity-100"
-                        onClick={() => handleUnassign(session.id, group.id)}
+                        onClick={() => handleUnassign(session.id)}
                         title="Remove from group"
                       >
                         <IconX className="h-2.5 w-2.5" />

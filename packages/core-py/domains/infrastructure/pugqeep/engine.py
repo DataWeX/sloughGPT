@@ -26,14 +26,13 @@ Usage:
 """
 
 import logging
-import queue
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, Future
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger("slo.pugqeep.engine")
 
@@ -81,6 +80,7 @@ class Process:
     created_at: float = field(default_factory=time.time)
     started_at: Optional[float] = None
     completed_at: Optional[float] = None
+    timeout: Optional[float] = None  # seconds, None = no timeout
     _future: Optional[Future] = field(default=None, repr=False)
     _tree_name: Optional[str] = field(default=None, repr=False)
 
@@ -155,6 +155,7 @@ class Stem:
     status: StemStatus = StemStatus.CREATED
     created_at: float = field(default_factory=time.time)
     completed_at: Optional[float] = None
+    _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def running(self) -> None:
         self.status = StemStatus.RUNNING
@@ -162,10 +163,12 @@ class Stem:
     def complete(self) -> None:
         self.status = StemStatus.COMPLETED
         self.completed_at = time.time()
+        self._done_event.set()
 
     def fail(self) -> None:
         self.status = StemStatus.FAILED
         self.completed_at = time.time()
+        self._done_event.set()
 
     @property
     def is_done(self) -> bool:
@@ -240,11 +243,37 @@ class Tree:
         return stem
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
-        """Execute a single process and update stem status."""
+        """Execute a single process with optional timeout and update stem status."""
         proc.running()
         try:
-            result = proc.fn(*proc.args, **proc.kwargs)
-            proc.complete(result)
+            if proc.timeout is not None and proc.timeout > 0:
+                # Run in a separate thread to enforce timeout
+                result_container: List[Any] = []
+                error_container: List[Optional[Exception]] = [None]
+
+                def _target():
+                    try:
+                        result_container.append(proc.fn(*proc.args, **proc.kwargs))
+                    except Exception as e:
+                        error_container[0] = e
+
+                worker = threading.Thread(target=_target, daemon=True)
+                worker.start()
+                worker.join(timeout=proc.timeout)
+
+                if worker.is_alive():
+                    proc.fail(f"timed out after {proc.timeout}s")
+                    logger.warning("Tree[%s]: process %s timed out (%.1fs)",
+                                   self.name, proc.id, proc.timeout)
+                elif error_container[0] is not None:
+                    proc.fail(str(error_container[0]))
+                    logger.error("Tree[%s]: process %s failed: %s",
+                                 self.name, proc.id, error_container[0])
+                else:
+                    proc.complete(result_container[0])
+            else:
+                result = proc.fn(*proc.args, **proc.kwargs)
+                proc.complete(result)
         except Exception as e:
             proc.fail(str(e))
             logger.error("Tree[%s]: process %s failed: %s",
@@ -262,12 +291,8 @@ class Tree:
         return proc.result
 
     def wait_stem(self, stem: Stem, timeout: Optional[float] = None) -> Stem:
-        """Wait for a Stem to complete."""
-        deadline = time.time() + timeout if timeout else None
-        while not stem.all_done:
-            if deadline and time.time() > deadline:
-                break
-            time.sleep(0.01)
+        """Wait for a Stem to complete (event-driven, no polling)."""
+        stem._done_event.wait(timeout=timeout)
         return stem
 
     def store(self, key: str, value: Any) -> None:
@@ -338,7 +363,6 @@ class Engine:
         self.max_trees = max_trees
         self._trees: Dict[str, Tree] = {}
         self._processes: Dict[str, Process] = {}
-        self._main_queue: queue.Queue = queue.Queue()
         self._pending: List[Process] = []
         self._running = False
         self._lock = threading.Lock()
@@ -349,8 +373,12 @@ class Engine:
         self._dispatch_batch_size: int = 8
         self._round_robin_idx: int = 0
 
+        # Producer-consumer queue for spawn dispatch (replaces raw queue.Queue)
+        self._spawn_queue: Optional["ProducerConsumerQueue[Process]"] = None
+
     def spawn(self, fn: Callable[..., Any], *args: Any,
               name: str = "", tree: Optional[str] = None,
+              priority: int = 2, timeout: Optional[float] = None,
               **kwargs: Any) -> Process:
         """Spawn a new process.
 
@@ -363,16 +391,24 @@ class Engine:
             *args: Positional args forwarded to ``fn``.
             name: Optional human-readable name. Used for routing.
             tree: Optional explicit tree name (overrides routing).
+            priority: Queue priority (0=highest, 3=lowest). Only used when
+                workers are running via ``start_workers()``.
+            timeout: Optional timeout in seconds. None = no timeout.
             **kwargs: Keyword args forwarded to ``fn``.
 
         Returns:
             A ``Process`` instance with a unique id.
         """
-        proc = Process(fn=fn, args=args, kwargs=kwargs, name=name)
+        proc = Process(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
         if tree:
             proc._tree_name = tree
         self._processes[proc.id] = proc
         self._pending.append(proc)
+
+        # Dispatch to worker queue if running
+        if self._spawn_queue is not None:
+            self._spawn_queue.put(proc, priority=priority)
+
         logger.debug("Engine[%s]: spawned process %s (%s) → pending",
                       self.name, proc.id, proc.name or fn.__name__)
         return proc
@@ -482,42 +518,34 @@ class Engine:
         self._pending.clear()
         return dispatched
 
-    def run(self, poll_interval: float = 0.1) -> None:
+    def run(self, poll_interval: float = 0.1,
+            on_progress: Optional[Callable[[dict], None]] = None) -> None:
         """Main process loop.
 
-        Processes spawn/branch events from the queue, dispatches
-        pending processes to trees, monitors active trees, and
-        fires completion callbacks. Runs until stop() is called.
+        Dispatches pending processes to trees, monitors active trees,
+        and fires completion callbacks. Runs until stop() is called.
 
-        This is the core dispatch loop — it continuously:
-        1. Drains the spawn queue into _pending
-        2. Dispatches pending processes to appropriate trees
-        3. Monitors active stems for completion
-        4. Fires on_complete callbacks
+        When workers are running (via ``start_workers()``), this loop
+        only monitors completion — dispatch is handled by workers.
+
+        Args:
+            poll_interval: Seconds between dispatch cycles.
+            on_progress: Optional callback receiving status dict each cycle:
+                {"pending": int, "active_stems": int, "completed": int,
+                 "running": int, "failed": int}
         """
         self._running = True
         logger.info("Engine[%s]: starting main loop", self.name)
 
         while self._running:
-            # 1. Drain spawn queue
-            try:
-                while True:
-                    event = self._main_queue.get_nowait()
-                    event_type, data = event
-                    if event_type == "spawn":
-                        logger.debug("Engine[%s]: queued spawn %s",
-                                     self.name, data.id)
-            except queue.Empty:
-                pass
-
-            # 2. Dispatch pending processes
-            if self._pending:
+            # 1. Dispatch pending processes (only when workers are NOT running)
+            if self._pending and self._spawn_queue is None:
                 dispatched = self.dispatch()
                 if dispatched > 0:
                     logger.info("Engine[%s]: dispatched %d processes",
                                 self.name, dispatched)
 
-            # 3. Monitor active trees and fire callbacks
+            # 2. Monitor active trees and fire callbacks
             with self._lock:
                 active = sum(t.active_stems for t in self._trees.values())
 
@@ -532,6 +560,22 @@ class Engine:
                             logger.error("Engine[%s]: on_complete callback error: %s",
                                          self.name, e)
 
+            # 3. Fire progress callback
+            if on_progress is not None:
+                try:
+                    on_progress({
+                        "pending": len(self._pending),
+                        "active_stems": active,
+                        "completed": len(self._completed),
+                        "running": sum(1 for p in self._processes.values()
+                                       if p.status == ProcessStatus.RUNNING),
+                        "failed": sum(1 for p in self._processes.values()
+                                      if p.status == ProcessStatus.FAILED),
+                    })
+                except Exception as e:
+                    logger.error("Engine[%s]: on_progress callback error: %s",
+                                 self.name, e)
+
             if active > 0:
                 logger.debug("Engine[%s]: %d active stems across %d trees",
                              self.name, active, len(self._trees))
@@ -540,11 +584,26 @@ class Engine:
 
         logger.info("Engine[%s]: main loop stopped", self.name)
 
-    def run_background(self, poll_interval: float = 0.1) -> None:
+    def run_background(self, poll_interval: float = 0.1,
+                       as_future: bool = False) -> Union[threading.Thread, Future]:
         """Start the main loop in a background thread.
 
         Non-blocking — returns immediately. Use stop() to stop.
+
+        Args:
+            poll_interval: Seconds between dispatch cycles.
+            as_future: If True, return a concurrent.futures.Future instead of Thread.
+
+        Returns:
+            threading.Thread if as_future=False, Future if as_future=True.
         """
+        if as_future:
+            executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"engine-{self.name}")
+            future = executor.submit(self.run, poll_interval)
+            future.add_done_callback(lambda _: executor.shutdown(wait=False))
+            logger.info("Engine[%s]: started as Future", self.name)
+            return future
+
         thread = threading.Thread(
             target=self.run,
             args=(poll_interval,),
@@ -563,7 +622,6 @@ class Engine:
         """
         deadline = time.time() + timeout if timeout else None
         while True:
-            # Check if anything is pending or running
             has_pending = bool(self._pending)
             has_running = any(
                 not p.is_done
@@ -575,9 +633,28 @@ class Engine:
                 break
             time.sleep(0.05)
 
+    def wait_all(self, timeout: Optional[float] = None) -> List[Process]:
+        """Wait for all processes and return completed/failed/cancelled list.
+
+        Args:
+            timeout: Maximum seconds to wait. None = wait forever.
+
+        Returns:
+            List of processes in terminal state.
+        """
+        self.wait(timeout=timeout)
+        return [p for p in self._processes.values() if p.is_done]
+
+    def get_completed(self) -> List[Process]:
+        """Return all completed processes since last call."""
+        done = list(self._completed)
+        self._completed.clear()
+        return done
+
     def stop(self) -> None:
-        """Stop the main process loop."""
+        """Stop the main process loop and workers."""
         self._running = False
+        self.stop_workers()
         for tree in self._trees.values():
             tree.shutdown()
 
@@ -606,3 +683,60 @@ class Engine:
             "active_stems": sum(t.active_stems for t in self._trees.values()),
             "routing": dict(self._routing),
         }
+
+    # ── Worker pool (ProducerConsumerQueue-backed) ────────────────────
+
+    def start_workers(self, num_workers: int = 2, max_queue: int = 128) -> None:
+        """Start worker threads that auto-dispatch spawned processes.
+
+        Replaces the manual ``run()`` loop with threaded dispatch.
+        Processes are dispatched to trees automatically via the routing table.
+
+        Args:
+            num_workers: Number of dispatcher threads.
+            max_queue: Maximum pending spawns before backpressure.
+        """
+        if self._spawn_queue is not None:
+            return
+
+        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+
+        self._spawn_queue = ProducerConsumerQueue[Process](
+            maxsize=max_queue,
+            num_consumers=num_workers,
+            handler=self._dispatch_process,
+            name=f"engine-{self.name}",
+        )
+        self._spawn_queue.start()
+        logger.info("Engine[%s]: started %d workers (max_queue=%d)",
+                     self.name, num_workers, max_queue,
+                     extra={"tag": "INFRA"})
+
+    def stop_workers(self, timeout: float = 5.0) -> None:
+        """Stop worker threads gracefully."""
+        if self._spawn_queue is not None:
+            self._spawn_queue.stop(timeout=timeout)
+            self._spawn_queue = None
+            logger.info("Engine[%s]: workers stopped", self.name,
+                         extra={"tag": "INFRA"})
+
+    def _dispatch_process(self, proc: Process) -> None:
+        """Worker callback: dispatch a single process to its target tree."""
+        tree_name = proc._tree_name or self._routing.get(proc.name) or self._default_tree
+        if not tree_name:
+            logger.warning("Engine[%s]: no tree for process '%s'", self.name, proc.name)
+            return
+
+        tree = self._trees.get(tree_name)
+        if tree is None:
+            logger.warning("Engine[%s]: tree '%s' not found for process '%s'",
+                           self.name, tree_name, proc.name)
+            proc.fail(f"tree '{tree_name}' not found")
+            return
+
+        try:
+            tree.branch([proc])
+        except RuntimeError as e:
+            logger.error("Engine[%s]: branch failed for '%s': %s",
+                         self.name, tree_name, e)
+            proc.fail(str(e))

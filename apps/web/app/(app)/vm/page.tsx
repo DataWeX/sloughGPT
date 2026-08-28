@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
-import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, Checkbox, cn } from '@sloughgpt/strui'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -869,10 +869,9 @@ export default function VMPage() {
                   <option value="kernel">kernel</option>
                 </select>
                 <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={debug}
-                    onChange={(e) => setDebug(e.target.checked)}
+                    onCheckedChange={(checked) => setDebug(checked === true)}
                     aria-label="Toggle debug mode"
                     className="rounded"
                   />

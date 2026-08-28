@@ -6,7 +6,7 @@ import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
 import { SlashCommandMenu } from './SlashCommandMenu'
 import { MentionMenu } from './MentionMenu'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconStop } from '@sloughgpt/strui'
 import { estimateTokens } from '@/lib/format-bytes'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -150,9 +150,7 @@ export const ChatInputRow = memo(function ChatInputRow({
           onClick={onCancel}
           aria-label="Cancel generation"
         >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="6" y="6" width="12" height="12" rx="2" />
-          </svg>
+          <IconStop className="h-4 w-4" aria-hidden="true" />
         </button>
       )}
       <ChatSendButton

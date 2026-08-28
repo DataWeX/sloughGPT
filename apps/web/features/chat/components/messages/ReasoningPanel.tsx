@@ -60,11 +60,11 @@ export const ReasoningPanel = memo(function ReasoningPanel({ isThinking, context
               <div key={i} className="flex items-start gap-2 text-[11px] leading-relaxed">
                 <span className={cn(
                   "shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full",
-                  layer.type === 'knowledge' && "bg-blue-500",
-                  layer.type === 'memory' && "bg-purple-500",
-                  layer.type === 'rag' && "bg-green-500",
-                  layer.type === 'tool' && "bg-orange-500",
-                  layer.type === 'soul' && "bg-primary",
+                  layer.type === 'knowledge' && "bg-primary",
+                  layer.type === 'memory' && "bg-accent",
+                  layer.type === 'rag' && "bg-success",
+                  layer.type === 'tool' && "bg-warning",
+                  layer.type === 'soul' && "bg-primary/60",
                   layer.type === 'system' && "bg-muted-foreground",
                 )} />
                 <div className="flex-1 min-w-0">

@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, EmptyCard, cn } from '@sloughgpt/strui'
+import { Card, CardContent, Checkbox, EmptyCard, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -763,10 +763,9 @@ export default function KnowledgePage() {
           <>
             {displayItems.length > 1 && (
               <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selectedIds.size === displayItems.length && displayItems.length > 0}
-                  onChange={toggleSelectAll}
+                  onCheckedChange={toggleSelectAll}
                   aria-label="Select all knowledge items"
                   className="rounded border-border"
                 />
@@ -780,10 +779,9 @@ export default function KnowledgePage() {
                   className={cn('group relative p-4 rounded-lg border text-sm leading-relaxed transition-colors', selectedIds.has(item.id) ? 'bg-primary/[0.06] border-primary/30' : editingId === item.id ? 'bg-primary/[0.04] border-primary/30' : 'bg-card border-border/60 hover:bg-muted/30')}
                 >
                   <div className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedIds.has(item.id)}
-                      onChange={() => toggleSelect(item.id)}
+                      onCheckedChange={() => toggleSelect(item.id)}
                       aria-label={`Select knowledge item`}
                       className="mt-0.5 rounded border-border shrink-0"
                     />

@@ -427,6 +427,43 @@ html {
   }
 }
 
+@keyframes scaleBar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.15); }
+  50% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.05); }
+}
+
+.trait-bar-inner {
+  transform-origin: left;
+  animation: scaleBar 0.5s ease-out forwards;
+}
+
+.stat-card {
+  animation: fadeSlideUp 0.4s ease-out both;
+}
+
+.badge-glow {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.view-pane {
+  animation: viewFadeIn 0.3s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .str-dot {
     animation: none;

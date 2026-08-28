@@ -216,6 +216,10 @@ class InferRouter:
                 provider_messages = [{"role": "user", "content": req.prompt}]
                 start = datetime.datetime.now()
                 token_count = 0
+                _token_gen_start = time.time()
+                _max_token_wait_s = getattr(cfg, "generate_timeout", 60)
+                _heartbeat_interval_s = 10.0
+                _last_heartbeat = time.time()
                 try:
                     async for token in provider.chat_stream(
                         provider_messages,
@@ -228,8 +232,23 @@ class InferRouter:
                         if await request.is_disconnected():
                             return
                         if token:
+                            _token_gen_start = time.time()
                             token_count += 1
                             yield self._sse_token("infer", token)
+                        else:
+                            now = time.time()
+                            if now - _last_heartbeat >= _heartbeat_interval_s:
+                                yield ": heartbeat\n\n"
+                                _last_heartbeat = now
+                        elapsed_since_token = time.time() - _token_gen_start
+                        if elapsed_since_token > _max_token_wait_s:
+                            logger.warning(
+                                "Infer stream stalled for %.1fs (limit=%.1fs)",
+                                elapsed_since_token, _max_token_wait_s,
+                                extra={"tag": "INF"},
+                            )
+                            yield self._sse_error("infer", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
+                            return
                 except Exception as e:
                     from domains.infrastructure.errors import classify_exception, emit_error_event
                     err = classify_exception(e)

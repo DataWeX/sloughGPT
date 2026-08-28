@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Checkbox } from '@sloughgpt/strui'
 import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
 
 interface Props {
@@ -132,10 +132,9 @@ export function SessionTrainingCard({ addToast }: Props) {
                 key={s.id}
                 className={cn('flex items-center gap-3 rounded border px-3 py-2 text-sm transition-colors', selected.has(s.id) ? 'border-primary bg-primary/5' : 'border-border/50 hover:bg-muted/30')}
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selected.has(s.id)}
-                  onChange={() => toggleSelect(s.id)}
+                  onCheckedChange={() => toggleSelect(s.id)}
                   aria-label={`Select session ${s.name}`}
                   className="h-3.5 w-3.5 rounded border-border shrink-0"
                 />

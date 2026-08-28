@@ -48,7 +48,7 @@ class ModelQueue:
 
         if tree is None:
             tc = config or TreeConfig(name=name, n_clusters=self.config.default_n_clusters)
-            lib = self._shared_library or PointLibrary(name=f"{name}_points")
+            lib = self._shared_library if self._shared_library is not None else PointLibrary(name=f"{name}_points")
             tree = ModelTree(tc.name, lib, n_clusters=tc.n_clusters)
 
         self._trees[name] = tree
@@ -122,10 +122,13 @@ class ModelQueue:
             tree.library.save(directory / f"{name}.points.json")
 
     def load_all(self, directory: Path) -> None:
-        """Load all trees from a directory."""
+        """Load all trees from a directory.
+
+        Expects files named ``{name}.points.json``.
+        """
         for f in directory.glob("*.points.json"):
-            name = f.stem.replace(".points", "")
+            name = f.name.rsplit(".points.json", 1)[0]
             lib = PointLibrary.load(f)
             tree = ModelTree(name, lib)
-            tree._loaded = True
+            tree.is_loaded = True
             self._trees[name] = tree

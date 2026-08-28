@@ -237,7 +237,11 @@ def _warmup(eps=np.float32(1e-5), has_bias=True):
 
     @njit
     def _warmup_softmax():
-        e = np.tile(np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float32), (1, 12, 1, 1))
+        e = np.empty((1, 12, 1, 4), dtype=np.float32)
+        for i in range(4):
+            e.flat[i] = np.float32(i)
+        for i in range(4, 48):
+            e.flat[i] = np.float32(i % 4)
         n_last = 4
         total = e.size
         for offset in range(0, total, n_last):

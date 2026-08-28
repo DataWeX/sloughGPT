@@ -143,10 +143,16 @@ export function StatusBar() {
           )}
         </button>
         {health?.tokens_per_sec ? (
-          <span className="hidden sm:inline tabular-nums">{health.tokens_per_sec.toFixed(0)} t/s</span>
+          <span className="hidden sm:inline-flex items-center gap-1 tabular-nums">
+            <span className="inline-block h-1 w-1 rounded-full bg-success animate-pulse" aria-hidden="true" />
+            {health.tokens_per_sec.toFixed(0)} tok/s
+          </span>
         ) : health !== null && health.inference_count != null ? (
-          <span className="hidden sm:inline">{health.inference_count} response{health.inference_count !== 1 ? 's' : ''}</span>
+          <span className="hidden sm:inline tabular-nums">{health.inference_count} req{health.inference_count !== 1 ? 's' : ''}</span>
         ) : null}
+        {health?.uptime_seconds != null && health.uptime_seconds > 0 && (
+          <span className="hidden sm:inline tabular-nums" title="Uptime">{formatDuration(health.uptime_seconds)}</span>
+        )}
       </div>
     </Link>
   )

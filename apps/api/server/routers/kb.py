@@ -1031,14 +1031,17 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_verify")
-    def rag_list_documents(self) -> dict:
+    async def rag_list_documents(self) -> dict:
         try:
             """List all documents in the RAG index (metadata only)."""
-            from domains.cognitive.rag_service import get_rag_service
+            from domains.cognitive.rag_service import get_rag_service, is_rag_service_ready
+            if not is_rag_service_ready():
+                return success_response(data={"documents": [], "stats": {}, "ready": False})
             rag_svc = get_rag_service()
             return success_response(data={
                 "documents": rag_svc.list_documents(),
                 "stats": rag_svc.stats(),
+                "ready": True,
             })
 
         except Exception as e:
@@ -1057,19 +1060,14 @@ class KBRouter:
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_clear")
-    def rag_stats(self) -> dict:
+    async def rag_stats(self) -> dict:
         try:
-            """Retrieve statistics for the production RAG index.
-
-            Returns document count, chunk count, index size, and other
-            metrics from the RAG service's internal state.
-
-            Returns:
-                Success envelope with RAG stats dict.
-            """
-            from domains.cognitive.rag_service import get_rag_service
+            """Retrieve statistics for the production RAG index."""
+            from domains.cognitive.rag_service import get_rag_service, is_rag_service_ready
+            if not is_rag_service_ready():
+                return success_response(data={"ready": False, "total_chunks": 0, "total_documents": 0})
             rag_svc = get_rag_service()
-            return success_response(data=rag_svc.stats())
+            return success_response(data={**rag_svc.stats(), "ready": True})
 
         except Exception as e:
             classify_and_raise(e, source="kb.rag_stats")

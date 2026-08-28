@@ -21,6 +21,9 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div>{label}: {value}</div>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
   }
 })
 

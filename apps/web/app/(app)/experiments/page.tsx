@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, StatCard, KpiGrid, Skeleton, cn } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
@@ -285,10 +285,9 @@ export default function ExperimentsPage() {
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer mb-2">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selectedIds.size === experiments.filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase())).length && experiments.length > 0}
-                    onChange={toggleSelectAll}
+                    onCheckedChange={toggleSelectAll}
                     className="rounded border-border"
                   />
                   Select all
@@ -306,10 +305,9 @@ export default function ExperimentsPage() {
                       tabIndex={0}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selectedIds.has(exp.id)}
-                          onChange={() => toggleSelect(exp.id)}
+                          onCheckedChange={() => toggleSelect(exp.id)}
                           onClick={e => e.stopPropagation()}
                           aria-label={`Select experiment ${exp.id}`}
                           className="rounded border-border shrink-0"

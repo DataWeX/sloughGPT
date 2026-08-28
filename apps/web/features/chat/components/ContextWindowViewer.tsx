@@ -19,11 +19,11 @@ interface ContextWindowViewerProps {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  system: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
-  knowledge: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  agent: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  user: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  assistant: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+  system: 'bg-primary/10 text-primary border-primary/20',
+  knowledge: 'bg-accent/10 text-accent border-accent/20',
+  agent: 'bg-warning/10 text-warning border-warning/20',
+  user: 'bg-success/10 text-success border-success/20',
+  assistant: 'bg-destructive/10 text-destructive border-destructive/20',
 }
 
 const TYPE_LABELS: Record<string, string> = {

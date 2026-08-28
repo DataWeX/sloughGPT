@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry } from '@/lib/files-controller'
@@ -199,10 +199,9 @@ export default function FilesPage() {
                 )}
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   <label className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 rounded">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.size === filtered.length && filtered.length > 0}
-                      onChange={toggleSelectAll}
+                      onCheckedChange={toggleSelectAll}
                       aria-label="Select all files"
                       className="h-4 w-4 rounded border-border"
                     />
@@ -211,10 +210,9 @@ export default function FilesPage() {
                   {filtered.map(f => (
                     <div key={f.id} className={cn('flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors', selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60')}>
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selected.has(f.id)}
-                          onChange={() => toggleSelect(f.id)}
+                          onCheckedChange={() => toggleSelect(f.id)}
                           aria-label={`Select file ${f.filename}`}
                           className="h-4 w-4 rounded border-border shrink-0"
                         />

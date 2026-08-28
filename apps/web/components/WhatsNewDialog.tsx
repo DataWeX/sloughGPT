@@ -1,12 +1,27 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { whatsNewItems, type WhatsNewItem } from '@/lib/whats-new-data'
 import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
+import { Sparkles, Palette, GraduationCap, Cpu, MessageCircle, Mic, Zap, BarChart3, Brain, Settings, Trash2 } from 'lucide-react'
+
+const EMOJI_TO_ICON: Record<string, ReactNode> = {
+  '✨': <Sparkles className="h-4 w-4" />,
+  '🎨': <Palette className="h-4 w-4" />,
+  '🎓': <GraduationCap className="h-4 w-4" />,
+  '🧠': <Brain className="h-4 w-4" />,
+  '💬': <MessageCircle className="h-4 w-4" />,
+  '🎤': <Mic className="h-4 w-4" />,
+  '⚡': <Zap className="h-4 w-4" />,
+  '📊': <BarChart3 className="h-4 w-4" />,
+  '🤖': <Cpu className="h-4 w-4" />,
+  '⚙️': <Settings className="h-4 w-4" />,
+  '🗑️': <Trash2 className="h-4 w-4" />,
+}
 
 const SEEN_KEY = 'whatsnew_seen'
 
@@ -90,7 +105,7 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 )}
               >
                 <div className="flex items-start gap-2.5">
-                  <span className="text-lg leading-none mt-0.5 shrink-0">{item.icon}</span>
+                  <span className="text-lg leading-none mt-0.5 shrink-0 text-muted-foreground">{EMOJI_TO_ICON[item.icon] ?? <Sparkles className="h-4 w-4" />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       {item.href ? (

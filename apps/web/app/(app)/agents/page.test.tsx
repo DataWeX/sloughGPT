@@ -34,6 +34,9 @@ vi.mock('@sloughgpt/strui', () => {
     IconTrash: () => <span>trash</span>,
     IconClock: () => <span>clock</span>,
     IconCopy: () => <span>copy</span>,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
   }
 })
 

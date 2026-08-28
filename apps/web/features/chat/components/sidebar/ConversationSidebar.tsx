@@ -1,17 +1,16 @@
 'use client'
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDownload, IconDocument, IconCopy, IconDot, IconDotOutline } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
 import type { Conversation } from '@/lib/session-controller'
-import { sessionController } from '@/lib/session-controller'
-import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 import { downloadJson, downloadMarkdown } from '@/lib/download-utils'
-import { MS_PER_DAY } from '@/lib/format-bytes'
+import { ConvRow } from './ConvRow'
+import { useSidebarSearch } from './useSidebarSearch'
 
 interface ConversationSidebarProps {
   conversations: Conversation[]
@@ -65,86 +64,20 @@ function SidebarContent({
   isDrawer?: boolean
   onToggleCollapse?: () => void
 }) {
-  const SORT_KEY = 'sloughgpt:sidebar-sort'
+  const {
+    search, setSearch, sortMode, setSortMode, sortOpen, setSortOpen,
+    serverSearchLoading, filtered, starred, pinned, recencyGroups, q,
+  } = useSidebarSearch(conversations)
 
-  const [search, setSearch] = useState('')
-  const [serverSearchResults, setServerSearchResults] = useState<Conversation[] | null>(null)
-  const [serverSearchLoading, setServerSearchLoading] = useState(false)
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
-  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>(() => {
-    if (typeof window === 'undefined') return 'updated'
-    const saved = localStorage.getItem(SORT_KEY)
-    if (saved === 'name' || saved === 'messages') return saved
-    return 'updated'
-  })
   const unreadCount = useMemo(() => conversations.filter(c => c.unread).length, [conversations])
   const [archivedExpanded, setArchivedExpanded] = useState(false)
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([])
   const [archivedLoading, setArchivedLoading] = useState(false)
-  const [sortOpen, setSortOpen] = useState(false)
-
-  useEffect(() => {
-    localStorage.setItem(SORT_KEY, sortMode)
-  }, [sortMode])
-
-  const sorted = useMemo(() => {
-    return [...conversations].sort((a, b) => {
-      if (sortMode === 'name') {
-        return (a.name || '').localeCompare(b.name || '')
-      }
-      if (sortMode === 'messages') {
-        return (b.message_count ?? b.messages?.length ?? 0) - (a.message_count ?? a.messages?.length ?? 0)
-      }
-      return new Date(b.updated_at || b.updatedAt || 0).getTime() - new Date(a.updated_at || a.updatedAt || 0).getTime()
-    })
-  }, [conversations, sortMode])
-
-  const q = search.toLowerCase().trim()
-
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
-    if (!q || q.length < 2) {
-      setServerSearchResults(null)
-      setServerSearchLoading(false)
-      return
-    }
-    setServerSearchLoading(true)
-    searchDebounceRef.current = setTimeout(async () => {
-      try {
-        const results = await sessionController.search(q, 30)
-        setServerSearchResults(results.map(r => ({
-          id: r.id,
-          name: r.name || 'Untitled',
-          session_id: r.id,
-          messages: r.matches?.map(m => ({ id: m.timestamp, role: m.role, content: m.content })) || [],
-          updated_at: r.updated_at,
-          created_at: r.created_at,
-          pinned: false,
-          starred: false,
-          message_count: r.match_count,
-        })))
-      } catch {
-        setServerSearchResults(null)
-      } finally {
-        setServerSearchLoading(false)
-      }
-    }, 300)
-    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
-  }, [q])
-
-  const filtered = useMemo(() => {
-    if (!q) return sorted
-    if (serverSearchResults) return serverSearchResults
-    return sorted.filter(c =>
-      c.name?.toLowerCase().includes(q) ||
-      c.messages?.some(m => m.content?.toLowerCase().includes(q))
-    )
-  }, [sorted, q, serverSearchResults])
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    const conv = sorted.find(c => c.id === id)
+    const conv = conversations.find(c => c.id === id)
     setDeleteTarget({ id, name: conv?.name || 'this conversation' })
   }
 
@@ -154,37 +87,6 @@ function SidebarContent({
       setDeleteTarget(null)
     }
   }
-
-  const starred = useMemo(() => filtered.filter(c => c.starred).slice(0, 10), [filtered])
-  const unstarred = useMemo(() => filtered.filter(c => !c.starred), [filtered])
-  const pinned = useMemo(() => unstarred.filter(c => c.pinned), [unstarred])
-  const unpinned = useMemo(() => unstarred.filter(c => !c.pinned), [unstarred])
-
-  function recencyGroup(dateStr: string | undefined): string {
-    if (!dateStr) return 'Older'
-    const diff = Date.now() - new Date(dateStr).getTime()
-    const days = diff / MS_PER_DAY
-    if (days < 1) return 'Today'
-    if (days < 2) return 'Yesterday'
-    if (days < 7) return 'Last 7 days'
-    return 'Older'
-  }
-
-  const recencyGroups = useMemo(() => {
-    const groups: { label: string; conversations: Conversation[] }[] = []
-    const seen = new Set<string>()
-    for (const c of unpinned) {
-      const label = recencyGroup(c.updated_at || c.updatedAt)
-      if (!seen.has(label)) {
-        seen.add(label)
-        groups.push({ label, conversations: [] })
-      }
-      const group = groups.find(g => g.label === label)!
-      if (group.conversations.length < 15) group.conversations.push(c)
-    }
-    const order = ['Today', 'Yesterday', 'Last 7 days', 'Older']
-    return groups.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label))
-  }, [unpinned])
 
   const handleSelect = (id: string) => {
     onLoadConversation(id)
@@ -333,7 +235,7 @@ function SidebarContent({
           {search && !serverSearchLoading && (
             <button
               type="button"
-              onClick={() => { setSearch(''); setServerSearchResults(null) }}
+              onClick={() => setSearch('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
               aria-label="Clear search"
             >
@@ -580,239 +482,3 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
   )
 }
 
-const ConvRow = memo(function ConvRow({
-  conversation: c,
-  isActive,
-  onSelect,
-  onDelete,
-  onStar,
-  onPin,
-  onArchive,
-  onRename,
-  onExport,
-  onDuplicate,
-  onToggleUnread,
-  searchQuery,
-}: {
-  conversation: Conversation
-  isActive: boolean
-  onSelect: () => void
-  onDelete?: (e: React.MouseEvent) => void
-  onStar?: (e: React.MouseEvent) => void
-  onPin?: (e: React.MouseEvent) => void
-  onArchive?: (e: React.MouseEvent) => void
-  onRename?: (name: string) => void
-  onExport?: (e: React.MouseEvent, format?: 'json' | 'markdown') => void
-  onDuplicate?: (e: React.MouseEvent) => void
-  onToggleUnread?: (e: React.MouseEvent) => void
-  searchQuery?: string
-}) {
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState(c.name)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editing])
-
-  const handleFinishEdit = () => {
-    const trimmed = editValue.trim()
-    if (trimmed && trimmed !== c.name) {
-      onRename?.(trimmed)
-    }
-    setEditing(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleFinishEdit()
-    } else if (e.key === 'Escape') {
-      setEditValue(c.name)
-      setEditing(false)
-    }
-  }
-
-  const msgCount = c.messages?.length ?? c.message_count ?? 0
-  const lastMsg = c.messages?.[c.messages.length - 1]?.content || ''
-
-  const highlightMatch = (text: string, query: string): React.ReactNode => {
-    if (!query) return text
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">{part}</mark>
-        : part
-    )
-  }
-
-  return (
-    <div
-      className={cn(
-        "group flex items-start gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
-        isActive ? "bg-primary/10" : "hover:bg-muted/40",
-        c.unread && !isActive && "bg-primary/5"
-      )}
-      onClick={!editing ? onSelect : undefined}
-      role="button"
-      tabIndex={0}
-      onFocus={(e) => {
-        // Show action buttons when the row receives focus (keyboard navigation)
-        const buttons = e.currentTarget.querySelectorAll<HTMLElement>('.sm\\:opacity-0')
-        buttons.forEach(btn => btn.classList.remove('sm:opacity-0'))
-      }}
-      onBlur={(e) => {
-        // Restore opacity when focus leaves the row
-        const buttons = e.currentTarget.querySelectorAll<HTMLElement>('.sm\\:opacity-0')
-        buttons.forEach(btn => btn.classList.add('sm:opacity-0'))
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(); return }
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          const scrollable = e.currentTarget.closest('.overflow-y-auto') || e.currentTarget.parentElement?.parentElement?.parentElement
-          if (!scrollable) return
-          const items = Array.from(scrollable.querySelectorAll<HTMLElement>('[role="button"]'))
-          const idx = items.indexOf(e.currentTarget)
-          const next = e.key === 'ArrowDown' ? idx + 1 : idx - 1
-          if (next >= 0 && next < items.length) items[next].focus()
-        }
-      }}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onPin}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-            aria-label={c.pinned ? 'Unpin' : 'Pin'}
-          >
-            <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
-            className={cn(
-              "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
-              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
-            )}
-            aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
-          >
-            {c.unread ? (
-              <IconDot className="h-2.5 w-2.5" />
-            ) : (
-              <IconDotOutline className="h-2.5 w-2.5" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onStar}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-            aria-label={c.starred ? 'Unstar' : 'Star'}
-          >
-            <IconStar className={cn("h-2.5 w-2.5", c.starred ? "text-warning" : "text-muted-foreground/40")} filled={c.starred} />
-          </button>
-          {editing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={handleFinishEdit}
-              onKeyDown={handleKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-1 min-w-0 h-5 text-xs font-medium bg-muted/60 rounded-sm px-1 outline-none ring-1 ring-primary/40"
-              aria-label="Rename conversation"
-            />
-          ) : (
-            <p
-              className={cn(
-                "text-xs truncate text-foreground",
-                c.unread ? "font-semibold" : "font-medium"
-              )}
-              onDoubleClick={(e) => { e.stopPropagation(); setEditValue(c.name); setEditing(true) }}
-            >
-              {highlightMatch(c.name, searchQuery || '')}
-            </p>
-          )}
-        </div>
-        {lastMsg && !editing && (
-          <p className="text-[11px] text-muted-foreground/70 mt-0.5 line-clamp-1">
-            {searchQuery ? highlightMatch(truncateMessage(lastMsg, 36), searchQuery) : truncateMessage(lastMsg, 36)}
-          </p>
-        )}
-        {!editing && (
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-              {msgCount}
-            </span>
-            <span className="text-xs text-muted-foreground/50">
-              {formatDate(c.updated_at || c.updatedAt)}
-            </span>
-            {c.pinned && <span className="text-xs text-primary">📌</span>}
-            {c.starred && <span className="text-xs">★</span>}
-          </div>
-        )}
-      </div>
-      <div className="hidden sm:flex items-center gap-0.5 shrink-0 mt-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        {onExport && !editing && (
-          <>
-            <button
-              type="button"
-              onClick={(e) => onExport(e, 'json')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-              aria-label="Export as JSON"
-              title="Export as JSON"
-            >
-              <IconDownload className="h-2.5 w-2.5" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => onExport(e, 'markdown')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-              aria-label="Export as Markdown"
-              title="Export as Markdown"
-            >
-              <IconDocument className="h-2.5 w-2.5" />
-            </button>
-          </>
-        )}
-        {onDuplicate && !editing && (
-          <button
-            type="button"
-            onClick={onDuplicate}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-            aria-label={`Duplicate ${c.name}`}
-            title="Duplicate conversation"
-          >
-            <IconCopy className="h-2.5 w-2.5" />
-          </button>
-        )}
-        {onArchive && !editing && (
-          <button
-            type="button"
-            onClick={onArchive}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
-            aria-label="Archive"
-          >
-            <IconFolder className="h-2.5 w-2.5" />
-          </button>
-        )}
-        {onDelete && !editing && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
-            aria-label={`Delete ${c.name}`}
-          >
-            <IconX className="h-2.5 w-2.5" />
-          </button>
-        )}
-      </div>
-    </div>
-  )
-})

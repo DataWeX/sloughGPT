@@ -82,18 +82,14 @@ class ModelsController:
 
     def _infer_config(self, state_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Infer model config from state dict"""
-        config = {}
-
-        for key, value in state_dict.items():
-            if "tok_emb.weight" in key:
-                config["vocab_size"] = value.shape[0]
-                config["n_embed"] = value.shape[1]
-                config["block_size"] = value.shape[1]
-            elif "blocks.0.attn.q_proj.weight" in key:
-                config["n_embed"] = value.shape[1]
-                config["n_layer"] = len([k for k in state_dict.keys() if k.startswith("blocks.") and ".norm1.weight" in k])
-
-        return config
+        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
+        arch = infer_arch_from_state_dict(state_dict)
+        return {
+            "vocab_size": arch["vocab_size"],
+            "n_embed": arch["n_embed"],
+            "n_layer": arch["n_layer"],
+            "block_size": arch["n_embed"],
+        }
 
     def list_available_models(self) -> List[Dict[str, Any]]:
         """List available models"""

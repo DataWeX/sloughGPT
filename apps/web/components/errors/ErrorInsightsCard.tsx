@@ -67,15 +67,15 @@ export function ErrorInsightsCard({ grouped, recent, total }: ErrorInsightsCardP
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</div>
-            <div className="text-lg font-semibold">{total}</div>
+            <div className="text-sm font-semibold">{total}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Unique</div>
-            <div className="text-lg font-semibold">{insights.uniqueErrors}</div>
+            <div className="text-sm font-semibold">{insights.uniqueErrors}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Hour</div>
-            <div className="text-lg font-semibold">{insights.recentCount}</div>
+            <div className="text-sm font-semibold">{insights.recentCount}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Top Error</div>

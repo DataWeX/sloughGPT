@@ -85,10 +85,10 @@ export function WorkflowSection() {
 
       {loading ? (
         <KpiGrid>
-          <StatCard label="Status" value="Loading..." />
-          <StatCard label="Feedback" value="..." />
-          <StatCard label="Adapters" value="..." />
-          <StatCard label="Health" value="..." />
+          <StatCard label="Status" value="" loading />
+          <StatCard label="Feedback" value="" loading />
+          <StatCard label="Adapters" value="" loading />
+          <StatCard label="Health" value="" loading />
         </KpiGrid>
       ) : (
         <KpiGrid>

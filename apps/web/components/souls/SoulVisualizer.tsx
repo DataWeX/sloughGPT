@@ -36,16 +36,6 @@ export default function SoulVisualizer({ traitWeights, currentSoulName }: SoulVi
 
   return (
     <>
-      <style>{`
-        @keyframes viewFadeIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .view-pane {
-          animation: viewFadeIn 0.3s ease-out both;
-        }
-      `}</style>
-
       {/* ── View toggle ── */}
       {hasRadarData && (
         <div className="flex flex-wrap items-center gap-1 mb-3">

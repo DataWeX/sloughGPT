@@ -25,6 +25,7 @@ Quick start:
 """
 
 from .point import Point
+from .point_interface import PointProtocol, PointView, FunctionType
 from .compressor import PointCompressor
 from .library import PointLibrary
 from .model_tree import ModelTree, load_model_to_points
@@ -50,10 +51,17 @@ from .generic import (
     JSONStorage,
     DirectoryStorage,
 )
+from domains.infrastructure.producer_consumer import (
+    ProducerConsumerQueue,
+    ShutdownMode,
+)
 
 __all__ = [
     # Core types
     "Point",
+    "PointProtocol",
+    "PointView",
+    "FunctionType",
     "PointCompressor",
     "PointLibrary",
     "ModelTree",
@@ -113,6 +121,10 @@ __all__ = [
 
     # Helpers
     "load_model_to_points",
+
+    # Producer-consumer
+    "ProducerConsumerQueue",
+    "ShutdownMode",
 ]
 
 __version__ = "0.1.0"

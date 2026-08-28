@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, memo } from 'react'
-import { Button, IconX, IconCheck } from '@sloughgpt/strui'
+import { Button, Checkbox, IconX, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
 
@@ -120,10 +120,9 @@ export const SessionComparison = memo(function SessionComparison({
 
       <div className="flex items-center gap-3 px-3 py-2 border-b text-[10px]">
         <label className="flex items-center gap-1 cursor-pointer">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={showUnchanged}
-            onChange={(e) => setShowUnchanged(e.target.checked)}
+            onCheckedChange={(checked) => setShowUnchanged(checked === true)}
             className="rounded"
           />
           <span className="text-muted-foreground">Show unchanged</span>

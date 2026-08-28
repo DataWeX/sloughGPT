@@ -57,26 +57,26 @@ export function TokenizerEfficiencyCard({ stats, samples }: TokenizerEfficiencyC
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Vocab Utilization</div>
-            <div className="text-lg font-semibold">{efficiency.vocabUtilization.toFixed(0)}%</div>
+            <div className="text-sm font-semibold">{efficiency.vocabUtilization.toFixed(0)}%</div>
             <div className="text-[10px] text-muted-foreground">
               {efficiency.vocabUtilization > 80 ? 'High' : efficiency.vocabUtilization > 50 ? 'Medium' : 'Low'}
             </div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Compression</div>
-            <div className="text-lg font-semibold">{efficiency.compressionRatio.toFixed(1)}x</div>
+            <div className="text-sm font-semibold">{efficiency.compressionRatio.toFixed(1)}x</div>
             <div className="text-[10px] text-muted-foreground">chars per token</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Avg Tokens/Word</div>
-            <div className="text-lg font-semibold">{efficiency.avgTokensPerWord.toFixed(1)}</div>
+            <div className="text-sm font-semibold">{efficiency.avgTokensPerWord.toFixed(1)}</div>
             <div className="text-[10px] text-muted-foreground">
               {efficiency.avgTokensPerWord <= 1.5 ? 'Efficient' : efficiency.avgTokensPerWord <= 3 ? 'Average' : 'Fragmented'}
             </div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Merge Efficiency</div>
-            <div className="text-lg font-semibold">{efficiency.mergeEfficiency.toFixed(0)}%</div>
+            <div className="text-sm font-semibold">{efficiency.mergeEfficiency.toFixed(0)}%</div>
             <div className="text-[10px] text-muted-foreground">merge coverage</div>
           </div>
         </div>

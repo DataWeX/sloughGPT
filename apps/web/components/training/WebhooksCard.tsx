@@ -1,188 +1,36 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Skeleton } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Skeleton, Checkbox } from '@sloughgpt/strui'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { trainingJobsController, type Webhook, type WebhookStats } from '@/lib/training-controller'
+import {
+  useWebhooks, AVAILABLE_EVENTS, eventLabel, formatTimestamp,
+} from './useWebhooks'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }
 
-const AVAILABLE_EVENTS = [
-  { key: 'training.completed', label: 'Training Completed' },
-  { key: 'training.failed', label: 'Training Failed' },
-  { key: 'training.started', label: 'Training Started' },
-]
-
-function eventLabel(key: string): string {
-  return AVAILABLE_EVENTS.find(e => e.key === key)?.label ?? key
-}
-
-function formatTimestamp(ts: string): string {
-  try { return new Date(ts).toLocaleString() } catch { return ts }
-}
-
-interface RetryEntry {
-  delivery_id: string
-  webhook_id: string
-  event: string
-  attempt_count: number
-  next_retry_at: number
-}
-
-interface DeadLetter {
-  delivery_id: string
-  webhook_id: string
-  event: string
-  error: string | null
-  status_code: number | null
-  attempt_count: number
-  dead_lettered_at: string
-}
-
 export function WebhooksCard({ addToast }: Props) {
-  const [webhooks, setWebhooks] = useState<Webhook[]>([])
-  const [loading, setLoading] = useState(true)
-  const [newUrl, setNewUrl] = useState('')
-  const [newEvents, setNewEvents] = useState<string[]>(['training.completed'])
-  const [adding, setAdding] = useState(false)
-  const [testingUrl, setTestingUrl] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [deliveries, setDeliveries] = useState<Array<{ id: string; event: string; status: number; success: boolean; delivered_at: string }>>([])
-  const [deliveriesLoading, setDeliveriesLoading] = useState(false)
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
-  const [retryQueue, setRetryQueue] = useState<RetryEntry[]>([])
-  const [deadLetters, setDeadLetters] = useState<DeadLetter[]>([])
-  const [showRetries, setShowRetries] = useState(false)
-  const [stats, setStats] = useState<WebhookStats | null>(null)
+  const {
+    webhooks, loading, newUrl, newEvents, adding, testingUrl,
+    expandedId, deliveries, deliveriesLoading, pendingDelete,
+    retryQueue, deadLetters, showRetries, stats,
+    setNewUrl, setNewEvents, setExpandedId, setShowRetries, setPendingDelete,
+    fetchWebhooks, addWebhook, deleteWebhook, testWebhook, loadDeliveries,
+  } = useWebhooks()
 
-  const fetchWebhooks = useCallback(async () => {
-    setLoading(true)
-    try {
-      const result = await trainingJobsController.listWebhooks()
-      setWebhooks(result ?? [])
-    } catch {
-      setWebhooks([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const toggleEvent = (event: string) => {
+    setNewEvents(newEvents.includes(event) ? newEvents.filter(e => e !== event) : [...newEvents, event])
+  }
 
-  const fetchRetryData = useCallback(async () => {
-    try {
-      const [retries, deads, statsResult] = await Promise.all([
-        trainingJobsController.getWebhookRetryQueue(),
-        trainingJobsController.getWebhookDeadLetters(),
-        trainingJobsController.webhookStats(),
-      ])
-      setRetryQueue(retries.retries ?? [])
-      setDeadLetters(deads.dead_letters ?? [])
-      setStats(statsResult)
-    } catch {
-      addToast('Could not load webhook retry data', 'error')
-    }
-  }, [addToast])
-
-  useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      try {
-        const result = await trainingJobsController.listWebhooks()
-        if (active) setWebhooks(result ?? [])
-      } catch {
-        if (active) setWebhooks([])
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    const load = async () => {
-      try {
-        const [retries, deads, statsResult] = await Promise.all([
-          trainingJobsController.getWebhookRetryQueue(),
-          trainingJobsController.getWebhookDeadLetters(),
-          trainingJobsController.webhookStats(),
-        ])
-        if (active) {
-          setRetryQueue(retries.retries ?? [])
-          setDeadLetters(deads.dead_letters ?? [])
-          setStats(statsResult)
-        }
-      } catch { /* silent */ }
-    }
-    void load()
-    return () => { active = false }
-  }, [])
-
-  const handleAdd = useCallback(async () => {
-    if (!newUrl.trim()) return
-    setAdding(true)
-    try {
-      await trainingJobsController.createWebhook(newUrl, newEvents)
-      addToast('Webhook added', 'success')
-      setNewUrl('')
-      setNewEvents(['training.completed'])
-      void fetchWebhooks()
-    } catch {
-      addToast('Could not add webhook', 'error')
-    } finally {
-      setAdding(false)
-    }
-  }, [newUrl, newEvents, addToast, fetchWebhooks])
-
-  const handleDelete = useCallback(async () => {
-    if (!pendingDelete) return
-    const id = pendingDelete
-    setPendingDelete(null)
-    try {
-      await trainingJobsController.deleteWebhook(id)
-      addToast('Webhook deleted', 'success')
-      void fetchWebhooks()
-    } catch {
-      addToast('Could not delete webhook', 'error')
-    }
-  }, [pendingDelete, addToast, fetchWebhooks])
-
-  const handleTest = useCallback(async (url: string) => {
-    setTestingUrl(url)
-    try {
-      await trainingJobsController.testWebhook(url)
-      addToast('Webhook test sent', 'success')
-    } catch {
-      addToast('Could not webhook test', 'error')
-    } finally {
-      setTestingUrl(null)
-    }
-  }, [addToast])
-
-  const toggleDeliveries = useCallback(async (id: string) => {
+  const handleToggleExpand = (id: string) => {
     if (expandedId === id) {
       setExpandedId(null)
-      setDeliveries([])
       return
     }
     setExpandedId(id)
-    setDeliveriesLoading(true)
-    try {
-      const result = await trainingJobsController.getWebhookDeliveries(id, 10)
-      setDeliveries(result ?? [])
-    } catch {
-      setDeliveries([])
-    } finally {
-      setDeliveriesLoading(false)
-    }
-  }, [expandedId])
-
-  const toggleEvent = useCallback((event: string) => {
-    setNewEvents(prev => prev.includes(event) ? prev.filter(e => e !== event) : [...prev, event])
-  }, [])
+    void loadDeliveries(id)
+  }
 
   return (
     <Card>
@@ -209,8 +57,8 @@ export function WebhooksCard({ addToast }: Props) {
           <div key={w.id} className="rounded border text-sm">
             <div
               className="flex cursor-pointer items-center justify-between p-3 hover:bg-muted/30"
-              onClick={() => void toggleDeliveries(w.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void toggleDeliveries(w.id); } }}
+              onClick={() => handleToggleExpand(w.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleExpand(w.id); } }}
               role="button"
               tabIndex={0}
             >
@@ -223,7 +71,7 @@ export function WebhooksCard({ addToast }: Props) {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); void handleTest(w.url) }} disabled={testingUrl === w.url}>
+                <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); void testWebhook(w.url, addToast) }} disabled={testingUrl === w.url}>
                   {testingUrl === w.url ? 'Testing...' : 'Test'}
                 </Button>
                 <Button size="sm" variant="ghost" className="text-destructive" onClick={e => { e.stopPropagation(); setPendingDelete(w.id) }}>
@@ -268,17 +116,16 @@ export function WebhooksCard({ addToast }: Props) {
           <div className="flex flex-wrap gap-2">
             {AVAILABLE_EVENTS.map(({ key, label }) => (
               <label key={key} className="flex items-center gap-1 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={newEvents.includes(key)}
-                  onChange={() => toggleEvent(key)}
+                  onCheckedChange={() => toggleEvent(key)}
                   className="h-3 w-3"
                 />
                 {label}
               </label>
             ))}
           </div>
-          <Button size="sm" onClick={handleAdd} disabled={adding || !newUrl.trim()}>
+          <Button size="sm" onClick={() => void addWebhook(addToast)} disabled={adding || !newUrl.trim()}>
             {adding ? 'Adding...' : 'Add webhook'}
           </Button>
         </div>
@@ -338,7 +185,7 @@ export function WebhooksCard({ addToast }: Props) {
         title="Delete webhook"
         description="This webhook will stop receiving training notifications. This cannot be undone."
         confirmLabel="Delete Webhook"
-        onConfirm={() => void handleDelete()}
+        onConfirm={() => void deleteWebhook(pendingDelete!, addToast)}
       />
     </Card>
   )

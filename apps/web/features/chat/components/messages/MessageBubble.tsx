@@ -1,7 +1,7 @@
 'use client'
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { cn, IconStar } from '@sloughgpt/strui'
+import { memo } from 'react'
+import { cn, Checkbox, IconStar } from '@sloughgpt/strui'
 import { IconMessage, IconPin } from '@sloughgpt/strui'
 import { timeAgo } from '@/lib/time-ago'
 import { MessageActions } from './MessageActions'
@@ -11,6 +11,7 @@ import { MessageContent } from './MessageContent'
 import { MessageReactions } from './MessageReactions'
 import type { ImageAttachment } from './../input/ImageUpload'
 import type { AudioAttachment } from '@/lib/chat-utils'
+import { useMessageBubble } from './useMessageBubble'
 
 export interface MessageBubbleProps {
   content: string
@@ -73,42 +74,35 @@ export const MessageBubble = memo(function MessageBubble({
   onPin,
   onSuggestionClick,
   messageId,
-  isStreaming = false,
-  isError = false,
-  isPinned = false,
+  isStreaming,
+  isError,
+  isPinned,
   searchQuery,
   model,
-  isBookmarked = false,
+  isBookmarked,
   onBookmark,
   onDelete,
   onSaveToKnowledge,
-  collapsibleLength = 0,
+  collapsibleLength,
   temperature,
-  hasNote = false,
+  hasNote,
   note,
   onAddNote,
-  hasThread = false,
+  hasThread,
   onThread,
   onForward,
   onExportMessageAsMarkdown,
   onQuickReply,
-  selectionMode = false,
-  isSelected = false,
+  selectionMode,
+  isSelected,
   onToggleSelection,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
-  const [isVisible, setIsVisible] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const bubbleRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => { setIsVisible(true) }, [])
-
-  const handleEditStart = useCallback(() => setIsEditing(true), [])
-  const handleEditCancel = useCallback(() => setIsEditing(false), [])
-
-  const hasContent = content && content.trim().length > 0
-  const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
-  const id = messageId || 'msg'
+  const {
+    isVisible, isEditing, bubbleRef,
+    hasContent, showActions, id,
+    handleEditStart, handleEditCancel,
+  } = useMessageBubble({ content, role, messageId, isStreaming, isError, onEdit })
 
   return (
     <MessageContextMenu
@@ -153,26 +147,25 @@ export const MessageBubble = memo(function MessageBubble({
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >
-      {/* Selection checkbox — shown in selection mode */}
+      {/* Selection checkbox */}
       {selectionMode && (
         <div className={cn(
           "flex items-center mb-0.5",
           role === 'user' ? 'justify-end' : 'justify-start'
         )}>
           <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={isSelected}
-              onChange={() => onToggleSelection?.(id)}
+              onCheckedChange={() => onToggleSelection?.(id)}
               className="h-3.5 w-3.5 rounded border-border/50 text-primary focus:ring-primary/30"
-              aria-label={`Select message`}
+              aria-label="Select message"
             />
             <span className="text-[10px] text-muted-foreground/60">Select</span>
           </label>
         </div>
       )}
 
-      {/* Role label — outside bubble for clear separation */}
+      {/* Role label */}
       <span className={cn(
         "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",
         role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
@@ -298,11 +291,19 @@ export const MessageBubble = memo(function MessageBubble({
           messageId={id}
           role={role}
           onCopy={onCopy}
-          onEdit={handleEditStart}
+          onRegenerate={onRegenerate}
+          onRegenerateWithOptions={onRegenerateWithOptions}
+          onThumbsUp={onThumbsUp}
+          onThumbsDown={onThumbsDown}
           onSuggestionClick={onSuggestionClick}
+          isBookmarked={isBookmarked}
+          onBookmark={onBookmark}
           onDelete={onDelete}
+          onSaveToKnowledge={onSaveToKnowledge}
+          temperature={temperature}
           onAddNote={onAddNote}
           hasNote={hasNote}
+          onQuickReply={onQuickReply}
           onForward={onForward}
           onExportMessageAsMarkdown={onExportMessageAsMarkdown}
         />

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -172,10 +172,9 @@ export function FineTunedModelsCard({
             )}
             {models.length > 2 && (
               <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mb-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selectedIds.size === models.length && models.length > 0}
-                  onChange={toggleSelectAll}
+                  onCheckedChange={toggleSelectAll}
                   className="rounded border-border"
                 />
                 Select all ({models.length})
@@ -192,10 +191,9 @@ export function FineTunedModelsCard({
                   )}>
                     <div className="flex items-start gap-2 min-w-0 flex-1">
                       {models.length > 2 && (
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={isSelected}
-                          onChange={() => toggleSelect(m.name)}
+                          onCheckedChange={() => toggleSelect(m.name)}
                           aria-label={`Select ${m.name}`}
                           className="mt-1 rounded border-border shrink-0"
                         />

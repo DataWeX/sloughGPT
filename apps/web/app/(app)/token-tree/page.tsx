@@ -301,8 +301,8 @@ export default function TokenTreePage() {
                         <td className="py-1 font-mono">{e.token}</td>
                         <td className="py-1">{e.freq}</td>
                         <td className="py-1">
-                          {e.is_special && <span className="rounded bg-yellow-500/10 px-1 py-0.5 text-xs text-yellow-600">special</span>}
-                          {e.is_merged && <span className="rounded bg-blue-500/10 px-1 py-0.5 text-xs text-blue-600">merged</span>}
+                          {e.is_special && <span className="rounded bg-warning/10 px-1 py-0.5 text-xs text-warning">special</span>}
+                          {e.is_merged && <span className="rounded bg-primary/10 px-1 py-0.5 text-xs text-primary">merged</span>}
                         </td>
                       </tr>
                     ))}
@@ -418,7 +418,7 @@ export default function TokenTreePage() {
                   <div className="flex gap-0.5">
                     {embedResult.top.map(([val, idx], i) => (
                       <div key={i} className="flex flex-col items-center">
-                        <div className="w-4 rounded-t" style={{ height: `${Math.abs(val) * 40}px`, backgroundColor: val > 0 ? 'rgb(124 82 196)' : 'rgb(220 80 90)' }} />
+                        <div className="w-4 rounded-t" style={{ height: `${Math.abs(val) * 40}px`, backgroundColor: val > 0 ? 'rgb(var(--primary))' : 'rgb(var(--destructive))' }} />
                         <span className="text-[8px] text-muted-foreground mt-0.5">{idx}</span>
                       </div>
                     ))}

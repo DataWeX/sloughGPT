@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
-import { Button } from '@sloughgpt/strui'
+import { Button, IconMicFilled, IconPlay, IconStop } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { estimateTokens } from '@/lib/format-bytes'
 
@@ -195,10 +195,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
               onClick={startRecording}
               aria-label="Start recording"
             >
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-              </svg>
+              <IconMicFilled className="h-6 w-6" aria-hidden="true" />
             </Button>
           ) : (
             <>
@@ -209,9 +206,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
                   className="rounded-full h-10 w-10 p-0"
                   onClick={pauseRecording}
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                  </svg>
+                  <IconStop className="h-4 w-4" aria-hidden="true" />
                 </Button>
               ) : (
                 <Button
@@ -220,9 +215,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
                   className="rounded-full h-10 w-10 p-0"
                   onClick={resumeRecording}
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 5v14l11-7z"/>
-                  </svg>
+                  <IconPlay className="h-4 w-4" aria-hidden="true" />
                 </Button>
               )}
               <Button
@@ -231,9 +224,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
                 className="rounded-full h-12 w-12 p-0"
                 onClick={stopRecording}
               >
-                <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6 6h12v12H6z"/>
-                </svg>
+                <IconStop className="h-6 w-6" aria-hidden="true" />
               </Button>
             </>
           )}

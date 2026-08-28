@@ -80,6 +80,9 @@ vi.mock('@sloughgpt/strui', () => {
     DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
     DropdownMenuContent: ({ children }: any) => <>{children}</>,
     DropdownMenuItem: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
   }
 })
 

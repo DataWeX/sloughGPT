@@ -10,6 +10,7 @@ import {
 } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { Checkbox } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy, cn } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
@@ -569,10 +570,9 @@ export default function AgentsPage() {
                 {filteredAgents.length > 0 && (
                   <div className="flex items-center gap-2 text-xs">
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedIds.size === filteredAgents.length && filteredAgents.length > 0}
-                        onChange={selectAll}
+                        onCheckedChange={selectAll}
                         aria-label="Select all agents"
                         className="rounded border-border"
                       />
@@ -649,10 +649,9 @@ export default function AgentsPage() {
                     <>
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-2 min-w-0 flex-1">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={selectedIds.has(agent.id)}
-                            onChange={() => toggleSelect(agent.id)}
+                            onCheckedChange={() => toggleSelect(agent.id)}
                             aria-label={`Select agent ${agent.name}`}
                             className="mt-1 rounded border-border"
                           />

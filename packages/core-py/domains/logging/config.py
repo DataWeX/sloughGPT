@@ -474,6 +474,13 @@ def setup_logging(
     if enable_output_buffer:
         bridge = _install_output_buffer_bridge(root)
 
+    # Dashboard event buffer filter (captures tagged events for CLI monitor)
+    try:
+        from domains.logging.dashboard_filter import DashboardFilter
+        root.addFilter(DashboardFilter())
+    except Exception:
+        pass
+
     # Suppress noisy third-party loggers
     for logger_name, logger_level in _NOISY_LOGGERS.items():
         logging.getLogger(logger_name).setLevel(logger_level)

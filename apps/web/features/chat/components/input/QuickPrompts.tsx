@@ -1,10 +1,27 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, type ReactNode } from 'react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button, Input } from '@sloughgpt/strui'
 import type { QuickPrompt } from '@/lib/quick-prompts'
 import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
+import { Lightbulb, FileText, Brain, Zap, ListTodo, Search, Palette, Pencil, Scale, Recycle, FlaskConical, BookOpen, MessageCircle } from 'lucide-react'
+
+const EMOJI_TO_ICON: Record<string, ReactNode> = {
+  '💡': <Lightbulb className="h-3.5 w-3.5" />,
+  '📝': <FileText className="h-3.5 w-3.5" />,
+  '🧠': <Brain className="h-3.5 w-3.5" />,
+  '⚡': <Zap className="h-3.5 w-3.5" />,
+  '📋': <ListTodo className="h-3.5 w-3.5" />,
+  '🔍': <Search className="h-3.5 w-3.5" />,
+  '🎭': <Palette className="h-3.5 w-3.5" />,
+  '✏️': <Pencil className="h-3.5 w-3.5" />,
+  '⚖️': <Scale className="h-3.5 w-3.5" />,
+  '♻️': <Recycle className="h-3.5 w-3.5" />,
+  '🧪': <FlaskConical className="h-3.5 w-3.5" />,
+  '📚': <BookOpen className="h-3.5 w-3.5" />,
+  '💬': <MessageCircle className="h-3.5 w-3.5" />,
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   writing: 'Writing',
@@ -175,7 +192,7 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                         title="Use this prompt"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs">{p.icon}</span>
+                          <span className="text-xs text-muted-foreground">{EMOJI_TO_ICON[p.icon as string] ?? <MessageCircle className="h-3.5 w-3.5" />}</span>
                           <span className="text-xs font-medium">{p.name}</span>
                           {p.category === 'custom' && (
                             <span className="text-[9px] text-muted-foreground ml-auto">custom</span>

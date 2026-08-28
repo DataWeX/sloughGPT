@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type JSX } from 'react'
-import { cn, IconChevronDown } from '@sloughgpt/strui'
+import { useState, type JSX, type ReactNode } from 'react'
+import { cn, IconChevronDown, IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconTraining, IconBolt, IconDocument, IconMic } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -14,18 +14,18 @@ import {
 
 export type ChatMode = 'chat' | 'write' | 'rewrite' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'
 
-const MODES: { value: ChatMode; label: string; icon: string }[] = [
-  { value: 'chat', label: 'Chat', icon: '💬' },
-  { value: 'write', label: 'Write', icon: '✍️' },
-  { value: 'rewrite', label: 'Rewrite', icon: '✏️' },
-  { value: 'decide', label: 'Decide', icon: '⚖️' },
-  { value: 'explain', label: 'Explain', icon: '🔍' },
-  { value: 'translate', label: 'Translate', icon: '🌐' },
-  { value: 'brainstorm', label: 'Brainstorm', icon: '💡' },
-  { value: 'wellness', label: 'Wellness', icon: '🧘' },
-  { value: 'create', label: 'Create', icon: '🎨' },
-  { value: 'read', label: 'Read', icon: '📄' },
-  { value: 'talk', label: 'Talk', icon: '🎙️' },
+const MODES: { value: ChatMode; label: string; icon: ReactNode }[] = [
+  { value: 'chat', label: 'Chat', icon: <IconChat className="h-3.5 w-3.5" /> },
+  { value: 'write', label: 'Write', icon: <IconEdit className="h-3.5 w-3.5" /> },
+  { value: 'rewrite', label: 'Rewrite', icon: <IconEdit className="h-3.5 w-3.5" /> },
+  { value: 'decide', label: 'Decide', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'explain', label: 'Explain', icon: <IconSearch className="h-3.5 w-3.5" /> },
+  { value: 'translate', label: 'Translate', icon: <IconVision className="h-3.5 w-3.5" /> },
+  { value: 'brainstorm', label: 'Brainstorm', icon: <IconBolt className="h-3.5 w-3.5" /> },
+  { value: 'wellness', label: 'Wellness', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'create', label: 'Create', icon: <IconVision className="h-3.5 w-3.5" /> },
+  { value: 'read', label: 'Read', icon: <IconDocument className="h-3.5 w-3.5" /> },
+  { value: 'talk', label: 'Talk', icon: <IconMic className="h-3.5 w-3.5" /> },
 ]
 
 const TONES = ['Friendly', 'Professional', 'Funny', 'Short', 'Detailed'] as const

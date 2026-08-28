@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Textarea, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Checkbox, Input, Label, Textarea, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { kbController, type KnowledgeItem, type KnowledgeStats, type TopicItem } from '@/lib/kb-controller'
@@ -326,10 +326,9 @@ export default function KbPage() {
                   <Card key={item.id}>
                     <CardContent className="py-3">
                       <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selectedIds.has(item.id)}
-                          onChange={() => toggleSelect(item.id)}
+                          onCheckedChange={() => toggleSelect(item.id)}
                           aria-label={`Select entry`}
                           className="mt-1 h-4 w-4 rounded border-border"
                         />

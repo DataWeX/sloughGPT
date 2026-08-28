@@ -23,6 +23,9 @@ vi.mock('@sloughgpt/strui', () => {
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
     AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
   }
 })
 

@@ -320,11 +320,11 @@ export default function SessionPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded bg-muted/30 p-2 text-center">
                       <div className="text-xs text-muted-foreground">Thumbs Up</div>
-                      <div className="text-base font-mono font-medium text-green-500">{inspector.feedback.thumbs_up}</div>
+                      <div className="text-base font-mono font-medium text-success">{inspector.feedback.thumbs_up}</div>
                     </div>
                     <div className="rounded bg-muted/30 p-2 text-center">
                       <div className="text-xs text-muted-foreground">Thumbs Down</div>
-                      <div className="text-base font-mono font-medium text-red-500">{inspector.feedback.thumbs_down}</div>
+                      <div className="text-base font-mono font-medium text-destructive">{inspector.feedback.thumbs_down}</div>
                     </div>
                   </div>
                   <div className="rounded bg-muted/30 p-2 text-center">

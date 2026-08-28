@@ -1,6 +1,7 @@
 'use client'
 
-import { cn } from '@sloughgpt/strui'
+import { cn, IconHeart, IconBrain } from '@sloughgpt/strui'
+import type { ReactNode } from 'react'
 
 interface PersonalitySummaryProps {
   traitWeights: Record<string, Record<string, number>>
@@ -19,10 +20,10 @@ const GROUP_COLORS: Record<string, string> = {
   emotion: 'rgb(var(--destructive))',
 }
 
-const GROUP_ICONS: Record<string, string> = {
-  personality: '❤️',
-  cognition: '🧠',
-  emotion: '💖',
+const GROUP_ICONS: Record<string, ReactNode> = {
+  personality: <IconHeart className="h-3 w-3" />,
+  cognition: <IconBrain className="h-3 w-3" />,
+  emotion: <IconHeart className="h-3 w-3" />,
 }
 
 interface ArchetypeDef {
@@ -106,30 +107,6 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
 
   return (
     <>
-      <style>{`
-        @keyframes scaleBar {
-          from { transform: scaleX(0); }
-          to { transform: scaleX(1); }
-        }
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes glowPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.15); }
-          50% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.05); }
-        }
-        .trait-bar-inner {
-          transform-origin: left;
-          animation: scaleBar 0.5s ease-out forwards;
-        }
-        .stat-card {
-          animation: fadeSlideUp 0.4s ease-out both;
-        }
-        .badge-glow {
-          animation: glowPulse 3s ease-in-out infinite;
-        }
-      `}</style>
 
       {/* ── Archetype Badge ── */}
       {currentSoulName && (
@@ -149,7 +126,7 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
             </div>
             <div className="flex flex-col items-center shrink-0">
               <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Overall</span>
-              <span className={cn('text-2xl font-bold', ratingColor(overall))}>{overall}</span>
+              <span className={cn('text-base font-bold', ratingColor(overall))}>{overall}</span>
               <span className="text-[8px] text-muted-foreground/50">/100</span>
             </div>
           </div>

@@ -30,6 +30,7 @@ const hoisted = vi.hoisted(() => ({
   memoryController: {
     list: vi.fn(),
     stats: vi.fn(),
+    archiveStats: vi.fn().mockResolvedValue({ records: 0, bytes: 0 }),
     delete: vi.fn(),
     clear: vi.fn(),
     setEnabled: vi.fn(),
@@ -48,6 +49,19 @@ vi.mock('@/lib/memory-controller', () => ({
 vi.mock('@/lib/dev-log', () => ({
   logger: hoisted.logger,
 }))
+
+vi.mock('@/lib/memory-events', () => {
+  const listeners = new Set<(info: any) => void>()
+  return {
+    subscribeMemoryEvents: vi.fn((cb: any) => {
+      listeners.add(cb)
+      return () => { listeners.delete(cb) }
+    }),
+    publishMemoryEvent: vi.fn((info: any) => {
+      for (const l of listeners) l(info)
+    }),
+  }
+})
 
 import { MemoryTab } from './MemoryTab'
 import { publishMemoryEvent } from '@/lib/memory-events'

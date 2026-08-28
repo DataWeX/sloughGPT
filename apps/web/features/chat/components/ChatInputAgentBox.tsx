@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, memo, type ReactNode } from 'react'
 import { Button } from '@sloughgpt/strui'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconExplain, IconDocument, IconCog, IconEye } from '@sloughgpt/strui'
 import { estimateTokens } from '@/lib/format-bytes'
 
 interface AgentStats {
@@ -16,7 +16,7 @@ interface AgentStats {
 interface QuickAction {
   id: string
   label: string
-  icon: string
+  icon: ReactNode
   action: string
   category: 'prompt' | 'format' | 'context' | 'tool'
 }
@@ -42,10 +42,10 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { id: 'explain', label: 'Explain', icon: '💡', action: 'Explain this concept in simple terms:', category: 'prompt' },
-  { id: 'summarize', label: 'Summarize', icon: '📝', action: 'Summarize the key points:', category: 'prompt' },
-  { id: 'debug', label: 'Debug', icon: '🔧', action: 'Help me debug this code:', category: 'prompt' },
-  { id: 'review', label: 'Review', icon: '👀', action: 'Review this code and suggest improvements:', category: 'prompt' },
+  { id: 'explain', label: 'Explain', icon: <IconExplain className="h-4 w-4" />, action: 'Explain this concept in simple terms:', category: 'prompt' },
+  { id: 'summarize', label: 'Summarize', icon: <IconDocument className="h-4 w-4" />, action: 'Summarize the key points:', category: 'prompt' },
+  { id: 'debug', label: 'Debug', icon: <IconCog className="h-4 w-4" />, action: 'Help me debug this code:', category: 'prompt' },
+  { id: 'review', label: 'Review', icon: <IconEye className="h-4 w-4" />, action: 'Review this code and suggest improvements:', category: 'prompt' },
   { id: 'bold', label: 'Bold', icon: '**', action: '**text**', category: 'format' },
   { id: 'italic', label: 'Italic', icon: '_', action: '_text_', category: 'format' },
   { id: 'code', label: 'Code', icon: '`', action: '`code`', category: 'format' },
@@ -263,7 +263,7 @@ export const ChatInputAgentBox = memo(function ChatInputAgentBox({
                 className="flex flex-col items-center gap-0.5 p-1.5 rounded hover:bg-muted/50 transition-colors"
                 title={action.label}
               >
-                <span className="text-sm">{action.icon}</span>
+                <span className="text-sm text-muted-foreground">{action.icon}</span>
                 <span className="text-[9px] text-muted-foreground truncate w-full text-center">
                   {action.label}
                 </span>

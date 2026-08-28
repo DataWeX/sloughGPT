@@ -139,6 +139,7 @@ class SoulsRouter:
         if SloughGPTModel is None:
             raise RuntimeError("SloughGPTModel not available — PyTorch model module not loaded")
         from domains.inference import load_soul
+        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(checkpoint_path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
@@ -146,39 +147,18 @@ class SoulsRouter:
             if not isinstance(sd, dict):
                 sd = sd.state_dict() if hasattr(sd, 'state_dict') else {}
 
-        vocab = sd["tok_emb.weight"].shape[0]
-        hidden = sd["tok_emb.weight"].shape[1]
-        block_indices = [int(k.split(".")[1]) for k in sd if k.startswith("blocks.")]
-        n_blocks = (max(block_indices) + 1) if block_indices else 0
-
-        n_head = 8
-        q_w = sd.get("blocks.0.attn.q_proj.weight")
-        if q_w is None:
-            q_w = sd.get("blocks.0.q_proj.weight")
-        if q_w is not None:
-            head_dim = hidden // 8
-            if head_dim > 0:
-                detected_heads = q_w.shape[0] // head_dim
-                if detected_heads >= 1:
-                    n_head = detected_heads
-
-        intermediate_size = 4 * hidden // 2
-        for key in sd:
-            if "mlp.w1.weight" in key:
-                w1_shape = sd[key].shape
-                if len(w1_shape) >= 2:
-                    intermediate_size = w1_shape[0]
-                break
+        arch = infer_arch_from_state_dict(sd)
+        tie_weights = "lm_head.weight" not in sd
 
         model = SloughGPTModel(
-            vocab_size=vocab,
-            n_embed=hidden,
-            n_layer=n_blocks,
-            n_head=n_head,
+            vocab_size=arch["vocab_size"],
+            n_embed=arch["n_embed"],
+            n_layer=arch["n_layer"],
+            n_head=arch["n_head"],
             dropout=0.0,
             tie_weights=tie_weights,
             block_size=128,
-            intermediate_size=intermediate_size,
+            intermediate_size=arch["intermediate_size"],
         )
 
         model.load_state_dict(sd, strict=False)

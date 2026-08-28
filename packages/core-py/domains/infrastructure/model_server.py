@@ -614,7 +614,10 @@ class IdleManager:
                         with self._lock:
                             entry["_reloading"] = False
 
-                Thread(target=_do_reload, daemon=True, name=f"idle-reload-{model_id}").start()
+                try:
+                    _get_bg_queue().put_nowait(_do_reload)
+                except Exception:
+                    Thread(target=_do_reload, daemon=True, name=f"idle-reload-{model_id}").start()
                 return "reloading"
         return "ok"
 
@@ -784,9 +787,30 @@ _GC_COUNTER = 0
 _GC_INTERVAL = 10  # Run GC every N generations
 _gc_counter_lock = Lock()
 
+# Bounded background work queue — replaces raw Thread spawning for GC, etc.
+_bg_queue: Optional[Any] = None
+_bg_queue_lock = Lock()
+
+
+def _get_bg_queue():
+    """Lazily create the global background work queue."""
+    global _bg_queue
+    if _bg_queue is None:
+        with _bg_queue_lock:
+            if _bg_queue is None:
+                from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+                _bg_queue = ProducerConsumerQueue[Any](
+                    maxsize=32,
+                    num_consumers=2,
+                    handler=lambda item: item() if callable(item) else None,
+                    name="model-server-bg",
+                )
+                _bg_queue.start()
+    return _bg_queue
+
 
 def _schedule_gc() -> None:
-    """Schedule gc.collect() in a background thread, throttled to every N generations.
+    """Schedule gc.collect() via the background queue, throttled to every N generations.
 
     Python's generational GC handles most cleanup automatically. Manual
     gc.collect() is only needed for large object graphs (KV caches, model weights).
@@ -798,9 +822,9 @@ def _schedule_gc() -> None:
         if _GC_COUNTER % _GC_INTERVAL != 0:
             return
     try:
-        Thread(target=gc.collect, daemon=True).start()
+        _get_bg_queue().put_nowait(gc.collect)
     except Exception as exc:
-        logger.debug("GC thread start failed: %s", exc)
+        logger.debug("GC queue put failed: %s", exc)
 
 
 # ── Generate Backends ─────────────────────────────────────────────────────────

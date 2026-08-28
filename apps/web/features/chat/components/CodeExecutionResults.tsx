@@ -31,9 +31,9 @@ function getStatusColor(exitCode: number): string {
   return 'text-destructive'
 }
 
-function getStatusIcon(exitCode: number): string {
-  if (exitCode === 0) return '✓'
-  return '✗'
+function getStatusIcon(exitCode: number): React.ReactNode {
+  if (exitCode === 0) return <IconCheck className="h-3.5 w-3.5" />
+  return <IconX className="h-3.5 w-3.5" />
 }
 
 export const CodeExecutionResults = memo(function CodeExecutionResults({

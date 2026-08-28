@@ -106,7 +106,8 @@ class TestMemoryStore:
         store.put("c", 3, size_bytes=100)
         # Explicitly evict — target 150 bytes means free until <= 150
         evicted = store.evict_lru(150)
-        assert "a" in evicted
+        evicted_keys = [k for k, _ in evicted]
+        assert "a" in evicted_keys
         assert store.get("a") is None
 
     def test_lfu_eviction(self):
@@ -121,7 +122,8 @@ class TestMemoryStore:
         store.get("b")
         # Evict to free 150 bytes — "c" has 0 accesses
         evicted = store.evict_lfu(150, {"a": 3, "b": 2, "c": 0})
-        assert "c" in evicted
+        evicted_keys = [k for k, _ in evicted]
+        assert "c" in evicted_keys
         assert store.exists("a") is True
 
     def test_lru_eviction_order(self):
@@ -134,7 +136,7 @@ class TestMemoryStore:
         store.get("c")
         # Evict 100 bytes — "a" (LRU) should be evicted first
         evicted = store.evict_lru(100)
-        assert evicted[0] == "a"
+        assert evicted[0][0] == "a"
 
     def test_put_existing_moves_to_end(self):
         from domains.infrastructure.pugqeep.cache import MemoryStore
@@ -373,3 +375,45 @@ class TestTieredCache:
         cache.get("k")  # access 2 — should trigger auto-promote to memory
         entry = cache._entries.get("k")
         assert entry.tier == Tier.MEMORY
+
+    def test_thread_safety(self):
+        from domains.infrastructure.pugqeep.cache import TieredCache, Tier
+        import threading
+        import concurrent.futures
+
+        cache = TieredCache(memory_max_mb=1, hot_max_mb=1)
+        errors = []
+
+        def writer(start: int):
+            try:
+                for i in range(100):
+                    cache.put(f"k{start + i}", f"v{start + i}", tier=Tier.MEMORY, size_bytes=10)
+            except Exception as e:
+                errors.append(e)
+
+        def reader():
+            try:
+                for _ in range(100):
+                    cache.get("k0")
+                    cache.stats()
+                    cache.list_keys()
+            except Exception as e:
+                errors.append(e)
+
+        def evicter():
+            try:
+                for _ in range(20):
+                    cache.evict(Tier.MEMORY, 50)
+            except Exception as e:
+                errors.append(e)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+            futures = []
+            for i in range(4):
+                futures.append(pool.submit(writer, i * 100))
+            for _ in range(2):
+                futures.append(pool.submit(reader))
+            futures.append(pool.submit(evicter))
+            concurrent.futures.wait(futures)
+
+        assert errors == [], f"Thread safety errors: {errors}"

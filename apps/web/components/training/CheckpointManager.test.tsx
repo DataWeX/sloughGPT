@@ -38,6 +38,9 @@ vi.mock('@sloughgpt/strui', () => ({
   AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
   AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
   AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+  Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+    <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+  ),
 }))
 
 function makeCps(n: number) {

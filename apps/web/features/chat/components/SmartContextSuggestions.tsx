@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, memo } from 'react'
-import { Button, IconX, IconCheck } from '@sloughgpt/strui'
+import { Button, IconX, IconCheck, IconFile, IconExternalLink, IconInfo, IconChat } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
 
@@ -167,9 +167,9 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
           onClick={() => onSelect(suggestion.value)}
         >
           <span className="text-[10px] text-muted-foreground mr-1">
-            {suggestion.type === 'file' ? '📄' :
-             suggestion.type === 'url' ? '🔗' :
-             suggestion.type === 'concept' ? '💡' : '💬'}
+            {suggestion.type === 'file' ? <IconFile className="inline h-3 w-3" /> :
+             suggestion.type === 'url' ? <IconExternalLink className="inline h-3 w-3" /> :
+             suggestion.type === 'concept' ? <IconInfo className="inline h-3 w-3" /> : <IconChat className="inline h-3 w-3" />}
           </span>
           {suggestion.label}
         </Button>

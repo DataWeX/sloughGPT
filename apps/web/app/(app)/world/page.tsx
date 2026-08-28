@@ -231,7 +231,7 @@ export default function WorldPage() {
               <div className="flex flex-wrap gap-2">
                 {Object.entries(stats.materials).map(([name, id]) => (
                   <span key={name} className="inline-flex items-center gap-1.5 rounded border border-border bg-muted/30 px-2 py-1 text-xs">
-                    <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: ['#94a3b8', '#22c55e', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#06b6d4'][id] ?? '#94a3b8' }} />
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40" style={{ backgroundColor: ['rgb(var(--muted-foreground))', 'rgb(var(--success))', 'rgb(var(--warning))', 'rgb(var(--destructive))', 'rgb(var(--primary))', 'rgb(139 92 246)', 'rgb(6 182 212)'][id] ?? undefined }} />
                     {name} ({id})
                   </span>
                 ))}

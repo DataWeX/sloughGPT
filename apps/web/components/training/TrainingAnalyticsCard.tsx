@@ -11,10 +11,10 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  completed: 'hsl(152, 70%, 45%)',
-  running: 'hsl(38, 90%, 55%)',
-  failed: 'hsl(350, 75%, 55%)',
-  cancelled: 'hsl(var(--muted-foreground))',
+  completed: 'rgb(var(--success))',
+  running: 'rgb(var(--warning))',
+  failed: 'rgb(var(--destructive))',
+  cancelled: 'rgb(var(--muted-foreground))',
 }
 
 export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addToast }: Props) {
@@ -106,7 +106,14 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
           <CardTitle className="text-base">Training Analytics</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground">Loading...</p>
+          <div className="grid grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded bg-muted/30 p-3">
+                <div className="h-2 w-12 rounded bg-muted mb-2" />
+                <div className="h-5 w-8 rounded bg-muted" />
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     )
@@ -139,19 +146,19 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
         {/* Summary stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="text-center">
-            <p className="text-2xl font-medium">{analytics.total}</p>
+            <p className="text-base font-semibold">{analytics.total}</p>
             <p className="text-[10px] text-muted-foreground">Total runs</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-medium text-success">{analytics.completed}</p>
+            <p className="text-base font-semibold text-success">{analytics.completed}</p>
             <p className="text-[10px] text-muted-foreground">Completed</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-medium text-destructive">{analytics.failed}</p>
+            <p className="text-base font-semibold text-destructive">{analytics.failed}</p>
             <p className="text-[10px] text-muted-foreground">Failed</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-medium">{analytics.avgLoss != null ? analytics.avgLoss.toFixed(3) : '—'}</p>
+            <p className="text-base font-semibold">{analytics.avgLoss != null ? analytics.avgLoss.toFixed(3) : '—'}</p>
             <p className="text-[10px] text-muted-foreground">Avg loss</p>
           </div>
         </div>

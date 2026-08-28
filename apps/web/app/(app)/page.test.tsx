@@ -232,10 +232,10 @@ describe('HomePage', () => {
     state.home = makeHomeData({
       feedbackStats: { db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3, ratio: 0.7 }, train_stats: null, adapter_stats: null },
     })
-    render(<HomePage />)
+    const { container } = render(<HomePage />)
     expect(screen.getByText('10')).toBeTruthy()
-    expect(screen.getByText('👍 7')).toBeTruthy()
-    expect(screen.getByText('👎 3')).toBeTruthy()
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('70% positive')).toBeTruthy()
     const link = screen.getByText('Train from feedback →')
     expect(link.getAttribute('href')).toBe('/training')

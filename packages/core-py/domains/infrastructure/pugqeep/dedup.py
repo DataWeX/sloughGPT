@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import numpy as np
+
 from .point import Point
 from .library import PointLibrary
 
@@ -63,10 +65,7 @@ class PointDeduplicator:
                 for lib in self._libraries:
                     point = lib.get(identity)
                     if point is not None:
-                        if point.function_type == "cluster":
-                            cents = point.params["centroids"]
-                            assns = point.params["assignments"]
-                            bytes_saved += cents.nbytes + assns.nbytes
+                        bytes_saved += point.nbytes()
                         lib.remove(identity)
                         merged += 1
 
@@ -80,12 +79,33 @@ class PointDeduplicator:
         if point.function_type == "cluster":
             cents = point.params["centroids"]
             assns = point.params["assignments"]
-            data = cents.tobytes() + assns.tobytes()
+            if self._tolerance > 0:
+                # Quantize centroids to tolerance before hashing
+                step = self._tolerance
+                cents_q = np.round(cents / step) * step
+                data = cents_q.tobytes() + assns.tobytes()
+            else:
+                data = cents.tobytes() + assns.tobytes()
         elif point.function_type == "raw":
-            data = base64.b64decode(point.params["data_b64"])
+            raw = base64.b64decode(point.params["data_b64"])
+            if self._tolerance > 0:
+                arr = np.frombuffer(raw, dtype=np.float32)
+                step = self._tolerance
+                arr_q = np.round(arr / step) * step
+                data = arr_q.tobytes()
+            else:
+                data = raw
         else:
-            params = sorted(point.params.items())
-            data = str(params).encode()
+            params = {}
+            for k, v in point.params.items():
+                if isinstance(v, float):
+                    if self._tolerance > 0:
+                        step = self._tolerance
+                        v = round(round(v / step) * step, 10)
+                    params[k] = v
+                else:
+                    params[k] = v
+            data = str(sorted(params.items())).encode()
 
         return hashlib.sha256(data).hexdigest()[:16]
 

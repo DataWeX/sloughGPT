@@ -1,21 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconSearch, IconPlus, IconDownload, IconMoon, IconTrash, IconCheckCircle, IconModel, IconBrain, IconChat, IconMessage, IconChevronRight } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
 import { soulsController, type Soul } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
 import { useModels, useSouls } from '@/lib/query/api-hooks'
 import { useToastStore } from '@/lib/toast-store'
-import { NAV_SECTIONS } from '@/lib/navigation'
+import { NAV_SECTIONS, SIDEBAR_ICONS } from '@/lib/navigation'
 
 interface CommandAction {
   id: string
   label: string
   description: string
-  icon: string
+  icon: ReactNode
   category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul'
   run: () => void
 }
@@ -64,7 +64,7 @@ export function CommandPalette() {
         id: `nav-${route.path}`,
         label: route.description || route.path,
         description: route.description || '',
-        icon: route.icon || '📄',
+        icon: route.icon || <IconSearch className="h-4 w-4" />,
         category: 'navigation' as const,
         run: () => router.push(route.path),
       }))
@@ -72,7 +72,7 @@ export function CommandPalette() {
 
     const modelActs: CommandAction[] = models.map(m => ({
       id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',
-      icon: m.loaded ? '✓' : '🧠', category: 'model' as const,
+      icon: m.loaded ? <IconCheckCircle className="h-4 w-4 text-success" /> : <IconModel className="h-4 w-4 text-primary" />, category: 'model' as const,
       run: async () => {
         if (!m.loaded) {
           try { await modelController.load(m.id) }
@@ -83,21 +83,21 @@ export function CommandPalette() {
     }))
 
     const acts: CommandAction[] = [
-      { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
-      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
-      { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: '📥', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
-      { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: '🌓', category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
-      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: '🗑️', category: 'action', run: () => { localStorage.removeItem('man_current_conversation'); window.location.reload() } },
-      { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: '⌨️', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
+      { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: <IconPlus className="h-4 w-4" />, category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
+      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: <IconSearch className="h-4 w-4" />, category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
+      { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: <IconDownload className="h-4 w-4" />, category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
+      { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: <IconMoon className="h-4 w-4" />, category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
+      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: <IconTrash className="h-4 w-4" />, category: 'action', run: () => { localStorage.removeItem('man_current_conversation'); window.location.reload() } },
+      { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: <IconSearch className="h-4 w-4" />, category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
     ]
 
     const conv: CommandAction[] = recentSessions.map(s => ({
-      id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
+      id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: <IconMessage className="h-4 w-4" />, category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
     }))
 
     const soulActs: CommandAction[] = souls.map((s: { name: string; description?: string }) => ({
       id: `soul-${s.name}`, label: `Switch soul: ${s.name}`, description: s.description || 'Switch personality',
-      icon: '🎭', category: 'soul' as const,
+      icon: <IconBrain className="h-4 w-4 text-accent" />, category: 'soul' as const,
       run: async () => { await soulsController.switch(s.name); router.push('/chat') },
     }))
 
@@ -173,7 +173,7 @@ export function CommandPalette() {
           }}
         >
           <div className="flex items-center border-b border-border/30 px-3">
-            <span className="text-sm text-muted-foreground mr-2">🔍</span>
+            <IconSearch className="h-4 w-4 text-muted-foreground mr-2" />
             <input
               ref={inputRef}
               value={query}
@@ -209,7 +209,13 @@ export function CommandPalette() {
                       onClick={() => { setOpen(false); action.run() }}
                       onMouseEnter={() => setSelectedIdx(i)}
                     >
-                      <span className="text-base">{action.icon}</span>
+                      {(() => {
+                        const NavIcon = action.id.startsWith('nav-') ? SIDEBAR_ICONS[action.id.replace('nav-', '')] : null
+                        if (NavIcon) {
+                          return <NavIcon className="h-4 w-4 text-muted-foreground" />
+                        }
+                        return <span className="text-muted-foreground">{action.icon}</span>
+                      })()}
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{action.label}</p>
                         <p className="truncate text-xs text-muted-foreground">{action.description}</p>

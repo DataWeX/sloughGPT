@@ -34,6 +34,10 @@ export { Separator, type SeparatorProps } from './components/ui/separator'
 // Checkbox
 export { Checkbox, type CheckboxProps } from './components/ui/checkbox'
 
+// Radio
+export { Radio, type RadioProps } from './components/ui/radio'
+export { RadioGroup, type RadioGroupProps } from './components/ui/radio-group'
+
 // Progress
 export { Progress, type ProgressProps } from './components/ui/progress'
 

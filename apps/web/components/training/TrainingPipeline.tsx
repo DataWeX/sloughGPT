@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, memo } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, IconCheck } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
 import dynamic from 'next/dynamic'
@@ -39,7 +39,7 @@ function StepIndicator({ current, completed, onStepClick }: { current: StepId; c
             <div className={cn('flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium transition-colors', isCurrent ? 'bg-primary text-primary-foreground' :
               isDone ? 'bg-primary/15 text-primary' :
               'bg-muted text-muted-foreground')}>
-              {isDone ? '✓' : i + 1}
+              {isDone ? <IconCheck className="h-3 w-3" /> : i + 1}
             </div>
             <span className={cn('text-xs', isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground')}>
               {step.label}

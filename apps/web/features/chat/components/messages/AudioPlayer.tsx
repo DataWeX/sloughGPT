@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect, useCallback } from 'react'
-import { cn, IconPlay } from '@sloughgpt/strui'
+import { cn, IconPlay, IconStop } from '@sloughgpt/strui'
 import { formatDuration } from '@/lib/format-bytes'
 
 interface AudioPlayerProps {
@@ -59,10 +59,7 @@ export function AudioPlayer({ src, durationMs = 0, className }: AudioPlayerProps
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {isPlaying ? (
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="4" width="4" height="16" />
-            <rect x="14" y="4" width="4" height="16" />
-          </svg>
+          <IconStop className="w-4 h-4" aria-hidden="true" />
         ) : (
           <IconPlay className="w-4 h-4" />
         )}

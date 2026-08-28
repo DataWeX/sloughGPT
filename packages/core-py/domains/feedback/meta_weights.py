@@ -224,10 +224,10 @@ class MetaWeightManager:
             weights.confidence_boost += adjustments.get("confidence_boost", 0)
 
             # Clamp to safe ranges
-            weights.temperature = max(0.1, min(2.0, weights.temperature))
-            weights.repetition_penalty = max(0.8, min(1.5, weights.repetition_penalty))
+            weights.temperature = max(0.1, min(1.5, weights.temperature))
+            weights.repetition_penalty = max(0.8, min(1.3, weights.repetition_penalty))
             weights.top_p = max(0.1, min(1.0, weights.top_p))
-            weights.top_k = max(1, min(500, weights.top_k))
+            weights.top_k = max(5, min(200, weights.top_k))
             weights.style_bias = max(-1.0, min(1.0, weights.style_bias))
             weights.confidence_boost = max(-1.0, min(1.0, weights.confidence_boost))
 

@@ -248,9 +248,11 @@ register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 # heavy imports.
 from routers.health import router as _health_router
 from routers.status import router as _status_router
+from routers.dashboard import router as _dashboard_router
 app.include_router(_health_router)
 app.include_router(_status_router)
-# Health/status routes are now registered pre-lifespan.
+app.include_router(_dashboard_router)
+# Health/status/dashboard routes are now registered pre-lifespan.
 # _phase6_routers() skips them by checking existing route prefixes.
 
 # Feature routers are registered by StartupOrchestrator._phase6_routers()

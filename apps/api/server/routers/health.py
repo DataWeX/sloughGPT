@@ -378,7 +378,10 @@ class HealthRouter:
                     yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
                 except Exception as e:
                     logger.warning("Health stream snapshot failed: %s", e)
-                    classify_and_raise(e, source="health_stream")
+                    yield "data: " + json.dumps({
+                        "stream": "health", "phase": "ERROR", "status": "error",
+                        "data": {"error": str(e)}, "message": str(e),
+                    }) + "\n\n"
                 await asyncio.sleep(self.HEALTH_STREAM_INTERVAL)
 
         return StreamingResponse(

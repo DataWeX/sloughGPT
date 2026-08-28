@@ -214,6 +214,8 @@ class SessionRouter:
             async def generate() -> AsyncIterator[str]:
                 """generate."""
                 _regen_start = time.time()
+                _regen_corr_id = f"regen-{session_id[:8]}-{int(_regen_start * 1000) % 100000}"
+                _token_count = 0
                 try:
                     from domains.infrastructure.session_core import SessionCore
                     msgs = SessionCore.get_messages(session_id)
@@ -246,7 +248,15 @@ class SessionRouter:
                                 logger.info("Client disconnected from regenerate stream (request)", extra={"tag": "REQ", "context": {"session_id": session_id}})
                                 return
                             if token:
+                                if _token_count == 0:
+                                    _first_token_ms = (time.time() - _token_gen_start) * 1000
+                                    logger.info(
+                                        "REGEN_FIRST_TOKEN corr=%s session=%s after=%.1fms",
+                                        _regen_corr_id, session_id, _first_token_ms,
+                                        extra={"tag": "REQ", "context": {"corr": _regen_corr_id, "session_id": session_id, "elapsed_ms": round(_first_token_ms, 1)}},
+                                    )
                                 _token_gen_start = time.time()
+                                _token_count += 1
                                 full_response += token
                                 yield self._sse_token("chat", token)
                             else:
@@ -256,13 +266,21 @@ class SessionRouter:
                                     _last_heartbeat = now
                             elapsed_since_token = time.time() - _token_gen_start
                             if elapsed_since_token > _max_token_wait_s:
-                                logger.warning("Regenerate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "REQ"})
+                                logger.warning(
+                                    "Regenerate stream stalled for %.1fs (limit=%.1fs) corr=%s session=%s",
+                                    elapsed_since_token, _max_token_wait_s, _regen_corr_id, session_id,
+                                    extra={"tag": "REQ", "context": {"corr": _regen_corr_id, "session_id": session_id, "elapsed_s": round(elapsed_since_token, 1), "limit_s": _max_token_wait_s}},
+                                )
                                 yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
                                 return
                         yield self._sse_token("chat", "", done=True)
                         _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
-                        safe_audit_log("session.regenerate", resource=session_id, detail=f"chars={len(full_response)} elapsed={_regen_elapsed_ms}ms")
-                        logger.info("Regenerate completed: %d chars in %dms", len(full_response), _regen_elapsed_ms, extra={"tag": "REQ"})
+                        safe_audit_log("session.regenerate", resource=session_id, detail=f"chars={len(full_response)} tokens={_token_count} elapsed={_regen_elapsed_ms}ms")
+                        logger.info(
+                            "REGEN_DONE corr=%s session=%s tokens=%d chars=%d elapsed=%dms",
+                            _regen_corr_id, session_id, _token_count, len(full_response), _regen_elapsed_ms,
+                            extra={"tag": "REQ", "context": {"corr": _regen_corr_id, "session_id": session_id, "tokens": _token_count, "chars": len(full_response), "elapsed_ms": _regen_elapsed_ms}},
+                        )
                     except GeneratorExit:
                         return
                     except Exception as e:

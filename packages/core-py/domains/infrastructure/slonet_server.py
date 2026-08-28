@@ -109,7 +109,7 @@ class SloNetServer:
         else:
             self._pool_mode = False
             self._model = model
-            self._semaphore = asyncio.Semaphore(1)
+            self._model_lock = threading.Lock()  # serializes model.generate* calls
 
         if enable_warmup:
             threading.Thread(target=self._run_warmup, daemon=True).start()
@@ -308,18 +308,19 @@ class SloNetServer:
             tokens = self._tokenizer.encode(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
             kv_state = self._resolve_kv_state(session_id)
-            result = model.generate_numpy(
-                input_ids,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                eos_token=self._tokenizer.eos_token_id or 0,
-                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-                kv_state=kv_state,
-                quantize_kv=self._quantize_kv,
-            )
+            with self._model_lock:
+                result = model.generate_numpy(
+                    input_ids,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    eos_token=self._tokenizer.eos_token_id or 0,
+                    extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                    kv_state=kv_state,
+                    quantize_kv=self._quantize_kv,
+                )
             text = self._tokenizer.decode(result[0].tolist())
             logger.debug(
                 "generate_sync",
@@ -356,6 +357,16 @@ class SloNetServer:
         import time as _time
         _t0 = _time.monotonic()
         logger.debug("PUMP_STREAM: _generate_stream_sync started, prompt_len=%d", len(prompt))
+        if self._tokenizer is None:
+            provider = getattr(self, "_provider", None)
+            if provider is not None and getattr(provider, "_tokenizer", None) is not None:
+                self._tokenizer = provider._tokenizer
+                logger.warning("PUMP_STREAM: tokenizer was None, recovered from provider")
+            else:
+                raise RuntimeError(
+                    f"SloNetServer '{self._model_id}' has no tokenizer — "
+                    "cannot encode prompt for streaming generation"
+                )
         model = self._acquire_model()
         logger.debug("PUMP_STREAM: _acquire_model returned in %.1fms, model=%s",
                       (_time.monotonic() - _t0) * 1000, type(model).__name__ if model else None)
@@ -373,29 +384,29 @@ class SloNetServer:
 
             _t_gen = _time.monotonic()
             _first_token = True
-            for tok_id in model.generate_numpy_stream(
-                input_ids,
-                max_new_tokens=max_new_tokens,
-                eos_token=eos_id,
-                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                kv_state=kv_state,
-                quantize_kv=self._quantize_kv,
-            ):
-                if _first_token:
-                    logger.debug("PUMP_STREAM: first token from generate_numpy_stream in %.1fms",
-                                  (_time.monotonic() - _t_gen) * 1000)
-                    _first_token = False
-                if cancel_event and cancel_event.is_set():
-                    logger.debug("PUMP_STREAM: cancel_event set, stopping after %d tokens",
-                                  sum(1 for _ in []))
-                    return
-                decoded = self._tokenizer.decode([tok_id])
-                if decoded:
-                    yield decoded
+            with self._model_lock:
+                for tok_id in model.generate_numpy_stream(
+                    input_ids,
+                    max_new_tokens=max_new_tokens,
+                    eos_token=eos_id,
+                    extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    kv_state=kv_state,
+                    quantize_kv=self._quantize_kv,
+                ):
+                    if _first_token:
+                        logger.debug("PUMP_STREAM: first token from generate_numpy_stream in %.1fms",
+                                      (_time.monotonic() - _t_gen) * 1000)
+                        _first_token = False
+                    if cancel_event and cancel_event.is_set():
+                        logger.debug("PUMP_STREAM: cancel_event set, stopping generation")
+                        return
+                    decoded = self._tokenizer.decode([tok_id])
+                    if decoded:
+                        yield decoded
             logger.debug("PUMP_STREAM: generation complete in %.1fms",
                           (_time.monotonic() - _t_gen) * 1000)
         finally:

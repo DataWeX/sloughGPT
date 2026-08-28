@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Chip, Skeleton } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
+import { IconModels, IconBrain, IconTraining } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
 import type { HealthStatus } from '@/lib/model-controller'
 
@@ -62,9 +63,9 @@ export default memo(function ModelStatusCard({
       )}
 
       <KpiGrid columns={3}>
-        <StatCard label="Models" value={modelsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : modelsCount.toString()} icon={<span className="text-xs font-mono">M</span>} />
-        <StatCard label="Personalities" value={soulsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : soulsCount.toString()} icon={<span className="text-xs">🎭</span>} />
-        <StatCard label="Checkpoints" value={checkpointsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : checkpointsCount.toString()} icon={<span className="text-xs">📦</span>} />
+        <StatCard label="Models" value={modelsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : modelsCount.toString()} icon={<IconModels className="h-3.5 w-3.5 text-primary" />} />
+        <StatCard label="Personalities" value={soulsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : soulsCount.toString()} icon={<IconBrain className="h-3.5 w-3.5 text-accent" />} />
+        <StatCard label="Checkpoints" value={checkpointsLoading ? <Skeleton className="h-5 w-8 inline-block" /> : checkpointsCount.toString()} icon={<IconTraining className="h-3.5 w-3.5 text-success" />} />
       </KpiGrid>
     </>
   )

@@ -151,10 +151,9 @@ class SLNCParser:
         offset, shape, dtype, crc = self._tensor_map[name]
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
 
-        # Copy from mmap to avoid segfaults when mmap is closed/GC'd
-        # while numpy arrays still reference the pages
-        data = self._mm[offset:offset + nbytes]
-        arr = np.frombuffer(bytes(data), dtype=dtype).reshape(shape).copy()
+        # np.frombuffer with mmap slice, .copy() creates independent array
+        # (avoids extra bytes() intermediate copy)
+        arr = np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape).copy()
 
         # Optional integrity check
         if self._verify:
@@ -164,6 +163,43 @@ class SLNCParser:
                 raise ValueError(f"Checksum mismatch for {name}: expected {crc:#x}, got {actual_crc:#x}")
 
         return arr
+
+    def get_tensor_info(self, name: str) -> Tuple[int, Tuple[int, ...], np.dtype, int]:
+        """Get tensor metadata without reading data.
+
+        Args:
+            name: Tensor name
+
+        Returns:
+            (offset, shape, dtype, crc) — file offset, array shape, element dtype, CRC32
+
+        Raises:
+            KeyError: if tensor name not found
+        """
+        if name not in self._tensor_map:
+            raise KeyError(f"Unknown tensor: {name}")
+        return self._tensor_map[name]
+
+    def read_tensor_region(self, name: str) -> np.ndarray:
+        """Read tensor directly from mmap into numpy array.
+
+        Like get_tensor() but returns a writable copy that can be assigned
+        directly to model parameter buffers.
+
+        Args:
+            name: Tensor name
+
+        Returns:
+            numpy array — writable copy of mmap data
+        """
+        offset, shape, dtype, crc = self.get_tensor_info(name)
+        nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
+        return np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape).copy()
+
+    @property
+    def tensor_names(self) -> List[str]:
+        """List of all tensor names in the file."""
+        return list(self._tensor_map.keys())
 
     def get_block(self, layer_idx: int) -> Dict[str, np.ndarray]:
         """Get all weights for a transformer block.

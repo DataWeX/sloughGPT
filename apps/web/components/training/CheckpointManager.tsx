@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, memo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, cn, Checkbox } from '@sloughgpt/strui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@sloughgpt/strui'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@sloughgpt/strui'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -98,7 +98,7 @@ export const CheckpointManager = memo(function CheckpointManager({ checkpoints, 
           {pageItems.map(c => (
             <div key={c.name} className={cn('flex items-center justify-between rounded border p-3 text-sm', selected.has(c.name) && 'border-primary bg-primary/5')}>
               <div className="min-w-0 flex-1 flex items-center gap-2">
-                <input type="checkbox" checked={selected.has(c.name)} onChange={() => toggle(c.name)} aria-label={`Select ${c.name}`} className="h-3.5 w-3.5 rounded border-border" />
+                <Checkbox checked={selected.has(c.name)} onCheckedChange={() => toggle(c.name)} aria-label={`Select ${c.name}`} className="h-3.5 w-3.5 rounded border-border" />
                 <div className="min-w-0">
                   <p className="truncate font-medium">{c.name}</p>
                 </div>

@@ -305,8 +305,11 @@ def convert_hf_to_slonet(
 
     _t_precomp = _time.monotonic()
 
+    n_written = 0
+
     def _write_param(slo_key, w):
         """Write weight into model parameter or result dict."""
+        nonlocal n_written
         if param_map is not None and slo_key in param_map:
             p = param_map[slo_key]
             if w.dtype != np.float32:
@@ -318,8 +321,10 @@ def convert_hf_to_slonet(
             elif p.data.ndim == 1 and w.ndim == 1:
                 min_d = min(p.data.shape[0], w.shape[0])
                 p.data[:min_d] = w[:min_d]
+            n_written += 1
         elif result is not None:
             result[slo_key] = w
+            n_written += 1
 
     n_mapped = 0
     for hf_key, arr in hf_state_dict.items():
@@ -377,9 +382,9 @@ def convert_hf_to_slonet(
     count = len(result) if result is not None else (len(param_map) if param_map else 0)
     logger.info(
         "convert_hf_to_slonet: arch=%s norm=%s act=%s transpose=%s fused=%s "
-        "mapped=%d keys (arch=%.3fs precomp=%.3fs main=%.3fs synth=%.3fs total=%.3fs)",
+        "mapped=%d keys wrote=%d params (arch=%.3fs precomp=%.3fs main=%.3fs synth=%.3fs total=%.3fs)",
         arch.name, arch.norm, arch.activation, arch.transpose_weights,
-        param_map is not None, count,
+        param_map is not None, count, n_written,
         _t_arch - _t0, _t_precomp - _t_arch, _t_main - _t_precomp,
         _t_end - _t_main, _t_end - _t0,
         extra={"tag": "INF"},
@@ -527,82 +532,39 @@ class SloNetChatProvider:
         import time as _time
 
         from domains.infrastructure.slnc.parser import SLNCParser
-        from domains.training.slonet import SloTransformer
+        from domains.infrastructure.weight_loader import build_model_from_config
 
         _t0 = _time.monotonic()
         parser = SLNCParser(slnc_path)
         config = parser.config
         _t_parse = _time.monotonic()
 
-        n_embed = config.get("n_embd", config.get("hidden_size", 768))
-        n_head = config.get("n_head", config.get("num_attention_heads", 12))
+        model = build_model_from_config(config, _lazy=True)
         n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
-        vocab_size = config.get("vocab_size", 50257)
-        intermediate_size = config.get("n_inner") or config.get("intermediate_size", n_embed * 4)
-        max_pos = config.get("n_positions", config.get("max_position_embeddings", 1024))
-
-        # Auto-detect positional encoding from config
-        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
-        use_abs_pos = not has_rope
-
-        # Auto-detect norm type from config
-        has_rms = config.get("rms_norm_eps") is not None
-        norm_type = "rms_norm" if has_rms else "layer_norm"
-        # Also check explicit config field
-        if config.get("layer_norm_type"):
-            norm_type = config["layer_norm_type"]
-
-        # Auto-detect GQA (n_kv_head < n_head)
-        n_kv_head = config.get("num_key_value_heads", n_head)
-
-        # Auto-detect activation from config — LLaMA/Qwen/Mistral use SwiGLU (silu)
-        hidden_act = config.get("hidden_act", "gelu")
-        activation = "silu" if hidden_act == "silu" else "gelu"
-
-        # Create SloTransformer — pass HF config's rms_norm_eps to match model exactly
-        hf_eps = config.get("rms_norm_eps", 1e-5)
-        model = SloTransformer(
-            vocab_size=vocab_size,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
-            n_kv_head=n_kv_head,
-            intermediate_size=intermediate_size,
-            block_size=max_pos,
-            max_seq_len=max_pos,
-            use_rope=not use_abs_pos,
-            rope_base=config.get("rope_theta", 10000.0),
-            dropout=0.0,
-            eps=hf_eps,
-            tie_weights=True,
-            use_abs_pos_emb=use_abs_pos,
-            norm_type=norm_type,
-            activation=activation,
-            _lazy=True,
-        )
         _t_model = _time.monotonic()
 
-        # Load weights from mmap (parallel for multi-core CPUs)
-        weights_dict = parser.get_weights_dict_parallel()
-        _t_weights = _time.monotonic()
-
-        # Fused convert+load: write directly into model parameters
-        param_map = dict(model._named_parameters())
-        mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config, param_map=param_map)
-        _t_convert = _time.monotonic()
-
-        # mapped is empty when fused path was used (writes done in-place)
-        if mapped:
-            model.load_state_dict(mapped)
-        _t_load = _time.monotonic()
-
-        # Drop the transient conversion buffers immediately — they are copies
-        # (2x the fp32 weight bytes) and would otherwise pin peak RSS until
-        # this method returns. load_state_dict already wrote their values into
-        # the model's parameters.
-        del weights_dict
-        del mapped
-        del param_map
+        # Unified loading path: DirectWeightLoader (single-pass mmap→parameter)
+        try:
+            from domains.infrastructure.weight_loader import DirectWeightLoader, build_load_plan
+            weights_dict = parser.get_weights_dict_parallel()
+            plan = build_load_plan(weights_dict, n_layer, config)
+            loader = DirectWeightLoader._from_plan(parser, plan, weights_dict)
+            result = loader.load(model)
+            _t_weights = _t_model + result.timing.get("direct", 0)
+            _t_convert = _t_weights + result.timing.get("direct", 0)
+            _t_load = _t_convert + result.timing.get("fused_qkv", 0) + result.timing.get("tied_synth", 0)
+            del loader, weights_dict, plan
+        except Exception as e:
+            logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"tag": "INF"})
+            # Fallback: build plan + generic loader (same mapping, no mmap optimization)
+            from domains.infrastructure.weight_loader import build_load_plan, load_into_model
+            weights_dict = parser.get_weights_dict_parallel()
+            _t_weights = _time.monotonic()
+            plan = build_load_plan(weights_dict, n_layer, config)
+            load_into_model(model, plan, weights_dict)
+            _t_convert = _time.monotonic()
+            _t_load = _t_convert
+            del weights_dict, plan
 
         logger.info(
             "from_slnc timing: parse=%.2fs model=%.2fs weights=%.2fs convert=%.2fs load_state=%.2fs total=%.2fs",
@@ -928,31 +890,23 @@ class SloNetChatProvider:
             ValueError: If the .soul file is invalid or missing model config
         """
         from domains.inference.slo_format import load_soul
-        from domains.training.slonet import SloTransformer
+        from domains.infrastructure.weight_loader import SoulWeightLoader, build_model_from_config
 
-        soul, state_dict = load_soul(soul_path)
+        loader = SoulWeightLoader(soul_path)
+        meta = loader.load_metadata()
+        soul = meta.pop("soul")
 
-        # Extract model config from soul metadata
-        cfg = soul.metadata.get("config", {})
-        vocab_size = soul.metadata.get("vocab_size", cfg.get("vocab_size", 256))
-        n_embed = cfg.get("n_embed", 128)
-        n_layer = cfg.get("n_layer", 4)
-        n_head = cfg.get("n_head", 4)
-        block_size = cfg.get("block_size", 128)
+        # Native .soul models don't use RoPE or RMSNorm — use simple config
+        model = build_model_from_config({
+            "vocab_size": meta["vocab_size"],
+            "hidden_size": meta["n_embed"],
+            "num_hidden_layers": meta["n_layer"],
+            "num_attention_heads": meta.get("n_head", 4),
+            "max_position_embeddings": meta.get("block_size", 128),
+        }, _lazy=True)
 
-        # Create SloTransformer with the trained architecture
-        model = SloTransformer(
-            vocab_size=vocab_size,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
-            block_size=block_size,
-            dropout=0.0,
-            _lazy=True,
-        )
-
-        # Load weights directly — already in SloNet format from training
-        model.load_state_dict(state_dict)
+        # Load weights — already in SloNet format from training
+        loader.load(model)
 
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)
@@ -994,7 +948,7 @@ class SloNetChatProvider:
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",
-            soul_path, n_layer, vocab_size, n_embed, extra={"tag": "INF"},
+            soul_path, meta["n_layer"], meta["vocab_size"], meta["n_embed"], extra={"tag": "INF"},
         )
 
         # Cross-turn KV cache state

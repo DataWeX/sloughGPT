@@ -10,11 +10,11 @@ import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
-  warmth: { label: 'Warmth', color: 'bg-orange-500/15 text-orange-600 dark:text-orange-400' },
-  curiosity: { label: 'Curiosity', color: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
-  creativity: { label: 'Creativity', color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400' },
-  confidence: { label: 'Confidence', color: 'bg-green-500/15 text-green-600 dark:text-green-400' },
-  humor: { label: 'Humor', color: 'bg-pink-500/15 text-pink-600 dark:text-pink-400' },
+  warmth: { label: 'Warmth', color: 'bg-warning/15 text-warning' },
+  curiosity: { label: 'Curiosity', color: 'bg-primary/15 text-primary' },
+  creativity: { label: 'Creativity', color: 'bg-accent/15 text-accent' },
+  confidence: { label: 'Confidence', color: 'bg-success/15 text-success' },
+  humor: { label: 'Humor', color: 'bg-destructive/15 text-destructive' },
 }
 
 export default function CompanionPage() {

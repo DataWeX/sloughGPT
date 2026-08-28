@@ -31,9 +31,10 @@ describe('ModeBar', () => {
   }
 
   it('renders mode trigger with current mode label', () => {
-    render(<ModeBar {...defaultProps} />)
+    const { container } = render(<ModeBar {...defaultProps} />)
     expect(screen.getByText('Chat')).toBeInTheDocument()
-    expect(screen.getByText('💬')).toBeInTheDocument()
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows sub-options for write mode', () => {

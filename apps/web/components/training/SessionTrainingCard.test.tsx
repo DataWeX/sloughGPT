@@ -29,6 +29,9 @@ vi.mock('@sloughgpt/strui', () => {
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     Label: ({ children, className }: any) => <label className={className}>{children}</label>,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
   }
 })
 

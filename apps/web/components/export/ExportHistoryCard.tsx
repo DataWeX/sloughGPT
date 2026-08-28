@@ -70,19 +70,19 @@ export function ExportHistoryCard() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Exports</div>
-            <div className="text-lg font-semibold">{history.length}</div>
+            <div className="text-sm font-semibold">{history.length}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Formats Used</div>
-            <div className="text-lg font-semibold">{Object.keys(formatCounts).length}</div>
+            <div className="text-sm font-semibold">{Object.keys(formatCounts).length}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Export</div>
-            <div className="text-lg font-semibold">{timeAgo(history[0].timestamp)}</div>
+            <div className="text-sm font-semibold">{timeAgo(history[0].timestamp)}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Files</div>
-            <div className="text-lg font-semibold">{history.reduce((s, r) => s + r.fileCount, 0)}</div>
+            <div className="text-sm font-semibold">{history.reduce((s, r) => s + r.fileCount, 0)}</div>
           </div>
         </div>
         <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">Recent</div>

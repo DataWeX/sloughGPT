@@ -9,6 +9,8 @@ a generator function instead of raw values. This enables:
 
 Works with any numpy array: weight tensors, feature vectors, embeddings,
 time series, sensor data, or any structured numerical data.
+
+Implements PointProtocol — the abstract interface for compressed data.
 """
 
 import base64
@@ -18,10 +20,15 @@ from typing import Any, Optional
 
 import numpy as np
 
+from .point_interface import PointProtocol, FunctionType
 
-@dataclass
-class Point:
-    """Compressed data with meaning — stores a generator function."""
+
+@dataclass(eq=False)
+class Point(PointProtocol):
+    """Compressed data with meaning — stores a generator function.
+
+    Implements PointProtocol for type-safe, swappable compression backends.
+    """
     identity: str           # what this point represents
     function_type: str      # "periodic", "linear", "polynomial", "cluster", "raw"
     params: dict            # function parameters
@@ -62,14 +69,32 @@ class Point:
     def nbytes(self) -> int:
         """Estimated memory usage of stored parameters."""
         if self.function_type == "cluster":
-            return (self.params["centroids"].nbytes +
-                    self.params["assignments"].nbytes +
-                    (self.residual.nbytes if self.residual is not None else 0))
+            centroids = self.params.get("centroids")
+            assignments = self.params.get("assignments")
+            if centroids is not None and assignments is not None:
+                return (centroids.nbytes + assignments.nbytes +
+                        (self.residual.nbytes if self.residual is not None else 0))
+            return 0
         elif self.function_type == "raw":
-            return len(base64.b64decode(self.params["data_b64"]))
+            return len(base64.b64decode(self.params.get("data_b64", "")))
         else:
             return 4 + len(self.params) * 4 + (
                 self.residual.nbytes if self.residual is not None else 0)
+
+    def _estimate_raw_bytes(self) -> int:
+        """Estimate uncompressed size for compression ratio calculation."""
+        if self.function_type == "cluster":
+            assignments = self.params.get("assignments")
+            if assignments is not None:
+                return len(assignments) * 4  # float32 per element
+            return 0
+        elif self.function_type == "raw":
+            return self.nbytes()
+        else:
+            # Use stored shape if available
+            if self.shape:
+                return int(np.prod(self.shape)) * 4  # float32 per element
+            return 0
 
     # Type code mapping — fixed 4-byte headers for binary serialization
     _TYPE_CODES = {

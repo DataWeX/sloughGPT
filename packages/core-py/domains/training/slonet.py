@@ -18,8 +18,58 @@ from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
 from domains.shared import find_repo_root
+from dataclasses import dataclass, field
 
 logger = logging.getLogger("slo.slonet")
+
+
+@dataclass
+class GenerationMetrics:
+    """Lightweight metrics tracker for the generation hot loop.
+
+    Initialized before the loop, finalized after. All fields are updated
+    inline during generation — no function calls in the hot path.
+    """
+    n_tokens: int = 0
+    prompt_tokens: int = 0
+    t_first_token: float = 0.0
+    t_start: float = 0.0
+    t_end: float = 0.0
+    prefill_ms: float = 0.0
+    decode_ms: float = 0.0
+    tokens_per_sec: float = 0.0
+
+    @property
+    def total_ms(self) -> float:
+        return (self.t_end - self.t_start) * 1000
+
+    @property
+    def ttft_ms(self) -> float:
+        """Time to first token (from start of generation)."""
+        return (self.t_first_token - self.t_start) * 1000 if self.t_first_token else 0.0
+
+    def finalize(self):
+        """Compute derived metrics after generation completes."""
+        if self.n_tokens > 0 and self.t_end > self.t_start:
+            self.decode_ms = (self.t_end - self.t_start) * 1000
+            self.tokens_per_sec = self.n_tokens / (self.t_end - self.t_start)
+        if self.t_first_token and self.t_start:
+            self.prefill_ms = (self.t_first_token - self.t_start) * 1000
+
+
+@dataclass
+class GenerateResult:
+    """Result from generate_numpy() — token IDs + performance metrics."""
+    token_ids: np.ndarray
+    metrics: GenerationMetrics = field(default_factory=GenerationMetrics)
+
+    @property
+    def generated_ids(self) -> np.ndarray:
+        """Token IDs excluding the prompt."""
+        m = self.metrics
+        if m.prompt_tokens > 0 and self.token_ids.shape[1] > m.prompt_tokens:
+            return self.token_ids[:, m.prompt_tokens:]
+        return self.token_ids
 
 # Lazy GPU acceleration — import on demand, never at module load
 _ACCELERATOR = None
@@ -4974,7 +5024,7 @@ class SloTransformer(SloNet):
         extra_stop_ids: Optional[Sequence[int]] = None,
         quantize_kv: Optional[bool] = None,
         kv_state: Optional[NumpyKVState] = None,
-    ) -> np.ndarray:
+    ) -> GenerateResult:
         """Fully inlined numpy generation — maximum inference speed.
 
         Optimizations over previous version:
@@ -5054,57 +5104,89 @@ class SloTransformer(SloNet):
                 quantize_kv_tensor as _qkv_t, dequantize_kv_tensor as _dqkv_t,
             )
 
-        # Flatten block weights into parallel lists — eliminates dict hash lookups.
-        # Each block is indexed by integer; inner loop uses direct list indexing.
-        n_an_w = []; n_an_b = []; n_an_e = []
-        n_fn_w = []; n_fn_b = []; n_fn_e = []
-        m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
-        m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
-        _nkv = []
-        # Quantized path: store SloLinear module references for forward_numpy()
-        if _is_quantized:
-            q_wq = []; q_wk = []; q_wv = []; q_wo = []
-            q_w1 = []; q_w3 = []; q_w2 = []
-        for l in self.layers[1:-2]:
-            if isinstance(l, SloTransformerBlock):
-                b = l
-                has_ln = isinstance(b.attn_norm, SloLayerNorm)
-                n_an_w.append(b.attn_norm.weight.data)
-                n_an_b.append(b.attn_norm.bias.data if has_ln else None)
-                n_an_e.append(b.attn_norm.eps)
-                n_fn_w.append(b.ff_norm.weight.data)
-                n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
-                n_fn_e.append(b.ff_norm.eps)
-                if _is_quantized:
-                    q_wq.append(b.attn.W_q); q_wk.append(b.attn.W_k)
-                    q_wv.append(b.attn.W_v); q_wo.append(b.attn.W_o)
-                    q_w1.append(b.ff.w1); q_w3.append(b.ff.w3)
-                    q_w2.append(b.ff.w2)
-                    _nkv.append(b.attn.n_kv_head)
-                    m_wqkv.append(None); m_bqkv.append(None)
-                    m_wo.append(None); m_bo.append(None)
-                    m_w13.append(None); m_b13.append(None)
-                    m_w2.append(None); m_b2.append(None)
-                else:
-                    wqkv = np.concatenate([b.attn.W_q._get_weight_T_contig(),
+        # ── Weight cache: flatten block weights once, reuse across calls ──
+        n_blocks = sum(1 for l in self.layers[1:-2] if isinstance(l, SloTransformerBlock))
+        _cache_key = (n_blocks, _is_quantized, _use_kvq)
+        _cache = getattr(self, '_gen_cache', None)
+        if _cache is not None and _cache.get('key') == _cache_key:
+            n_an_w = _cache['n_an_w']; n_an_b = _cache['n_an_b']; n_an_e = _cache['n_an_e']
+            n_fn_w = _cache['n_fn_w']; n_fn_b = _cache['n_fn_b']; n_fn_e = _cache['n_fn_e']
+            m_wqkv = _cache['m_wqkv']; m_bqkv = _cache['m_bqkv']
+            m_wo = _cache['m_wo']; m_bo = _cache['m_bo']
+            m_w13 = _cache['m_w13']; m_b13 = _cache['m_b13']
+            m_w2 = _cache['m_w2']; m_b2 = _cache['m_b2']
+            _nkv = _cache['_nkv']
+            q_wq = _cache.get('q_wq'); q_wk = _cache.get('q_wk')
+            q_wv = _cache.get('q_wv'); q_wo = _cache.get('q_wo')
+            q_w1 = _cache.get('q_w1'); q_w3 = _cache.get('q_w3')
+            q_w2 = _cache.get('q_w2')
+            f_qkv = _cache['f_qkv']; f_ff = _cache['f_ff']
+            f_qkv4 = _cache['f_qkv4']; f_ff4 = _cache['f_ff4']
+            tok_emb_w = _cache['tok_emb_w']; pos_emb_w = _cache['pos_emb_w']
+            pos_emb_n = _cache['pos_emb_n']; lm_head_mod = _cache['lm_head_mod']
+            norm_w = _cache['norm_w']; norm_b = _cache['norm_b']
+            norm_eps = _cache['norm_eps']
+            lm_w = _cache['lm_w']; lm_w_T = _cache['lm_w_T']
+            E = _cache['E']; H = _cache['H']; K_H = _cache['K_H']
+            _ff_dim = _cache['_ff_dim']; scale = _cache['scale']
+            _clip_max = _cache['_clip_max']; _use_gqa = _cache['_use_gqa']
+            _gqa_reps = _cache['_gqa_reps']; _he = _cache['_he']
+            _khe = _cache['_khe']
+            _use_bias_bqkv = _cache['_use_bias_bqkv']
+            _use_bias_bo = _cache['_use_bias_bo']
+            _use_bias_b13 = _cache['_use_bias_b13']
+            _use_bias_b2 = _cache['_use_bias_b2']
+            n_blocks = _cache['n_blocks']
+        else:
+            # Flatten block weights into parallel lists — eliminates dict hash lookups.
+            n_an_w = []; n_an_b = []; n_an_e = []
+            n_fn_w = []; n_fn_b = []; n_fn_e = []
+            m_wqkv = []; m_bqkv = []; m_wo = []; m_bo = []
+            m_w13 = []; m_b13 = []; m_w2 = []; m_b2 = []
+            _nkv = []
+            if _is_quantized:
+                q_wq = []; q_wk = []; q_wv = []; q_wo = []
+                q_w1 = []; q_w3 = []; q_w2 = []
+            for l in self.layers[1:-2]:
+                if isinstance(l, SloTransformerBlock):
+                    b = l
+                    has_ln = isinstance(b.attn_norm, SloLayerNorm)
+                    n_an_w.append(b.attn_norm.weight.data)
+                    n_an_b.append(b.attn_norm.bias.data if has_ln else None)
+                    n_an_e.append(b.attn_norm.eps)
+                    n_fn_w.append(b.ff_norm.weight.data)
+                    n_fn_b.append(b.ff_norm.bias.data if has_ln else None)
+                    n_fn_e.append(b.ff_norm.eps)
+                    if _is_quantized:
+                        q_wq.append(b.attn.W_q); q_wk.append(b.attn.W_k)
+                        q_wv.append(b.attn.W_v); q_wo.append(b.attn.W_o)
+                        q_w1.append(b.ff.w1); q_w3.append(b.ff.w3)
+                        q_w2.append(b.ff.w2)
+                        _nkv.append(b.attn.n_kv_head)
+                        m_wqkv.append(None); m_bqkv.append(None)
+                        m_wo.append(None); m_bo.append(None)
+                        m_w13.append(None); m_b13.append(None)
+                        m_w2.append(None); m_b2.append(None)
+                    else:
+                        wqkv = np.concatenate([b.attn.W_q._get_weight_T_contig(),
                                            b.attn.W_k._get_weight_T_contig(),
                                            b.attn.W_v._get_weight_T_contig()], axis=1)
-                    bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
-                    bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
-                    bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
-                    bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
-                    w13 = np.concatenate([b.ff.w1._get_weight_T_contig(),
-                                          b.ff.w3._get_weight_T_contig()], axis=1)
-                    b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
-                    b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
-                    b13 = np.concatenate([b1, b3]) if b1 is not None else None
-                    _nkv.append(b.attn.n_kv_head)
-                    m_wqkv.append(wqkv); m_bqkv.append(bqkv)
-                    m_wo.append(b.attn.W_o._get_weight_T_contig())
-                    m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
-                    m_w13.append(w13); m_b13.append(b13)
-                    m_w2.append(b.ff.w2._get_weight_T_contig())
-                    m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
+                        bq = b.attn.W_q.bias.data if b.attn.W_q.use_bias else None
+                        bk = b.attn.W_k.bias.data if b.attn.W_k.use_bias else None
+                        bv = b.attn.W_v.bias.data if b.attn.W_v.use_bias else None
+                        bqkv = np.concatenate([bq, bk, bv]) if bq is not None else None
+                        w13 = np.concatenate([b.ff.w1._get_weight_T_contig(),
+                                              b.ff.w3._get_weight_T_contig()], axis=1)
+                        b1 = b.ff.w1.bias.data if b.ff.w1.use_bias else None
+                        b3 = b.ff.w3.bias.data if b.ff.w3.use_bias else None
+                        b13 = np.concatenate([b1, b3]) if b1 is not None else None
+                        _nkv.append(b.attn.n_kv_head)
+                        m_wqkv.append(wqkv); m_bqkv.append(bqkv)
+                        m_wo.append(b.attn.W_o._get_weight_T_contig())
+                        m_bo.append(b.attn.W_o.bias.data if b.attn.W_o.use_bias else None)
+                        m_w13.append(w13); m_b13.append(b13)
+                        m_w2.append(b.ff.w2._get_weight_T_contig())
+                        m_b2.append(b.ff.w2.bias.data if b.ff.w2.use_bias else None)
 
         n_blocks = len(m_wqkv)
         # Fused quantized packs: [w_q;w_k;w_v] and [w1;w3] shared-input GEMMs.
@@ -5204,6 +5286,46 @@ class SloTransformer(SloNet):
         _use_bias_bo = m_bo[0] is not None
         _use_bias_b13 = m_b13[0] is not None
         _use_bias_b2 = m_b2[0] is not None
+
+        # Store cache for next call (skip weight flattening overhead)
+        if _cache is None or _cache.get('key') != _cache_key:
+            self._gen_cache = {
+                'key': _cache_key,
+                'n_an_w': n_an_w, 'n_an_b': n_an_b, 'n_an_e': n_an_e,
+                'n_fn_w': n_fn_w, 'n_fn_b': n_fn_b, 'n_fn_e': n_fn_e,
+                'm_wqkv': m_wqkv, 'm_bqkv': m_bqkv,
+                'm_wo': m_wo, 'm_bo': m_bo,
+                'm_w13': m_w13, 'm_b13': m_b13,
+                'm_w2': m_w2, 'm_b2': m_b2,
+                '_nkv': _nkv,
+                'q_wq': q_wq if _is_quantized else None,
+                'q_wk': q_wk if _is_quantized else None,
+                'q_wv': q_wv if _is_quantized else None,
+                'q_wo': q_wo if _is_quantized else None,
+                'q_w1': q_w1 if _is_quantized else None,
+                'q_w3': q_w3 if _is_quantized else None,
+                'q_w2': q_w2 if _is_quantized else None,
+                'f_qkv': f_qkv, 'f_ff': f_ff,
+                'f_qkv4': f_qkv4, 'f_ff4': f_ff4,
+                'tok_emb_w': tok_emb_w, 'pos_emb_w': pos_emb_w,
+                'pos_emb_n': pos_emb_n, 'lm_head_mod': lm_head_mod,
+                'norm_w': norm_w, 'norm_b': norm_b, 'norm_eps': norm_eps,
+                'lm_w': lm_w, 'lm_w_T': lm_w_T,
+                'E': E, 'H': H, 'K_H': K_H,
+                '_ff_dim': _ff_dim, 'scale': scale,
+                '_clip_max': _clip_max, '_use_gqa': _use_gqa,
+                '_gqa_reps': _gqa_reps, '_he': _he,
+                '_khe': _khe, 'n_blocks': n_blocks,
+                '_use_bias_bqkv': _use_bias_bqkv,
+                '_use_bias_bo': _use_bias_bo,
+                '_use_bias_b13': _use_bias_b13,
+                '_use_bias_b2': _use_bias_b2,
+            }
+
+        # ── Metrics ───────────────────────────────────────────────────────
+        _t_gen_start = time.perf_counter()
+        _gen_metrics = GenerationMetrics(prompt_tokens=prompt_len, t_start=_t_gen_start)
+        _first_token_recorded = False
 
         for step in range(max_gen):
             if step == 0:
@@ -5334,7 +5456,10 @@ class SloTransformer(SloNet):
                     _ao = _nb_fused_attention_multi(_q, k[0], v[0], scale, H, E)
                     ao = _ao.reshape(1, seq_len, _he)
                 else:
-                    scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+                    # Attention scores: einsum('bnhd,bmhd->bhnm', q, k) → matmul
+                    q_t = q.transpose(0, 2, 1, 3)  # (1, H, seq_len, E)
+                    k_t = k.transpose(0, 2, 3, 1)  # (1, H, E, new_len)
+                    scores = (q_t @ k_t) * scale
                     if step == 0 and seq_len > 1:
                         _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
                         if _start_pos > 0:
@@ -5346,7 +5471,9 @@ class SloTransformer(SloNet):
                         scores = scores + _cm
                     attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                     attn = attn / attn.sum(axis=-1, keepdims=True)
-                    ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
+                    # Attention output: einsum('bhnm,bmhd->bnhd', attn, v) → matmul
+                    v_t = v.transpose(0, 2, 1, 3)  # (1, H, new_len, E)
+                    ao = (attn @ v_t).transpose(0, 2, 1, 3).reshape(1, seq_len, _he)
 
                 # Output projection
                 if _is_quantized:
@@ -5461,14 +5588,23 @@ class SloTransformer(SloNet):
                         generated_ids=out_buf[:, prompt_len:step + prompt_len].flatten(),
                     )
             out_buf[0, prompt_len + step] = next_id
+            if not _first_token_recorded:
+                _gen_metrics.t_first_token = time.perf_counter()
+                _first_token_recorded = True
             if next_id in _stop_ids:
+                _gen_metrics.n_tokens = step + 1
+                _gen_metrics.t_end = time.perf_counter()
+                _gen_metrics.finalize()
                 if kv_state is not None:
                     kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
-                return out_buf[:, :prompt_len + step + 1]
+                return GenerateResult(out_buf[:, :prompt_len + step + 1], _gen_metrics)
 
+        _gen_metrics.n_tokens = max_gen
+        _gen_metrics.t_end = time.perf_counter()
+        _gen_metrics.finalize()
         if kv_state is not None:
             kv_state.prev_ids = out_buf.copy()
-        return out_buf
+        return GenerateResult(out_buf, _gen_metrics)
 
     def generate_numpy_stream(
         self,
@@ -5685,6 +5821,11 @@ class SloTransformer(SloNet):
         _use_bias_b13 = m_b13[0] is not None
         _use_bias_b2 = m_b2[0] is not None
 
+
+        # ── Metrics ───────────────────────────────────────────────────────
+        _t_gen_start = time.perf_counter()
+        _gen_metrics = GenerationMetrics(prompt_tokens=prompt_len, t_start=_t_gen_start)
+
         for step in range(max_gen):
             if step == 0:
                 # First step: only the new suffix is recomputed; the shared
@@ -5807,7 +5948,10 @@ class SloTransformer(SloNet):
                     _ao = _nb_fused_attention_multi(_q, k[0], v[0], scale, H, E)
                     ao = _ao.reshape(1, seq_len, _he)
                 else:
-                    scores = np.einsum('bnhd,bmhd->bhnm', q, k) * scale
+                    # Attention scores: einsum('bnhd,bmhd->bhnm', q, k) → matmul
+                    q_t = q.transpose(0, 2, 1, 3)  # (1, H, seq_len, E)
+                    k_t = k.transpose(0, 2, 3, 1)  # (1, H, E, new_len)
+                    scores = (q_t @ k_t) * scale
                     if step == 0 and seq_len > 1:
                         _cm = np.triu(np.full((seq_len, new_len), -1e9, dtype=np.float32), k=1)
                         if _start_pos > 0:
@@ -5819,7 +5963,9 @@ class SloTransformer(SloNet):
                         scores = scores + _cm
                     attn = np.exp(scores - scores.max(axis=-1, keepdims=True))
                     attn = attn / attn.sum(axis=-1, keepdims=True)
-                    ao = np.einsum('bhnm,bmhd->bnhd', attn, v).reshape(1, seq_len, _he)
+                    # Attention output: einsum('bhnm,bmhd->bnhd', attn, v) → matmul
+                    v_t = v.transpose(0, 2, 1, 3)  # (1, H, new_len, E)
+                    ao = (attn @ v_t).transpose(0, 2, 1, 3).reshape(1, seq_len, _he)
 
                 if _is_quantized:
                     ao = q_wo[bi].forward_numpy(ao)
@@ -5931,8 +6077,18 @@ class SloTransformer(SloNet):
             if kv_state is not None:
                 kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
             if next_id in _stop_ids and step > 0:
+                _gen_metrics.t_end = time.perf_counter()
+                _gen_metrics.finalize()
                 return
+            if _gen_metrics.n_tokens == 0:
+                _gen_metrics.t_first_token = time.perf_counter()
+            _gen_metrics.n_tokens += 1
             yield next_id
+
+
+        _gen_metrics.t_end = time.perf_counter()
+        _gen_metrics.finalize()
+        self._last_stream_metrics = _gen_metrics
 
     def state_dict(self) -> Dict[str, np.ndarray]:
         result = {}
