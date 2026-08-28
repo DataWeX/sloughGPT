@@ -29,16 +29,34 @@ const jetbrainsMono = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'Man - AI Platform',
-  description: 'Enterprise-grade AI framework with production-ready ML infrastructure',
-  icons: { icon: '/favicon.svg' },
+  title: 'SloughGPT',
+  description: 'SloughGPT — AI chat interface',
+  manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/favicon.svg',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'SloughGPT',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  other: {
+    'theme-color': '#7c52c4',
+  },
 }
 
 /** Enables `env(safe-area-inset-*)` under notches / home indicators on mobile. */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
+  themeColor: '#7c52c4',
 }
 
 /** Runs before React hydrates; ``useLayoutEffect`` in ThemeProvider re-syncs after any className reconciliation. */
@@ -51,9 +69,21 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${rubik.variable} ${lato.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <meta name="theme-color" content="#7c52c4" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="SloughGPT" />
       </head>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{})});}`,
+          }}
+        />
         <WebVitals />
         <ErrorLifecycle />
         <ErrorBoundary>

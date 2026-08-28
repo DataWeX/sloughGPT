@@ -759,3 +759,32 @@ html.dark {
     radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
   border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
 }
+
+/* ── Mobile Performance ────────────────────────────────────── */
+@media (max-width: 767px) {
+  html {
+    text-rendering: optimizeSpeed;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
