@@ -788,3 +788,12 @@ html.dark {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Chat Message Performance ──────────────────────────────── */
+@media (max-width: 767px) {
+  .chat-message,
+  [data-message-id] {
+    content-visibility: auto;
+    contain-intrinsic-size: 0 120px;
+  }
+}
