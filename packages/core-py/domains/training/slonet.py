@@ -6053,19 +6053,23 @@ class SloTransformer(SloNet):
             # correct per-row scale for both per-tensor and per-channel weights.
             if _is_quantized:
                 logits = lm_head_mod.forward_numpy(x[:, -1, :])
-                next_id = int(np.argmax(logits[0]))
             elif _use_kernels:
-                next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
+                if _is_greedy:
+                    next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
+                    out_buf[0, prompt_len + step] = next_id
+                    if kv_state is not None:
+                        kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
+                    if next_id in _stop_ids and step > 0:
+                        return
+                    yield next_id
+                    continue
+                logits = x[:, -1, :] @ lm_w_T
             else:
                 logits = x[:, -1, :] @ lm_w_T
-                next_id = int(np.argmax(logits[0]))
 
-            # Non-greedy sampling
-            if not _is_greedy:
-                if _is_quantized:
-                    logits = lm_head_mod.forward_numpy(x[:, -1, :])
-                else:
-                    logits = x[:, -1, :] @ lm_w_T
+            if _is_greedy:
+                next_id = int(np.argmax(logits[0]))
+            else:
                 next_id = _sample_from_logits(
                         logits, temperature=temperature,
                         top_k=top_k, top_p=top_p,

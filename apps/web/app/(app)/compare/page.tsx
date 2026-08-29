@@ -42,12 +42,12 @@ interface SavedSnapshot {
 
 const STORAGE_KEY = 'compare-snapshots'
 
-function loadSnapshots(): SavedSnapshot[] {
+async function loadSnapshots(): Promise<SavedSnapshot[]> {
   return getJsonItem<SavedSnapshot[]>(STORAGE_KEY, [])
 }
 
-function saveSnapshots(snapshots: SavedSnapshot[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshots))
+async function saveSnapshots(snapshots: SavedSnapshot[]) {
+  await setJsonItem(STORAGE_KEY, snapshots)
 }
 
 export default function ComparePage() {
@@ -60,7 +60,9 @@ export default function ComparePage() {
   const [snapshotName, setSnapshotName] = useState('')
   const addToast = useToastStore(s => s.addToast)
 
-  useEffect(() => { setSnapshots(loadSnapshots()) }, [])
+  useEffect(() => {
+    loadSnapshots().then(setSnapshots)
+  }, [])
 
   useEffect(() => {
     (async () => {
@@ -124,7 +126,7 @@ export default function ComparePage() {
     }
     const updated = [snap, ...snapshots]
     setSnapshots(updated)
-    saveSnapshots(updated)
+    saveSnapshots(updated).catch(() => {})
     setSnapshotName('')
     addToast(`Saved "${name}"`, 'success')
   }
@@ -137,7 +139,7 @@ export default function ComparePage() {
   const deleteSnapshot = (id: string) => {
     const updated = snapshots.filter(s => s.id !== id)
     setSnapshots(updated)
-    saveSnapshots(updated)
+    saveSnapshots(updated).catch(() => {})
     addToast('Snapshot deleted', 'success')
   }
 

@@ -790,7 +790,7 @@ def _cmd_api_and_web(args):
         **env,
         "PORT": str(web_port),
         "HOSTNAME": "0.0.0.0",
-        "NEXT_PUBLIC_API_URL": f"http://{args.host}:{api_port}",
+        "NEXT_PUBLIC_API_URL": os.environ.get("NEXT_PUBLIC_API_URL", f"http://{args.host}:{api_port}"),
     }
 
     if server_js.is_file():

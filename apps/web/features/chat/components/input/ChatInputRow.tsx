@@ -43,6 +43,10 @@ export const ChatInputRow = memo(function ChatInputRow({
   const [showMentionMenu, setShowMentionMenu] = useState(false)
   const [mentionMenuDismissed, setMentionMenuDismissed] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const slashMenuDismissedRef = useRef(slashMenuDismissed)
+  const mentionMenuDismissedRef = useRef(mentionMenuDismissed)
+  slashMenuDismissedRef.current = slashMenuDismissed
+  mentionMenuDismissedRef.current = mentionMenuDismissed
 
   const showSlash = showSlashMenu && value.startsWith('/')
   const showMention = showMentionMenu && value.startsWith('@')
@@ -69,10 +73,12 @@ export const ChatInputRow = memo(function ChatInputRow({
 
   const handleChange = useCallback((newVal: string) => {
     onChange(newVal)
-    if (newVal.startsWith('/') && !slashMenuDismissed) {
+    const slashDismissed = slashMenuDismissedRef.current
+    const mentionDismissed = mentionMenuDismissedRef.current
+    if (newVal.startsWith('/') && !slashDismissed) {
       setShowSlashMenu(true)
       setShowMentionMenu(false)
-    } else if (newVal.startsWith('@') && !mentionMenuDismissed) {
+    } else if (newVal.startsWith('@') && !mentionDismissed) {
       setShowMentionMenu(true)
       setShowSlashMenu(false)
     } else {
@@ -85,7 +91,7 @@ export const ChatInputRow = memo(function ChatInputRow({
     if (!newVal.startsWith('@')) {
       setMentionMenuDismissed(false)
     }
-  }, [onChange, slashMenuDismissed, mentionMenuDismissed])
+  }, [onChange])
 
   return (
     <div className="flex flex-col w-full" ref={containerRef}>

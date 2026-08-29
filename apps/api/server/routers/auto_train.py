@@ -532,7 +532,7 @@ class AutoTrainRouter:
         self.router.add_api_route("/pause", self.pause, methods=["POST"])
         self.router.add_api_route("/resume", self.resume, methods=["POST"])
         self.router.add_api_route("/status", self.status, methods=["GET"])
-        self.router.add_api_route("/stream", self.stream, methods=["GET"])
+        self.router.add_api_route("/stream", self.stream, methods=["GET"], response_model=None)
         self.router.add_api_route("/checkpoints", self.list_checkpoints, methods=["GET"])
         self.router.add_api_route("/checkpoints/{name}", self.delete_checkpoint, methods=["DELETE"])
         self.router.add_api_route("/checkpoints/{name}/load", self.load_checkpoint, methods=["POST"])
@@ -541,7 +541,7 @@ class AutoTrainRouter:
         self.router.add_api_route("/checkpoints/{name}/export-mobile", self.export_checkpoint_mobile, methods=["GET"])
         self.router.add_api_route("/log", self.auto_train_log, methods=["GET"])
         self.router.add_api_route("/from-sessions/start", self.start_from_sessions, methods=["POST"])
-        self.router.add_api_route("/from-sessions/stream", self.stream_from_sessions, methods=["GET"])
+        self.router.add_api_route("/from-sessions/stream", self.stream_from_sessions, methods=["GET"], response_model=None)
         self.router.add_api_route("/from-sessions/cancel", self.cancel_from_sessions, methods=["GET"])
         self.router.add_api_route("/metrics/export", self.export_metrics, methods=["GET"])
 

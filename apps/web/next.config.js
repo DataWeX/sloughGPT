@@ -7,24 +7,8 @@ const nextConfig = {
     pagesBufferLength: 2,
   },
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
   distDir: process.env.BUILD_DIST || (process.env.NODE_ENV === 'development' ? '.next-dev' : '.next'),
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-      }
-    }
-    // v86 ESM build imports node: builtins — externalize to avoid webpack errors
-    config.externals = [
-      ...(Array.isArray(config.externals) ? config.externals : []),
-      { 'v86': 'v86' },
-    ]
-    return config
-  },
+  transpilePackages: ['@sloughgpt/strui'],
 }
 
 module.exports = nextConfig

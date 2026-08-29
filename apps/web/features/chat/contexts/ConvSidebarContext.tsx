@@ -1,13 +1,18 @@
 'use client'
 
 import { createContext, useCallback, useContext, useState, useEffect, type ReactNode } from 'react'
+import { chatDB } from '@/lib/db'
 
 const CONV_COLLAPSED_KEY = 'sloughgpt:conv-sidebar-collapsed'
 const NAV_COLLAPSED_KEY = 'sloughgpt:nav-sidebar-collapsed'
 
-function readBool(key: string): boolean {
-  if (typeof window === 'undefined') return false
-  try { return localStorage.getItem(key) === 'true' } catch { return false /* SSR or private browsing */ }
+async function readBool(key: string): Promise<boolean> {
+  try {
+    const entry = await chatDB.getKV<string>(key)
+    return entry === 'true'
+  } catch {
+    return false
+  }
 }
 
 interface ConvSidebarContextValue {
@@ -32,18 +37,30 @@ export function useConvSidebar() {
 
 export function ConvSidebarProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
-  const [convCollapsed, setConvCollapsed] = useState(() => readBool(CONV_COLLAPSED_KEY))
-  const [navCollapsed, setNavCollapsed] = useState(() => readBool(NAV_COLLAPSED_KEY))
+  const [convCollapsed, setConvCollapsed] = useState(false)
+  const [navCollapsed, setNavCollapsed] = useState(false)
   const toggle = useCallback(() => setOpen(v => !v), [])
   const toggleConv = useCallback(() => setConvCollapsed(v => !v), [])
   const toggleNav = useCallback(() => setNavCollapsed(v => !v), [])
 
   useEffect(() => {
-    try { localStorage.setItem(CONV_COLLAPSED_KEY, String(convCollapsed)) } catch { /* SSR or private browsing */ }
+    let cancelled = false
+    readBool(CONV_COLLAPSED_KEY).then(v => { if (!cancelled) setConvCollapsed(v) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    readBool(NAV_COLLAPSED_KEY).then(v => { if (!cancelled) setNavCollapsed(v) })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    chatDB.setKV(CONV_COLLAPSED_KEY, String(convCollapsed)).catch(() => {})
   }, [convCollapsed])
 
   useEffect(() => {
-    try { localStorage.setItem(NAV_COLLAPSED_KEY, String(navCollapsed)) } catch { /* SSR or private browsing */ }
+    chatDB.setKV(NAV_COLLAPSED_KEY, String(navCollapsed)).catch(() => {})
   }, [navCollapsed])
 
   return (

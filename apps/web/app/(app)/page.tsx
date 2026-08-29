@@ -27,6 +27,7 @@ import { OnboardingCard } from '@/components/onboarding/OnboardingCard'
 import { sessionController } from '@/lib/session-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { chatDB } from '@/lib/db'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
 import { formatBytes } from '@/lib/format-bytes'
@@ -54,10 +55,23 @@ export default function HomePage() {
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
-  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('onboarding_dismissed') === '1'
-  })
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(false)
+
+  useEffect(() => {
+    let cancelled = false
+    chatDB.getKV<string>('onboarding_dismissed').then(v => {
+      if (!cancelled) setOnboardingDismissed(v === '1')
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    if (onboardingDismissed) {
+      chatDB.setKV('onboarding_dismissed', '1').catch(() => {})
+    } else {
+      chatDB.deleteKV('onboarding_dismissed').catch(() => {})
+    }
+  }, [onboardingDismissed])
 
   const [convStats, setConvStats] = useState<{ totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null>(null)
 
@@ -109,15 +123,6 @@ export default function HomePage() {
     }).catch(() => { /* dataset stats non-critical */ })
     return () => { cancelled = true }
   }, [apiStatus])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (onboardingDismissed) {
-      localStorage.setItem('onboarding_dismissed', '1')
-    } else {
-      localStorage.removeItem('onboarding_dismissed')
-    }
-  }, [onboardingDismissed])
 
   useEffect(() => {
     if (apiStatus !== 'offline') return

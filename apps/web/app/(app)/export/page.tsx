@@ -80,7 +80,7 @@ export default function ExportPage() {
       )
       const fileCount = Object.keys(res.files ?? {}).length
       setExportResult(`Exported ${fileCount} file(s) in ${res.format} format`)
-      recordExport(res.format, fileCount)
+      recordExport(res.format, fileCount).catch(() => {})
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not export')
     } finally {

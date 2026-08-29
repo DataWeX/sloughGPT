@@ -33,6 +33,8 @@ import { useLocale, LOCALES } from '@/hooks/useLocale'
 import { useTheme } from '@/components/ThemeProvider'
 import { PALETTE_IDS, PALETTE_LABELS, type StoredPaletteId } from '@/lib/theme-storage'
 import { systemController, type DetailedHealth, type SystemMetrics, type DiskUsage, type SystemInfo } from '@/lib/system-controller'
+import { chatDB } from '@/lib/db'
+import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
 import { downloadJson, importFile } from '@/lib/download-utils'
@@ -139,7 +141,7 @@ export default function SettingsPage() {
   }
 
   const clearChat = () => {
-    localStorage.removeItem('man_current_conversation')
+    chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {})
     addToast('Chat history cleared', 'success')
   }
 

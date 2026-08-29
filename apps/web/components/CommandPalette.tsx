@@ -1,21 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, IconSearch, IconPlus, IconDownload, IconMoon, IconTrash, IconCheckCircle, IconModel, IconBrain, IconChat, IconMessage, IconChevronRight } from '@sloughgpt/strui'
+import { cn } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
-import { soulsController, type Soul } from '@/lib/souls-controller'
+import { soulsController } from '@/lib/souls-controller'
 import { useSettings, useUpdateSettings } from '@/lib/store'
-import { useModels, useSouls } from '@/lib/query/api-hooks'
-import { useToastStore } from '@/lib/toast-store'
-import { NAV_SECTIONS, SIDEBAR_ICONS } from '@/lib/navigation'
+import { NAV_SECTIONS } from '@/lib/navigation'
+import { chatDB } from '@/lib/db'
+import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
 
 interface CommandAction {
   id: string
   label: string
   description: string
-  icon: ReactNode
+  icon: string
   category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul'
   run: () => void
 }
@@ -26,36 +26,26 @@ export function CommandPalette() {
   const [query, setQuery] = useState('')
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [recentSessions, setRecentSessions] = useState<{ id: string; name: string }[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [models, setModels] = useState<{ id: string; name: string; loaded: boolean }[]>([])
+  const [souls, setSouls] = useState<{ name: string; description?: string }[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
-  const addToast = useToastStore(s => s.addToast)
-
-  // Use shared query cache for models and souls — eliminates 2 independent API calls.
-  const { data: modelsData } = useModels()
-  const { data: soulsData } = useSouls()
-
-  const models = useMemo(() => {
-    const list = modelsData ?? []
-    return list.map((model) => ({
-      id: model.id || model.name,
-      name: (model.id || model.name).replace(/^hf\//, ''),
-      loaded: model.loaded || false,
-    }))
-  }, [modelsData])
-
-  const souls = useMemo(() => {
-    const list = soulsData?.souls || []
-    return list.map((soul: Soul) => ({ name: soul.name, description: soul.description }))
-  }, [soulsData])
 
   useEffect(() => {
-    let active = true
     sessionController.list().then(sessions => {
-      if (active) setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
-    }).catch(() => { if (active && !loadError) setLoadError('Some data unavailable') })
-    return () => { active = false }
+      setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
+    }).catch(() => /* session list unavailable */ {})
+    modelController.list().then(list => {
+      setModels(list.map(m => ({
+        id: m.id || m.name,
+        name: (m.id || m.name).replace(/^hf\//, ''),
+        loaded: m.loaded || false,
+      })))
+    }).catch(() => /* model list unavailable */ {})
+    soulsController.list().then(res => {
+      setSouls(res.souls.map(s => ({ name: s.name, description: s.description })))
+    }).catch(() => /* soul list unavailable */ {})
   }, [])
 
   const actions: CommandAction[] = useMemo(() => {
@@ -64,7 +54,7 @@ export function CommandPalette() {
         id: `nav-${route.path}`,
         label: route.description || route.path,
         description: route.description || '',
-        icon: route.icon || <IconSearch className="h-4 w-4" />,
+        icon: route.icon || '📄',
         category: 'navigation' as const,
         run: () => router.push(route.path),
       }))
@@ -72,32 +62,29 @@ export function CommandPalette() {
 
     const modelActs: CommandAction[] = models.map(m => ({
       id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',
-      icon: m.loaded ? <IconCheckCircle className="h-4 w-4 text-success" /> : <IconModel className="h-4 w-4 text-primary" />, category: 'model' as const,
+      icon: m.loaded ? '✓' : '🧠', category: 'model' as const,
       run: async () => {
-        if (!m.loaded) {
-          try { await modelController.load(m.id) }
-          catch { addToast('Could not load model', 'error') }
-        }
+        if (!m.loaded) { try { await modelController.load(m.id) } catch { /* ignore */ } }
         router.push('/chat')
       },
     }))
 
     const acts: CommandAction[] = [
-      { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: <IconPlus className="h-4 w-4" />, category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
-      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: <IconSearch className="h-4 w-4" />, category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
-      { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: <IconDownload className="h-4 w-4" />, category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
-      { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: <IconMoon className="h-4 w-4" />, category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
-      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: <IconTrash className="h-4 w-4" />, category: 'action', run: () => { localStorage.removeItem('man_current_conversation'); window.location.reload() } },
-      { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: <IconSearch className="h-4 w-4" />, category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
+      { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
+      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
+      { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: '📥', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
+      { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: '🌓', category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
+      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: '🗑️', category: 'action', run: () => { chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {}); window.location.reload() } },
+      { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: '⌨️', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
     ]
 
     const conv: CommandAction[] = recentSessions.map(s => ({
-      id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: <IconMessage className="h-4 w-4" />, category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
+      id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
     }))
 
-    const soulActs: CommandAction[] = souls.map((s: { name: string; description?: string }) => ({
+    const soulActs: CommandAction[] = souls.map(s => ({
       id: `soul-${s.name}`, label: `Switch soul: ${s.name}`, description: s.description || 'Switch personality',
-      icon: <IconBrain className="h-4 w-4 text-accent" />, category: 'soul' as const,
+      icon: '🎭', category: 'soul' as const,
       run: async () => { await soulsController.switch(s.name); router.push('/chat') },
     }))
 
@@ -120,9 +107,7 @@ export function CommandPalette() {
   useEffect(() => { setSelectedIdx(0) }, [query])
 
   useEffect(() => {
-    if (!open) return
-    const id = setTimeout(() => inputRef.current?.focus(), 50)
-    return () => clearTimeout(id)
+    if (open) setTimeout(() => inputRef.current?.focus(), 50)
   }, [open])
 
   useEffect(() => {
@@ -173,14 +158,13 @@ export function CommandPalette() {
           }}
         >
           <div className="flex items-center border-b border-border/30 px-3">
-            <IconSearch className="h-4 w-4 text-muted-foreground mr-2" />
+            <span className="text-sm text-muted-foreground mr-2">🔍</span>
             <input
               ref={inputRef}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, models, actions..."
-              aria-label="Search pages, models, actions"
               className="flex-1 bg-transparent py-3 text-sm outline-none focus:ring-2 focus:ring-ring/30 rounded placeholder:text-muted-foreground/50"
             />
             <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Esc</kbd>
@@ -201,7 +185,6 @@ export function CommandPalette() {
                       </p>
                     )}
                     <button
-                      type="button"
                       className={cn(
                         'flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
                         i === selectedIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
@@ -209,13 +192,7 @@ export function CommandPalette() {
                       onClick={() => { setOpen(false); action.run() }}
                       onMouseEnter={() => setSelectedIdx(i)}
                     >
-                      {(() => {
-                        const NavIcon = action.id.startsWith('nav-') ? SIDEBAR_ICONS[action.id.replace('nav-', '')] : null
-                        if (NavIcon) {
-                          return <NavIcon className="h-4 w-4 text-muted-foreground" />
-                        }
-                        return <span className="text-muted-foreground">{action.icon}</span>
-                      })()}
+                      <span className="text-base">{action.icon}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{action.label}</p>
                         <p className="truncate text-xs text-muted-foreground">{action.description}</p>
@@ -226,11 +203,6 @@ export function CommandPalette() {
               })
             )}
           </div>
-          {loadError && (
-            <div className="border-t border-border/30 px-3 py-1.5">
-              <p className="text-[10px] text-muted-foreground">{loadError}</p>
-            </div>
-          )}
         </div>
       </div>
     </>

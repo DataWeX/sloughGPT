@@ -37,6 +37,8 @@ export interface TrainingFormState {
   method: Method
   inputMode: InputMode
   textInput: string
+  showAdvanced: boolean
+  algo: string
   trainingEpochs: number
   trainingLR: number
   trainingBatchSize: number
@@ -53,10 +55,13 @@ export interface TrainingFormState {
   nativeLayers: number
   nativeHeads: number
   nativeBlockSize: number
+  loadingFinetunedModel: boolean
   allJobs: TrainingJob[]
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
   setTextInput: (s: string) => void
+  setShowAdvanced: (v: boolean) => void
+  setAlgo: (a: string) => void
   setTrainingEpochs: (n: number) => void
   setTrainingLR: (n: number) => void
   setTrainingBatchSize: (n: number) => void
@@ -72,22 +77,21 @@ export interface TrainingFormState {
   setNativeLayers: (n: number) => void
   setNativeHeads: (n: number) => void
   setNativeBlockSize: (n: number) => void
+  setLoadingFinetunedModel: (v: boolean) => void
   applyPreset: (preset: TrainingPreset) => void
   customPresets: TrainingPreset[]
   saveCustomPreset: (preset: TrainingPreset) => void
   deleteCustomPreset: (name: string) => void
   canStart: boolean
-  resumeCheckpoint: string
-  setResumeCheckpoint: (s: string) => void
   startTraining: (checkpointName?: string) => void
 }
 
 const TRAINING_CONFIG_KEY = 'sloughgpt-training-config'
-const TRAINING_PRESETS_KEY = 'sloughgpt-training-presets'
 
 interface SavedConfig {
   method?: Method
   inputMode?: InputMode
+  algo?: string
   trainingEpochs?: number
   trainingLR?: number
   trainingBatchSize?: number
@@ -105,6 +109,8 @@ export function useTrainingForm(
 ): TrainingFormState {
   const [method, setMethod] = useState<Method>('distill')
   const [inputMode, setInputMode] = useState<InputMode>('dataset')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [algo, setAlgo] = useState('bpe')
   const [trainingEpochs, setTrainingEpochs] = useState(5)
   const [trainingLR, setTrainingLR] = useState(1e-3)
   const [trainingBatchSize, setTrainingBatchSize] = useState(64)
@@ -114,16 +120,14 @@ export function useTrainingForm(
   const [loraRank, setLoraRank] = useState(8)
   const [loraAlpha, setLoraAlpha] = useState(16)
   const [textInput, setTextInput] = useState('')
-  const [resumeCheckpoint, setResumeCheckpoint] = useState('')
   const [configLoaded, setConfigLoaded] = useState(false)
 
   useEffect(() => {
-    let active = true
     chatDB.getKV<SavedConfig>(TRAINING_CONFIG_KEY).then(saved => {
-      if (!active) return
       if (saved) {
         if (saved.method) setMethod(saved.method)
         if (saved.inputMode) setInputMode(saved.inputMode)
+        if (saved.algo) setAlgo(saved.algo)
         if (saved.trainingEpochs) setTrainingEpochs(saved.trainingEpochs)
         if (saved.trainingLR) setTrainingLR(saved.trainingLR)
         if (saved.trainingBatchSize) setTrainingBatchSize(saved.trainingBatchSize)
@@ -134,7 +138,6 @@ export function useTrainingForm(
       }
       setConfigLoaded(true)
     })
-    return () => { active = false }
   }, [])
 
   const [visualVisionEncoder, setVlmVisionEncoder] = useState('google/siglip-base-patch16-224')
@@ -147,14 +150,26 @@ export function useTrainingForm(
   const [nativeHeads, setNativeHeads] = useState(4)
   const [nativeBlockSize, setNativeBlockSize] = useState(128)
 
-  const [customPresets, setCustomPresets] = useState<TrainingPreset[]>(() => {
-    try { return JSON.parse(localStorage.getItem(TRAINING_PRESETS_KEY) || '[]') } catch { return [] }
-  })
+  const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
+
+  const [customPresets, setCustomPresets] = useState<TrainingPreset[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    chatDB.getKV<TrainingPreset[]>('training-presets').then(presets => {
+      if (!cancelled && presets) {
+        setCustomPresets(presets)
+      }
+    }).catch(() => {
+      // ignore load errors — keep empty presets
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const saveCustomPreset = useCallback((preset: TrainingPreset) => {
     setCustomPresets(prev => {
       const next = [...prev.filter(p => p.name !== preset.name), preset]
-      localStorage.setItem(TRAINING_PRESETS_KEY, JSON.stringify(next))
+      chatDB.setKV('training-presets', next).catch(() => {})
       return next
     })
   }, [])
@@ -162,7 +177,7 @@ export function useTrainingForm(
   const deleteCustomPreset = useCallback((name: string) => {
     setCustomPresets(prev => {
       const next = prev.filter(p => p.name !== name)
-      localStorage.setItem(TRAINING_PRESETS_KEY, JSON.stringify(next))
+      chatDB.setKV('training-presets', next).catch(() => {})
       return next
     })
   }, [])
@@ -180,20 +195,17 @@ export function useTrainingForm(
   useEffect(() => {
     if (!configLoaded) return
     chatDB.setKV(TRAINING_CONFIG_KEY, {
-      method, inputMode, trainingEpochs, trainingLR,
+      method, inputMode, algo, trainingEpochs, trainingLR,
       trainingBatchSize, selectedModel, useLoRA,
     })
-  }, [method, inputMode, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
+  }, [method, inputMode, algo, trainingEpochs, trainingLR, trainingBatchSize, selectedModel, useLoRA, configLoaded])
 
   useEffect(() => {
-    let active = true
     modelController.list().then(models => {
-      if (!active) return
       const ids = models.map(m => m.id)
       setAvailableModels(ids)
       setSelectedModel((prev: string) => prev || ids[0] || '')
-    }).catch(() => { if (active) addToast('Could not load model list — training may be limited', 'info') })
-    return () => { active = false }
+    }).catch(() => addToast('Could not load model list — training may be limited', 'info'))
   }, [addToast])
 
   const applyPreset = useCallback((preset: TrainingPreset) => {
@@ -215,18 +227,11 @@ export function useTrainingForm(
     (method !== 'vlm' || !!datasets.selectedDataset)
 
   const startTraining = useCallback(async (checkpointName?: string) => {
-    // Request notification permission on first training start
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-
-    const effectiveCheckpoint = checkpointName || resumeCheckpoint || undefined
-
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
 
-    if (!hasDataset && !hasText && !effectiveCheckpoint) {
-      addToast('Select a dataset, paste text, or choose a checkpoint to resume', 'error'); return
+    if (!hasDataset && !hasText && !checkpointName) {
+      addToast('Select a dataset or paste text to train on', 'error'); return
     }
 
     if (method === 'finetune' && !hasDataset) {
@@ -237,13 +242,13 @@ export function useTrainingForm(
       addToast('Vision model training requires a dataset with image-text pairs', 'error'); return
     }
 
-    if (method === 'native' && !hasDataset && !hasText && !effectiveCheckpoint) {
-      addToast('Select a dataset, paste text, or choose a checkpoint for native training', 'error'); return
+    if (method === 'native' && !hasDataset && !hasText) {
+      addToast('Select a dataset or paste text for native training', 'error'); return
     }
 
-    const body: Record<string, unknown> = { algo: 'bpe', epochs: trainingEpochs, learning_rate: trainingLR }
+    const body: Record<string, unknown> = { algo, epochs: trainingEpochs, learning_rate: trainingLR }
     if (trainingBatchSize) body.batch_size = trainingBatchSize
-    if (effectiveCheckpoint) body.checkpoint_name = effectiveCheckpoint
+    if (checkpointName) body.checkpoint_name = checkpointName
     if (hasDataset) body.dataset_id = datasets.selectedDataset
     if (hasText) body.source_text = textInput.trim()
 
@@ -261,8 +266,6 @@ export function useTrainingForm(
       id: tempId, name: `${method} started`, status: 'running',
       progress: 0, created_at: now, status_message: 'Starting...',
     }])
-
-    const clearOptimistic = () => setOptimisticJobs(prev => prev.filter(j => j.id !== tempId))
 
     if (method === 'finetune') {
       session.startFineTune({
@@ -289,26 +292,26 @@ export function useTrainingForm(
         checkpoints.fetchCheckpoints()
       })
     }
-
-    setTimeout(clearOptimistic, 5000)
-  }, [method, inputMode, textInput, trainingEpochs, trainingLR, trainingBatchSize,
+  }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
       selectedModel, useLoRA, datasets.selectedDataset, visualVisionEncoder, visualLLM,
-      visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints, resumeCheckpoint])
+      visualStage1Epochs, visualStage2Epochs, addToast, session, checkpoints])
 
   return {
-    method, inputMode, textInput,
+    method, inputMode, textInput, showAdvanced, algo,
     trainingEpochs, trainingLR, trainingBatchSize, availableModels, selectedModel, useLoRA,
     loraRank, loraAlpha,
     visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs,
     nativeEmbed, nativeLayers, nativeHeads, nativeBlockSize,
+    loadingFinetunedModel,
     allJobs,
-    setMethod, setInputMode, setTextInput,
+    setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
     setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
     setLoraRank, setLoraAlpha,
     setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs,
     setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
+    setLoadingFinetunedModel,
     applyPreset,
     customPresets, saveCustomPreset, deleteCustomPreset,
-    canStart, resumeCheckpoint, setResumeCheckpoint, startTraining,
+    canStart, startTraining,
   }
 }

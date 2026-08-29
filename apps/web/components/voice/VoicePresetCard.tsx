@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { chatDB } from '@/lib/db'
 
 interface VoicePreset {
   name: string
@@ -20,19 +21,16 @@ const DEFAULT_PRESETS: VoicePreset[] = [
   { name: 'High', rate: 1.0, pitch: 1.4, voice: '' },
 ]
 
-function loadPresets(): VoicePreset[] {
+async function loadPresets(): Promise<VoicePreset[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
-    }
+    const entry = await chatDB.getKV<VoicePreset[]>(STORAGE_KEY)
+    if (entry && Array.isArray(entry) && entry.length > 0) return entry
   } catch { /* corrupted — fall back */ }
   return DEFAULT_PRESETS
 }
 
-function savePresets(presets: VoicePreset[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)) } catch { /* quota exceeded */ }
+async function savePresets(presets: VoicePreset[]) {
+  try { await chatDB.setKV(STORAGE_KEY, presets) } catch { /* quota exceeded */ }
 }
 
 interface VoicePresetCardProps {
@@ -48,7 +46,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
   const [voices, setVoices] = useState<string[]>([])
 
   useEffect(() => {
-    setPresets(loadPresets())
+    loadPresets().then(setPresets)
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       const loadVoices = () => {
         const list = window.speechSynthesis.getVoices().map(v => v.name)
@@ -56,7 +54,6 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
       }
       loadVoices()
       window.speechSynthesis.onvoiceschanged = loadVoices
-      return () => { window.speechSynthesis.onvoiceschanged = null }
     }
   }, [])
 
@@ -70,7 +67,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
       const updated = prev.map(p =>
         p.name === editing ? { ...p, rate: editRate, pitch: editPitch } : p
       )
-      savePresets(updated)
+      savePresets(updated).catch(() => {})
       return updated
     })
     setEditing(null)
@@ -81,7 +78,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
     const newPreset: VoicePreset = { name, rate: 1.0, pitch: 1.0, voice: '' }
     const updated = [...presets, newPreset]
     setPresets(updated)
-    savePresets(updated)
+    savePresets(updated).catch(() => {})
     setEditing(name)
     setEditRate(1.0)
     setEditPitch(1.0)
@@ -90,7 +87,7 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
   const handleDelete = (name: string) => {
     const updated = presets.filter(p => p.name !== name)
     setPresets(updated)
-    savePresets(updated)
+    savePresets(updated).catch(() => {})
     if (activeName === name) setActiveName(null)
     if (editing === name) setEditing(null)
   }
@@ -138,7 +135,6 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                         value={editRate}
                         onChange={e => setEditRate(parseFloat(e.target.value))}
                         className="w-20"
-                        aria-label="Speech rate"
                       />
                       <span className="font-numeric w-7 text-right">{editRate.toFixed(1)}</span>
                     </label>
@@ -152,7 +148,6 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                         value={editPitch}
                         onChange={e => setEditPitch(parseFloat(e.target.value))}
                         className="w-20"
-                        aria-label="Speech pitch"
                       />
                       <span className="font-numeric w-7 text-right">{editPitch.toFixed(1)}</span>
                     </label>
@@ -161,11 +156,10 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                     <select
                       className="text-xs border border-border rounded px-2 py-1 bg-background w-full"
                       value={p.voice}
-                      aria-label="Voice selection"
                       onChange={e => {
                         const updated = presets.map(pr => pr.name === p.name ? { ...pr, voice: e.target.value } : pr)
                         setPresets(updated)
-                        savePresets(updated)
+                        savePresets(updated).catch(() => {})
                       }}
                     >
                       <option value="">Default voice</option>
@@ -181,10 +175,11 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <button
-                      type="button"
-                      className={cn('text-left font-medium text-xs px-2 py-0.5 rounded transition-colors', activeName === p.name
+                      className={`text-left font-medium text-xs px-2 py-0.5 rounded transition-colors ${
+                        activeName === p.name
                           ? 'bg-primary/15 text-primary'
-                          : 'hover:bg-muted')}
+                          : 'hover:bg-muted'
+                      }`}
                       onClick={() => handleApply(p)}
                     >
                       {p.name}

@@ -200,6 +200,26 @@ nvidia-smi
 # Inference defaults to CPU on MPS to avoid memory issues
 ```
 
+## Free Cloud Deployment
+
+If you don't want to run anything locally, these free tiers can host SloughGPT.
+
+### Frontend — Cloudflare Pages
+- Free, unlimited bandwidth, global CDN.
+- Deploys from GitHub; sets `NEXT_PUBLIC_API_URL` in the dashboard.
+
+### Backend — Render.com
+- Free web service with Docker.
+- URL: `https://<service-name>.onrender.com`
+- Note: 512MB RAM limit; use a quantized or small model.
+
+### Backend — Fly.io
+- Free tier: 3 shared VMs, 160GB outbound/month.
+- Note: 256MB RAM per VM; only viable with 4-bit quantization or a tiny model.
+
+### Important: model size
+The default model checkpoint is ~2.5GB unquantized. Free tiers cannot hold that in memory. For free hosting, use a smaller model or 4-bit quantization.
+
 ## Production Checklist
 
 - [ ] Set secure SLO_JWT_SECRET

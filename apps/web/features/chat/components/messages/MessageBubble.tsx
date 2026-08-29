@@ -1,17 +1,13 @@
 'use client'
 
-import { memo } from 'react'
-import { cn, Checkbox, IconStar } from '@sloughgpt/strui'
-import { IconMessage, IconPin } from '@sloughgpt/strui'
-import { timeAgo } from '@/lib/time-ago'
+import { memo, useEffect, useRef, useState } from 'react'
+import { cn, IconStar } from '@sloughgpt/strui'
+import { MS_PER_MINUTE } from '@/lib/format-bytes'
 import { MessageActions } from './MessageActions'
 import { MessageContextMenu } from './MessageContextMenu'
 import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
-import { MessageReactions } from './MessageReactions'
 import type { ImageAttachment } from './../input/ImageUpload'
-import type { AudioAttachment } from '@/lib/chat-utils'
-import { useMessageBubble } from './useMessageBubble'
 
 export interface MessageBubbleProps {
   content: string
@@ -19,21 +15,15 @@ export interface MessageBubbleProps {
   timestamp: Date | string
   showTimestamp: boolean
   images?: ImageAttachment[]
-  audio?: AudioAttachment
-  reactions?: Record<string, number>
   onCopy?: (text: string) => void
-  onRegenerate?: (messageId: string) => void
-  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
+  onRegenerate?: () => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
-  onReact?: (messageId: string, emoji: string) => void
-  onPin?: (messageId: string) => void
   onSuggestionClick?: (text: string) => void
   messageId?: string
   isStreaming?: boolean
   isError?: boolean
-  isPinned?: boolean
   searchQuery?: string
   model?: string
   isBookmarked?: boolean
@@ -41,19 +31,17 @@ export interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
-  temperature?: number
-  hasNote?: boolean
-  note?: string
-  onAddNote?: (messageId: string) => void
-  hasThread?: boolean
-  onThread?: (messageId: string) => void
-  onForward?: (content: string) => void
-  onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
-  onQuickReply?: (messageId: string) => void
-  selectionMode?: boolean
-  isSelected?: boolean
-  onToggleSelection?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
+}
+
+function formatTime(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMins = Math.floor(diffMs / MS_PER_MINUTE)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export const MessageBubble = memo(function MessageBubble({
@@ -62,47 +50,47 @@ export const MessageBubble = memo(function MessageBubble({
   timestamp,
   showTimestamp,
   images,
-  audio,
-  reactions,
   onCopy,
   onRegenerate,
-  onRegenerateWithOptions,
   onThumbsUp,
   onThumbsDown,
   onEdit,
-  onReact,
-  onPin,
   onSuggestionClick,
   messageId,
-  isStreaming,
-  isError,
-  isPinned,
+  isStreaming = false,
+  isError = false,
   searchQuery,
   model,
-  isBookmarked,
+  isBookmarked = false,
   onBookmark,
   onDelete,
   onSaveToKnowledge,
-  collapsibleLength,
-  temperature,
-  hasNote,
-  note,
-  onAddNote,
-  hasThread,
-  onThread,
-  onForward,
-  onExportMessageAsMarkdown,
-  onQuickReply,
-  selectionMode,
-  isSelected,
-  onToggleSelection,
+  collapsibleLength = 0,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
-  const {
-    isVisible, isEditing, bubbleRef,
-    hasContent, showActions, id,
-    handleEditStart, handleEditCancel,
-  } = useMessageBubble({ content, role, messageId, isStreaming, isError, onEdit })
+  const [isEditing, setIsEditing] = useState(false)
+  const bubbleRef = useRef<HTMLDivElement>(null)
+  const articlesRef = useRef<HTMLElement[]>([])
+
+  const hasContent = content && content.trim().length > 0
+  const showActions = role === 'assistant' && hasContent && !isStreaming && !isError
+  const id = messageId || 'msg'
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (articlesRef.current.length === 0) return
+      const idx = articlesRef.current.indexOf(e.currentTarget as HTMLElement)
+      const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1
+      if (next >= 0 && next < articlesRef.current.length) articlesRef.current[next].focus()
+    }
+  }, [])
+
+  useEffect(() => {
+    const feed = document.getElementById('chat-messages')
+    if (!feed) return
+    articlesRef.current = Array.from(feed.querySelectorAll<HTMLElement>('[role="article"]'))
+  })
 
   return (
     <MessageContextMenu
@@ -110,18 +98,12 @@ export const MessageBubble = memo(function MessageBubble({
       content={content}
       role={role}
       isBookmarked={isBookmarked}
-      isPinned={isPinned}
-      hasNote={hasNote}
-      hasThread={hasThread}
       onCopy={onCopy}
-      onEdit={onEdit ? handleEditStart : undefined}
+      onEdit={onEdit ? () => setIsEditing(true) : undefined}
       onBookmark={onBookmark}
-      onPin={onPin}
       onRegenerate={showActions ? onRegenerate : undefined}
       onDelete={onDelete}
       onSaveToKnowledge={onSaveToKnowledge}
-      onAddNote={onAddNote}
-      onThread={onThread}
     >
     <div
       id={messageId ? `msg-${messageId}` : undefined}
@@ -130,65 +112,21 @@ export const MessageBubble = memo(function MessageBubble({
       tabIndex={0}
       aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
       aria-live={isStreaming ? 'polite' : ariaLive}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault()
-          const feed = document.getElementById('chat-messages')
-          if (!feed) return
-          const articles = Array.from(feed.querySelectorAll<HTMLElement>('[role="article"]'))
-          const idx = articles.indexOf(e.currentTarget as HTMLElement)
-          const next = e.key === 'ArrowUp' ? idx - 1 : idx + 1
-          if (next >= 0 && next < articles.length) articles[next].focus()
-        }
-      }}
+      onKeyDown={handleKeyDown}
       className={cn(
         "group flex flex-col transition-all duration-300 ease-out",
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3",
         role === 'user' ? 'items-end' : 'items-start'
       )}
     >
-      {/* Selection checkbox */}
-      {selectionMode && (
-        <div className={cn(
-          "flex items-center mb-0.5",
-          role === 'user' ? 'justify-end' : 'justify-start'
-        )}>
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => onToggleSelection?.(id)}
-              className="h-3.5 w-3.5 rounded border-border/50 text-primary focus:ring-primary/30"
-              aria-label="Select message"
-            />
-            <span className="text-[10px] text-muted-foreground/60">Select</span>
-          </label>
-        </div>
-      )}
-
-      {/* Role label */}
+      {/* Role label — outside bubble for clear separation */}
       <span className={cn(
         "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",
         role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
       )}>
         {role === 'user' ? 'You' : 'Assistant'}
-        {timestamp && (
-          <span className="ml-2 text-[9px] font-normal normal-case tracking-normal opacity-0 group-hover:opacity-100 transition-opacity">
-            {new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        )}
         {isBookmarked && (
           <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-            <IconStar className="h-2.5 w-2.5 inline" filled aria-hidden="true" />
-          </span>
-        )}
-        {hasNote && (
-          <span className="ml-1.5 text-primary/70" aria-label="Has note">
-            <IconMessage className="h-2.5 w-2.5 inline" aria-hidden="true" />
-          </span>
-        )}
-        {isPinned && (
-          <span className="ml-1.5 text-primary/70" aria-label="Pinned">
-            <IconPin className="h-2.5 w-2.5 inline" aria-hidden="true" />
+            <IconStar className="h-2.5 w-2.5 inline" filled />
           </span>
         )}
         {role === 'assistant' && model && !isError && (
@@ -224,10 +162,9 @@ export const MessageBubble = memo(function MessageBubble({
           isError={isError}
           collapsibleLength={collapsibleLength}
           isEditing={isEditing}
-          audio={audio}
           onEdit={onEdit}
-          onEditStart={handleEditStart}
-          onEditCancel={handleEditCancel}
+          onEditStart={() => setIsEditing(true)}
+          onEditCancel={() => setIsEditing(false)}
         />
 
         {showTimestamp && (
@@ -235,29 +172,8 @@ export const MessageBubble = memo(function MessageBubble({
             "mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
             role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
           )}>
-            {timeAgo(timestamp)}
+            {formatTime(timestamp)}
           </p>
-        )}
-        {reactions && Object.keys(reactions).length > 0 && (
-          <MessageReactions
-            reactions={reactions}
-            onReact={(emoji) => onReact?.(id, emoji)}
-            className="mt-1"
-          />
-        )}
-        {note && (
-          <div className="mt-1.5 px-2 py-1.5 rounded-md bg-warning/10 border border-warning/20 text-xs">
-            <span className="font-medium text-warning/80">Note:</span>{' '}
-            <span className="text-foreground/80 line-clamp-3">{note}</span>
-          </div>
-        )}
-        {isStreaming && role === 'assistant' && hasContent && (
-          <div className="flex items-center gap-1.5 mt-1" aria-live="polite">
-            <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-            <span className="text-[10px] text-muted-foreground/50 font-mono">
-              {content.length} chars
-            </span>
-          </div>
         )}
       </div>
 
@@ -268,7 +184,6 @@ export const MessageBubble = memo(function MessageBubble({
           role={role}
           onCopy={onCopy}
           onRegenerate={onRegenerate}
-          onRegenerateWithOptions={onRegenerateWithOptions}
           onThumbsUp={onThumbsUp}
           onThumbsDown={onThumbsDown}
           onSuggestionClick={onSuggestionClick}
@@ -276,12 +191,6 @@ export const MessageBubble = memo(function MessageBubble({
           onBookmark={onBookmark}
           onDelete={onDelete}
           onSaveToKnowledge={onSaveToKnowledge}
-          temperature={temperature}
-          onAddNote={onAddNote}
-          hasNote={hasNote}
-          onQuickReply={onQuickReply}
-          onForward={onForward}
-          onExportMessageAsMarkdown={onExportMessageAsMarkdown}
         />
       )}
 
@@ -291,21 +200,9 @@ export const MessageBubble = memo(function MessageBubble({
           messageId={id}
           role={role}
           onCopy={onCopy}
-          onRegenerate={onRegenerate}
-          onRegenerateWithOptions={onRegenerateWithOptions}
-          onThumbsUp={onThumbsUp}
-          onThumbsDown={onThumbsDown}
+          onEdit={() => setIsEditing(true)}
           onSuggestionClick={onSuggestionClick}
-          isBookmarked={isBookmarked}
-          onBookmark={onBookmark}
           onDelete={onDelete}
-          onSaveToKnowledge={onSaveToKnowledge}
-          temperature={temperature}
-          onAddNote={onAddNote}
-          hasNote={hasNote}
-          onQuickReply={onQuickReply}
-          onForward={onForward}
-          onExportMessageAsMarkdown={onExportMessageAsMarkdown}
         />
       )}
     </div>

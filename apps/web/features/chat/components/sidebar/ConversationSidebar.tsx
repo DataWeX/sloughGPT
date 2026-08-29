@@ -1,16 +1,17 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDownload, IconDocument, IconCopy, IconDot, IconDotOutline } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
 import type { Conversation } from '@/lib/session-controller'
+import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 import { downloadJson, downloadMarkdown } from '@/lib/download-utils'
-import { ConvRow } from './ConvRow'
-import { useSidebarSearch } from './useSidebarSearch'
+import { MS_PER_DAY } from '@/lib/format-bytes'
+import { chatDB } from '@/lib/db'
 
 interface ConversationSidebarProps {
   conversations: Conversation[]
@@ -64,20 +65,55 @@ function SidebarContent({
   isDrawer?: boolean
   onToggleCollapse?: () => void
 }) {
-  const {
-    search, setSearch, sortMode, setSortMode, sortOpen, setSortOpen,
-    serverSearchLoading, filtered, starred, pinned, recencyGroups, q,
-  } = useSidebarSearch(conversations)
+  const SORT_KEY = 'sloughgpt:sidebar-sort'
 
+  const [search, setSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
+
+  useEffect(() => {
+    let cancelled = false
+    chatDB.getKV<string>(SORT_KEY).then(saved => {
+      if (!cancelled && (saved === 'name' || saved === 'messages')) {
+        setSortMode(saved)
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
   const unreadCount = useMemo(() => conversations.filter(c => c.unread).length, [conversations])
   const [archivedExpanded, setArchivedExpanded] = useState(false)
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([])
   const [archivedLoading, setArchivedLoading] = useState(false)
+  const [sortOpen, setSortOpen] = useState(false)
+
+  useEffect(() => {
+    chatDB.setKV(SORT_KEY, sortMode).catch(() => {})
+  }, [sortMode])
+
+  const sorted = useMemo(() => {
+    return [...conversations].sort((a, b) => {
+      if (sortMode === 'name') {
+        return (a.name || '').localeCompare(b.name || '')
+      }
+      if (sortMode === 'messages') {
+        return (b.message_count ?? b.messages?.length ?? 0) - (a.message_count ?? a.messages?.length ?? 0)
+      }
+      return new Date(b.updated_at || b.updatedAt || 0).getTime() - new Date(a.updated_at || a.updatedAt || 0).getTime()
+    })
+  }, [conversations, sortMode])
+
+  const q = search.toLowerCase().trim()
+  const filtered = useMemo(() => {
+    if (!q) return sorted
+    return sorted.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.messages?.some(m => m.content?.toLowerCase().includes(q))
+    )
+  }, [sorted, q])
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
-    const conv = conversations.find(c => c.id === id)
+    const conv = sorted.find(c => c.id === id)
     setDeleteTarget({ id, name: conv?.name || 'this conversation' })
   }
 
@@ -87,6 +123,37 @@ function SidebarContent({
       setDeleteTarget(null)
     }
   }
+
+  const starred = filtered.filter(c => c.starred).slice(0, 10)
+  const unstarred = filtered.filter(c => !c.starred)
+  const pinned = unstarred.filter(c => c.pinned)
+  const unpinned = unstarred.filter(c => !c.pinned)
+
+  function recencyGroup(dateStr: string | undefined): string {
+    if (!dateStr) return 'Older'
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const days = diff / MS_PER_DAY
+    if (days < 1) return 'Today'
+    if (days < 2) return 'Yesterday'
+    if (days < 7) return 'Last 7 days'
+    return 'Older'
+  }
+
+  const recencyGroups = useMemo(() => {
+    const groups: { label: string; conversations: Conversation[] }[] = []
+    const seen = new Set<string>()
+    for (const c of unpinned) {
+      const label = recencyGroup(c.updated_at || c.updatedAt)
+      if (!seen.has(label)) {
+        seen.add(label)
+        groups.push({ label, conversations: [] })
+      }
+      const group = groups.find(g => g.label === label)!
+      if (group.conversations.length < 15) group.conversations.push(c)
+    }
+    const order = ['Today', 'Yesterday', 'Last 7 days', 'Older']
+    return groups.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label))
+  }, [unpinned])
 
   const handleSelect = (id: string) => {
     onLoadConversation(id)
@@ -128,7 +195,6 @@ function SidebarContent({
         <div className="flex items-center gap-1">
           {!isDrawer && onToggleCollapse && (
             <button
-              type="button"
               onClick={onToggleCollapse}
               className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
               aria-label="Collapse sidebar"
@@ -144,7 +210,6 @@ function SidebarContent({
                 {unreadCount}
               </span>
               <button
-                type="button"
                 onClick={() => { conversations.filter(c => c.unread).forEach(c => onToggleUnreadConversation?.(c.id, false)) }}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Mark all as read"
@@ -155,7 +220,6 @@ function SidebarContent({
           )}
           <div className="relative">
             <button
-              type="button"
               onClick={() => setSortOpen(!sortOpen)}
               className={cn(
                 "h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 transition-colors",
@@ -176,7 +240,6 @@ function SidebarContent({
                     { value: 'messages', label: 'Message count' },
                   ] as const).map(opt => (
                     <button
-                      type="button"
                       key={opt.value}
                       onClick={() => { setSortMode(opt.value); setSortOpen(false) }}
                       className={cn(
@@ -205,7 +268,6 @@ function SidebarContent({
           </Button>
           {isDrawer && onClose && (
             <button
-              type="button"
               onClick={onClose}
               className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Close sidebar"
@@ -224,24 +286,9 @@ function SidebarContent({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations…"
-            className="w-full h-8 rounded-md bg-muted/50 pl-7 pr-7 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
+            className="w-full h-8 rounded-md bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
             aria-label="Search conversations"
           />
-          {serverSearchLoading && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <div className="h-3 w-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-            </div>
-          )}
-          {search && !serverSearchLoading && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/60 hover:text-foreground transition-colors"
-              aria-label="Clear search"
-            >
-              <IconX className="h-3 w-3" />
-            </button>
-          )}
         </div>
       )}
       <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1 pb-4">
@@ -267,7 +314,6 @@ function SidebarContent({
               No conversations match &ldquo;{q}&rdquo;
             </p>
             <button
-              type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('search-conversations'))}
               className="text-xs text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
             >
@@ -365,7 +411,6 @@ function SidebarContent({
           {(archivedCount ?? 0) > 0 && (
             <div className="mt-2 border-t border-border/30 pt-2">
               <button
-                type="button"
                 onClick={async () => {
                   const next = !archivedExpanded
                   setArchivedExpanded(next)
@@ -473,7 +518,7 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={onClose}
           />
-          <aside className="absolute inset-y-0 left-0 w-[var(--conv-sidebar-width)] flex flex-col bg-background shadow-xl" aria-label="Conversations">
+          <aside className="absolute inset-y-0 left-0 w-[var(--conv-sidebar-width)] flex flex-col bg-background shadow-xl">
             <SidebarContent {...props} isDrawer={true} />
           </aside>
         </div>
@@ -482,3 +527,221 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
   )
 }
 
+function ConvRow({
+  conversation: c,
+  isActive,
+  onSelect,
+  onDelete,
+  onStar,
+  onPin,
+  onArchive,
+  onRename,
+  onExport,
+  onDuplicate,
+  onToggleUnread,
+  searchQuery,
+}: {
+  conversation: Conversation
+  isActive: boolean
+  onSelect: () => void
+  onDelete?: (e: React.MouseEvent) => void
+  onStar?: (e: React.MouseEvent) => void
+  onPin?: (e: React.MouseEvent) => void
+  onArchive?: (e: React.MouseEvent) => void
+  onRename?: (name: string) => void
+  onExport?: (e: React.MouseEvent, format?: 'json' | 'markdown') => void
+  onDuplicate?: (e: React.MouseEvent) => void
+  onToggleUnread?: (e: React.MouseEvent) => void
+  searchQuery?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(c.name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [editing])
+
+  const handleFinishEdit = () => {
+    const trimmed = editValue.trim()
+    if (trimmed && trimmed !== c.name) {
+      onRename?.(trimmed)
+    }
+    setEditing(false)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleFinishEdit()
+    } else if (e.key === 'Escape') {
+      setEditValue(c.name)
+      setEditing(false)
+    }
+  }
+
+  const msgCount = c.messages?.length ?? c.message_count ?? 0
+  const lastMsg = c.messages?.[c.messages.length - 1]?.content || ''
+
+  const highlightMatch = (text: string, query: string): React.ReactNode => {
+    if (!query) return text
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">{part}</mark>
+        : part
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        "group flex items-start gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
+        isActive ? "bg-primary/10" : "hover:bg-muted/40",
+        c.unread && !isActive && "bg-primary/5"
+      )}
+      onClick={!editing ? onSelect : undefined}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(); return }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault()
+          const scrollable = e.currentTarget.closest('.overflow-y-auto') || e.currentTarget.parentElement?.parentElement?.parentElement
+          if (!scrollable) return
+          const items = Array.from(scrollable.querySelectorAll<HTMLElement>('[role="button"]'))
+          const idx = items.indexOf(e.currentTarget)
+          const next = e.key === 'ArrowDown' ? idx + 1 : idx - 1
+          if (next >= 0 && next < items.length) items[next].focus()
+        }
+      }}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onPin}
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            aria-label={c.pinned ? 'Unpin' : 'Pin'}
+          >
+            <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
+              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
+            )}
+            aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
+          >
+            {c.unread ? (
+              <IconDot className="h-2.5 w-2.5" />
+            ) : (
+              <IconDotOutline className="h-2.5 w-2.5" />
+            )}
+          </button>
+          <button
+            onClick={onStar}
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+            aria-label={c.starred ? 'Unstar' : 'Star'}
+          >
+            <IconStar className={cn("h-2.5 w-2.5", c.starred ? "text-warning" : "text-muted-foreground/40")} filled={c.starred} />
+          </button>
+          {editing ? (
+            <input
+              ref={inputRef}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleFinishEdit}
+              onKeyDown={handleKeyDown}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 h-5 text-xs font-medium bg-muted/60 rounded-sm px-1 outline-none ring-1 ring-primary/40"
+              aria-label="Rename conversation"
+            />
+          ) : (
+            <p
+              className={cn(
+                "text-xs truncate text-foreground",
+                c.unread ? "font-semibold" : "font-medium"
+              )}
+              onDoubleClick={(e) => { e.stopPropagation(); setEditValue(c.name); setEditing(true) }}
+            >
+              {highlightMatch(c.name, searchQuery || '')}
+            </p>
+          )}
+        </div>
+        {lastMsg && !editing && (
+          <p className="text-[11px] text-muted-foreground/70 mt-0.5 line-clamp-1">
+            {truncateMessage(lastMsg, 36)}
+          </p>
+        )}
+        {!editing && (
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+              {msgCount}
+            </span>
+            <span className="text-xs text-muted-foreground/50">
+              {formatDate(c.updated_at || c.updatedAt)}
+            </span>
+            {c.pinned && <span className="text-xs text-primary">📌</span>}
+            {c.starred && <span className="text-xs">★</span>}
+          </div>
+        )}
+      </div>
+      <div className="hidden sm:flex items-center gap-0.5 shrink-0 mt-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        {onExport && !editing && (
+          <>
+            <button
+              onClick={(e) => onExport(e, 'json')}
+              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+              aria-label="Export as JSON"
+              title="Export as JSON"
+            >
+              <IconDownload className="h-2.5 w-2.5" />
+            </button>
+            <button
+              onClick={(e) => onExport(e, 'markdown')}
+              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+              aria-label="Export as Markdown"
+              title="Export as Markdown"
+            >
+              <IconDocument className="h-2.5 w-2.5" />
+            </button>
+          </>
+        )}
+        {onDuplicate && !editing && (
+          <button
+            onClick={onDuplicate}
+            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
+            aria-label={`Duplicate ${c.name}`}
+            title="Duplicate conversation"
+          >
+            <IconCopy className="h-2.5 w-2.5" />
+          </button>
+        )}
+        {onArchive && !editing && (
+          <button
+            onClick={onArchive}
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
+            aria-label="Archive"
+          >
+            <IconFolder className="h-2.5 w-2.5" />
+          </button>
+        )}
+        {onDelete && !editing && (
+          <button
+            onClick={onDelete}
+            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
+            aria-label={`Delete ${c.name}`}
+          >
+            <IconX className="h-2.5 w-2.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}

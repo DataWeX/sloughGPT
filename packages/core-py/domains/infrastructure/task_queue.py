@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -167,7 +166,6 @@ class TaskQueue:
         self._cancelled: dict[str, Task] = {}
         self._lock = asyncio.Lock()
         self._sse_callbacks: list[Callable[[str, Task], None]] = []
-        self._callbacks_lock = threading.Lock()
         self._dispatcher_task: asyncio.Task | None = None
         self._started = False
         self._started_loop: asyncio.AbstractEventLoop | None = None
@@ -178,7 +176,7 @@ class TaskQueue:
             from domains.infrastructure.event_bus import get_event_bus
             self._event_bus = get_event_bus()
         except Exception as e:
-            logger.debug("Event bus unavailable, task lifecycle events disabled: %s", e)
+            logger.debug("TaskQueue event bus unavailable: %s", e, extra={"tag": "INFRA"})
 
         # Stop event
         self._stop_event = asyncio.Event()
@@ -207,8 +205,8 @@ class TaskQueue:
                 asyncio.ensure_future(
                     self._event_bus.emit(event_name, data, source="task_queue")
                 )
-            except Exception as exc:
-                logger.debug("task_queue: event emit failed for %s: %s", event_name, exc)
+            except Exception as e:
+                logger.debug("Silent exception: %s", e, extra={"tag": "INFRA"})
 
     # ── Lifecycle ──
 
@@ -250,22 +248,18 @@ class TaskQueue:
     # ── SSE subscriptions ──
 
     def subscribe(self, callback: Callable[[str, Task], None]):
-        with self._callbacks_lock:
-            self._sse_callbacks.append(callback)
+        self._sse_callbacks.append(callback)
 
     def unsubscribe(self, callback: Callable[[str, Task], None]):
-        with self._callbacks_lock:
-            if callback in self._sse_callbacks:
-                self._sse_callbacks.remove(callback)
+        if callback in self._sse_callbacks:
+            self._sse_callbacks.remove(callback)
 
     def _emit(self, event: str, task: Task):
-        with self._callbacks_lock:
-            snapshot = list(self._sse_callbacks)
-        for cb in snapshot:
+        for cb in self._sse_callbacks:
             try:
                 cb(event, task)
-            except Exception as exc:
-                logger.debug("SSE emit failed: %s", exc)
+            except Exception as e:
+                logger.debug("Silent exception: %s", e, extra={"tag": "INFRA"})
         bus_event = f"task.{event}"
         self._emit_event(bus_event, task)
 
@@ -299,10 +293,7 @@ class TaskQueue:
                 message = task.error or f"Task failed: {task.task_type}"
                 sse_queue.put_nowait(sse_error(stream_name, "FAILED", message))
         except Exception as e:
-            logger.error("task_queue: SSE terminal event delivery failed", extra={
-                "task_id": task.id, "task_type": task.task_type,
-                "status": status.value, "error": str(e),
-            })
+            logger.debug("Silent exception: %s", e, extra={"tag": "INFRA"})
 
     # ── Enqueue ──
 
@@ -458,24 +449,6 @@ class TaskQueue:
         """Check pause/cancel events and run the task's handler."""
         raise NotImplementedError("Subclasses must implement _run_with_controls or set handler")
 
-    async def purge_completed(self, max_age_s: float = 3600.0) -> int:
-        """Remove completed/failed/cancelled tasks older than max_age_s.
-
-        Returns the number of tasks purged.
-        """
-        cutoff = time.time() - max_age_s
-        async with self._lock:
-            purged = 0
-            for store in (self._completed, self._failed, self._cancelled):
-                to_remove = [
-                    tid for tid, task in store.items()
-                    if task.completed_at and task.completed_at < cutoff
-                ]
-                for tid in to_remove:
-                    del store[tid]
-                    purged += 1
-        return purged
-
 
 class InProcessTaskQueue(TaskQueue):
     """TaskQueue that runs handlers via registered callbacks (no subprocess)."""
@@ -565,28 +538,17 @@ class InProcessTaskQueue(TaskQueue):
 # ── Singleton ──
 
 _default_queue: InProcessTaskQueue | None = None
-_task_queue_lock = threading.Lock()
 
 
 def get_task_queue() -> InProcessTaskQueue:
     global _default_queue
     if _default_queue is None:
-        with _task_queue_lock:
-            if _default_queue is None:
-                from domains.infrastructure.resource_manager import get_resource_manager
-                n = get_resource_manager().task_queue_workers
-                _default_queue = InProcessTaskQueue(num_workers=n)
+        from domains.infrastructure.resource_manager import get_resource_manager
+        n = get_resource_manager().task_queue_workers
+        _default_queue = InProcessTaskQueue(num_workers=n)
     return _default_queue
 
 
-def set_task_queue(queue: InProcessTaskQueue) -> None:
+def set_task_queue(queue: InProcessTaskQueue):
     global _default_queue
-    with _task_queue_lock:
-        _default_queue = queue
-
-
-def reset_task_queue() -> None:
-    """Reset the singleton (for testing)."""
-    global _default_queue
-    with _task_queue_lock:
-        _default_queue = None
+    _default_queue = queue

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
-import { timeAgo } from '@/lib/time-ago'
+import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { chatDB } from '@/lib/db'
 
 const STORAGE_KEY = 'sloughgpt-export-history'
 
@@ -13,29 +13,36 @@ interface ExportRecord {
   label: string
 }
 
-function loadHistory(): ExportRecord[] {
+async function loadHistory(): Promise<ExportRecord[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as ExportRecord[]
+    const entry = await chatDB.getKV<ExportRecord[]>(STORAGE_KEY)
+    return entry ?? []
   } catch {
     return []
   }
 }
 
-function saveHistory(history: ExportRecord[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(0, 20)))
+async function saveHistory(history: ExportRecord[]) {
+  try { await chatDB.setKV(STORAGE_KEY, history.slice(0, 20)) } catch { /* quota exceeded */ }
 }
 
-export function recordExport(format: string, fileCount: number) {
-  const history = loadHistory()
+export async function recordExport(format: string, fileCount: number) {
+  const history = await loadHistory()
   history.unshift({
     format,
     timestamp: Date.now(),
     fileCount,
     label: format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
   })
-  saveHistory(history.slice(0, 20))
+  await saveHistory(history.slice(0, 20))
+}
+
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts
+  if (diff < 60000) return 'just now'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  return `${Math.floor(diff / 86400000)}d ago`
 }
 
 function formatColor(format: string): string {
@@ -50,7 +57,7 @@ export function ExportHistoryCard() {
   const [history, setHistory] = useState<ExportRecord[]>([])
 
   useEffect(() => {
-    setHistory(loadHistory())
+    loadHistory().then(setHistory)
   }, [])
 
   if (history.length === 0) return null
@@ -70,19 +77,19 @@ export function ExportHistoryCard() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Exports</div>
-            <div className="text-sm font-semibold">{history.length}</div>
+            <div className="text-lg font-semibold">{history.length}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Formats Used</div>
-            <div className="text-sm font-semibold">{Object.keys(formatCounts).length}</div>
+            <div className="text-lg font-semibold">{Object.keys(formatCounts).length}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Export</div>
-            <div className="text-sm font-semibold">{timeAgo(history[0].timestamp)}</div>
+            <div className="text-lg font-semibold">{timeAgo(history[0].timestamp)}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total Files</div>
-            <div className="text-sm font-semibold">{history.reduce((s, r) => s + r.fileCount, 0)}</div>
+            <div className="text-lg font-semibold">{history.reduce((s, r) => s + r.fileCount, 0)}</div>
           </div>
         </div>
         <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-1.5">Recent</div>
@@ -90,7 +97,7 @@ export function ExportHistoryCard() {
           {history.slice(0, 5).map((r, idx) => (
             <div key={idx} className="flex items-center justify-between text-[11px]">
               <div className="flex items-center gap-2">
-                <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', formatColor(r.format))}>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${formatColor(r.format)}`}>
                   {r.label}
                 </span>
                 <span className="text-muted-foreground">{r.fileCount} file{r.fileCount !== 1 ? 's' : ''}</span>

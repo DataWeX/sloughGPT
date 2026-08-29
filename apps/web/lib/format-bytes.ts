@@ -74,13 +74,23 @@ export const PDF_ANALYSIS_MAX_TOKENS = 512
 /** Default max tokens for generation. */
 export const DEFAULT_MAX_TOKENS = 100
 
-/** Safely read a JSON value from localStorage, returning fallback on any error. */
-export function getJsonItem<T>(key: string, fallback: T): T {
+import { chatDB } from '@/lib/db'
+
+/** Safely read a JSON value from MogDB, returning fallback on any error. */
+export async function getJsonItem<T>(key: string, fallback: T): Promise<T> {
   try {
-    const raw = localStorage.getItem(key)
-    if (raw === null) return fallback
-    return JSON.parse(raw) as T
+    const entry = await chatDB.getKV<{ value: T }>(key)
+    return entry?.value ?? fallback
   } catch {
     return fallback
+  }
+}
+
+/** Safely write a JSON value to MogDB. */
+export async function setJsonItem<T>(key: string, value: T): Promise<void> {
+  try {
+    await chatDB.setKV(key, { value })
+  } catch {
+    // ignore write errors
   }
 }

@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
@@ -16,9 +16,8 @@ import type { AutoTrainStatus } from '@/lib/training-controller'
 import dynamicNext from 'next/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
-import { todayDateString, getJsonItem } from '@/lib/format-bytes'
+import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { StatusCard } from '@/components/monitoring/StatusCard'
-import { logger } from '@/lib/dev-log'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
 import { TrafficCard } from '@/components/monitoring/TrafficCard'
 import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
@@ -35,7 +34,6 @@ import { QualityCard } from '@/components/monitoring/QualityCard'
 import { FeedbackCard } from '@/components/monitoring/FeedbackCard'
 import { TrainingHistory } from '@/components/monitoring/TrainingHistory'
 import { ExecutorPool } from '@/components/monitoring/ExecutorPool'
-import { InferencePoolCard } from '@/components/monitoring/InferencePoolCard'
 import { ProcessCard } from '@/components/monitoring/ProcessCard'
 import { KvCacheCard } from '@/components/monitoring/KvCacheCard'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
@@ -43,7 +41,7 @@ import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
 
-const POLL_INTERVAL_MS = 10_000
+const POLL_INTERVAL_MS = 5000
 const POLL_MAX_BACKOFF_MS = 60_000
 const MAX_ALERT_HISTORY = 20
 
@@ -57,7 +55,7 @@ const TrendChart = dynamicNext(() => import('@/components/monitoring/TrendChart'
   loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
 })
 
-export default memo(function SystemHealthPage() {
+export default function SystemHealthPage() {
   const { health: liveHealth, connectionStatus } = useLiveStatus()
   const [detailed, setDetailed] = useState<DetailedHealth | null>(null)
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
@@ -69,8 +67,8 @@ export default memo(function SystemHealthPage() {
   const [knowledgeStats, setKnowledgeStats] = useState<{ total_items: number; topic_count: number; avg_importance: number; searchable: boolean } | null>(null)
   const [adapterStatus, setAdapterStatus] = useState<{ adapter_exists: boolean; fact_count: number; total_facts_available: number } | null>(null)
   const [benchQuality, setBenchQuality] = useState<{
-    coherence_score: number; quality_score: number; repetition_rate: number;
-    total_responses: number; avg_length: number; empty_rate: number;
+    status: string; total_responses: number; coherence_score: number; quality_score: number;
+    repetition_rate: number; avg_length: number; empty_rate: number;
   } | null>(null)
   const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
@@ -84,20 +82,26 @@ export default memo(function SystemHealthPage() {
   const MAX_HISTORY = 30
   const [inferenceRate, setInferenceRate] = useState<number>(0)
   const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
-  const rateEmaRef = useRef<number>(0)
-  const [cpuThreshold, setCpuThreshold] = useState(() => {
-    return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).cpu ?? 80
-  })
-  const [memThreshold, setMemThreshold] = useState(() => {
-    return getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).mem ?? 80
-  })
+  const [cpuThreshold, setCpuThreshold] = useState(80)
+  const [memThreshold, setMemThreshold] = useState(80)
   const [alerts, setAlerts] = useState<Array<{ time: string; type: string; value: number }>>([])
   const alertsRef = useRef<Array<{ time: string; type: string; value: number }>>([])
   const prevCpuOverRef = useRef(false)
   const prevMemOverRef = useRef(false)
 
   useEffect(() => {
-    try { localStorage.setItem('sloughgpt-monitoring-thresholds', JSON.stringify({ cpu: cpuThreshold, mem: memThreshold })) } catch { /* ignore */ }
+    let cancelled = false
+    getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).then(t => {
+      if (!cancelled) {
+        if (t.cpu != null) setCpuThreshold(t.cpu)
+        if (t.mem != null) setMemThreshold(t.mem)
+      }
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    setJsonItem('sloughgpt-monitoring-thresholds', { cpu: cpuThreshold, mem: memThreshold }).catch(() => {})
   }, [cpuThreshold, memThreshold])
 
   const fetchAll = useCallback(async (showRefreshing = false): Promise<boolean> => {
@@ -110,18 +114,18 @@ export default memo(function SystemHealthPage() {
 
       // Non-critical endpoints — each degrades independently on failure.
       const [m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
-        systemController.getMetrics().catch((e) => { logger.warning('Could not metrics fetch', e); return null }),
-        systemController.getInfo().catch((e) => { logger.warning('Could not info fetch', e); return null }),
-        systemController.getDisk().catch((e) => { logger.warning('Could not disk fetch', e); return null }),
-        knowledgeController.stats().catch((e) => { logger.warning('Could not knowledge stats', e); return null }),
-        knowledgeController.getAdapterStatus().catch((e) => { logger.warning('Could not adapter status', e); return null }),
-        benchmarkController.quality().catch((e) => { logger.warning('Could not benchmark quality', e); return null }),
-        benchmarkController.stats().catch((e) => { logger.warning('Could not benchmark stats', e); return null }),
-        multimodalController.getDPOStatus().catch((e) => { logger.warning('Could not dpo status', e); return null }),
-        multimodalController.getStatus().catch((e) => { logger.warning('Could not multimodal status', e); return null }),
-        systemController.getExecutorStatus().catch((e) => { logger.warning('Could not executor status', e); return null }),
-        trainingController.getAutoTrainStatus().catch((e) => { logger.warning('auto-train status failed', e); return null }),
-        trainingController.list().catch((e) => { logger.warning('Could not list training jobs', e); return [] }),
+        systemController.getMetrics().catch(() => null),
+        systemController.getInfo().catch(() => null),
+        systemController.getDisk().catch(() => null),
+        knowledgeController.stats().catch(() => null),
+        knowledgeController.getAdapterStatus().catch(() => null),
+        benchmarkController.quality().catch(() => null),
+        benchmarkController.stats().catch(() => null),
+        multimodalController.getDPOStatus().catch(() => null),
+        multimodalController.getStatus().catch(() => null),
+        systemController.getExecutorStatus().catch(() => null),
+        trainingController.getAutoTrainStatus().catch(() => null),
+        trainingController.list().catch(() => []),
       ])
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)
@@ -129,7 +133,7 @@ export default memo(function SystemHealthPage() {
       if (ks != null) setKnowledgeStats(ks)
       if (as_ != null) setAdapterStatus(as_)
       if (bq && 'coherence_score' in bq) {
-        setBenchQuality(bq as { coherence_score: number; quality_score: number; repetition_rate: number; total_responses: number; avg_length: number; empty_rate: number })
+        setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
       }
       if (bs != null) setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
       if (dsRes != null) setDpoStatus(dsRes as typeof dpoStatus)
@@ -143,7 +147,7 @@ export default memo(function SystemHealthPage() {
       setLastUpdated(new Date().toLocaleTimeString())
       return true
     } catch (e: unknown) {
-      setError(extractErrorMessage(e, 'Could not load system health'))
+      setError(extractErrorMessage(e, 'Failed to load system health'))
       return false
     } finally {
       if (showRefreshing) setRefreshing(false)
@@ -151,15 +155,6 @@ export default memo(function SystemHealthPage() {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchAll(true) }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [fetchAll])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -216,11 +211,8 @@ export default memo(function SystemHealthPage() {
     if (prev) {
       const elapsed = (now - prev.time) / 1000
       if (elapsed > 0) {
-        const rawRate = ((count - prev.count) / elapsed) * 60
-        // Exponential moving average (alpha=0.3) to smooth jitter
-        const alpha = 0.3
-        rateEmaRef.current = alpha * rawRate + (1 - alpha) * rateEmaRef.current
-        setInferenceRate(Math.max(0, rateEmaRef.current))
+        const rate = ((count - prev.count) / elapsed) * 60
+        setInferenceRate(Math.max(0, rate))
       }
     }
     prevInferenceRef.current = { count, time: now }
@@ -296,10 +288,10 @@ export default memo(function SystemHealthPage() {
   const headerRight = (
     <div className="flex items-center gap-3">
       {lastUpdated && (
-        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono" aria-live="polite" aria-atomic="true">Updated {lastUpdated}</span>
+        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
       )}
       <div className="flex items-center gap-1.5">
-        <label className="text-xs text-muted-foreground">Auto</label>
+        <label className="text-[10px] text-muted-foreground">Auto</label>
         <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-75" />
       </div>
       <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
@@ -318,7 +310,7 @@ export default memo(function SystemHealthPage() {
     >
       {/* Loading: skeleton while fetch is in progress */}
       {!loaded && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3" aria-busy="true">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
             {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
           </div></CardContent></Card>
@@ -397,7 +389,7 @@ export default memo(function SystemHealthPage() {
             <ModelEventsCard liveHealth={liveHealth} />
             <RateViolationsCard liveHealth={liveHealth} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <LatencyCard liveHealth={liveHealth} />
+              <LatencyCard chartHistory={chartHistory} />
               <ProcessCard detailed={detailed} />
             </div>
           </div>
@@ -428,7 +420,6 @@ export default memo(function SystemHealthPage() {
                 {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
               </div>
             )}
-            <InferencePoolCard onRefresh={fetchAll} />
           </div>
         </FoldSection>
       )}
@@ -448,7 +439,7 @@ export default memo(function SystemHealthPage() {
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
-                  <button type="button" onClick={handleExportHistory} className="text-xs text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
+                  <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
                     Export
                   </button>
                 </div>
@@ -463,9 +454,9 @@ export default memo(function SystemHealthPage() {
         </FoldSection>
       )}
 
-      {/* Collapsible: Service Output & Activity */}
+      {/* Collapsible: Server Output & Activity */}
       {loaded && (
-        <FoldSection heading="Service Output" open={false}>
+        <FoldSection heading="Server Output" open={false}>
           <div className="space-y-3">
             <OutputCard compact />
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -485,4 +476,4 @@ export default memo(function SystemHealthPage() {
 
     </PageContainer>
   )
-})
+}

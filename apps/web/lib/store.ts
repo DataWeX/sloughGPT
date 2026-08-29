@@ -1,8 +1,8 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { chatDB } from '@/lib/db'
 
 export interface AppSettings {
   apiUrl: string
@@ -33,6 +33,9 @@ interface AppStore {
   clearKnowledge: () => void
 }
 
+const SETTINGS_KEY = 'app-settings'
+const KNOWLEDGE_KEY = 'app-knowledge'
+
 export const DEFAULT_SETTINGS: AppSettings = {
   apiUrl: PUBLIC_API_URL,
   hfToken: '',
@@ -47,53 +50,66 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoApproveTools: false,
 }
 
-export const useAppStore = create<AppStore>()(
-  persist(
-    (set, get) => ({
-      settings: DEFAULT_SETTINGS,
-      injectedKnowledge: [],
+export const useAppStore = create<AppStore>()((set, get) => ({
+  settings: DEFAULT_SETTINGS,
+  injectedKnowledge: [],
 
-      updateSettings: (partial) =>
-        set((state) => ({
-          settings: { ...state.settings, ...partial },
-        })),
+  updateSettings: (partial) => {
+    const next = { ...get().settings, ...partial }
+    set({ settings: next })
+    chatDB.setKV(SETTINGS_KEY, next).catch(() => {})
+  },
 
-      addKnowledge: (content) =>
-        set((state) => ({
-          injectedKnowledge: [
-            ...state.injectedKnowledge,
-            {
-              id: `know_${Date.now()}`,
-              content,
-              timestamp: Date.now(),
-            },
-          ],
-        })),
+  addKnowledge: (content) => {
+    const item = { id: `know_${Date.now()}`, content, timestamp: Date.now() }
+    const next = [...get().injectedKnowledge, item]
+    set({ injectedKnowledge: next })
+    chatDB.setKV(KNOWLEDGE_KEY, next).catch(() => {})
+  },
 
-      removeKnowledge: (id) =>
-        set((state) => ({
-          injectedKnowledge: state.injectedKnowledge.filter((k) => k.id !== id),
-        })),
+  removeKnowledge: (id) => {
+    const next = get().injectedKnowledge.filter((k) => k.id !== id)
+    set({ injectedKnowledge: next })
+    chatDB.setKV(KNOWLEDGE_KEY, next).catch(() => {})
+  },
 
-      clearKnowledge: () =>
-        set({ injectedKnowledge: [] }),
-    }),
-    {
-      name: 'man-store',
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<AppStore>
-        return {
-          ...current,
-          ...p,
-          settings: {
-            ...DEFAULT_SETTINGS,
-            ...(p.settings ?? {}),
-          },
-        }
-      },
+  clearKnowledge: () => {
+    set({ injectedKnowledge: [] })
+    chatDB.deleteKV(KNOWLEDGE_KEY).catch(() => {})
+  },
+}))
+
+let _initPromise: Promise<void> | null = null
+
+export async function initStore() {
+  if (_initPromise) return _initPromise
+  _initPromise = (async () => {
+    try {
+      const [storedSettings, storedKnowledge] = await Promise.all([
+        chatDB.getKV<AppSettings>(SETTINGS_KEY),
+        chatDB.getKV<InjectedKnowledge[]>(KNOWLEDGE_KEY),
+      ])
+      if (storedSettings) {
+        useAppStore.setState({ settings: { ...DEFAULT_SETTINGS, ...storedSettings } })
+      }
+      if (storedKnowledge) {
+        useAppStore.setState({ injectedKnowledge: storedKnowledge })
+      }
+    } catch {
+      // ignore init errors — store stays at defaults
     }
-  )
-)
+  })()
+  return _initPromise
+}
+
+/** Reset the init guard — for tests only. */
+export function _resetInitGuard() {
+  _initPromise = null
+}
+
+if (typeof window !== 'undefined') {
+  initStore()
+}
 
 export function useSettings() {
   return useAppStore((state) => state.settings)

@@ -101,7 +101,7 @@ class SoulsRouter:
         self.state = SloRouterState()
         self.router = APIRouter(prefix="/souls", tags=["souls"])
 
-        self.router.add_api_route("/chat", self.soul_chat, methods=["POST"])
+        self.router.add_api_route("/chat", self.soul_chat, methods=["POST"], response_model=None)
         self.router.add_api_route("/switch", self.switch_soul, methods=["POST"])
         self.router.add_api_route("", self.list_souls, methods=["GET"])
         self.router.add_api_route("/weights", self.get_trait_weights, methods=["GET"])

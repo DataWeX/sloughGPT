@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, renderHook, act } from '@testing-library/react'
 import React from 'react'
@@ -6,6 +7,28 @@ import { ConvSidebarProvider, useConvSidebar } from './ConvSidebarContext'
 
 const CONV_KEY = 'sloughgpt:conv-sidebar-collapsed'
 const NAV_KEY = 'sloughgpt:nav-sidebar-collapsed'
+
+const store = new Map<string, string>()
+
+const { chatDBMock } = vi.hoisted(() => {
+  const chatDBMock = {
+    getKV: vi.fn(async (key: string) => {
+      const entry = store.get(key)
+      return entry
+    }),
+    setKV: vi.fn(async (key: string, value: unknown) => {
+      store.set(key, String(value))
+    }),
+    deleteKV: vi.fn(async (key: string) => {
+      store.delete(key)
+    }),
+  }
+  return { chatDBMock }
+})
+
+vi.mock('@/lib/db', () => ({
+  chatDB: chatDBMock,
+}))
 
 function renderProvider() {
   const view = render(
@@ -34,7 +57,10 @@ function TestConsumer() {
 }
 
 beforeEach(() => {
-  localStorage.clear()
+  store.clear()
+  chatDBMock.getKV.mockClear()
+  chatDBMock.setKV.mockClear()
+  chatDBMock.deleteKV.mockClear()
 })
 
 afterEach(() => cleanup())
@@ -47,18 +73,17 @@ describe('ConvSidebarContext', () => {
     expect(screen.getByTestId('navCollapsed').textContent).toBe('false')
   })
 
-  it('reads persisted collapsed flags from localStorage', () => {
-    localStorage.setItem(CONV_KEY, 'true')
-    localStorage.setItem(NAV_KEY, 'true')
+  it('reads persisted collapsed flags from chatDB', async () => {
+    store.set(CONV_KEY, 'true')
+    store.set(NAV_KEY, 'true')
     renderProvider()
     expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
     expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    // open is not persisted — always starts false
     expect(screen.getByTestId('open').textContent).toBe('false')
   })
 
-  it('ignores non-true storage values', () => {
-    localStorage.setItem(CONV_KEY, '1')
+  it('ignores non-true storage values', async () => {
+    store.set(CONV_KEY, '1')
     renderProvider()
     expect(screen.getByTestId('convCollapsed').textContent).toBe('false')
   })
@@ -71,17 +96,17 @@ describe('ConvSidebarContext', () => {
     expect(screen.getByTestId('open').textContent).toBe('false')
   })
 
-  it('toggleConv/toggleNav flip collapsed flags and persist', () => {
+  it('toggleConv/toggleNav flip collapsed flags and persist', async () => {
     renderProvider()
     fireEvent.click(screen.getByText('toggle-conv'))
     fireEvent.click(screen.getByText('toggle-nav'))
     expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
     expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    expect(localStorage.getItem(CONV_KEY)).toBe('true')
-    expect(localStorage.getItem(NAV_KEY)).toBe('true')
+    expect(store.get(CONV_KEY)).toBe('true')
+    expect(store.get(NAV_KEY)).toBe('true')
   })
 
-  it('setOpen/setConvCollapsed/setNavCollapsed apply exact values', () => {
+  it('setOpen/setConvCollapsed/setNavCollapsed apply exact values', async () => {
     renderProvider()
     fireEvent.click(screen.getByText('set-open-true'))
     fireEvent.click(screen.getByText('set-conv-true'))
@@ -89,26 +114,24 @@ describe('ConvSidebarContext', () => {
     expect(screen.getByTestId('open').textContent).toBe('true')
     expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
     expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    expect(localStorage.getItem(CONV_KEY)).toBe('true')
-    expect(localStorage.getItem(NAV_KEY)).toBe('true')
+    expect(store.get(CONV_KEY)).toBe('true')
+    expect(store.get(NAV_KEY)).toBe('true')
   })
 
-  it('writes false back to storage when toggled off', () => {
-    localStorage.setItem(CONV_KEY, 'true')
+  it('writes false back to storage when toggled off', async () => {
+    store.set(CONV_KEY, 'true')
     renderProvider()
     fireEvent.click(screen.getByText('toggle-conv'))
-    expect(localStorage.getItem(CONV_KEY)).toBe('false')
+    expect(store.get(CONV_KEY)).toBe('false')
   })
 
-  it('tolerates localStorage throws (private browsing / SSR)', () => {
-    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied') })
+  it('tolerates chatDB errors', async () => {
+    chatDBMock.getKV.mockRejectedValueOnce(new Error('denied'))
+    chatDBMock.setKV.mockRejectedValueOnce(new Error('denied'))
     renderProvider()
     expect(screen.getByTestId('convCollapsed').textContent).toBe('false')
     fireEvent.click(screen.getByText('toggle-conv'))
     expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
-    getItem.mockRestore()
-    setItem.mockRestore()
   })
 
   it('useConvSidebar throws outside provider', () => {
@@ -132,6 +155,6 @@ describe('ConvSidebarContext', () => {
     expect(result.current.open).toBe(true)
     act(() => result.current.toggleConv())
     expect(result.current.convCollapsed).toBe(true)
-    expect(localStorage.getItem(CONV_KEY)).toBe('true')
+    expect(store.get(CONV_KEY)).toBe('true')
   })
 })

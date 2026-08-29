@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
 import { authController, type UserInfo } from '@/lib/auth-controller'
-import { useToastStore } from '@/lib/toast-store'
+import { chatDB } from '@/lib/db'
 
 type Mode = 'login' | 'register'
 
@@ -20,19 +20,22 @@ export default function AuthPage() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
   const [checking, setChecking] = useState(true)
   const [token, setToken] = useState<string | null>(null)
-  const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    const saved = localStorage.getItem('auth_token')
-    if (saved) {
-      setToken(saved)
-      authController.getMe(saved)
-        .then(d => setCurrentUser(d))
-        .catch(() => { localStorage.removeItem('auth_token'); setToken(null) })
-        .finally(() => setChecking(false))
-    } else {
-      setChecking(false)
-    }
+    let cancelled = false
+    chatDB.getKV<string>('auth_token').then(saved => {
+      if (cancelled) return
+      if (saved) {
+        setToken(saved)
+        authController.getMe(saved)
+          .then(d => setCurrentUser(d))
+          .catch(() => { chatDB.deleteKV('auth_token').catch(() => {}); setToken(null) })
+          .finally(() => setChecking(false))
+      } else {
+        setChecking(false)
+      }
+    })
+    return () => { cancelled = true }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,9 +48,9 @@ export default function AuthPage() {
         : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
-      localStorage.setItem('auth_token', data.token)
+      chatDB.setKV('auth_token', data.token).catch(() => {})
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not connection')
+      setError(err instanceof Error ? err.message : 'Connection failed')
     } finally {
       setLoading(false)
     }
@@ -56,16 +59,16 @@ export default function AuthPage() {
   const handleLogout = () => {
     setToken(null)
     setCurrentUser(null)
-    localStorage.removeItem('auth_token')
+    chatDB.deleteKV('auth_token').catch(() => {})
   }
 
   if (checking) {
     return (
       <PageContainer title="Auth" subtitle="Authentication" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value="..." />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         <Card><CardContent><div className="h-24 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
@@ -115,38 +118,28 @@ export default function AuthPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-3">
               <Input
-                id="auth-username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 placeholder="Username"
                 required
-                aria-required="true"
-                aria-label="Username"
-                aria-describedby={error ? 'auth-error' : undefined}
               />
               {mode === 'register' && (
                 <Input
-                  id="auth-email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="Email"
                   required
-                  aria-required="true"
-                  aria-label="Email"
                 />
               )}
               <Input
-                id="auth-password"
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="Password"
                 required
-                aria-required="true"
-                aria-label="Password"
               />
-              {error && <div id="auth-error" role="alert" className="text-xs text-destructive">{error}</div>}
+              {error && <div className="text-xs text-destructive">{error}</div>}
               <div className="flex items-center gap-3">
                 <Button size="sm" type="submit" disabled={loading}>
                   {loading ? 'Processing...' : mode === 'login' ? 'Login' : 'Register'}
@@ -173,7 +166,7 @@ export default function AuthPage() {
             <div className="space-y-2">
               <div className="rounded-md bg-muted/30 p-3">
                 <div className="text-xs text-muted-foreground mb-1">JWT Token</div>
-                <div className="text-xs font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
+                <div className="text-[10px] font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
               </div>
               <Button
                 size="sm"
@@ -181,7 +174,7 @@ export default function AuthPage() {
                 onClick={async () => {
                   try {
                     const data = await authController.verify(token!)
-                    alert(data?.valid ? 'Token valid' : 'Token invalid')
+                    alert(data?.data?.valid ? 'Token valid' : 'Token invalid')
                   } catch { alert('Verification failed') }
                 }}
               >

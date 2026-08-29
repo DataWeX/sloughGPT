@@ -22,6 +22,7 @@ import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
 import { ImageSection } from '@/components/multimodal/ImageSection'
+import { ObjectDetectionCard } from '@/components/multimodal/ObjectDetectionCard'
 
 const TrainingCard = dynamicNext(() => import('@/components/multimodal/TrainingCard'), { ssr: false })
 
@@ -226,6 +227,7 @@ export default function MultimodalPage() {
       <VisualDatasetCard creatingDataset={creatingDataset} onCreate={handleCreateVisualDataset} />
       <DPOCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
       <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
+      <ObjectDetectionCard />
       <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />
       <VoiceSection />
       <ImageSection />

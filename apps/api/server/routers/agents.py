@@ -72,7 +72,7 @@ class AgentsRouter:
         self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"])
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
         self.router.add_api_route("/{agent_id}/execute", self.execute_agent, methods=["POST"])
-        self.router.add_api_route("/orchestrate", self.orchestrate_agents, methods=["POST"])
+        self.router.add_api_route("/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None)
 
     def _get_system(self):
         """Get the agent system singleton."""

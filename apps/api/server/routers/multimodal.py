@@ -108,6 +108,7 @@ class MultimodalRouter:
         self.router.add_api_route("/video-infer", self.video_infer, methods=["POST"])
         self.router.add_api_route("/dpo", self.trigger_dpo, methods=["POST"])
         self.router.add_api_route("/analyze", self.analyze_image, methods=["POST"])
+        self.router.add_api_route("/detect", self.detect_objects, methods=["POST"])
         self.router.add_api_route("/pdf/upload", self.analyze_pdf, methods=["POST"])
         self.router.add_api_route("/process-video", self.process_video, methods=["POST"])
         self.router.add_api_route("/transcribe", self.transcribe_audio, methods=["POST"])
@@ -479,6 +480,30 @@ class MultimodalRouter:
         except Exception as e:
             logger.warning("Multimodal analyze image failed: %s", e)
             classify_and_raise(e, source="multimodal_analyze_image")
+
+    async def detect_objects(self, file: UploadFile = File(...)) -> dict:
+        """detect_objects."""
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Only image files accepted")
+        mgr = self._ensure_initialized()
+        try:
+            contents = await file.read()
+            from PIL import Image
+            import io
+            img = Image.open(io.BytesIO(contents)).convert("RGB")
+            objects = mgr.detect_objects(img)
+            return success_response(data={
+                "objects": [
+                    {
+                        "label": obj.label,
+                        "bbox": obj.bbox,
+                        "confidence": obj.confidence,
+                    }
+                    for obj in objects
+                ]
+            })
+        except Exception as e:
+            classify_and_raise(e, source="multimodal_detect_objects")
 
     async def analyze_pdf(
         self,

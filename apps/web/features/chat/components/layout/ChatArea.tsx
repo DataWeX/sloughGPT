@@ -122,6 +122,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     const [autoScroll, setAutoScroll] = useState(true)
     const prevMessageCountRef = useRef(messages.length)
     const prevLastContentLenRef = useRef(0)
+    const lastScrollTimeRef = useRef(0)
 
     const filteredMessages = useMemo(() => searchQuery
       ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -134,6 +135,9 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     }))
 
     const handleScroll = useCallback(() => {
+      const now = Date.now()
+      if (now - lastScrollTimeRef.current < 50) return
+      lastScrollTimeRef.current = now
       const el = containerRef.current
       if (!el) return
       const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight

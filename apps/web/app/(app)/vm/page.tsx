@@ -2,12 +2,11 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
-import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, Checkbox, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } from '@sloughgpt/strui'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { useV86 } from '@/hooks/useV86'
+import { chatDB } from '@/lib/db'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
@@ -49,9 +48,10 @@ function clampSteps(n: number): number {
     : DEFAULT_MAX_STEPS
 }
 
-function loadRole(): string {
+async function loadRole(): Promise<string> {
   try {
-    const saved = localStorage.getItem('vm-role')
+    const entry = await chatDB.getKV<string>('vm-role')
+    const saved = entry ?? 'user'
     if (saved === 'admin' || saved === 'kernel' || saved === 'user') return saved
   } catch {
     /* storage unavailable — default to user */
@@ -59,9 +59,10 @@ function loadRole(): string {
   return 'user'
 }
 
-function loadMaxSteps(): number {
+async function loadMaxSteps(): Promise<number> {
   try {
-    const saved = Number(localStorage.getItem('vm-max-steps'))
+    const entry = await chatDB.getKV<number>('vm-max-steps')
+    const saved = Number(entry ?? NaN)
     if (Number.isFinite(saved)) return clampSteps(saved)
   } catch {
     /* storage unavailable — default steps */
@@ -69,22 +70,12 @@ function loadMaxSteps(): number {
   return DEFAULT_MAX_STEPS
 }
 
-function loadTrainConfig(): TrainConfig {
+async function loadTrainConfig(): Promise<TrainConfig> {
   try {
-    const raw = localStorage.getItem('vm-train-config')
-    if (!raw) return DEFAULT_TRAIN_CONFIG
-    const parsed = JSON.parse(raw) as Partial<TrainConfig>
-    return clampTrainConfig({
-      dataset: parsed.dataset ?? DEFAULT_TRAIN_CONFIG.dataset,
-      epochs: parsed.epochs ?? DEFAULT_TRAIN_CONFIG.epochs,
-      lr: parsed.lr ?? DEFAULT_TRAIN_CONFIG.lr,
-      batch_size: parsed.batch_size ?? DEFAULT_TRAIN_CONFIG.batch_size,
-      n_layer: parsed.n_layer ?? DEFAULT_TRAIN_CONFIG.n_layer,
-      n_head: parsed.n_head ?? DEFAULT_TRAIN_CONFIG.n_head,
-      embed_dim: parsed.embed_dim ?? DEFAULT_TRAIN_CONFIG.embed_dim,
-    })
+    const entry = await chatDB.getKV<TrainConfig>('vm-train-config')
+    if (entry) return clampTrainConfig(entry)
   } catch {
-    /* malformed or unavailable — default config */
+    /* storage unavailable — default config */
   }
   return DEFAULT_TRAIN_CONFIG
 }
@@ -521,69 +512,7 @@ MOV [0x5004], EAX
 HLT`,
 }
 
-function LinuxTab() {
-  const { isBooted, stateSaved, error, save, restore, reset, init } = useV86()
-  const screenRef = useRef<HTMLDivElement>(null)
-  const initialized = useRef(false)
-
-  useEffect(() => {
-    if (screenRef.current && !initialized.current) {
-      initialized.current = true
-      init(screenRef.current)
-    }
-  }, [init])
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="p-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={save} disabled={!isBooted}>
-                Save State
-              </Button>
-              <Button size="sm" variant="ghost" onClick={restore} disabled={!stateSaved}>
-                Restore
-              </Button>
-              <Button size="sm" variant="ghost" onClick={reset} disabled={!isBooted}>
-                Reset
-              </Button>
-            </div>
-            <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
-              <span className={cn('inline-block h-2 w-2 rounded-full', isBooted ? 'bg-success' : 'bg-warning animate-pulse')} />
-              {isBooted ? 'Running' : 'Booting...'}
-              {stateSaved && <span className="text-success ml-1">Saved</span>}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {error && (
-        <div className="bg-destructive/10 border border-destructive/30 text-destructive text-xs p-2 rounded">
-          {error}
-        </div>
-      )}
-
-      <Card>
-        <CardContent className="p-0">
-          <div
-            ref={screenRef}
-            className="bg-black rounded-lg overflow-hidden"
-            style={{ minHeight: 480 }}
-          />
-        </CardContent>
-      </Card>
-
-      <p className="text-xs text-muted-foreground">
-        Full Linux OS running in your browser via v86. Click the screen to focus keyboard input.
-        State auto-saves every 30 seconds.
-      </p>
-    </div>
-  )
-}
-
 export default function VMPage() {
-  const [mode, setMode] = useState<'assembly' | 'linux'>('assembly')
   const [source, setSource] = useState(DEFAULT_PROGRAMS.hello)
   const [result, setResult] = useState<VMRunResult | null>(null)
   const [running, setRunning] = useState(false)
@@ -701,46 +630,48 @@ export default function VMPage() {
         setSource(decoded)
         sourceLoaded = true
       }
-    } catch { /* malformed hash — fall through to localStorage */ }
-    if (!sourceLoaded) {
-      const saved = localStorage.getItem('vm-source')
-      if (saved) setSource(saved)
+    } catch { /* malformed hash — fall through to chatDB */ }
+
+    const loadState = async () => {
+      if (!sourceLoaded) {
+        const saved = await chatDB.getKV<string>('vm-source')
+        if (saved) setSource(saved)
+      }
+      const [role, maxSteps, trainConfigData] = await Promise.all([
+        loadRole(),
+        loadMaxSteps(),
+        loadTrainConfig(),
+      ])
+      setRole(role)
+      setMaxSteps(maxSteps)
+      setTrainConfig(trainConfigData)
+      setHydrated(true)
     }
-    setRole(loadRole())
-    setMaxSteps(loadMaxSteps())
-    setTrainConfig(loadTrainConfig())
-    setHydrated(true)
+
+    loadState()
   }, [])
 
-  // Save source to localStorage on change
+  // Save source to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-source', source)
-    } catch { /* quota exceeded — source not persisted */ }
+    chatDB.setKV('vm-source', source).catch(() => {})
   }, [source, hydrated])
 
-  // Save role and steps to localStorage on change
+  // Save role and steps to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-role', role)
-    } catch { /* storage unavailable */ }
+    chatDB.setKV('vm-role', role).catch(() => {})
   }, [role, hydrated])
 
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-max-steps', String(maxSteps))
-    } catch { /* storage unavailable */ }
+    chatDB.setKV('vm-max-steps', maxSteps).catch(() => {})
   }, [maxSteps, hydrated])
 
-  // Save the training launch config to localStorage on change
+  // Save the training launch config to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    try {
-      localStorage.setItem('vm-train-config', JSON.stringify(clampTrainConfig(trainConfig)))
-    } catch { /* storage unavailable */ }
+    chatDB.setKV('vm-train-config', clampTrainConfig(trainConfig)).catch(() => {})
   }, [trainConfig, hydrated])
 
   const handleRun = useCallback(async (step?: boolean, srcOverride?: string): Promise<VMRunResult | null> => {
@@ -794,34 +725,7 @@ export default function VMPage() {
   )
 
   return (
-    <PageContainer title="VM Console" subtitle="x86 assembly sandbox and Linux VM" maxWidth="max-w-6xl">
-        {/* Mode selector */}
-        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'assembly'}
-            aria-label="Assembly mode"
-            onClick={() => setMode('assembly')}
-            className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors', mode === 'assembly' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-          >
-            Assembly
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'linux'}
-            aria-label="Linux mode"
-            onClick={() => setMode('linux')}
-            className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors', mode === 'linux' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
-          >
-            Linux
-          </button>
-        </div>
-
-        {mode === 'linux' && <SectionErrorBoundary sectionName="Linux VM"><LinuxTab /></SectionErrorBoundary>}
-
-        {mode === 'assembly' && (<>
+    <PageContainer title="VM Console" subtitle="x86-32 assembly sandbox — write, run, inspect" maxWidth="max-w-6xl">
         {/* Top bar: program selector + run */}
         <Card>
           <CardContent className="p-3">
@@ -845,7 +749,6 @@ export default function VMPage() {
                   type="number"
                   value={maxSteps}
                   onChange={(e) => setMaxSteps(Number(e.target.value))}
-                  aria-label="Maximum execution steps"
                   className="w-20 px-2 py-1 text-xs border rounded bg-background"
                   min={1}
                   max={MAX_STEPS_LIMIT}
@@ -869,10 +772,10 @@ export default function VMPage() {
                   <option value="kernel">kernel</option>
                 </select>
                 <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-                  <Checkbox
+                  <input
+                    type="checkbox"
                     checked={debug}
-                    onCheckedChange={(checked) => setDebug(checked === true)}
-                    aria-label="Toggle debug mode"
+                    onChange={(e) => setDebug(e.target.checked)}
                     className="rounded"
                   />
                   Debug
@@ -912,7 +815,6 @@ export default function VMPage() {
                   size="sm"
                   variant={showRef ? 'default' : 'ghost'}
                   onClick={() => setShowRef(!showRef)}
-                  aria-pressed={showRef}
                 >
                   Ref
                 </Button>
@@ -960,7 +862,6 @@ export default function VMPage() {
                       <input
                         type="file"
                         accept=".asm,.txt"
-                        aria-label="Load assembly source file"
                         className="hidden"
                         onChange={(e) => {
                           const file = e.target.files?.[0]
@@ -1024,7 +925,6 @@ export default function VMPage() {
 
           {/* Results */}
           <div className="space-y-4">
-            <SectionErrorBoundary sectionName="Results panel">
             {/* Status */}
             {result && (
               <Card>
@@ -1074,7 +974,6 @@ export default function VMPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      type="button"
                       onClick={() => navigator.clipboard.writeText(result.training_result as string)}
                     >
                       Copy
@@ -1360,11 +1259,10 @@ export default function VMPage() {
                   <div className="grid grid-cols-2 gap-1">
                     {result.registers.map((reg: VMRegister) => (
                       <button
-                        type="button"
                         key={reg.name}
                         className="flex justify-between text-xs font-mono px-2 py-1 bg-muted/30 rounded hover:bg-muted/60 text-left transition-colors"
                         onClick={() => navigator.clipboard.writeText(reg.hex)}
-                        title="Copy to clipboard"
+                        title="Click to copy"
                       >
                         <span className="text-muted-foreground">{reg.name}</span>
                         <span>{reg.hex}</span>
@@ -1404,9 +1302,7 @@ export default function VMPage() {
 
             {/* VGA memory */}
             {result && result.success && (
-              <SectionErrorBoundary sectionName="VGA Display">
-                <VGADisplay text={result.vga_text} cells={result.vga_cells} />
-              </SectionErrorBoundary>
+              <VGADisplay text={result.vga_text} cells={result.vga_cells} />
             )}
 
             {/* Memory dump */}
@@ -1422,7 +1318,6 @@ export default function VMPage() {
                 </CardContent>
               </Card>
             )}
-            </SectionErrorBoundary>
           </div>
         </div>
 
@@ -1437,10 +1332,10 @@ export default function VMPage() {
                 <table className="w-full text-xs font-mono">
                   <thead>
                     <tr className="text-muted-foreground">
-                      <th scope="col" className="text-left py-1 px-2">#</th>
-                      <th scope="col" className="text-left py-1 px-2">EIP</th>
-                      <th scope="col" className="text-left py-1 px-2">Opcode</th>
-                      <th scope="col" className="text-left py-1 px-2">Operands</th>
+                      <th className="text-left py-1 px-2">#</th>
+                      <th className="text-left py-1 px-2">EIP</th>
+                      <th className="text-left py-1 px-2">Opcode</th>
+                      <th className="text-left py-1 px-2">Operands</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1503,7 +1398,6 @@ export default function VMPage() {
             </CardContent>
           </Card>
         )}
-        </>)}
     </PageContainer>
   )
 }
@@ -1606,7 +1500,6 @@ function VGADisplay({ text, cells }: { text?: string; cells?: { ch: string; fg: 
             size="sm"
             variant="ghost"
             onClick={() => setFullScreen(!fullScreen)}
-            aria-pressed={fullScreen}
           >
             {fullScreen ? 'Exit' : 'Fullscreen'}
           </Button>
@@ -1614,7 +1507,9 @@ function VGADisplay({ text, cells }: { text?: string; cells?: { ch: string; fg: 
       </CardHeader>
       <CardContent>
         <div
-          className={cn('bg-black font-mono text-xs p-3 rounded overflow-y-auto whitespace-pre', fullScreen ? 'h-[calc(100dvh-8rem)]' : 'h-40')}
+          className={`bg-black font-mono text-xs p-3 rounded overflow-y-auto whitespace-pre ${
+            fullScreen ? 'h-[calc(100dvh-8rem)]' : 'h-40'
+          }`}
         >
           {cells ? (
             renderCells()

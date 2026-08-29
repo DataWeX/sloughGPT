@@ -7,7 +7,7 @@ import { Button } from '@sloughgpt/strui'
 import { IconStar } from '@sloughgpt/strui'
 import { catalogIdMatchesRuntime } from '@/lib/inference-display'
 import { generateController } from '@/lib/generate-controller'
-import { getJsonItem } from '@/lib/format-bytes'
+import { getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { useLoadModel } from '@/lib/query/api-hooks'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -38,10 +38,15 @@ export default memo(function ModelCatalogCard({ models, modelsLoading, activeRun
   const [trackedModel, setTrackedModel] = useState<string | null>(null)
   const { status: conversionStatus } = useConversionStatus(trackedModel)
   const [loadTimes, setLoadTimes] = useState<Record<string, number>>({})
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set()
-    return new Set(getJsonItem<string[]>(FAVORITES_KEY, []))
-  })
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    let cancelled = false
+    getJsonItem<string[]>(FAVORITES_KEY, []).then(list => {
+      if (!cancelled) setFavorites(new Set(list))
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const toggleFavorite = (modelId: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -49,7 +54,7 @@ export default memo(function ModelCatalogCard({ models, modelsLoading, activeRun
       const next = new Set(prev)
       if (next.has(modelId)) next.delete(modelId)
       else next.add(modelId)
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify([...next]))
+      setJsonItem(FAVORITES_KEY, [...next]).catch(() => {})
       return next
     })
   }
