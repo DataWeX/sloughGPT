@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
@@ -44,7 +44,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       setResult(res)
       addToast(`${res.bits}-bit ${mode} quantization applied (${res.layers_quantized} layers)`, 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Quantization failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not quantization'), 'error')
     } finally {
       setQuantizing(false)
     }
@@ -58,7 +58,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
       setShowLayers(false)
       addToast('Reset to float32', 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Reset failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not reset'), 'error')
     } finally {
       setResetting(false)
     }
@@ -84,7 +84,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                   type="button"
                   onClick={() => setBits(8)}
                   aria-pressed={bits === 8}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${bits === 8 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
+                  className={cn('px-2 py-1 text-xs rounded border transition-colors', bits === 8 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40')}
                 >
                   int8
                 </button>
@@ -92,7 +92,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                   type="button"
                   onClick={() => setBits(4)}
                   aria-pressed={bits === 4}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${bits === 4 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
+                  className={cn('px-2 py-1 text-xs rounded border transition-colors', bits === 4 ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40')}
                 >
                   int4
                 </button>
@@ -103,7 +103,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                   type="button"
                   onClick={() => setMode('symmetric')}
                   aria-pressed={mode === 'symmetric'}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${mode === 'symmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
+                  className={cn('px-2 py-1 text-xs rounded border transition-colors', mode === 'symmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40')}
                 >
                   Sym
                 </button>
@@ -111,7 +111,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                   type="button"
                   onClick={() => setMode('asymmetric')}
                   aria-pressed={mode === 'asymmetric'}
-                  className={`px-2 py-1 text-xs rounded border transition-colors ${mode === 'asymmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40'}`}
+                  className={cn('px-2 py-1 text-xs rounded border transition-colors', mode === 'asymmetric' ? 'bg-primary/10 border-primary text-primary' : 'border-border/60 text-muted-foreground hover:border-primary/40')}
                 >
                   Asym
                 </button>
@@ -132,7 +132,7 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
                 <div className="pt-2 border-t border-border/40 space-y-2">
                   <KpiGrid columns={4}>
                     <StatCard label="Layers" value={`${result.layers_quantized}/${result.total_layers}`} />
-                    <StatCard label="Quality" value={grade.label} icon={<span className={`text-xs ${grade.color}`}>●</span>} />
+                    <StatCard label="Quality" value={grade.label} icon={<span className={cn('text-xs', grade.color)}>●</span>} />
                     <StatCard label="Mode" value={result.mode === 'asymmetric' ? 'Asym' : 'Sym'} />
                     <StatCard label="Type" value={result.model_type === 'slonet' ? 'SloNet' : 'HuggingFace'} />
                   </KpiGrid>
@@ -149,20 +149,20 @@ export default function QuantizationCard({ isOnline }: { isOnline: boolean }) {
 
                 {showLayers && (
                   <div className="max-h-64 overflow-x-auto overflow-y-auto rounded border border-border/40">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-xs" aria-label="Quantization layer details">
                       <thead className="sticky top-0 bg-muted/50">
                         <tr className="text-left text-muted-foreground">
-                          <th className="px-2 py-1 font-medium">Layer</th>
-                          <th className="px-2 py-1 font-medium text-right">Cosine</th>
-                          <th className="px-2 py-1 font-medium text-right">Scale</th>
-                          <th className="px-2 py-1 font-medium text-right">Zero Pt</th>
+                          <th scope="col" className="px-2 py-1 font-medium">Layer</th>
+                          <th scope="col" className="px-2 py-1 font-medium text-right">Cosine</th>
+                          <th scope="col" className="px-2 py-1 font-medium text-right">Scale</th>
+                          <th scope="col" className="px-2 py-1 font-medium text-right">Zero Pt</th>
                         </tr>
                       </thead>
                       <tbody>
                         {sortedLayers.map(([name, entry]) => (
                           <tr key={name} className="border-t border-border/20 hover:bg-muted/20 transition-colors">
                             <td className="px-2 py-1 font-mono">{formatLayerName(name)}</td>
-                            <td className={`px-2 py-1 text-right font-mono ${cosineColor(entry.cosine_sim)}`}>
+                            <td className={cn('px-2 py-1 text-right font-mono', cosineColor(entry.cosine_sim))}>
                               {entry.cosine_sim.toFixed(6)}
                             </td>
                             <td className="px-2 py-1 text-right font-mono">{entry.scale.toFixed(6)}</td>

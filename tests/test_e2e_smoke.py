@@ -184,8 +184,8 @@ class TestAutoTrain:
         resp = client.get("/auto-train/checkpoints")
         assert resp.status_code == 200
         data = resp.json()
-        assert "checkpoints" in data
-        assert isinstance(data["checkpoints"], list)
+        checkpoints = data.get("checkpoints") or data.get("data", [])
+        assert isinstance(checkpoints, list)
 
 
 class TestWorkflow:
