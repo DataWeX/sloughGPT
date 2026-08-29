@@ -5,7 +5,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { cn, Card, CardContent, CardHeader, CardTitle, Checkbox } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Checkbox, Slider } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Switch } from '@sloughgpt/strui'
@@ -408,17 +408,18 @@ export const MemoryCard = memo(function MemoryCard() {
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs text-muted-foreground shrink-0">Importance:</label>
-              <input
-                type="range"
+              <Slider
+                value={[editImportance]}
                 min={0}
                 max={1}
                 step={0.1}
-                value={editImportance}
-                onChange={e => setEditImportance(Number(e.target.value))}
-                className="flex-1 h-1 accent-primary"
+                showValue
+                formatValue={(v) => v.toFixed(1)}
+                onValueChange={([v]) => setEditImportance(v)}
+                size="sm"
+                className="flex-1"
                 aria-label="Edit memory fact importance"
               />
-              <span className="text-xs text-muted-foreground font-mono w-8 text-right shrink-0">{editImportance.toFixed(1)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" className="h-8 text-xs" disabled={!editContent.trim() || savingEdit} onClick={handleSaveEdit}>

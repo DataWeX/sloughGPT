@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Slider, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
 
 interface VoicePreset {
@@ -125,46 +125,48 @@ export function VoicePresetCard({ onApply }: VoicePresetCardProps) {
                     <span className="font-medium text-xs">{p.name}</span>
                   </div>
                   <div className="flex items-center gap-3 text-xs">
-                    <label className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Rate</span>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        value={editRate}
-                        onChange={e => setEditRate(parseFloat(e.target.value))}
-                        className="w-20"
-                      />
-                      <span className="font-numeric w-7 text-right">{editRate.toFixed(1)}</span>
-                    </label>
-                    <label className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground">Pitch</span>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        value={editPitch}
-                        onChange={e => setEditPitch(parseFloat(e.target.value))}
-                        className="w-20"
-                      />
-                      <span className="font-numeric w-7 text-right">{editPitch.toFixed(1)}</span>
-                    </label>
+                    <Slider
+                      label="Rate"
+                      value={[editRate]}
+                      min={0.5}
+                      max={2.0}
+                      step={0.1}
+                      showValue
+                      formatValue={(v) => v.toFixed(1)}
+                      onValueChange={([v]) => setEditRate(v)}
+                      size="sm"
+                    />
+                    <Slider
+                      label="Pitch"
+                      value={[editPitch]}
+                      min={0.5}
+                      max={2.0}
+                      step={0.1}
+                      showValue
+                      formatValue={(v) => v.toFixed(1)}
+                      onValueChange={([v]) => setEditPitch(v)}
+                      size="sm"
+                    />
                   </div>
                   {voices.length > 0 && (
-                    <select
-                      className="text-xs border border-border rounded px-2 py-1 bg-background w-full"
+                    <Select
                       value={p.voice}
-                      onChange={e => {
-                        const updated = presets.map(pr => pr.name === p.name ? { ...pr, voice: e.target.value } : pr)
+                      onValueChange={(value) => {
+                        const updated = presets.map(pr => pr.name === p.name ? { ...pr, voice: value } : pr)
                         setPresets(updated)
                         savePresets(updated).catch(() => {})
                       }}
                     >
-                      <option value="">Default voice</option>
-                      {voices.map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
+                      <SelectTrigger className="w-full text-xs">
+                        <SelectValue placeholder="Default voice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Default voice</SelectItem>
+                        {voices.map(v => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   )}
                   <div className="flex gap-1">
                     <Button size="sm" variant="ghost" onClick={handleSaveEdit}>Save</Button>

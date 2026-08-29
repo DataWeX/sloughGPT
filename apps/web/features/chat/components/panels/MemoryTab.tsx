@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { cn, Switch, Button } from '@sloughgpt/strui'
+import { cn, Switch, Button, Slider } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
@@ -329,18 +329,19 @@ export function MemoryTab() {
                 />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-muted-foreground">Importance</span>
-                <input
-                  type="range"
+                <Slider
+                  label="Importance"
+                  value={[editImportance]}
                   min={0}
                   max={1}
                   step={0.1}
-                  value={editImportance}
-                  onChange={e => setEditImportance(Number(e.target.value))}
+                  showValue
+                  formatValue={(v) => v.toFixed(1)}
+                  onValueChange={([v]) => setEditImportance(v)}
+                  size="sm"
+                  className="flex-1"
                   aria-label="Edit memory fact importance"
-                  className="flex-1 h-1 accent-primary"
                 />
-                <span className="text-[10px] text-muted-foreground font-mono w-8 text-right">{editImportance.toFixed(1)}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Button size="sm" className="h-6 text-[10px] px-2" disabled={!editContent.trim() || savingEdit} onClick={handleSaveEdit}>

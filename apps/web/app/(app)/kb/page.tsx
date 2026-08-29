@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { Card, CardContent, CardHeader, CardTitle, Button, Checkbox, Input, Label, Textarea, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Checkbox, Input, Label, Textarea, cn, Slider } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { kbController, type KnowledgeItem, type KnowledgeStats, type TopicItem } from '@/lib/kb-controller'
@@ -417,8 +417,18 @@ export default function KbPage() {
                   {suggestResult && <p className="text-xs text-muted-foreground">Suggested: {suggestResult}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="importance-slider" className="text-xs">Importance ({newImportance.toFixed(1)})</Label>
-                  <input id="importance-slider" type="range" min="0" max="1" step="0.1" value={newImportance} onChange={e => setNewImportance(Number(e.target.value))} className="w-full" />
+                  <Slider
+                    id="importance-slider"
+                    label="Importance"
+                    value={[newImportance]}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    showValue
+                    formatValue={(v) => v.toFixed(1)}
+                    onValueChange={([v]) => setNewImportance(v)}
+                    size="sm"
+                  />
                 </div>
               </div>
               <div className="flex gap-2">

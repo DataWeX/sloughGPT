@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, Checkbox, EmptyCard, cn } from '@sloughgpt/strui'
+import { Card, CardContent, Checkbox, EmptyCard, cn, Slider } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -840,23 +840,31 @@ export default function KnowledgePage() {
                             )}
                             {editingImportanceId === item.id ? (
                               <div className="flex items-center gap-1.5 bg-muted/50 rounded px-1.5 py-0.5">
-                                <input
-                                  type="range"
+                                <Slider
+                                  value={[importanceValue]}
                                   min={0}
                                   max={10}
                                   step={0.1}
-                                  value={importanceValue}
-                                  onChange={e => setImportanceValue(Number(e.target.value))}
-                                  aria-label="Importance value"
-                                  className="w-16 h-1 accent-primary"
+                                  onValueChange={([v]) => setImportanceValue(v)}
+                                  size="sm"
+                                  className="w-16"
                                 />
-                                <span className="text-xs font-mono w-6 text-right">{importanceValue.toFixed(1)}</span>
-                                <button type="button" onClick={() => handleSaveImportance(item.id)} aria-label="Save importance" className="text-primary hover:text-primary/80">
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  onClick={() => handleSaveImportance(item.id)}
+                                  aria-label="Save importance"
+                                >
                                   <IconCheck className="h-3 w-3" />
-                                </button>
-                                <button type="button" onClick={() => setEditingImportanceId(null)} aria-label="Cancel editing" className="text-muted-foreground hover:text-foreground">
+                                </Button>
+                                <Button
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  onClick={() => setEditingImportanceId(null)}
+                                  aria-label="Cancel editing"
+                                >
                                   <IconX className="h-3 w-3" />
-                                </button>
+                                </Button>
                               </div>
                             ) : (
                               <button

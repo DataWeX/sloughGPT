@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { Card, CardContent, Slider } from '@sloughgpt/strui'
 
 interface AlertPanelProps {
   cpuThreshold: number
@@ -35,16 +35,28 @@ export const AlertPanel = memo(function AlertPanel({ cpuThreshold, memThreshold,
         )}
       </div>
       <CardContent className="p-0 space-y-2">
-        <div className="flex items-center gap-2">
-          <label htmlFor="cpu-threshold" className="text-[11px] text-muted-foreground w-10">CPU</label>
-          <input id="cpu-threshold" type="range" min={10} max={100} value={cpuThreshold} onChange={e => onCpuThresholdChange(Number(e.target.value))} className="flex-1 h-1 accent-primary" />
-          <span className="text-[11px] font-numeric w-8 text-right">{cpuThreshold}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="mem-threshold" className="text-[11px] text-muted-foreground w-10">MEM</label>
-          <input id="mem-threshold" type="range" min={10} max={100} value={memThreshold} onChange={e => onMemThresholdChange(Number(e.target.value))} className="flex-1 h-1 accent-primary" />
-          <span className="text-[11px] font-numeric w-8 text-right">{memThreshold}%</span>
-        </div>
+        <Slider
+          id="cpu-threshold"
+          label="CPU"
+          value={[cpuThreshold]}
+          min={10}
+          max={100}
+          showValue
+          formatValue={(v) => `${v}%`}
+          onValueChange={([v]) => onCpuThresholdChange(v)}
+          size="sm"
+        />
+        <Slider
+          id="mem-threshold"
+          label="MEM"
+          value={[memThreshold]}
+          min={10}
+          max={100}
+          showValue
+          formatValue={(v) => `${v}%`}
+          onValueChange={([v]) => onMemThresholdChange(v)}
+          size="sm"
+        />
       </CardContent>
 
       {alerts.length > 0 && (

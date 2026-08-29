@@ -24,6 +24,769 @@
   ],
   "cards": [
     {
+      "id": "20260829_121936_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
+      "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
+      "description": "",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "world-realm",
+        "stage13",
+        "done"
+      ],
+      "created_at": "2026-08-29T12:19:36.469394+00:00",
+      "updated_at": "2026-08-29T12:19:36.469394+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_sidebar-drawer-fix",
+      "title": "Sidebar Drawer Fix",
+      "description": "Session summary:\n1. Sidebar drawer fully fixed: X close, overlay tap, back button, swipe-open, navigation. Root cause: PanResponder swallowing touches.\n2. ChatScreen improvements in source: cleaner header (removed model badge), card-style suggestion chips with icons. APK not built due to CMake cache corruption from space in 'Default Project' path.\n3. Tutorial UX fixed: commands at prompt now advance instead of executing, friendly AI timeout messages.\n4. Known issue: CMake/native build cache corrupted by path space. Clearing .cxx and rebuilding breaks native modules. Workaround: never clear .cxx, or build from path without spaces.\n5. 91/91 test suites, 856/856 tests pass.\n6. Working APK: sloughgpt-sidebar-fixed.apk (sidebar + shell fixes, old ChatScreen).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "ui"
+      ],
+      "created_at": "2026-08-29T12:19:36.454419+00:00",
+      "updated_at": "2026-08-29T12:19:36.454419+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_continue-mobile-build",
+      "title": "Continue Mobile Build",
+      "description": "Added operations store, error store, useLiveStatus hook, useOperations hook, AuthScreen, MonitoringScreen, ShellScreen. Added activity/shield/pause/play/send icons. All 950 tests pass, TypeScript clean.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-29T12:19:36.439934+00:00",
+      "updated_at": "2026-08-29T12:19:36.439934+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_continue-mobile-build-phase-2",
+      "title": "Continue Mobile Build Phase 2",
+      "description": "Phase 2 complete. Added useServerOutput hook, VMConsoleScreen, download-utils. Added cpu/pause/play/send icons. All 950 tests pass, TypeScript clean, APK installed.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-29T12:19:36.425369+00:00",
+      "updated_at": "2026-08-29T12:19:36.425369+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_continue-mobile-build-phase-3",
+      "title": "Continue Mobile Build Phase 3",
+      "description": "Phase 4 complete. Fixed ExportScreen: wired checkpoint selection into export request, added error detail propagation, added checkpoint picker for model export. Fixed KnowledgeScreen broken debounce (was immediate, now 300ms delay). Wrote tests for error-store (30 tests), operations-store (26 tests), useOperations hook (4 tests), useLiveStatus hook (5 tests), useServerOutput hook (6 tests). Total: 71 new tests. 1005/1005 tests pass, TypeScript clean, APK built.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-29T12:19:36.411583+00:00",
+      "updated_at": "2026-08-29T12:19:36.411583+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_continue-mobile-build-phase-5",
+      "title": "Continue Mobile Build Phase 5",
+      "description": "Phase 5 complete. ErrorsScreen: auto-refresh 15s with AppState awareness, unread badge from /errors/unread, error detail modal with stack/URL/host on tap, fixed hardcoded #fff. FeedbackScreen: fixed stats endpoint to /feedback/stats/summary with thumbs_up/thumbs_down, removed broken training section, added conversations list from /feedback/conversations. SettingsScreen: health polling every 30s. All 1005 tests pass, TypeScript clean, APK built.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-29T12:19:36.397370+00:00",
+      "updated_at": "2026-08-29T12:19:36.397370+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_continue-mobile-build-phase-6",
+      "title": "Continue Mobile Build Phase 6",
+      "description": "Phase 6 complete. DatasetsScreen: added debounced search bar (300ms), search endpoint integration, clear button, no-results state. ChatScreen already has suggestion pills (4 cards on empty state) and ReasoningPanel with animated dots + elapsed timer. All 1005 tests pass, TypeScript clean, APK built.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-29T12:19:36.382845+00:00",
+      "updated_at": "2026-08-29T12:19:36.382845+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_continue-mobile-build-phase-7",
+      "title": "Continue Mobile Build Phase 7",
+      "description": "Mobile app phase 7 complete. All 949 mobile tests pass (100 test suites).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-29T12:19:36.368539+00:00",
+      "updated_at": "2026-08-29T12:19:36.368539+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_shell-interactive-interface-base",
+      "title": "Shell Interactive Interface Base",
+      "description": "Shell interactive interface base is complete. Fixed test_source_nonexistent_file to accept 'File not found' error message. All 148 shell tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-29T12:19:36.354258+00:00",
+      "updated_at": "2026-08-29T12:19:36.354258+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_final-comprehensive-codebase-scan",
+      "title": "Final Comprehensive Codebase Scan",
+      "description": "Comprehensive scan complete. Found actionable issues in backend sync I/O in async handlers.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-29T12:19:36.339970+00:00",
+      "updated_at": "2026-08-29T12:19:36.339970+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_shell-error-handling-train-validation",
+      "title": "Shell error handling & train validation",
+      "description": "Consolidated timeAgo into shared lib/time-ago.ts (10 files updated). Fixed 4 more components returning null with empty states: ImageGalleryInsightsCard, TokenizerEfficiencyCard, SoulPersonalityCard, RecoveryCard. Added 11 missing aria-labels on icon-only buttons. Fixed OnboardingCard onSkip prop error. Type check clean, 941 lib tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.325639+00:00",
+      "updated_at": "2026-08-29T12:19:36.325639+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_shell-backend-error-handling",
+      "title": "Shell & backend error handling",
+      "description": "Fixed models_cmd.py (error checking on all commands, input validation), souls_cmd.py (verified API response before success), _cmd_kill (formatted output instead of raw JSON), QuantizeRequest/PrecisionRequest (Literal Field constraints)",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.311775+00:00",
+      "updated_at": "2026-08-29T12:19:36.311775+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_shell-input-validation-error-handling",
+      "title": "Shell input validation & error handling",
+      "description": "Fixed data_cmds.py (top-level try/except), _cmd_protect/_cmd_unprotect (typed exceptions), added _validate_id helper for kill/train stop/ops cancel/train load/train del",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.297591+00:00",
+      "updated_at": "2026-08-29T12:19:36.297591+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_api-validation-shell-error-formatting",
+      "title": "API validation & shell error formatting",
+      "description": "Added Field constraints to images.py GenerateRequest and souls.py SloChatRequest. Added _format_error helper for descriptive error messages with command context and actionable hints. Updated execute/execute_single/background error handlers.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.283226+00:00",
+      "updated_at": "2026-08-29T12:19:36.283226+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_shell-builtins-frontend-error-handling",
+      "title": "Shell builtins & frontend error handling",
+      "description": "Fixed test/fold/xargs crash on non-integer args with try/except. Fixed MemorySettingsCard/SpacedReviewCard silent error swallowing. Added Field constraints to SwitchRequest in souls.py.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:36.268789+00:00",
+      "updated_at": "2026-08-29T12:19:36.268789+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_api-validation-frontend-error-handling",
+      "title": "API validation & frontend error handling",
+      "description": "Added Field constraints to DownloadRequest (min_length=1), companion ChatRequest (min_length=1). Fixed CommandPalette/TurboCard/RegistryContent silent error swallowing with toasts/error indicators.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.255076+00:00",
+      "updated_at": "2026-08-29T12:19:36.255076+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_api-model-validation-complete",
+      "title": "API model validation complete",
+      "description": "Added Field constraints to SloChatRequest (prompt 1-10000, max_new_tokens 1-4096, temperature 0.1-2.0, top_p 0.1-1.0), inference GenerateRequest (prompt 1-50000), and Message (role pattern, content 1-100000).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.236239+00:00",
+      "updated_at": "2026-08-29T12:19:36.236239+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_backend-error-classification-health",
+      "title": "Backend error classification & health",
+      "description": "Fixed souls.py list_souls/list_weight_snapshots to use classify_and_raise instead of raise_error(str(e)). Fixed health.py with try/except and proper error messages.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.222595+00:00",
+      "updated_at": "2026-08-29T12:19:36.222595+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_structured-api-errors-frontend-fixes",
+      "title": "Structured API errors & frontend fixes",
+      "description": "Fixed commands.py API helpers to return structured error info (error_type, status_code). Added Field constraints to infer.py InferRequest/EmbedRequest/TokenizeRequest. Fixed ExperimentDetailsCard.tsx with error state and retry button.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:36.207854+00:00",
+      "updated_at": "2026-08-29T12:19:36.207854+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_backend-schema-validation-frontend-fixes",
+      "title": "Backend schema validation & frontend fixes",
+      "description": "Added Field constraints to user_adapters.py AdapterUpdateRequest (Literal rating), training/schemas.py _TrainHyperparameters (all numeric fields bounded). Fixed QuantizeCard.tsx grammar errors.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:36.193047+00:00",
+      "updated_at": "2026-08-29T12:19:36.193047+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_backend-error-classification-across-routers",
+      "title": "Backend error classification across routers",
+      "description": "Replaced raise_error(str(e)) with classify_and_raise(e) in experiments.py (5 locations), collections.py (5 locations), world_render.py (4 locations). Added Field constraints to ExperimentCreate.name.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.178432+00:00",
+      "updated_at": "2026-08-29T12:19:36.178432+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_training-schema-validation-shell-fixes",
+      "title": "Training schema validation & shell fixes",
+      "description": "Added Field constraints to TrainingRequest (name/model required), DistillStartRequest (all fields bounded). Added try/except to train distill/hf epoch parsing.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend",
+        "shell"
+      ],
+      "created_at": "2026-08-29T12:19:36.164742+00:00",
+      "updated_at": "2026-08-29T12:19:36.164742+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_knowledge-crash-fix-souls-cmd-error-handling-datasets-search",
+      "title": "Knowledge crash fix, souls_cmd error handling, datasets search error handling",
+      "description": "Fixed _cmd_knowledge to use list_knowledge. Added full error handling to souls_cmd.py. Added try/except to search_books and search_github endpoints.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.150687+00:00",
+      "updated_at": "2026-08-29T12:19:36.150687+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_path-traversal-guards-and-frontend-error-states",
+      "title": "Path traversal guards and frontend error states",
+      "description": "Added regex + path containment checks to lora_eval adapter_path and delete_checkpoint. Verified frontend components already have error handling.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "security",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:36.137187+00:00",
+      "updated_at": "2026-08-29T12:19:36.137187+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_training-export-text-validation-commandpalette-error-vm-erro",
+      "title": "Training export-text validation, CommandPalette error, VM error sanitization",
+      "description": "Added Pydantic ExportTextRequest to export-text endpoint. Fixed CommandPalette model load toast. Changed vm.py to use classify_and_raise instead of leaking str(e).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend",
+        "frontend",
+        "security"
+      ],
+      "created_at": "2026-08-29T12:19:36.123619+00:00",
+      "updated_at": "2026-08-29T12:19:36.123619+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_fix-f-string-logger-calls",
+      "title": "Fix f-string logger calls",
+      "description": "Verified no f-string logger calls remain in apps/api/server. Task completed.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "performance",
+        "logging"
+      ],
+      "created_at": "2026-08-29T12:19:36.109082+00:00",
+      "updated_at": "2026-08-29T12:19:36.109082+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_cli-startup-spinner-fix",
+      "title": "CLI startup spinner fix",
+      "description": "Changed API wait from ProgressBar to Spinner for cleaner single-line output during startup.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "cli"
+      ],
+      "created_at": "2026-08-29T12:19:36.095626+00:00",
+      "updated_at": "2026-08-29T12:19:36.095626+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_trainingpipeline-typo-fix-auto-train-validation-registrycont",
+      "title": "TrainingPipeline typo fix, auto_train validation, RegistryContent audit",
+      "description": "Fixed 'Could not training' typo. Added Field constraints to StartRequest.soul_name. Verified RegistryContent error handling is correct.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.081390+00:00",
+      "updated_at": "2026-08-29T12:19:36.081390+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_feedbackcard-error-toast-exportquantizeprecision-field-const",
+      "title": "FeedbackCard error toast, Export/Quantize/Precision field constraints",
+      "description": "Added addToast to FeedbackCard DPO error. Added Field constraints to ExportRequest, QuantizeRequest, PrecisionRequest.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.067584+00:00",
+      "updated_at": "2026-08-29T12:19:36.067584+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_trainingdatacard-error-learnsection-error-start-turbo-valida",
+      "title": "TrainingDataCard error, LearnSection error, start_turbo validation",
+      "description": "Added error state + toast to TrainingDataCard. Added addToast to LearnSection status fetch. Added data_path validation to start_turbo.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.053692+00:00",
+      "updated_at": "2026-08-29T12:19:36.053692+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_shell-format-error-helper-and-error-message-improvements",
+      "title": "Shell _format_error helper and error message improvements",
+      "description": "Added _format_error helper to ShellREPL for structured error messages. Replaced generic Error: {e} in models, souls, datasets, knowledge, checkpoints, protect, unprotect commands.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell"
+      ],
+      "created_at": "2026-08-29T12:19:36.038902+00:00",
+      "updated_at": "2026-08-29T12:19:36.038902+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_replaced-all-remaining-generic-error-messages-in-shell",
+      "title": "Replaced all remaining generic Error messages in shell",
+      "description": "Replaced all remaining generic Error: {e} messages in repl.py with _format_error helper. Now 0 generic error messages remain.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell"
+      ],
+      "created_at": "2026-08-29T12:19:36.024791+00:00",
+      "updated_at": "2026-08-29T12:19:36.024791+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121936_kill-error-handling-frontend-error-states-dataset-url-valida",
+      "title": "Kill error handling, frontend error states, dataset URL validation",
+      "description": "Fixed _cmd_kill error handling. Added toasts to MemoryCard and RegistryContent. Added URL scheme validation to dataset import schemas.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell",
+        "frontend",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:36.011777+00:00",
+      "updated_at": "2026-08-29T12:19:36.011777+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_shell-exec-error-surfacing-workflowpipeline-empty-state",
+      "title": "Shell exec error surfacing, WorkflowPipeline empty state",
+      "description": "Shell exec endpoint now returns error message instead of empty string. WorkflowPipeline shows 'Pipeline not configured' when status is null.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:35.997210+00:00",
+      "updated_at": "2026-08-29T12:19:35.997210+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_fixed-nameerror-in-dataset-import-error-handlers",
+      "title": "Fixed NameError in dataset import error handlers",
+      "description": "Changed all except HTTPException: classify_and_raise(e) to except HTTPException: raise in datasets.py import handlers. Fixed NameError where e was undefined.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:35.983179+00:00",
+      "updated_at": "2026-08-29T12:19:35.983179+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_train-stop-error-handling-load-model-error-dict-consistency",
+      "title": "Train stop error handling, load_model error dict consistency",
+      "description": "Fixed train stop to check for error dict. Made load_model return consistent error dict with error_type field.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell"
+      ],
+      "created_at": "2026-08-29T12:19:35.968772+00:00",
+      "updated_at": "2026-08-29T12:19:35.968772+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_auth-field-constraints-data-cmds-error-handling-inferencepoo",
+      "title": "Auth field constraints, data_cmds error handling, InferencePoolCard error state",
+      "description": "Added min_length to auth request fields. Added _format_error to data_cmds.py. Added error state to InferencePoolCard.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "backend",
+        "shell",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:35.956088+00:00",
+      "updated_at": "2026-08-29T12:19:35.956088+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_models-cmd-error-handling-and-validation-linuxpy-error-handl",
+      "title": "models_cmd error handling and validation, linux.py error handling",
+      "description": "Rewrote models_cmd.py with _format_error and input validation. Added _fmt_error to LinuxCommandsMixin. Replaced 6 generic error messages in tar/gzip/timeout.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "shell"
+      ],
+      "created_at": "2026-08-29T12:19:35.941695+00:00",
+      "updated_at": "2026-08-29T12:19:35.941695+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_sse-error-enrichment-remaining-callers",
+      "title": "SSE Error Enrichment - Remaining Callers",
+      "description": "Enriched all remaining sse_error callers across auto_train.py, mobile.py, agents.py with structured codes (E_STATE_IDLE, E_TIMEOUT, E_VAL_REQUEST, E_ENV_MISSING, E_INFRA_GENERATION). Updated 3 fallback definitions to accept code/http_status params. 15 calls enriched. All tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "backend"
+      ],
+      "created_at": "2026-08-29T12:19:35.928777+00:00",
+      "updated_at": "2026-08-29T12:19:35.928777+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_polish-planner-gui-noir-violet",
+      "title": "Polish Planner GUI - Noir Violet",
+      "description": "Polished planner GUI to match Noir Violet design system. Updated CSS variables to RGB triples, added Outfit font, shadow tokens, hover/focus/transition states, and improved board/notes/stats/modal styling. All 146 planner tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:35.914741+00:00",
+      "updated_at": "2026-08-29T12:19:35.914741+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_fix-contextlayers-typescript-error",
+      "title": "Fix contextLayers TypeScript error",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "frontend"
+      ],
+      "created_at": "2026-08-29T12:19:35.900691+00:00",
+      "updated_at": "2026-08-29T12:19:35.900691+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_turbo-training-and-scroll-fixes-continuation",
+      "title": "Turbo training and scroll fixes continuation",
+      "description": "Added tests for all scroll-overflow fixes: TrainingLogCard (MAX_VISIBLE_LINES=500), TrainingHistoryView (paginate at 20), TrainingBuildsCard (paginate at 10), auto-train checkpoints (paginate at 10). All 286/291 pass, 5 pre-existing LossChart failures.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "training"
+      ],
+      "created_at": "2026-08-29T12:19:35.888025+00:00",
+      "updated_at": "2026-08-29T12:19:35.888025+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_training-flow-improvements",
+      "title": "Training flow improvements",
+      "description": "All training flow work verified: turbo pause/resume (backend + frontend), scroll overflow fixes (5 components), tests (84 passing). Full pipeline solid.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "training"
+      ],
+      "created_at": "2026-08-29T12:19:35.874185+00:00",
+      "updated_at": "2026-08-29T12:19:35.874185+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_training-flow-polish-and-edge-cases",
+      "title": "Training flow polish and edge cases",
+      "description": "Fixed 'Could not training' typo across 27 locations in 15 files. All 286/291 tests pass (5 pre-existing LossChart failures). Training codebase clean of TODOs and skipped tests.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "training"
+      ],
+      "created_at": "2026-08-29T12:19:35.861414+00:00",
+      "updated_at": "2026-08-29T12:19:35.861414+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_training-flow-edge-cases-and-polish",
+      "title": "Training flow edge cases and polish",
+      "description": "Final round: fixed stale optimistic job on training start (auto-clear after 5s), fixed dismiss buttons clearing error state in FeedbackTrainCard and APILogsCard, added custom- prefix to preset keys preventing name collisions, added Notification API guard in training/page.tsx. 113/113 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "training"
+      ],
+      "created_at": "2026-08-29T12:19:35.848450+00:00",
+      "updated_at": "2026-08-29T12:19:35.848450+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_write-comprehensive-tests-for-feedback-workflow",
+      "title": "Write comprehensive tests for feedback workflow",
+      "description": "Wrote 71 tests for feedback workflow. All pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-29T12:19:35.835299+00:00",
+      "updated_at": "2026-08-29T12:19:35.835299+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_write-comprehensive-tests-for-collections-perceptiontraining",
+      "title": "Write comprehensive tests for collections perception/training_bridge/world_bridge",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-29T12:19:35.820439+00:00",
+      "updated_at": "2026-08-29T12:19:35.820439+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_121935_write-tests-for-gguf-export-and-tokenizer",
+      "title": "Write tests for gguf_export and tokenizer",
+      "description": "Wrote 158 tests for gguf_export.py and tokenizer.py. All passing. Covers: GGUFExportConfig, _as_float16, count_layers, detect_architecture, register_architecture, all 13 mapping classes, get_block_mapping, estimate_memory_requirements, list helpers, gpt2_pretokenize, default_pretokenize, SloBPE (train/encode/decode/serialize/decompose/analyze/special tokens), SloUnigram (train/encode/decode/serialize/viterbi/segmentations/scores/decompose/analyze).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "training"
+      ],
+      "created_at": "2026-08-29T12:19:35.806336+00:00",
+      "updated_at": "2026-08-29T12:19:35.806336+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260821_012030_make-me-well-wellness-feature",
       "title": "Make Me Well (Wellness) feature",
       "description": "Per UX_FLOWS.md: Calming welcome screen, options (Sleep story, Meditation guide, Journal prompt, Breathing exercise, Positive affirmation), timer settings, voice output.",
@@ -6795,6 +7558,23 @@
       ],
       "created_at": "2026-08-09T00:14:51.486079+00:00",
       "updated_at": "2026-08-09T00:14:51.486079+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260829_160432-strui-component-port",
+      "title": "Port native UI components to @sloughgpt/strui",
+      "description": "Ported 16 native range inputs to Slider, 3 hand-rolled toggle switches to Switch, 1 native select to Select, 2 native buttons to Button across 8 files:\n- VoicePresetCard.tsx: Rate/Pitch sliders + voice select\n- VoiceSettingsPanel.tsx: 3 sliders + 3 toggle switches\n- AlertPanel.tsx: CPU/MEM threshold sliders\n- companion/page.tsx: 5 personality trait sliders\n- kb/page.tsx: importance slider\n- knowledge/page.tsx: importance slider + save/cancel buttons\n- MemoryCard.tsx: importance slider\n- MemoryTab.tsx: importance slider\n\nZero new type errors introduced.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "strui",
+        "ui-consistency"
+      ],
+      "created_at": "2026-08-29T15:04:32.741981+00:00",
+      "updated_at": "2026-08-29T15:04:32.741995+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
