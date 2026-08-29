@@ -387,7 +387,7 @@ def convert_hf_to_slonet(
         param_map is not None, count, n_written,
         _t_arch - _t0, _t_precomp - _t_arch, _t_main - _t_precomp,
         _t_end - _t_main, _t_end - _t0,
-        extra={"tag": "INF"},
+        extra={"op": "model.load"},
     )
     return result if result is not None else {}
 
@@ -555,7 +555,7 @@ class SloNetChatProvider:
             _t_load = _t_convert + result.timing.get("fused_qkv", 0) + result.timing.get("tied_synth", 0)
             del loader, weights_dict, plan
         except Exception as e:
-            logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"tag": "INF"})
+            logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"op": "model.load"})
             # Fallback: build plan + generic loader (same mapping, no mmap optimization)
             from domains.infrastructure.weight_loader import build_load_plan, load_into_model
             weights_dict = parser.get_weights_dict_parallel()
@@ -570,7 +570,7 @@ class SloNetChatProvider:
             "from_slnc timing: parse=%.2fs model=%.2fs weights=%.2fs convert=%.2fs load_state=%.2fs total=%.2fs",
             _t_parse - _t0, _t_model - _t_parse, _t_weights - _t_model,
             _t_convert - _t_weights, _t_load - _t_convert, _t_load - _t0,
-            extra={"tag": "INF"},
+            extra={"op": "model.load"},
         )
 
         # Create instance (bypass __init__)
@@ -599,7 +599,7 @@ class SloNetChatProvider:
                 logger.info(
                     "SloNetChatProvider.from_slnc: AVX2 int8 kernel not available "
                     "(numpy fallback is slower than float32) — skipping quantization",
-                    extra={"tag": "INF"},
+                    extra={"op": "model.load"},
                 )
                 quantize = False
 
@@ -637,7 +637,7 @@ class SloNetChatProvider:
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded pre-quantized weights (%d tensors) from %s",
                     quantized_count, quant_npz_path,
-                    extra={"tag": "INF"},
+                    extra={"op": "model.load"},
                 )
 
             # Priority 2: metadata-only (.json) — re-encode from float32
@@ -646,7 +646,7 @@ class SloNetChatProvider:
                 logger.info(
                     "SloNetChatProvider.from_slnc: loaded quant metadata (%d tensors) from %s",
                     len(param_names), quant_meta_path,
-                    extra={"tag": "INF"},
+                    extra={"op": "model.load"},
                 )
 
                 quantized_count = 0
@@ -695,7 +695,7 @@ class SloNetChatProvider:
                 "SloNetChatProvider.from_slnc: quantized %d/%d tensors (bits=%d, mode=%s, avg_cosine=%.4f)",
                 quantized_count, len(linear_map), quant_bits, quant_mode,
                 summary.get("avg_cosine_sim", 0.0),
-                extra={"tag": "INF"},
+                extra={"op": "model.load"},
             )
 
         # Release float32 originals of quantized/point layers (inference-only).
@@ -706,7 +706,7 @@ class SloNetChatProvider:
             logger.info(
                 "SloNetChatProvider.from_slnc: released float32 originals of %d quantized/point layers",
                 freed,
-                extra={"tag": "INF"},
+                extra={"op": "model.load"},
             )
 
         if release_mmap_pages:
@@ -714,7 +714,7 @@ class SloNetChatProvider:
                 logger.info(
                     "SloNetChatProvider.from_slnc: released .slnc mmap pages (%.1f MB file)",
                     parser.file_size / 1e6,
-                    extra={"tag": "INF"},
+                    extra={"op": "model.load"},
                 )
 
         # glibc keeps freed heap (peak allocations from weight conversion)
@@ -744,7 +744,7 @@ class SloNetChatProvider:
         _t_tok = _time.monotonic()
 
         logger.info("SloNetChatProvider.from_slnc: %s, %d layers (tokenizer=%.2fs)",
-                     slnc_path, n_layer, _t_tok - _t_tok_start, extra={"tag": "INF"})
+                     slnc_path, n_layer, _t_tok - _t_tok_start, extra={"op": "model.load"})
 
         # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
         instance._kv_states: Dict[str, Any] = {}
@@ -867,7 +867,7 @@ class SloNetChatProvider:
         logger.info(
             "SloNetChatProvider.lazy_from_slnc: %s (%.1f MB file, %d params) — weights deferred",
             slnc_path, parser.file_size / 1e6, total_params,
-            extra={"tag": "INF"},
+            extra={"op": "model.load"},
         )
         return instance
 
@@ -955,7 +955,7 @@ class SloNetChatProvider:
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",
-            soul_path, meta["n_layer"], meta["vocab_size"], meta["n_embed"], extra={"tag": "INF"},
+            soul_path, meta["n_layer"], meta["vocab_size"], meta["n_embed"], extra={"op": "model.load"},
         )
 
         # Cross-turn KV cache state
@@ -1019,7 +1019,7 @@ class SloNetChatProvider:
 
         logger.info(
             "SloNetChatProvider.apply_adapter: loaded %s (rank=%d, alpha=%.1f, %d params)",
-            adapter_path, rank, alpha, n_params, extra={"tag": "INF"},
+            adapter_path, rank, alpha, n_params, extra={"op": "model.load"},
         )
 
         result = {
@@ -1037,7 +1037,7 @@ class SloNetChatProvider:
             result["merged"] = True
             logger.info(
                 "SloNetChatProvider.apply_adapter: merged LoRA into base weights",
-                extra={"tag": "INF"},
+                extra={"op": "model.load"},
             )
 
         return result
@@ -1102,7 +1102,7 @@ class SloNetChatProvider:
             self._kv_last_access.pop(session_id, None)
         if existed:
             logger.debug("Cleared KV state for session %s", session_id,
-                         extra={"tag": "MODEL"})
+                         extra={"op": "model.load"})
         return existed
 
     def clear_all_sessions(self) -> int:
@@ -1120,7 +1120,7 @@ class SloNetChatProvider:
             self._kv_last_access.clear()
         if n:
             logger.info("Cleared KV state for %d sessions", n,
-                        extra={"tag": "MODEL"})
+                        extra={"op": "model.load"})
         return n
 
     @property
@@ -1173,12 +1173,12 @@ class SloNetChatProvider:
             from domains.infrastructure.morph_tokenizer import MorphTokenizer
             if model_dir and Path(model_dir).is_dir() and (Path(model_dir) / "tokenizer.json").exists():
                 logger.info("Using fine-tuned model tokenizer from %s", model_dir,
-                            extra={"tag": "INF"})
+                            extra={"op": "model.load"})
                 return MorphTokenizer.from_pretrained(str(model_dir))
             # from_pretrained reads tokenizer.json and parses vocab+merges correctly
             return MorphTokenizer.from_pretrained(self._hf_model_id)
         except Exception as e:
-            logger.warning("MorphTokenizer load failed: %s", e, extra={"tag": "INF"})
+            logger.warning("MorphTokenizer load failed: %s", e, extra={"op": "model.load"})
 
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
 
@@ -1239,7 +1239,7 @@ class SloNetChatProvider:
                 self._meta["lazy"] = True
             logger.info(
                 "SloNetChatProvider: %s weights now resident in parent (lazy load)",
-                self._model_id, extra={"tag": "INF"},
+                self._model_id, extra={"op": "model.load"},
             )
             return self._model
 
@@ -1279,7 +1279,7 @@ class SloNetChatProvider:
                 self._meta["lazy"] = True
             logger.info(
                 "SloNetChatProvider: %s weights now resident (materialize)",
-                self._model_id, extra={"tag": "INF"},
+                self._model_id, extra={"op": "model.load"},
             )
             return self._model
         finally:
@@ -1326,7 +1326,7 @@ class SloNetChatProvider:
             logger.debug("malloc_trim failed: %s", e)
         logger.info(
             "SloNetChatProvider.release_model: %s weights released to OS",
-            self._model_id, extra={"tag": "INF"},
+            self._model_id, extra={"op": "model.load"},
         )
         # Record dashboard event
         try:
@@ -1412,7 +1412,7 @@ class SloNetChatProvider:
                 self._kv_last_access.pop(sid, None)
         if stale:
             logger.info("Evicted %d stale KV sessions (TTL=%.0fs)", len(stale), self._kv_ttl,
-                        extra={"tag": "INF"})
+                        extra={"op": "model.load"})
 
     def _resolve_session_kv(self, session_id):
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
@@ -1449,7 +1449,7 @@ class SloNetChatProvider:
         self._kv_states.pop(lru_id, None)
         self._kv_last_access.pop(lru_id, None)
         logger.info("Evicted least-recently-used KV session %s (max=%d)",
-                    lru_id, self._kv_max_sessions, extra={"tag": "INF"})
+                    lru_id, self._kv_max_sessions, extra={"op": "model.load"})
 
     def _generate_sync(self, messages, max_tokens=512, temperature=0.8,
                        top_k=None, top_p=None, repetition_penalty=1.0,
@@ -1592,7 +1592,7 @@ class SloNetChatProvider:
             elapsed = time.monotonic() - gen_start
             if elapsed > _STREAM_TOTAL_TIMEOUT_S:
                 cancel_event.set() if cancel_event else None
-                logger.warning("Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"})
+                logger.warning("Streaming generation timed out after %.0fs", elapsed, extra={"op": "model.load"})
                 yield "\n\n[Generation timed out after {:.0f}s]".format(elapsed)
                 return
 

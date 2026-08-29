@@ -558,7 +558,7 @@ class IdleManager:
                 if reload_fn:
                     self._logger.info(
                         "Auto-reloading idle model %s", model_id,
-                        extra={"tag": "IDLE"},
+                        extra={"op": "sys.info"},
                     )
                     try:
                         reload_fn()
@@ -567,7 +567,7 @@ class IdleManager:
                     except Exception as e:
                         self._logger.error(
                             "Auto-reload failed for %s: %s", model_id, e,
-                            extra={"tag": "IDLE"},
+                            extra={"op": "sys.info"},
                         )
             entry["last_touch"] = time.time()
         return reloaded
@@ -596,7 +596,7 @@ class IdleManager:
                     try:
                         self._logger.info(
                             "Auto-reloading idle model %s (background)", model_id,
-                            extra={"tag": "IDLE"},
+                            extra={"op": "sys.info"},
                         )
                         reload_fn()
                         with self._lock:
@@ -604,12 +604,12 @@ class IdleManager:
                             entry["_reloading"] = False
                         self._logger.info(
                             "Auto-reload complete for %s", model_id,
-                            extra={"tag": "IDLE"},
+                            extra={"op": "sys.info"},
                         )
                     except Exception as e:
                         self._logger.error(
                             "Auto-reload failed for %s: %s", model_id, e,
-                            extra={"tag": "IDLE"},
+                            extra={"op": "sys.info"},
                         )
                         with self._lock:
                             entry["_reloading"] = False
@@ -672,7 +672,7 @@ class IdleManager:
                         if unload_fn:
                             self._logger.info(
                                 "Idle timeout %.0fs reached for %s — unloading",
-                                age, model_id, extra={"tag": "IDLE"},
+                                age, model_id, extra={"op": "sys.info"},
                             )
                             try:
                                 unload_fn()
@@ -680,7 +680,7 @@ class IdleManager:
                             except Exception as e:
                                 self._logger.error(
                                     "Idle unload failed for %s: %s", model_id, e,
-                                    extra={"tag": "IDLE"},
+                                    extra={"op": "sys.info"},
                                 )
 
     def shutdown(self) -> None:
@@ -1420,7 +1420,7 @@ class ModelServer:
         gc.collect()
         logger.info(
             "Model %s unloaded (idle) — memory freed", self.model_id,
-            extra={"tag": "IDLE"},
+            extra={"op": "sys.info"},
         )
 
     def _idle_reload(self) -> None:
@@ -1437,7 +1437,7 @@ class ModelServer:
         if not self._hf_model_id and not self._slnc_path:
             logger.warning(
                 "Cannot reload %s: no model ID or path stored", self.model_id,
-                extra={"tag": "IDLE"},
+                extra={"op": "sys.info"},
             )
             return
         try:
@@ -1453,7 +1453,7 @@ class ModelServer:
                 if not candidate.exists():
                     logger.error(
                         "Cannot reload %s: no .slnc file at %s",
-                        self.model_id, candidate, extra={"tag": "IDLE"},
+                        self.model_id, candidate, extra={"op": "sys.info"},
                     )
                     return
                 slnc_path = str(candidate)
@@ -1479,13 +1479,13 @@ class ModelServer:
                 self._status = ModelStatus.READY
             logger.info(
                 "Model %s reloaded (idle) — ready to serve", self.model_id,
-                extra={"tag": "IDLE"},
+                extra={"op": "sys.info"},
             )
         except Exception as e:
             self._status = ModelStatus.ERROR
             logger.error(
                 "Idle reload failed for %s: %s", self.model_id, e,
-                extra={"tag": "IDLE"},
+                extra={"op": "sys.info"},
             )
 
     @property
@@ -1530,7 +1530,7 @@ class ModelServer:
                 self.metrics.record_success(elapsed_ms, tokens)
             with self._warmup_lock:
                 self._warmup_completed = True
-            logger.info("ModelServer[%s]: warmup completed (%dms)", self.model_id, int(elapsed_ms), extra={"tag": "MODEL"})
+            logger.info("ModelServer[%s]: warmup completed (%dms)", self.model_id, int(elapsed_ms), extra={"op": "model.load"})
         except Exception as e:
             with self._warmup_lock:
                 self._warmup_error = f"{type(e).__name__}: {e}"
@@ -1541,7 +1541,7 @@ class ModelServer:
             if "No module named" in str(e):
                 logger.debug("ModelServer[%s]: warmup skipped: %s", self.model_id, e)
             else:
-                logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e, extra={"tag": "MODEL"})
+                logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e, extra={"op": "model.load"})
             return
 
     def _check_device(self) -> None:
@@ -1585,7 +1585,7 @@ class ModelServer:
         if self._local_backend is not None:
             self._local_backend._model_ref = None
         self._device = "guard"
-        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id, extra={"tag": "MODEL"})
+        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id, extra={"op": "model.load"})
 
     def _cleanup_kv_cache(self) -> None:
         """Clear any KV cache tensors the model may have accumulated."""
@@ -1830,7 +1830,7 @@ class ModelServer:
             try:
                 hook()
             except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
+                logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
 
         # Submit to priority queue
         async def _run() -> dict:
@@ -2037,7 +2037,7 @@ class ModelServer:
             try:
                 hook()
             except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
+                logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
 
         # EventBus generation lifecycle — started
         _gen_id = f"{self.model_id}-stream-{id(prompt[:32])}"
@@ -2149,7 +2149,7 @@ class ModelServer:
 
         except GeneratorExit:
             aborted = True
-            logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"tag": "MODEL"})
+            logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"op": "model.load"})
             if cancel_event is not None:
                 cancel_event.set()
             _emit_gen_event("generation.cancelled", {
@@ -2163,7 +2163,7 @@ class ModelServer:
             if pump_thread is not None and pump_thread.is_alive():
                 pump_thread.join(timeout=10)
                 if pump_thread.is_alive():
-                    logger.warning("generate_stream[%s]: pump thread did not stop within 10s", self.model_id, extra={"tag": "MODEL"})
+                    logger.warning("generate_stream[%s]: pump thread did not stop within 10s", self.model_id, extra={"op": "model.load"})
             return
         except asyncio.TimeoutError:
             with self._metrics_lock:
@@ -2201,11 +2201,11 @@ class ModelServer:
                 try:
                     hook()
                 except Exception as e:
-                    logger.warning("Post-gen hook failed: %s", e, extra={"tag": "MODEL"})
+                    logger.warning("Post-gen hook failed: %s", e, extra={"op": "model.load"})
             # Release priority-queue slot
             _release()
             if aborted:
-                logger.info("generate_stream[%s]: cleaned up after abort", self.model_id, extra={"tag": "MODEL"})
+                logger.info("generate_stream[%s]: cleaned up after abort", self.model_id, extra={"op": "model.load"})
 
     @staticmethod
     def _wrap_generator_as_streamer(gen):
@@ -2225,7 +2225,7 @@ class ModelServer:
             except StopIteration:
                 pass
             except Exception as e:
-                logger.warning("Streaming pump generator failed: %s", e, extra={"tag": "MODEL"})
+                logger.warning("Streaming pump generator failed: %s", e, extra={"op": "model.load"})
                 q.put(e)  # Propagate exception to caller
             finally:
                 q.put(stop_signal)
@@ -2249,7 +2249,7 @@ class ModelServer:
             try:
                 hook(error)
             except Exception as e:
-                logger.warning("Error hook failed: %s", e, extra={"tag": "MODEL"})
+                logger.warning("Error hook failed: %s", e, extra={"op": "model.load"})
 
     # --- Model swap (hot-reload) ---
 
@@ -2276,7 +2276,7 @@ class ModelServer:
         _emit_gen_event("model.swapped", {
             "model_id": self.model_id,
         })
-        logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
+        logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"op": "model.load"})
         # Re-warmup with new model
         with self._warmup_lock:
             self._warmup_completed = False

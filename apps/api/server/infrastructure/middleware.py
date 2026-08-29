@@ -11,9 +11,9 @@ Unified log format (single line per request):
     HH:MM:SS WRN  [SLOW]  GET /models 200 (12.4s) corr=abc1
 
 Type tags for quick scanning:
-    [REQ]   — normal request log (level varies by status)
-    [SLOW]  — slow request (>1s) log
-    [INFRA] — infrastructure events (middleware registration, timeouts)
+    [REQ]   - normal request log (level varies by status)
+    [SLOW]  - slow request (>1s) log
+    [INFRA] - infrastructure events (middleware registration, timeouts)
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ REQUEST_TIMEOUT_SECONDS = 60.0
 # Slow request threshold (seconds)
 SLOW_THRESHOLD_SECONDS = 1.0
 
-# Paths that are always slow during cold start — suppress SLOW log for these
+# Paths that are always slow during cold start - suppress SLOW log for these
 _COLD_START_PATHS = frozenset({"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs", "/system/stream"})
 
 
@@ -62,11 +62,22 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
             return await asyncio.wait_for(call_next(request), timeout=self.timeout)
         except asyncio.TimeoutError:
             elapsed_str = f"{self.timeout:.3f}s"
+            corr_id = request.scope.get("correlation_id", "-")
             logger.warning(
                 "504 on %s %s (%s) corr=%s",
-                request.method, request.url.path, elapsed_str,
-                request.scope.get("correlation_id", "-"),
-                extra={"tag": "INFRA", "context": {"status": 504, "timeout_s": self.timeout}},
+                request.method, request.url.path, elapsed_str, corr_id,
+                extra={
+                    "op": "http.request",
+                    "ok": False,
+                    "err": {"code": "E_INFRA_TIMEOUT", "msg": f"request timed out after {self.timeout}s"},
+                    "dur_ms": int(self.timeout * 1000),
+                    "http": {
+                        "method": request.method,
+                        "path": request.url.path,
+                        "status": 504,
+                        "corr": corr_id,
+                    },
+                },
             )
             return JSONResponse(
                 status_code=status.HTTP_504_GATEWAY_TIMEOUT,
@@ -104,15 +115,15 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
     Produces one clean log line per request.  Log level is chosen by status
     code so that errors are visible immediately in stdout:
 
-        5xx  → logger.error   (tag REQ)
-        4xx  → logger.warning (tag REQ)
-        >1s  → logger.warning (tag SLOW)  — unless path is in _COLD_START_PATHS
-        else → logger.debug   (tag REQ)
+        5xx  -> logger.error   (tag REQ)
+        4xx  -> logger.warning (tag REQ)
+        >1s  -> logger.warning (tag SLOW)  - unless path is in _COLD_START_PATHS
+        else -> logger.debug   (tag REQ)
 
     On unhandled exceptions the full traceback is logged via logger.exception.
 
     Error detail extraction is intentionally left to FastAPI exception
-    handlers — they already produce structured JSON responses.  This
+    handlers - they already produce structured JSON responses.  This
     middleware avoids reading response bodies because:
       * StreamingResponse has no pre-buffered body attribute.
       * Buffering the body to inspect it would break streaming endpoints.
@@ -137,13 +148,15 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
                 "unhandled exception on %s %s (%s) corr=%s",
                 method, path, elapsed_str, corr_id,
                 extra={
-                    "tag": "REQ",
-                    "context": {
-                        "corr": corr_id,
+                    "op": "http.request",
+                    "ok": False,
+                    "err": {"code": "E_UNHANDLED", "msg": "unhandled exception"},
+                    "dur_ms": int(elapsed * 1000),
+                    "http": {
                         "method": method,
                         "path": path,
                         "status": 500,
-                        "elapsed": elapsed_str,
+                        "corr": corr_id,
                     },
                 },
             )
@@ -167,32 +180,54 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             logger.error(
                 "%d on %s %s (%s) corr=%s",
                 sc, method, path, elapsed_str, corr_id,
-                extra={"tag": "REQ", "context": ctx},
+                extra={
+                    "op": "http.request",
+                    "ok": False,
+                    "dur_ms": int(elapsed * 1000),
+                    "http": {"method": method, "path": path, "status": sc, "corr": corr_id},
+                },
             )
         elif sc >= 400:
             logger.warning(
                 "%d on %s %s (%s) corr=%s",
                 sc, method, path, elapsed_str, corr_id,
-                extra={"tag": "REQ", "context": ctx},
+                extra={
+                    "op": "http.request",
+                    "ok": False,
+                    "dur_ms": int(elapsed * 1000),
+                    "http": {"method": method, "path": path, "status": sc, "corr": corr_id},
+                },
             )
         elif elapsed > SLOW_THRESHOLD_SECONDS:
             if path in _COLD_START_PATHS and elapsed < 60.0:
                 logger.debug(
                     "cold-start %s %s %d (%s) corr=%s",
                     method, path, sc, elapsed_str, corr_id,
-                    extra={"tag": "REQ", "context": ctx},
+                    extra={
+                        "op": "http.request",
+                        "dur_ms": int(elapsed * 1000),
+                        "http": {"method": method, "path": path, "status": sc, "corr": corr_id},
+                    },
                 )
             else:
                 logger.warning(
                     "%s %s %d (%s) corr=%s",
                     method, path, sc, elapsed_str, corr_id,
-                    extra={"tag": "SLOW", "context": ctx},
+                    extra={
+                        "op": "http.request",
+                        "dur_ms": int(elapsed * 1000),
+                        "http": {"method": method, "path": path, "status": sc, "corr": corr_id},
+                    },
                 )
         else:
             logger.info(
                 "%s %s %d (%s) corr=%s",
                 method, path, sc, elapsed_str, corr_id,
-                extra={"tag": "REQ", "context": ctx},
+                extra={
+                    "op": "http.request",
+                    "dur_ms": int(elapsed * 1000),
+                    "http": {"method": method, "path": path, "status": sc, "corr": corr_id},
+                },
             )
 
         return response
@@ -250,7 +285,10 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
         logger.debug(
             ">>> %s %s corr=%s body=%s",
             method, path, corr_id, req_body,
-            extra={"tag": "PAYLOAD", "context": {"phase": "request", "path": path}},
+            extra={
+                "op": "http.request",
+                "http": {"method": method, "path": path, "corr": corr_id, "phase": "request"},
+            },
         )
 
         response = await call_next(request)
@@ -260,7 +298,7 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
         is_streaming = hasattr(response, 'body_iterator') or isinstance(
             response, (Response.__class__.__mro__[0],)
         )
-        # Check if it's a StreamingResponse — skip body logging
+        # Check if it's a StreamingResponse - skip body logging
         from starlette.responses import StreamingResponse
         if not isinstance(response, StreamingResponse):
             try:
@@ -275,7 +313,10 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
         logger.debug(
             "<<< %s %s %d corr=%s body=%s",
             method, path, response.status_code, corr_id, resp_body,
-            extra={"tag": "PAYLOAD", "context": {"phase": "response", "path": path, "status": response.status_code}},
+            extra={
+                "op": "http.request",
+                "http": {"method": method, "path": path, "status": response.status_code, "corr": corr_id, "phase": "response"},
+            },
         )
 
         return response
@@ -300,7 +341,7 @@ class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
                 logger.debug(
                     "Extension error suppressed: %s %s %d",
                     request.method, request.url.path, response.status_code,
-                    extra={"tag": "REQ"},
+                    extra={"op": "http.request"},
                 )
         return response
 
@@ -313,8 +354,8 @@ def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) 
     first on each request.  The list below is therefore the registration
     order, and the inbound request path is the reverse of it.
 
-    Request path (inbound → outbound):
-        ClientErrorFilter → CorrelationId → UnifiedRequest → Metrics → RequestTimeout → handler
+    Request path (inbound -> outbound):
+        ClientErrorFilter -> CorrelationId -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
 
     CorrelationId MUST run before UnifiedRequest inbound so that
     ``request.scope["correlation_id"]`` is populated when UnifiedRequest logs.
@@ -341,6 +382,6 @@ def register_all_middleware(app: FastAPI, request_timeout: float = REQUEST_TIMEO
     try:
         from domains.infrastructure.rate_limiter import RateLimitMiddleware
         app.add_middleware(RateLimitMiddleware)
-        logger.info("RateLimitMiddleware registered", extra={"tag": "INFRA"})
+        logger.info("RateLimitMiddleware registered", extra={"op": "infra.startup"})
     except Exception as exc:
-        logger.warning("RateLimitMiddleware skipped: %s", exc, extra={"tag": "INFRA"})
+        logger.warning("RateLimitMiddleware skipped: %s", exc, extra={"op": "infra.startup"})

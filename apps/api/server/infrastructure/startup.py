@@ -109,12 +109,12 @@ def _preload_model_imports() -> None:
         try:
             __import__(mod)
         except Exception as e:
-            logger.warning("Preload import failed for %s: %s", mod, e, extra={"tag": "START"})
+            logger.warning("Preload import failed for %s: %s", mod, e, extra={"op": "sys.startup"})
     try:
         from routers import get_all_routers
         get_all_routers()
     except Exception as e:
-        logger.warning("Preload routers failed: %s", e, extra={"tag": "START"})
+        logger.warning("Preload routers failed: %s", e, extra={"op": "sys.startup"})
 
 
 class StartupOrchestrator:
@@ -258,10 +258,10 @@ class StartupOrchestrator:
                 profile_enum.value,
                 len(self._lifecycle._startup_hooks),
                 len(self._lifecycle._shutdown_hooks),
-                extra={"tag": "START"},
+                extra={"op": "sys.startup"},
             )
         except Exception as exc:
-            logger.warning("LifecycleManager init skipped: %s", exc, extra={"tag": "START"})
+            logger.warning("LifecycleManager init skipped: %s", exc, extra={"op": "sys.startup"})
 
     @property
     def lifecycle(self):
@@ -290,7 +290,7 @@ class StartupOrchestrator:
         if self._lifecycle is not None:
             ok = await self._lifecycle.start(timeout=180.0, profile=profile_enum)
             if not ok:
-                logger.warning("Lifecycle startup incomplete — running fallback phases", extra={"tag": "START"})
+                logger.warning("Lifecycle startup incomplete — running fallback phases", extra={"op": "sys.startup"})
                 await self._phase5_model_registry()
                 await self._phase6_routers()
             else:
@@ -324,11 +324,11 @@ class StartupOrchestrator:
 
         raw = cfg.autoload_model
         if not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable"):
-            logger.info("Phase: autoload disabled (%r)", raw, extra={"tag": "START"})
+            logger.info("Phase: autoload disabled (%r)", raw, extra={"op": "sys.startup"})
             return
 
         STARTUP_PHASE.update(phase="loading_model", step=4, total=9, message="Loading model weights...")
-        logger.info("Phase 4: loading model %s (background)", raw, extra={"tag": "START"})
+        logger.info("Phase 4: loading model %s (background)", raw, extra={"op": "sys.startup"})
 
         def _load_and_register():
             """Load model then register with registry/providers."""
@@ -345,7 +345,7 @@ class StartupOrchestrator:
                     core.model.set(engine_client)
                     core.model_type.set(cfg.autoload_model)
                 except Exception as e:
-                    logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
+                    logger.debug("Core ServerState mirror failed: %s", e, extra={"op": "sys.startup"})
                 try:
                     from domains.models.provider import setup_providers
                     setup_providers(
@@ -355,11 +355,11 @@ class StartupOrchestrator:
                         quant_mode=cfg.quant_mode,
                     )
                 except Exception as e:
-                    logger.error("Inference engine: registration failed (%s)", e, exc_info=True, extra={"tag": "START"})
+                    logger.error("Inference engine: registration failed (%s)", e, exc_info=True, extra={"op": "sys.startup"})
                 _sync_soul_traits()
                 logger.info(
                     "Inference engine ready: %s (subprocess mode)",
-                    cfg.autoload_model, extra={"tag": "START"},
+                    cfg.autoload_model, extra={"op": "sys.startup"},
                 )
                 return
 
@@ -372,7 +372,7 @@ class StartupOrchestrator:
                 _sync_soul_traits()
                 logger.info(
                     "Lazy-guard autoload ready: %s (parent weights deferred, background preload starting)",
-                    cfg.autoload_model, extra={"tag": "START"},
+                    cfg.autoload_model, extra={"op": "sys.startup"},
                 )
                 _start_parent_preload(cfg.autoload_model)
                 return
@@ -380,7 +380,7 @@ class StartupOrchestrator:
             try:
                 loaded_provider = _autoload_model(cfg)
             except Exception as e:
-                logger.error("Model load failed: %s", e, exc_info=True, extra={"tag": "START"})
+                logger.error("Model load failed: %s", e, exc_info=True, extra={"op": "sys.startup"})
                 return
 
             # After model is loaded, register with registry + providers
@@ -388,7 +388,7 @@ class StartupOrchestrator:
                 process_guard = _build_guard_for_model(cfg, server_state.model_type)
                 _register_loaded(cfg, process_guard, preloaded_provider=loaded_provider)
             except Exception as e:
-                logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"tag": "START"})
+                logger.error("Post-load registration failed: %s", e, exc_info=True, extra={"op": "sys.startup"})
 
         # Fire-and-forget: model loads in background while routers register
         task = asyncio.create_task(asyncio.to_thread(_load_and_register))
@@ -398,10 +398,10 @@ class StartupOrchestrator:
         try:
             task.result()
         except asyncio.CancelledError:
-            logger.debug("Model load task cancelled (server shutting down)", extra={"tag": "START"})
+            logger.debug("Model load task cancelled (server shutting down)", extra={"op": "sys.startup"})
             return
         except Exception as e:
-            logger.error("Model load task failed: %s", e, exc_info=True, extra={"tag": "START"})
+            logger.error("Model load task failed: %s", e, exc_info=True, extra={"op": "sys.startup"})
 
         # Sync to persistent model catalog
         try:
@@ -415,7 +415,7 @@ class StartupOrchestrator:
                     device=getattr(server_state, "device", "cpu"),
                 )
         except Exception as e:
-            logger.debug("Model catalog sync failed: %s", e, extra={"tag": "START"})
+            logger.debug("Model catalog sync failed: %s", e, extra={"op": "sys.startup"})
 
     async def _phase3_wandb(self):
         """Start W&B metrics server (disabled by default to save RAM).
@@ -425,7 +425,7 @@ class StartupOrchestrator:
         STARTUP_PHASE.update(phase="wandb_server", step=5, total=9, message="W&B: disabled by default")
         enabled = os.environ.get("SLO_WANDB", "").lower() in ("1", "true", "yes")
         if not enabled:
-            logger.info("Phase: W&B skipped (enable with SLO_WANDB=1)", extra={"tag": "START"})
+            logger.info("Phase: W&B skipped (enable with SLO_WANDB=1)", extra={"op": "sys.startup"})
             return
         try:
             from domains.ops.wandb_server import start_wandb_server_background
@@ -453,13 +453,13 @@ class StartupOrchestrator:
                     self._wandb_task = await start_wandb_server_background(
                         _NoopMetrics(), extra_metrics=_extra_metrics,
                     )
-                    logger.info("Phase: W&B metrics server started", extra={"tag": "START"})
+                    logger.info("Phase: W&B metrics server started", extra={"op": "sys.startup"})
                 except Exception as e:
-                    logger.warning("Phase: W&B server skipped: %s", e, extra={"tag": "START"})
+                    logger.warning("Phase: W&B server skipped: %s", e, extra={"op": "sys.startup"})
 
             self._wandb_task = asyncio.create_task(_start())
         except Exception as e:
-            logger.warning("Phase: W&B unavailable: %s", e, extra={"tag": "START"})
+            logger.warning("Phase: W&B unavailable: %s", e, extra={"op": "sys.startup"})
 
     async def _phase4_multimodal(self):
         """Initialize multimodal engine (lazy — skipped at startup to save RAM).
@@ -468,7 +468,7 @@ class StartupOrchestrator:
         via the /multimodal/* endpoints, not at server startup.
         """
         STARTUP_PHASE.update(phase="multimodal", step=6, total=9, message="Multimodal: lazy-load enabled")
-        logger.info("Phase 4/6: multimodal deferred to first use (saves ~200MB RAM)", extra={"tag": "START"})
+        logger.info("Phase 4/6: multimodal deferred to first use (saves ~200MB RAM)", extra={"op": "sys.startup"})
 
     async def _phase5_model_registry(self):
         """Initialize model registry."""
@@ -476,9 +476,9 @@ class StartupOrchestrator:
         try:
             from domains.infrastructure.model_registry import get_model_registry
             self._registry = get_model_registry()
-            logger.info("Phase: model registry initialized", extra={"tag": "START"})
+            logger.info("Phase: model registry initialized", extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Phase: model registry failed: %s", e, extra={"tag": "START"})
+            logger.warning("Phase: model registry failed: %s", e, extra={"op": "sys.startup"})
 
     async def _phase6_routers(self):
         """Register all feature routers.
@@ -516,11 +516,11 @@ class StartupOrchestrator:
                     from training.router import router as training_router
                     self._app.include_router(training_router)
                 except Exception as exc:
-                    logger.warning("Phase: training router failed: %s", exc, extra={"tag": "START"})
+                    logger.warning("Phase: training router failed: %s", exc, extra={"op": "sys.startup"})
                 logger.info(
                     "Phase: all routers registered (%d routes)",
                     len(self._app.routes),
-                    extra={"tag": "START"},
+                    extra={"op": "sys.startup"},
                 )
                 self._routers_registered = True
 
@@ -530,7 +530,7 @@ class StartupOrchestrator:
                     from domains.inference.slo_manager import get_slo_manager
                     get_slo_manager()
                 except Exception as e:
-                    logger.debug("SloManager pre-init failed: %s", e, extra={"tag": "START"})
+                    logger.debug("SloManager pre-init failed: %s", e, extra={"op": "sys.startup"})
 
                 # Background checkpoint warmup: first list_checkpoints() call
                 # is slow (~1-5s) due to directory scanning and metadata parsing.
@@ -546,7 +546,7 @@ class StartupOrchestrator:
                         finally:
                             _loop.close()
                     except Exception as e:
-                        logger.debug("Checkpoint warmup failed (non-fatal): %s", e, extra={"tag": "START"})
+                        logger.debug("Checkpoint warmup failed (non-fatal): %s", e, extra={"op": "sys.startup"})
 
                 threading.Thread(target=_warm_checkpoints, name="ckpt-warmup", daemon=True).start()
 
@@ -559,7 +559,7 @@ class StartupOrchestrator:
                 if transient and attempt < 2:
                     logger.warning(
                         "Phase: router registration transient import failure (%s) — retrying (attempt %d/3)",
-                        e, attempt + 1, extra={"tag": "START"},
+                        e, attempt + 1, extra={"op": "sys.startup"},
                     )
                     import traceback as _tb
                     import faulthandler as _fth
@@ -582,7 +582,7 @@ class StartupOrchestrator:
                 except Exception:
                     pass
                 _tb.print_exc(file=sys.stderr)
-                logger.error("Phase: router registration failed: %s", last_exc, exc_info=True, extra={"tag": "START"})
+                logger.error("Phase: router registration failed: %s", last_exc, exc_info=True, extra={"op": "sys.startup"})
                 raise
 
     async def _phase_task_queue(self):
@@ -592,27 +592,27 @@ class StartupOrchestrator:
             from domains.infrastructure.task_queue import get_task_queue
             self._task_queue = get_task_queue()
             await self._task_queue.start()
-            logger.info("Task queue initialized and started", extra={"tag": "START"})
+            logger.info("Task queue initialized and started", extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Task queue init failed: %s", e, extra={"tag": "START"})
+            logger.warning("Task queue init failed: %s", e, extra={"op": "sys.startup"})
         try:
             from domains.infrastructure.training_queue import register_training_handlers
             register_training_handlers()
-            logger.info("Training handlers registered with task queue", extra={"tag": "START"})
+            logger.info("Training handlers registered with task queue", extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Training handler registration failed: %s", e, extra={"tag": "START"})
+            logger.warning("Training handler registration failed: %s", e, extra={"op": "sys.startup"})
         try:
             from domains.memory import register_memory_handlers
             register_memory_handlers()
-            logger.info("Memory handlers registered with task queue", extra={"tag": "START"})
+            logger.info("Memory handlers registered with task queue", extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Memory handler registration failed: %s", e, extra={"tag": "START"})
+            logger.warning("Memory handler registration failed: %s", e, extra={"op": "sys.startup"})
         try:
             from domains.memory.maintenance import start_memory_maintenance
             start_memory_maintenance()
-            logger.info("Memory maintenance scheduler started", extra={"tag": "START"})
+            logger.info("Memory maintenance scheduler started", extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Memory maintenance scheduler start failed: %s", e, extra={"tag": "START"})
+            logger.warning("Memory maintenance scheduler start failed: %s", e, extra={"op": "sys.startup"})
 
     async def _phase_config(self):
         """Validate and warm the config system + init ResourceManager."""
@@ -621,9 +621,9 @@ class StartupOrchestrator:
             from domains.infrastructure.config import get_config
             cfg = get_config()
             _ = cfg.model.name
-            logger.info("Config system validated", extra={"tag": "START"})
+            logger.info("Config system validated", extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Config system init: %s", e, extra={"tag": "START"})
+            logger.warning("Config system init: %s", e, extra={"op": "sys.startup"})
         # Init ResourceManager — applies BLAS env vars before numpy loads
         try:
             from domains.infrastructure.resource_manager import get_resource_manager
@@ -632,14 +632,14 @@ class StartupOrchestrator:
             rm.apply_compute_limits()
             rm.apply_environment()
             logger.info("ResourceManager initialised: mode=%s %s", rm.mode, rm.summary(),
-                extra={"tag": "START"})
+                extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
+            logger.warning("ResourceManager init: %s", e, extra={"op": "sys.startup"})
 
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""
         STARTUP_PHASE.update(phase="ready", step=9, total=9, message="Server ready")
-        logger.info("Startup complete — server ready for requests", extra={"tag": "START"})
+        logger.info("Startup complete — server ready for requests", extra={"op": "sys.startup"})
 
     # ── Shutdown hooks ──
 
@@ -654,7 +654,7 @@ class StartupOrchestrator:
             from training.runtime import get_training_runtime
             await asyncio.to_thread(get_training_runtime().shutdown)
         except Exception as e:
-            logger.warning("Training runtime shutdown: %s", e, extra={"tag": "START"})
+            logger.warning("Training runtime shutdown: %s", e, extra={"op": "sys.startup"})
 
     async def _shutdown_task_queue(self):
         """Gracefully stop the background task queue."""
@@ -663,12 +663,12 @@ class StartupOrchestrator:
                 from domains.memory.maintenance import stop_memory_maintenance
                 await stop_memory_maintenance()
             except Exception as e:
-                logger.warning("Memory maintenance shutdown: %s", e, extra={"tag": "START"})
+                logger.warning("Memory maintenance shutdown: %s", e, extra={"op": "sys.startup"})
             try:
                 await self._task_queue.stop()
-                logger.info("Task queue stopped", extra={"tag": "START"})
+                logger.info("Task queue stopped", extra={"op": "sys.startup"})
             except Exception as e:
-                logger.warning("Task queue shutdown: %s", e, extra={"tag": "START"})
+                logger.warning("Task queue shutdown: %s", e, extra={"op": "sys.startup"})
 
     async def _shutdown_jobs(self):
         """Mark running training jobs as crashed on shutdown."""
@@ -677,9 +677,9 @@ class StartupOrchestrator:
             store = get_job_store()
             for job in store.list(status="running"):
                 store.mark_crashed(job["id"])
-                logger.info("Marked job %s as interrupted on shutdown", job["id"], extra={"tag": "START"})
+                logger.info("Marked job %s as interrupted on shutdown", job["id"], extra={"op": "sys.startup"})
         except Exception as e:
-            logger.warning("Shutdown job cleanup: %s", e, extra={"tag": "START"})
+            logger.warning("Shutdown job cleanup: %s", e, extra={"op": "sys.startup"})
 
     async def _shutdown_wandb(self):
         """Cancel W&B server task."""
@@ -709,7 +709,7 @@ class StartupOrchestrator:
                     proc.wait(timeout=10)
                 except Exception:
                     proc.kill()
-                logger.info("Inference engine subprocess terminated (pid=%d)", proc.pid, extra={"tag": "START"})
+                logger.info("Inference engine subprocess terminated (pid=%d)", proc.pid, extra={"op": "sys.startup"})
         except Exception as e:
             logger.debug("Inference engine shutdown failed: %s", e)
 
@@ -738,9 +738,9 @@ class StartupOrchestrator:
             from domains.training.executor import _instance
             if _instance is not None:
                 _instance.shutdown(wait=True)
-                logger.info("TrainingExecutor shut down", extra={"tag": "START"})
+                logger.info("TrainingExecutor shut down", extra={"op": "sys.startup"})
         except Exception as e:
-                logger.warning("TrainingExecutor shutdown: %s", e, extra={"tag": "START"})
+                logger.warning("TrainingExecutor shutdown: %s", e, extra={"op": "sys.startup"})
 
     async def shutdown(self):
         """Clean up on server shutdown — uses lifecycle drain if available."""
@@ -749,7 +749,7 @@ class StartupOrchestrator:
                 await self._lifecycle.shutdown(timeout=30.0)
                 return
             except Exception as e:
-                logger.warning("Lifecycle shutdown error: %s", e, extra={"tag": "START"})
+                logger.warning("Lifecycle shutdown error: %s", e, extra={"op": "sys.startup"})
 
         # Fallback: direct cleanup
         await self._shutdown_inference_engine()
@@ -769,7 +769,7 @@ async def _restore_training_runtime():
         from training.runtime import get_training_runtime
         get_training_runtime().restore()
     except Exception as e:
-        logger.warning("Training runtime restore failed: %s", e, extra={"tag": "START"})
+        logger.warning("Training runtime restore failed: %s", e, extra={"op": "sys.startup"})
 
 
 def _sync_soul_traits():
@@ -782,7 +782,7 @@ def _sync_soul_traits():
         if current and hasattr(current, "personality") and current.personality:
             update_personality_traits(current.personality)
     except Exception as e:
-        logger.debug("Failed to sync soul traits to personality processor: %s", e, extra={"tag": "START"})
+        logger.debug("Failed to sync soul traits to personality processor: %s", e, extra={"op": "sys.startup"})
 
 
 def _start_parent_preload(model_type: str):
@@ -798,7 +798,7 @@ def _start_parent_preload(model_type: str):
         try:
             provider = getattr(server_state, "provider", None)
             if provider is None:
-                logger.debug("Parent preload: no provider on server_state, skipping", extra={"tag": "START"})
+                logger.debug("Parent preload: no provider on server_state, skipping", extra={"op": "sys.startup"})
                 return
 
             # Materialize the parent weights WHILE guard still serves requests.
@@ -807,7 +807,7 @@ def _start_parent_preload(model_type: str):
             elapsed = time.monotonic() - _st
             logger.info(
                 "Parent preload complete: %s in %.1fs — in-process ready",
-                model_type, elapsed, extra={"tag": "START"},
+                model_type, elapsed, extra={"op": "sys.startup"},
             )
 
             # NOW stop the guard to release the subprocess copy.
@@ -819,12 +819,12 @@ def _start_parent_preload(model_type: str):
                         guard.stop()
                         logger.info(
                             "Parent preload: stopped guard after materialization (release subprocess copy)",
-                            extra={"tag": "START"},
+                            extra={"op": "sys.startup"},
                         )
             except Exception as exc:
-                logger.debug("Parent preload: guard stop failed (non-fatal): %s", exc, extra={"tag": "START"})
+                logger.debug("Parent preload: guard stop failed (non-fatal): %s", exc, extra={"op": "sys.startup"})
         except Exception as e:
-            logger.debug("Parent preload failed (will materialize on first request): %s", e, extra={"tag": "START"})
+            logger.debug("Parent preload failed (will materialize on first request): %s", e, extra={"op": "sys.startup"})
 
     threading.Thread(target=_preload, daemon=True, name=f"parent-preload-{model_type.split('/')[-1]}").start()
 
@@ -862,10 +862,10 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         from domains.infrastructure.safetensors_loader import _get_model_dir
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
-            logger.info("Lazy-guard autoload skipped: no .slnc at %s", slnc_path, extra={"tag": "START"})
+            logger.info("Lazy-guard autoload skipped: no .slnc at %s", slnc_path, extra={"op": "sys.startup"})
             return False
     except Exception as e:
-        logger.warning("Lazy-guard autoload: slnc resolution failed (%s)", e, extra={"tag": "START"})
+        logger.warning("Lazy-guard autoload: slnc resolution failed (%s)", e, extra={"op": "sys.startup"})
         return False
 
     try:
@@ -879,7 +879,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             quant_clip=cfg.quant_clip,
         )
     except Exception as e:
-        logger.warning("Lazy-guard autoload: lazy provider creation failed (%s)", e, extra={"tag": "START"})
+        logger.warning("Lazy-guard autoload: lazy provider creation failed (%s)", e, extra={"op": "sys.startup"})
         return False
 
     try:
@@ -901,7 +901,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     except Exception as e:
         logger.warning(
             "Lazy-guard autoload: guard start failed (%s) — falling back to eager load",
-            e, extra={"tag": "START"},
+            e, extra={"op": "sys.startup"},
         )
         return False
 
@@ -920,7 +920,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         core.model.set(provider)
         core.model_type.set(model_type)
     except Exception as e:
-        logger.debug("Core ServerState mirror failed: %s", e, extra={"tag": "START"})
+        logger.debug("Core ServerState mirror failed: %s", e, extra={"op": "sys.startup"})
 
     # Track the guard so /models/process-guard status and the runtime toggle
     # can manage it (autoload path bypasses the controller).
@@ -928,7 +928,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         from controllers.models import get_models_controller
         get_models_controller().adopt_process_guard(process_guard, model_type)
     except Exception as e:
-        logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
+        logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"op": "sys.startup"})
 
     try:
         from domains.infrastructure.model_registry import get_model_registry
@@ -942,12 +942,12 @@ def _try_lazy_guard_autoload(cfg) -> bool:
             quant_mode=cfg.quant_mode,
         )
     except Exception as e:
-        logger.error("Lazy-guard autoload: registration failed (%s)", e, exc_info=True, extra={"tag": "START"})
+        logger.error("Lazy-guard autoload: registration failed (%s)", e, exc_info=True, extra={"op": "sys.startup"})
         return False
 
     logger.info(
         "Lazy-guard autoload active for %s (worker: %s) — parent weights deferred",
-        model_type, process_guard.worker_id, extra={"tag": "START"},
+        model_type, process_guard.worker_id, extra={"op": "sys.startup"},
     )
     return True
 
@@ -971,7 +971,7 @@ def _build_guard_for_model(cfg, model_type: str):
 
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
-            logger.info("ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"tag": "START"})
+            logger.info("ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"op": "sys.startup"})
             return None
         process_guard = ProcessGuard(
             slnc_path=slnc_path,
@@ -987,17 +987,17 @@ def _build_guard_for_model(cfg, model_type: str):
             quant_clip=cfg.quant_clip,
         )
         process_guard.start()
-        logger.info("ProcessGuard started for %s", model_type, extra={"tag": "START"})
+        logger.info("ProcessGuard started for %s", model_type, extra={"op": "sys.startup"})
         # Track the guard so /models/process-guard status and the runtime toggle
         # can manage it (autoload path bypasses the controller).
         try:
             from controllers.models import get_models_controller
             get_models_controller().adopt_process_guard(process_guard, model_type)
         except Exception as e:
-            logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"tag": "START"})
+            logger.debug("ProcessGuard adoption into controller failed: %s", e, extra={"op": "sys.startup"})
         return process_guard
     except Exception as e:
-        logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "START"})
+        logger.warning("ProcessGuard creation failed: %s", e, extra={"op": "sys.startup"})
         return None
 
 
@@ -1060,20 +1060,20 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
             core.model.set(preloaded_provider)
         logger.debug("Synced state.py → ServerState (model=%s, type=%s)",
                      server_state.model is not None, server_state.model_type,
-                     extra={"tag": "START"})
+                     extra={"op": "sys.startup"})
     except Exception as e:
-        logger.debug("ServerState sync failed: %s", e, extra={"tag": "START"})
+        logger.debug("ServerState sync failed: %s", e, extra={"op": "sys.startup"})
 
     # Auto-select precision on GPU (fp16 benchmark)
     try:
         from domains.slolib.gpu import set_accelerator_precision
         active = set_accelerator_precision("auto")
         if active == "fp16":
-            logger.info("GPU precision set to fp16 (auto-selected via benchmark)", extra={"tag": "START"})
+            logger.info("GPU precision set to fp16 (auto-selected via benchmark)", extra={"op": "sys.startup"})
     except Exception as e:
-        logger.warning("GPU precision auto-select failed: %s", e, extra={"tag": "START"})
+        logger.warning("GPU precision auto-select failed: %s", e, extra={"op": "sys.startup"})
     _sync_soul_traits()
-    logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"tag": "START"})
+    logger.info("Model loaded + providers registered: %s", server_state.model_type, extra={"op": "sys.startup"})
 
 
 def _autoload_model(cfg: ServerConfig):
@@ -1106,12 +1106,12 @@ def _autoload_model(cfg: ServerConfig):
                 server_state.model = provider._model
                 server_state.model_type = "native-soul"
                 server_state.provider = provider
-                logger.info("Autoload native soul: %s", soul_path, extra={"tag": "START"})
+                logger.info("Autoload native soul: %s", soul_path, extra={"op": "sys.startup"})
                 return provider
             except Exception as e:
-                logger.warning("Native soul load failed (%s), falling back to standard autoload", e, extra={"tag": "START"})
+                logger.warning("Native soul load failed (%s), falling back to standard autoload", e, extra={"op": "sys.startup"})
         else:
-            logger.warning("Native soul path %s not found, falling back to standard autoload", soul_path, extra={"tag": "START"})
+            logger.warning("Native soul path %s not found, falling back to standard autoload", soul_path, extra={"op": "sys.startup"})
 
     model_id = cfg.autoload_model
 
@@ -1140,7 +1140,7 @@ def _autoload_model(cfg: ServerConfig):
             logger.info(
                 "Autoload ok: %s (%s) attempt=%d",
                 model_id, result.model_type, attempt + 1,
-                extra={"tag": "START"},
+                extra={"op": "sys.startup"},
             )
             return result.provider
 
@@ -1149,22 +1149,22 @@ def _autoload_model(cfg: ServerConfig):
             logger.warning(
                 "Autoload attempt %d/%d failed: %s — retrying in %.1fs",
                 attempt + 1, max_retries + 1, result.error, delay,
-                extra={"tag": "START"},
+                extra={"op": "sys.startup"},
             )
             _time.sleep(delay)
 
     # 2) All local load attempts failed — download from HuggingFace
-    logger.info("No local .slnc/safetensors for %s — downloading from HuggingFace", model_id, extra={"tag": "START"})
+    logger.info("No local .slnc/safetensors for %s — downloading from HuggingFace", model_id, extra={"op": "sys.startup"})
     try:
         from domains.infrastructure.hf_hub import download_hf_model
         from domains.infrastructure.safetensors_loader import _get_model_dir
 
         cache_dir = _get_model_dir(model_id)
-        logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"tag": "START"})
+        logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"op": "sys.startup"})
         download_hf_model(model_id)
-        logger.info("Download complete: %s", model_id, extra={"tag": "START"})
+        logger.info("Download complete: %s", model_id, extra={"op": "sys.startup"})
     except Exception as e:
-        logger.warning("HuggingFace download failed: %s", e, extra={"tag": "START"})
+        logger.warning("HuggingFace download failed: %s", e, extra={"op": "sys.startup"})
         return None
 
     # 3) Retry load now that safetensors are cached (with retries)
@@ -1187,7 +1187,7 @@ def _autoload_model(cfg: ServerConfig):
             logger.info(
                 "Autoload ok (after download): %s (%s) attempt=%d",
                 model_id, result.model_type, attempt + 1,
-                extra={"tag": "START"},
+                extra={"op": "sys.startup"},
             )
             return result.provider
 
@@ -1196,11 +1196,11 @@ def _autoload_model(cfg: ServerConfig):
             logger.warning(
                 "Post-download load attempt %d/%d failed: %s — retrying in %.1fs",
                 attempt + 1, max_retries + 1, result.error, delay,
-                extra={"tag": "START"},
+                extra={"op": "sys.startup"},
             )
             _time.sleep(delay)
 
-    logger.error("Autoload failed after all attempts: %s", result.error, extra={"tag": "START"})
+    logger.error("Autoload failed after all attempts: %s", result.error, extra={"op": "sys.startup"})
 
 
 # ── Standalone inference engine ───────────────────────────────────────
@@ -1223,17 +1223,17 @@ def _start_inference_engine(cfg) -> Optional[Any]:
 
     model_type = cfg.autoload_model
     if not model_type:
-        logger.info("Inference engine skipped: no autoload_model", extra={"tag": "START"})
+        logger.info("Inference engine skipped: no autoload_model", extra={"op": "sys.startup"})
         return None
 
     try:
         from domains.infrastructure.safetensors_loader import _get_model_dir
         slnc_path = _get_model_dir(model_type) / "model.slnc"
         if not slnc_path.exists():
-            logger.info("Inference engine skipped: no .slnc at %s", slnc_path, extra={"tag": "START"})
+            logger.info("Inference engine skipped: no .slnc at %s", slnc_path, extra={"op": "sys.startup"})
             return None
     except Exception as e:
-        logger.warning("Inference engine: slnc resolution failed: %s", e, extra={"tag": "START"})
+        logger.warning("Inference engine: slnc resolution failed: %s", e, extra={"op": "sys.startup"})
         return None
 
     engine_host = getattr(cfg, "inference_engine_host", "127.0.0.1")
@@ -1278,15 +1278,15 @@ def _start_inference_engine(cfg) -> Optional[Any]:
                         line.decode(errors="replace").rstrip()
                     )
             except Exception as e:
-                logger.debug("Inference engine stderr capture failed: %s", e, extra={"tag": "START"})
+                logger.debug("Inference engine stderr capture failed: %s", e, extra={"op": "sys.startup"})
 
         threading.Thread(target=_capture_stderr, daemon=True, name="engine-stderr").start()
         logger.info(
             "Inference engine subprocess launched (pid=%d, port=%d)", proc.pid, port,
-            extra={"tag": "START"},
+            extra={"op": "sys.startup"},
         )
     except Exception as e:
-        logger.error("Inference engine: failed to launch subprocess: %s", e, extra={"tag": "START"})
+        logger.error("Inference engine: failed to launch subprocess: %s", e, extra={"op": "sys.startup"})
         return None
 
     from domains.infrastructure.inference_client import InferenceClient
@@ -1301,19 +1301,19 @@ def _start_inference_engine(cfg) -> Optional[Any]:
             logger.error(
                 "Inference engine process died (code=%s): %s",
                 proc.returncode, stderr[-500:] if stderr else "",
-                extra={"tag": "START"},
+                extra={"op": "sys.startup"},
             )
             return None
         try:
             if client.connect():
-                logger.info("Inference engine connected (model=%s)", client.model_id, extra={"tag": "START"})
+                logger.info("Inference engine connected (model=%s)", client.model_id, extra={"op": "sys.startup"})
                 _start_engine_watcher(proc, client)
                 return client
         except Exception as e:
-            logger.debug("Inference engine connect attempt failed: %s", e, extra={"tag": "START"})
+            logger.debug("Inference engine connect attempt failed: %s", e, extra={"op": "sys.startup"})
         time.sleep(1.0)
 
-    logger.error("Inference engine: connection timeout after %ds", int(connect_timeout), extra={"tag": "START"})
+    logger.error("Inference engine: connection timeout after %ds", int(connect_timeout), extra={"op": "sys.startup"})
     proc.terminate()
     return None
 
@@ -1327,10 +1327,10 @@ def _start_engine_watcher(proc, client):
         if rc is not None and rc != 0:
             logger.error(
                 "Inference engine process exited with code %d — inference will fail until restarted",
-                rc, extra={"tag": "START"},
+                rc, extra={"op": "sys.startup"},
             )
         else:
-            logger.info("Inference engine process exited cleanly (code=0)", extra={"tag": "START"})
+            logger.info("Inference engine process exited cleanly (code=0)", extra={"op": "sys.startup"})
     t = threading.Thread(target=_watch, daemon=True, name="engine-watcher")
     t.start()
 
@@ -1384,9 +1384,9 @@ def _make_engine_restart_fn(cfg):
             )
             import state as server_state
             server_state._inference_engine_proc = proc
-            logger.info("Inference engine restarted (pid=%d, port=%d)", proc.pid, port, extra={"tag": "START"})
+            logger.info("Inference engine restarted (pid=%d, port=%d)", proc.pid, port, extra={"op": "sys.startup"})
         except Exception as e:
-            logger.error("Inference engine: restart failed: %s", e, extra={"tag": "START"})
+            logger.error("Inference engine: restart failed: %s", e, extra={"op": "sys.startup"})
             return None
 
         from domains.infrastructure.inference_client import InferenceClient
@@ -1401,7 +1401,7 @@ def _make_engine_restart_fn(cfg):
                     _start_engine_watcher(proc, new_client)
                     return new_client
             except Exception as e:
-                logger.debug("Inference engine restart connect failed: %s", e, extra={"tag": "START"})
+                logger.debug("Inference engine restart connect failed: %s", e, extra={"op": "sys.startup"})
             time.sleep(1.0)
 
         proc.terminate()

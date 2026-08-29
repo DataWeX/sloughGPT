@@ -3,7 +3,7 @@ Tests for domains.logging.config — centralized logging configuration.
 
 Covers:
     - setup_logging() with all parameter combinations
-    - HumanFormatter and JSONFormatter output
+    - SloFormatter (console human-readable + file JSON)
     - Correlation ID injection via contextvars
     - Log context merging
     - File handler with rotation
@@ -34,8 +34,7 @@ if str(_CORE_PY) not in sys.path:
     sys.path.insert(0, str(_CORE_PY))
 
 from domains.logging.config import (
-    HumanFormatter,
-    JSONFormatter,
+    SloFormatter,
     ClientExtensionFilter,
     _enriched_record_factory,
     _collect_extras,
@@ -155,12 +154,12 @@ class TestLogContext:
         assert ctx1 is not ctx2  # different dict objects
 
 
-# ── HumanFormatter tests ──────────────────────────────────────────────
+# ── SloFormatter tests ────────────────────────────────────────────────
 
 
-class TestHumanFormatter:
+class TestSloFormatterHuman:
     def test_basic_output(self):
-        fmt = HumanFormatter(colors=False)
+        fmt = SloFormatter(colors=False)
         record = _make_record(msg="hello world")
         output = fmt.format(record)
         assert "INF" in output
@@ -168,7 +167,7 @@ class TestHumanFormatter:
         assert "test" in output  # logger name
 
     def test_level_badges(self):
-        fmt = HumanFormatter(colors=False)
+        fmt = SloFormatter(colors=False)
         for level, badge in [
             (logging.DEBUG, "DBG"),
             (logging.INFO, "INF"),
@@ -181,26 +180,26 @@ class TestHumanFormatter:
             assert badge in output
 
     def test_tag_in_output(self):
-        fmt = HumanFormatter(colors=False)
+        fmt = SloFormatter(colors=False)
         record = _make_record(tag="MODEL")
         output = fmt.format(record)
         assert "[MODEL]" in output
 
     def test_request_id_in_output(self):
-        fmt = HumanFormatter(colors=False)
+        fmt = SloFormatter(colors=False)
         record = _make_record(request_id="abc-123")
         output = fmt.format(record)
         assert "req=abc-123" in output
 
     def test_context_in_output(self):
-        fmt = HumanFormatter(colors=False)
+        fmt = SloFormatter(colors=False)
         record = _make_record(model="gpt2", tokens=50)
         output = fmt.format(record)
         assert "model=gpt2" in output
         assert "tokens=50" in output
 
     def test_exception_in_output(self):
-        fmt = HumanFormatter(colors=False)
+        fmt = SloFormatter(colors=False)
         try:
             raise ValueError("bad value")
         except ValueError:
@@ -212,47 +211,48 @@ class TestHumanFormatter:
         assert "bad value" in output
 
     def test_colors_enabled(self):
-        fmt = HumanFormatter(colors=True)
+        fmt = SloFormatter(colors=True)
         record = _make_record(msg="colored")
         output = fmt.format(record)
         assert "\033[" in output  # ANSI escape codes present
 
 
-# ── JSONFormatter tests ───────────────────────────────────────────────
+# ── SloFormatter JSON tests ──────────────────────────────────────────
 
 
-class TestJSONFormatter:
+class TestSloFormatterJSON:
+    """Tests for SloFormatter in JSON mode."""
     def test_basic_output(self):
-        fmt = JSONFormatter()
+        fmt = SloFormatter(fmt="json")
         record = _make_record(msg="hello")
         output = fmt.format(record)
         data = json.loads(output)
         assert data["msg"] == "hello"
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["logger"] == "slo.test"
         assert "ts" in data
 
     def test_tag_in_output(self):
-        fmt = JSONFormatter()
+        fmt = SloFormatter(fmt="json")
         record = _make_record(tag="REQ")
         data = json.loads(fmt.format(record))
         assert data["tag"] == "REQ"
 
     def test_request_id_in_output(self):
-        fmt = JSONFormatter()
+        fmt = SloFormatter(fmt="json")
         record = _make_record(request_id="xyz-789")
         data = json.loads(fmt.format(record))
-        assert data["request_id"] == "xyz-789"
+        assert data["corr"] == "xyz-789"
 
     def test_context_in_output(self):
-        fmt = JSONFormatter()
+        fmt = SloFormatter(fmt="json")
         record = _make_record(model="gpt2", tokens=100)
         data = json.loads(fmt.format(record))
         assert data["ctx"]["model"] == "gpt2"
         assert data["ctx"]["tokens"] == 100
 
     def test_exception_in_output(self):
-        fmt = JSONFormatter()
+        fmt = SloFormatter(fmt="json")
         try:
             raise RuntimeError("boom")
         except RuntimeError:
@@ -264,7 +264,7 @@ class TestJSONFormatter:
         assert "RuntimeError" in data["exception"]
 
     def test_no_extra_fields_in_output(self):
-        fmt = JSONFormatter()
+        fmt = SloFormatter(fmt="json")
         record = _make_record()
         data = json.loads(fmt.format(record))
         # Standard fields should not appear in ctx
@@ -370,7 +370,6 @@ class TestSetupLogging:
     def test_default_setup(self):
         result = setup_logging(enable_output_buffer=False)
         assert result["level"] == "INFO"
-        assert result["format"] == "human"
         assert "log_dir" in result
 
     def test_custom_level(self):
@@ -379,9 +378,9 @@ class TestSetupLogging:
         root = logging.getLogger()
         assert root.level == logging.DEBUG
 
-    def test_json_format(self):
-        result = setup_logging(format="json", enable_output_buffer=False)
-        assert result["format"] == "json"
+    def test_unified_formatter(self):
+        result = setup_logging(enable_output_buffer=False)
+        assert "level" in result
 
     def test_file_handler_created(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -422,16 +421,14 @@ class TestSetupLogging:
     def test_returns_complete_info(self):
         result = setup_logging(enable_output_buffer=False)
         assert "level" in result
-        assert "format" in result
         assert "log_dir" in result
         assert "file_handler" in result
         assert "bridge" in result
 
     def test_env_var_overrides(self):
-        with patch.dict(os.environ, {"SLO_LOG_LEVEL": "DEBUG", "SLO_LOG_FORMAT": "json"}):
+        with patch.dict(os.environ, {"SLO_LOG_LEVEL": "DEBUG"}):
             result = setup_logging(enable_output_buffer=False)
             assert result["level"] == "DEBUG"
-            assert result["format"] == "json"
 
     def test_idempotent(self):
         """Calling setup_logging twice should not create duplicate handlers."""
@@ -454,7 +451,7 @@ class TestStdlibIntegration:
 
         # Add a test handler that captures output
         test_handler = logging.StreamHandler(output)
-        test_handler.setFormatter(HumanFormatter(colors=False))
+        test_handler.setFormatter(SloFormatter(colors=False))
         logging.getLogger().addHandler(test_handler)
 
         logger = logging.getLogger("slo.integration.test")
@@ -473,7 +470,7 @@ class TestStdlibIntegration:
         setup_logging(enable_output_buffer=False, enable_file=False)
 
         test_handler = logging.StreamHandler(output)
-        test_handler.setFormatter(JSONFormatter())
+        test_handler.setFormatter(SloFormatter(fmt="json"))
         logging.getLogger().addHandler(test_handler)
 
         set_request_id("req-42")
@@ -482,6 +479,6 @@ class TestStdlibIntegration:
 
         test_output = output.getvalue()
         data = json.loads(test_output)
-        assert data["request_id"] == "req-42"
+        assert data["corr"] == "req-42"
 
         logging.getLogger().removeHandler(test_handler)
