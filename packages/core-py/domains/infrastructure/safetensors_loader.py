@@ -97,7 +97,12 @@ def load_model_weights(
     except ImportError:
         logger.info("safetensors package not installed — using built-in raw parser",
                     extra={"tag": "INFRA"})
-        return _load_weights_raw(safetensors_path, dtype)
+        try:
+            return _load_weights_raw(safetensors_path, dtype)
+        except (ValueError, json.JSONDecodeError, struct.error) as e:
+            logger.error("Failed to load corrupted safetensors file %s: %s",
+                         safetensors_path.name, e, extra={"tag": "INFRA"})
+            raise ValueError(f"Corrupted safetensors file {safetensors_path.name}: {e}") from e
 
     with safe_open(str(safetensors_path), framework="numpy") as f:
         for key in f.keys():
@@ -123,6 +128,9 @@ def load_model_weights(
     return weights
 
 
+_MAX_HEADER_LEN = 100 * 1024 * 1024  # 100 MB sanity limit for header length
+
+
 def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
     """Read a .safetensors file with the built-in raw parser.
 
@@ -136,17 +144,50 @@ def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
 
     Returns:
         Dict mapping parameter names to numpy arrays.
+
+    Raises:
+        ValueError: If the file is corrupted or contains out-of-bounds offsets.
     """
     import struct
 
     weights: Dict[str, np.ndarray] = {}
+    file_size = path.stat().st_size
     with open(path, "rb") as f:
-        header_len = struct.unpack("<Q", f.read(8))[0]
-        header = json.loads(f.read(header_len))
+        raw_header_len = f.read(8)
+        if len(raw_header_len) < 8:
+            raise ValueError(f"Truncated safetensors header in {path.name}")
+        header_len = struct.unpack("<Q", raw_header_len)[0]
+
+        if header_len > _MAX_HEADER_LEN:
+            raise ValueError(
+                f"Header length {header_len} exceeds sanity limit "
+                f"({_MAX_HEADER_LEN}) in {path.name}"
+            )
+        if 8 + header_len > file_size:
+            raise ValueError(
+                f"Header extends past end of file ({8 + header_len} > {file_size}) "
+                f"in {path.name}"
+            )
+
+        header_bytes = f.read(header_len)
+        if len(header_bytes) < header_len:
+            raise ValueError(f"Truncated header JSON in {path.name}")
+        header = json.loads(header_bytes)
+
         for key, info in header.items():
             if key.startswith("__"):
                 continue
             start, end = info["data_offsets"]
+            if start < 0 or end < start:
+                raise ValueError(
+                    f"Invalid offsets [{start}, {end}] for tensor '{key}' "
+                    f"in {path.name}"
+                )
+            if 8 + header_len + end > file_size:
+                raise ValueError(
+                    f"Tensor '{key}' offsets [{start}, {end}] exceed file size "
+                    f"({file_size}) in {path.name}"
+                )
             f.seek(8 + header_len + start)
             raw = f.read(end - start)
             shape = info["shape"]

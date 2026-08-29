@@ -341,4 +341,4 @@ def setup(kernel: Any) -> None:
     kernel._vfs = VFS()
     kernel._vfs.set_kernel(kernel)
     kernel._addons["filesystem"] = True
-    logger.info("Filesystem addon installed")
+    logger.debug("Filesystem addon installed")

@@ -17,6 +17,7 @@ const healthy: LiveHealthSnapshot = {
   error_count: 0,
   tokens_per_sec: 2.5,
   avg_latency_ms: 40,
+  p95_latency_ms: 60,
   requests_per_minute: 1.5,
   total_tokens: 500,
   avg_tokens_per_request: 120,
@@ -44,12 +45,12 @@ const healthy: LiveHealthSnapshot = {
 describe('DiagnosticsCard', () => {
   afterEach(cleanup)
 
-  it('renders nothing when liveHealth is null', () => {
+  it('renders empty state when liveHealth is null', () => {
     const { container } = render(<DiagnosticsCard liveHealth={null} />)
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders nothing when there are no diagnoses and no summary', () => {
+  it('renders empty state when there are no diagnoses and no summary', () => {
     const { container } = render(<DiagnosticsCard liveHealth={{ ...healthy, diagnoses: [], health_summary: '' }} />)
     expect(container.innerHTML).toBe('')
   })

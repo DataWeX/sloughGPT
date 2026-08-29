@@ -46,7 +46,7 @@ export default function PersonalityProfileCard({
       addToast(`Saved "${name}"`, 'success')
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to save'), 'error')
+      addToast(extractErrorMessage(err, 'Could not save'), 'error')
     }
   }
 
@@ -56,7 +56,7 @@ export default function PersonalityProfileCard({
       addToast(`Loaded "${name}" (${count} traits)`, 'success')
       await onTraitsChanged()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to load'), 'error')
+      addToast(extractErrorMessage(err, 'Could not load'), 'error')
     }
   }
 
@@ -67,7 +67,7 @@ export default function PersonalityProfileCard({
       addToast(`Deleted "${name}"`, 'success')
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to delete'), 'error')
+      addToast(extractErrorMessage(err, 'Could not delete'), 'error')
     }
   }
 

@@ -49,7 +49,12 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
   const hybrid = useHybridStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+
+  const matchCount = searchQuery
+    ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase())).length
+    : 0;
   const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [forwardTo, setForwardTo] = useState<Message | null>(null);
@@ -66,6 +71,21 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     setReplyTo, setForwardTo, select.setSelectMode, select.setSelectedIds,
   );
 
+  const searchNext = useCallback(() => {
+    if (matchCount === 0) return;
+    setCurrentMatchIdx(i => (i + 1) % matchCount);
+  }, [matchCount]);
+
+  const searchPrev = useCallback(() => {
+    if (matchCount === 0) return;
+    setCurrentMatchIdx(i => (i - 1 + matchCount) % matchCount);
+  }, [matchCount]);
+
+  // Reset match index when query changes
+  useEffect(() => {
+    setCurrentMatchIdx(0);
+  }, [searchQuery]);
+
   useEffect(() => {
     if (modals.showInfo && activeSessionId) {
       labelsService.getLabels(activeSessionId).then(fetchedLabels => {
@@ -73,6 +93,19 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
       });
     }
   }, [modals.showInfo, activeSessionId]);
+
+  // Auto-retry pending messages when connection recovers
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    if (online && wasOffline.current) {
+      const state = useChatStore.getState();
+      if (state.offlineQueue > 0) {
+        toast.info('Connection restored — retrying queued messages');
+        retryPendingSends();
+      }
+    }
+    wasOffline.current = !online;
+  }, [online, retryPendingSends]);
 
   useEffect(() => {
     if (modals.showDrawer) {
@@ -128,6 +161,13 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
       toast.error(e.message || 'Failed to pick image');
     }
   }, [sendMessage]);
+
+  const handleSendWithImages = useCallback(
+    (text: string, images: string[]) => {
+      sendMessage(text, images);
+    },
+    [sendMessage],
+  );
 
   const handleSuggestion = useCallback(
     (s: string) => {
@@ -193,6 +233,10 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     setShowInfo: modals.setShowInfo,
     searchQuery,
     setSearchQuery,
+    matchCount,
+    currentMatchIdx,
+    searchNext,
+    searchPrev,
     refreshing,
     setRefreshing,
     isRecording: voice.isRecording,
@@ -251,6 +295,7 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     handleFile,
     handleSend,
     handleImage,
+    handleSendWithImages,
     handleVoice: voice.handleVoice,
     handleSuggestion,
     handleSelectSearchSession,
@@ -260,5 +305,6 @@ export function useChatActions(flatListRef: React.RefObject<FlatList | null>) {
     onScroll: scroll.onScroll,
     isConnected: online,
     dismissAllModals: modals.dismissAllModals,
+    dismissKeyboardModals: modals.dismissKeyboardModals,
   };
 }

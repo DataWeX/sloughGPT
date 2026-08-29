@@ -8,7 +8,7 @@ The text below is retained as a design sketch for a future interactive wrapper.
 
 **🎯 Interactive Mode**: Run `slo` for an interactive menu system
 **🚀 Command Mode**: Run `slo train small` for direct commands  
-**🎨 Rich Interface**: Beautiful tables, progress bars, and colors
+**🎨 ANSI Interface**: Native terminal output with colors, tables, and progress bars
 **🔍 Auto-discovery**: Automatically finds configs, datasets, and models
 **⚡ Smart Prompts**: Interactive selection menus for complex operations
 
@@ -78,14 +78,14 @@ slo clean              # Clean temp files
 **🧭 User-Friendly**: No need to remember complex commands or file paths
 **🎯 Context-Aware**: Auto-discovery of configs, datasets, and models
 **🔄 Workflow-Oriented**: Commands follow natural training workflow
-**🎨 Visual Feedback**: Rich output with tables, progress bars, and status indicators
+**🎨 Visual Feedback**: Native ANSI output with tables, progress bars, and status indicators
 **⚡ Efficient**: Tab completion, command history, and keyboard shortcuts
 **🔧 Extensible**: Easy to add new commands and features
 
 ## Implementation Details
 
 The CLI is built with:
-- **Rich** for beautiful terminal output
+- **Native ANSI** for terminal output (colors, tables, progress bars)
 - **Readline** for tab completion and history
 - **Modular design** for easy extension
 - **Fallback modes** when dependencies aren't available

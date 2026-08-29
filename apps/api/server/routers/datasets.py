@@ -1,12 +1,16 @@
 """
 Datasets Router - MVC View layer
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import FileResponse
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 import asyncio
 import json
+import time
+import socket
+import ipaddress
+from urllib.parse import urlparse
 
 from schemas.datasets import (
     DatasetInfo, DatasetCreate, DatasetUpdate, DatasetDataRequest,
@@ -17,8 +21,9 @@ from schemas.datasets import (
     VersionCreateResponse, VersionListResponse, VersionRestoreResponse,
     FromChatRequest, DatasetExportRequest,
 )
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from controllers.datasets import get_datasets_controller
+from infrastructure.auth import require_auth_if_enabled
 
 import logging
 import re
@@ -26,12 +31,37 @@ import re
 logger = logging.getLogger("slo.routers.datasets")
 
 
+def _is_private_ip(hostname: str) -> bool:
+    """Check if hostname resolves to a private/loopback IP (SSRF protection)."""
+    try:
+        addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _, _, _, sockaddr in addrinfos:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return True
+    except (socket.gaierror, ValueError):
+        pass
+    return False
+
+
+def _validate_url_not_private(url: str) -> None:
+    """Validate that a URL does not point to a private/internal IP (SSRF protection)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.hostname and _is_private_ip(parsed.hostname):
+            raise_error(f"URL points to a private/internal address: {url}", "E_BAD_REQUEST", status_code=400)
+    except Exception as e:
+        if "E_BAD_REQUEST" in str(e):
+            raise
+        logger.warning("URL validation failed: %s", e)
+
+
 class DatasetsRouter:
     """Router for dataset CRUD, import, export, search and versioning."""
 
     def __init__(self):
         self.router = APIRouter(prefix="/datasets", tags=["datasets"])
-        self._DATASETS_DIR = Path(__file__).resolve().parents[4] / "datasets"
+        self._DATASETS_DIR = Path(__file__).resolve().parents[4] / "data"
         self._import_locks: dict[str, asyncio.Lock] = {}
         self._import_locks_lock = asyncio.Lock()
         self._DATASET_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]+$')
@@ -67,7 +97,7 @@ class DatasetsRouter:
     def _validate_dataset_id(self, dataset_id: str) -> str:
         """Validate dataset_id contains only safe characters (no path traversal)."""
         if not self._DATASET_ID_RE.match(dataset_id):
-            raise HTTPException(status_code=422, detail=f"Invalid dataset ID: {dataset_id!r} — only alphanumeric, hyphens, underscores allowed")
+            raise_error(f"Invalid dataset ID: {dataset_id!r} — only alphanumeric, hyphens, underscores allowed", "E_VAL_REQUEST")
         return dataset_id
 
     async def _get_import_lock(self, name: str) -> asyncio.Lock:
@@ -104,54 +134,59 @@ class DatasetsRouter:
             directory on disk.
         """
         ctrl = get_datasets_controller()
-        datasets = ctrl.list_datasets(q, type)
+        datasets = await asyncio.to_thread(ctrl.list_datasets, q, type)
         return DatasetListResponse(
             datasets=[DatasetInfo(**d) for d in datasets],
             count=len(datasets),
         )
 
-    async def import_from_local(self, request: LocalImportRequest) -> dict:
+    async def import_from_local(self, request: LocalImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from local file or directory."""
         lock = await self._get_import_lock(request.name)
         if lock.locked():
-            raise HTTPException(status_code=429, detail=f"Import already in progress for '{request.name}'")
+            raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
                 from pathlib import Path as _P
                 import_path = _P(request.path).resolve()
                 _allowed = {_P.home(), _P.home() / "Documents", _P.home() / "Downloads", _P.home() / "Pictures", self._DATASETS_DIR.resolve()}
                 if not any(import_path == b or str(import_path).startswith(str(b) + "/") for b in _allowed):
-                    raise HTTPException(status_code=403, detail=f"Directory not in allowed paths: {request.path}")
+                    raise_error(f"Directory not in allowed paths: {request.path}", "E_AUTH_FORBIDDEN")
                 importer = self._get_data_importer()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.import_from_local,
                     path=request.path,
                     name=request.name,
                     extensions=request.extensions or None,
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=request.name, detail="local", files=result.files_imported, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=request.name, detail=f"local elapsed={_elapsed_ms:.0f}ms", files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=request.name,
                         message=f"Imported {result.files_imported} files ({result.total_chars} chars)",
                         output_path=result.output_path,
                     )
-                raise HTTPException(status_code=400, detail=result.error or "Import failed")
+                raise_error(result.error or "Import failed", "E_BAD_REQUEST")
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (local) failed: %s", e)
                 classify_and_raise(e, source="dataset_import_local")
 
-    async def import_from_github(self, request: GitHubImportRequest) -> dict:
+    async def import_from_github(self, request: GitHubImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from GitHub repository."""
+        _validate_url_not_private(request.url)
         lock = await self._get_import_lock(request.name)
         if lock.locked():
-            raise HTTPException(status_code=429, detail=f"Import already in progress for '{request.name}'")
+            raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
                 from domains.training.data_import import RepoImporter
                 importer = RepoImporter()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.import_from_github,
                     url=request.url,
@@ -160,51 +195,56 @@ class DatasetsRouter:
                     extensions=request.extensions or None,
                     max_files=request.max_files,
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=result.name or request.name, detail="github", files=result.files_imported, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=result.name or request.name, detail=f"github elapsed={_elapsed_ms:.0f}ms", files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=result.name or request.name,
                         message=f"Imported {result.files_imported} files ({result.total_chars} chars)",
                         output_path=result.output_path,
                     )
-                raise HTTPException(status_code=400, detail=result.error or "Import failed")
+                raise_error(result.error or "Import failed", "E_BAD_REQUEST")
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (github) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_huggingface(self, request: HuggingFaceImportRequest) -> dict:
+    async def import_from_huggingface(self, request: HuggingFaceImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from HuggingFace Hub."""
         name = request.name or request.dataset_id.split("/")[-1]
         lock = await self._get_import_lock(name)
         if lock.locked():
-            raise HTTPException(status_code=429, detail=f"Import already in progress for '{name}'")
+            raise_error(f"Import already in progress for '{name}'", "E_INFRA_BUSY")
         async with lock:
             try:
                 from domains.training.data_import import HuggingFaceImporter
                 importer = HuggingFaceImporter()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.download_dataset,
                     dataset_id=request.dataset_id,
                     name=name,
                     output_dir=str(self._DATASETS_DIR),
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=name, detail="huggingface", dataset_id=request.dataset_id, files=result.files_imported, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=name, detail=f"huggingface elapsed={_elapsed_ms:.0f}ms", dataset_id=request.dataset_id, files=result.files_imported, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=name,
                         message=f"Downloaded {result.files_imported} splits ({result.total_chars} chars)",
                         output_path=result.output_path,
                     )
-                raise HTTPException(status_code=400, detail=result.error or "Download failed")
+                raise_error(result.error or "Download failed", "E_BAD_REQUEST")
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (huggingface) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_url(self, request: URLImportRequest) -> dict:
+    async def import_from_url(self, request: URLImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Download and import a dataset from a remote URL.
 
         Args:
@@ -223,34 +263,38 @@ class DatasetsRouter:
             Logs an audit entry on success.
             Raises 429 if an import is already in progress for this name.
         """
+        _validate_url_not_private(request.url)
         lock = await self._get_import_lock(request.name)
         if lock.locked():
-            raise HTTPException(status_code=429, detail=f"Import already in progress for '{request.name}'")
+            raise_error(f"Import already in progress for '{request.name}'", "E_INFRA_BUSY")
         async with lock:
             try:
                 from domains.training.data_import import URLImporter
                 importer = URLImporter()
+                _t0 = time.monotonic()
                 result = await asyncio.to_thread(
                     importer.import_from_url,
                     url=request.url,
                     dataset_name=request.name,
                     output_dir=str(self._DATASETS_DIR),
                 )
+                _elapsed_ms = (time.monotonic() - _t0) * 1000
                 if result.success:
-                    safe_audit_log("dataset.import", resource=request.name, detail="url", url=request.url, chars=result.total_chars)
+                    safe_audit_log("dataset.import", resource=request.name, detail=f"url elapsed={_elapsed_ms:.0f}ms", url=request.url, chars=result.total_chars)
                     return ImportResponse(
                         success=True,
                         dataset_id=request.name,
                         message=f"Downloaded {result.total_chars} chars",
                         output_path=result.output_path,
                     )
-                raise HTTPException(status_code=400, detail=result.error or "Download failed")
+                raise_error(result.error or "Download failed", "E_BAD_REQUEST")
             except HTTPException:
                 raise
             except Exception as e:
+                logger.warning("Dataset import (url) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_kaggle(self, request: KaggleImportRequest) -> dict:
+    async def import_from_kaggle(self, request: KaggleImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Download and import a dataset from Kaggle using the Kaggle CLI.
 
         Args:
@@ -272,16 +316,18 @@ class DatasetsRouter:
         try:
             name = request.name or request.dataset.replace("/", "_")
             output_dir = self._DATASETS_DIR / name
-            output_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
+            _t0 = time.monotonic()
             proc = await asyncio.create_subprocess_exec(
                 "kaggle", "datasets", "download", "-d", request.dataset, "-p", str(output_dir), "--unzip",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
             if proc.returncode != 0:
-                raise HTTPException(status_code=400, detail=f"Kaggle import failed: {stderr.decode()}")
+                raise_error(f"Kaggle import failed: {stderr.decode()}", "E_BAD_REQUEST")
 
             temp_dir = output_dir / request.dataset.replace("/", "_")
 
@@ -296,7 +342,7 @@ class DatasetsRouter:
 
             file_count, total_size = await asyncio.to_thread(_organize)
 
-            safe_audit_log("dataset.import", resource=name, detail="kaggle", dataset=request.dataset, files=file_count)
+            safe_audit_log("dataset.import", resource=name, detail=f"kaggle elapsed={_elapsed_ms:.0f}ms", dataset=request.dataset, files=file_count)
             return ImportResponse(
                 success=True,
                 dataset_id=name,
@@ -306,32 +352,38 @@ class DatasetsRouter:
         except HTTPException:
             raise
         except FileNotFoundError:
-            raise HTTPException(status_code=400, detail="Kaggle CLI not found. Install with: pip install kaggle")
+            raise_error("Kaggle CLI not found. Install with: pip install kaggle", "E_BAD_REQUEST")
         except Exception as e:
+            logger.warning("Dataset import (kaggle) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
-    async def import_from_csv(self, request: CSVImportRequest) -> dict:
+    async def import_from_csv(self, request: CSVImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import dataset from CSV URL."""
+        _validate_url_not_private(request.url)
         import csv
         import asyncio
         import urllib.request
         try:
             name = request.name
             output_dir = self._DATASETS_DIR / name
-            output_dir.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
-            req = urllib.request.Request(request.url, headers={"User-Agent": "SloughGPT"})
-            raw = await asyncio.to_thread(urllib.request.urlopen, req, 30)
-            content = raw.read().decode(request.encoding or "utf-8")
+            def _fetch_and_parse():
+                req = urllib.request.Request(request.url, headers={"User-Agent": "SloughGPT"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    content = resp.read().decode(request.encoding or "utf-8")
+                lines = content.strip().split("\n")
+                if not lines:
+                    return None, None, 0
+                dialect = csv.Sniffer().sniff(lines[0][:1000], delimiters=",;\t")
+                reader = csv.reader(lines, dialect=dialect)
+                headers = next(reader)
+                rows = list(reader)
+                return headers, rows, len(rows)
 
-            lines = content.strip().split("\n")
-            if not lines:
-                raise HTTPException(status_code=400, detail="CSV file is empty")
-
-            dialect = csv.Sniffer().sniff(lines[0][:1000], delimiters=",;\t")
-            reader = csv.reader(lines, dialect=dialect)
-            headers = next(reader)
-            rows = list(reader)
+            headers, rows, row_count = await asyncio.to_thread(_fetch_and_parse)
+            if headers is None:
+                raise_error("CSV file is empty", "E_BAD_REQUEST")
 
             jsonl_path = output_dir / f"{name}.jsonl"
             meta_path = output_dir / "metadata.json"
@@ -346,61 +398,99 @@ class DatasetsRouter:
 
             await asyncio.to_thread(_write_csv)
 
-            safe_audit_log("dataset.import", resource=name, detail="csv", url=request.url, rows=len(rows), columns=len(headers))
+            safe_audit_log("dataset.import", resource=name, detail="csv", url=request.url, rows=row_count, columns=len(headers))
             return ImportResponse(
                 success=True,
                 dataset_id=name,
-                message=f"Imported CSV with {len(rows)} rows, {len(headers)} columns",
+                message=f"Imported CSV with {row_count} rows, {len(headers)} columns",
                 output_path=str(output_dir),
             )
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Dataset import (csv) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
-    async def batch_import(self, request: BatchImportRequest) -> dict:
-        """Import multiple datasets in one request."""
-        results = []
-        errors = []
-
-        for i, source in enumerate(request.sources[:20]):
-            name = source.name or f"batch_{i}"
+    async def batch_import(self, request: BatchImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Import multiple datasets in one request."""
+            results = []
+            errors = []
+            cm_op = None
+            _batch_t0 = time.monotonic()
             try:
-                if source.type == "url" and source.url:
-                    from domains.training.data_import import URLImporter
-                    importer = URLImporter()
-                    result = importer.import_from_url(url=source.url, dataset_name=name, output_dir=str(self._DATASETS_DIR))
-                elif source.type == "local" and source.path:
-                    importer = self._get_data_importer()
-                    result = importer.import_from_local(path=source.path, name=name, extensions=source.extensions)
-                elif source.type == "github" and source.url:
-                    from domains.training.data_import import RepoImporter
-                    importer = RepoImporter()
-                    result = importer.import_from_github(url=source.url, dataset_name=name, output_dir=str(self._DATASETS_DIR))
-                elif source.type == "huggingface" and source.dataset_id:
-                    from domains.training.data_import import HuggingFaceImporter
-                    importer = HuggingFaceImporter()
-                    result = importer.download_dataset(dataset_id=source.dataset_id, name=name, output_dir=str(self._DATASETS_DIR))
-                else:
-                    errors.append({"index": i, "error": f"Unsupported source type: {source.type}"})
-                    continue
-
-                if result.success:
-                    results.append({"index": i, "name": name, "files": result.files_imported, "chars": result.total_chars})
-                else:
-                    errors.append({"index": i, "error": result.error or "Import failed"})
+                from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+                import threading
+                _cancel_event = threading.Event()
+                _cm = get_cancel_manager()
+                cm_op = _cm.register(
+                    op_type=OpType.IMPORT,
+                    label=f"batch-import({len(request.sources)} sources)",
+                    cancel_fn=lambda: _cancel_event.set(),
+                )
+                _cm.start(cm_op)
             except Exception as e:
-                errors.append({"index": i, "error": str(e)})
+                logger.warning("CancelManager registration failed for batch import (may be unkillable): %s", e)
 
-        safe_audit_log("dataset.import", resource=f"batch({len(request.sources)})", detail="batch", imported=len(results), errors=len(errors))
-        return success_response(data={"imported": len(results), "errors": errors})
+            try:
+                for i, source in enumerate(request.sources[:20]):
+                    name = source.name or f"batch_{i}"
+                    try:
+                        if source.type == "url" and source.url:
+                            from domains.training.data_import import URLImporter
+                            importer = URLImporter()
+                            result = importer.import_from_url(url=source.url, dataset_name=name, output_dir=str(self._DATASETS_DIR))
+                        elif source.type == "local" and source.path:
+                            importer = self._get_data_importer()
+                            result = importer.import_from_local(path=source.path, name=name, extensions=source.extensions)
+                        elif source.type == "github" and source.url:
+                            from domains.training.data_import import RepoImporter
+                            importer = RepoImporter()
+                            result = importer.import_from_github(url=source.url, dataset_name=name, output_dir=str(self._DATASETS_DIR))
+                        elif source.type == "huggingface" and source.dataset_id:
+                            from domains.training.data_import import HuggingFaceImporter
+                            importer = HuggingFaceImporter()
+                            result = importer.download_dataset(dataset_id=source.dataset_id, name=name, output_dir=str(self._DATASETS_DIR))
+                        else:
+                            errors.append({"index": i, "error": f"Unsupported source type: {source.type}"})
+                            continue
 
+                        if result.success:
+                            results.append({"index": i, "name": name, "files": result.files_imported, "chars": result.total_chars})
+                        else:
+                            errors.append({"index": i, "error": result.error or "Import failed"})
+                    except Exception as e:
+                        errors.append({"index": i, "error": str(e)})
+
+                if cm_op:
+                    try:
+                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        get_cancel_manager().finish(cm_op)
+                    except Exception as exc:
+                        logger.warning("CancelManager.finish failed for batch import: %s", exc)
+            except Exception as e:
+                if cm_op:
+                    try:
+                        from domains.infrastructure.cancel_manager import get_cancel_manager
+                        get_cancel_manager().finish(cm_op, error=str(e))
+                    except Exception as exc:
+                        logger.warning("CancelManager.finish failed for batch import error: %s", exc)
+
+            _batch_elapsed_ms = (time.monotonic() - _batch_t0) * 1000
+            safe_audit_log("dataset.import", resource=f"batch({len(request.sources)})", detail=f"batch elapsed={_batch_elapsed_ms:.0f}ms", imported=len(results), errors=len(errors))
+            return success_response(data={"imported": len(results), "errors": errors, "elapsed_ms": round(_batch_elapsed_ms, 1)})
+
+        except Exception as e:
+            classify_and_raise(e, source="datasets.batch_import")
     async def search_books(self, q: str = Query(..., description="Search by title or ISBN"), limit: int = Query(10, ge=1, le=50)) -> dict:
         """Search books by title or ISBN via Open Library."""
-        from domains.training.data_import import BooksSearch
-        searcher = BooksSearch()
-        results = searcher.search(q, limit)
-        return success_response(data={"books": results})
+        try:
+            from domains.training.data_import import BooksSearch
+            searcher = BooksSearch()
+            results = searcher.search(q, limit)
+            return success_response(data={"books": results})
+        except Exception as e:
+            classify_and_raise(e, source="search_books")
 
     async def search_github(self, q: str = Query(..., description="Search query"), limit: int = Query(10, ge=1, le=50)) -> dict:
         """Search GitHub for repositories matching a query string.
@@ -416,35 +506,40 @@ class DatasetsRouter:
         Side effects:
             Calls the GitHub Search API via GitHubSearch.search_repos().
         """
-        from domains.training.data_import import GitHubSearch
-        searcher = GitHubSearch()
-        items = searcher.search_repos(q, limit)
-        repos = [
-            {
-                "id": item["full_name"],
-                "name": item["full_name"].split("/")[1] if "/" in item["full_name"] else item["full_name"],
-                "full_name": item["full_name"],
-                "description": item.get("description"),
-                "stars": item.get("stargazers_count", 0),
-                "url": item.get("html_url", ""),
-                "language": item.get("language"),
-            }
-            for item in items
-        ]
-        return success_response(data={"repos": repos})
+        try:
+            from domains.training.data_import import GitHubSearch
+            searcher = GitHubSearch()
+            items = searcher.search_repos(q, limit)
+            repos = [
+                {
+                    "id": item["full_name"],
+                    "name": item["full_name"].split("/")[1] if "/" in item["full_name"] else item["full_name"],
+                    "full_name": item["full_name"],
+                    "description": item.get("description"),
+                    "stars": item.get("stargazers_count", 0),
+                    "url": item.get("html_url", ""),
+                    "language": item.get("language"),
+                }
+                for item in items
+            ]
+            return success_response(data={"repos": repos})
+        except Exception as e:
+            classify_and_raise(e, source="search_github")
 
-    async def import_from_isbn(self, request: ISBNImportRequest) -> dict:
+    async def import_from_isbn(self, request: ISBNImportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Import book by ISBN. Fetches full text if available on Project Gutenberg."""
         try:
             from domains.training.data_import import ISBNImporter
             importer = ISBNImporter(output_dir=str(self._DATASETS_DIR))
+            _t0 = time.monotonic()
             result = await asyncio.to_thread(
                 importer.import_from_isbn,
                 isbn=request.isbn,
                 name=request.name or f"book_{request.isbn}",
             )
+            _elapsed_ms = (time.monotonic() - _t0) * 1000
             if result.success:
-                safe_audit_log("dataset.import", resource=result.name or request.name or f"book_{request.isbn}", detail="isbn", isbn=request.isbn, files=result.files_imported)
+                safe_audit_log("dataset.import", resource=result.name or request.name or f"book_{request.isbn}", detail=f"isbn elapsed={_elapsed_ms:.0f}ms", isbn=request.isbn, files=result.files_imported)
                 return ImportResponse(
                     success=True,
                     dataset_id=result.name or request.name or f"book_{request.isbn}",
@@ -453,342 +548,397 @@ class DatasetsRouter:
                     else "Book metadata saved",
                     output_path=result.output_path,
                 )
-            raise HTTPException(status_code=400, detail=result.error or "Import failed")
+            raise_error(result.error or "Import failed", "E_BAD_REQUEST")
         except HTTPException:
             raise
         except Exception as e:
+            logger.warning("Dataset import (isbn) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
     async def search_datasets(self, q: str = Query(..., min_length=1, max_length=500, description="Search query")) -> dict:
-        """Search datasets by name using a substring or fuzzy match.
+        try:
+            """Search datasets by name using a substring or fuzzy match.
 
-        Args:
-            q: Search string (1 to 500 characters). Matched against
-                dataset names and descriptions.
+            Args:
+                q: Search string (1 to 500 characters). Matched against
+                    dataset names and descriptions.
 
-        Returns:
-            Success envelope containing a results array of matching
-            dataset summaries and a count of matches.
+            Returns:
+                Success envelope containing a results array of matching
+                dataset summaries and a count of matches.
 
-        Side effects:
-            Delegates to DatasetsController.search_datasets which
-            performs a case-insensitive substring match.
-        """
-        ctrl = get_datasets_controller()
-        results = ctrl.search_datasets(q)
-        return success_response(data={"results": results, "count": len(results)})
+            Side effects:
+                Delegates to DatasetsController.search_datasets which
+                performs a case-insensitive substring match.
+            """
+            ctrl = get_datasets_controller()
+            results = ctrl.search_datasets(q)
+            return success_response(data={"results": results, "count": len(results)})
 
+        except Exception as e:
+            classify_and_raise(e, source="datasets.search_datasets")
     async def get_dataset(self, dataset_id: str) -> dict:
-        """Return full details for a single dataset by its ID.
+        try:
+            """Return full details for a single dataset by its ID.
 
-        Args:
-            dataset_id: The unique dataset identifier (alphanumeric,
-                hyphens, underscores only).
+            Args:
+                dataset_id: The unique dataset identifier (alphanumeric,
+                    hyphens, underscores only).
 
-        Returns:
-            DatasetInfo with id, name, description, created_at,
-            updated_at, row_count, and other metadata fields.
+            Returns:
+                DatasetInfo with id, name, description, created_at,
+                updated_at, row_count, and other metadata fields.
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Raises 404 if no dataset with the given ID is found.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        dataset = ctrl.get_dataset(dataset_id)
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        return DatasetInfo(**dataset)
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Raises 404 if no dataset with the given ID is found.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            dataset = ctrl.get_dataset(dataset_id)
+            if not dataset:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+            return DatasetInfo(**dataset)
 
+        except Exception as e:
+            classify_and_raise(e, source="datasets.get_dataset")
     async def get_dataset_stats(self, dataset_id: str) -> dict:
-        """Return aggregate statistics for a dataset.
+        try:
+            """Return aggregate statistics for a dataset.
 
-        Args:
-            dataset_id: The unique dataset identifier (alphanumeric,
-                hyphens, underscores only).
+            Args:
+                dataset_id: The unique dataset identifier (alphanumeric,
+                    hyphens, underscores only).
 
-        Returns:
-            DatasetStats with fields like format, row_count,
-            avg_length, total_chars, and import_method.
+            Returns:
+                DatasetStats with fields like format, row_count,
+                avg_length, total_chars, and import_method.
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Reads the dataset's input file from disk to compute stats.
-            Raises 404 if the dataset is not found or has no data.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        stats = ctrl.get_dataset_stats(dataset_id)
-        if not stats:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        return DatasetStats(**stats)
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Reads the dataset's input file from disk to compute stats.
+                Raises 404 if the dataset is not found or has no data.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            stats = ctrl.get_dataset_stats(dataset_id)
+            if not stats:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+            return DatasetStats(**stats)
 
-    async def create_dataset(self, req: DatasetCreate) -> dict:
-        """Create a new empty dataset with the given name and description.
+        except Exception as e:
+            classify_and_raise(e, source="datasets.get_dataset_stats")
+    async def create_dataset(self, req: DatasetCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Create a new empty dataset with the given name and description.
 
-        Args:
-            req: DatasetCreate with name (used as the directory name and
-                ID slug) and an optional description string.
+            Args:
+                req: DatasetCreate with name (used as the directory name and
+                    ID slug) and an optional description string.
 
-        Returns:
-            DatasetInfo with the newly created dataset's id, name,
-            description, and timestamp fields.
+            Returns:
+                DatasetInfo with the newly created dataset's id, name,
+                description, and timestamp fields.
 
-        Side effects:
-            Creates a new directory under the datasets root directory.
-            Persists dataset metadata via DatasetsController.
-            Logs an audit entry for dataset creation.
-        """
-        ctrl = get_datasets_controller()
-        dataset = ctrl.create_dataset(req.name, req.description)
-        safe_audit_log("dataset.create", resource=req.name, detail=req.description or "")
-        return DatasetInfo(**dataset)
+            Side effects:
+                Creates a new directory under the datasets root directory.
+                Persists dataset metadata via DatasetsController.
+                Logs an audit entry for dataset creation.
+            """
+            ctrl = get_datasets_controller()
+            dataset = ctrl.create_dataset(req.name, req.description)
+            safe_audit_log("dataset.create", resource=req.name, detail=req.description or "")
+            return DatasetInfo(**dataset)
 
-    async def update_dataset(self, dataset_id: str, req: DatasetUpdate) -> dict:
-        """Update a dataset's metadata fields (name, description, etc).
+        except Exception as e:
+            classify_and_raise(e, source="datasets.create_dataset")
+    async def update_dataset(self, dataset_id: str, req: DatasetUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Update a dataset's metadata fields (name, description, etc).
 
-        Args:
-            dataset_id: The unique dataset identifier to update.
-            req: DatasetUpdate with optional name and description fields.
-                Only non-None fields are applied.
+            Args:
+                dataset_id: The unique dataset identifier to update.
+                req: DatasetUpdate with optional name and description fields.
+                    Only non-None fields are applied.
 
-        Returns:
-            DatasetInfo with the updated metadata.
+            Returns:
+                DatasetInfo with the updated metadata.
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Modifies the dataset's metadata.json on disk.
-            Logs an audit entry for the update.
-            Raises 404 if the dataset is not found.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        dataset = ctrl.update_dataset(dataset_id, req.model_dump(exclude_none=True))
-        if not dataset:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        safe_audit_log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)))
-        return DatasetInfo(**dataset)
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Modifies the dataset's metadata.json on disk.
+                Logs an audit entry for the update.
+                Raises 404 if the dataset is not found.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            dataset = ctrl.update_dataset(dataset_id, req.model_dump(exclude_none=True))
+            if not dataset:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+            safe_audit_log("dataset.update", resource=dataset_id, detail=str(req.model_dump(exclude_none=True)))
+            return DatasetInfo(**dataset)
 
-    async def delete_dataset(self, dataset_id: str) -> dict:
-        """Delete a dataset and all its files from disk.
+        except Exception as e:
+            classify_and_raise(e, source="datasets.update_dataset")
+    async def delete_dataset(self, dataset_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Delete a dataset and all its files from disk.
 
-        Args:
-            dataset_id: The unique dataset identifier to delete.
+            Args:
+                dataset_id: The unique dataset identifier to delete.
 
-        Returns:
-            Success response with status "deleted" and the dataset_id.
+            Returns:
+                Success response with status "deleted" and the dataset_id.
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Removes the dataset directory and all contained files.
-            Logs an audit entry for the deletion.
-            Raises 404 if the dataset is not found.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        ok = ctrl.delete_dataset(dataset_id)
-        if not ok:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        safe_audit_log("dataset.delete", resource=dataset_id)
-        return success_response(data={"status": "deleted", "dataset_id": dataset_id})
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Removes the dataset directory and all contained files.
+                Logs an audit entry for the deletion.
+                Raises 404 if the dataset is not found.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            ok = ctrl.delete_dataset(dataset_id)
+            if not ok:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+            safe_audit_log("dataset.delete", resource=dataset_id)
+            return success_response(data={"status": "deleted", "dataset_id": dataset_id})
 
-    async def create_version(self, dataset_id: str) -> dict:
-        """Create a timestamped snapshot of a dataset."""
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        timestamp = ctrl.create_version_snapshot(dataset_id)
-        if not timestamp:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        safe_audit_log("dataset.version", resource=dataset_id, detail=str(timestamp))
-        return VersionCreateResponse(timestamp=timestamp, message="Version created")
+        except Exception as e:
+            classify_and_raise(e, source="datasets.delete_dataset")
+    async def create_version(self, dataset_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Create a timestamped snapshot of a dataset."""
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            timestamp = ctrl.create_version_snapshot(dataset_id)
+            if not timestamp:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+            safe_audit_log("dataset.version", resource=dataset_id, detail=str(timestamp))
+            return VersionCreateResponse(timestamp=timestamp, message="Version created")
 
+        except Exception as e:
+            classify_and_raise(e, source="datasets.create_version")
     async def list_versions(self, dataset_id: str) -> dict:
-        """List all version timestamps for a dataset."""
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        versions = ctrl.list_versions(dataset_id)
-        return VersionListResponse(versions=versions, count=len(versions))
+        try:
+            """List all version timestamps for a dataset."""
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            versions = ctrl.list_versions(dataset_id)
+            return VersionListResponse(versions=versions, count=len(versions))
 
-    async def restore_version(self, dataset_id: str, timestamp: str) -> dict:
-        """Restore a dataset to a specific version snapshot."""
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        ok = ctrl.restore_version(dataset_id, timestamp)
-        if not ok:
-            raise HTTPException(status_code=404, detail="Dataset or version not found")
-        safe_audit_log("dataset.version.restore", resource=dataset_id, detail=timestamp)
-        return VersionRestoreResponse(success=True, message="Version restored")
+        except Exception as e:
+            classify_and_raise(e, source="datasets.list_versions")
+    async def restore_version(self, dataset_id: str, timestamp: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Restore a dataset to a specific version snapshot."""
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            ok = ctrl.restore_version(dataset_id, timestamp)
+            if not ok:
+                raise_error("Dataset or version not found", "E_NOT_FOUND")
+            safe_audit_log("dataset.version.restore", resource=dataset_id, detail=timestamp)
+            return VersionRestoreResponse(success=True, message="Version restored")
 
-    async def add_dataset_data(self, dataset_id: str, req: DatasetDataRequest) -> dict:
-        """Append data rows to an existing dataset's input file.
+        except Exception as e:
+            classify_and_raise(e, source="datasets.restore_version")
+    async def add_dataset_data(self, dataset_id: str, req: DatasetDataRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Append data rows to an existing dataset's input file.
 
-        Args:
-            dataset_id: The unique dataset identifier to append to.
-            req: DatasetDataRequest with data (list of string rows to
-                append to the dataset's input file).
+            Args:
+                dataset_id: The unique dataset identifier to append to.
+                req: DatasetDataRequest with data (list of string rows to
+                    append to the dataset's input file).
 
-        Returns:
-            Success response with status "appended" and rows_added count.
+            Returns:
+                Success response with status "appended" and rows_added count.
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Appends rows to the dataset's input.jsonl file on disk.
-            Logs an audit entry with the row count.
-            Raises 404 if the dataset is not found.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        result = ctrl.add_data(dataset_id, req.data)
-        if result is None:
-            raise HTTPException(status_code=404, detail="Dataset not found")
-        safe_audit_log("dataset.data.append", resource=dataset_id, detail=f"rows={result}")
-        return success_response(data={"status": "appended", "rows_added": result})
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Appends rows to the dataset's input.jsonl file on disk.
+                Logs an audit entry with the row count.
+                Raises 404 if the dataset is not found.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            result = ctrl.add_data(dataset_id, req.data)
+            if result is None:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+            safe_audit_log("dataset.data.append", resource=dataset_id, detail=f"rows={result}")
+            return success_response(data={"status": "appended", "rows_added": result})
 
-    async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")) -> dict:
-        """Return the first N rows of a dataset for preview.
+        except Exception as e:
+            classify_and_raise(e, source="datasets.add_dataset_data")
+    async def preview_dataset(self, dataset_id: str, limit: int = Query(10, ge=1, le=1000, description="Number of samples")):
+        try:
+            """Return the first N rows of a dataset for preview.
 
-        Args:
-            dataset_id: The unique dataset identifier to preview.
-            limit: Number of rows to return (1-1000, default 10).
+            Args:
+                dataset_id: The unique dataset identifier to preview.
+                limit: Number of rows to return (1-1000, default 10).
 
-        Returns:
-            Preview data from the dataset's input file (format depends
-            on the dataset's file type).
+            Returns:
+                Preview data from the dataset's input file (format depends
+                on the dataset's file type).
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Reads up to limit rows from the dataset file on disk.
-            Raises 404 if the dataset is not found or empty.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        preview = ctrl.preview_dataset(dataset_id, limit)
-        if not preview:
-            raise HTTPException(status_code=404, detail="Dataset not found or empty")
-        return preview
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Reads up to limit rows from the dataset file on disk.
+                Raises 404 if the dataset is not found or empty.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            preview = await asyncio.to_thread(ctrl.preview_dataset, dataset_id, limit)
+            if not preview:
+                raise_error("Dataset not found or empty", "E_NOT_FOUND")
+            return preview
 
-    async def export_dataset(self, dataset_id: str, request: DatasetExportRequest) -> dict:
-        """Export a dataset as a downloadable file in the requested format.
+        except Exception as e:
+            classify_and_raise(e, source="datasets.preview_dataset")
+    async def export_dataset(self, dataset_id: str, request: DatasetExportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Export a dataset as a downloadable file in the requested format.
 
-        Args:
-            dataset_id: The unique dataset identifier to export.
-            request: DatasetExportRequest with format (e.g. "jsonl",
-                "csv", "txt") specifying the output file format.
+            Args:
+                dataset_id: The unique dataset identifier to export.
+                request: DatasetExportRequest with format (e.g. "jsonl",
+                    "csv", "txt") specifying the output file format.
 
-        Returns:
-            FileResponse with the exported file, Content-Disposition
-            header set to the dataset filename, and media type
-            application/octet-stream.
+            Returns:
+                FileResponse with the exported file, Content-Disposition
+                header set to the dataset filename, and media type
+                application/octet-stream.
 
-        Side effects:
-            Validates dataset_id format (raises 422 on invalid chars).
-            Reads the dataset from disk and writes the exported file.
-            Raises 404 if the dataset is not found or empty.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        export_path = ctrl.export_dataset(dataset_id, request.format)
-        if not export_path:
-            raise HTTPException(status_code=404, detail="Dataset not found or empty")
-        return FileResponse(
-            path=str(export_path),
-            filename=f"{dataset_id}.{request.format}",
-            media_type="application/octet-stream",
-        )
+            Side effects:
+                Validates dataset_id format (raises 422 on invalid chars).
+                Reads the dataset from disk and writes the exported file.
+                Raises 404 if the dataset is not found or empty.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            export_path = await asyncio.to_thread(ctrl.export_dataset, dataset_id, request.format)
+            if not export_path:
+                raise_error("Dataset not found or empty", "E_NOT_FOUND")
+            return FileResponse(
+                path=str(export_path),
+                filename=f"{dataset_id}.{request.format}",
+                media_type="application/octet-stream",
+            )
 
-    async def create_dataset_from_chat(self, req: FromChatRequest) -> dict:
-        """Create a training dataset from a chat conversation.
+        except Exception as e:
+            classify_and_raise(e, source="datasets.export_dataset")
+    async def create_dataset_from_chat(self, req: FromChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Create a training dataset from a chat conversation.
 
-        Accepts validated { messages: [{role, content}...], name?: string }.
-        Saves as JSONL in the datasets directory and returns the dataset ID.
-        """
-        messages = req.messages
-        name = req.name
+            Accepts validated { messages: [{role, content}...], name?: string }.
+            Saves as JSONL in the datasets directory and returns the dataset ID.
+            """
+            messages = req.messages
+            name = req.name
 
-        if not messages:
-            raise HTTPException(status_code=400, detail="No messages provided")
+            if not messages:
+                raise_error("No messages provided", "E_BAD_REQUEST")
 
-        ctrl = get_datasets_controller()
-        dataset = ctrl.create_dataset(name, description=f"Exported from chat ({len(messages)} messages)")
+            ctrl = get_datasets_controller()
+            dataset = ctrl.create_dataset(name, description=f"Exported from chat ({len(messages)} messages)")
 
-        dataset_dir = self._DATASETS_DIR / dataset["id"]
-        dataset_dir.mkdir(parents=True, exist_ok=True)
+            dataset_dir = self._DATASETS_DIR / dataset["id"]
+            await asyncio.to_thread(dataset_dir.mkdir, parents=True, exist_ok=True)
 
-        jsonl_path = dataset_dir / "input.jsonl"
-        with open(jsonl_path, "w") as f:
-            for msg in messages:
-                if msg.role in ("user", "assistant") and msg.content:
-                    f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
+            jsonl_path = dataset_dir / "input.jsonl"
 
-        safe_audit_log("dataset.create", resource=name, detail=f"from-chat ({len(messages)} messages)", messages=len(messages))
-        return {
-            "status": "created",
-            "dataset_id": dataset["id"],
-            "name": name,
-            "messages_exported": len([m for m in messages if m.role in ("user", "assistant") and m.content]),
-        }
+            def _write_chat():
+                with open(jsonl_path, "w") as f:
+                    for msg in messages:
+                        if msg.role in ("user", "assistant") and msg.content:
+                            f.write(json.dumps({"messages": [{"role": msg.role, "content": msg.content}]}) + "\n")
 
-    async def convert_to_messages(self, dataset_id: str, system_prompt: str = "You are a helpful assistant.") -> dict:
-        """Convert a dataset to chat message format for fine-tuning.
+            await asyncio.to_thread(_write_chat)
 
-        Reads the dataset's input.jsonl, wraps each entry in a
-        system/user/assistant message structure, and saves as a new dataset.
-        """
-        self._validate_dataset_id(dataset_id)
-        ctrl = get_datasets_controller()
-        datasets = ctrl.list_datasets()
-        source = None
-        for ds in datasets:
-            if ds["id"] == dataset_id:
-                source = ds
-                break
-        if not source:
-            raise HTTPException(status_code=404, detail=f"Dataset {dataset_id} not found")
+            safe_audit_log("dataset.create", resource=name, detail=f"from-chat ({len(messages)} messages)", messages=len(messages))
+            return success_response(data={
+                "status": "created",
+                "dataset_id": dataset["id"],
+                "name": name,
+                "messages_exported": len([m for m in messages if m.role in ("user", "assistant") and m.content]),
+            })
 
-        source_dir = self._DATASETS_DIR / dataset_id
-        jsonl_path = source_dir / "input.jsonl"
-        if not jsonl_path.exists():
-            raise HTTPException(status_code=404, detail="Dataset has no input.jsonl")
+        except Exception as e:
+            classify_and_raise(e, source="datasets.create_dataset_from_chat")
+    async def convert_to_messages(self, dataset_id: str, system_prompt: str = "You are a helpful assistant.", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """Convert a dataset to chat message format for fine-tuning.
 
-        messages_out = []
-        with open(jsonl_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if "text" in row:
-                    messages_out.append({"messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": row["text"]},
-                        {"role": "assistant", "content": row["text"]},
-                    ]})
-                elif "messages" in row:
-                    msgs = row["messages"]
-                    if msgs and msgs[0].get("role") != "system":
-                        msgs = [{"role": "system", "content": system_prompt}] + msgs
-                    messages_out.append({"messages": msgs})
+            Reads the dataset's input.jsonl, wraps each entry in a
+            system/user/assistant message structure, and saves as a new dataset.
+            """
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            datasets = ctrl.list_datasets()
+            source = None
+            for ds in datasets:
+                if ds["id"] == dataset_id:
+                    source = ds
+                    break
+            if not source:
+                raise_error(f"Dataset {dataset_id} not found", "E_NOT_FOUND")
 
-        new_ds = ctrl.create_dataset(
-            name=f"{source['name']}-messages",
-            description=f"Converted from {source['name']} ({len(messages_out)} conversations)",
-        )
-        new_dir = self._DATASETS_DIR / new_ds["id"]
-        new_dir.mkdir(parents=True, exist_ok=True)
-        out_path = new_dir / "input.jsonl"
-        with open(out_path, "w") as f:
-            for entry in messages_out:
-                f.write(json.dumps(entry) + "\n")
+            source_dir = self._DATASETS_DIR / dataset_id
+            jsonl_path = source_dir / "input.jsonl"
+            if not await asyncio.to_thread(jsonl_path.exists):
+                raise_error("Dataset has no input.jsonl", "E_NOT_FOUND")
 
-        safe_audit_log("dataset.convert", resource=dataset_id, detail=str(new_ds["id"]), conversations=len(messages_out))
-        return {
-            "status": "converted",
-            "new_dataset_id": new_ds["id"],
-            "total_conversations": len(messages_out),
-        }
+            def _read_source():
+                msgs = []
+                with open(jsonl_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            row = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if "text" in row:
+                            msgs.append({"messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": row["text"]},
+                                {"role": "assistant", "content": row["text"]},
+                            ]})
+                        elif "messages" in row:
+                            m = row["messages"]
+                            if m and m[0].get("role") != "system":
+                                m = [{"role": "system", "content": system_prompt}] + m
+                            msgs.append({"messages": m})
+                return msgs
+
+            messages_out = await asyncio.to_thread(_read_source)
+
+            new_ds = ctrl.create_dataset(
+                name=f"{source['name']}-messages",
+                description=f"Converted from {source['name']} ({len(messages_out)} conversations)",
+            )
+            new_dir = self._DATASETS_DIR / new_ds["id"]
+            await asyncio.to_thread(new_dir.mkdir, parents=True, exist_ok=True)
+            out_path = new_dir / "input.jsonl"
+
+            def _write_output():
+                with open(out_path, "w") as f:
+                    for entry in messages_out:
+                        f.write(json.dumps(entry) + "\n")
+
+            await asyncio.to_thread(_write_output)
+
+            safe_audit_log("dataset.convert", resource=dataset_id, detail=str(new_ds["id"]), conversations=len(messages_out))
+            return success_response(data={
+                "status": "converted",
+                "new_dataset_id": new_ds["id"],
+                "total_conversations": len(messages_out),
+            })
 
 
+        except Exception as e:
+            classify_and_raise(e, source="datasets.convert_to_messages")
 router = DatasetsRouter().router

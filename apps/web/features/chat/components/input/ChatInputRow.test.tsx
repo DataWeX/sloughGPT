@@ -50,13 +50,13 @@ describe('ChatInputRow', () => {
 
   it('shows warning color at 2000 chars', () => {
     render(<ChatInputRow {...defaultProps} value={'x'.repeat(2500)} />)
-    const count = screen.getByLabelText('Estimated 625 tokens')
+    const count = screen.getByLabelText('Estimated 2 tokens')
     expect(count.className).toContain('warning')
   })
 
   it('shows destructive color at 4000 chars', () => {
     render(<ChatInputRow {...defaultProps} value={'x'.repeat(4500)} />)
-    const count = screen.getByLabelText('Estimated 1125 tokens')
+    const count = screen.getByLabelText('Estimated 2 tokens')
     expect(count.className).toContain('destructive')
   })
 

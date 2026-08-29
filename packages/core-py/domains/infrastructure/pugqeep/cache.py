@@ -11,6 +11,7 @@ Automatically promotes/demotes data based on access patterns.
 
 import json
 import logging
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -69,11 +70,31 @@ class CacheStats:
     evictions: int = 0
     promotions: int = 0
     demotions: int = 0
+    # Per-tier hit/miss tracking
+    disk_hits: int = 0
+    disk_misses: int = 0
+    hot_hits: int = 0
+    hot_misses: int = 0
+    memory_hits: int = 0
+    memory_misses: int = 0
 
     @property
     def hit_rate(self) -> float:
         total = self.hits + self.misses
         return self.hits / total if total > 0 else 0.0
+
+    def to_dict(self) -> dict:
+        return {
+            "hits": self.hits,
+            "misses": self.misses,
+            "hit_rate": self.hit_rate,
+            "evictions": self.evictions,
+            "promotions": self.promotions,
+            "demotions": self.demotions,
+            "disk": {"hits": self.disk_hits, "misses": self.disk_misses},
+            "hot": {"hits": self.hot_hits, "misses": self.hot_misses},
+            "memory": {"hits": self.memory_hits, "misses": self.memory_misses},
+        }
 
 
 class Store(Protocol):
@@ -122,21 +143,22 @@ class MemoryStore:
     def size_bytes(self) -> int:
         return sum(self._sizes.values())
 
-    def evict_lru(self, target_bytes: int) -> List[str]:
-        """Evict least-recently-used entries to free space."""
+    def evict_lru(self, target_bytes: int) -> List[Tuple[str, Any]]:
+        """Evict least-recently-used entries to free space.
+
+        Returns list of (key, data) tuples for evicted entries.
+        """
         evicted = []
         while self.size_bytes() > self._max_size - target_bytes and self._data:
-            key, _ = self._data.popitem(last=False)
-            evicted.append(key)
+            key, data = self._data.popitem(last=False)
+            evicted.append((key, data))
             self._sizes.pop(key, None)
         return evicted
 
-    def evict_lfu(self, target_bytes: int, access_counts: Dict[str, int]) -> List[str]:
+    def evict_lfu(self, target_bytes: int, access_counts: Dict[str, int]) -> List[Tuple[str, Any]]:
         """Evict least-frequently-used entries to free space.
 
-        Args:
-            target_bytes: Target bytes to free.
-            access_counts: Dict of key → access_count from CacheEntry.
+        Returns list of (key, data) tuples for evicted entries.
         """
         if self.size_bytes() <= self._max_size - target_bytes:
             return []
@@ -146,9 +168,9 @@ class MemoryStore:
         for key in keys_by_freq:
             if self.size_bytes() <= self._max_size - target_bytes:
                 break
-            self._data.pop(key, None)
+            data = self._data.pop(key, None)
             self._sizes.pop(key, None)
-            evicted.append(key)
+            evicted.append((key, data))
         return evicted
 
 
@@ -264,58 +286,88 @@ class TieredCache:
         self._auto_promote = auto_promote
         self._eviction_policy = eviction_policy
         self._stats = CacheStats()
+        self._lock = threading.RLock()  # protects _entries, _stats, and tier mutations
 
     def get(self, key: str) -> Optional[Any]:
-        """Get data, promoting to hotter tier if needed."""
-        entry = self._entries.get(key)
-        if entry is None:
-            self._stats.misses += 1
-            return None
+        """Get data, promoting to hotter tier if needed. Thread-safe."""
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None:
+                self._stats.misses += 1
+                return None
 
-        # Check TTL expiration
-        if entry.is_expired():
-            self.remove(key)
-            self._stats.misses += 1
-            return None
+            # Check TTL expiration
+            if entry.is_expired():
+                self._remove_unlocked(key)
+                self._stats.misses += 1
+                return None
 
-        # Try memory first
-        data = self._memory.get(key)
-        if data is not None:
-            entry.tier = Tier.MEMORY
-            entry.touch()
-            self._stats.hits += 1
-            return data
-
-        # Try hot cache
-        data = self._hot.get(key)
-        if data is not None:
-            entry.tier = Tier.HOT
-            entry.touch()
-            self._stats.hits += 1
-            # Auto-promote to memory if hot enough
-            if self._auto_promote and entry.access_count >= self._promote_threshold:
-                self._promote(key, data, Tier.MEMORY)
-            return data
-
-        # Try disk
-        if self._disk:
-            data = self._disk.get(key)
+            # Try memory first
+            data = self._memory.get(key)
             if data is not None:
-                entry.tier = Tier.DISK
+                entry.tier = Tier.MEMORY
                 entry.touch()
                 self._stats.hits += 1
-                # Auto-promote to hot if accessed enough
-                if self._auto_promote and entry.access_count >= self._promote_threshold:
-                    self._promote(key, data, Tier.HOT)
+                self._stats.memory_hits += 1
                 return data
 
-        self._stats.misses += 1
-        return None
+            # Try hot cache
+            data = self._hot.get(key)
+            if data is not None:
+                entry.tier = Tier.HOT
+                entry.touch()
+                self._stats.hits += 1
+                self._stats.hot_hits += 1
+                # Auto-promote to memory if hot enough
+                if self._auto_promote and entry.access_count >= self._promote_threshold:
+                    self._promote(key, data, Tier.MEMORY)
+                return data
+
+            # Try disk
+            if self._disk:
+                data = self._disk.get(key)
+                if data is not None:
+                    entry.tier = Tier.DISK
+                    entry.touch()
+                    self._stats.hits += 1
+                    self._stats.disk_hits += 1
+                    # Auto-promote to hot if accessed enough
+                    if self._auto_promote and entry.access_count >= self._promote_threshold:
+                        self._promote(key, data, Tier.HOT)
+                    return data
+
+            self._stats.misses += 1
+            self._stats.memory_misses += 1
+            return None
+
+    def peek(self, key: str) -> Optional[Any]:
+        """Get data without promoting or updating access stats.
+
+        Thread-safe. Read-only — no tier changes, no access count update.
+        """
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is None:
+                return None
+            if entry.is_expired():
+                return None
+
+            data = self._memory.get(key)
+            if data is not None:
+                return data
+            data = self._hot.get(key)
+            if data is not None:
+                return data
+            if self._disk:
+                data = self._disk.get(key)
+                if data is not None:
+                    return data
+            return None
 
     def put(self, key: str, value: Any, tier: Tier = Tier.MEMORY,
             size_bytes: int = 0, pinned: bool = False,
             ttl: Optional[float] = None) -> None:
-        """Store data at the specified tier.
+        """Store data at the specified tier. Thread-safe.
 
         Args:
             key: Cache key.
@@ -328,26 +380,32 @@ class TieredCache:
         if size_bytes == 0 and isinstance(value, np.ndarray):
             size_bytes = value.nbytes
 
-        entry = CacheEntry(
-            key=key,
-            tier=tier,
-            size_bytes=size_bytes,
-            pinned=pinned,
-            ttl=ttl,
-        )
-        self._entries[key] = entry
+        with self._lock:
+            entry = CacheEntry(
+                key=key,
+                tier=tier,
+                size_bytes=size_bytes,
+                pinned=pinned,
+                ttl=ttl,
+            )
+            self._entries[key] = entry
 
-        if tier == Tier.MEMORY:
-            self._memory.put(key, value, size_bytes)
-            self._maybe_evict_memory()
-        elif tier == Tier.HOT:
-            self._hot.put(key, value, size_bytes)
-            self._maybe_evict_hot()
-        elif tier == Tier.DISK and self._disk:
-            self._disk.put(key, value)
+            if tier == Tier.MEMORY:
+                self._memory.put(key, value, size_bytes)
+                self._maybe_evict_memory()
+            elif tier == Tier.HOT:
+                self._hot.put(key, value, size_bytes)
+                self._maybe_evict_hot()
+            elif tier == Tier.DISK and self._disk:
+                self._disk.put(key, value)
 
     def remove(self, key: str) -> bool:
-        """Remove data from all tiers."""
+        """Remove data from all tiers. Thread-safe."""
+        with self._lock:
+            return self._remove_unlocked(key)
+
+    def _remove_unlocked(self, key: str) -> bool:
+        """Remove data from all tiers (caller must hold lock)."""
         entry = self._entries.pop(key, None)
         if entry is None:
             return False
@@ -359,51 +417,55 @@ class TieredCache:
         return True
 
     def exists(self, key: str) -> bool:
-        return key in self._entries
+        with self._lock:
+            return key in self._entries
 
     def list_keys(self, tier: Optional[Tier] = None) -> List[str]:
-        """List keys, optionally filtered by tier."""
-        if tier is None:
-            return list(self._entries.keys())
-        return [k for k, e in self._entries.items() if e.tier == tier]
+        """List keys, optionally filtered by tier. Thread-safe."""
+        with self._lock:
+            if tier is None:
+                return list(self._entries.keys())
+            return [k for k, e in self._entries.items() if e.tier == tier]
 
     def stats(self) -> dict:
-        """Cache statistics."""
-        tier_counts = {}
-        tier_sizes = {}
-        for entry in self._entries.values():
-            t = entry.tier.value
-            tier_counts[t] = tier_counts.get(t, 0) + 1
-            tier_sizes[t] = tier_sizes.get(t, 0) + entry.size_bytes
+        """Cache statistics. Thread-safe."""
+        with self._lock:
+            tier_counts = {}
+            tier_sizes = {}
+            for entry in self._entries.values():
+                t = entry.tier.value
+                tier_counts[t] = tier_counts.get(t, 0) + 1
+                tier_sizes[t] = tier_sizes.get(t, 0) + entry.size_bytes
 
-        # Count expired entries
-        expired = sum(1 for e in self._entries.values() if e.is_expired())
+            # Count expired entries
+            expired = sum(1 for e in self._entries.values() if e.is_expired())
 
-        return {
-            "total_entries": len(self._entries),
-            "expired_entries": expired,
-            "eviction_policy": self._eviction_policy.value,
-            "tier_counts": tier_counts,
-            "tier_sizes": tier_sizes,
-            "memory_size": self._memory.size_bytes(),
-            "memory_max": self._memory._max_size,
-            "hot_size": self._hot.size_bytes(),
-            "hot_max": self._hot._inner._max_size,
-            "disk_size": self._disk.size_bytes() if self._disk else 0,
-            "hits": self._stats.hits,
-            "misses": self._stats.misses,
-            "hit_rate": self._stats.hit_rate,
-            "evictions": self._stats.evictions,
-            "promotions": self._stats.promotions,
-            "demotions": self._stats.demotions,
-        }
+            return {
+                "total_entries": len(self._entries),
+                "expired_entries": expired,
+                "eviction_policy": self._eviction_policy.value,
+                "tier_counts": tier_counts,
+                "tier_sizes": tier_sizes,
+                "memory_size": self._memory.size_bytes(),
+                "memory_max": self._memory._max_size,
+                "hot_size": self._hot.size_bytes(),
+                "hot_max": self._hot._inner._max_size,
+                "disk_size": self._disk.size_bytes() if self._disk else 0,
+                "hits": self._stats.hits,
+                "misses": self._stats.misses,
+                "hit_rate": self._stats.hit_rate,
+                "evictions": self._stats.evictions,
+                "promotions": self._stats.promotions,
+                "demotions": self._stats.demotions,
+            }
 
     def cleanup_expired(self) -> int:
-        """Remove all expired entries. Returns count removed."""
-        expired_keys = [k for k, e in self._entries.items() if e.is_expired()]
-        for key in expired_keys:
-            self.remove(key)
-        return len(expired_keys)
+        """Remove all expired entries. Returns count removed. Thread-safe."""
+        with self._lock:
+            expired_keys = [k for k, e in self._entries.items() if e.is_expired()]
+            for key in expired_keys:
+                self._remove_unlocked(key)
+            return len(expired_keys)
 
     def _promote(self, key: str, data: Any, target_tier: Tier) -> None:
         """Promote data to a hotter tier."""
@@ -423,22 +485,47 @@ class TieredCache:
         logger.debug("Promoted %s: %s → %s", key, old_tier.value, target_tier.value)
 
     def evict(self, target_tier: Tier, target_bytes: int) -> int:
-        """Evict entries from a tier to free space. Returns bytes freed."""
-        freed = 0
+        """Evict entries from a tier to free space. Returns bytes freed. Thread-safe."""
+        with self._lock:
+            freed = 0
 
-        if target_tier == Tier.MEMORY:
-            evicted = self._memory.evict_lru(target_bytes)
-            for key in evicted:
-                entry = self._entries.get(key)
-                if entry:
-                    # Demote to hot
-                    self._hot.put(key, None, entry.size_bytes)
-                    entry.tier = Tier.HOT
-                    self._stats.demotions += 1
-                    freed += entry.size_bytes
-                    self._stats.evictions += 1
+            if target_tier == Tier.MEMORY:
+                if self._eviction_policy == EvictionPolicy.LFU:
+                    counts = {k: e.access_count for k, e in self._entries.items()
+                              if e.tier == Tier.MEMORY and not e.pinned}
+                    evicted = self._memory.evict_lfu(target_bytes, counts)
+                else:
+                    evicted = self._memory.evict_lru(target_bytes)
+                for key, data in evicted:
+                    entry = self._entries.get(key)
+                    if entry:
+                        # Demote to hot (preserves data)
+                        if data is not None:
+                            self._hot.put(key, data, entry.size_bytes)
+                        entry.tier = Tier.HOT
+                        self._stats.demotions += 1
+                        freed += entry.size_bytes
+                        self._stats.evictions += 1
 
-        return freed
+            elif target_tier == Tier.HOT:
+                if self._eviction_policy == EvictionPolicy.LFU:
+                    counts = {k: e.access_count for k, e in self._entries.items()
+                              if e.tier == Tier.HOT and not e.pinned}
+                    evicted = self._hot._inner.evict_lfu(target_bytes, counts)
+                else:
+                    evicted = self._hot._inner.evict_lru(target_bytes)
+                for key, data in evicted:
+                    entry = self._entries.get(key)
+                    if entry:
+                        # Demote to disk if available
+                        if self._disk and data is not None:
+                            self._disk.put(key, data, meta={"demoted_from": "hot"})
+                            entry.tier = Tier.DISK
+                        self._stats.demotions += 1
+                        freed += entry.size_bytes
+                        self._stats.evictions += 1
+
+            return freed
 
     def _maybe_evict_memory(self) -> None:
         """Auto-evict from memory when over capacity."""
@@ -454,14 +541,13 @@ class TieredCache:
             evicted = self._memory.evict_lfu(target, counts)
         else:
             evicted = self._memory.evict_lru(target)
-        for key in evicted:
+        for key, data in evicted:
             entry = self._entries.get(key)
             if entry and not entry.pinned:
-                data = None  # data was removed from MemoryStore
-                if self._disk:
+                if self._disk and data is not None:
                     self._disk.put(key, data, meta={"demoted_from": "memory"})
                     entry.tier = Tier.DISK
-                else:
+                elif data is not None:
                     self._hot.put(key, data, entry.size_bytes)
                     entry.tier = Tier.HOT
                 self._stats.demotions += 1
@@ -480,11 +566,11 @@ class TieredCache:
             evicted = self._hot._inner.evict_lfu(target, counts)
         else:
             evicted = self._hot._inner.evict_lru(target)
-        for key in evicted:
+        for key, data in evicted:
             entry = self._entries.get(key)
             if entry and not entry.pinned:
-                if self._disk:
-                    self._disk.put(key, None, meta={"demoted_from": "hot"})
+                if self._disk and data is not None:
+                    self._disk.put(key, data, meta={"demoted_from": "hot"})
                     entry.tier = Tier.DISK
                 self._stats.demotions += 1
                 self._stats.evictions += 1

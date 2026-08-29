@@ -122,7 +122,7 @@ def range_server():
 @pytest.fixture(autouse=True)
 def _isolate_state(monkeypatch, tmp_path):
     """Give each test a private download state so tests never share/collide."""
-    from downcraft import state as state_mod
+    from downcraft.download import state as state_mod
     monkeypatch.setattr(
         state_mod,
         "get_state",
@@ -133,8 +133,8 @@ def _isolate_state(monkeypatch, tmp_path):
 @pytest.fixture(autouse=True)
 def _fast_retries(monkeypatch):
     """Keep failure-path tests fast: never wait real backoff."""
-    from downcraft import downloader as downloader_mod
-    monkeypatch.setattr(downloader_mod, "MAX_RETRIES", 1)
+    from downcraft.download import http as http_mod
+    monkeypatch.setattr(http_mod, "MAX_RETRIES", 1)
 
 
 # ---------------------------------------------------------------------------

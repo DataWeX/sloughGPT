@@ -38,6 +38,18 @@ vi.mock('@sloughgpt/strui', () => {
     StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
+    AlertDialog: ({ children }: any) => <div data-testid="alert-dialog">{children}</div>,
+    AlertDialogAction: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    AlertDialogCancel: ({ children }: any) => <button>{children}</button>,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    DropdownMenu: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
+    DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuItem: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
   }
 })
 
@@ -90,6 +102,11 @@ vi.mock('@/components/training/TrainingPipeline', () => ({
       <span>jobs:{form.allJobs.length}</span>
       {session.trainingRunning && <span>running</span>}
     </div>
+  ),
+}))
+vi.mock('@/components/training/StopTrainingButton', () => ({
+  StopTrainingButton: ({ onStop }: { onStop: () => Promise<void> }) => (
+    <button data-testid="stop-training-button" onClick={() => void onStop()}>Stop training</button>
   ),
 }))
 
@@ -182,7 +199,7 @@ describe('TrainingPage', () => {
     render(<Page />)
     await waitFor(() => { expect(screen.getByText('Export metrics')).toBeTruthy() })
     await act(async () => { screen.getByText('Export metrics').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to export metrics', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not export metrics', 'error') })
   })
 
   it('refreshes jobs and checkpoints when Refresh is clicked', async () => {

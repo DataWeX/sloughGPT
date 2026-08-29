@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { experimentsController } from '@/lib/experiments-controller'
 
@@ -18,26 +18,56 @@ interface ExperimentData {
 export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardProps) {
   const [data, setData] = useState<ExperimentData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchData = async () => {
     setLoading(true)
+    setError(null)
     try {
       const result = await experimentsController.getExperimentData(experimentId)
       setData(result)
-    } catch {
-      // silently ignore
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Could not load experiment data')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchData() }, [experimentId])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const result = await experimentsController.getExperimentData(experimentId)
+        if (active) setData(result)
+      } catch (e: unknown) {
+        if (active) setError(e instanceof Error ? e.message : 'Could not load experiment data')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [experimentId])
 
   if (loading) {
     return (
       <Card data-testid="experiment-details">
         <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
         <CardContent><div className="h-20 animate-pulse bg-muted/50 rounded" /></CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card data-testid="experiment-details">
+        <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-sm text-destructive">{error}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={fetchData}>Retry</Button>
+        </CardContent>
       </Card>
     )
   }
@@ -71,14 +101,12 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
           <div className="flex items-center gap-2">
             <CardTitle className="text-base">Experiment Data</CardTitle>
             {status?.status && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                status.status === 'completed' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
-              }`}>
+              <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', status.status === 'completed' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning')}>
                 {status.status}
               </span>
             )}
           </div>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
+          <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
             <IconRefresh className="h-3.5 w-3.5" />
           </Button>
         </div>

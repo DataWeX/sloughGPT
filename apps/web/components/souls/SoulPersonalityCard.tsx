@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
 interface SoulPersonalityCardProps {
   personality: Record<string, number> | undefined
@@ -56,7 +56,7 @@ export function SoulPersonalityCard({ personality, traits, soulName }: SoulPerso
               </div>
               <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${traitColor(value)}`}
+                  className={cn('h-full rounded-full transition-all', traitColor(value))}
                   style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
                 />
               </div>

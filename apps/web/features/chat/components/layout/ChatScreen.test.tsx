@@ -31,7 +31,7 @@ describe('ChatScreen', () => {
   it('renders system banner when offline', () => {
     render(<ChatScreen messages={[]} loading={false} health={'offline' as any} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
     expect(screen.getByTestId('sys-banner')).toBeDefined()
-    expect(screen.getByText('API Server Offline')).toBeDefined()
+    expect(screen.getByText('Service Unavailable')).toBeDefined()
   })
 
   it('does not show empty state when offline', () => {

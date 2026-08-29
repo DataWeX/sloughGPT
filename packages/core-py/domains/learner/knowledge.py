@@ -421,7 +421,7 @@ def _scrape_article(url: str, timeout: float = 15) -> str:
         text = ' '.join(p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20)
         return text.strip() or resp.text[:2000]
     except Exception as e:
-        logger.warning(f"Article scrape failed {url}: {e}", extra={"tag": "INF"})
+        logger.warning("Article scrape failed %s: %s", url, e, extra={"tag": "INF"})
         return ""
 
 
@@ -465,7 +465,7 @@ def _search_ddg(query: str, max_results: int = 5) -> list[dict]:
                 if len(results) >= max_results:
                     break
     except Exception as e:
-        logger.warning(f"DDG search failed: {e}", extra={"tag": "INF"})
+        logger.warning("DDG search failed: %s", e, extra={"tag": "INF"})
     return results[:max_results]
 
 
@@ -534,8 +534,8 @@ class KnowledgeMemory:
             self._vector_store = InMemoryVectorStore(dimension=dim)
             try:
                 self._run_async(self._vector_store.connect())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Vector store connect failed: %s", e)
         self._embed_fn = None
         self._fact_counter = 0
         if load_persisted:
@@ -558,8 +558,8 @@ class KnowledgeMemory:
         if VISITED_PATH.exists():
             try:
                 return json.loads(VISITED_PATH.read_text())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load visited paths: %s", e)
         return []
 
     def _save_visited(self):
@@ -588,7 +588,7 @@ class KnowledgeMemory:
                 })
             ENTRIES_PATH.write_text(json.dumps(data))
         except Exception as e:
-            logger.warning(f"Failed to save entries: {e}", extra={"tag": "INF"})
+            logger.warning("Failed to save entries: %s", e, extra={"tag": "INF"})
 
     def _load_entries(self):
         """Load persisted entries into vector store on init."""
@@ -616,14 +616,14 @@ class KnowledgeMemory:
                 )
                 entries.append(entry)
             if skipped:
-                logger.warning(f"Skipped {skipped} entries with wrong dimension (expected {expected_dim})", extra={"tag": "INF"})
+                logger.warning("Skipped %s entries with wrong dimension (expected %s)", skipped, expected_dim, extra={"tag": "INF"})
             if entries:
                 self._run_async(self._vector_store.upsert(entries))
             if not hasattr(self, '_loaded_log'):
-                logger.info(f"Loaded {len(entries)} persisted entries from {ENTRIES_PATH}", extra={"tag": "INF"})
+                logger.info("Loaded %s persisted entries from %s", len(entries), ENTRIES_PATH, extra={"tag": "INF"})
                 self._loaded_log = True
         except Exception as e:
-            logger.warning(f"Failed to load entries: {e}", extra={"tag": "INF"})
+            logger.warning("Failed to load entries: %s", e, extra={"tag": "INF"})
 
     def _migrate_from_json_topics(self):
         """One-time migration: import old JSON topic files into vector store."""
@@ -649,9 +649,9 @@ class KnowledgeMemory:
                     if self.add_fact(fact):
                         migrated += 1
             except Exception as e:
-                logger.warning(f"Migration failed for {f}: {e}", extra={"tag": "INF"})
+                logger.warning("Migration failed for %s: %s", f, e, extra={"tag": "INF"})
         migration_done.write_text(json.dumps({"migrated": migrated, "at": time.time()}))
-        logger.info(f"Migrated {migrated} facts from legacy JSON topic files into vector store", extra={"tag": "INF"})
+        logger.info("Migrated %s facts from legacy JSON topic files into vector store", migrated, extra={"tag": "INF"})
 
     # ---- storage -----------------------------------------------------------
 
@@ -661,8 +661,6 @@ class KnowledgeMemory:
         with self._lock:
             if content_hash in self._visited:
                 return False
-            self._visited.add(content_hash)
-            self._fact_counter += 1
         import asyncio
         try:
             vec = self._get_embedding(fact.content)
@@ -686,7 +684,11 @@ class KnowledgeMemory:
                 self._run_async(self._vector_store.upsert([entry]))
             self._save_entries()
         except Exception as e:
-            logger.warning(f"Vector store upsert failed: {e}", extra={"tag": "INF"})
+            logger.warning("Vector store upsert failed: %s", e, extra={"tag": "INF"})
+            return False
+        with self._lock:
+            self._visited.add(content_hash)
+            self._fact_counter += 1
         self._save_visited()
         return True
 
@@ -749,7 +751,7 @@ class KnowledgeMemory:
                 self._run_async(self._vector_store.upsert(to_upsert))
             self._save_entries()
         except Exception as e:
-            logger.warning(f"Vector store batch upsert failed: {e}", extra={"tag": "INF"})
+            logger.warning("Vector store batch upsert failed: %s", e, extra={"tag": "INF"})
         self._save_visited()
         return len(to_upsert)
 
@@ -888,7 +890,7 @@ class KnowledgeMemory:
             facts.sort(key=lambda f: -f.get("importance", 0.5))
             return facts[:top_k]
         except Exception as e:
-            logger.warning(f"Vector store query failed: {e}", extra={"tag": "INF"})
+            logger.warning("Vector store query failed: %s", e, extra={"tag": "INF"})
             return []
 
     def search(self, text: str, top_k: int = 5) -> list[dict]:
@@ -924,7 +926,7 @@ class KnowledgeMemory:
                 facts.append(fact)
             return facts
         except Exception as e:
-            logger.warning(f"Vector search failed: {e}", extra={"tag": "INF"})
+            logger.warning("Vector search failed: %s", e, extra={"tag": "INF"})
             return []
 
     def stats(self) -> dict:
@@ -972,7 +974,7 @@ class KnowledgeMemory:
                 })
             return facts
         except Exception as e:
-            logger.warning(f"list_all failed: {e}", extra={"tag": "INF"})
+            logger.warning("list_all failed: %s", e, extra={"tag": "INF"})
             return []
 
     def delete_by_id(self, item_id: str) -> bool:
@@ -994,7 +996,7 @@ class KnowledgeMemory:
                 self._save_entries()
             return deleted
         except Exception as e:
-            logger.warning(f"delete_by_id failed: {e}", extra={"tag": "INF"})
+            logger.warning("delete_by_id failed: %s", e, extra={"tag": "INF"})
             return False
 
     def update_fact(self, item_id: str, content: str,
@@ -1064,7 +1066,7 @@ class KnowledgeMemory:
             self._save_entries()
             return True
         except Exception as e:
-            logger.warning(f"update_fact failed: {e}", extra={"tag": "INF"})
+            logger.warning("update_fact failed: %s", e, extra={"tag": "INF"})
             return False
 
     def clear_all(self) -> int:
@@ -1082,7 +1084,7 @@ class KnowledgeMemory:
             self._save_entries()
             return len(ids)
         except Exception as e:
-            logger.warning(f"clear_all failed: {e}", extra={"tag": "INF"})
+            logger.warning("clear_all failed: %s", e, extra={"tag": "INF"})
             return 0
 
     def get_context_string(self, max_items: int = 50) -> str:
@@ -1130,7 +1132,7 @@ class KnowledgeIngestor:
                 data = json.loads(FEED_STATE_PATH.read_text())
                 return [FeedSubscription(**d) for d in data]
             except Exception as e:
-                logger.warning(f"Failed to load feeds: {e}", extra={"tag": "INF"})
+                logger.warning("Failed to load feeds: %s", e, extra={"tag": "INF"})
         return []
 
     def _save_feeds(self):
@@ -1149,7 +1151,7 @@ class KnowledgeIngestor:
                 last_fetched=0,
             ))
             self._save_feeds()
-        logger.info(f"Subscribed to RSS feed: {url}", extra={"tag": "INF"})
+        logger.info("Subscribed to RSS feed: %s", url, extra={"tag": "INF"})
         return True
 
     def unsubscribe_feed(self, url: str) -> bool:
@@ -1178,7 +1180,7 @@ class KnowledgeIngestor:
                     articles.append({"url": url, "title": title, "summary": summary})
             return articles
         except Exception as e:
-            logger.warning(f"Feed fetch failed for {feed.url}: {e}", extra={"tag": "INF"})
+            logger.warning("Feed fetch failed for %s: %s", feed.url, e, extra={"tag": "INF"})
             return []
 
     def poll_feeds(self, max_articles: int = 10) -> dict:
@@ -1245,7 +1247,7 @@ class KnowledgeIngestor:
             )
             if not passes:
                 total_rejected += 1
-                logger.debug(f"Filter rejected {url[:60]}: {reason}", extra={"tag": "INF"})
+                logger.debug("Filter rejected %s: %s", url[:60], reason, extra={"tag": "INF"})
                 continue
             added = self.memory.add_article(
                 url, r.get("title", ""), content, source="search",
@@ -1306,7 +1308,7 @@ class KnowledgeIngestor:
             target=self._poll_loop, args=(interval,), daemon=True
         )
         self._feed_thread.start()
-        logger.info(f"Background feed polling started (interval={interval}s)", extra={"tag": "INF"})
+        logger.info("Background feed polling started (interval=%ss)", interval, extra={"tag": "INF"})
 
     def stop_background_polling(self):
         self._running = False
@@ -1319,9 +1321,9 @@ class KnowledgeIngestor:
             try:
                 new = self.poll_feeds(max_articles=5)
                 if new.get("new_articles", 0) > 0:
-                    logger.info(f"Background poll: {new['new_articles']} new articles ingested", extra={"tag": "INF"})
+                    logger.info("Background poll: %s new articles ingested", new['new_articles'], extra={"tag": "INF"})
             except Exception as e:
-                logger.warning(f"Background poll error: {e}", extra={"tag": "INF"})
+                logger.warning("Background poll error: %s", e, extra={"tag": "INF"})
             if self._stop_event.wait(timeout=interval):
                 break
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { cn, IconX } from '@sloughgpt/strui'
+import { cn, IconX, IconCheckCircle, IconError, IconInfo } from '@sloughgpt/strui'
 
 export type ToastType = 'success' | 'error' | 'info'
 
@@ -27,22 +27,14 @@ const TYPE_STYLES: Record<ToastType, { bar: string; icon: string }> = {
 const DURATION = 4000
 const EXIT_MS = 250
 
-const successEmojis = ['✨', '🎉', '⭐', '👏', '💪', '🌟', '🎯', '✅']
-
 function ToastIcon({ type, className }: { type: ToastType; className?: string }) {
-  const [emoji, setEmoji] = useState('✨')
-
-  useEffect(() => {
-    if (type === 'success') {
-      setEmoji(successEmojis[Math.floor(Math.random() * successEmojis.length)])
-    } else if (type === 'error') {
-      setEmoji('😕')
-    } else {
-      setEmoji('💡')
-    }
-  }, [type])
-
-  return <span className={cn('text-sm', className)}>{emoji}</span>
+  return (
+    <span className={cn('text-sm', className)}>
+      {type === 'success' ? <IconCheckCircle className="h-4 w-4 text-success" /> :
+       type === 'error' ? <IconError className="h-4 w-4 text-destructive" /> :
+       <IconInfo className="h-4 w-4 text-primary" />}
+    </span>
+  )
 }
 
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
@@ -106,7 +98,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
   return (
     <div
-      className={`sl-toast${exiting ? ' sl-toast--exit' : ''}`}
+      className={cn('sl-toast', exiting ? ' sl-toast--exit' : '')}
       role="alert"
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       aria-atomic="true"
@@ -120,14 +112,15 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         {toast.type === 'info' && 'Information: '}
       </span>
 
-      <div className={`sl-toast__bar ${styles.bar}`} />
+      <div className={cn('sl-toast__bar', styles.bar)} />
 
       <span className="sl-toast__body">
-        <ToastIcon type={toast.type} className={`sl-toast__icon ${styles.icon}`} />
+        <ToastIcon type={toast.type} className={cn('sl-toast__icon', styles.icon)} />
         <span className="sl-toast__message">
           {toast.message}
           {toast.verbose && (
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); setShowVerbose(v => !v) }}
               className="sl-toast__verbose"
             >
@@ -137,6 +130,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         </span>
         {toast.onUndo && (
           <button
+            type="button"
             onClick={e => { e.stopPropagation(); toast.onUndo!(); dismiss() }}
             className="sl-toast__undo"
           >
@@ -144,6 +138,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           </button>
         )}
         <button
+          type="button"
           onClick={e => { e.stopPropagation(); dismiss() }}
           className="sl-toast__close"
           aria-label={`Dismiss notification: ${toast.message}`}
@@ -158,7 +153,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
       <span className="sl-toast__track">
         <span
-          className={`sl-toast__fill ${styles.bar}`}
+          className={cn('sl-toast__fill', styles.bar)}
           style={{ width: `${progress}%` }}
         />
       </span>
@@ -178,6 +173,7 @@ export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainer
     <div className="sl-toast-container" role="region" aria-label="Notifications">
       {toasts.length > 2 && onClearAll && (
         <button
+          type="button"
           onClick={onClearAll}
           className="absolute top-1 right-1 z-10 text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
@@ -210,6 +206,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
     <ToastProvider>
       {toasts.length > 2 && onClearAll && (
         <button
+          type="button"
           onClick={onClearAll}
           className="fixed bottom-20 right-4 z-[101] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
@@ -221,7 +218,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
         <Toast key={t.id} className={['border-l-4', TYPE_BORDER[t.type]].join(' ')}>
           <div className="flex items-start gap-3 w-full">
             <span className="mt-0.5 text-sm shrink-0">
-              {t.type === 'success' ? '✨' : t.type === 'error' ? '😕' : '💡'}
+              {t.type === 'success' ? <IconCheckCircle className="h-4 w-4 text-success" /> : t.type === 'error' ? <IconError className="h-4 w-4 text-destructive" /> : <IconInfo className="h-4 w-4 text-primary" />}
             </span>
             <div className="flex-1 min-w-0">
               <ToastTitle className="text-sm">{t.message}</ToastTitle>

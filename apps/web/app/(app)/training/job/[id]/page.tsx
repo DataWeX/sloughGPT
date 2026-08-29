@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -23,16 +23,7 @@ import { trainingJobsController, type TrainingJob } from '@/lib/training-control
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
-import { MS_PER_SECOND, MS_PER_MINUTE, MS_PER_HOUR } from '@/lib/format-bytes'
-
-function formatDuration(start: number | string, end?: number | string): string {
-  const s = new Date(start).getTime()
-  const e = end ? new Date(end).getTime() : Date.now()
-  const ms = e - s
-  if (ms < MS_PER_MINUTE) return `${Math.floor(ms / MS_PER_SECOND)}s`
-  if (ms < MS_PER_HOUR) return `${Math.floor(ms / MS_PER_MINUTE)}m ${Math.floor((ms % MS_PER_MINUTE) / MS_PER_SECOND)}s`
-  return `${Math.floor(ms / MS_PER_HOUR)}h ${Math.floor((ms % MS_PER_HOUR) / MS_PER_MINUTE)}m`
-}
+import { formatElapsed } from '@/components/training/formatDuration'
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error' }> = {
   running: { label: 'Running', variant: 'default' },
@@ -98,7 +89,7 @@ export default function TrainingJobDetailPage() {
         consecutiveErrors++
         if (consecutiveErrors >= 5) {
           clearInterval(id)
-          addToast('Lost connection to training server', 'error')
+          addToast('Lost connection to training service', 'error')
         }
       }
     }, 3000)
@@ -112,7 +103,7 @@ export default function TrainingJobDetailPage() {
     try {
       await modelController.loadModelPath(job.checkpoint)
       addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
-    } catch { addToast('Failed to load trained version', 'error') }
+    } catch { addToast('Could not load trained version', 'error') }
   }
 
   const handleDelete = async () => {
@@ -233,7 +224,7 @@ export default function TrainingJobDetailPage() {
                         await trainingJobsController.stop(job.id)
                         addToast('Training stopped', 'info')
                         await fetchJob()
-                      } catch { addToast('Failed to stop training', 'error') }
+                      } catch { addToast('Could not stop training', 'error') }
                     }}>
                       Stop
                     </Button>
@@ -248,7 +239,7 @@ export default function TrainingJobDetailPage() {
                           const blob = await trainingJobsController.downloadTrainingJob(job.id)
                           downloadBlob(blob, `${job.id}.checkpoint`)
                           addToast('Checkpoint downloaded', 'success')
-                        } catch { addToast('Download failed', 'error') }
+                        } catch { addToast('Could not download', 'error') }
                       }}>
                         <IconDownload className="h-4 w-4 mr-1" /> Export
                       </Button>
@@ -259,7 +250,7 @@ export default function TrainingJobDetailPage() {
                       try {
                         await modelController.loadModelPath(job.checkpoint)
                         addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
-                      } catch { addToast('Failed to load model', 'error') }
+                      } catch { addToast('Could not load model', 'error') }
                     }
                     router.push('/chat')
                   }}>
@@ -325,7 +316,7 @@ export default function TrainingJobDetailPage() {
                   const improving = avgSecond < avgFirst
                   const pctChange = avgFirst > 0 ? ((avgSecond - avgFirst) / avgFirst * 100).toFixed(1) : '0'
                   return (
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                    <span className={cn('text-xs font-medium px-2 py-0.5 rounded', improving ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning')}>
                       {improving ? '↓' : '↑'} {Math.abs(Number(pctChange))}%
                     </span>
                   )
@@ -372,7 +363,7 @@ export default function TrainingJobDetailPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Duration</p>
-                  <p className="text-xs mt-0.5">{formatDuration(job.created_at, job.finished_at)}</p>
+                  <p className="text-xs mt-0.5">{formatElapsed(job.created_at, job.finished_at)}</p>
                 </div>
                 {job.checkpoint && (
                   <div className="col-span-2">

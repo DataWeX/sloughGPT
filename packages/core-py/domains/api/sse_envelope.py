@@ -101,10 +101,11 @@ class SSEEnvelope:
     message: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         status = self.status.value if isinstance(self.status, StreamStatus) else self.status
-        return {
+        result = {
             "stream": self.stream,
             "phase": self.phase,
             "status": status,
@@ -112,6 +113,9 @@ class SSEEnvelope:
             "data": self.data,
             "meta": self.meta,
         }
+        if self.id is not None:
+            result["id"] = self.id
+        return result
 
 
 def sse_event(
@@ -121,6 +125,7 @@ def sse_event(
     data: Optional[Dict[str, Any]] = None,
     meta: Optional[Dict[str, Any]] = None,
     message: str = "",
+    id: Optional[str] = None,
 ) -> str:
     """
     Build a standard SSE data line.
@@ -132,6 +137,7 @@ def sse_event(
         data:     structured payload (token, loss, step, etc.)
         meta:     diagnostic info (step, epoch, elapsed_ms, etc.)
         message:  human-readable one-liner
+        id:       optional event ID for Last-Event-ID reconnection
 
     Returns:
         SSE data line string: "data: <json>\n\n"
@@ -145,6 +151,7 @@ def sse_event(
         message=message,
         data=data or {},
         meta=meta or {},
+        id=id,
     )
     return "data: " + json.dumps(env.to_dict(), default=_json_safe) + "\n\n"
 
@@ -163,13 +170,29 @@ def sse_error(
     phase: str,
     error: str,
     meta: Optional[Dict[str, Any]] = None,
+    code: Optional[str] = None,
+    http_status: Optional[int] = None,
 ) -> str:
-    """Convenience: emit an error event."""
+    """Convenience: emit an error event.
+
+    Args:
+        stream:     stream name (e.g. "chat")
+        phase:      phase name (e.g. "TIMEOUT", "IDLE")
+        error:      human-readable error message
+        meta:       optional diagnostic metadata
+        code:       structured error code (e.g. "MODEL_TIMEOUT", "E_VAL_REQUEST")
+        http_status: suggested HTTP status code for the client (e.g. 503, 400)
+    """
+    data: Dict[str, Any] = {"error": error}
+    if code is not None:
+        data["code"] = code
+    if http_status is not None:
+        data["http_status"] = http_status
     return sse_event(
         stream=stream,
         phase=phase,
         status="error",
-        data={"error": error},
+        data=data,
         meta=meta or {},
         message=f"Error: {error}",
     )

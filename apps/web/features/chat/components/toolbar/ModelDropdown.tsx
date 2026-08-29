@@ -11,6 +11,7 @@ import {
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
+import { shortModelName } from '@/lib/chat-utils'
 
 interface ModelDropdownProps {
   variant?: 'dropdown' | 'panel'
@@ -27,10 +28,6 @@ interface FineTunedModel {
   model?: string
   dataset?: string
   size_mb?: number
-}
-
-function shortModelName(m: string): string {
-  return m.includes('/') ? m.split('/').pop() || m : m
 }
 
 function sizeLabel(info?: ModelInfo): string {
@@ -86,6 +83,7 @@ export function ModelDropdown({
             return (
               <button
                 key={m}
+                type="button"
                 onClick={() => onSelectModel(m)}
                 className={cn(
                   'w-full text-left px-2 py-1 rounded text-xs transition-colors flex items-center justify-between',
@@ -133,7 +131,7 @@ export function ModelDropdown({
               currentModel ? 'bg-success' : 'bg-muted-foreground/30'
             )} />
           )}
-          <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || currentModel || 'Select a model to load'}>
+          <span className="truncate max-w-[48px] sm:max-w-[64px]" title={loadingModel || currentModel || 'Select a model to load'} aria-live="polite">
             {loadingModel ? shortModelName(loadingModel) : currentModel ? shortModelName(currentModel) : 'Select model'}
           </span>
           {dlProgress?.status === 'downloading' && dlProgress.percentage != null && dlProgress.percentage > 0 && (
@@ -141,7 +139,7 @@ export function ModelDropdown({
               {dlProgress.percentage.toFixed(0)}%
             </span>
           )}
-          <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" />
+          <IconChevronDown className="h-2.5 w-2.5 opacity-40 shrink-0" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[200px] max-h-[300px] overflow-y-auto">

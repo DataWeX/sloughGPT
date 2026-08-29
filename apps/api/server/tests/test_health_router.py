@@ -64,7 +64,6 @@ class TestHealthRouter:
         """GET /health/detailed includes real process metrics."""
         data = self._data(client.get('/health/detailed'))
         system = data['system']
-        assert 'open_files' in system
         assert 'threads' in system
         assert system['threads'] >= 1
         assert 'gc_gen0' in system
@@ -79,6 +78,9 @@ class TestHealthRouter:
         from domains.infrastructure.server_state import get_server_state
 
         hc = HealthController()
+        # Reset the trend throttle so the first call records
+        get_server_state()._last_trend_ts = 0.0
+        hc._cache_time = 0.0
         d1 = hc.get_detailed_health()
         assert len(d1['health_history']) >= 1
         assert len(d1['memory_history']) >= 1

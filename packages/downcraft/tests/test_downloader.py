@@ -1,4 +1,4 @@
-"""Tests for downcraft.downloader — HTTP download with resume."""
+"""Tests for downcraft.download.http — HTTP download with resume."""
 
 import os
 import tempfile
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from downcraft.downloader import (
+from downcraft.download.http import (
     _part_path,
     _resolve_range_start,
     download_file,

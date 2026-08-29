@@ -121,6 +121,7 @@ export function SlashCommandMenu({ value, onInsert, onClose, onExecute }: SlashC
         <button
           key={cmd.command}
           ref={el => { itemRefs.current[i] = el }}
+          type="button"
           role="option"
           aria-selected={i === selectedIndex}
           onClick={() => select(cmd)}

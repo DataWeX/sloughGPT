@@ -27,9 +27,9 @@ const adapters = [
 ]
 
 describe('AdapterHealthCard', () => {
-  it('returns null for empty adapters', () => {
+  it('renders empty state for empty adapters', () => {
     const { container } = render(<AdapterHealthCard adapters={[]} />)
-    expect(container.querySelector('[data-testid="adapter-health"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders health card', () => {

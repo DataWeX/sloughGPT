@@ -18,6 +18,7 @@ Usage:
 """
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -59,10 +60,15 @@ class ConversionStatus:
 
 
 class ConversionTracker:
-    """Tracks conversion status for all models."""
+    """Tracks conversion status for all models.
+
+    Thread safety: All methods are protected by ``_lock`` to allow
+    concurrent access from model load threads and API request threads.
+    """
 
     def __init__(self):
         self._statuses: dict[str, ConversionStatus] = {}
+        self._lock = threading.Lock()
 
     def start(self, model_id: str, stage: ConversionStage = ConversionStage.IDLE, message: str = "") -> ConversionStatus:
         """Start tracking a model conversion."""
@@ -72,73 +78,81 @@ class ConversionTracker:
             message=message or self._default_message(stage),
             started_at=time.time(),
         )
-        self._statuses[model_id] = status
+        with self._lock:
+            self._statuses[model_id] = status
         logger.info("Conversion started: %s → %s", model_id, stage.value)
         return status
 
     def update(self, model_id: str, stage: ConversionStage = None, progress: float = None, message: str = None) -> ConversionStatus:
         """Update conversion status."""
-        status = self._statuses.get(model_id)
-        if status is None:
-            status = self.start(model_id, stage or ConversionStage.IDLE)
+        with self._lock:
+            status = self._statuses.get(model_id)
+            if status is None:
+                status = self.start(model_id, stage or ConversionStage.IDLE)
 
-        if stage is not None:
-            status.stage = stage
-        if progress is not None:
-            status.progress = min(1.0, max(0.0, progress))
-        if message is not None:
-            status.message = message
-        elif stage is not None:
-            status.message = self._default_message(stage)
+            if stage is not None:
+                status.stage = stage
+            if progress is not None:
+                status.progress = min(1.0, max(0.0, progress))
+            if message is not None:
+                status.message = message
+            elif stage is not None:
+                status.message = self._default_message(stage)
 
-        status.updated_at = time.time()
-        status.elapsed_s = time.time() - status.started_at
-        return status
+            status.updated_at = time.time()
+            status.elapsed_s = time.time() - status.started_at
+            return status
 
     def finish(self, model_id: str) -> ConversionStatus:
         """Mark conversion as complete."""
-        status = self._statuses.get(model_id)
-        if status:
-            status.stage = ConversionStage.READY
-            status.progress = 1.0
-            status.message = "Ready"
-            status.updated_at = time.time()
-            status.elapsed_s = time.time() - status.started_at
-            logger.info("Conversion complete: %s (%.1fs)", model_id, status.elapsed_s)
-        return status
+        with self._lock:
+            status = self._statuses.get(model_id)
+            if status:
+                status.stage = ConversionStage.READY
+                status.progress = 1.0
+                status.message = "Ready"
+                status.updated_at = time.time()
+                status.elapsed_s = time.time() - status.started_at
+                logger.info("Conversion complete: %s (%.1fs)", model_id, status.elapsed_s)
+            return status
 
     def fail(self, model_id: str, error: str) -> ConversionStatus:
         """Mark conversion as failed."""
-        status = self._statuses.get(model_id)
-        if status:
-            status.stage = ConversionStage.ERROR
-            status.error = error
-            status.message = f"Error: {error}"
-            status.updated_at = time.time()
-        return status
+        with self._lock:
+            status = self._statuses.get(model_id)
+            if status:
+                status.stage = ConversionStage.ERROR
+                status.error = error
+                status.message = f"Error: {error}"
+                status.updated_at = time.time()
+            return status
 
     def get(self, model_id: str) -> Optional[dict]:
         """Get status for a model."""
-        status = self._statuses.get(model_id)
-        return status.to_dict() if status else None
+        with self._lock:
+            status = self._statuses.get(model_id)
+            return status.to_dict() if status else None
 
     def get_all(self) -> list[dict]:
         """Get all active conversions."""
-        return [s.to_dict() for s in self._statuses.values()]
+        with self._lock:
+            return [s.to_dict() for s in self._statuses.values()]
 
     def get_active(self) -> list[dict]:
         """Get only in-progress conversions (not ready/error)."""
         active_stages = {ConversionStage.IDLE, ConversionStage.DOWNLOADING,
                          ConversionStage.CONVERTING, ConversionStage.PROTECTING,
                          ConversionStage.LOADING}
-        return [s.to_dict() for s in self._statuses.values() if s.stage in active_stages]
+        with self._lock:
+            return [s.to_dict() for s in self._statuses.values() if s.stage in active_stages]
 
-    def clear(self, model_id: str = None):
+    def clear(self, model_id: str = None) -> None:
         """Clear tracked status."""
-        if model_id:
-            self._statuses.pop(model_id, None)
-        else:
-            self._statuses.clear()
+        with self._lock:
+            if model_id:
+                self._statuses.pop(model_id, None)
+            else:
+                self._statuses.clear()
 
     @staticmethod
     def _default_message(stage: ConversionStage) -> str:
@@ -156,11 +170,14 @@ class ConversionTracker:
 
 # Module-level singleton
 _tracker: ConversionTracker | None = None
+_tracker_lock = threading.Lock()
 
 
 def get_tracker() -> ConversionTracker:
     """Get or create the global conversion tracker."""
     global _tracker
     if _tracker is None:
-        _tracker = ConversionTracker()
+        with _tracker_lock:
+            if _tracker is None:
+                _tracker = ConversionTracker()
     return _tracker

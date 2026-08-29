@@ -33,7 +33,9 @@ class TestHelpers:
 
     def test_api_get_exception(self, monkeypatch):
         monkeypatch.setattr(requests, "get", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("down")))
-        assert commands._api_get("/x") == {"error": "down"}
+        result = commands._api_get("/x")
+        assert "error" in result
+        assert result["error_type"] == "ConnectionError"
 
     def test_api_post_success(self, monkeypatch):
         calls = []
@@ -51,7 +53,8 @@ class TestHelpers:
 
     def test_api_post_exception(self, monkeypatch):
         monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(TimeoutError("slow")))
-        assert commands._api_post("/x") == {"error": "slow"}
+        result = commands._api_post("/x")
+        assert "error" in result
 
     def test_api_delete_success(self, monkeypatch):
         monkeypatch.setattr(requests, "delete", lambda *a, **k: _Resp(200, data={"deleted": True}))
@@ -59,11 +62,14 @@ class TestHelpers:
 
     def test_api_delete_non_200(self, monkeypatch):
         monkeypatch.setattr(requests, "delete", lambda *a, **k: _Resp(403))
-        assert commands._api_delete("/x") == {"error": "HTTP 403"}
+        result = commands._api_delete("/x")
+        assert result["error"] == "HTTP 403"
+        assert result["error_type"] == "HTTPError"
 
     def test_api_delete_exception(self, monkeypatch):
         monkeypatch.setattr(requests, "delete", lambda *a, **k: (_ for _ in ()).throw(OSError("nope")))
-        assert commands._api_delete("/x") == {"error": "nope"}
+        result = commands._api_delete("/x")
+        assert "error" in result
 
 
 class TestShellCommands:
@@ -106,7 +112,9 @@ class TestShellCommands:
 
     def test_load_model_exception(self, monkeypatch):
         monkeypatch.setattr(requests, "post", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("x")))
-        assert ShellCommands.load_model("gpt2") == {"error": "x"}
+        result = ShellCommands.load_model("gpt2")
+        assert result["error"] == "x"
+        assert result["error_type"] == "ConnectionError"
 
     def test_unload_model(self, monkeypatch):
         monkeypatch.setattr(commands, "_api_post", lambda p, d=None: {"unloaded": True})

@@ -73,6 +73,32 @@ export interface QuantizationResult {
   avx2_enabled: boolean
 }
 
+export interface ProviderDiagnostics {
+  providers: Record<string, {
+    type: string
+    module: string
+    text_provider?: string
+    processors?: string[]
+    model_id?: string
+    server?: { type: string; has_circuit_breaker: boolean }
+  }>
+  default_provider: string | null
+  model_state: {
+    model: string | null
+    model_type: string | null
+    tokenizer: string | null
+    provider: string | null
+  }
+  startup_phase: string
+}
+
+export interface StartupProgress {
+  phase: string
+  step: number
+  total: number
+  message: string
+}
+
 export const modelController = {
   _listInFlight: null as Promise<ModelInfo[]> | null,
 
@@ -98,12 +124,15 @@ export const modelController = {
   async getHealth(): Promise<HealthStatus | null> {
     try {
       return await apiGet<HealthStatus>('/health', undefined, { silent: true })
-    } catch { return null }
+    } catch (e) {
+      _log.warning('Could not health check', { exception: String(e) })
+      return null
+    }
   },
 
   async load(modelId: string, device = 'auto'): Promise<ModelLoadResponse> {
     const result = await apiPost<ModelLoadResponse>('/models/load', { model_id: modelId, device })
-    if (result.status === 'error') throw new Error(result.error || 'Model load failed')
+    if (result.status === 'error') throw new Error(result.error || 'Could not model load')
     return result
   },
 
@@ -115,7 +144,8 @@ export const modelController = {
         model_type: data.model_type ?? null,
         device: data.device ?? null,
       }
-    } catch {
+    } catch (e) {
+      _log.warning('Could not status check', { exception: String(e) })
       return { loaded: false, model_type: null, device: null }
     }
   },
@@ -124,7 +154,8 @@ export const modelController = {
     try {
       const models = await this.list()
       return models.find((m) => m.id === modelId) || null
-    } catch {
+    } catch (e) {
+      _log.warning('Could not model info fetch', { exception: String(e) })
       return null
     }
   },
@@ -133,7 +164,7 @@ export const modelController = {
     return this.load(modelPath, 'cpu')
   },
 
-  async unloadModel(modelId: string): Promise<Record<string, unknown>> {
+  async unloadModel(): Promise<Record<string, unknown>> {
     return await apiPost('/models/unload')
   },
 
@@ -163,12 +194,121 @@ export const modelController = {
   async getExportFormats(): Promise<Record<string, string>> {
     return apiGet<Record<string, string>>('/models/export/formats')
   },
+
+  async getCurrentModel(): Promise<{ model_id: string; model_type: string; device: string; loaded_at: number; quantization?: Record<string, unknown> } | null> {
+    try {
+      return await apiGet('/models/current')
+    } catch (e) {
+      _log.warning('Could not get current model', { exception: String(e) })
+      return null
+    }
+  },
+
+  async getCatalog(): Promise<{ models: Array<{ id: string; name: string; type: string; size_gb: number; cached: boolean; source: string }>; count: number }> {
+    try {
+      return await apiGet('/models/catalog')
+    } catch (e) {
+      _log.warning('Could not get catalog', { exception: String(e) })
+      return { models: [], count: 0 }
+    }
+  },
+
+  async getCatalogStats(): Promise<{ total_models: number; total_size_gb: number; cached_count: number; sources: Record<string, number> }> {
+    try {
+      return await apiGet('/models/catalog/stats')
+    } catch (e) {
+      _log.warning('Could not get catalog stats', { exception: String(e) })
+      return { total_models: 0, total_size_gb: 0, cached_count: 0, sources: {} }
+    }
+  },
+
+  async startDownload(modelId: string, totalBytesHint = 0): Promise<{ status: string; model_id: string }> {
+    return apiPost('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
+  },
+
+  async getDownloadStatus(modelId: string): Promise<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number; error?: string }> {
+    return apiGet(`/models/download/${encodeURIComponent(modelId)}`)
+  },
+
+  async listDownloads(): Promise<{ downloads: Array<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }>; count: number }> {
+    try {
+      return await apiGet('/models/downloads')
+    } catch (e) {
+      _log.warning('Could not list downloads', { exception: String(e) })
+      return { downloads: [], count: 0 }
+    }
+  },
+
+  async cancelDownload(modelId: string): Promise<{ status: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(modelId)}/cancel`)
+  },
+
+  async retryDownload(modelId: string): Promise<{ status: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(modelId)}/retry`)
+  },
+
+  async verifyDownload(modelId: string): Promise<{ verified: boolean; model_id: string; error?: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(modelId)}/verify`)
+  },
+
+  async getEngineStatus(): Promise<{ engine: string; version: string; models_loaded: number; uptime_s: number; memory_usage_mb: number }> {
+    try {
+      return await apiGet('/models/engine/status')
+    } catch (e) {
+      _log.warning('Could not get engine status', { exception: String(e) })
+      return { engine: 'unknown', version: '0.0.0', models_loaded: 0, uptime_s: 0, memory_usage_mb: 0 }
+    }
+  },
+
+  async reloadEngine(): Promise<{ status: string }> {
+    return apiPost('/models/engine/reload')
+  },
+
+  async debugProviders(): Promise<ProviderDiagnostics | null> {
+    try {
+      return await apiGet<ProviderDiagnostics>('/models/debug/providers')
+    } catch (e) {
+      _log.warning('Could not get provider diagnostics', { exception: String(e) })
+      return null
+    }
+  },
+
+  async getStartupProgress(): Promise<StartupProgress | null> {
+    try {
+      return await apiGet<StartupProgress>('/health/startup-progress')
+    } catch {
+      return null
+    }
+  },
+
+  async setPrecision(mode: 'auto' | 'fp32' | 'fp16'): Promise<{ mode: string; applied: boolean }> {
+    return apiPost('/models/precision', { mode })
+  },
+
+  async exportModel(outputPath: string, format: 'sou' | 'safetensors' | 'onnx' | 'gguf' = 'sou', includeTokenizer = true): Promise<{ status: string; output_path: string }> {
+    return apiPost('/models/export', { output_path: outputPath, format, include_tokenizer: includeTokenizer })
+  },
 }
 
 export async function* streamModelEvents(
-  _modelId: string,
+  modelId: string,
 ): AsyncGenerator<{ phase: string; progress: number }> {
-  yield { phase: 'downloading', progress: 0 }
-  yield { phase: 'loading', progress: 50 }
-  yield { phase: 'ready', progress: 100 }
+  const { apiGet } = await import('./http-client')
+  while (true) {
+    try {
+      const data = await apiGet<{ model_id: string; cached?: boolean; status?: string; progress?: number }>(`/models/download/${encodeURIComponent(modelId)}`)
+      if (data.cached) {
+        yield { phase: 'ready', progress: 100 }
+        return
+      }
+      const status = data.status ?? 'downloading'
+      const progress = (data.progress ?? 0) * 100
+      yield { phase: status, progress }
+      if (status === 'complete' || status === 'error') return
+    } catch {
+      yield { phase: 'downloading', progress: 0 }
+      return
+    }
+    await new Promise(r => setTimeout(r, 1000))
+  }
 }

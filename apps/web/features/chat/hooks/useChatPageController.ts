@@ -18,17 +18,18 @@ import { useChatKeyboard } from '@/features/chat/hooks/useChatKeyboard'
 import { useChatBookmarks } from '@/features/chat/hooks/useChatBookmarks'
 import { useChatMessages } from '@/features/chat/hooks/useChatMessages'
 import { useChatMode } from '@/features/chat/hooks/useChatMode'
+import { useMessageNotes } from '@/features/chat/hooks/useMessageNotes'
+import { useMessageThreads } from '@/features/chat/hooks/useMessageThreads'
 import { computeSearchMatches } from '@/lib/chat-utils'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { chatController } from '@/lib/chat-controller'
-import { generationConfigController } from '@/lib/generation-config-controller'
 import { useFeedbackStore } from '@/lib/feedback-store'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings } from '@/lib/store'
 import { imagesController } from '@/lib/images-controller'
 import type { ImageStyle } from '@/lib/images-controller'
 import { chatDB } from '@/lib/db'
-import { filesController } from '@/lib/files-controller'
+
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { resizeImage } from '@/features/chat/components/input/ImageUpload'
 import { useChatToolbarValue } from '@/features/chat/hooks/useChatToolbarValue'
@@ -63,6 +64,14 @@ export function useChatPageController(
     })
   }, [])
   const [systemPromptOpen, setSystemPromptOpen] = useState(false)
+  const [noteDialogOpen, setNoteDialogOpen] = useState(false)
+  const [noteDialogMessageId, setNoteDialogMessageId] = useState<string | null>(null)
+  const [noteSearchOpen, setNoteSearchOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [conversationSearchQuery, setConversationSearchQuery] = useState('')
+  const [conversationSearchOpen, setConversationSearchOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
 
   const { bookmarks, addBookmark, removeBookmark, isBookmarked, clearAll } = useChatBookmarks()
 
@@ -97,16 +106,23 @@ export function useChatPageController(
     },
   })
 
+  const messageNotes = useMessageNotes({ sessionId: chat.sessionIdRef.current })
+
+  const threads = useMessageThreads({ messages: chat.messages })
+  const [activeThreadMessageId, setActiveThreadMessageId] = useState<string | null>(null)
+
   const {
     chatMode, setChatMode,
     writeTone, setWriteTone,
     writeType, setWriteType,
+    rewriteStyle, setRewriteStyle,
     decideStructure, setDecideStructure,
     explainDifficulty, setExplainDifficulty,
     translateLangPair, setTranslateLangPair,
     brainstormTopic, setBrainstormTopic,
     wellnessType, setWellnessType,
     createStyle, setCreateStyle,
+    handleSend: handleModeSend,
   } = useChatMode({
     chat: {
       input: chat.input,
@@ -139,6 +155,9 @@ export function useChatPageController(
       }
     },
     onExportMarkdown: () => chat.handleExportMarkdown(),
+    onCancelStream: () => chat.cancelStream(),
+    onApproveTool: () => chat.handleToolApproval(true),
+    onDenyTool: () => chat.handleToolApproval(false),
     onDuplicateConversation: () => {
       const sid = chat.sessionIdRef.current
       if (sid) {
@@ -147,6 +166,29 @@ export function useChatPageController(
       }
     },
     onToggleBookmarks: () => ui.setToolPanelOpen(prev => !prev),
+    onToggleSidebar: () => ui.setSidebarOpen(prev => !prev),
+    onAddNoteToLastMessage: () => {
+      const messages = chat.messages
+      if (messages.length > 0) {
+        const lastMsg = messages[messages.length - 1]
+        if (lastMsg.id) {
+          setNoteDialogMessageId(lastMsg.id)
+          setNoteDialogOpen(true)
+        }
+      }
+    },
+    onOpenNoteSearch: () => setNoteSearchOpen(true),
+    onOpenShortcuts: () => setShortcutsOpen(true),
+    onOpenTemplates: () => setTemplatesOpen(true),
+    onOpenConversationSearch: () => setConversationSearchOpen(true),
+    onOpenStats: () => setStatsOpen(true),
+    onQuickReply: (messageId: string) => {
+      const msg = chat.messages.find(m => m.id === messageId)
+      if (msg) {
+        const snippet = msg.content.slice(0, 200).replace(/\n/g, ' ')
+        chat.setInput(`> ${snippet}\n\n`)
+      }
+    },
   })
 
   // ── Computed (cross-hook) ──────────────────────────────────────────────────
@@ -225,10 +267,12 @@ export function useChatPageController(
   useEffect(() => {
     fetchStats()
     fetchAdapterStats()
+    const { fetchInitialData: fetchModelData } = model
+    const { fetchInitialData: fetchAgentData } = agents
     const healthModel = health && health !== 'offline' && (health.model_loaded || health.model_type) ? health.model_type : undefined
-    model.fetchInitialData(healthModel)
-    agents.fetchInitialData()
-  }, [fetchStats, fetchAdapterStats, health, model, agents])
+    fetchModelData(healthModel)
+    fetchAgentData()
+  }, [fetchStats, fetchAdapterStats, health, model.fetchInitialData, agents.fetchInitialData])
 
   // ── Flyweights: clearChat / selectAgent with toast ────────────────────────
 
@@ -258,11 +302,12 @@ export function useChatPageController(
       addSystemMessage,
       sendMessage: chat.sendMessage,
       archiveConversation: () => {
-        const name = `Chat - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
         const sid = chat.sessionIdRef.current
-        if (sid) chat.renameSession(sid, name)
-        chat.setInput('')
-        showToast(`Archived as "${name}"`, 'success')
+        if (sid) {
+          chat.archiveSession(sid, true)
+          chat.newChat()
+        }
+        showToast('Conversation archived', 'success')
       },
       renameConversation: (name: string) => {
         const sid = chat.sessionIdRef.current
@@ -275,7 +320,7 @@ export function useChatPageController(
     try {
       await cmd.execute(args, context)
     } catch (err: unknown) {
-      showToast(formatToastError(err, 'Command failed'), 'error')
+      showToast(formatToastError(err, 'Could not command'), 'error')
     }
   }, [chat, clearChat, model, showToast, router, ui])
 
@@ -314,8 +359,8 @@ export function useChatPageController(
   }, [])
 
   const handleCreateImage = useCallback(async (prompt: string) => {
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: prompt, timestamp: new Date() }
-    const pendingId = (Date.now() + 1).toString()
+    const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: prompt, timestamp: new Date() }
+    const pendingId = crypto.randomUUID()
     const pendingMsg: ChatMessage = { id: pendingId, role: 'assistant', content: '✨ **Creating your image...**', timestamp: new Date() }
     chat.setMessages(prev => [...prev, userMsg, pendingMsg])
     chat.setLoading(true)
@@ -334,37 +379,8 @@ export function useChatPageController(
   const handleWriteSend = useCallback(async () => {
     const input = chat.input.trim()
     if (!input && chatMode !== 'read') { chat.sendMessage(); return }
-    if (chatMode === 'write') {
-      chat.sendMessage(`Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'decide') {
-      chat.sendMessage(`Help me decide using ${decideStructure.toLowerCase()}: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'explain') {
-      chat.sendMessage(`Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'translate') {
-      const [src, tgt] = translateLangPair.split('→')
-      chat.sendMessage(`Translate this from ${src} to ${tgt}: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'brainstorm') {
-      chat.sendMessage(`Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'wellness') {
-      const prompts: Record<string, string> = { 'Sleep Story': 'Tell me a calming sleep story', 'Meditation': 'Guide me through a short meditation', 'Breathing': 'Guide me through a breathing exercise', 'Affirmation': 'Share a positive affirmation' }
-      chat.sendMessage(`Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: ${input}`)
-      chat.setInput('')
-    } else if (chatMode === 'create') {
-      chat.setInput('')
-      await handleCreateImage(input)
-    } else if (chatMode === 'read') {
-      if (!readFileData) { useToastStore.getState().addToast('Upload a file first, then ask your question', 'info'); return }
-      chat.setInput('')
-      chat.sendMessage(`[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, MAX_FILE_CONTENT_CHARS)}\n\n---\n\nMy question: ${input}`)
-    } else {
-      chat.sendMessage()
-    }
-  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, readFileData, chat, handleCreateImage])
+    await handleModeSend(readFileData)
+  }, [chatMode, readFileData, chat, handleModeSend])
 
   const handleToggleBookmark = useCallback((messageId: string) => {
     const msg = chat.messages.find(m => m.id === messageId)
@@ -394,20 +410,22 @@ export function useChatPageController(
       await knowledgeController.add(content.slice(0, MAX_KNOWLEDGE_CONTENT_CHARS), 'chat-saved', true)
       showToast('Saved to knowledge', 'success')
     } catch {
-      showToast('Failed to save to knowledge', 'error')
+      showToast('Could not save to knowledge', 'error')
     }
   }, [showToast])
 
   const handleReadFile = useCallback(async (file: File) => {
     setReadLoading(true)
     try {
-      const result = await filesController.extract(file)
-      setReadFileData({ text: result.text, filename: result.filename, pages: result.pages ?? 0 })
-      const fileName = result.filename
-      const pageInfo = result.extension === '.pdf' ? ` (${result.pages} pages)` : ''
+      const text = await file.text()
+      const fileName = file.name
+      const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')) : ''
+      const pages = ext === '.pdf' ? Math.max(1, Math.ceil(text.length / 3000)) : 0
+      setReadFileData({ text, filename: fileName, pages })
+      const pageInfo = pages > 0 ? ` (${pages} pages)` : ''
       // Add a system message confirming the file was read
       chat.setMessages(prev => [...prev, {
-        id: `file-${Date.now()}`, role: 'assistant', content: `📄 **Read: ${fileName}**${pageInfo}\n\nGot it! I've read ${result.chars.toLocaleString()} characters${pageInfo ? ` across ${result.pages} pages` : ''}. What do you want to know?`, timestamp: new Date(),
+        id: `file-${Date.now()}`, role: 'assistant', content: `📄 **Read: ${fileName}**${pageInfo}\n\nGot it! I've read ${text.length.toLocaleString()} characters${pageInfo ? ` across ${pages} pages` : ''}. What do you want to know?`, timestamp: new Date(),
       }])
     } catch (err: unknown) {
       useToastStore.getState().addToast(formatToastError(err, "Couldn't read file"), 'error')
@@ -422,7 +440,7 @@ export function useChatPageController(
       chat.handleAddImage(dataUrl)
       showToast('Image attached — drop more or send message', 'info')
     } catch {
-      showToast('Failed to attach image', 'error')
+      showToast('Could not attach image', 'error')
     }
   }, [chat, showToast])
 
@@ -454,7 +472,7 @@ export function useChatPageController(
       }])
       showToast('PDF analyzed — see response below', 'info')
     } catch (err: unknown) {
-      showToast(formatToastError(err, 'PDF analysis failed'), 'error')
+      showToast(formatToastError(err, 'Could not pdf analysis'), 'error')
     }
   }, [chat, showToast])
 
@@ -464,6 +482,45 @@ export function useChatPageController(
       ui.setVoiceMode(true)
     }
   }, [chatMode, ui])
+
+  const onSaveNote = useCallback((note: string) => {
+    if (noteDialogMessageId) {
+      if (note === '') {
+        messageNotes.removeNote(noteDialogMessageId)
+      } else {
+        messageNotes.setNote(noteDialogMessageId, note)
+      }
+    }
+  }, [noteDialogMessageId, messageNotes])
+
+  const onDeleteNote = useCallback(() => {
+    if (noteDialogMessageId) {
+      messageNotes.removeNote(noteDialogMessageId)
+    }
+  }, [noteDialogMessageId, messageNotes])
+
+  const onAddNote = useCallback((messageId: string) => {
+    setNoteDialogMessageId(messageId)
+    setNoteDialogOpen(true)
+  }, [])
+
+  const onStartThread = useCallback((parentMessageId: string) => {
+    threads.createThread(parentMessageId)
+    setActiveThreadMessageId(parentMessageId)
+  }, [threads])
+
+  const onReplyInThread = useCallback((threadId: string, content: string) => {
+    threads.addToThread(threadId, {
+      id: `thread-msg-${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: new Date(),
+    })
+  }, [threads])
+
+  const onCloseThread = useCallback(() => {
+    setActiveThreadMessageId(null)
+  }, [])
 
   return {
     health,
@@ -478,6 +535,7 @@ export function useChatPageController(
     chatMode, setChatMode,
     writeTone, setWriteTone,
     writeType, setWriteType,
+    rewriteStyle, setRewriteStyle,
     decideStructure, setDecideStructure,
     explainDifficulty, setExplainDifficulty,
     translateLangPair, setTranslateLangPair,
@@ -513,6 +571,65 @@ export function useChatPageController(
     handleImageDropped,
     handleTextDropped,
     handlePDFDropped,
+    contextLayers: chat.contextLayers,
+    handleReact: chat.handleReact,
+    handlePin: chat.handlePin,
+    selectedMessageIds: chat.selectedMessageIds,
+    selectionMode: chat.selectionMode,
+    toggleSelectionMode: chat.toggleSelectionMode,
+    toggleMessageSelection: chat.toggleMessageSelection,
+    selectAllMessages: chat.selectAllMessages,
+    clearSelection: chat.clearSelection,
+    deleteSelectedMessages: chat.deleteSelectedMessages,
+    noteMap: messageNotes.notes,
+    noteDialogOpen: noteDialogOpen,
+    setNoteDialogOpen: setNoteDialogOpen,
+    noteDialogMessageId: noteDialogMessageId,
+    noteDialogNote: noteDialogMessageId ? messageNotes.getNote(noteDialogMessageId) || '' : '',
+    onSaveNote,
+    onDeleteNote,
+    onAddNote,
+    noteSearchOpen: noteSearchOpen,
+    setNoteSearchOpen: setNoteSearchOpen,
+    onNavigateToNote: (sessionId: string, messageId: string) => {
+      if (sessionId !== chat.sessionIdRef.current) {
+        chat.loadSession(sessionId)
+      }
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${messageId}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus()
+        }
+      }, 100)
+    },
+    activeThreadMessageId: activeThreadMessageId,
+    activeThread: activeThreadMessageId ? threads.getThread(activeThreadMessageId) : undefined,
+    activeThreadMessages: activeThreadMessageId && threads.getThread(activeThreadMessageId)
+      ? threads.getThreadMessages(threads.getThread(activeThreadMessageId)!.id)
+      : [],
+    onStartThread,
+    onReplyInThread,
+    onCloseThread,
+    hasThread: threads.hasThread,
+    threadCount: threads.threadCount,
+    shortcutsOpen: shortcutsOpen,
+    setShortcutsOpen: setShortcutsOpen,
+    templatesOpen: templatesOpen,
+    setTemplatesOpen: setTemplatesOpen,
+    conversationSearchQuery: conversationSearchQuery,
+    setConversationSearchQuery: setConversationSearchQuery,
+    conversationSearchOpen: conversationSearchOpen,
+    setConversationSearchOpen: setConversationSearchOpen,
+    statsOpen: statsOpen,
+    setStatsOpen: setStatsOpen,
+    onQuickReply: (messageId: string) => {
+      const msg = chat.messages.find(m => m.id === messageId)
+      if (msg) {
+        const snippet = msg.content.slice(0, 200).replace(/\n/g, ' ')
+        chat.setInput(prev => prev ? `${prev}\n> ${snippet}\n\n` : `> ${snippet}\n\n`)
+      }
+    },
   }
 }
 

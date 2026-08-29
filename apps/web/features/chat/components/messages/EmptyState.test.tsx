@@ -16,13 +16,17 @@ vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: mockT, locale: 'en' }),
 }))
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+}))
+
 import { EmptyState } from './EmptyState'
 
 const mockSuggestions = [
-  { text: 'Write a poem', icon: '✍️' },
-  { text: 'Explain quantum physics', icon: '💡' },
-  { text: 'Plan a weekend trip', icon: '🗺️' },
-  { text: 'Help me practice Spanish', icon: '🌐' },
+  { text: 'Write a poem', icon: <span data-testid="icon-write" /> },
+  { text: 'Explain quantum physics', icon: <span data-testid="icon-explain" /> },
+  { text: 'Plan a weekend trip', icon: <span data-testid="icon-trip" /> },
+  { text: 'Help me practice Spanish', icon: <span data-testid="icon-spanish" /> },
 ]
 
 beforeAll(() => {

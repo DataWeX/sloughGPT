@@ -199,7 +199,7 @@ async def apply_processors(messages: list, processors: list) -> list:
         try:
             messages = await proc.process(messages)
         except Exception as e:
-            logger.warning(f"Processor {type(proc).__name__} failed: {e}", extra={"tag": "MODEL"})
+            logger.warning("Processor %s failed: %s", type(proc).__name__, e, extra={"tag": "MODEL"})
     return messages
 
 
@@ -241,7 +241,7 @@ class VisionProcessor:
                 mgr.initialize(vision_model="slonet")
             return get_provider(self._provider_name) is not None
         except Exception as e:
-            logger.warning(f"Failed to init multimodal: {e}", extra={"tag": "MODEL"})
+            logger.warning("Failed to init multimodal: %s", e, extra={"tag": "MODEL"})
             return False
 
     async def _caption(self, img_data: str) -> str:
@@ -266,7 +266,7 @@ class VisionProcessor:
             mgr = get_multimodal_manager()
             return mgr.caption_image(img).text
         except Exception as e:
-            logger.warning(f"Caption failed: {e}", extra={"tag": "MODEL"})
+            logger.warning("Caption failed: %s", e, extra={"tag": "MODEL"})
             return "[image]"
 
     async def process(self, messages: list) -> list:
@@ -290,7 +290,7 @@ class VisionProcessor:
         for i, img in enumerate(images):
             cap = await self._caption(img)
             captions.append(cap)
-            logger.info(f"Image {i+1} captioned: {cap[:60]}", extra={"tag": "MODEL"})
+            logger.info("Image %s captioned: %s", i + 1, cap[:60], extra={"tag": "MODEL"})
 
         caption_block = "\n".join(f"[Image: {c}]" for c in captions)
 
@@ -625,7 +625,7 @@ class ProviderRouter:
             try:
                 msgs = await processor.process(msgs)
             except Exception as e:
-                logger.warning(f"Processor {type(processor).__name__} failed: {e}", extra={"tag": "MODEL"})
+                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
 
         if not self._text_name:
             yield "No text model configured. Please load a model first."
@@ -662,11 +662,11 @@ class ProviderRouter:
                 return
 
             tool_name, tool_arg, match_text = match
-            logger.info(f"Tool call detected: {tool_name}({tool_arg[:40]})", extra={"tag": "MODEL"})
+            logger.info("Tool call detected: %s(%s)", tool_name, tool_arg[:40], extra={"tag": "MODEL"})
             yield f"\n[Running tool: {tool_name}...]\n"
 
             tool_result = await self._execute_tool(tool_name, tool_arg, cancel_event=cancel_event)
-            logger.info(f"Tool result: {tool_result[:60] if tool_result else 'empty'}", extra={"tag": "MODEL"})
+            logger.info("Tool result: %s", tool_result[:60] if tool_result else "empty", extra={"tag": "MODEL"})
 
             msgs.append({"role": "assistant", "content": generated.replace(match_text, "").strip()})
             msgs.append({"role": "system", "content": f"Tool {tool_name} returned: {tool_result}"})
@@ -713,7 +713,7 @@ class ProviderRouter:
             except Exception as e:
                 return f"[tool error: {e}]"
 
-        logger.warning(f"Unknown tool: {tool_name}", extra={"tag": "MODEL"})
+        logger.warning("Unknown tool: %s", tool_name, extra={"tag": "MODEL"})
         return f"[unknown tool: {tool_name}]"
 
     async def chat(
@@ -723,10 +723,23 @@ class ProviderRouter:
         temperature: float = 0.7,
         **kwargs,
     ) -> str:
-        chunks = []
-        async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
-            chunks.append(chunk)
-        return "".join(chunks)
+        # Run processors
+        msgs = list(messages)
+        for processor in self._processors:
+            try:
+                msgs = await processor.process(msgs)
+            except Exception as e:
+                logger.warning("Processor %s failed: %s", type(processor).__name__, e, extra={"tag": "MODEL"})
+
+        if not self._text_name:
+            return "No text model configured. Please load a model first."
+        text_provider = get_provider(self._text_name)
+        if text_provider is None:
+            return f"Text model '{self._text_name}' is not available. Please load a model."
+
+        # Call text_provider.chat() directly (goes through guard when alive)
+        # instead of chat_stream() which always runs in-process.
+        return await text_provider.chat(msgs, max_tokens=max_tokens, temperature=temperature, **kwargs)
 
     def embed(self, text: str) -> List[float]:
         return []
@@ -809,7 +822,7 @@ class SloTransformerProvider:
         try:
             out = await loop.run_in_executor(None, _gen)
         except Exception as e:
-            logger.warning(f"SloTransformer generation error: {e}", extra={"tag": "MODEL"})
+            logger.warning("SloTransformer generation error: %s", e, extra={"tag": "MODEL"})
             return
         if out is None:
             return
@@ -844,6 +857,7 @@ class SloTransformerProvider:
     def load_from_sou(cls, path: str, model_id_str: str = "") -> "SloTransformerProvider":
         """Load a trained SloTransformer from a .slo checkpoint."""
         from domains.inference import load_soul
+        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
@@ -862,31 +876,15 @@ class SloTransformerProvider:
             stoi = {ch: i for i, ch in enumerate(chars)}
             itos = {i: ch for i, ch in enumerate(chars)}
 
-        vocab = sd["tok_emb.weight"].shape[0]
-        n_embed = sd["tok_emb.weight"].shape[1]
-
-        n_layer = 1
-        for key in sd:
-            if key.startswith("blocks."):
-                idx = int(key.split(".")[1])
-                n_layer = max(n_layer, idx + 1)
-
-        n_head = 8
-        q_w = sd.get("blocks.0.attn.q_proj.weight")
-        if q_w is not None:
-            head_dim = n_embed // 8
-            if head_dim > 0:
-                detected = q_w.shape[0] // head_dim
-                if detected >= 1:
-                    n_head = detected
+        arch = infer_arch_from_state_dict(sd)
 
         from domains.training.slonet import SloTransformer
 
         model = SloTransformer(
-            vocab_size=vocab,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
+            vocab_size=arch["vocab_size"],
+            n_embed=arch["n_embed"],
+            n_layer=arch["n_layer"],
+            n_head=arch["n_head"],
             dropout=0.0,
             tie_weights=False,
         )
@@ -1095,8 +1093,9 @@ def setup_providers(
                     text_provider_name = "slonet-native"
                     logger.info("Auto-detected slonet-native provider: %s", default_model,
                                 extra={"tag": "MODEL"})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Auto-detect slonet-native failed for %s: %s", default_model, e,
+                           extra={"tag": "MODEL"})
 
     # Build default ProviderRouter with full processor pipeline
     existing = _providers.get("default")

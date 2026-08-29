@@ -17,6 +17,8 @@ export interface FileEntry {
   uploaded_at: string
   ingested: boolean
   chunk_count?: number
+  extension?: string
+  tags?: string[]
 }
 
 export interface SearchResult {
@@ -24,19 +26,34 @@ export interface SearchResult {
   count?: number
 }
 
-export interface ExtractResult {
-  text: string
+interface BackendFileItem {
+  id: string
   filename: string
-  chars: number
-  pages?: number
   extension?: string
+  size_bytes?: number
+  uploaded_at: string | number
+  tags?: string[]
+}
+
+function mapFileEntry(f: BackendFileItem): FileEntry {
+  return {
+    id: f.id,
+    filename: f.filename,
+    size: f.size_bytes ?? 0,
+    content_type: f.extension ?? 'unknown',
+    uploaded_at: String(f.uploaded_at),
+    ingested: (f.tags?.length ?? 0) > 0,
+    extension: f.extension,
+    tags: f.tags,
+  }
 }
 
 class FilesController {
   async list(): Promise<FileEntry[]> {
-    const data = await apiGet<{ files?: FileEntry[] } | FileEntry[]>('/files/')
+    const data = await apiGet<{ files?: BackendFileItem[] } | BackendFileItem[]>('/files/')
     if (!data) return []
-    return Array.isArray(data) ? data : data.files ?? []
+    const raw = Array.isArray(data) ? data : (data.files ?? [])
+    return raw.map(mapFileEntry)
   }
 
   async upload(formData: FormData): Promise<{ filename?: string }> {
@@ -56,17 +73,11 @@ class FilesController {
   }
 
   async search(query: string): Promise<FileEntry[]> {
-    const data = await apiGet<{ results?: FileEntry[] } | FileEntry[]>(
+    const data = await apiGet<{ files?: BackendFileItem[] }>(
       `/files/search?q=${encodeURIComponent(query)}`,
     )
     if (!data) return []
-    return Array.isArray(data) ? data : data.results ?? []
-  }
-
-  async extract(file: File): Promise<ExtractResult> {
-    const formData = new FormData()
-    formData.append('file', file)
-    return apiPost('/files/extract', formData, { raw: true })
+    return (data.files ?? []).map(mapFileEntry)
   }
 }
 

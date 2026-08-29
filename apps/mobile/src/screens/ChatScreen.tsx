@@ -1,4 +1,4 @@
-import React, {useCallback, useRef, useEffect} from 'react';
+import React, {useCallback, useRef, useEffect, useState} from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -14,29 +14,113 @@ import {useColors} from '../theme/colors';
 import {useChatActions} from '../hooks/useChatActions';
 import {ChatDrawer} from '../components/ChatDrawer';
 import {ChatBottomSheets} from '../components/ChatBottomSheets';
+import {useSidebar} from '../contexts/SidebarContext';
 import {MessageBubble} from '../components/MessageBubble';
 import {ChatInput} from '../components/ChatInput';
+import {ChatModeBar, type ChatMode} from '../components/ChatModeBar';
 import {ReasoningPanel} from '../components/ReasoningPanel';
 import {Icon} from '../components/Icon';
 
 const SUGGESTIONS = [
-  'Tell me something interesting',
-  'Help me brainstorm',
-  'Explain a concept',
+  {icon: 'zap' as const, text: 'Tell me something interesting', prompt: 'Tell me something interesting'},
+  {icon: 'target' as const, text: 'Help me brainstorm ideas', prompt: 'Help me brainstorm ideas for a project'},
+  {icon: 'book-open' as const, text: 'Explain a concept', prompt: 'Explain a concept to me in simple terms'},
+  {icon: 'terminal' as const, text: 'Write some code', prompt: 'Write some code for me'},
 ];
+
+function buildModePrompt(
+  mode: ChatMode,
+  input: string,
+  opts: {
+    tone: string;
+    type: string;
+    rewriteStyle: string;
+    decideStructure: string;
+    difficulty: string;
+    langPair: string;
+    brainstormTopic: string;
+    wellnessType: string;
+  },
+): string {
+  switch (mode) {
+    case 'chat':
+      return input;
+    case 'write':
+      return `Write a ${opts.tone.toLowerCase()} ${opts.type.toLowerCase()} about: ${input}`;
+    case 'rewrite': {
+      const prompts: Record<string, string> = {
+        'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
+        'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
+        'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
+        'Make Professional': 'Rewrite this text in a professional, formal tone',
+        'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+      };
+      return `${prompts[opts.rewriteStyle] || 'Rewrite this text'}:\n\n${input}`;
+    }
+    case 'decide':
+      return `Help me decide using ${opts.decideStructure.toLowerCase()}: ${input}`;
+    case 'explain':
+      return `Explain this at a ${opts.difficulty.toLowerCase()} level (as if explaining to a ${opts.difficulty.toLowerCase()} learner): ${input}`;
+    case 'translate': {
+      const [src, tgt] = opts.langPair.split('→');
+      return `Translate this from ${src} to ${tgt}: ${input}`;
+    }
+    case 'brainstorm':
+      return `Let's brainstorm ${opts.brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`;
+    case 'wellness': {
+      const prompts: Record<string, string> = {
+        'Sleep Story': 'Tell me a calming sleep story',
+        'Meditation': 'Guide me through a short meditation',
+        'Breathing': 'Guide me through a breathing exercise',
+        'Affirmation': 'Share a positive affirmation',
+      };
+      return `Respond in a gentle, soothing tone. ${prompts[opts.wellnessType] || 'Help me feel calm'}: ${input}`;
+    }
+    default:
+      return input;
+  }
+}
 
 export function ChatScreen() {
   const colors = useColors();
   const flatListRef = useRef<FlatList>(null);
   const a = useChatActions(flatListRef);
+  const {open: openSidebar} = useSidebar();
+
+  // Mode state
+  const [chatMode, setChatMode] = useState<ChatMode>('chat');
+  const [writeTone, setWriteTone] = useState('Friendly');
+  const [writeType, setWriteType] = useState('Email');
+  const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar');
+  const [decideStructure, setDecideStructure] = useState('Pros & Cons');
+  const [explainDifficulty, setExplainDifficulty] = useState('Simple');
+  const [translateLangPair, setTranslateLangPair] = useState('EN→ES');
+  const [brainstormTopic, setBrainstormTopic] = useState('Name Ideas');
+  const [wellnessType, setWellnessType] = useState('Sleep Story');
+
+  // Wrap handleSend to apply mode transformation
+  const handleModeSend = useCallback((text: string) => {
+    const transformed = buildModePrompt(chatMode, text, {
+      tone: writeTone,
+      type: writeType,
+      rewriteStyle,
+      decideStructure,
+      difficulty: explainDifficulty,
+      langPair: translateLangPair,
+      brainstormTopic,
+      wellnessType,
+    });
+    a.handleSend(transformed);
+  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType, a.handleSend]);
 
   useEffect(() => {
     const {Keyboard: KB} = require('react-native');
     const sub = KB.addListener('keyboardDidHide', () => {
-      a.dismissAllModals();
+      // Only dismiss keyboard-triggered modals (search), not explicit ones (drawer, soul picker)
+      a.dismissKeyboardModals();
     });
     return () => sub.remove();
-  }, [a.dismissAllModals]);
+  }, [a.dismissKeyboardModals]);
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: 'var(--background)'}} edges={['top']}>
@@ -46,22 +130,21 @@ export function ChatScreen() {
         keyboardVerticalOffset={0}>
         {/* Header */}
         <XStack
-          paddingHorizontal={16}
-          paddingVertical={12}
-          borderBottomWidth={0.5}
-          borderBottomColor="$borderColor"
+          paddingHorizontal={20}
+          paddingVertical={14}
+          borderBottomWidth={0}
           backgroundColor="$background"
           alignItems="center"
-          justifyContent="space-between"
-          opacity={0.98}>
-          <XStack alignItems="center" gap={12}>
+          justifyContent="space-between">
+          <XStack alignItems="center" gap={14}>
             <YStack
-              width={36} height={36} borderRadius={12}
+              width={40} height={40} borderRadius={14}
               alignItems="center" justifyContent="center"
-              onPress={() => a.setShowDrawer(true)}
+              backgroundColor={colors.primaryAlpha(0.08)}
+              onPress={openSidebar}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Open menu">
-              <Icon name="menu" size={18} color={colors.textSecondary} />
+              <Icon name="menu" size={18} color={colors.primary} />
             </YStack>
             <YStack
               alignItems="flex-start"
@@ -72,54 +155,43 @@ export function ChatScreen() {
                 }
                 a.lastHeaderTap.current = now;
               }}>
-              <XStack alignItems="center" gap={6}>
-                <Text fontSize={17} fontWeight="700" letterSpacing={-0.3} color="$color">Chat</Text>
+              <XStack alignItems="center" gap={8}>
+                <Text fontSize={20} fontWeight="700" letterSpacing={-0.5} color="$color">Chat</Text>
                 {a.currentSoul && (
                   <YStack
-                    backgroundColor="rgba(124, 82, 196, 0.1)"
+                    backgroundColor={colors.primaryAlpha(0.12)}
                     paddingHorizontal={10}
-                    paddingVertical={3}
+                    paddingVertical={4}
                     borderRadius={999}
-                    borderWidth={0.5}
-                    borderColor="rgba(124, 82, 196, 0.18)"
                     onPress={() => a.setShowSoulPicker(true)}
                     pressStyle={{opacity: 0.7, scale: 0.95}}>
                     <Text fontSize={11} fontWeight="600" color="$color9">{a.currentSoul.name}</Text>
-                  </YStack>
-                )}
-                {a.health?.model_name && (
-                  <YStack
-                    backgroundColor="rgba(52, 176, 125, 0.1)"
-                    paddingHorizontal={8}
-                    paddingVertical={3}
-                    borderRadius={999}
-                    borderWidth={0.5}
-                    borderColor="rgba(52, 176, 125, 0.18)">
-                    <Text fontSize={10} fontWeight="600" color="#34B07D">{a.health.model_name}</Text>
                   </YStack>
                 )}
               </XStack>
             </YStack>
           </XStack>
 
-          <XStack alignItems="center" gap={4}>
+          <XStack alignItems="center" gap={6}>
             {a.messages.length > 0 && (
               <YStack
-                width={36} height={36} borderRadius={12}
+                width={40} height={40} borderRadius={14}
                 alignItems="center" justifyContent="center"
+                backgroundColor={colors.primaryAlpha(0.08)}
                 onPress={a.handleExportChat}
                 pressStyle={{opacity: 0.6, scale: 0.95}}
                 accessible accessibilityRole="button" accessibilityLabel="Export conversation">
-                <Icon name="share-2" size={18} color={colors.textSecondary} />
+                <Icon name="share-2" size={18} color={colors.primary} />
               </YStack>
             )}
             <YStack
-              width={36} height={36} borderRadius={12}
+              width={40} height={40} borderRadius={14}
               alignItems="center" justifyContent="center"
+              backgroundColor={colors.primaryAlpha(0.08)}
               onPress={() => a.setShowSettings(true)}
               pressStyle={{opacity: 0.6, scale: 0.95}}
               accessible accessibilityRole="button" accessibilityLabel="Settings">
-              <Icon name="more-vertical" size={18} color={colors.textSecondary} />
+              <Icon name="more-vertical" size={18} color={colors.primary} />
             </YStack>
           </XStack>
         </XStack>
@@ -127,13 +199,13 @@ export function ChatScreen() {
         {a.error && (
           <XStack
             paddingHorizontal={16} paddingVertical={10}
-            backgroundColor="rgba(239, 68, 68, 0.06)"
-            borderBottomWidth={0.5} borderBottomColor="rgba(239, 68, 68, 0.12)"
+            backgroundColor={colors.errorAlpha(0.06)}
+            borderBottomWidth={0.5} borderBottomColor={colors.errorAlpha(0.12)}
             alignItems="center" gap={8}
             onPress={a.clearError}>
-            <YStack width={6} height={6} borderRadius={3} backgroundColor="#EF4444" />
-            <Text fontSize={12} color="#EF4444" flex={1} numberOfLines={2}>{a.error}</Text>
-            <Icon name="x" size={14} color="#EF4444" />
+            <YStack width={6} height={6} borderRadius={3} backgroundColor={colors.error} />
+            <Text fontSize={12} color={colors.error} flex={1} numberOfLines={2}>{a.error}</Text>
+            <Icon name="x" size={14} color={colors.error} />
           </XStack>
         )}
 
@@ -142,7 +214,7 @@ export function ChatScreen() {
             paddingHorizontal={16} paddingVertical={8}
             borderBottomWidth={0.5} borderBottomColor="$borderColor"
             alignItems="center" gap={6}>
-            <YStack width={5} height={5} borderRadius={3} backgroundColor="#F59E0B" />
+            <YStack width={5} height={5} borderRadius={3} backgroundColor={colors.warning} />
             <Text fontSize={11} fontWeight="500" color="$color10">Offline</Text>
             {a.offlineQueue > 0 && (
               <YStack onPress={a.retryPendingSends}>
@@ -152,6 +224,27 @@ export function ChatScreen() {
           </XStack>
         )}
 
+        <ChatModeBar
+          mode={chatMode}
+          onModeChange={setChatMode}
+          tone={writeTone}
+          onToneChange={setWriteTone}
+          type={writeType}
+          onTypeChange={setWriteType}
+          rewriteStyle={rewriteStyle}
+          onRewriteStyleChange={setRewriteStyle}
+          decideStructure={decideStructure}
+          onDecideStructureChange={setDecideStructure}
+          difficulty={explainDifficulty}
+          onDifficultyChange={setExplainDifficulty}
+          langPair={translateLangPair}
+          onLangPairChange={setTranslateLangPair}
+          brainstormTopic={brainstormTopic}
+          onBrainstormTopicChange={setBrainstormTopic}
+          wellnessType={wellnessType}
+          onWellnessTypeChange={setWellnessType}
+        />
+
         {a.showSearch && (
           <XStack
             paddingHorizontal={16} paddingVertical={8}
@@ -160,7 +253,7 @@ export function ChatScreen() {
               style={{
                 flex: 1, fontSize: 13,
                 color: colors.text,
-                backgroundColor: 'rgba(124, 82, 196, 0.06)',
+                backgroundColor: colors.primaryAlpha(0.06),
                 borderRadius: 10,
                 paddingHorizontal: 12, paddingVertical: 7,
                 borderWidth: 0.5, borderColor: colors.border,
@@ -171,10 +264,37 @@ export function ChatScreen() {
               placeholderTextColor={colors.textMuted}
               autoFocus
             />
+            {a.matchCount > 0 && (
+              <Text fontSize={11} color={colors.textMuted} minWidth={40} textAlign="center">
+                {a.currentMatchIdx + 1}/{a.matchCount}
+              </Text>
+            )}
+            {a.matchCount > 0 && (
+              <>
+                <YStack
+                  width={28} height={28} borderRadius={9}
+                  alignItems="center" justifyContent="center"
+                  backgroundColor={colors.primaryAlpha(0.06)}
+                  onPress={a.searchPrev}
+                  pressStyle={{opacity: 0.6}}
+                  accessible accessibilityRole="button" accessibilityLabel="Previous match">
+                  <Icon name="chevron-up" size={14} color={colors.textMuted} />
+                </YStack>
+                <YStack
+                  width={28} height={28} borderRadius={9}
+                  alignItems="center" justifyContent="center"
+                  backgroundColor={colors.primaryAlpha(0.06)}
+                  onPress={a.searchNext}
+                  pressStyle={{opacity: 0.6}}
+                  accessible accessibilityRole="button" accessibilityLabel="Next match">
+                  <Icon name="chevron-down" size={14} color={colors.textMuted} />
+                </YStack>
+              </>
+            )}
             <YStack
               width={28} height={28} borderRadius={9}
               alignItems="center" justifyContent="center"
-              backgroundColor="rgba(124, 82, 196, 0.06)"
+              backgroundColor={colors.primaryAlpha(0.06)}
               onPress={() => { a.setShowSearch(false); a.setSearchQuery(''); }}
               pressStyle={{opacity: 0.6}}
               accessible accessibilityRole="button" accessibilityLabel="Close search">
@@ -189,47 +309,63 @@ export function ChatScreen() {
             paddingHorizontal={32}
             backgroundColor={a.chatBackground || 'var(--background)'}>
             <YStack
-              width={80} height={80} borderRadius={40}
-              backgroundColor="rgba(124, 82, 196, 0.08)"
+              width={88} height={88} borderRadius={28}
+              backgroundColor={colors.primaryAlpha(0.1)}
               alignItems="center" justifyContent="center"
-              marginBottom={24}
-              borderWidth={0.5}
-              borderColor="rgba(124, 82, 196, 0.15)">
+              marginBottom={28}
+              shadowColor={colors.primary}
+              shadowOffset={{width: 0, height: 8}}
+              shadowOpacity={0.15}
+              shadowRadius={24}
+              elevation={8}>
               <YStack
-                width={56} height={56} borderRadius={28}
-                backgroundColor="rgba(124, 82, 196, 0.1)"
+                width={56} height={56} borderRadius={18}
+                backgroundColor={colors.primaryAlpha(0.15)}
                 alignItems="center" justifyContent="center">
                 <Icon name="message-circle" size={26} color={colors.primary} />
               </YStack>
             </YStack>
 
-            <Text fontSize={22} fontWeight="700" letterSpacing={-0.5} color="$color" marginBottom={8} textAlign="center">
-              {a.currentSoul ? a.currentSoul.name : 'Chat'}
+            <Text fontSize={24} fontWeight="700" letterSpacing={-0.5} color="$color" marginBottom={8} textAlign="center">
+              {a.currentSoul ? a.currentSoul.name : 'Start chatting'}
             </Text>
 
-            <Text fontSize={14} color="$color11" textAlign="center" marginBottom={36} lineHeight={20} maxWidth={260}>
+            <Text fontSize={15} color="$color10" textAlign="center" marginBottom={40} lineHeight={22} maxWidth={280}>
               {a.currentSoul
                 ? (a.currentSoul.description || 'Ask me anything')
-                : 'Start a conversation'}
+                : 'Send a message to begin a conversation with your AI'}
             </Text>
 
-            <XStack gap={10} flexWrap="wrap" justifyContent="center">
+            <YStack gap={10} width="100%" maxWidth={340}>
               {SUGGESTIONS.map(s => (
                 <YStack
-                  key={s}
-                  paddingHorizontal={18} paddingVertical={10}
-                  borderRadius={999}
-                  backgroundColor="rgba(124, 82, 196, 0.06)"
-                  borderWidth={0.5}
-                  borderColor="rgba(124, 82, 196, 0.12)"
-                  onPress={() => a.handleSuggestion(s)}
-                  pressStyle={{opacity: 0.7, scale: 0.96}}>
-                  <Text fontSize={13} fontWeight="500" color="$color9">{s}</Text>
+                  key={s.text}
+                  flexDirection="row"
+                  alignItems="center"
+                  gap={14}
+                  paddingHorizontal={18}
+                  paddingVertical={16}
+                  borderRadius={16}
+                  backgroundColor={colors.primaryAlpha(0.06)}
+                  borderWidth={1}
+                  borderColor={colors.primaryAlpha(0.08)}
+                  onPress={() => a.handleSuggestion(s.prompt)}
+                  pressStyle={{opacity: 0.7, scale: 0.98, backgroundColor: colors.primaryAlpha(0.12)}}>
+                  <YStack
+                    width={36} height={36} borderRadius={12}
+                    backgroundColor={colors.primaryAlpha(0.12)}
+                    alignItems="center" justifyContent="center">
+                    <Icon name={s.icon} size={18} color={colors.primary} />
+                  </YStack>
+                  <Text fontSize={14} fontWeight="500" color="$color" flex={1}>{s.text}</Text>
+                  <YStack style={{transform: [{rotate: '-90deg'}]}}>
+                    <Icon name="chevron-down" size={14} color={colors.textMuted} />
+                  </YStack>
                 </YStack>
               ))}
-            </XStack>
+            </YStack>
 
-            <Text fontSize={11} color="$color10" marginTop={32} textAlign="center" letterSpacing={0.3}>
+            <Text fontSize={11} color="$color10" marginTop={36} textAlign="center" letterSpacing={0.3}>
               Swipe left on a message to delete it
             </Text>
           </YStack>
@@ -245,6 +381,8 @@ export function ChatScreen() {
               contentContainerStyle={{paddingTop: 8, paddingBottom: 8}}
               onScroll={a.onScroll}
               scrollEventThrottle={16}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
               removeClippedSubviews
               maxToRenderPerBatch={10}
               windowSize={11}
@@ -275,7 +413,7 @@ export function ChatScreen() {
               }
             }}
             pressStyle={{opacity: 0.7}}>
-            <YStack width={24} height={24} borderRadius={8} backgroundColor="rgba(124, 82, 196, 0.08)" alignItems="center" justifyContent="center">
+            <YStack width={24} height={24} borderRadius={8} backgroundColor={colors.primaryAlpha(0.08)} alignItems="center" justifyContent="center">
               <Icon name="pin" size={12} color="$color9" />
             </YStack>
             <Text fontSize={11} fontWeight="500" color="$color9">
@@ -289,7 +427,7 @@ export function ChatScreen() {
             paddingHorizontal={16} paddingVertical={10}
             borderTopWidth={0.5} borderTopColor="$borderColor"
             alignItems="center" justifyContent="space-between"
-            backgroundColor="rgba(124, 82, 196, 0.04)">
+            backgroundColor={colors.primaryAlpha(0.04)}>
             <YStack onPress={() => {
               if (a.selectedIds.size === a.messages.length) {
                 a.setSelectedIds(new Set());
@@ -304,15 +442,15 @@ export function ChatScreen() {
             <XStack gap={12} alignItems="center">
               <Text fontSize={12} color="$color10">{a.selectedIds.size} selected</Text>
               <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
-                backgroundColor={a.selectedIds.size > 0 ? 'rgba(239, 68, 68, 0.1)' : 'transparent'}
+                backgroundColor={a.selectedIds.size > 0 ? colors.errorAlpha(0.1) : 'transparent'}
                 opacity={a.selectedIds.size === 0 ? 0.4 : 1}
                 onPress={a.deleteSelected}
                 disabled={a.selectedIds.size === 0}>
                 <Text fontSize={13} fontWeight="600"
-                  color={a.selectedIds.size > 0 ? '#EF4444' : '$color10'}>Delete</Text>
+                  color={a.selectedIds.size > 0 ? colors.error : colors.textMuted}>Delete</Text>
               </YStack>
               <YStack paddingHorizontal={10} paddingVertical={5} borderRadius={8}
-                backgroundColor="rgba(124, 82, 196, 0.08)" onPress={a.toggleSelectMode}>
+                backgroundColor={colors.primaryAlpha(0.08)} onPress={a.toggleSelectMode}>
                 <Text fontSize={13} fontWeight="600" color="$color9">Done</Text>
               </YStack>
             </XStack>
@@ -325,7 +463,7 @@ export function ChatScreen() {
           <XStack
             paddingHorizontal={16} paddingVertical={8}
             gap={10} alignItems="center"
-            backgroundColor="rgba(124, 82, 196, 0.04)"
+            backgroundColor={colors.primaryAlpha(0.04)}
             borderTopWidth={0.5} borderTopColor="$borderColor">
             <YStack width={3} height={32} borderRadius={2} backgroundColor="$color9" />
             <YStack flex={1}>
@@ -338,7 +476,7 @@ export function ChatScreen() {
             </YStack>
             <YStack
               width={24} height={24} borderRadius={8}
-              backgroundColor="rgba(124, 82, 196, 0.06)"
+              backgroundColor={colors.primaryAlpha(0.06)}
               alignItems="center" justifyContent="center"
               onPress={() => a.setReplyTo(null)}
               pressStyle={{opacity: 0.6}}>
@@ -348,7 +486,8 @@ export function ChatScreen() {
         )}
 
         <ChatInput
-          onSend={a.handleSend}
+          onSend={handleModeSend}
+          onSendWithImages={a.handleSendWithImages}
           onImage={a.handleImage}
           onVoice={a.handleVoice}
           onFile={a.handleFile}
@@ -370,9 +509,9 @@ export function ChatScreen() {
             width={40}
             height={40}
             borderRadius={20}
-            backgroundColor="rgba(124, 82, 196, 0.15)"
+            backgroundColor={colors.primaryAlpha(0.15)}
             borderWidth={0.5}
-            borderColor="rgba(124, 82, 196, 0.25)"
+            borderColor={colors.primaryAlpha(0.25)}
             alignItems="center"
             justifyContent="center"
             shadowColor="$color9"

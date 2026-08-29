@@ -39,6 +39,8 @@ def app(mock_workflow):
     router_instance = WorkflowRouter()
     app = FastAPI()
     app.include_router(router_instance.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     with patch.object(router_instance, "_get_workflow", return_value=mock_workflow):
         yield app
 
@@ -105,7 +107,7 @@ class TestTriggerWorkflow:
     def test_trigger_unknown_action(self, client):
         resp = client.post("/workflow/trigger/unknown")
         assert resp.status_code == 400
-        assert "Unknown action" in resp.json()["detail"]
+        assert "Unknown action" in resp.json()["error"]
 
 
 class TestWorkflowModuleLevel:

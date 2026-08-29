@@ -15,7 +15,7 @@ import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {Icon, type IconName} from '../components/Icon';
 import {useHapticPress} from '../hooks/useHapticPress';
-import {getApiUrl, setApiUrl} from '../services/api-client';
+import {setApiUrl} from '../services/api-client';
 
 const {width: SCREEN_W} = Dimensions.get('window');
 
@@ -204,9 +204,9 @@ export function OnboardingScreen({onComplete}: Props) {
                           backgroundColor: colors.background,
                           borderWidth: 1,
                           borderColor: connectionStatus === 'ok'
-                            ? '#34B07D'
+                            ? colors.success
                             : connectionStatus === 'fail'
-                              ? '#DC505A'
+                              ? colors.error
                               : colors.border,
                           borderRadius: 10,
                           padding: 14,
@@ -238,15 +238,15 @@ export function OnboardingScreen({onComplete}: Props) {
 
                       {connectionStatus === 'ok' && (
                         <XStack alignItems="center" justifyContent="center" gap={6}>
-                          <Icon name="check" size={16} color="#34B07D" />
-                          <Text fontSize={13} color="#34B07D" fontWeight="500">
+                          <Icon name="check" size={16} color={colors.success} />
+                          <Text fontSize={13} color={colors.success} fontWeight="500">
                             Server is ready
                           </Text>
                         </XStack>
                       )}
 
                       {connectionStatus === 'fail' && (
-                        <Text fontSize={13} color="#DC505A" textAlign="center">
+                        <Text fontSize={13} color={colors.error} textAlign="center">
                           {connectionError}
                         </Text>
                       )}

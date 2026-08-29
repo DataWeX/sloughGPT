@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput } from '@sloughgpt/strui'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
@@ -17,7 +17,7 @@ export default function RegistryPage() {
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
         registryController.list().catch(() => []),
@@ -28,13 +28,13 @@ export default function RegistryPage() {
       setStats(statsRes)
       setBestModel(bestRes)
     } catch {
-      addToast('Failed to load registry data', 'error')
+      addToast('Could not load registry data', 'error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const filteredModels = models.filter(m =>
     m.model_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -49,10 +49,10 @@ export default function RegistryPage() {
         loadingContent={
           <div className="space-y-4">
             <KpiGrid>
-              <StatCard label="Loading" value="..." />
-              <StatCard label="Loading" value="..." />
-              <StatCard label="Loading" value="..." />
-              <StatCard label="Loading" value="..." />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+              <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
             </KpiGrid>
             <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
             <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
@@ -90,7 +90,7 @@ export default function RegistryPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Registered Models</CardTitle>
-            <Button size="sm" variant="ghost" onClick={fetchData}>
+            <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
               <IconRefresh className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -107,11 +107,7 @@ export default function RegistryPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium truncate">{m.model_id}</span>
-                          <span className={`text-xs px-1 rounded ${
-                            m.status === 'loaded' ? 'bg-success/10 text-success' :
-                            m.status === 'failed' ? 'bg-destructive/10 text-destructive' :
-                            'bg-muted text-muted-foreground'
-                          }`}>{m.status}</span>
+                          <span className={cn('text-xs px-1 rounded', m.status === 'loaded' ? 'bg-success/10 text-success' : m.status === 'failed' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground')}>{m.status}</span>
                         </div>
                         {m.registered_at && (
                           <div className="text-xs text-muted-foreground mt-0.5">

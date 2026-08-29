@@ -38,6 +38,8 @@ def _mock_system(**overrides) -> MagicMock:
 def _app(ar: AgentsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(ar.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 
@@ -49,8 +51,12 @@ class TestListAgents:
         client = TestClient(_app(ar))
         resp = client.get("/agents")
         assert resp.status_code == 200
-        assert len(resp.json()) == 1
-        assert resp.json()[0]["id"] == "a1"
+        body = resp.json()
+        data = body.get("data", body)
+        if isinstance(data, dict):
+            data = data.get("agents", data.get("items", []))
+        assert len(data) == 1
+        assert data[0]["id"] == "a1"
 
 
 class TestCreateAgent:
@@ -63,7 +69,9 @@ class TestCreateAgent:
         client = TestClient(_app(ar))
         resp = client.post("/agents", json={"name": "New"})
         assert resp.status_code == 201
-        assert resp.json()["id"] == "new-agent"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["id"] == "new-agent"
 
     @patch.object(AgentsRouter, "_get_system")
     def test_create_duplicate(self, mock_gs):
@@ -84,7 +92,9 @@ class TestGetAgent:
         client = TestClient(_app(ar))
         resp = client.get("/agents/a1")
         assert resp.status_code == 200
-        assert resp.json()["id"] == "a1"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["id"] == "a1"
 
     @patch.object(AgentsRouter, "_get_system")
     def test_get_not_found(self, mock_gs):
@@ -105,7 +115,9 @@ class TestUpdateAgent:
         client = TestClient(_app(ar))
         resp = client.put("/agents/a1", json={"name": "Updated"})
         assert resp.status_code == 200
-        assert resp.json()["name"] == "Updated"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["name"] == "Updated"
 
     @patch.object(AgentsRouter, "_get_system")
     def test_update_not_found(self, mock_gs):
@@ -146,7 +158,9 @@ class TestExecuteAgent:
         client = TestClient(_app(ar))
         resp = client.post("/agents/a1/execute", json={"request": "do something"})
         assert resp.status_code == 200
-        assert resp.json()["result"] == "done"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["result"] == "done"
 
 
 class TestListRuns:

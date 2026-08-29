@@ -37,16 +37,31 @@ describe('voice-input', () => {
     expect(typeof result.stop).toBe('function');
   });
 
-  it('stop returns recording with uri and duration', async () => {
+  it('stop returns recording with uri and duration when long enough', async () => {
+    const now = Date.now();
+    jest.spyOn(Date, 'now')
+      .mockReturnValueOnce(now)
+      .mockReturnValueOnce(now + 5000);
     const {stop} = await startRecording();
     const recording = await stop();
-    expect(recording).toEqual({uri: 'file:///rec.m4a', duration: expect.any(Number)});
+    expect(recording).toEqual({uri: 'file:///rec.m4a', duration: 5});
+    jest.restoreAllMocks();
   });
 
-  it('transcribeAudio returns empty on fetch failure', async () => {
+  it('stop returns null when recording too short', async () => {
+    const now = Date.now();
+    jest.spyOn(Date, 'now')
+      .mockReturnValueOnce(now)
+      .mockReturnValueOnce(now + 500);
+    const {stop} = await startRecording();
+    const recording = await stop();
+    expect(recording).toBeNull();
+    jest.restoreAllMocks();
+  });
+
+  it('transcribeAudio throws on fetch failure', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('network'));
-    const result = await transcribeAudio('file:///bad.m4a');
-    expect(result).toBe('');
+    await expect(transcribeAudio('file:///bad.m4a')).rejects.toThrow('network');
     jest.restoreAllMocks();
   });
 
@@ -62,5 +77,24 @@ describe('voice-input', () => {
       expect.objectContaining({method: 'POST'}),
     );
     fetchSpy.mockRestore();
+  });
+
+  it('transcribeAudio throws on non-ok response', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as Response);
+    await expect(transcribeAudio('file:///rec.m4a')).rejects.toThrow('Transcription failed (500)');
+    jest.restoreAllMocks();
+  });
+
+  it('transcribeAudio returns empty string when no speech', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({text: ''}),
+    } as Response);
+    const result = await transcribeAudio('file:///rec.m4a');
+    expect(result).toBe('');
+    jest.restoreAllMocks();
   });
 });

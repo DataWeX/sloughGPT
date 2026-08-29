@@ -186,18 +186,16 @@ def test_subprocess_shell_cmd():
     pkgs = repr(str(Path(__file__).resolve().parents[1]))
     code = """import sys; sys.path.insert(0, {pkgs})
 from pathlib import Path
-from unittest.mock import patch
 from domains.shell.repl import ShellREPL, _CaptureOutput
 from domains.shell.runtime import DaitRuntime
-import tempfile, json, os
+from domains.shell.state import set_shell_state_db
+import tempfile, os
 tmp = tempfile.mkdtemp()
-with open(Path(tmp) / "state.json", "w") as f:
-    json.dump({"version": 1, "first_run": False, "history": [], "aliases": {}, "env": {}, "cwd": os.getcwd()}, f)
-with patch("domains.shell.state._STATE_FILE", Path(tmp) / "state.json"):
-    r = ShellREPL(DaitRuntime())
-    r._running = True
-    out = r._execute_single("health")
-    assert "healthy" in out.lower() or "ok" in out.lower()
+set_shell_state_db(tmp + "/mogdb")
+r = ShellREPL(DaitRuntime())
+r._running = True
+out = r._execute_single("health")
+assert "healthy" in out.lower() or "ok" in out.lower()
 """.replace("{pkgs}", pkgs)
     result = subprocess.run(
         [sys.executable, "-c", code],

@@ -153,11 +153,11 @@ class ContinualLearner:
             try:
                 net = import_from_sou(str(STATE_PATH))
                 if isinstance(net, SloTransformer):
-                    logger.info(f"Loaded learner transformer from {STATE_PATH}", extra={"tag": "INF"})
+                    logger.info("Loaded learner transformer from %s", STATE_PATH, extra={"tag": "INF"})
                     return net
                 logger.warning("Existing checkpoint is not a SloTransformer — recreating", extra={"tag": "INF"})
             except Exception as e:
-                logger.warning(f"Failed to load learner state: {e}", extra={"tag": "INF"})
+                logger.warning("Failed to load learner state: %s", e, extra={"tag": "INF"})
 
         net = _build_transformer(
             n_embed=self.n_embed,
@@ -166,8 +166,8 @@ class ContinualLearner:
             soul_name=self.soul_name,
         )
         logger.info(
-            f"Created fresh SloTransformer learner "
-            f"(vocab={VOCAB}, embed={self.n_embed}, layers={self.n_layer}, heads={self.n_head})",
+            "Created fresh SloTransformer learner (vocab=%s, embed=%s, layers=%s, heads=%s)",
+            VOCAB, self.n_embed, self.n_layer, self.n_head,
             extra={"tag": "INF"}
         )
         return net
@@ -176,7 +176,7 @@ class ContinualLearner:
         """Save learner model to disk as .soul."""
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         export_to_sou(self.net, str(STATE_PATH))
-        logger.info(f"Saved learner checkpoint ({STATE_PATH.stat().st_size / 1024:.0f} KB)", extra={"tag": "INF"})
+        logger.info("Saved learner checkpoint (%.0f KB)", STATE_PATH.stat().st_size / 1024, extra={"tag": "INF"})
 
     # -----------------------------------------------------------------
     # INGESTION
@@ -238,7 +238,7 @@ class ContinualLearner:
             self.ingest_text(text)
             total_tokens += len(_tokenize(text))
 
-        logger.info(f"search_and_learn({query!r}): {new_facts} facts, {rejected} rejected, {total_tokens} tokens", extra={"tag": "INF"})
+        logger.info("search_and_learn(%r): %s facts, %s rejected, %s tokens", query, new_facts, rejected, total_tokens, extra={"tag": "INF"})
         return {
             "new_facts": new_facts,
             "rejected": rejected,
@@ -269,7 +269,7 @@ class ContinualLearner:
                 for topic in self.knowledge.all_topics():
                     for fact in self.knowledge.get_topic_facts(topic):
                         self.ingest_text(f"rss: {fact.get('content', '')}")
-            logger.info(f"Feed {url}: {new_count} initial articles ingested", extra={"tag": "INF"})
+            logger.info("Feed %s: %s initial articles ingested", url, new_count, extra={"tag": "INF"})
         return result
 
     def unsubscribe_feed(self, url: str) -> bool:
@@ -367,7 +367,7 @@ class ContinualLearner:
                 if self._new_since_last_train >= INGEST_THRESHOLD and elapsed >= TRAIN_INTERVAL:
                     self._train_step()
             except Exception as e:
-                logger.error(f"Background train error: {e}", extra={"tag": "INF"})
+                logger.error("Background train error: %s", e, extra={"tag": "INF"})
         if loop is not None:
             loop.close()
 

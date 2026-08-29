@@ -48,7 +48,7 @@ describe('BatchTrainingCard', () => {
 
   it('renders server directory input', () => {
     render(<BatchTrainingCard batchUploading={false} trainStatus={null} onFileUpload={mockOnFileUpload} onDirUpload={mockOnDirUpload} />)
-    expect(screen.getByPlaceholderText('/path/to/images on server')).toBeDefined()
+    expect(screen.getByPlaceholderText('/path/to/images')).toBeDefined()
   })
 
   it('Train from directory button disabled when input is empty', () => {
@@ -59,14 +59,14 @@ describe('BatchTrainingCard', () => {
 
   it('enables Train from directory when path entered', () => {
     render(<BatchTrainingCard batchUploading={false} trainStatus={null} onFileUpload={mockOnFileUpload} onDirUpload={mockOnDirUpload} />)
-    fireEvent.change(screen.getByPlaceholderText('/path/to/images on server'), { target: { value: '/data/imgs' } })
+    fireEvent.change(screen.getByPlaceholderText('/path/to/images'), { target: { value: '/data/imgs' } })
     const btn = screen.getByText('Train from directory').closest('button')!
     expect(btn.disabled).toBe(false)
   })
 
   it('calls onDirUpload with path when Train from directory clicked', () => {
     render(<BatchTrainingCard batchUploading={false} trainStatus={null} onFileUpload={mockOnFileUpload} onDirUpload={mockOnDirUpload} />)
-    fireEvent.change(screen.getByPlaceholderText('/path/to/images on server'), { target: { value: '/data/imgs' } })
+    fireEvent.change(screen.getByPlaceholderText('/path/to/images'), { target: { value: '/data/imgs' } })
     fireEvent.click(screen.getByText('Train from directory'))
     expect(mockOnDirUpload).toHaveBeenCalledWith('/data/imgs')
   })

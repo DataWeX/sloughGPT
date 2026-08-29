@@ -12,7 +12,7 @@ import { persist } from 'zustand/middleware'
 
 export interface TrainingShellState {
   phase: 'idle' | 'TRAINING' | 'complete' | 'error'
-  method: 'slnet' | 'hf' | 'turbo' | null
+  method: 'slonet' | 'hf' | 'turbo' | null
   loss: number | null
   progress: number
   epoch: number
@@ -33,6 +33,13 @@ export interface TrainingShellState {
   jobId: string | null
   visualOutputDir: string | null
   visualSouPath: string | null
+  avgQuality: number | null
+  dataQuality: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number } | null
+  finetunedModelPath: string | null
+  finetunedModelLoss: number | null
+  distillCheckpoint: string | null
+  distillFinalLoss: number | null
+  distillEpochs: number | null
 }
 
 export interface AppShellState {
@@ -68,7 +75,14 @@ const DEFAULT_TRAINING: TrainingShellState = {
   error: null,
   jobId: null,
   visualOutputDir: null,
+  avgQuality: null,
+  dataQuality: null,
   visualSouPath: null,
+  finetunedModelPath: null,
+  finetunedModelLoss: null,
+  distillCheckpoint: null,
+  distillFinalLoss: null,
+  distillEpochs: null,
 }
 
 export const appShellStore = createStore<AppShellState>()(

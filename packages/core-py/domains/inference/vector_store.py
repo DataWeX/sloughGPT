@@ -626,8 +626,10 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
                 _slo_embedder_rejected = True
             elif candidate is not None:
                 _slo_embedder = candidate
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("vector_store: SloNet embedder load failed, using n-gram fallback", extra={
+                "error": str(e),
+            })
     if _slo_embedder is not None:
         try:
             vec = _slo_embedder.embed(text)
@@ -641,8 +643,8 @@ def simple_embed(text: str, dimension: int = 384) -> List[float]:
                     vec = vec / norm
             return vec.tolist() if isinstance(vec, np.ndarray) else vec
         except Exception:
-            import logging
-            logging.getLogger(__name__).warning("SloNet embedder failed, using n-gram fallback")
+            logger.warning("vector_store: SloNet embedder encode failed, using n-gram fallback",
+                exc_info=True)
 
     # 3. Last resort: word n-gram TF-IDF (zero downloads, zero training)
     vec = _ngram_embed(text, dimension)

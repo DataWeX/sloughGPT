@@ -1,7 +1,24 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { cn } from '@sloughgpt/strui'
+import Prism from 'prismjs'
+import 'prismjs/components/prism-typescript'
+import 'prismjs/components/prism-javascript'
+import 'prismjs/components/prism-jsx'
+import 'prismjs/components/prism-tsx'
+import 'prismjs/components/prism-python'
+import 'prismjs/components/prism-bash'
+import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-markdown'
+import 'prismjs/components/prism-yaml'
+import 'prismjs/components/prism-rust'
+import 'prismjs/components/prism-go'
+import 'prismjs/components/prism-java'
+import 'prismjs/components/prism-css'
+import 'prismjs/components/prism-sql'
+import 'prismjs/components/prism-c'
+import 'prismjs/components/prism-cpp'
 
 interface MarkdownProps {
   content: string
@@ -16,6 +33,18 @@ function InlineCode({ children }: { children: string }) {
   )
 }
 
+function highlightCode(code: string, language: string): string {
+  const lang = language.toLowerCase()
+  const grammar = Prism.languages[lang]
+  if (grammar) {
+    return Prism.highlight(code, grammar, lang)
+  }
+  return code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false)
   const handleCopy = async () => {
@@ -23,11 +52,13 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
+  const highlighted = useMemo(() => highlightCode(code, language), [code, language])
   return (
     <div className="relative my-2 rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 bg-muted/20">
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{language || 'code'}</span>
         <button
+          type="button"
           onClick={handleCopy}
           className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
           aria-label="Copy code"
@@ -36,7 +67,11 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
         </button>
       </div>
       <pre className="overflow-x-auto p-3 text-xs leading-relaxed font-mono">
-        <code>{code}</code>
+        {language ? (
+          <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+        ) : (
+          <code>{code}</code>
+        )}
       </pre>
     </div>
   )

@@ -11,6 +11,7 @@ interface ChatInputFieldProps {
   disabled: boolean
   textareaRef: React.RefObject<HTMLTextAreaElement>
   suppressEnter?: boolean
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
 const PLACEHOLDERS = [
@@ -27,7 +28,7 @@ function autoResize(textarea: HTMLTextAreaElement | null) {
   }
 }
 
-export function ChatInputField({ value, onChange, onSend, placeholder, disabled, textareaRef, suppressEnter }: ChatInputFieldProps) {
+export function ChatInputField({ value, onChange, onSend, placeholder, disabled, textareaRef, suppressEnter, onKeyDown }: ChatInputFieldProps) {
   const [phIndex, setPhIndex] = useState(0)
 
   useEffect(() => {
@@ -46,11 +47,12 @@ export function ChatInputField({ value, onChange, onSend, placeholder, disabled,
   }, [onChange, textareaRef])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    onKeyDown?.(e)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (!suppressEnter) onSend()
     }
-  }, [onSend, suppressEnter])
+  }, [onSend, suppressEnter, onKeyDown])
 
   return (
     <>

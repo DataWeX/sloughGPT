@@ -155,32 +155,34 @@ class ChunkedOperation:
     def attention_chunked(self, query: np.ndarray, key: np.ndarray, value: np.ndarray,
                           chunk_size: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray]:
         chunk_size = chunk_size or self.chunk_size
-        B, H, N, E = query.shape
-        _, _, S, _ = key.shape
+        # Layout: [B, S, H, E] — sequence dim=1, heads dim=2
+        B, S, H, E = query.shape
 
         all_outputs, all_weights = [], []
         scale = 1.0 / math.sqrt(E)
 
-        for i in range(0, N, chunk_size):
-            q_chunk = query[:, :, i:i+chunk_size]
+        for i in range(0, S, chunk_size):
+            q_chunk = query[:, i:i+chunk_size]
             start = max(0, i - chunk_size)
-            k_chunk = key[:, :, start:i+chunk_size]
-            v_chunk = value[:, :, start:i+chunk_size]
+            k_chunk = key[:, start:i+chunk_size]
+            v_chunk = value[:, start:i+chunk_size]
 
-            q_local = query.shape[2] - i
-            k_len = k_chunk.shape[2]
-            mask = np.triu(np.ones((q_local, k_len), dtype=np.bool_), k=1)
-            scores = np.einsum("bqhe,bshe->bqhs", q_chunk, k_chunk) * scale
+            q_len = q_chunk.shape[1]
+            k_len = k_chunk.shape[1]
+            mask = np.triu(np.ones((1, 1, q_len, k_len), dtype=np.bool_), k=1)
+            # scores[b, h, q, s] — query attends to key
+            scores = np.einsum("bqhe,bshe->bhqs", q_chunk, k_chunk) * scale
             scores = np.where(mask, -1e9, scores)
 
             exp_s = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
             attn = exp_s / np.sum(exp_s, axis=-1, keepdims=True)
-            out = np.einsum("bqhs,bshe->bqhe", attn, v_chunk)
+            # output[b, q, h, e]
+            out = np.einsum("bhqs,bshe->bqhe", attn, v_chunk)
 
             all_outputs.append(out)
             all_weights.append(attn)
 
-        output = np.concatenate(all_outputs, axis=2)
+        output = np.concatenate(all_outputs, axis=1)
         weights = np.concatenate(all_weights, axis=3)
         return output, weights
 
@@ -212,19 +214,37 @@ class MemoryEfficientSoftmax:
         shape[dim] = n_out
         result = np.zeros(shape, dtype=np.float32)
 
+        # Two-pass: compute max across all chunks for numerical stability,
+        # then compute exp and sum across all chunks.
+        # First pass: find global max per row across chunks
+        global_max = -np.inf * np.ones(shape, dtype=np.float32)
         for i in range(0, dim_size, chunk_size):
             end = min(i + chunk_size, dim_size)
             idx = [slice(None)] * logits.ndim
             idx[dim] = slice(i, end)
             chunk = logits[tuple(idx)]
-
             if stable:
-                chunk = chunk - np.max(chunk, axis=dim, keepdims=True)
+                chunk_max = np.max(chunk, axis=dim, keepdims=True)
+                chunk_max_expanded = np.zeros(shape, dtype=np.float32)
+                chunk_max_expanded[tuple(idx)] = chunk_max
+                global_max = np.maximum(global_max, chunk_max_expanded)
 
+        # Second pass: compute exp(logit - global_max) and accumulate sum
+        exp_sum = np.zeros(shape, dtype=np.float32)
+        for i in range(0, dim_size, chunk_size):
+            end = min(i + chunk_size, dim_size)
+            idx = [slice(None)] * logits.ndim
+            idx[dim] = slice(i, end)
+            chunk = logits[tuple(idx)]
+            if stable:
+                chunk = chunk - global_max[tuple(idx)]
             exp_chunk = np.exp(chunk)
-            result[tuple(idx)] = exp_chunk / np.sum(exp_chunk, axis=dim, keepdims=True)
+            exp_sum[tuple(idx)] = exp_chunk
 
-        return result
+        # Normalize
+        total_sum = np.sum(exp_sum, axis=dim, keepdims=True)
+        total_sum = np.maximum(total_sum, 1e-10)  # avoid division by zero
+        return exp_sum / total_sum
 
 
 # =============================================================================
@@ -273,9 +293,9 @@ class OptimizedEmbedding:
         w = self.weight
         scale = (np.abs(w).max(axis=1, keepdims=True) + 1e-8)
         if dtype == "uint8":
-            self._quantized = np.clip((w / scale * 127).astype(np.int8) + 128, 0, 255).astype(np.uint8)
+            self._quantized = np.clip(np.round(w / scale * 127) + 128, 0, 255).astype(np.uint8)
         else:
-            self._quantized = np.clip((w / scale * 127).astype(np.int8), -128, 127)
+            self._quantized = np.clip(np.round(w / scale * 127), -128, 127).astype(np.int8)
         self._scale = scale
 
     def forward(self, x: np.ndarray) -> np.ndarray:

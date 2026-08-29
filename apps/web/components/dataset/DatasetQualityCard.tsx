@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
@@ -45,11 +45,11 @@ function computeQuality(preview: DatasetPreview): QualityMetrics {
   }
 }
 
-export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
+export const DatasetQualityCard = memo(function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
   const [preview, setPreview] = useState<DatasetPreview | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const fetchPreview = async () => {
+  const fetchPreview = useCallback(async () => {
     setLoading(true)
     try {
       const p = await datasetController.preview(datasetId, 200)
@@ -59,10 +59,23 @@ export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [datasetId])
 
   useEffect(() => {
-    fetchPreview()
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const p = await datasetController.preview(datasetId, 200)
+        if (active) setPreview(p)
+      } catch {
+        if (active) setPreview(null)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
   }, [datasetId])
 
   const metrics = useMemo(() => preview ? computeQuality(preview) : null, [preview])
@@ -105,7 +118,7 @@ export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
               <Badge label="Poor" variant="error" size="sm" />
             )}
           </div>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={fetchPreview} disabled={loading}>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={fetchPreview} disabled={loading} aria-label="Refresh preview">
             <IconRefresh className={loading ? 'animate-spin h-3 w-3' : 'h-3 w-3'} />
           </Button>
         </div>
@@ -165,4 +178,4 @@ export function DatasetQualityCard({ datasetId }: DatasetQualityCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

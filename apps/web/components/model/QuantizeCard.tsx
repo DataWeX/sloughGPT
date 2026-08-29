@@ -42,7 +42,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
       addToast(`Quantized to ${bits}-bit (${result.summary?.tensors ?? 0} tensors)`, 'success')
       onQuantized?.()
     } catch {
-      addToast('Quantization failed', 'error')
+      addToast('Could not quantize model', 'error')
     } finally {
       setQuantizing(false)
     }
@@ -57,7 +57,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
       addToast('Model restored to full precision', 'success')
       onQuantized?.()
     } catch {
-      addToast('Dequantization failed', 'error')
+      addToast('Could not dequantize model', 'error')
     } finally {
       setDequantizing(false)
     }

@@ -39,6 +39,7 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domains.training.trainer_protocol import TrainResult
+from domains.training.quality_scorer import compute_data_quality
 from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domains.training.slonet import load_checkpoint_npz
 from domains.training.lora import apply_lora_to_model, LoRAConfig
@@ -98,7 +99,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         total_len = 0
 
         for ds_name, ratio in datasets_with_ratios:
-            path = Path("datasets") / ds_name / "input.txt"
+            path = Path("data") / ds_name / "input.txt"
             if path.exists():
                 text = path.read_text(encoding="utf-8")
                 target_len = int(len(text) * ratio)
@@ -122,7 +123,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         datasets = data_path
         texts = []
         for ds_name in datasets:
-            path = Path("datasets") / ds_name / "input.txt"
+            path = Path("data") / ds_name / "input.txt"
             if path.exists():
                 texts.append(path.read_text(encoding="utf-8"))
             else:
@@ -131,9 +132,20 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         text = "".join(texts)
 
     else:
+        if data_path is None:
+            raise FileNotFoundError(
+                "No data_path provided and no default dataset found"
+            )
         path = Path(data_path)
-        if not path.exists():
-            path = Path("datasets") / data_path / "input.txt"
+        if not path.is_file():
+            # Try as a dataset name under data/
+            alt = Path("data") / data_path / "input.txt"
+            if alt.is_file():
+                path = alt
+            else:
+                raise FileNotFoundError(
+                    f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
+                )
         with open(path, "r", encoding="utf-8") as f:
             text = f.read()
 
@@ -316,8 +328,10 @@ def _build_training_state_metadata(
                 if isinstance(hyper, dict):
                     hyper["lr"] = initial_lr
             state["optimizer"] = _make_json_safe(opt_state)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("train_pipeline: optimizer state serialization failed", extra={
+                "error": str(e),
+            })
     if scheduler is not None:
         try:
             sched_state = scheduler.state_dict()
@@ -326,8 +340,10 @@ def _build_training_state_metadata(
             if initial_lr is not None and isinstance(sched_state, dict):
                 sched_state["initial_lr"] = initial_lr
             state["scheduler"] = _make_json_safe(sched_state)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("train_pipeline: scheduler state serialization failed", extra={
+                "error": str(e),
+            })
     return state
 
 
@@ -587,6 +603,7 @@ class SloughGPTTrainer:
         lora_alpha: int = 16,
         device: Optional[str] = None,
         soul_name: Optional[str] = None,
+        personality: Optional[dict] = None,
         log_interval: int = 10,
         eval_interval: int = 100,
         experiment_tracker: Optional["ExperimentTracker"] = None,
@@ -627,6 +644,7 @@ class SloughGPTTrainer:
 
         self.data_path = data_path
         self.soul_name = soul_name or "sloughgpt"
+        self._personality = personality
         self.tokenizer = tokenizer
         self._experiment_tracker = experiment_tracker
         self._best_val_loss = float("inf")
@@ -639,6 +657,8 @@ class SloughGPTTrainer:
         self._best_model_path = None  # path to best checkpoint
         self._best_checkpoint_loss = float("inf")  # best train loss for save_best_only
         self._early_stopped = False  # True if early stopping triggered
+        self._quality_scores: List[float] = []  # rolling quality scores of training data
+        self._avg_quality: Optional[float] = None  # running average quality
 
         self.device = self._setup_device()
         self.config.device = self.device
@@ -664,6 +684,19 @@ class SloughGPTTrainer:
         n = int(0.9 * len(self.data))
         self.train_data = self.data[:n]
         self.val_data = self.data[n:]
+
+        # Compute data quality metrics
+        try:
+            raw_text = "".join(self.itos.get(int(i), "") for i in self.data[:min(50000, len(self.data))])
+            self._data_quality = compute_data_quality(raw_text)
+            self._avg_quality = self._data_quality.get("avg_quality")
+            logger.info("Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f",
+                self._data_quality["avg_quality"], self._data_quality["repetition_rate"],
+                self._data_quality["diversity"], self._data_quality["language_quality"],
+                extra={"tag": "TRAIN"})
+        except Exception as e:
+            logger.warning("Data quality computation failed, using defaults: %s", e)
+            self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
 
         # Create model
         self._create_model()
@@ -823,6 +856,9 @@ class SloughGPTTrainer:
         Uses 10 batches — sufficient for loss estimation while keeping the
         per-eval cost low.
         """
+        import time as _time
+        eval_start = _time.monotonic()
+
         model = self.training_model
         model.eval()
 
@@ -836,6 +872,13 @@ class SloughGPTTrainer:
             steps += 1
 
         avg_loss = total_loss / max(steps, 1)
+        elapsed_ms = (_time.monotonic() - eval_start) * 1000
+        logger.info("train_pipeline: evaluate complete", extra={
+            "eval_loss": round(avg_loss, 4),
+            "eval_ppl": round(float(np.exp(avg_loss)), 2),
+            "batches": num_batches,
+            "elapsed_ms": round(elapsed_ms, 1),
+        })
         return {"eval_loss": avg_loss, "eval_ppl": float(np.exp(avg_loss))}
 
     def _restore_from_checkpoint_bundle(self, checkpoint: Dict[str, Any]) -> None:
@@ -1032,9 +1075,9 @@ class SloughGPTTrainer:
                     extra={"tag": "TRAIN"},
                 )
 
-        logger.info(f"Training config: {self.config}",
+        logger.info("Training config: %s", self.config,
             extra={"tag": "TRAIN"},)
-        logger.info(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}",
+        logger.info("Total parameters: %s", f"{sum(p.numel() for p in self.model.parameters()):,}",
             extra={"tag": "TRAIN"},)
         if self._experiment_tracker is not None:
             n_params = sum(p.numel() for p in self.model.parameters())
@@ -1075,6 +1118,7 @@ class SloughGPTTrainer:
                         "elapsed_s": round(self._training_elapsed(), 1),
                         "done": done,
                         "done_reason": done_reason,
+                        "avg_quality": self._avg_quality,
                     }
                 )
             except Exception:
@@ -1082,6 +1126,16 @@ class SloughGPTTrainer:
 
         self._is_training = True
         self._training_start_time = time.time()
+
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            epochs = self.config.epochs
+            max_steps = self.config.max_steps or "unlimited"
+            get_event_buffer().record("TRAIN", f"started epochs={epochs} max_steps={max_steps}")
+        except Exception:
+            pass
+
         for epoch in range(self.current_epoch, self.config.epochs):
             self.current_epoch = epoch
 
@@ -1090,7 +1144,7 @@ class SloughGPTTrainer:
                     extra={"tag": "TRAIN"},)
                 break
 
-            logger.info(f"\nEpoch {epoch + 1}/{self.config.epochs}",
+            logger.info("Epoch %d/%d", epoch + 1, self.config.epochs,
                 extra={"tag": "TRAIN"},)
 
             model = self.training_model
@@ -1248,6 +1302,14 @@ class SloughGPTTrainer:
 
         self._is_training = False
 
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            final_loss_str = f"{final_loss:.4f}" if final_loss is not None else "n/a"
+            get_event_buffer().record("TRAIN", f"completed step={self.global_step} loss={final_loss_str}")
+        except Exception:
+            pass
+
         # final_loss: prefer best eval loss, fall back to last train loss
         final_loss = self._best_val_loss
         if final_loss is None or (isinstance(final_loss, float) and final_loss == float("inf")):
@@ -1270,6 +1332,8 @@ class SloughGPTTrainer:
             epochs_completed=self._completed_epochs,
             model_path=self._best_model_path or model_path,
             checkpoint_name=checkpoint_name,
+            avg_quality=self._avg_quality,
+            data_quality=getattr(self, '_data_quality', None),
         )
 
     def save_checkpoint(self, metrics: Optional[Dict[str, float]] = None, is_final: bool = False):
@@ -1327,7 +1391,8 @@ class SloughGPTTrainer:
         self.save(str(checkpoint_path),
                   stoi=self.stoi, itos=self.itos, chars=chars_list,
                   training_duration=training_duration,
-                  include_optimizer_state=not is_final)
+                  include_optimizer_state=not is_final,
+                  avg_quality=self._avg_quality)
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
         self._prune_stale_checkpoints(keep_final=is_final)
 
@@ -1388,7 +1453,7 @@ class SloughGPTTrainer:
             self._best_model_path = None
 
     def save(self, path: str, format: Optional[str] = None, stoi=None, itos=None, chars=None,
-             training_duration=None, include_optimizer_state: bool = True):
+             training_duration=None, include_optimizer_state: bool = True, avg_quality: Optional[float] = None):
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
         Args:
@@ -1430,6 +1495,7 @@ class SloughGPTTrainer:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
         from domains.inference import create_soul_profile, save_soul
+        from domains.inference.slo_format import PersonalityCore
 
         # Honest metadata: only claim a loss that was actually observed. A save
         # before any training step has neither a train loss nor an eval loss,
@@ -1453,6 +1519,7 @@ class SloughGPTTrainer:
             epochs_trained=epochs_trained,
             final_train_loss=final_train_loss,
             final_val_loss=final_val_loss,
+            personality=PersonalityCore(**self._personality) if self._personality else None,
             lineage="sloughgpt",
             tags=["sloughgpt", "trained", "soul"],
         )
@@ -1480,6 +1547,8 @@ class SloughGPTTrainer:
         }
         if training_duration is not None:
             soul.metadata["training_duration_s"] = training_duration
+        if avg_quality is not None:
+            soul.metadata["avg_quality"] = avg_quality
 
         # Embed the tokenizer (e.g. a trained TokenTree) so the .soul is fully
         # self-contained and inference can reproduce BPE-level encoding.
@@ -1616,8 +1685,8 @@ def main():
             trainer.train()
     except ValueError as exc:
         raise SystemExit(f"error: {exc}") from exc
-    print("\n=== Generated Text ===")
-    print(trainer.generate("First"))
+    logger.info("=== Generated Text ===")
+    logger.info("%s", trainer.generate("First"))
 
 
 if __name__ == "__main__":  # pragma: no cover (entry-point guard)

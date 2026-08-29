@@ -136,12 +136,12 @@ describe('SettingsPage', () => {
   it('renders Connection card', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('API server and authentication').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Service connection and authentication').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders API URL input with default value', () => {
     render(<SettingsPage />)
-    const inputs = screen.getAllByLabelText('API server URL')
+    const inputs = screen.getAllByLabelText('Service URL')
     expect(inputs.length).toBeGreaterThanOrEqual(1)
     expect(inputs[0]).toHaveValue('http://localhost:8000')
   })

@@ -74,7 +74,7 @@ describe('TurboCard', () => {
     const session = makeSession()
     render(<TurboCard datasets={datasets as unknown as UseTrainingDatasetsReturn} session={session} addToast={vi.fn()} />)
     fireEvent.click(screen.getByText('Start turbo train'))
-    expect(session.startTurboTrain).toHaveBeenCalledWith('1', TURBO_DEFAULTS, expect.any(Function))
+    expect(session.startTurboTrain).toHaveBeenCalledWith('1', TURBO_DEFAULTS, expect.any(Function), undefined)
   })
 
   it('renders live progress and stop during training', () => {
@@ -137,7 +137,7 @@ describe('TurboCard', () => {
     render(<TurboCard datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn} session={session} addToast={addToast} />)
     fireEvent.click(screen.getByText('Load for chat'))
     await vi.waitFor(() => {
-      expect(addToast).toHaveBeenCalledWith('Failed to load trained version', 'error')
+      expect(addToast).toHaveBeenCalledWith('Could not load trained version', 'error')
     })
   })
 

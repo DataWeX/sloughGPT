@@ -28,8 +28,7 @@ export function TokenTreeMatrixCard() {
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [load])
 
   const energyRows = (rows: [string, number, number][]) => (
     <div className="divide-y divide-border/30">

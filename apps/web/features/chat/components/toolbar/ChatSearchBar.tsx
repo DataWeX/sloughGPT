@@ -22,27 +22,30 @@ export function ChatSearchBar() {
       {searchQuery && (
         <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
           {matchCount > 0 && (
-            <span className="hidden sm:inline text-[10px] text-muted-foreground whitespace-nowrap mr-0.5" aria-live="polite" role="status">
+            <span className="hidden sm:inline text-[10px] text-muted-foreground whitespace-nowrap mr-0.5" aria-live="polite" role="status" aria-atomic="true">
               {matchIndex + 1}/{matchCount}
             </span>
           )}
           <button
+            type="button"
             onClick={onPrevMatch}
             className="text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             disabled={matchCount === 0}
             aria-label="Previous match"
           >
-            <IconChevronUp className="h-3 w-3" />
+            <IconChevronUp className="h-3 w-3" aria-hidden="true" />
           </button>
           <button
+            type="button"
             onClick={onNextMatch}
             className="text-muted-foreground hover:text-foreground disabled:opacity-30 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             disabled={matchCount === 0}
             aria-label="Next match"
           >
-            <IconChevronDown className="h-3 w-3" />
+            <IconChevronDown className="h-3 w-3" aria-hidden="true" />
           </button>
           <button
+            type="button"
             onClick={onClear}
             className="text-muted-foreground hover:text-foreground transition-colors h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded"
             aria-label="Clear search"

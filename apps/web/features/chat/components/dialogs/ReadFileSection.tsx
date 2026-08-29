@@ -40,6 +40,7 @@ export default function ReadFileSection({ readLoading, readFileData, onFileSelec
         <span className="font-medium truncate max-w-[200px]">{readFileData.filename}</span>
         {readFileData.pages > 1 && <span className="text-xs text-muted-foreground">({readFileData.pages} pages)</span>}
         <button
+          type="button"
           onClick={onRemove}
           className="ml-auto text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-muted/10"
         >

@@ -3,12 +3,12 @@ import time
 import threading
 import queue
 import logging
-import copy
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from typing import Optional, List, Iterator, AsyncIterator, Dict, Any, Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import Optional, List, Iterator, AsyncIterator, Any, Callable
 
 import numpy as np
 
+from .constants import DEFAULT_GENERATE_TIMEOUT
 from domains.infrastructure.model_server import CircuitBreaker, ModelMetrics
 
 logger = logging.getLogger("slo.infrastructure.slonet_server")
@@ -52,7 +52,7 @@ class SloNetServer:
         model_factory: Optional[Callable[[], Any]] = None,
         model_id: str = "slonet",
         max_workers: int = 4,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         enable_warmup: bool = True,
         warmup_prompt: str = "Hello",
@@ -109,7 +109,7 @@ class SloNetServer:
         else:
             self._pool_mode = False
             self._model = model
-            self._semaphore = asyncio.Semaphore(1)
+            self._model_lock = threading.Lock()  # serializes model.generate* calls
 
         if enable_warmup:
             threading.Thread(target=self._run_warmup, daemon=True).start()
@@ -126,12 +126,17 @@ class SloNetServer:
             if self._lazy_model_factory is not None:
                 with self._lazy_lock:
                     if self._model is None:
+                        t0 = time.monotonic()
                         model = self._lazy_model_factory()
+                        elapsed_ms = (time.monotonic() - t0) * 1000
                         if model is None:
                             raise RuntimeError(
                                 f"Lazy model factory returned None for '{self._model_id}'"
                             )
                         self._model = model
+                        logger.info("slonet_server: lazy model materialized", extra={
+                            "model_id": self._model_id, "elapsed_ms": round(elapsed_ms, 1),
+                        })
                     return self._model
             raise RuntimeError(
                 f"SloNetServer '{self._model_id}' has no model and no lazy factory"
@@ -255,7 +260,10 @@ class SloNetServer:
             return None
         try:
             return self._process_guard.health()
-        except Exception:
+        except Exception as e:
+            logger.warning("slonet_server: guard health check failed", extra={
+                "model_id": self._model_id, "error": str(e),
+            })
             return {"alive": False}
 
     def _generate_sync(
@@ -300,18 +308,19 @@ class SloNetServer:
             tokens = self._tokenizer.encode(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
             kv_state = self._resolve_kv_state(session_id)
-            result = model.generate_numpy(
-                input_ids,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                eos_token=self._tokenizer.eos_token_id or 0,
-                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-                kv_state=kv_state,
-                quantize_kv=self._quantize_kv,
-            )
+            with self._model_lock:
+                result = model.generate_numpy(
+                    input_ids,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    eos_token=self._tokenizer.eos_token_id or 0,
+                    extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                    kv_state=kv_state,
+                    quantize_kv=self._quantize_kv,
+                )
             text = self._tokenizer.decode(result[0].tolist())
             logger.debug(
                 "generate_sync",
@@ -345,30 +354,61 @@ class SloNetServer:
         # IPC queue + stall detection causes false-positive restarts on
         # slow CPU generation.  Non-streaming generate() still uses the
         # guard for crash isolation.
+        import time as _time
+        _t0 = _time.monotonic()
+        logger.debug("PUMP_STREAM: _generate_stream_sync started, prompt_len=%d", len(prompt))
+        if self._tokenizer is None:
+            provider = getattr(self, "_provider", None)
+            if provider is not None and getattr(provider, "_tokenizer", None) is not None:
+                self._tokenizer = provider._tokenizer
+                logger.warning("PUMP_STREAM: tokenizer was None, recovered from provider")
+            else:
+                raise RuntimeError(
+                    f"SloNetServer '{self._model_id}' has no tokenizer — "
+                    "cannot encode prompt for streaming generation"
+                )
         model = self._acquire_model()
+        logger.debug("PUMP_STREAM: _acquire_model returned in %.1fms, model=%s",
+                      (_time.monotonic() - _t0) * 1000, type(model).__name__ if model else None)
         try:
+            _t_enc = _time.monotonic()
             tokens = self._tokenizer.encode(prompt)
+            logger.debug("PUMP_STREAM: encode done in %.1fms, tokens=%d",
+                          (_time.monotonic() - _t_enc) * 1000, len(tokens))
             input_ids = np.array([tokens], dtype=np.int64)
             eos_id = self._tokenizer.eos_token_id or 0
+            _t_kv = _time.monotonic()
             kv_state = self._resolve_kv_state(session_id)
+            logger.debug("PUMP_STREAM: kv_state resolved in %.1fms, session=%s",
+                          (_time.monotonic() - _t_kv) * 1000, session_id)
 
-            for tok_id in model.generate_numpy_stream(
-                input_ids,
-                max_new_tokens=max_new_tokens,
-                eos_token=eos_id,
-                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-                temperature=temperature,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                kv_state=kv_state,
-                quantize_kv=self._quantize_kv,
-            ):
-                if cancel_event and cancel_event.is_set():
-                    return
-                decoded = self._tokenizer.decode([tok_id])
-                if decoded:
-                    yield decoded
+            _t_gen = _time.monotonic()
+            _first_token = True
+            with self._model_lock:
+                for tok_id in model.generate_numpy_stream(
+                    input_ids,
+                    max_new_tokens=max_new_tokens,
+                    eos_token=eos_id,
+                    extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                    temperature=temperature,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    kv_state=kv_state,
+                    quantize_kv=self._quantize_kv,
+                ):
+                    if _first_token:
+                        logger.debug("PUMP_STREAM: first token from generate_numpy_stream in %.1fms",
+                                      (_time.monotonic() - _t_gen) * 1000)
+                        _first_token = False
+                    if cancel_event and cancel_event.is_set():
+                        logger.debug("PUMP_STREAM: cancel_event set, stopping generation")
+                        return
+                    decoded = self._tokenizer.decode([tok_id])
+                    if decoded:
+                        yield decoded
+            logger.debug("PUMP_STREAM: generation complete in %.1fms",
+                          (_time.monotonic() - _t_gen) * 1000)
         finally:
             self._release_model(model)
 
@@ -477,9 +517,11 @@ class SloNetServer:
 
         pump_thread = threading.Thread(target=_pump, daemon=True)
         pump_thread.start()
+        logger.debug("STREAM_CONSUMER: pump thread started, session=%s", session_id)
 
         start = time.monotonic()
         tokens = 0
+        _timeout_count = 0
         try:
             while True:
                 try:
@@ -488,6 +530,12 @@ class SloNetServer:
                         timeout=30.0,
                     )
                 except asyncio.TimeoutError:
+                    _timeout_count += 1
+                    elapsed = time.monotonic() - start
+                    logger.warning(
+                        "STREAM_CONSUMER: 30s timeout #%d at %.1fs elapsed, pump_alive=%s, tokens=%d, session=%s",
+                        _timeout_count, elapsed, pump_thread.is_alive(), tokens, session_id,
+                    )
                     # Defensive race guard: a dead pump always pushes the sentinel,
                     # so a timeout with a dead pump is unreachable in practice.
                     if not pump_thread.is_alive():  # pragma: no cover
@@ -558,8 +606,10 @@ class SloNetServer:
                 n_head = int(pmeta.get("n_head", 0))
                 vocab = int(pmeta.get("vocab_size", 0))
                 max_seq = int(pmeta.get("max_seq_len", 0))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("slonet_server: provider metadata parse failed", extra={
+                    "model_id": self._model_id, "error": str(e),
+                })
 
         cb_state = (
             self._circuit_breaker.state.value

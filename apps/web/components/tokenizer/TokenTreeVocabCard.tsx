@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import {
   tokenTreeController,
@@ -30,7 +30,9 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
   const [lineageLoading, setLineageLoading] = useState(false)
 
   useEffect(() => {
-    tokenTreeController.getStats().then(setStats).catch(() => setStats(null))
+    let active = true
+    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
+    return () => { active = false }
   }, [])
 
   const load = useCallback(async (nextOffset: number) => {
@@ -48,8 +50,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
 
   useEffect(() => {
     if (stats?.trained) load(offset)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, stats])
+  }, [refreshKey, stats, offset, load])
 
   const handleGoTo = async (nextOffset: number) => {
     setOffset(nextOffset)
@@ -119,12 +120,13 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
             {page.entries.map(entry => (
               <div key={entry.id}>
                 <button
+                  type="button"
                   onClick={() => handleToggleEntry(entry)}
                   className="w-full flex items-center gap-3 py-1.5 text-sm text-left hover:bg-muted/40 transition-colors px-1 -mx-1 rounded"
                   aria-label={`Toggle lineage for ${display(entry.token)}`}
                 >
                   <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">{entry.id}</span>
-                  <span className={`font-mono flex-1 ${entry.is_special ? 'text-primary' : ''}`}>
+                  <span className={cn('font-mono flex-1', entry.is_special ? 'text-primary' : '')}>
                     {display(entry.token)}
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums">{entry.freq}</span>

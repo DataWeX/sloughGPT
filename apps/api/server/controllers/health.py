@@ -2,10 +2,13 @@
 Health Controller - Business logic for system health
 """
 import json
+import logging
 import time
 from typing import Dict, Any, Tuple, Optional
 import psutil
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 _health_start_time = datetime.now()
 
@@ -52,10 +55,18 @@ def _get_mps_monitor_info() -> Optional[Dict[str, Any]]:
 def _is_model_loading() -> bool:
     """Check if the server is currently loading a model in the background.
 
-    Returns True when the model isn't loaded yet but the server has been
-    running for less than 90s (the typical model load window).
+    Returns True when:
+    1. ModelLoader reports a load in progress, OR
+    2. Model isn't loaded yet but the server has been running for less than 90s
+       (the typical model load window).
     """
     try:
+        # Check if ModelLoader has a load in progress
+        from domains.infrastructure.model_loader import ModelLoader
+        if ModelLoader.is_loading():
+            return True
+
+        # Fallback: time-based heuristic
         import state as server_state
         if server_state.model is not None:
             return False
@@ -73,11 +84,15 @@ def _is_app_ready() -> bool:
     Health must not report the model as loaded until the lifecycle reaches
     RUNNING — otherwise clients see ``model_loaded: true`` during the startup
     window and hit routes that are not registered yet (404 "Not Found").
+
+    Reads from ``STARTUP_PHASE`` (set by the startup orchestrator) instead of
+    creating the lifecycle singleton, which would race with
+    ``StartupOrchestrator._init_lifecycle()`` when health routes are queried
+    pre-lifespan.
     """
     try:
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
-        mgr = get_lifecycle_manager()
-        return mgr.is_running()
+        from startup_progress import STARTUP_PHASE
+        return STARTUP_PHASE.get("phase") in ("running", "ready")
     except Exception:
         return True
 
@@ -154,8 +169,8 @@ def _get_model_device() -> Optional[str]:
             for m in health.get("models", []):
                 if m.get("is_default") and m.get("device"):
                     return m["device"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("GPU device detection failed: %s", e)
     return None
 
 
@@ -286,6 +301,17 @@ def _get_resource_allocation() -> Dict[str, Any]:
         return {}
 
 
+_cached_process: Optional["psutil.Process"] = None
+
+
+def _get_process() -> "psutil.Process":
+    """Return a cached psutil.Process instance for the current process."""
+    global _cached_process
+    if _cached_process is None:
+        _cached_process = psutil.Process()
+    return _cached_process
+
+
 def _get_process_info() -> Dict[str, Any]:
     """Compute real process metrics for the current server process.
 
@@ -302,9 +328,8 @@ def _get_process_info() -> Dict[str, Any]:
     """
     try:
         import gc
-        proc = psutil.Process()
+        proc = _get_process()
         info: Dict[str, Any] = {
-            "open_files": len(proc.open_files()),
             "threads": proc.num_threads(),
             "process_cpu_percent": round(proc.cpu_percent(interval=None), 1),
             "process_memory_percent": round(proc.memory_percent(), 1),
@@ -315,8 +340,8 @@ def _get_process_info() -> Dict[str, Any]:
             info["gc_gen0"] = gen0
             info["gc_gen1"] = gen1
             info["gc_gen2"] = gen2
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("GC gen tracking failed: %s", e)
         return info
     except Exception:
         return {}
@@ -330,6 +355,12 @@ class HealthController:
     def __init__(self):
         self._cache: Dict[str, Any] = {}
         self._cache_time: float = 0.0
+        # Warm up psutil cpu_percent — first call always returns 0.0
+        try:
+            psutil.cpu_percent(interval=None)
+            psutil.Process().cpu_percent(interval=None)
+        except Exception as e:
+            logger.debug("CPU percent sampling failed: %s", e)
 
     def get_basic_health(self) -> Dict[str, Any]:
         """Get basic health status with flow-based summary."""
@@ -365,8 +396,8 @@ class HealthController:
                     meta = server_state.provider.metadata()
                     if meta and meta.get("total_params"):
                         result["num_parameters"] = meta["total_params"]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Model parameter counting failed: %s", e)
 
         # Quantization status
         quant_info = _get_quantization_info()
@@ -435,6 +466,7 @@ class HealthController:
             error_count = ss.error_count
             current_soul = ss.current_soul.get()
             avg_latency = ss.get_avg_latency()
+            p95_latency = ss.get_p95_latency()
             requests_per_min = ss.get_requests_per_minute()
             path_latencies = ss.get_path_latencies(5)
             recent_errors = ss.get_error_history(5)
@@ -442,7 +474,7 @@ class HealthController:
             total_tokens = ss.total_tokens
             tokens_per_sec = ss.get_tokens_per_second()
             avg_tokens_per_req = ss.get_avg_tokens_per_request()
-            health_score = ss.get_health_score()
+            health_score = ss.get_health_score(cpu_percent=cpu, memory_percent=mem.percent)
             model_metrics = ss.get_model_metrics()
             model_events = ss.get_model_events(10)
             ss.record_trend_snapshots()
@@ -454,6 +486,7 @@ class HealthController:
             error_count = 0
             current_soul = None
             avg_latency = 0.0
+            p95_latency = 0.0
             requests_per_min = 0.0
             path_latencies = []
             recent_errors = []
@@ -477,6 +510,7 @@ class HealthController:
             "request_count": request_count,
             "error_count": error_count,
             "avg_latency_ms": avg_latency,
+            "p95_latency_ms": p95_latency,
             "requests_per_minute": requests_per_min,
             "path_latencies": path_latencies,
             "recent_errors": recent_errors,

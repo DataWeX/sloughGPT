@@ -1,4 +1,4 @@
-"""Tests for downcraft.state — persistent download state."""
+"""Tests for downcraft.download.state — persistent download state."""
 
 import json
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from downcraft.state import PersistentState, ModelState, FileProgress, get_state
+from downcraft.download.state import PersistentState, ModelState, FileProgress, get_state
 
 
 class TestPersistentState:

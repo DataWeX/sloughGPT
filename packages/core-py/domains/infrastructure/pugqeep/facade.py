@@ -263,7 +263,8 @@ class PGQ:
     # ── Core infra engine (Process/Tree/Stem) ──
 
     def spawn(self, fn: Callable[..., Any], *args: Any,
-              name: str = "", **kwargs: Any) -> Process:
+              name: str = "", timeout: Optional[float] = None,
+              priority: int = 2, **kwargs: Any) -> Process:
         """Spawn a new process on the core engine.
 
         Creates a Process wrapping ``fn(*args, **kwargs)`` and adds it
@@ -274,12 +275,15 @@ class PGQ:
             fn: Callable to execute.
             *args: Positional args forwarded to ``fn``.
             name: Optional human-readable name.
+            timeout: Optional timeout in seconds. None = no timeout.
+            priority: Queue priority (0=highest, 3=lowest).
             **kwargs: Keyword args forwarded to ``fn``.
 
         Returns:
             A ``Process`` instance with a unique id.
         """
-        return self._engine.spawn(fn, *args, name=name, **kwargs)
+        return self._engine.spawn(fn, *args, name=name,
+                                  timeout=timeout, priority=priority, **kwargs)
 
     def tree(self, name: str, max_stems: int = 8,
              pool_workers: int = 4) -> "EngineTree":
@@ -378,6 +382,21 @@ class PGQ:
             timeout: Maximum seconds to wait. None = wait forever.
         """
         self._engine.wait(timeout=timeout)
+
+    def wait_all(self, timeout: Optional[float] = None) -> List[Process]:
+        """Wait for all processes and return completed/failed/cancelled list.
+
+        Args:
+            timeout: Maximum seconds to wait. None = wait forever.
+
+        Returns:
+            List of processes in terminal state.
+        """
+        return self._engine.wait_all(timeout=timeout)
+
+    def get_completed(self) -> List[Process]:
+        """Return all completed processes since last call."""
+        return self._engine.get_completed()
 
     # ── Training via executor (Point-Graph-Queue integration) ──
 
@@ -504,17 +523,25 @@ class PGQ:
     # ── Batch operations ──
 
     def put_many(self, data: Dict[str, np.ndarray], compress: bool = True,
-                 method: Optional[str] = None) -> dict:
+                 method: Optional[str] = None, num_workers: int = 0) -> dict:
         """Store multiple arrays at once.
 
         Args:
             data: Dict of name → numpy array.
             compress: Whether to compress.
             method: Compression method.
+            num_workers: Parallel workers. 0 = sequential, -1 = cpu_count.
 
         Returns:
             Stats with counts and total size.
         """
+        if num_workers == 0 or len(data) <= 1:
+            return self._put_many_sequential(data, compress, method)
+
+        return self._put_many_parallel(data, compress, method, num_workers)
+
+    def _put_many_sequential(self, data: Dict[str, np.ndarray],
+                             compress: bool, method: Optional[str]) -> dict:
         total_bytes = 0
         count = 0
         for name, arr in data.items():
@@ -523,16 +550,101 @@ class PGQ:
             count += 1
         return {"count": count, "total_bytes": total_bytes}
 
-    def get_many(self, names: List[str]) -> Dict[str, Optional[np.ndarray]]:
+    def _put_many_parallel(self, data: Dict[str, np.ndarray], compress: bool,
+                           method: Optional[str], num_workers: int) -> dict:
+        import threading
+        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+
+        if num_workers < 0:
+            import os
+            num_workers = os.cpu_count() or 4
+
+        total_bytes = 0
+        count = 0
+        errors = []
+        lock = threading.Lock()
+
+        def put_one(item):
+            name, arr = item
+            try:
+                self.put(name, arr, compress=compress, method=method)
+                with lock:
+                    nonlocal total_bytes, count
+                    total_bytes += arr.nbytes if isinstance(arr, np.ndarray) else 0
+                    count += 1
+            except Exception as e:
+                with lock:
+                    errors.append((name, str(e)))
+
+        q = ProducerConsumerQueue(
+            maxsize=num_workers * 4,
+            num_consumers=num_workers,
+            handler=put_one,
+            name="put-many",
+        )
+        q.start()
+        try:
+            for item in data.items():
+                q.put(item)
+            import time
+            while not q.empty:
+                time.sleep(0.01)
+        finally:
+            q.stop(timeout=30)
+
+        result = {"count": count, "total_bytes": total_bytes}
+        if errors:
+            result["errors"] = errors
+        return result
+
+    def get_many(self, names: List[str], num_workers: int = 0) -> Dict[str, Optional[np.ndarray]]:
         """Get multiple arrays at once.
 
         Args:
             names: List of data identifiers.
+            num_workers: Parallel workers. 0 = sequential, -1 = cpu_count.
 
         Returns:
             Dict of name → array (None if not found).
         """
-        return {name: self.get(name) for name in names}
+        if num_workers == 0 or len(names) <= 1:
+            return {name: self.get(name) for name in names}
+
+        return self._get_many_parallel(names, num_workers)
+
+    def _get_many_parallel(self, names: List[str], num_workers: int) -> Dict[str, Optional[np.ndarray]]:
+        import threading
+        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+
+        if num_workers < 0:
+            import os
+            num_workers = os.cpu_count() or 4
+
+        results: Dict[str, Optional[np.ndarray]] = {}
+        lock = threading.Lock()
+
+        def get_one(name):
+            arr = self.get(name)
+            with lock:
+                results[name] = arr
+
+        q = ProducerConsumerQueue(
+            maxsize=num_workers * 4,
+            num_consumers=num_workers,
+            handler=get_one,
+            name="get-many",
+        )
+        q.start()
+        try:
+            for name in names:
+                q.put(name)
+            import time
+            while not q.empty:
+                time.sleep(0.01)
+        finally:
+            q.stop(timeout=30)
+
+        return results
 
     def exists_many(self, names: List[str]) -> Dict[str, bool]:
         """Check existence of multiple keys."""

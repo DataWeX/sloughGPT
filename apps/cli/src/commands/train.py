@@ -42,10 +42,10 @@ def _resolve_corpus_file(path_or_name: str) -> Path:
     if p.is_file():
         return p
     name = path_or_name.strip("/")
-    for candidate in (Path("datasets") / name / "input.txt", Path(name)):
+    for candidate in (Path("data") / name / "input.txt", Path(name)):
         if candidate.is_file():
             return candidate
-    available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
+    available = sorted(d.name for d in Path("data").glob("*") if d.is_dir())
     hint = f" Available datasets: {', '.join(available)}." if available else ""
     log.error(f"Dataset not found: {path_or_name}.{hint}")
     sys.exit(2)
@@ -1356,7 +1356,7 @@ def cmd_train_embed(args):
                     pass
 
         # Datasets directory
-        datasets_dir = repo_root / "datasets"
+        datasets_dir = repo_root / "data"
         if datasets_dir.exists():
             for fp in datasets_dir.rglob("*.txt"):
                 try:
@@ -1551,8 +1551,8 @@ def cmd_distill(args):
             elif p.is_file():
                 # Check if it's inside a known dataset dir
                 parts = p.parts
-                if "datasets" in parts:
-                    idx = parts.index("datasets")
+                if "data" in parts:
+                    idx = parts.index("data")
                     if idx + 1 < len(parts):
                         dataset_name = parts[idx + 1]
                 else:
@@ -1759,7 +1759,7 @@ def cmd_train_from_sessions(args):
     # Count available pairs
     try:
         sessions_dir = Path("data/chat_sessions")
-        corpus_file = Path("datasets/api_conversations/corpus.jsonl")
+        corpus_file = Path("data/api_conversations/corpus.jsonl")
         n_sessions = len(list(sessions_dir.glob("*.json"))) if sessions_dir.exists() else 0
         n_corpus = 0
         if corpus_file.exists():

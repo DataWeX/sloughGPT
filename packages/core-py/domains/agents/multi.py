@@ -161,8 +161,8 @@ class MultiAgentOrchestrator:
                             system_prompt=data["system_prompt"],
                             tools=data.get("tools", ["memory"]),
                         )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("custom agents file load failed: %s", e)
 
     def list_agents(self) -> List[Dict[str, Any]]:
         return [a.to_dict() for a in self.agents.values()]

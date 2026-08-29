@@ -42,10 +42,12 @@ def get_all_routers() -> List[APIRouter]:
     if _cached_routers is not None:
         return _cached_routers
 
+    # Note: "health" and "status" are registered directly in main.py
+    # pre-lifespan (needed during model load). Do NOT list them here.
     _router_names = [
         "auth", "auto_train", "models", "inference",
         "feedback", "kb", "agents", "system",
-        "status", "souls", "config", "health",
+        "souls", "config",
         "security", "metrics", "datasets",
         "ratelimit", "workflow", "experiments",
         "benchmark",
@@ -57,6 +59,9 @@ def get_all_routers() -> List[APIRouter]:
         "errors", "mobile",
         "images", "files", "voice", "infer",
         "vm", "memory", "docstore",
+        "collections",
+        "shell", "world_render",
+        "tokens",
     ]
 
     _cached_routers = []

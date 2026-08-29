@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -19,7 +19,7 @@ interface ModelsCardProps {
   onClear: (modelId: string) => void
 }
 
-export default function ModelsCard({ models, loading, results, running, onBenchmark, onClear }: ModelsCardProps) {
+export default memo(function ModelsCard({ models, loading, results, running, onBenchmark, onClear }: ModelsCardProps) {
   const [search, setSearch] = useState('')
   const router = useRouter()
   const filtered = search
@@ -36,6 +36,7 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Filter..."
+              aria-label="Filter models"
               className="h-7 w-32 rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
             />
           )}
@@ -92,4 +93,4 @@ export default function ModelsCard({ models, loading, results, running, onBenchm
       </CardContent>
     </Card>
   )
-}
+})

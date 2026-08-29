@@ -59,15 +59,20 @@ describe('feedbackController.recordFeedbackWorkflow', () => {
 describe('feedbackController.getFeedbackStats', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('calls /meta-weights/stats endpoint', async () => {
+  it('calls /feedback/stats/summary endpoint', async () => {
     apiClient.apiGet.mockResolvedValue({
-      db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3 },
-      current_weights: { temperature: 0.8 },
+      thumbs_up: 7,
+      thumbs_down: 3,
+      total: 10,
+      up_ratio: 0.7,
     })
 
-    await feedbackController.getFeedbackStats()
+    const result = await feedbackController.getFeedbackStats()
 
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/meta-weights/stats')
+    expect(result.db_stats.thumbs_up).toBe(7)
+    expect(result.db_stats.thumbs_down).toBe(3)
+    expect(result.db_stats.feedback_total).toBe(10)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/feedback/stats/summary')
   })
 })
 
@@ -75,10 +80,11 @@ describe('userAdaptersController.list', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('calls /user-adapters endpoint', async () => {
-    apiClient.apiGet.mockResolvedValue({ stats: { total_users: 5, total_size_mb: 0.25 } })
+    apiClient.apiGet.mockResolvedValue({ adapters: [], stats: { total_users: 5, total_size_mb: 0.25 } })
 
-    await userAdaptersController.list()
+    const result = await userAdaptersController.list()
 
+    expect(result.adapters).toEqual([])
     expect(apiClient.apiGet).toHaveBeenCalledWith('/user-adapters')
   })
 })
@@ -102,17 +108,22 @@ describe('feedbackController.getWorkflowStatus', () => {
 describe('feedbackController.getTrainingStats', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('calls /training/status endpoint', async () => {
-    apiClient.apiGet.mockResolvedValue({
-      pairs_converted: 3,
-      last_training: '2026-01-01',
-      quality_score: 0.85,
-    })
+  it('calls /training/jobs and handles array response', async () => {
+    apiClient.apiGet.mockResolvedValue([
+      { id: 'j1', status: 'completed', created_at: '2026-01-01', loss: 0.5 },
+      { id: 'j2', status: 'running', progress: 50 },
+    ])
 
     const result = await feedbackController.getTrainingStats()
 
-    expect(result.feedback_pairs).toBe(3)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/status')
+    expect(result.feedback_pairs).toBe(2)
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/jobs')
+  })
+
+  it('handles empty array', async () => {
+    apiClient.apiGet.mockResolvedValue([])
+    const result = await feedbackController.getTrainingStats()
+    expect(result.feedback_pairs).toBe(0)
   })
 })
 

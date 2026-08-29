@@ -11,6 +11,7 @@ vi.mock('@sloughgpt/strui', () => ({
   IconStar: ({ className }: any) => <span className={className}>star</span>,
   IconTrash: ({ className }: any) => <span className={className}>trash</span>,
   IconPin: ({ className }: any) => <span className={className}>pin</span>,
+  IconMessage: ({ className }: any) => <span className={className}>message</span>,
 }))
 
 import { MessageContextMenu } from './MessageContextMenu'
@@ -219,5 +220,52 @@ describe('MessageContextMenu', () => {
     renderWithMenu({ onSaveToKnowledge: undefined })
     openMenu()
     expect(screen.queryByText('Save to knowledge')).toBeNull()
+  })
+
+  it('shows "Add note" when hasNote is false', () => {
+    renderWithMenu({ hasNote: false, onAddNote: vi.fn() })
+    openMenu()
+    expect(screen.getByText('Add note')).toBeDefined()
+  })
+
+  it('shows "Edit note" when hasNote is true', () => {
+    renderWithMenu({ hasNote: true, onAddNote: vi.fn() })
+    openMenu()
+    expect(screen.getByText('Edit note')).toBeDefined()
+  })
+
+  it('calls onAddNote with messageId when note item clicked', () => {
+    const onAddNote = vi.fn()
+    renderWithMenu({ hasNote: false, onAddNote })
+    openMenu()
+    fireEvent.click(screen.getByText('Add note'))
+    expect(onAddNote).toHaveBeenCalledWith('msg-1')
+  })
+
+  it('does not show note item when onAddNote is not provided', () => {
+    renderWithMenu({ onAddNote: undefined })
+    openMenu()
+    expect(screen.queryByText('Add note')).toBeNull()
+    expect(screen.queryByText('Edit note')).toBeNull()
+  })
+
+  it('navigates with Home key to first item', () => {
+    renderWithMenu()
+    openMenu()
+    const menu = screen.getByRole('menu')
+    const items = menu.querySelectorAll('[role="menuitem"]:not([disabled])')
+    expect(items.length).toBeGreaterThan(1)
+    fireEvent.keyDown(menu, { key: 'Home' })
+    expect(document.activeElement).toBe(items[0])
+  })
+
+  it('navigates with End key to last item', () => {
+    renderWithMenu()
+    openMenu()
+    const menu = screen.getByRole('menu')
+    const items = menu.querySelectorAll('[role="menuitem"]:not([disabled])')
+    expect(items.length).toBeGreaterThan(1)
+    fireEvent.keyDown(menu, { key: 'End' })
+    expect(document.activeElement).toBe(items[items.length - 1])
   })
 })

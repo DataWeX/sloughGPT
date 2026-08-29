@@ -68,9 +68,10 @@ describe('FeedbackCard', () => {
     expect(screen.getByText('2')).toBeDefined()
   })
 
-  it('shows placeholder when vision status missing', () => {
+  it('shows skeleton when vision status missing', () => {
     renderCard({ dpoStatus })
-    expect(screen.getAllByText('...').length).toBeGreaterThan(0)
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThan(0)
   })
 
   it('calls apiPost and onRefresh on run feedback', async () => {

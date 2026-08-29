@@ -1,14 +1,15 @@
 'use client'
 
-import { Card, CardContent } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { memo } from 'react'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import type { KvSessionsInfo } from '@/lib/system-controller'
 
 interface KvCacheCardProps {
   kvSessions: KvSessionsInfo
 }
 
-export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
+export const KvCacheCard = memo(function KvCacheCard({ kvSessions }: KvCacheCardProps) {
   if (!kvSessions.enabled) return null
 
   return (
@@ -25,13 +26,13 @@ export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
           <StatCard
             label="Active"
             value={kvSessions.active_sessions ?? 0} numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${(kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', (kvSessions.active_sessions ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard label="Cached tokens" value={kvSessions.cached_tokens ?? 0} numeric />
           <StatCard label="TTL" value={(kvSessions.ttl_seconds ?? 0) / 60 + "m"} numeric />
           <StatCard
             label="Oldest"
-            value={kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : '...'} numeric
+            value={kvSessions.oldest_session_age != null ? `${kvSessions.oldest_session_age.toFixed(0)}s` : <Skeleton className="h-5 w-10" />} numeric
           />
         </KpiGrid>
         {kvSessions.max_sessions != null && (
@@ -42,4 +43,4 @@ export function KvCacheCard({ kvSessions }: KvCacheCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

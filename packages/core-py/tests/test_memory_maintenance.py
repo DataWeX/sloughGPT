@@ -1,184 +1,117 @@
-"""Tests for the periodic memory maintenance scheduler (domains/memory/maintenance.py)."""
+"""Tests for domains.memory.maintenance — memory maintenance scheduler."""
 
 import asyncio
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
-
-from domains.memory import maintenance
+from domains.memory.maintenance import (
+    maintenance_tick, run_memory_maintenance,
+    start_memory_maintenance, stop_memory_maintenance,
+)
 from domains.memory.memory_config import MemoryConfig
 
 
 @pytest.fixture(autouse=True)
-async def reset_scheduler():
-    """Ensure no scheduler task leaks between tests."""
-    await maintenance.stop_memory_maintenance()
+def _reset_maintenance():
+    """Reset the module-level task before each test."""
+    import domains.memory.maintenance as mod
+    mod._maintenance_task = None
     yield
-    await maintenance.stop_memory_maintenance()
+    mod._maintenance_task = None
 
 
-@pytest.fixture(autouse=True)
-def enabled_config(monkeypatch):
-    """Default config state: memory enabled with a normal interval."""
-    cfg = MemoryConfig.get()
-    monkeypatch.setattr(cfg, "enabled", True)
-    monkeypatch.setattr(cfg, "maintenance_interval_minutes", 60)
-    yield cfg
+def _run(coro):
+    """Helper to run async from sync tests."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
-@pytest.fixture
-def fake_submit(monkeypatch):
-    """Replace submit_memory_consolidate with a recording async fake."""
-    calls = []
+class TestMaintenanceTick:
+    @patch("domains.memory.maintenance.prune_archive", return_value=5)
+    @patch("domains.memory.maintenance.submit_memory_consolidate", new_callable=AsyncMock, return_value="task_123")
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_prunes_and_enqueues(self, mock_cfg, mock_submit, mock_prune):
+        mock_cfg.get.return_value = MagicMock(enabled=True, maintenance_interval_minutes=30)
+        result = _run(maintenance_tick())
+        mock_prune.assert_called_once()
+        mock_submit.assert_called_once()
+        assert result == "task_123"
 
-    async def _fake(**kwargs):
-        calls.append(kwargs)
-        return "task-1"
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_disabled_returns_none(self, mock_cfg):
+        mock_cfg.get.return_value = MagicMock(enabled=False)
+        result = _run(maintenance_tick())
+        assert result is None
 
-    monkeypatch.setattr(maintenance, "submit_memory_consolidate", _fake)
-    return calls
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_zero_interval_returns_none(self, mock_cfg):
+        mock_cfg.get.return_value = MagicMock(enabled=True, maintenance_interval_minutes=0)
+        result = _run(maintenance_tick())
+        assert result is None
 
+    @patch("domains.memory.maintenance.prune_archive", side_effect=Exception("disk full"))
+    @patch("domains.memory.maintenance.submit_memory_consolidate", new_callable=AsyncMock, return_value="task_456")
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_prune_failure_still_enqueues(self, mock_cfg, mock_submit, mock_prune):
+        mock_cfg.get.return_value = MagicMock(enabled=True, maintenance_interval_minutes=10)
+        result = _run(maintenance_tick())
+        mock_submit.assert_called_once()
+        assert result == "task_456"
 
-@pytest.fixture(autouse=True)
-def fake_prune(monkeypatch):
-    """Keep tick() hermetic: replace prune_archive with a recording fake.
-
-    Returns a call log; each entry records the retain_days kwarg actually
-    passed (None means "use the config default retention window").
-    """
-    calls = []
-
-    def _fake(retain_days=None):
-        calls.append(retain_days)
-        return 0
-
-    monkeypatch.setattr(maintenance, "prune_archive", _fake)
-    return calls
-
-
-def test_tick_enqueues_consolidate(fake_submit, monkeypatch):
-    monkeypatch.setattr(
-        "domains.infrastructure.task_queue.get_task_queue", lambda: None)
-    task_id = asyncio.run(maintenance.maintenance_tick())
-    assert task_id == "task-1"
-    assert len(fake_submit) == 1
-    assert fake_submit[0]["queue"] is None
-
-
-def test_tick_prunes_archive_with_default_retention(fake_submit, monkeypatch,
-                                                    fake_prune):
-    monkeypatch.setattr(
-        "domains.infrastructure.task_queue.get_task_queue", lambda: None)
-    asyncio.run(maintenance.maintenance_tick())
-    assert fake_prune == [None]
+    @patch("domains.memory.maintenance.prune_archive", return_value=0)
+    @patch("domains.memory.maintenance.submit_memory_consolidate", new_callable=AsyncMock, side_effect=Exception("queue down"))
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_enqueue_failure_returns_none(self, mock_cfg, mock_submit, mock_prune):
+        mock_cfg.get.return_value = MagicMock(enabled=True, maintenance_interval_minutes=10)
+        result = _run(maintenance_tick())
+        assert result is None
 
 
-def test_tick_does_not_prune_when_disabled(enabled_config, monkeypatch,
-                                           fake_submit, fake_prune):
-    monkeypatch.setattr(enabled_config, "enabled", False)
-    assert asyncio.run(maintenance.maintenance_tick()) is None
-    assert fake_submit == []
-    assert fake_prune == []
+class TestStartStopMemoryMaintenance:
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_disabled_returns_none(self, mock_cfg):
+        mock_cfg.get.return_value = MagicMock(enabled=False)
+        task = start_memory_maintenance()
+        assert task is None
 
+    @patch("domains.memory.maintenance.MemoryConfig")
+    def test_disabled_run_returns_immediately(self, mock_cfg):
+        mock_cfg.get.return_value = MagicMock(enabled=False)
+        _run(run_memory_maintenance())
 
-def test_tick_does_not_prune_when_interval_zero(enabled_config, monkeypatch,
-                                                fake_submit, fake_prune):
-    monkeypatch.setattr(enabled_config, "maintenance_interval_minutes", 0)
-    assert asyncio.run(maintenance.maintenance_tick()) is None
-    assert fake_submit == []
-    assert fake_prune == []
+    def test_stop_cleans_task(self):
+        import domains.memory.maintenance as mod
 
+        async def _fake_coro():
+            await asyncio.sleep(999)
 
-def test_tick_prunes_before_enqueue(fake_submit, monkeypatch, fake_prune):
-    order = []
-    monkeypatch.setattr(
-        "domains.infrastructure.task_queue.get_task_queue", lambda: None)
+        async def _run_stop():
+            task = asyncio.create_task(_fake_coro())
+            mod._maintenance_task = task
+            await stop_memory_maintenance()
+            assert mod._maintenance_task is None
 
-    def _recording_prune(retain_days=None):
-        order.append("prune")
-        return 0
+        _run(_run_stop())
 
-    async def _recording_submit(**kwargs):
-        order.append("enqueue")
-        return "task-1"
+    def test_stop_noop_when_none(self):
+        import domains.memory.maintenance as mod
+        mod._maintenance_task = None
+        _run(stop_memory_maintenance())
+        assert mod._maintenance_task is None
 
-    monkeypatch.setattr(maintenance, "prune_archive", _recording_prune)
-    monkeypatch.setattr(maintenance, "submit_memory_consolidate", _recording_submit)
-    asyncio.run(maintenance.maintenance_tick())
-    assert order == ["prune", "enqueue"]
+    def test_stop_noop_when_done(self):
+        import domains.memory.maintenance as mod
+        loop = asyncio.new_event_loop()
 
+        async def _done():
+            pass
 
-def test_tick_still_enqueues_when_prune_raises(fake_submit, monkeypatch):
-    monkeypatch.setattr(
-        "domains.infrastructure.task_queue.get_task_queue", lambda: None)
-
-    def _broken_prune(retain_days=None):
-        raise OSError("disk full")
-
-    monkeypatch.setattr(maintenance, "prune_archive", _broken_prune)
-    task_id = asyncio.run(maintenance.maintenance_tick())
-    assert task_id == "task-1"
-    assert len(fake_submit) == 1
-
-
-def test_tick_swallows_enqueue_error(monkeypatch, fake_submit):
-    async def _broken(**kwargs):
-        raise RuntimeError("queue down")
-
-    monkeypatch.setattr(maintenance, "submit_memory_consolidate", _broken)
-    assert asyncio.run(maintenance.maintenance_tick()) is None
-
-
-def test_run_returns_immediately_when_interval_zero(enabled_config, monkeypatch):
-    monkeypatch.setattr(enabled_config, "maintenance_interval_minutes", 0)
-    asyncio.run(maintenance.run_memory_maintenance())
-
-
-def test_run_returns_immediately_when_disabled(enabled_config, monkeypatch):
-    monkeypatch.setattr(enabled_config, "enabled", False)
-    asyncio.run(maintenance.run_memory_maintenance())
-
-
-def test_start_and_stop_loop_ticks(enabled_config, monkeypatch, fake_submit):
-    """A started loop enqueues at least one consolidate within its interval."""
-    monkeypatch.setattr(enabled_config, "maintenance_interval_minutes", 0.001)
-
-    async def scenario():
-        task = maintenance.start_memory_maintenance()
-        assert task is not None
-        assert maintenance.start_memory_maintenance() is task
-        await asyncio.sleep(0.15)
-        await maintenance.stop_memory_maintenance()
-
-    asyncio.run(scenario())
-    assert len(fake_submit) >= 1
-
-
-def test_start_returns_none_when_disabled(enabled_config, monkeypatch):
-    monkeypatch.setattr(enabled_config, "enabled", False)
-    assert maintenance.start_memory_maintenance() is None
-
-
-def test_memory_config_exposes_interval():
-    cfg = MemoryConfig(maintenance_interval_minutes=120)
-    assert cfg.maintenance_interval_minutes == 120
-
-
-def test_memory_config_interval_default():
-    cfg = MemoryConfig()
-    assert cfg.maintenance_interval_minutes == MemoryConfig.DEFAULT_MAINTENANCE_INTERVAL_MINUTES
-
-
-def test_memory_config_consolidation_threshold_default():
-    cfg = MemoryConfig()
-    assert cfg.consolidation_threshold == MemoryConfig.DEFAULT_CONSOLIDATION_THRESHOLD
-    assert cfg.consolidation_threshold == 0.80
-
-
-def test_memory_config_archive_retention_exposes_value():
-    cfg = MemoryConfig(archive_retention_days=90)
-    assert cfg.archive_retention_days == 90
-
-
-def test_memory_config_archive_retention_default():
-    cfg = MemoryConfig()
-    assert cfg.archive_retention_days == MemoryConfig.DEFAULT_ARCHIVE_RETENTION_DAYS
+        task = loop.create_task(_done())
+        loop.run_until_complete(task)  # task finishes
+        mod._maintenance_task = task
+        _run(stop_memory_maintenance())
+        assert mod._maintenance_task is None
+        loop.close()

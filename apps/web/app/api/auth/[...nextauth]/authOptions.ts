@@ -1,7 +1,6 @@
 import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GithubProvider from 'next-auth/providers/github'
-import crypto from 'crypto'
 
 function resolveProviders(env: NodeJS.ProcessEnv): NextAuthOptions['providers'] {
   const githubId = env.GITHUB_ID?.trim()
@@ -31,11 +30,11 @@ function resolveProviders(env: NodeJS.ProcessEnv): NextAuthOptions['providers'] 
 }
 
 function resolveSecret(env: NodeJS.ProcessEnv): string {
-  return (
-    env.NEXTAUTH_SECRET ||
-    (env.NODE_ENV === 'development'
-      ? 'development-only-change-me'
-      : crypto.createHash('sha256').update('sloughgpt-nextauth-secret').digest('base64'))
+  if (env.NEXTAUTH_SECRET) return env.NEXTAUTH_SECRET
+  if (env.NODE_ENV === 'development') return 'development-only-change-me'
+  throw new Error(
+    'NEXTAUTH_SECRET is required in production. ' +
+    'Set it in your environment variables or .env.local file.',
   )
 }
 

@@ -116,8 +116,8 @@ describe('trainingJobsController.get', () => {
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/jobs/j1')
   })
 
-  it('returns null on error', async () => {
-    apiClient.apiGet.mockRejectedValue(new Error('not found'))
+  it('returns null on 404', async () => {
+    apiClient.apiGet.mockRejectedValue(new Error('404 not found'))
     const result = await trainingJobsController.get('missing')
     expect(result).toBeNull()
   })
@@ -282,9 +282,9 @@ describe('trainingJobsController.webhooks', () => {
   })
 
   it('webhookStats GETs /training/webhooks/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ total: 5, success_rate: 0.9 })
+    apiClient.apiGet.mockResolvedValue({ total_webhooks: 5, success_rate: 0.9, total_deliveries: 10, successful_deliveries: 9, failed_deliveries: 1, active_webhooks: 3, pending_retries: 0, dead_letters: 0 })
     const result = await trainingJobsController.webhookStats()
-    expect(result.total).toBe(5)
+    expect(result.total_webhooks).toBe(5)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/webhooks/stats')
   })
 })
@@ -400,10 +400,9 @@ describe('trainingJobsController.listFineTuned', () => {
     expect(result).toHaveLength(1)
   })
 
-  it('returns empty array on error', async () => {
+  it('propagates errors', async () => {
     apiClient.apiGet.mockRejectedValue(new Error('boom'))
-    const result = await trainingJobsController.listFineTuned()
-    expect(result).toEqual([])
+    await expect(trainingJobsController.listFineTuned()).rejects.toThrow('boom')
   })
 })
 

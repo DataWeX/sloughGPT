@@ -41,8 +41,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, load])
 
   const handleSave = async () => {
     const trimmed = name.trim()
@@ -54,7 +53,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
       addToast(`Saved token tree "${trimmed}"`, 'success')
       await load()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to save token tree', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not save token tree', 'error')
     } finally {
       setSaving(false)
     }
@@ -67,7 +66,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
       addToast(`Loaded token tree "${tree.name}"`, 'success')
       onLoaded?.()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to load token tree', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not load token tree', 'error')
     } finally {
       setBusyName(null)
     }
@@ -80,7 +79,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
       addToast(`Deleted token tree "${tree.name}"`, 'success')
       await load()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to delete token tree', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not delete token tree', 'error')
     } finally {
       setBusyName(null)
     }
@@ -99,7 +98,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
       <CardContent className="space-y-4">
         {loadFailed ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
-            Could not load saved trees. <button onClick={load} className="text-primary underline">Retry</button>
+            Could not load saved trees. <button type="button" onClick={load} className="text-primary underline">Retry</button>
           </div>
         ) : stats === null ? (
           <div className="space-y-2">
@@ -136,7 +135,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
 
             {trees.length === 0 ? (
               <div className="text-center py-6 text-sm text-muted-foreground">
-                No saved trees yet. Train a token tree, then save it here to keep it across server restarts.
+                No saved trees yet. Train a token tree, then save it here to keep it across restarts.
               </div>
             ) : (
               <div className="divide-y divide-border/30">
@@ -181,7 +180,7 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
           </>
         )}
         <p className="text-xs text-muted-foreground">
-          Saved trees persist to <span className="font-mono">data/token_trees/</span> on the server and survive restarts.
+          Saved trees persist to <span className="font-mono">data/token_trees/</span> and survive restarts.
           Loading one swaps it in as the current tree for the other explorer cards.
         </p>
       </CardContent>

@@ -2,7 +2,10 @@
  * Souls Controller — axios-based API for personality management.
  */
 
-import { apiGet, apiPost, apiDelete } from './http-client'
+import { apiGet, apiPost, apiDelete, authFetch } from './http-client'
+import { logger } from './dev-log'
+
+const _log = logger.child('souls-controller')
 
 export interface Soul {
   name: string
@@ -54,6 +57,8 @@ export interface Checkpoint {
   training_dataset?: string
   training_duration_s?: number
   source?: string
+  avg_quality?: number
+  data_quality?: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number }
 }
 
 export interface SoulsResponse {
@@ -77,7 +82,8 @@ export const soulsController = {
   async getCurrent(): Promise<Soul | null> {
     try {
       return await apiGet<Soul>('/souls/current')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get current soul', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -143,7 +149,7 @@ export const soulsController = {
     const res = await apiDelete<{ deleted: boolean } | { status: string; data: { deleted: boolean } }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}`
     )
-    return ('deleted' in res ? (res as { deleted: boolean }).deleted : false) ?? ('data' in res ? (res as { data: { deleted: boolean } }).data?.deleted : false) ?? false
+    return 'deleted' in res ? (res as { deleted: boolean }).deleted : false
   },
 
   async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {
@@ -157,7 +163,8 @@ export const soulsController = {
   async getSoul(name: string): Promise<Soul | null> {
     try {
       return await apiGet<Soul>(`/souls/${encodeURIComponent(name)}`)
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get soul', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -169,14 +176,15 @@ export const soulsController = {
   async checkpointInfo(name: string): Promise<Checkpoint | null> {
     try {
       return await apiGet<Checkpoint>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get checkpoint info', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const response = await fetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
-    if (!response.ok) throw new Error('Download failed')
+    const response = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
+    if (!response.ok) throw new Error('Could not download')
     return response.blob()
   },
 }

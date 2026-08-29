@@ -1,7 +1,8 @@
 'use client'
 
-import { Card, CardContent } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { memo } from 'react'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
 import type { LiveHealthSnapshot, ConnectionStatus } from '@/hooks/useLiveStatus'
 import type { DetailedHealth } from '@/lib/system-controller'
@@ -14,7 +15,7 @@ interface StatusCardProps {
   loaded: boolean
 }
 
-export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRate, loaded }: StatusCardProps) {
+export const StatusCard = memo(function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRate, loaded }: StatusCardProps) {
   const apiOk = (liveHealth?.health_status ?? detailed?.status) === 'healthy'
   const modelLoaded = liveHealth?.model_loaded ?? detailed?.model_loaded ?? false
   const modelLoading = liveHealth?.model_loading ?? detailed?.model_loading ?? false
@@ -34,7 +35,7 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
   const soulValue = liveHealth?.soul || detailed?.soul || null
 
   return (
-    <Card className="p-3">
+    <Card className="p-3" role="status" aria-live="polite">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Status</span>
         {connectionStatus === 'connected' && liveHealth && (
@@ -66,46 +67,46 @@ export function StatusCard({ liveHealth, detailed, connectionStatus, inferenceRa
         <KpiGrid columns={2}>
           <StatCard
             label="API"
-            value={!loaded ? '...' : <span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive'}`} />}
+            value={!loaded ? <Skeleton className="h-5 w-16" /> : <span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', !loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive')} />}
           />
           <StatCard
             label="Model"
-            value={!loaded ? '...' : <span className="font-mono">{modelValue}</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${!loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning'}`} />}
+            value={!loaded ? <Skeleton className="h-5 w-20" /> : <span className="font-mono">{modelValue}</span>}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', !loaded ? 'bg-warning' : modelLoaded ? 'bg-success' : 'bg-warning')} />}
           />
           <StatCard
             label="Uptime"
-            value={!loaded ? '...' : <span className="font-mono">{formatUptime(liveHealth?.uptime_seconds ?? detailed?.uptime_seconds ?? 0)}</span>}
+            value={!loaded ? <Skeleton className="h-5 w-14" /> : <span className="font-mono">{formatUptime(liveHealth?.uptime_seconds ?? detailed?.uptime_seconds ?? 0)}</span>}
           />
           <StatCard
             label="Responses"
-            value={!loaded ? '...' : String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}
+            value={!loaded ? <Skeleton className="h-5 w-10" /> : String(liveHealth?.inference_count ?? detailed?.inference?.inference_count ?? 0)}
             numeric
           />
           <StatCard
             label="Rate"
-            value={!loaded ? '...' : `${inferenceRate.toFixed(1)}/min`}
+            value={!loaded ? <Skeleton className="h-5 w-14" /> : `${inferenceRate.toFixed(1)}/min`}
             numeric
           />
           <StatCard
             label="Tokens/s"
-            value={!loaded ? '...' : liveHealth?.tokens_per_sec != null ? liveHealth.tokens_per_sec.toFixed(1) : '...'}
+            value={!loaded ? <Skeleton className="h-5 w-12" /> : liveHealth?.tokens_per_sec != null ? liveHealth.tokens_per_sec.toFixed(1) : <Skeleton className="h-5 w-12" />}
             numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', liveHealth && (liveHealth.tokens_per_sec ?? 0) > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard
             label="Errors"
-            value={!loaded ? '...' : String(liveHealth?.error_count ?? 0)}
+            value={!loaded ? <Skeleton className="h-5 w-8" /> : String(liveHealth?.error_count ?? 0)}
             numeric
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${(liveHealth?.error_count ?? 0) > 0 ? 'bg-destructive' : 'bg-success'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', (liveHealth?.error_count ?? 0) > 0 ? 'bg-destructive' : 'bg-success')} />}
           />
           <StatCard
             label="Soul"
-            value={!loaded ? '...' : <span className="font-mono">{soulValue || '—'}</span>}
+            value={!loaded ? <Skeleton className="h-5 w-16" /> : <span className="font-mono">{soulValue || '—'}</span>}
           />
         </KpiGrid>
       </CardContent>
     </Card>
   )
-}
+})

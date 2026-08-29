@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { trainingController, type TrainFromSessionsParams } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { logger } from '@/lib/dev-log'
 
 type Phase = 'idle' | 'extracting' | 'training' | 'complete' | 'error'
 
@@ -53,6 +54,7 @@ export function APILogsCard({
   const [config, setConfig] = useState<FormConfig>(DEFAULTS)
 
   const start = useCallback(async () => {
+    if (phase === 'extracting' || phase === 'training') return
     setPhase('extracting')
     setProgress(0)
     setLoss(null)
@@ -103,12 +105,15 @@ export function APILogsCard({
       setError(err instanceof Error ? err.message : 'Unknown error')
       addToast('Training failed', 'error')
     }
-  }, [config, addToast])
+  }, [phase, config, addToast])
 
   const stop = useCallback(() => {
-    trainingController.cancelFromSessionsSloNet().catch(() => {})
+    trainingController.cancelFromSessionsSloNet().catch(e => {
+      logger.error('Could not cancel training', { exception: String(e) })
+      addToast('Could not cancel training', 'error')
+    })
     setPhase('idle')
-  }, [])
+  }, [addToast])
 
   const loadForChat = useCallback(async () => {
     const raw = result?.checkpoint
@@ -122,7 +127,7 @@ export function APILogsCard({
       await soulsController.loadCheckpoint(name)
       addToast(`Loaded: ${name}`, 'success')
     } catch {
-      addToast('Failed to load checkpoint', 'error')
+      addToast('Could not load checkpoint', 'error')
     } finally {
       setLoadingModel(false)
     }
@@ -147,7 +152,7 @@ export function APILogsCard({
       </CardHeader>
       <CardContent className="space-y-4">
         {isRunning ? (
-          <div className="space-y-3" aria-live="polite">
+          <div className="space-y-3" aria-live="polite" aria-atomic="true">
             <Progress
               value={progress}
               max={100}
@@ -198,7 +203,7 @@ export function APILogsCard({
               <Button size="sm" onClick={loadForChat} disabled={loadingModel}>
                 {loadingModel ? 'Loading...' : 'Load for chat'}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setPhase('idle')}>
+            <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setError(null) }}>
                 Train another
               </Button>
             </div>

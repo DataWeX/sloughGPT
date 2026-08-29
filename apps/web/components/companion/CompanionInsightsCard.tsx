@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { useMemo } from 'react'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { CompanionTraits } from '@/lib/companion-controller'
 
 interface CompanionInsightsCardProps {
@@ -32,12 +33,12 @@ function personalityType(traits: CompanionTraits): string {
 }
 
 export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCardProps) {
-  if (!traits) return null
-  const numericValues = (Object.values(traits) as unknown[]).filter((v): v is number => typeof v === 'number')
-  if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
+  const numericValues = useMemo(() => (Object.values(traits ?? {}) as unknown[]).filter((v): v is number => typeof v === 'number'), [traits])
+  const { dominant, weakest, spread } = useMemo(() => traitBalance(traits!), [traits])
+  const type = useMemo(() => personalityType(traits!), [traits])
 
-  const { dominant, weakest, spread } = traitBalance(traits)
-  const type = personalityType(traits)
+  if (!traits) return null
+  if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
   const avg = numericValues.length > 0 ? numericValues.reduce((s, v) => s + v, 0) / numericValues.length : 0
 
   return (
@@ -70,11 +71,9 @@ export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCard
           {(Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name').map(([key, value]) => (
             <span
               key={key}
-              className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-                value >= 0.7 ? 'bg-primary/15 text-primary' :
+              className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', value >= 0.7 ? 'bg-primary/15 text-primary' :
                 value >= 0.4 ? 'bg-muted text-muted-foreground' :
-                'bg-muted/50 text-muted-foreground/60'
-              }`}
+                'bg-muted/50 text-muted-foreground/60')}
             >
               {key} {(value * 100).toFixed(0)}%
             </span>

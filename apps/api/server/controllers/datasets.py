@@ -4,7 +4,10 @@ Datasets Controller - Business logic for dataset management
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 import json
+import logging
 import shutil
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetsController:
@@ -13,7 +16,7 @@ class DatasetsController:
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self.data_dir = repo_root / "data" / "features"
-        self.datasets_dir = repo_root / "datasets"
+        self.datasets_dir = repo_root / "data"
 
     def list_datasets(self, q: Optional[str] = None, dataset_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """List available datasets"""
@@ -39,14 +42,14 @@ class DatasetsController:
                 try:
                     with open(corpus_file) as f:
                         num_samples = sum(1 for _ in f)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to count samples in %s: %s", corpus_file, e)
 
             # Detect Visual dataset from metadata marker
             visual_meta_path = d / ".visual_metadata.json"
             if visual_meta_path.exists():
                 try:
-                    visual_meta = json.loads(visual_meta_path.read_text())
+                    json.loads(visual_meta_path.read_text())
                     dataset_type = "visual"
                 except Exception:
                     dataset_type = "corpus" if has_corpus else "text"
@@ -70,8 +73,8 @@ class DatasetsController:
             if visual_meta_path.exists() and dataset_type == "visual":
                 try:
                     dataset["visual_metadata"] = json.loads(visual_meta_path.read_text())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to parse visual metadata from %s: %s", visual_meta_path, e)
 
             # Filters
             if q and q.lower() not in d.name.lower() and q.lower() not in dataset["name"].lower():
@@ -138,13 +141,13 @@ class DatasetsController:
                             obj = json.loads(line)
                             if "messages" in obj or "conversations" in obj:
                                 is_messages = True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Failed to parse JSON line for message detection: %s", e)
                     lower = line.lower()
                     if any(lower.startswith(m) or f" {m}" in lower for m in dialogue_markers):
                         has_dialogue = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to read sample file %s for stats: %s", sample_file, e)
 
         num_lines = len(lines_list)
         avg_length = (total_chars / num_lines) if num_lines > 0 else 0
@@ -204,14 +207,12 @@ class DatasetsController:
         word_count = len(sample.split())
 
         # Detect format
-        is_jsonl = False
         is_messages = False
         has_dialogue = False
         dialogue_markers = ["user:", "assistant:", "human:", "<|user|>", "<|assistant|>"]
 
         for line in lines[:10]:
             if line.startswith("{"):
-                is_jsonl = True
                 try:
                     import json
                     obj = json.loads(line)

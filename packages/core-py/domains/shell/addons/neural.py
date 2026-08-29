@@ -858,4 +858,4 @@ def setup(kernel: Any) -> None:
     kernel._addons["neural"] = True
 
     _install_facade(kernel)
-    logger.info("Neural addon installed")
+    logger.debug("Neural addon installed")

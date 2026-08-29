@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { cn, Card } from '@sloughgpt/strui'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 
@@ -18,7 +18,7 @@ function ToolIcon({ name }: { name: string }) {
   return <span className="mr-1.5 text-xs">{icons[name] || '\u2699\uFE0F'}</span>
 }
 
-function ToolCallCard({ event }: { event: ToolCallEvent }) {
+const ToolCallCard = memo(function ToolCallCard({ event }: { event: ToolCallEvent }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -29,8 +29,10 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
       event.status === 'error' && 'border-destructive/30 bg-destructive/5',
     )}>
       <button
+        type="button"
         className="flex w-full items-center justify-between gap-2 text-left"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <ToolIcon name={event.tool} />
@@ -64,9 +66,9 @@ function ToolCallCard({ event }: { event: ToolCallEvent }) {
       )}
     </Card>
   )
-}
+})
 
-export function ToolCallPanel({ events }: ToolCallPanelProps) {
+export const ToolCallPanel = memo(function ToolCallPanel({ events }: ToolCallPanelProps) {
   if (!events.length) return null
 
   return (
@@ -76,4 +78,4 @@ export function ToolCallPanel({ events }: ToolCallPanelProps) {
       ))}
     </div>
   )
-}
+})

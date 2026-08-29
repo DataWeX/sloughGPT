@@ -1,8 +1,10 @@
 """
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
+import asyncio
+import logging
 import re
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 import state as server_state
 import subprocess
@@ -10,7 +12,11 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from domains.infrastructure.errors import AppError
+
+logger = logging.getLogger("slo.api.self_train")
 
 
 class SelfTrainRequest(BaseModel):
@@ -38,7 +44,7 @@ class SelfTrainRouter:
         self.router.add_api_route("/stop", self.stop_self_train, methods=["POST"])
         self.router.add_api_route("/status", self.get_self_train_status, methods=["GET"])
 
-    async def start_self_train(self, req: Optional[SelfTrainRequest] = None) -> dict:
+    async def start_self_train(self, req: Optional[SelfTrainRequest] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Start self-training in a subprocess.
 
         Args:
@@ -55,72 +61,62 @@ class SelfTrainRouter:
             cmd = [sys.executable, str(script)]
             if req and req.model:
                 if not self._model_name_re.match(req.model):
-                    raise HTTPException(status_code=422, detail="Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed")
+                    raise_error("Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed", "E_VAL_REQUEST", status_code=422)
                 cmd.extend(["--model", req.model])
             if req and req.temperature is not None:
                 cmd.extend(["--temperature", str(req.temperature)])
             if req and req.forever:
                 cmd.append("--forever")
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = await asyncio.to_thread(subprocess.Popen, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             server_state._self_train_proc = proc
+            logger.info("Self-training started (pid=%d, model=%s)", proc.pid, req.model if req and req.model else "default")
             safe_audit_log("self_train.start", resource=req.model if req and req.model else "default", detail=f"pid={proc.pid}", temperature=req.temperature if req and req.temperature is not None else None, forever=bool(req and req.forever))
             return success_response(data={"status": "started", "pid": proc.pid})
-        except HTTPException:
-            raise
+        except AppError as e:
+            classify_and_raise(e, source="self_train.start_self_train")
         except Exception as e:
+            logger.warning("Self-training start failed: %s", e)
             classify_and_raise(e, source="self_train_start")
 
-    async def stop_self_train(self) -> dict:
-        """Stop the running self-training subprocess.
-
-        Attempts a graceful terminate with a 5-second timeout, then falls
-        back to kill if the process does not exit. Clears the process
-        reference in server state.
-
-        Returns:
-            Success envelope with status "stopped" or "not_running".
-
-        Side effects:
-            - Terminates or kills the self-training subprocess.
-            - Clears server_state._self_train_proc.
-            - Writes an audit log entry for the stop action.
-        """
-        proc = server_state._self_train_proc
-        if proc is None or proc.poll() is not None:
-            return success_response(data={"status": "not_running"})
+    async def stop_self_train(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Stop the running self-training subprocess."""
         try:
-            proc.terminate()
-            proc.wait(timeout=5)
-            server_state._self_train_proc = None
-            safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
-            return success_response(data={"status": "stopped"})
+            proc = server_state._self_train_proc
+            if proc is None or proc.poll() is not None:
+                return success_response(data={"status": "not_running"})
+            try:
+                proc.terminate()
+                await asyncio.to_thread(proc.wait, 5)
+                server_state._self_train_proc = None
+                logger.info("Self-training stopped gracefully (pid=%d)", proc.pid)
+                safe_audit_log("self_train.stop", resource=str(proc.pid), detail="stopped")
+                return success_response(data={"status": "stopped"})
+            except Exception as e:
+                proc.kill()
+                server_state._self_train_proc = None
+                logger.warning("Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e)
+                safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
+                raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
         except Exception as e:
-            proc.kill()
-            server_state._self_train_proc = None
-            safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
-            raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
+            classify_and_raise(e, source="self_train.stop")
 
     async def get_self_train_status(self) -> dict:
-        """Check the current status of the self-training subprocess.
-
-        Returns whether training is running, has exited, or has not started.
-        Includes the last 50 lines of training history from the history file.
-
-        Returns:
-            Success envelope with status (not_started/running/exited),
-            optional pid/returncode, and history lines.
-        """
-        proc = server_state._self_train_proc
-        history_path = self._repo_root / "data" / "self_train_history.txt"
-        history = []
-        if history_path.exists():
-            history = history_path.read_text().strip().split("\n")[-50:]
-        if proc is None:
-            return success_response(data={"status": "not_started", "history": history})
-        ret = proc.poll()
-        if ret is None:
-            return success_response(data={"status": "running", "pid": proc.pid, "history": history})
-        return success_response(data={"status": "exited", "returncode": ret, "history": history})
+        """Check the current status of the self-training subprocess."""
+        try:
+            proc = server_state._self_train_proc
+            history_path = self._repo_root / "data" / "self_train_history.txt"
+            history = []
+            if history_path.exists():
+                _text = await asyncio.to_thread(history_path.read_text)
+                history = _text.strip().split("\n")[-50:]
+            if proc is None:
+                return success_response(data={"status": "not_started", "history": history})
+            ret = proc.poll()
+            if ret is None:
+                return success_response(data={"status": "running", "pid": proc.pid, "history": history})
+            return success_response(data={"status": "exited", "returncode": ret, "history": history})
+        except Exception as e:
+            classify_and_raise(e, source="self_train.status")
 
 
 router = SelfTrainRouter().router

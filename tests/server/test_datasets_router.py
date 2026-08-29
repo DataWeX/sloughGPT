@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.datasets import DatasetsRouter
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
@@ -23,6 +24,7 @@ def router(tmp_path):
 @pytest.fixture
 def app(router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router.router)
     return _app
 
@@ -255,7 +257,7 @@ class TestCreateFromChat:
             ],
         })
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "created"
         assert body["messages_exported"] == 2
 
@@ -270,7 +272,7 @@ class TestCreateFromChat:
                 {"role": "user", "content": ""},
             ],
         })
-        assert resp.json()["messages_exported"] == 1
+        assert resp.json()["data"]["messages_exported"] == 1
 
 
 class TestImportFromLocal:
@@ -310,9 +312,10 @@ class TestImportFromLocal:
         result.output_path = None
         mock_importer.return_value.import_from_local.return_value = result
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(router.router)
-        client = TestClient(_app, raise_server_exceptions=False)
-        r = client.post("/datasets/import/local", json={
+        c = TestClient(_app, raise_server_exceptions=False)
+        r = c.post("/datasets/import/local", json={
             "path": str(router._DATASETS_DIR), "name": "mine",
         })
         assert r.status_code == 400
@@ -405,7 +408,7 @@ class TestImportGithub:
             "url": "https://github.com/org/repo", "name": "repo",
         })
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "clone timeout"
+        assert resp.json()["error"] == "clone timeout"
 
     def test_missing_url_422(self, client):
         resp = client.post("/datasets/import/github", json={"name": "repo"})
@@ -427,7 +430,7 @@ class TestImportHuggingface:
         result.total_chars = 100
         result.output_path = "/tmp/hf"
         result.error = None
-        mock_cls.return_value.download_dataset.return_value = result
+        mock_cls.return_value.downloadDataset.return_value = result
         resp = client.post("/datasets/import/huggingface", json={"dataset_id": "org/myds"})
         assert resp.status_code == 200
         body = resp.json()
@@ -441,10 +444,10 @@ class TestImportHuggingface:
         result.error = "download failed"
         result.files_imported = 0
         result.total_chars = 0
-        mock_cls.return_value.download_dataset.return_value = result
+        mock_cls.return_value.downloadDataset.return_value = result
         resp = client.post("/datasets/import/huggingface", json={"dataset_id": "org/myds"})
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "download failed"
+        assert resp.json()["error"] == "download failed"
 
     def test_missing_dataset_id_422(self, client):
         resp = client.post("/datasets/import/huggingface", json={})
@@ -482,7 +485,7 @@ class TestImportUrl:
             "url": "https://x.example/missing.txt", "name": "u",
         })
         assert resp.status_code == 400
-        assert resp.json()["detail"] == "404 not found"
+        assert resp.json()["error"] == "404 not found"
 
     def test_missing_url_422(self, client):
         resp = client.post("/datasets/import/url", json={"name": "u"})
@@ -678,7 +681,9 @@ class TestFromChatValidation:
     def test_empty_messages_400(self, mock_get_ctrl, client):
         resp = client.post("/datasets/from-chat", json={"messages": []})
         assert resp.status_code == 400
-        assert "No messages provided" in resp.json()["detail"]
+        body = resp.json()
+        msg = body.get("error") or body.get("detail") or body.get("message") or ""
+        assert "No messages provided" in msg
 
     def test_missing_messages_422(self, client):
         resp = client.post("/datasets/from-chat", json={})
@@ -713,11 +718,12 @@ class TestConvertToMessages:
     def test_missing_input_jsonl_404(self, mock_get_ctrl, router):
         mock_get_ctrl.return_value.list_datasets.return_value = [{"id": "ds1", "name": "dia"}]
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
         resp = client.post("/datasets/convert-to-messages?dataset_id=ds1")
         assert resp.status_code == 404
-        assert "input.jsonl" in resp.json()["detail"]
+        assert "input.jsonl" in resp.json()["error"]
 
     @patch("apps.api.server.routers.datasets.get_datasets_controller")
     def test_converts_text_and_messages(self, mock_get_ctrl, router):
@@ -731,11 +737,12 @@ class TestConvertToMessages:
             '{"messages": [{"role": "user", "content": "hi"}]}\n'
         )
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(router.router)
         client = TestClient(_app, raise_server_exceptions=False)
         resp = client.post("/datasets/convert-to-messages?dataset_id=ds1&system_prompt=BE_STRICT")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "converted"
         assert body["total_conversations"] == 2
         out = router._DATASETS_DIR / "out" / "input.jsonl"

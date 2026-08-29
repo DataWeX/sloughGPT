@@ -704,9 +704,9 @@ class TestRunDirectFallback:
         orch._profile_enum = None
         with patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()), \
              patch.object(StartupOrchestrator, "_phase5_model_registry",
-                          new=MagicMock()) as mock_reg, \
+                          new=AsyncMock()) as mock_reg, \
              patch.object(StartupOrchestrator, "_phase6_routers",
-                          new=MagicMock()) as mock_routers, \
+                          new=AsyncMock()) as mock_routers, \
              patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready:
             asyncio.run(orch.run())
         assert mock_reg.call_count == 1

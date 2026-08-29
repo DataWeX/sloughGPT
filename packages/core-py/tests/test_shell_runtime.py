@@ -76,25 +76,25 @@ class TestProbeApi:
 
 class TestAPIServerProcessStart:
     def test_start_ready(self):
-        proc = _FakeProc(stderr=["[api] boot line\n"])
+        """Phase 1: server already healthy — returns 'connected', no Popen."""
         with patch("domains.shell.runtime._shared_proc", None), \
              patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.subprocess.Popen", return_value=proc) as popen, \
              patch("domains.shell.runtime._probe_api",
-                   return_value={"available": True, "model_id": "gpt2"}), \
-             patch("domains.shell.runtime.time.sleep", lambda s: None):
+                   return_value={"available": True, "model_id": "gpt2"}):
             r = APIServerProcess("http://x").start(timeout=10)
         assert r["ok"] is True
-        assert "ready (gpt2)" in r["message"]
-        popen.assert_called_once()
+        assert "connected (gpt2)" in r["message"]
 
     def test_start_already_running(self):
-        with patch("domains.shell.runtime._shared_proc", object()):
+        fake = _FakeProc(stderr=None)
+        with patch("domains.shell.runtime._shared_proc", fake):
             r = APIServerProcess().start()
         assert r == {"ok": True, "message": "already running"}
 
     def test_start_launch_error(self):
         with patch("domains.shell.runtime._shared_proc", None), \
+             patch("domains.shell.runtime._probe_api", return_value={"available": False}), \
+             patch("socket.create_connection", side_effect=ConnectionRefusedError), \
              patch("domains.shell.runtime.subprocess.Popen",
                    side_effect=OSError("boom")):
             r = APIServerProcess().start()
@@ -110,6 +110,7 @@ class TestAPIServerProcessStart:
              patch("domains.shell.runtime.time.time",
                    side_effect=[0.0, 0.0, 0.5, 1.0, 1.5, 2.0]), \
              patch("domains.shell.runtime.time.sleep", lambda s: None), \
+             patch("socket.create_connection", side_effect=ConnectionRefusedError), \
              patch("sys.stdout", MagicMock()):
             r = APIServerProcess("http://x").start(timeout=1.0)
         assert r["ok"] is False

@@ -7,9 +7,12 @@ import { datasetController } from '@/lib/controllers'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
 
+import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
+
 export interface StepProps {
   form: TrainingFormState
   datasets: UseTrainingDatasetsReturn
+  checkpoints?: UseTrainingCheckpointsReturn
   onNext: () => void
   onBack: () => void
   addToast?: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -45,7 +48,7 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       await datasets.fetchDatasets()
       datasets.setSelectedDataset(result.dataset_id)
     } catch {
-      addToast?.(`Failed to import ${datasetId}`, 'error')
+      addToast?.(`Could not import ${datasetId}`, 'error')
     } finally {
       setImportingKaggle(null)
     }
@@ -62,7 +65,7 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       await datasets.fetchDatasets()
       datasets.setSelectedDataset(result.dataset_id)
     } catch {
-      addToast?.(`Failed to import ${datasetId}`, 'error')
+      addToast?.(`Could not import ${datasetId}`, 'error')
     } finally {
       setImportingHF(null)
     }

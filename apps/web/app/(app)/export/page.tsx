@@ -2,9 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
-import { IconDownload } from '@/components/icons/NavIcons'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, IconRefresh, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -33,8 +31,8 @@ export default function ExportPage() {
   const [exporting, setExporting] = useState(false)
   const [exportResult, setExportResult] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [formatLoadError, setFormatLoadError] = useState<string | null>(null)
 
-  const [trainingPairs, setTrainingPairs] = useState<Record<string, unknown>[] | null>(null)
   const [exportingPairs, setExportingPairs] = useState(false)
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
@@ -50,14 +48,9 @@ export default function ExportPage() {
         }))
         setFormats(list)
       })
-      .catch(() => {
-        setFormats([
-          { key: 'sou', label: 'SOU', description: 'SloughGPT self-contained + personality' },
-          { key: 'safetensors', label: 'SafeTensors', description: 'Safe, fast (recommended)' },
-          { key: 'onnx', label: 'ONNX', description: 'Cross-platform (server, web, TF.js)' },
-          { key: 'gguf_q4_k_m', label: 'GGUF Q4_K_M', description: 'Mobile (llama.rn)' },
-          { key: 'torch', label: 'PyTorch', description: 'Training checkpoint' },
-        ])
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        setFormatLoadError(`Could not load export formats: ${msg}`)
       })
   }, [])
 
@@ -89,7 +82,7 @@ export default function ExportPage() {
       setExportResult(`Exported ${fileCount} file(s) in ${res.format} format`)
       recordExport(res.format, fileCount).catch(() => {})
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed')
+      setExportError(err instanceof Error ? err.message : 'Could not export')
     } finally {
       setExporting(false)
     }
@@ -101,7 +94,7 @@ export default function ExportPage() {
       const blob = await trainingJobsController.exportTrainingPairs()
       downloadBlob(blob, `training-pairs-${Date.now()}.jsonl`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Training data export failed')
+      setExportError(err instanceof Error ? err.message : 'Could not export training data')
     } finally {
       setExportingPairs(false)
     }
@@ -112,16 +105,7 @@ export default function ExportPage() {
       const blob = await trainingJobsController.downloadCheckpoint(name)
       downloadBlob(blob, `${name}.soul`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Checkpoint download failed')
-    }
-  }
-
-  const handleDownloadFeedbackExport = async () => {
-    try {
-      const blob = await trainingJobsController.downloadTrainingJob('latest')
-      downloadBlob(blob, `feedback-export-${Date.now()}.json`)
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Feedback export not available')
+      setExportError(err instanceof Error ? err.message : 'Could not checkpoint download')
     }
   }
 
@@ -142,7 +126,12 @@ export default function ExportPage() {
       {exportError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
           {exportError}
-          <button className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
+        </div>
+      )}
+      {formatLoadError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {formatLoadError}
         </div>
       )}
 
@@ -160,12 +149,9 @@ export default function ExportPage() {
             {formats.map(f => (
               <button
                 key={f.key}
+                type="button"
                 onClick={() => setSelectedFormat(f.key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedFormat === f.key
-                    ? 'bg-primary/15 text-primary'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
+                className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors', selectedFormat === f.key ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/80')}
                 title={f.description}
               >
                 {f.label}
@@ -224,16 +210,6 @@ export default function ExportPage() {
                 </span>
               )}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadFeedbackExport}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <IconDownload className="h-3.5 w-3.5" />
-                Download Feedback Export
-              </span>
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -241,8 +217,8 @@ export default function ExportPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Checkpoints</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints}>
-            <IconRefresh className={`h-3.5 w-3.5 ${loadingCheckpoints ? 'animate-spin' : ''}`} />
+          <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
+            <IconRefresh className={cn('h-3.5 w-3.5', loadingCheckpoints && 'animate-spin')} />
           </Button>
         </CardHeader>
         <CardContent>

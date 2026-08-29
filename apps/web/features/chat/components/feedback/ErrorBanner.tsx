@@ -7,11 +7,11 @@ type ErrorType = 'network' | 'server' | 'model' | 'timeout' | 'unknown'
 const ERROR_MESSAGES: Record<ErrorType, { title: string; suggestion: string }> = {
   network: {
     title: 'Connection failed',
-    suggestion: 'Check if the API server is running on port 8000.',
+    suggestion: 'Check if the service is running.',
   },
   server: {
-    title: 'Server error',
-    suggestion: 'The API returned an error. Try again or restart the server.',
+    title: 'Service error',
+    suggestion: 'The request returned an error. Try again or restart the service.',
   },
   model: {
     title: 'Model not loaded',
@@ -54,6 +54,9 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
           <p className="mt-0.5 text-xs text-destructive/70">
             {error.message}
           </p>
+          <p className="mt-0.5 text-[10px] text-destructive/50">
+            {info.suggestion}
+          </p>
         </div>
         <div className="flex shrink-0 gap-1.5 sm:gap-2">
           {error.canRetry && (
@@ -84,16 +87,34 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
 
 export function getErrorInfo(status: number, message?: string): { type: ErrorType; message: string; canRetry: boolean } {
   if (status === 0) {
-    return { type: 'network', message: 'Could not connect to API server.', canRetry: true }
+    return { type: 'network', message: 'Could not connect to the service.', canRetry: true }
+  }
+  if (status === 400) {
+    return { type: 'server', message: message || 'Invalid request.', canRetry: false }
   }
   if (status === 404) {
-    return { type: 'server', message: 'Chat endpoint not found. Is the API server running?', canRetry: true }
+    return { type: 'server', message: 'Chat endpoint not found. Please try again.', canRetry: true }
+  }
+  if (status === 408) {
+    return { type: 'timeout', message: message || 'Request timed out.', canRetry: true }
+  }
+  if (status === 422) {
+    return { type: 'server', message: message || 'Invalid request format.', canRetry: false }
+  }
+  if (status === 429) {
+    return { type: 'server', message: message || 'Too many requests. Please slow down.', canRetry: true }
   }
   if (status === 500) {
     return { type: 'server', message: message || 'Internal server error.', canRetry: true }
   }
+  if (status === 502) {
+    return { type: 'server', message: message || 'Service temporarily unavailable.', canRetry: true }
+  }
   if (status === 503) {
     return { type: 'model', message: message || 'Model not available.', canRetry: true }
+  }
+  if (status === 504) {
+    return { type: 'timeout', message: message || 'Generation timed out.', canRetry: true }
   }
   return { type: 'unknown', message: message || `HTTP ${status}`, canRetry: true }
 }

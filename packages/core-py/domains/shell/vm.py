@@ -417,6 +417,21 @@ class FileDevice(Device):
     def info(self):
         return {"type": "file", "open_files": len(self._files)}
 
+    def close_all(self):
+        for fh in self._files.values():
+            try:
+                fh.close()
+            except Exception as e:
+                logger.debug("file handle close failed: %s", e)
+        self._files.clear()
+
+    def __del__(self):
+        for fh in self._files.values():
+            try:
+                fh.close()
+            except Exception as e:
+                logger.debug("file handle close in __del__ failed: %s", e)
+
     def call(self, method, *args):
         if method == "open":
             path, mode = args[0], args[1] if len(args) > 1 else "r"
@@ -1925,8 +1940,8 @@ def _op_out(cpu, ops):
         device = cpu._devices._devices.get(str(port))
         if device and hasattr(device, 'write'):
             device.write(val)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("device write to port %s failed: %s", port, e)
 
 
 # ── Tensor ALU ───────────────────────────────────────────────────────────────
@@ -4054,8 +4069,8 @@ class X86Assembler:
         if re.match(r'^[\d\s\+\-\*\/\(\)]+$', expr):
             try:
                 return int(eval(expr))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("address expression eval failed for %r: %s", expr, e)
         return 0
 
     def _split_ops(self, text):
@@ -4644,7 +4659,7 @@ class X86CPU:
         except (InsFault, MemFault):
             raise
         except Exception as e:
-            logger.error(f"CPU fault at EIP=0x{start_eip:X}: {type(e).__name__}: {e}")
+            logger.error("CPU fault at EIP=0x%X: %s: %s", start_eip, type(e).__name__, e)
             return False
         self._step_count += 1
         return True

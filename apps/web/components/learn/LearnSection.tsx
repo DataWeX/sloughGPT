@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
@@ -33,11 +33,20 @@ export function LearnSection() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
+    let active = true
     learnerController.status().then(s => {
-      setStatus(s)
-      setLoading(false)
-    }).catch(() => setLoading(false))
-  }, [])
+      if (active) {
+        setStatus(s)
+        setLoading(false)
+      }
+    }).catch(() => {
+      if (active) {
+        addToast('Failed to load learner status', 'error')
+        setLoading(false)
+      }
+    })
+    return () => { active = false }
+  }, [addToast])
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
@@ -47,7 +56,7 @@ export function LearnSection() {
       const res = await learnerController.search(searchQuery)
       setSearchResult(`Ingested ${res.tokens_ingested} tokens, ${res.new_facts} new facts`)
     } catch (err) {
-      setSearchResult(err instanceof Error ? err.message : 'Search failed')
+      setSearchResult(err instanceof Error ? err.message : 'Could not search')
     } finally {
       setSearching(false)
     }
@@ -62,7 +71,7 @@ export function LearnSection() {
       setIngestResult(`Added ${res.facts_added} facts from URL`)
       setIngestUrl('')
     } catch (err) {
-      setIngestResult(err instanceof Error ? err.message : 'Ingest failed')
+      setIngestResult(err instanceof Error ? err.message : 'Could not ingest')
     } finally {
       setIngesting(false)
     }
@@ -77,7 +86,7 @@ export function LearnSection() {
       setIngestResult(`Added ${res.facts_added} facts from text`)
       setIngestText('')
     } catch (err) {
-      setIngestResult(err instanceof Error ? err.message : 'Ingest failed')
+      setIngestResult(err instanceof Error ? err.message : 'Could not ingest')
     } finally {
       setIngesting(false)
     }
@@ -89,7 +98,7 @@ export function LearnSection() {
       const res = await learnerController.queryKnowledge(knowledgeQuery || undefined)
       setKnowledge(res.facts ?? [])
     } catch {
-      addToast('Failed to load knowledge', 'error')
+      addToast('Could not load knowledge', 'error')
     } finally {
       setLoadingKnowledge(false)
     }
@@ -100,7 +109,7 @@ export function LearnSection() {
       const res = await learnerController.listFeeds()
       setFeeds(res.feeds ?? [])
     } catch {
-      addToast('Failed to load feeds', 'error')
+      addToast('Could not load feeds', 'error')
     }
   }
 
@@ -119,7 +128,7 @@ export function LearnSection() {
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
         <h2 className="text-base font-medium">Continual Learning</h2>
         <span className="text-xs text-muted-foreground">
-          {status ? `${status.knowledge_count} facts · ${status.total_tokens} tokens` : 'Search the web and learn'}
+          {status ? `${status.total_tokens_ingested} tokens · ${status.feeds_subscribed} feeds` : 'Search the web and learn'}
         </span>
       </div>
 
@@ -129,10 +138,10 @@ export function LearnSection() {
         status && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: 'Knowledge', value: status.knowledge_count },
-              { label: 'Tokens', value: status.total_tokens },
-              { label: 'Feeds', value: status.feeds_count },
-              { label: 'Status', value: status.learner_active ? 'Active' : 'Idle' },
+              { label: 'Tokens Ingested', value: status.total_tokens_ingested },
+              { label: 'Train Steps', value: status.train_steps_completed },
+              { label: 'Feeds', value: status.feeds_subscribed },
+              { label: 'Buffer', value: `${status.buffer_size}/${status.buffer_capacity}` },
             ].map(s => (
               <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
                 <div className="text-xs text-muted-foreground">{s.label}</div>
@@ -149,14 +158,13 @@ export function LearnSection() {
         {(['search', 'ingest', 'knowledge', 'feeds'] as Tab[]).map(t => (
           <button
             key={t}
+            type="button"
             onClick={() => {
               setTab(t)
               if (t === 'knowledge') handleLoadKnowledge()
               if (t === 'feeds') handleLoadFeeds()
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -211,8 +219,8 @@ export function LearnSection() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge}>
-              <IconRefresh className={`h-4 w-4 ${loadingKnowledge ? 'animate-spin' : ''}`} />
+            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
+              <IconRefresh className={cn('h-4 w-4', loadingKnowledge ? 'animate-spin' : '')} />
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">

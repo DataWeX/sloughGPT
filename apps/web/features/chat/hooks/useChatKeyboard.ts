@@ -19,6 +19,17 @@ interface KeyboardDeps {
   onExportMarkdown?: () => void
   onDuplicateConversation?: () => void
   onToggleBookmarks?: () => void
+  onCancelStream?: () => void
+  onApproveTool?: () => void
+  onDenyTool?: () => void
+  onToggleSidebar?: () => void
+  onAddNoteToLastMessage?: () => void
+  onOpenNoteSearch?: () => void
+  onOpenShortcuts?: () => void
+  onOpenTemplates?: () => void
+  onOpenConversationSearch?: () => void
+  onOpenStats?: () => void
+  onQuickReply?: (messageId: string) => void
 }
 
 export function useChatKeyboard(deps: KeyboardDeps) {
@@ -29,6 +40,8 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     searchInputRef, handleSearchChange,
     onRenameConversation, onExportMarkdown,
     onDuplicateConversation, onToggleBookmarks,
+    onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
+    onAddNoteToLastMessage, onOpenNoteSearch, onOpenShortcuts, onOpenTemplates, onOpenConversationSearch, onOpenStats,
   } = deps
 
   const depsRef = useRef(deps)
@@ -41,6 +54,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         if (d.loading && d.loadingRef.current) {
           d.loadingRef.current.abort()
           d.setLoading(false)
+          d.onCancelStream?.()
         } else if (d.currentError) {
           d.setCurrentError(null)
         } else if (d.showSettings) {
@@ -94,6 +108,42 @@ export function useChatKeyboard(deps: KeyboardDeps) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
         e.preventDefault()
         d.onToggleBookmarks?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+        e.preventDefault()
+        d.onApproveTool?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        d.onDenyTool?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        e.preventDefault()
+        d.onToggleSidebar?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && e.shiftKey) {
+        e.preventDefault()
+        d.onAddNoteToLastMessage?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenNoteSearch?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '/' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenShortcuts?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 't' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenTemplates?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenConversationSearch?.()
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 's' && e.shiftKey) {
+        e.preventDefault()
+        d.onOpenStats?.()
       }
     }
     window.addEventListener('keydown', handleKeyDown)

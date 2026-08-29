@@ -16,6 +16,7 @@ Usage:
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -45,7 +46,18 @@ class ModelLoader:
     """SloNet model loader — detects .slnc format and routes accordingly.
 
     Falls back to auto-conversion from safetensors when no .slnc file exists.
+
+    Thread safety: ``load()`` is protected by ``_load_lock`` to prevent
+    concurrent model loads from corrupting shared state.
     """
+
+    _load_lock = threading.Lock()
+    _loading = False  # True while a load is in progress
+
+    @classmethod
+    def is_loading(cls) -> bool:
+        """Check if a model load is currently in progress."""
+        return cls._loading
 
     def __init__(self, models_dir: Optional[Path] = None):
         self.models_dir = models_dir or _REPO_ROOT / "models"
@@ -71,7 +83,36 @@ class ModelLoader:
 
         Returns:
             LoadResult with provider, model, tokenizer, and metrics
+
+        Thread safety: Only one model can load at a time.
         """
+        if not self._load_lock.acquire(blocking=False):
+            return LoadResult(
+                success=False,
+                model_id=model_id,
+                model_type="unknown",
+                error="Another model is currently loading. Please wait.",
+            )
+        try:
+            ModelLoader._loading = True
+            return self._load_inner(model_id, device, quantize, quant_bits, quant_mode, verify)
+        finally:
+            ModelLoader._loading = False
+            self._load_lock.release()
+
+    def _load_inner(
+        self,
+        model_id: str,
+        device: str,
+        quantize: bool,
+        quant_bits: int,
+        quant_mode: str,
+        verify: bool,
+    ) -> LoadResult:
+        """Internal load implementation (caller holds _load_lock)."""
+        import time as _time
+        load_start = _time.monotonic()
+
         from domains.infrastructure.conversion_tracker import get_tracker, ConversionStage
         tracker = get_tracker()
 
@@ -80,7 +121,8 @@ class ModelLoader:
             from domains.infrastructure.safetensors_loader import _get_model_dir
             cache_dir = _get_model_dir(model_id)
             has_slnc = (cache_dir / "model.slnc").exists()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to check for .slnc file: %s", exc)
             has_slnc = False
 
         if not has_slnc:
@@ -91,6 +133,11 @@ class ModelLoader:
             tracker.update(model_id, stage=ConversionStage.LOADING, progress=0.95, message="Loading into memory...")
             if verify and result.success:
                 self._verify_model(result)
+            elapsed_ms = (_time.monotonic() - load_start) * 1000
+            logger.info("model_loader: load complete", extra={
+                "model_id": model_id, "elapsed_ms": round(elapsed_ms, 1),
+                "success": result.success, "source": "slnc",
+            })
             tracker.finish(model_id)
             return result
 
@@ -99,8 +146,18 @@ class ModelLoader:
         if soul_result is not None:
             if verify and soul_result.success:
                 self._verify_model(soul_result)
+            elapsed_ms = (_time.monotonic() - load_start) * 1000
+            logger.info("model_loader: load complete", extra={
+                "model_id": model_id, "elapsed_ms": round(elapsed_ms, 1),
+                "success": soul_result.success, "source": "soul",
+            })
             tracker.finish(model_id)
             return soul_result
+
+        elapsed_ms = (_time.monotonic() - load_start) * 1000
+        logger.warning("model_loader: load failed", extra={
+            "model_id": model_id, "elapsed_ms": round(elapsed_ms, 1),
+        })
 
         if not has_slnc:
             tracker.fail(model_id, "No .slnc or .soul file found")
@@ -127,7 +184,8 @@ class ModelLoader:
         try:
             from domains.infrastructure.safetensors_loader import _get_model_dir
             cache_dir = _get_model_dir(model_id)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to resolve model directory: %s", exc)
             return None
 
         slnc_path = cache_dir / "model.slnc"
@@ -162,6 +220,14 @@ class ModelLoader:
                     "quant_bits": quant_bits if quantize else None,
                 },
             )
+        except FileNotFoundError as e:
+            logger.warning("SloNet .slnc file vanished during load: %s", e, extra={"tag": "MODEL"})
+            return LoadResult(
+                success=False,
+                model_id=model_id,
+                model_type="slonet",
+                error=f"Model file disappeared during loading: {e}",
+            )
         except Exception as e:
             logger.warning("SloNet load failed: %s", e, extra={"tag": "MODEL"})
             return LoadResult(
@@ -185,8 +251,11 @@ class ModelLoader:
         if not native_dir.exists():
             return None
 
-        # Find all .soul files, sorted by modification time (newest first)
-        soul_files = sorted(native_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True)
+        try:
+            soul_files = sorted(native_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True)
+        except FileNotFoundError as e:
+            logger.warning("Native .soul directory removed during scan: %s", e, extra={"tag": "MODEL"})
+            return None
         if not soul_files:
             return None
 
@@ -287,8 +356,8 @@ class ModelLoader:
             try:
                 from domains.infrastructure.model_protector import protect_model
                 protect_model(model_id, [str(slnc_path)])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Model protection failed: %s", exc)
             tracker.update(model_id, progress=0.95)
 
             logger.info("Converted to .slnc: %s", slnc_path, extra={"tag": "MODEL"})
@@ -316,18 +385,23 @@ class ModelLoader:
             return True
         except Exception as e:
             logger.warning("Model verification failed: %s", e, extra={"tag": "MODEL"})
+            result.success = False
+            result.error = f"Verification failed: {e}"
             result.metrics["verified"] = False
             return False
 
 
 _loader: Optional[ModelLoader] = None
+_loader_lock = threading.Lock()
 
 
 def get_model_loader() -> ModelLoader:
     """Get the global ModelLoader instance."""
     global _loader
     if _loader is None:
-        _loader = ModelLoader()
+        with _loader_lock:
+            if _loader is None:
+                _loader = ModelLoader()
     return _loader
 
 

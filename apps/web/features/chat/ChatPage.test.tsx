@@ -114,6 +114,7 @@ vi.mock('@/features/chat/hooks/useChatMode', async () => {
         chatMode, setChatMode,
         writeTone: 'Friendly', setWriteTone: vi.fn(),
         writeType: 'Email', setWriteType: vi.fn(),
+        rewriteStyle: 'Fix Grammar', setRewriteStyle: vi.fn(),
         decideStructure: 'Pro/Con', setDecideStructure: vi.fn(),
         explainDifficulty: 'Beginner', setExplainDifficulty: vi.fn(),
         translateLangPair: 'English→Spanish', setTranslateLangPair: vi.fn(),

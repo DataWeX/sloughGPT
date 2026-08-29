@@ -20,7 +20,7 @@ def main():
 
     # Create trainer with small config for quick training
     trainer = SloughGPTTrainer(
-        data_path='datasets/shakespeare/input.txt',
+        data_path='data/shakespeare/input.txt',
         n_embed=128,
         n_layer=4,
         n_head=4,

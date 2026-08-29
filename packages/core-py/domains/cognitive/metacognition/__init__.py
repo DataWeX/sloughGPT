@@ -134,7 +134,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Metacognitive Monitor initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Metacognitive Monitor: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to initialize Metacognitive Monitor: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Metacognitive Monitor initialization failed: {e}")
 
     async def shutdown(self) -> None:
@@ -165,7 +165,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             self.logger.info("Metacognitive Monitor shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Metacognitive Monitor: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to shutdown Metacognitive Monitor: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Metacognitive Monitor shutdown failed: {e}")
 
     async def monitor_thought_process(self, thoughts: List[Thought]) -> Dict[str, Any]:
@@ -213,13 +213,13 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
                 self.assessment_history = self.assessment_history[-500:]
 
             self.logger.debug(
-                f"Monitored {len(thoughts)} thoughts, efficiency: "
-                f"{monitoring_results['overall_efficiency']:.2f}"
+                "Monitored %d thoughts, efficiency: %.2f",
+                len(thoughts), monitoring_results['overall_efficiency']
             )
             return monitoring_results
 
         except Exception as e:
-            self.logger.error(f"Thought process monitoring failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Thought process monitoring failed: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Thought process monitoring failed: {e}")
 
     async def assess_confidence(self, thought: Thought) -> float:
@@ -255,17 +255,17 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             # Ensure confidence is within valid range
             assessed_confidence = max(0.0, min(1.0, assessed_confidence))
 
-            self.logger.debug(f"Assessed confidence for thought: {assessed_confidence:.2f}")
+            self.logger.debug("Assessed confidence for thought: %.2f", assessed_confidence)
             return assessed_confidence
 
         except Exception as e:
-            self.logger.error(f"Confidence assessment failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Confidence assessment failed: %s", e, extra={"tag": "COG"})
             return float(thought.confidence)  # Fallback to base confidence
 
     async def trigger_reflection(self, trigger: str) -> None:
         """Trigger a reflection process"""
         try:
-            self.logger.info(f"Triggering reflection for: {trigger}", extra={"tag": "COG"})
+            self.logger.info("Triggering reflection for: %s", trigger, extra={"tag": "COG"})
 
             reflection_insight = await self._perform_reflection(trigger)
 
@@ -275,14 +275,14 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
                 # Apply reflection insights
                 await self._apply_reflection_insights(reflection_insight)
 
-                self.logger.info(f"Reflection completed: {reflection_insight.content}", extra={"tag": "COG"})
+                self.logger.info("Reflection completed: %s", reflection_insight.content, extra={"tag": "COG"})
             else:
                 self.logger.warning(
-                    f"Reflection failed to generate insights for trigger: {trigger}", extra={"tag": "COG"}
+                    "Reflection failed to generate insights for trigger: %s", trigger, extra={"tag": "COG"}
                 )
 
         except Exception as e:
-            self.logger.error(f"Reflection process failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Reflection process failed: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Reflection process failed: {e}")
 
     async def get_cognitive_state_snapshot(self) -> Dict[str, Any]:
@@ -314,7 +314,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             elif self.monitoring_level == MetacognitiveLevel.ADAPTIVE:
                 self.thresholds["cognitive_load_high"] = 0.5
 
-            self.logger.info(f"Monitoring level set to: {level}", extra={"tag": "COG"})
+            self.logger.info("Monitoring level set to: %s", level, extra={"tag": "COG"})
 
         except ValueError:
             raise ComponentException(f"Invalid monitoring level: {level}")
@@ -384,7 +384,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return report
 
         except Exception as e:
-            self.logger.error(f"Failed to generate metacognitive report: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to generate metacognitive report: %s", e, extra={"tag": "COG"})
             raise ComponentException(f"Report generation failed: {e}")
 
     # Private helper methods
@@ -687,7 +687,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             return None
 
         except Exception as e:
-            self.logger.error(f"Reflection performance failed: {e}", extra={"tag": "COG"})
+            self.logger.error("Reflection performance failed: %s", e, extra={"tag": "COG"})
             return None
 
     async def _identify_cognitive_patterns(
@@ -771,7 +771,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
         """Apply reflection insights to improve cognitive processes"""
         for action_item in insight.action_items:
             # Implementation for applying insights
-            self.logger.info(f"Applying reflection action: {action_item}", extra={"tag": "COG"})
+            self.logger.info("Applying reflection action: %s", action_item, extra={"tag": "COG"})
 
     async def _monitoring_loop(self) -> None:
         """Background monitoring loop"""
@@ -786,7 +786,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Monitoring loop error: {e}", extra={"tag": "COG"})
+                self.logger.error("Monitoring loop error: %s", e, extra={"tag": "COG"})
                 await asyncio.sleep(10)
 
     async def _reflection_loop(self) -> None:
@@ -805,7 +805,7 @@ class MetacognitiveMonitor(BaseComponent, IMetacognitiveMonitor):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Reflection loop error: {e}", extra={"tag": "COG"})
+                self.logger.error("Reflection loop error: %s", e, extra={"tag": "COG"})
                 await asyncio.sleep(60)
 
     async def _perform_cognitive_health_check(self) -> None:

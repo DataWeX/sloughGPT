@@ -1,14 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-vi.mock('recharts', () => ({
+vi.mock('@/lib/recharts-lazy', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
   BarChart: ({ children }: { children: React.ReactNode }) => <div data-testid="bar-chart">{children}</div>,
+  RadarChart: ({ children }: { children: React.ReactNode }) => <div data-testid="radar-chart">{children}</div>,
   Bar: () => null,
+  Radar: () => null,
+  PolarGrid: () => null,
+  PolarAngleAxis: () => null,
+  PolarRadiusAxis: () => null,
   XAxis: () => null,
   YAxis: () => null,
   Tooltip: () => null,
   CartesianGrid: () => null,
+  Legend: () => null,
 }))
 
 import VisualComparisonCard from '@/components/compare/VisualComparisonCard'

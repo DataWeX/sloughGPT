@@ -2,6 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 
+const mockPush = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+
 vi.mock('@sloughgpt/strui', async () => {
   const actual = await vi.importActual<typeof import('@sloughgpt/strui')>('@sloughgpt/strui')
   return {

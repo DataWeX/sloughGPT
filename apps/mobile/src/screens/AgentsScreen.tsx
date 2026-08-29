@@ -127,7 +127,7 @@ export function AgentsScreen() {
           <Text fontSize={15} fontWeight="600" color={colors.text}>{item.name}</Text>
           {item.description ? <Text fontSize={12} color={colors.textMuted} numberOfLines={2}>{item.description}</Text> : null}
         </YStack>
-        <Pressable onPress={() => handleDelete(item.id)}>
+        <Pressable onPress={() => handleDelete(item.id)} style={({pressed}) => ({opacity: pressed ? 0.6 : 1})}>
           <Icon name="trash-2" size={16} color={colors.error} />
         </Pressable>
       </XStack>

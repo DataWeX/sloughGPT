@@ -261,8 +261,8 @@ class TestLLMDeviceFallback:
 class TestEmbeddingDeviceFallback:
     def test_compute_embedding_without_fn(self):
         dev = EmbeddingDevice()
-        assert dev.write("hello world") == "  embedding: 64 dims"
-        assert "64 dims" in dev.read()
+        assert dev.write("hello world") == "  embedding: 384 dims"
+        assert "384 dims" in dev.read()
 
 
 class TestKnowledgeDeviceBranches:

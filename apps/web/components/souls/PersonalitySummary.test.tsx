@@ -27,11 +27,10 @@ describe('PersonalitySummary', () => {
     expect(container.querySelector('.border-b')).toBeNull()
   })
 
-  it('renders 3 group stat cards', () => {
-    render(<PersonalitySummary traitWeights={baseWeights} currentSoulName={null} />)
-    expect(screen.getByText('❤️')).toBeDefined()
-    expect(screen.getByText('🧠')).toBeDefined()
-    expect(screen.getByText('💖')).toBeDefined()
+  it('renders 3 group stat cards with icons', () => {
+    const { container } = render(<PersonalitySummary traitWeights={baseWeights} currentSoulName={null} />)
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(3)
   })
 
   it('renders group labels in stat cards', () => {

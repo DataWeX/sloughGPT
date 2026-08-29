@@ -112,7 +112,7 @@ class VMTrainingBridge:
                 "status": "running",
             }
 
-        logger.info(
+        logger.debug(
             "TRAIN_START job=%d api_job_id=%s config=%s",
             job_id, api_job_id, body,
         )
@@ -217,7 +217,7 @@ class VMTrainingBridge:
         with self._lock:
             if job_id in self._jobs:
                 self._jobs[job_id]["status"] = "stopping"
-        logger.info("TRAIN_STOP job=%d api_job_id=%s", job_id, api_job_id)
+        logger.debug("TRAIN_STOP job=%d api_job_id=%s", job_id, api_job_id)
         return True
 
     def remove(self, job_id: int) -> bool:

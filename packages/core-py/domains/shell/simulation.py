@@ -3021,7 +3021,7 @@ class SimScene:
         entities = [Entity.from_dict(e) for e in data["entities"]]
         by_id = {e.id: e for e in entities}
         babies = [
-            SimBaby.from_dict(b, params, entity=by_id.get(b["entity"]["id"]))
+            SimBaby.from_dict(b, params, entity=by_id.get((b.get("entity") or {}).get("id")))
             for b in data["babies"]
         ]
         scene = cls(params)
@@ -3076,12 +3076,13 @@ class Simulation:
     """
 
     def __init__(self, scene: SimScene, max_ticks: int = 100,
-                 verbose: bool = False):
+                 verbose: bool = False, render_bridge=None):
         self.scene = scene
         self.max_ticks = max_ticks
         self.verbose = verbose
         self._tick_log: list[dict] = []
         self._running = False
+        self._render_bridge = render_bridge
 
     def step(self) -> list[dict]:
         """Run one simulation tick. Returns per-baby results."""
@@ -3105,6 +3106,16 @@ class Simulation:
         # after diffusion, so it never competes with a cell's internal math.
         if self.scene.params.solar_enabled:
             self.scene.apply_solar()
+
+        # Render the world state after all compute, before baby actions.
+        # The bridge converts the WorldGrid into a Cycles Scene and renders it.
+        rendered_image = None
+        if self._render_bridge is not None:
+            rendered_image = self._render_bridge.render_tick(
+                self.scene.world,
+                babies=list(self.scene.alive_babies),
+                nests=self.scene.nests if self.scene.params.structure_enabled else None,
+            )
 
         alive = list(self.scene.alive_babies)
 
@@ -3454,7 +3465,7 @@ class Simulation:
             results.append(result)
 
             if self.verbose:
-                logger.info(
+                logger.debug(
                     f"tick={self.scene.tick} baby={baby.entity.id} "
                     f"energy={baby.energy:.1f} "
                     f"delta={net_delta:+.1f} "

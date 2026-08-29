@@ -56,6 +56,7 @@ export interface DetailedHealth {
   request_count: number
   error_count: number
   avg_latency_ms: number
+  p95_latency_ms: number
   requests_per_minute: number
   path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
   recent_errors: Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>
@@ -172,9 +173,9 @@ export const systemController = {
     return apiGet<OutputResponse>(`/system/output?n=${n}`, undefined, { silent: true })
   },
 
-  async *streamOutput(tail: number = 50): AsyncGenerator<OutputLine> {
+  async *streamOutput(tail: number = 50, signal?: AbortSignal): AsyncGenerator<OutputLine> {
     try {
-      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET' })) {
+      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET', signal })) {
         const d = event.data
         if (d && typeof d.text === 'string' && typeof d.level === 'string' && typeof d.source === 'string' && typeof d.ts === 'number') {
           const line: OutputLine = { text: d.text, level: d.level, source: d.source, ts: d.ts }

@@ -24,6 +24,379 @@
   ],
   "cards": [
     {
+      "id": "20260821_012030_make-me-well-wellness-feature",
+      "title": "Make Me Well (Wellness) feature",
+      "description": "Per UX_FLOWS.md: Calming welcome screen, options (Sleep story, Meditation guide, Journal prompt, Breathing exercise, Positive affirmation), timer settings, voice output.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feature",
+        "ux",
+        "web",
+        "mobile"
+      ],
+      "created_at": "2026-08-21T01:20:30.217959+00:00",
+      "updated_at": "2026-08-21T01:20:30.217959+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_explain-things-simply-feature",
+      "title": "Explain Things Simply feature",
+      "description": "Per UX_FLOWS.md: Input \"What do you want explained?\", difficulty selector (Simple/Normal/Detailed), response with plain language, examples, analogies. Drill deeper on follow-up.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feature",
+        "ux",
+        "web",
+        "mobile"
+      ],
+      "created_at": "2026-08-21T01:20:30.208367+00:00",
+      "updated_at": "2026-08-21T01:20:30.208367+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_help-me-decide-feature",
+      "title": "Help Me Decide feature",
+      "description": "Per UX_FLOWS.md: Input \"What are you deciding between?\", Option A and B fields with notes, pro/con table, recommendation, explanation. Save decision to notepad.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feature",
+        "ux",
+        "web",
+        "mobile"
+      ],
+      "created_at": "2026-08-21T01:20:30.199040+00:00",
+      "updated_at": "2026-08-21T01:20:30.199040+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_web-home-quick-actions",
+      "title": "Web home quick actions",
+      "description": "Per UX_FLOWS.md: \"Hi [name], what can I help with?\" greeting, search bar, quick action buttons (Write something, Read a file, Create an image, Brainstorm ideas, Talk instead). Current home page is basic.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "feature",
+        "ux",
+        "web"
+      ],
+      "created_at": "2026-08-21T01:20:30.189462+00:00",
+      "updated_at": "2026-08-21T01:20:30.189462+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_translate-feature",
+      "title": "Translate feature",
+      "description": "Per UX_FLOWS.md: Two columns side by side, auto-detect source language, big dropdown for target language, instant translation, speaker icon for pronunciation, copy translation, swap languages.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "feature",
+        "ux",
+        "web",
+        "mobile"
+      ],
+      "created_at": "2026-08-21T01:20:30.178996+00:00",
+      "updated_at": "2026-08-21T01:20:30.178996+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_rewrite-polish-feature",
+      "title": "Rewrite & Polish feature",
+      "description": "Per UX_FLOWS.md: Paste text box, buttons (Fix spelling/grammar, Make it shorter, Make it friendlier, Make it professional, Make it sound like me), side-by-side view original vs rewritten, \"Use this version\" action.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "feature",
+        "ux",
+        "web",
+        "mobile"
+      ],
+      "created_at": "2026-08-21T01:20:30.169109+00:00",
+      "updated_at": "2026-08-21T01:20:30.169109+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_writing-assistant-feature",
+      "title": "Writing Assistant feature",
+      "description": "Per UX_FLOWS.md: Tone buttons (Friendly/Professional/Funny/Short/Detailed), Type buttons (Email/Social Post/Story/Poem/Letter/Note), \"Make it better\" button. Backend needs prompt templates for each tone+type combination.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "feature",
+        "ux",
+        "web",
+        "mobile"
+      ],
+      "created_at": "2026-08-21T01:20:30.159280+00:00",
+      "updated_at": "2026-08-21T01:20:30.159280+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_mobile-test-coverage",
+      "title": "Mobile test coverage",
+      "description": "Only 4 test files in apps/mobile/src/__tests__/ for 38 wired screens. Need store tests (chat, model, training), screen component tests, API client integration tests.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "testing"
+      ],
+      "created_at": "2026-08-21T01:20:30.150008+00:00",
+      "updated_at": "2026-08-21T01:20:30.150008+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260821_012030_fix-6-failing-web-test-files-57-tests",
+      "title": "Fix 6 failing web test files (57 tests)",
+      "description": "6 test files failing: ModelsCard (15), PersonalitiesCard (14), ModelDropdown (19), TrainingHistory (7), LearnSection (1), QualityCard (1). All stale mocks or component API mismatches. 332/338 files pass, 3981/4038 tests pass.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "web",
+        "testing",
+        "ci"
+      ],
+      "created_at": "2026-08-21T01:20:30.139793+00:00",
+      "updated_at": "2026-08-21T01:20:30.139793+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_test-mobile-screens-on-real-device",
+      "title": "Test mobile screens on real device",
+      "description": "All 5 mobile screens verified working on Android emulator (Pixel_API_30, emulator-5554): Home (quick actions, recent), Chat (modes bar, input, suggestions), Models (active pipeline, SloNet/Qwen/Server tabs, Load/Download), Tools (server status, quick action cards), Settings (server config, inference providers, health). Fixed Missing theme error (removed @tamagui/lucide-icons v1 dep + wrapped SplashScreen in TamaguiProvider). Lucide icons render as gray squares on API 30 (software rendering limitation, cosmetic only).",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "mobile",
+        "testing"
+      ],
+      "created_at": "2026-08-20T17:31:09.786350+00:00",
+      "updated_at": "2026-08-21T10:48:00.000000+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_make-web-ui-responsive-320px-768px",
+      "title": "Make web UI responsive (320px-768px)",
+      "description": "",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "responsive",
+        "web",
+        "css"
+      ],
+      "created_at": "2026-08-20T17:31:09.760911+00:00",
+      "updated_at": "2026-08-20T17:31:09.760911+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-settingsscreen-to-config-api",
+      "title": "Wire SettingsScreen to /config API",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "settings",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.733309+00:00",
+      "updated_at": "2026-08-21T01:19:49.544764+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-feedbackscreen-to-feedback-api",
+      "title": "Wire FeedbackScreen to /feedback API",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "feedback",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.702968+00:00",
+      "updated_at": "2026-08-21T01:19:49.544764+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260820_173109_wire-soulsscreen-to-souls-api",
+      "title": "Wire SoulsScreen to /souls API",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "mobile",
+        "souls",
+        "api"
+      ],
+      "created_at": "2026-08-20T17:31:09.676815+00:00",
+      "updated_at": "2026-08-21T01:19:49.544764+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260819_190830_android-apk-launch-fix",
+      "title": "Android APK launch fix",
+      "description": "Fixed 4 cascading Android APK launch crashes: (1) abiFilters x86_64-only had no ARM code - fixed to arm64-v8a+armeabi-v7a+x86_64; (2) isNewArchEnabled override removed (unsupported since RN 0.82); (3) ReactInstanceManager.createReactContext removed (bridge mode dropped in RN 0.86); (4) librninstance.so missing - stub created in jniLibs. Removed explicit DefaultNewArchitectureEntryPoint.load() from MainApplication. Enabled fabricEnabled=true. Bundled JS via react-native bundle. App runs: onboarding \u2192 chat screen with suggestion chips, input bar, bottom tabs. 90/90 test suites, 843/843 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "android",
+        "mobile",
+        "build"
+      ],
+      "created_at": "2026-08-19T19:08:30.311118+00:00",
+      "updated_at": "2026-08-19T19:08:30.311118+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260819_133522_continue-building-training-feedback-infra-endpoints-ui-tests",
+      "title": "Continue building \u2014 training, feedback, infra, endpoints, UI, tests",
+      "description": "CancelManager full-stack: backend register/finish wired into slnet/lora/distill training paths via _finish_job, operations endpoints (list/cancel/cancelAll/purge), frontend operationsStore+useOperations+operationsController, stop handlers wired, 42 tests pass.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "session",
+        "planning"
+      ],
+      "created_at": "2026-08-19T13:35:22.172515+00:00",
+      "updated_at": "2026-08-19T13:35:22.172515+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_152504_final-verification",
+      "title": "Final verification",
+      "description": "Fixed test_model_health_error: expected 200 but classify_and_raise raises 500. Updated test to expect 500. All 63 health/status tests pass.\n\nCommits: 75cc4d57, 9d18c7be, 1304a7b5, aec1a757",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "verification"
+      ],
+      "created_at": "2026-08-18T15:25:04.344276+00:00",
+      "updated_at": "2026-08-18T15:25:04.344276+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_152022_verify-stack-after-health-rewrite",
+      "title": "Verify stack after health rewrite",
+      "description": "All 7 health endpoints verified working after rewrite:\n\n- /health/live \u2192 alive\n- /health/ready \u2192 ready\n- /health \u2192 model_loaded, device, lifecycle\n- /health/model \u2192 model health stats\n- /health/summary \u2192 score 85, healthy\n- /health/debug \u2192 debug subset\n- /status \u2192 uptime, timestamp\n\nAPI on :8000 (200), Web on :3000 (200).\nCommitted: 1304a7b5",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infra",
+        "verification"
+      ],
+      "created_at": "2026-08-18T15:20:22.949833+00:00",
+      "updated_at": "2026-08-18T15:20:22.949833+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_150559_rewrite-healthstatus-routers-with-proper-code-quality",
+      "title": "Rewrite health/status routers with proper code quality",
+      "description": "Rewrote health.py with proper code quality:\n\n- Module docstring lists all 9 endpoints with response shapes\n- Class docstring explains delegation and thread-pool pattern\n- Every handler has docstring: purpose, returns, side effects\n- _build_health_snapshot has Args/Returns\n- health_stream documents disconnect detection and SSE envelope\n- Removed thin placeholder docstrings\n- Moved AsyncGenerator to top-level imports\n\nCommitted: 1304a7b5",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "router",
+        "health",
+        "quality"
+      ],
+      "created_at": "2026-08-18T15:05:59.597272+00:00",
+      "updated_at": "2026-08-18T15:05:59.597272+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_145543_ensure-stack-runs-clean",
+      "title": "Ensure stack runs clean",
+      "description": "Stack verified running clean. API on :8000 (200), Web on :3000 (200). Port 3000 had a stale process \u2014 killed and restarted web.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infra",
+        "stack"
+      ],
+      "created_at": "2026-08-18T14:55:43.896497+00:00",
+      "updated_at": "2026-08-18T14:55:43.896497+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_143722_session-healthstatus-router-fixes-stack-verification",
+      "title": "Session: health/status router fixes + stack verification",
+      "description": "Fixed two router startup crashes:\n\n1. health.py: Added missing return types, docstrings, AsyncGenerator typing on stream methods\n2. status.py: Added missing router export, completed live() method body, return types, docstrings\n\nRoot cause: stale .pyc bytecode cache caused 27 false router import warnings. Clearing __pycache__ resolved them.\n\nVerified: 47 routes registered, zero warnings, all health endpoints responding.\nCommitted: 75cc4d57",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "router",
+        "health",
+        "bugfix"
+      ],
+      "created_at": "2026-08-18T14:37:22.989142+00:00",
+      "updated_at": "2026-08-18T14:37:22.989142+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260818_142158_fix-healthstatus-router-startup-crashes",
+      "title": "Fix health/status router startup crashes",
+      "description": "Fixed two router startup crashes:\n\n1. health.py: Added missing liveness() and model_health() methods, return type annotations, docstrings\n2. status.py: Added missing router export, completed live() method body, return types, docstrings\n\nRoot cause: stale .pyc bytecode cache caused 27 false router import warnings. Clearing __pycache__ resolved them.\n\nVerified: 47 routes registered, zero warnings, all health endpoints responding.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "router",
+        "health",
+        "bugfix"
+      ],
+      "created_at": "2026-08-18T14:21:58.158105+00:00",
+      "updated_at": "2026-08-18T14:21:58.158105+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260818_054613_mobile-training-suite-losschart-fix-test-model-dialog-per-jo",
       "title": "Mobile training suite: LossChart fix, Test Model dialog, per-job stop",
       "description": "Fixed 3 issues in the mobile training suite:\n\n1. **LossChart scope bug** \u2014 Moved LossChart inside TrainingScreen component so it has access to  from useColors() hook. Was referencing module-scope  which didn't exist. Converted to useCallback.\n\n2. **Test Model dialog** \u2014 Added POST /inference/generate integration. After training completes (distill or fine-tune), a 'Test Model' button opens a modal where users type a prompt and see the model's response. Shows loading state and error handling.\n\n3. **Per-job stop for fine-tune** \u2014 training-store.ts stop() now calls POST /training/jobs/{id}/stop when a hfJobId exists. Previously only cleared local state, leaving the server job running.\n\nVerification: npx tsc --noEmit passes (only pre-existing KnowledgeScreen errors). 838/838 mobile tests pass (91 training tests). 1 pre-existing failure in KnowledgeScreen test.",
@@ -1538,9 +1911,9 @@
     },
     {
       "id": "20260812_013610_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
-      "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
-      "description": "",
-      "column": "todo",
+      "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified",
+      "description": "apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py. 12 tests in tests/test_realm_view.py pass. Realm regression suites green.",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "world-realm",

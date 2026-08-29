@@ -354,9 +354,8 @@ class TestHealthStream:
     def test_stream_yields_sse_snapshot(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_detailed_health.return_value = _make_detailed()
-        ctrl.get_basic_health.return_value = {
-            "is_inferencing": True, "inference_count": 7,
-        }
+        ctrl.get_detailed_health.return_value["is_inferencing"] = True
+        ctrl.get_detailed_health.return_value["inference_count"] = 7
         mock_get_ctrl.return_value = ctrl
         with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
              patch("asyncio.sleep", new=AsyncMock(return_value=None)):

@@ -73,7 +73,8 @@ describe('Checkbox', () => {
     render(<Checkbox id="terms" label="Accept terms" description="By continuing you agree to the terms" />)
     expect(screen.getByText('Accept terms')).toBeTruthy()
     expect(screen.getByText('By continuing you agree to the terms')).toBeTruthy()
-    expect(screen.getByText('Accept terms').getAttribute('for')).toBe('terms')
+    const label = screen.getByText('Accept terms').closest('label')
+    expect(label?.getAttribute('for')).toBe('terms')
   })
 
   it('sets the indeterminate property', () => {
@@ -81,9 +82,21 @@ describe('Checkbox', () => {
     expect((screen.getByRole('checkbox') as HTMLInputElement).indeterminate).toBe(true)
   })
 
-  it('applies size classes', () => {
+  it('applies size classes to wrapper', () => {
     const { container } = render(<Checkbox size="sm" />)
-    const input = container.querySelector('input')
-    expect(input?.className).toContain('h-3.5 w-3.5')
+    const wrapper = container.querySelector('span')
+    expect(wrapper?.className).toContain('h-4 w-4')
+  })
+
+  it('shows checkmark SVG when checked', () => {
+    const { container } = render(<Checkbox defaultChecked />)
+    const svg = container.querySelector('svg')
+    expect(svg).toBeTruthy()
+  })
+
+  it('shows indeterminate dash when indeterminate', () => {
+    const { container } = render(<Checkbox indeterminate />)
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(2)
   })
 })

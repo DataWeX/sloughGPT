@@ -1,21 +1,41 @@
 'use client'
 
-import { useRef, useCallback, useEffect, memo } from 'react'
+import { useRef, useCallback, useEffect, useState, memo } from 'react'
 import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
+import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
+
+const HISTORY_KEY = 'chat-input-history'
+const MAX_HISTORY = 50
+
+function loadHistory(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+function saveHistory(history: string[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY)))
+}
 
 export interface ChatInputProps {
   value: string
   onChange: (value: string) => void
   onSend: () => void
   onStop?: () => void
+  onCancel?: () => void
   loading: boolean
+  streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
+  streamingToolName?: string
   health: ApiHealthSnapshot
   images?: ImageAttachment[]
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onAudioTranscript?: (text: string) => void
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
@@ -28,11 +48,15 @@ export const ChatInput = memo(function ChatInput({
   onChange,
   onSend,
   onStop,
+  onCancel,
   loading,
+  streamingStatus = 'generating',
+  streamingToolName,
   health,
   images = [],
   onAddImage,
   onRemoveImage,
+  onAudioRecorded,
   onAudioTranscript,
   onGeneratedImage,
   onPDFAnalysis,
@@ -41,13 +65,27 @@ export const ChatInput = memo(function ChatInput({
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const pendingSendRef = useRef(false)
+  const [history, setHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    setHistory(loadHistory())
+  }, [])
 
   const handleSend = useCallback(() => {
+    if (value.trim()) {
+      const newHistory = [...history, value.trim()]
+      saveHistory(newHistory)
+      setHistory(newHistory)
+      setHistoryIndex(-1)
+      setDraft('')
+    }
     onSend()
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [onSend])
+  }, [onSend, value, history])
 
   const handleVoiceTranscript = useCallback((text: string) => {
     onChange(value ? `${value} ${text}` : text)
@@ -80,10 +118,33 @@ export const ChatInput = memo(function ChatInput({
     }
   }, [onRemoveImage])
 
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'ArrowUp' && !e.shiftKey && value === '' && history.length > 0) {
+      e.preventDefault()
+      const newIndex = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1)
+      if (historyIndex === -1) setDraft(value)
+      setHistoryIndex(newIndex)
+      onChange(history[newIndex])
+    } else if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex !== -1) {
+      e.preventDefault()
+      if (historyIndex === history.length - 1) {
+        setHistoryIndex(-1)
+        onChange(draft)
+      } else {
+        const newIndex = historyIndex + 1
+        setHistoryIndex(newIndex)
+        onChange(history[newIndex])
+      }
+    } else if (e.key === 'Escape' && historyIndex !== -1) {
+      setHistoryIndex(-1)
+      onChange(draft)
+    }
+  }, [value, history, historyIndex, draft, onChange])
+
   const isDisabled = loading || health === 'offline'
   const hasModel = health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
   const placeholder = health === 'offline'
-    ? 'API offline...'
+    ? 'Service offline...'
     : hasModel
       ? 'Type a message...'
       : 'Loading model...'
@@ -91,17 +152,14 @@ export const ChatInput = memo(function ChatInput({
 
   return (
     <section
+      aria-label="Chat input"
       className="shrink-0 bg-background/95 backdrop-blur-sm px-4 sm:px-6 pb-2 pt-1"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
       <div className="mx-auto max-w-3xl">
         {loading && (
-          <div className="flex justify-center pb-1" role="status" aria-live="polite">
-            <div className="flex gap-[3px] items-center">
-              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:0ms]" />
-              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:150ms]" />
-              <span className="w-1 h-1 rounded-full bg-primary/60 animate-bounce [animation-delay:300ms]" />
-            </div>
+          <div className="flex justify-center pb-1">
+            <StreamingIndicator status={streamingStatus} toolName={streamingToolName} />
           </div>
         )}
 
@@ -122,19 +180,41 @@ export const ChatInput = memo(function ChatInput({
           onChange={onChange}
           onSend={handleSend}
           onStop={onStop}
+          onCancel={onCancel}
           loading={loading}
           disabled={isDisabled}
           placeholder={placeholder}
           textareaRef={textareaRef}
           onImage={handleAddImage}
           onTranscript={handleVoiceTranscript}
+          onAudioRecorded={onAudioRecorded}
           onAudioTranscript={onAudioTranscript}
           onGeneratedImage={onGeneratedImage}
           onPDFAnalysis={onPDFAnalysis}
           onPDFError={onPDFError}
           hasContent={hasContent}
           onExecuteCommand={onExecuteCommand}
+          onKeyDown={handleKeyDown}
         />
+
+        {!loading && !value && hasModel && (
+          <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1" aria-hidden="true">
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
+              <span>send</span>
+            </span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Shift+Enter</kbd>
+              <span>newline</span>
+            </span>
+            <span className="text-muted-foreground/20">·</span>
+            <span className="flex items-center gap-1">
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">/</kbd>
+              <span>commands</span>
+            </span>
+          </div>
+        )}
       </div>
     </section>
   )

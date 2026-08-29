@@ -219,7 +219,7 @@ describe('CompanionPage — chat flow', () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
-    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hello companion' } })
     const sendBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('send')
@@ -234,7 +234,7 @@ describe('CompanionPage — chat flow', () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
-    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hi' } })
     const sendBtn = screen.getAllByRole('button').find(b =>
       b.textContent?.toLowerCase().includes('send')
@@ -249,7 +249,7 @@ describe('CompanionPage — chat flow', () => {
     render(<CompanionPage />)
     await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
 
-    const chatInput = screen.getAllByPlaceholderText(/say something/i)[0]
+    const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hello' } })
     await act(async () => {
       fireEvent.keyDown(chatInput, { key: 'Enter' })
@@ -312,7 +312,7 @@ describe('CompanionPage — error handling', () => {
     mockGetPrompt.mockRejectedValue(new Error('network'))
     render(<CompanionPage />)
     await waitFor(() => {
-      expect(screen.getByText('Failed to load companion data')).toBeTruthy()
+      expect(screen.getByText('network')).toBeTruthy()
     })
   })
 
@@ -339,7 +339,7 @@ describe('CompanionPage — error handling', () => {
     )
     await act(async () => { fireEvent.click(saveBtn!) })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to save personality', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('fail', 'error')
     })
   })
 
@@ -351,7 +351,7 @@ describe('CompanionPage — error handling', () => {
     const presetBtn = screen.getAllByRole('button').find(b => b.textContent === 'Warm')
     await act(async () => { fireEvent.click(presetBtn!) })
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to apply preset', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('fail', 'error')
     })
   })
 })

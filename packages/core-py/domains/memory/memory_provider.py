@@ -159,8 +159,8 @@ class KnowledgeMemoryProvider:
         try:
             return self._get_store().stats()
         except Exception as e:
-            logger.debug("Memory stats failed: %s", e)
-            return {}
+            logger.warning("Memory stats failed: %s", e, extra={"tag": "INF"})
+            return {"error": str(e), "total_facts": 0}
 
     def list_all(self, limit: int) -> List[Dict[str, Any]]:
         """

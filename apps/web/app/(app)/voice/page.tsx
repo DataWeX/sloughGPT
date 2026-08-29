@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
@@ -16,13 +16,14 @@ export default function VoicePage() {
   const [lastResult, setLastResult] = useState<{ duration_ms: number; backend: string; sample_rate: number } | null>(null)
   const [ttsError, setTtsError] = useState<string | null>(null)
   const [ttsCount, setTtsCount] = useState(0)
+  const [activePreset, setActivePreset] = useState<{ rate: number; pitch: number; voice: string } | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
     voiceController.getStatus()
       .then(d => setStatus(d))
-      .catch(() => { addToast('Failed to load voice status', 'error') })
+      .catch(() => { addToast('Could not load voice status', 'error') })
       .finally(() => setLoading(false))
   }, [])
 
@@ -30,7 +31,7 @@ export default function VoicePage() {
     try {
       setStatus(await voiceController.getStatus())
     } catch {
-      addToast('Failed to refresh voice status', 'error')
+      addToast('Could not refresh voice status', 'error')
     }
   }
 
@@ -53,24 +54,42 @@ export default function VoicePage() {
         audio.play().catch(() => {}) // autoplay policy — expected
       } else if (data.backend === 'browser-fallback') {
         if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel()
           const utterance = new SpeechSynthesisUtterance(ttsText)
+          if (activePreset) {
+            utterance.rate = activePreset.rate
+            utterance.pitch = activePreset.pitch
+            if (activePreset.voice) {
+              const match = window.speechSynthesis.getVoices().find(v => v.name === activePreset.voice)
+              if (match) utterance.voice = match
+            }
+          }
           window.speechSynthesis.speak(utterance)
         }
       }
     } catch (err) {
-      setTtsError(err instanceof Error ? err.message : 'TTS failed')
+      setTtsError(err instanceof Error ? err.message : 'Could not tts')
     } finally {
       setGenerating(false)
     }
   }
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefreshStatus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
   if (loading) {
     return (
       <PageContainer title="Voice" subtitle="Text-to-speech settings" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         <Card><CardContent><div className="h-40 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
@@ -79,40 +98,37 @@ export default function VoicePage() {
   }
 
   return (
-    <PageContainer title="Voice" subtitle="Text-to-speech settings">
+    <PageContainer title="Voice" subtitle="Text-to-speech via browser speech synthesis">
       <KpiGrid>
-        <StatCard label="Server TTS" value={status?.server_tts ? 'Available' : 'Unavailable'} />
-        <StatCard label="Model" value={status?.model ?? 'None'} />
+        <StatCard
+          label="Text-to-Speech"
+          value={status?.server_tts ? 'Available' : 'Not supported'}
+        />
+        <StatCard
+          label="Engine"
+          value={status?.model ? `AI model (${status.model})` : 'Browser SpeechSynthesis'}
+        />
         <StatCard label="TTS Calls" value={ttsCount} />
       </KpiGrid>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">TTS Backend</CardTitle>
-          <Button size="sm" variant="ghost" onClick={handleRefreshStatus}>
+          <CardTitle className="text-base">Text-to-Speech</CardTitle>
+          <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh status">
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>
         <CardContent>
-          {status ? (
-            <div className="space-y-3">
-              <KpiGrid columns={4}>
-                <StatCard label="Server" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
-                <StatCard label="Model" value={status.model ?? '—'} />
-                <StatCard label="Fallback" value="Browser" />
-                <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
-              </KpiGrid>
-              {status.error && (
-                <div className="text-xs text-destructive bg-destructive/5 rounded-md p-2">{status.error}</div>
-              )}
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
+              Text-to-speech requires the transformers library (not available).
+              Text is spoken using your browser&apos;s built-in speech synthesis.
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
-          )}
+          </div>
         </CardContent>
       </Card>
 
-      <VoicePresetCard />
+      <VoicePresetCard onApply={(p) => setActivePreset(p)} />
 
       <Card>
         <CardHeader>
@@ -124,6 +140,7 @@ export default function VoicePage() {
             onChange={e => setTtsText(e.target.value)}
             placeholder="Enter text to speak..."
             rows={3}
+            aria-label="Text to speak"
           />
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={handleGenerate} disabled={generating || !ttsText.trim()}>
@@ -147,8 +164,8 @@ export default function VoicePage() {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground space-y-1">
-            <p>Server-side TTS uses HuggingFace bark-small model when available.</p>
-            <p>Falls back to browser native speechSynthesis if server model is unavailable.</p>
+            <p>Text-to-speech uses HuggingFace bark-small model when available.</p>
+            <p>Falls back to browser native speechSynthesis if the model is unavailable.</p>
             <p>Voice input is available in the chat page via the microphone button.</p>
           </div>
         </CardContent>

@@ -146,13 +146,15 @@ class TestExecutor:
 
     def test_executor_job_not_found(self, client):
         resp = client.get("/system/executor/nonexistent")
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 503
+        body = resp.json()
+        assert "error" in body
 
     def test_executor_job_result_not_found(self, client):
         resp = client.get("/system/executor/nonexistent/result")
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 503
+        body = resp.json()
+        assert "error" in body
 
     def test_purge_when_uninitialized(self, client):
         resp = client.post("/system/executor/purge")
@@ -194,8 +196,9 @@ class TestExecutorInitialized:
         mod = self._install()
         try:
             resp = client.get("/system/executor/ghost")
-            assert resp.status_code == 200
-            assert "error" in resp.json()
+            assert resp.status_code == 404
+            body = resp.json()
+            assert "error" in body
         finally:
             self._restore()
 
@@ -203,8 +206,9 @@ class TestExecutorInitialized:
         mod = self._install()
         try:
             resp = client.get("/system/executor/ghost/result")
-            assert resp.status_code == 200
-            assert "error" in resp.json()
+            assert resp.status_code == 404
+            body = resp.json()
+            assert "error" in body
         finally:
             self._restore()
 
@@ -223,7 +227,7 @@ class TestOutputStream:
     """GET /system/stream — SSE output stream."""
 
     def _make_sub(self, lines=(), timeout_raises=False):
-        import threading
+        import asyncio
 
         class FakeSub:
             name = "fake-sub"
@@ -232,6 +236,13 @@ class TestOutputStream:
                 self._items = list(items)
 
             def read(self, timeout=0.1):
+                if timeout_raises:
+                    raise Exception("timeout")
+                out = self._items
+                self._items = []
+                return out
+
+            async def async_read(self, timeout=0.1):
                 if timeout_raises:
                     raise Exception("timeout")
                 out = self._items

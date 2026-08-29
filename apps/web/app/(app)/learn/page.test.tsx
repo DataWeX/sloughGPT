@@ -64,10 +64,23 @@ vi.mock('@/components/learn/LearningInsightsCard', () => ({
 import LearnPage from './page'
 
 const status = {
-  knowledge_count: 12,
-  total_tokens: 3456,
-  feeds_count: 3,
-  learner_active: true,
+  soul_name: 'test',
+  total_tokens_ingested: 3456,
+  train_steps_completed: 42,
+  current_loss: 0.5,
+  loss_history: [],
+  buffer_size: 100,
+  buffer_capacity: 200,
+  pending_tokens: 0,
+  arch: 'transformer',
+  n_embed: 128,
+  n_layer: 4,
+  n_head: 4,
+  vocab_size: 256,
+  knowledge: {},
+  feeds_subscribed: 3,
+  filter_stats: {},
+  filter_config: {},
 }
 
 afterEach(() => { cleanup() })
@@ -78,7 +91,7 @@ beforeEach(() => {
 
 async function renderLoaded() {
   render(<LearnPage />)
-  await waitFor(() => { expect(screen.getByText('12 facts · 3456 tokens')).toBeTruthy() })
+  await waitFor(() => { expect(screen.getByText('3456 tokens · 3 feeds')).toBeTruthy() })
 }
 
 describe('LearnPage', () => {
@@ -91,14 +104,14 @@ describe('LearnPage', () => {
 
   it('displays status stats and header subtitle after load', async () => {
     render(<LearnPage />)
-    await waitFor(() => { expect(screen.getByText('12 facts · 3456 tokens')).toBeTruthy() })
-    expect(screen.getAllByText('Knowledge').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Tokens')).toBeTruthy()
+  await waitFor(() => { expect(screen.getByText('3456 tokens · 3 feeds')).toBeTruthy() })
+    expect(screen.getByText('Tokens Ingested')).toBeTruthy()
+    expect(screen.getByText('Train Steps')).toBeTruthy()
     expect(screen.getAllByText('Feeds').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Status')).toBeTruthy()
-    expect(screen.getAllByText('12').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('3456').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Active')).toBeTruthy()
+    expect(screen.getByText('Buffer')).toBeTruthy()
+    expect(screen.getByText('3456')).toBeTruthy()
+    expect(screen.getByText('42')).toBeTruthy()
+    expect(screen.getByText('100/200')).toBeTruthy()
   })
 
   it('renders default search tab after status fails', async () => {
@@ -220,7 +233,7 @@ describe('LearnPage', () => {
     mockQueryKnowledge.mockRejectedValue(new Error('boom'))
     await renderLoaded()
     await act(async () => { screen.getByRole('button', { name: 'Knowledge' }).click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to load knowledge', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not load knowledge', 'error') })
   })
 
   it('lists subscribed RSS feeds', async () => {

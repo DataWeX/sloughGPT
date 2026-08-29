@@ -1,7 +1,8 @@
 'use client'
 
-import { Card, CardContent } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { memo } from 'react'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
+import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 
 interface ProcessCardProps {
   detailed: {
@@ -24,7 +25,7 @@ interface ProcessCardProps {
   } | null
 }
 
-export function ProcessCard({ detailed }: ProcessCardProps) {
+export const ProcessCard = memo(function ProcessCard({ detailed }: ProcessCardProps) {
   if (!detailed?.system) return null
 
   const sys = detailed.system
@@ -37,24 +38,24 @@ export function ProcessCard({ detailed }: ProcessCardProps) {
         <KpiGrid columns={2}>
           <StatCard
             label="CPU"
-            value={sys.cpu_percent != null ? sys.cpu_percent + '%' : '...'}
+            value={sys.cpu_percent != null ? sys.cpu_percent + '%' : <Skeleton className="h-5 w-10 inline-block" />}
             numeric
           />
           <StatCard
             label="Memory"
-            value={sys.memory_percent != null ? sys.memory_percent + '%' : '...'}
+            value={sys.memory_percent != null ? sys.memory_percent + '%' : <Skeleton className="h-5 w-10 inline-block" />}
             numeric
           />
           {hasProcessData && (
             <>
               <StatCard
                 label="Open files"
-                value={sys.open_files != null ? sys.open_files : '...'}
+                value={sys.open_files != null ? sys.open_files : <Skeleton className="h-5 w-8 inline-block" />}
                 numeric
               />
               <StatCard
                 label="Threads"
-                value={sys.threads != null ? sys.threads : '...'}
+                value={sys.threads != null ? sys.threads : <Skeleton className="h-5 w-8 inline-block" />}
                 numeric
               />
             </>
@@ -71,11 +72,11 @@ export function ProcessCard({ detailed }: ProcessCardProps) {
               <StatCard
                 label="GPU"
                 value={<span className="font-mono">{detailed.gpu.backend ?? 'N/A'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${detailed.gpu.backend && detailed.gpu.backend !== 'none' ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', detailed.gpu.backend && detailed.gpu.backend !== 'none' ? 'bg-success' : 'bg-muted-foreground/50')} />}
               />
               <StatCard
                 label="VRAM"
-                value={detailed.gpu.vram_gb ? detailed.gpu.vram_gb + ' GB' : '...'}
+                value={detailed.gpu.vram_gb ? detailed.gpu.vram_gb + ' GB' : <Skeleton className="h-5 w-12 inline-block" />}
                 numeric
               />
             </>
@@ -84,4 +85,4 @@ export function ProcessCard({ detailed }: ProcessCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

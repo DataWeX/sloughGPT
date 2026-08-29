@@ -72,7 +72,7 @@ describe('TokenTreeCodecCard', () => {
     render(<TokenTreeCodecCard />)
     fireEvent.click(screen.getByRole('button', { name: /Encode/i }))
 
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Failed to encode text', 'error'))
+    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not encode text', 'error'))
   })
 
   it('decodes ids entered by the user', async () => {
@@ -101,6 +101,6 @@ describe('TokenTreeCodecCard', () => {
     fireEvent.change(screen.getByLabelText('Token ids to decode'), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: /Decode/i }))
 
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Failed to decode ids', 'error'))
+    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not decode ids', 'error'))
   })
 })

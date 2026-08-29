@@ -2,19 +2,13 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { apiGet, apiPost } from '@/lib/http-client'
+import { imagesController, type GalleryImage, type ImageStyle } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
-
-interface GalleryImage {
-  id: string
-  path: string
-  created: number
-}
 
 interface Style {
   key: string
@@ -26,8 +20,9 @@ export default function ImagesPage() {
   const [gallery, setGallery] = useState<GalleryImage[]>([])
   const [styles, setStyles] = useState<Style[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
-  const [selectedStyle, setSelectedStyle] = useState('realistic')
+  const [selectedStyle, setSelectedStyle] = useState<ImageStyle>('realistic')
   const [generating, setGenerating] = useState(false)
   const [lastGenerated, setLastGenerated] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
@@ -35,14 +30,16 @@ export default function ImagesPage() {
 
   const fetchData = async () => {
     try {
+      setLoadError(null)
       const [galleryRes, stylesRes] = await Promise.all([
-        apiGet<{ data?: { images?: GalleryImage[] } }>('/images/gallery').catch(() => null),
-        apiGet<{ data?: { styles?: Array<[string, string]> } }>('/images/styles').catch(() => null),
+        imagesController.gallery().catch(() => null),
+        imagesController.styles().catch(() => null),
       ])
-      setGallery(galleryRes?.data?.images ?? [])
-      setStyles((stylesRes?.data?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+      setGallery(galleryRes?.images ?? [])
+      setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+      if (!galleryRes && !stylesRes) setLoadError('Could not load image data. Please try again.')
     } catch {
-      addToast('Failed to load image data', 'error')
+      setLoadError('Could not load image data')
     } finally {
       setLoading(false)
     }
@@ -56,15 +53,11 @@ export default function ImagesPage() {
     setGenError(null)
     setLastGenerated(null)
     try {
-      const data = await apiPost<{ detail?: string; image?: string }>('/images/generate', { prompt, style: selectedStyle })
-      if (data.detail) {
-        setGenError(data.detail)
-        return
-      }
+      const data = await imagesController.generate(prompt, selectedStyle)
       setLastGenerated(data.image ?? null)
       await fetchData()
     } catch (err) {
-      setGenError(err instanceof Error ? err.message : 'Generation failed')
+      setGenError(err instanceof Error ? err.message : 'Could not generation')
     } finally {
       setGenerating(false)
     }
@@ -75,11 +68,13 @@ export default function ImagesPage() {
       title="Images"
       subtitle={`${gallery.length} images generated`}
       loading={loading}
+      error={loadError}
+      onRetry={fetchData}
     >
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Generate</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
+          <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>
@@ -94,12 +89,9 @@ export default function ImagesPage() {
             {styles.map(s => (
               <button
                 key={s.key}
-                onClick={() => setSelectedStyle(s.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  selectedStyle === s.key
-                    ? 'bg-primary/15 text-primary border border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted'
-                }`}
+                type="button"
+                onClick={() => setSelectedStyle(s.key as ImageStyle)}
+                className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', selectedStyle === s.key ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted')}
               >
                 {s.name}
               </button>

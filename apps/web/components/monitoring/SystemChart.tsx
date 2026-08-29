@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 
 interface ChartPoint {
@@ -32,7 +33,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   )
 }
 
-export function SystemChart({ data, showTokens = true, showLatency = true }: SystemChartProps) {
+export const SystemChart = memo(function SystemChart({ data, showTokens = true, showLatency = true }: SystemChartProps) {
   if (!data.length) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
@@ -48,19 +49,19 @@ export function SystemChart({ data, showTokens = true, showLatency = true }: Sys
         <XAxis
           dataKey="time"
           tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-          interval="preserveStartEnd"
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          yAxisId="left"
-          domain={[0, 100]}
-          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-          width={35}
-          tickLine={false}
-          axisLine={false}
-          label={{ value: '%', position: 'insideTopLeft', offset: 10, style: { fontSize: 10, fill: 'var(--muted-foreground)' } }}
-        />
+            interval="preserveStartEnd"
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            yAxisId="left"
+            domain={[0, 100]}
+            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+            width={35}
+            tickLine={false}
+            axisLine={false}
+            label={{ value: '%', position: 'insideTopLeft', offset: 10, style: { fontSize: 10, fill: 'var(--muted-foreground)' } }}
+          />
         {(showTokens || showLatency) && (
           <YAxis
             yAxisId="right"
@@ -120,4 +121,4 @@ export function SystemChart({ data, showTokens = true, showLatency = true }: Sys
       </ComposedChart>
     </ResponsiveContainer>
   )
-}
+})

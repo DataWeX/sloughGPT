@@ -29,6 +29,8 @@ from typing import Any
 
 from domains.logging.bridge import record_extra_context
 
+logger = logging.getLogger("slo.infrastructure.output_buffer")
+
 
 @dataclass
 class OutputLine:
@@ -302,8 +304,8 @@ class BufferLogHandler(logging.Handler):
                 tag=tag,
                 context=context,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to write log line to output buffer: %s", exc)
 
 
 class _TeeWriter:
@@ -409,13 +411,23 @@ def _norm_level(raw: str) -> str:
 # ── Singletons + installation ──────────────────────────────────────────
 
 _server_buffer: OutputBuffer | None = None
+_server_buffer_lock = threading.Lock()
 
 
 def get_server_buffer() -> OutputBuffer:
     global _server_buffer
     if _server_buffer is None:
-        _server_buffer = OutputBuffer(max_lines=10_000)
+        with _server_buffer_lock:
+            if _server_buffer is None:
+                _server_buffer = OutputBuffer(max_lines=10_000)
     return _server_buffer
+
+
+def reset_server_buffer() -> None:
+    """Reset the singleton (for testing)."""
+    global _server_buffer
+    with _server_buffer_lock:
+        _server_buffer = None
 
 
 def install_log_bridge(buffer: OutputBuffer | None = None, level: int = logging.INFO) -> BufferLogHandler:
@@ -426,7 +438,7 @@ def install_log_bridge(buffer: OutputBuffer | None = None, level: int = logging.
     return handler
 
 
-def install_stdio_bridge(buffer: OutputBuffer | None = None):
+def install_stdio_bridge(buffer: OutputBuffer | None = None) -> None:
     """Tee stdout/stderr into the OutputBuffer with structured parsing."""
     buf = buffer or get_server_buffer()
     import sys

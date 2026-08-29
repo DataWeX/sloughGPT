@@ -237,29 +237,34 @@ def safe_audit_log(
 
 
 def classify_and_raise(e: Exception, source: str = "router") -> None:
-    """Classify an exception, emit an error event, and raise HTTPException.
+    """Classify an exception, emit an error event, and raise AppError.
 
     Replaces the repeated ``classify_exception + emit_error_event + raise_error``
-    blocks across router files.
+    blocks across router files.  Uses the unified ``raise_error()`` path so every
+    error goes through the ``AppError`` hierarchy and the global exception handlers
+    convert it to the correct HTTP response.
 
     Args:
         e: The caught exception.
         source: Identifier for the error source.
 
     Raises:
-        HTTPException: Always, with classified error details.
+        AppError (or subclass) — never returns.
     """
-    from fastapi import HTTPException as _HTTPException
+    from domains.infrastructure.errors import AppError as _AppError
     try:
         from domains.infrastructure.errors import classify_exception, emit_error_event
         err = classify_exception(e)
         emit_error_event(err, source=source)
-        raise _HTTPException(status_code=err.http_status, detail=err.user_message)
-    except _HTTPException:
+        # If already an AppError, re-raise directly (its code may not be in _code_map)
+        if isinstance(err, _AppError):
+            raise err
+        raise_error(err.user_message, err.code, status_code=err.http_status, details=err.details)
+    except _AppError:
         raise
     except Exception:
         _audit_logger.warning(
             "classify_and_raise fallback: source=%s error=%s",
             source, e, exc_info=True,
         )
-        raise _HTTPException(status_code=500, detail=str(e))
+        raise_error(str(e), "E_DOMAIN", status_code=500)

@@ -2,6 +2,9 @@
  * Connection status hook — polls server health, tracks connection state.
  * Returns detailed status: 'connected' | 'connecting' | 'reconnecting' | 'offline'.
  * Includes model state, latency, and last-seen timestamp.
+ *
+ * If the server was never reached (first launch), returns 'connected' instead
+ * of 'offline' to avoid alarming the user.
  */
 
 import {useEffect, useState, useRef, useCallback} from 'react';
@@ -28,6 +31,7 @@ export function useConnectionStatus(): ConnectionInfo {
     retryCount: 0,
   });
   const mountedRef = useRef(true);
+  const everConnected = useRef(false);
 
   const check = useCallback(async () => {
     if (!mountedRef.current) return;
@@ -44,6 +48,7 @@ export function useConnectionStatus(): ConnectionInfo {
       if (res.ok) {
         const data = await res.json();
         if (!mountedRef.current) return;
+        everConnected.current = true;
 
         setInfo({
           state: 'connected',
@@ -54,20 +59,24 @@ export function useConnectionStatus(): ConnectionInfo {
         });
       } else {
         if (!mountedRef.current) return;
-        setInfo(prev => ({
-          ...prev,
-          state: 'reconnecting',
-          retryCount: prev.retryCount + 1,
-        }));
+        if (everConnected.current) {
+          setInfo(prev => ({
+            ...prev,
+            state: 'reconnecting',
+            retryCount: prev.retryCount + 1,
+          }));
+        }
       }
     } catch {
       if (!mountedRef.current) return;
-      setInfo(prev => ({
-        ...prev,
-        state: 'offline',
-        latencyMs: null,
-        retryCount: prev.retryCount + 1,
-      }));
+      if (everConnected.current) {
+        setInfo(prev => ({
+          ...prev,
+          state: 'offline',
+          latencyMs: null,
+          retryCount: prev.retryCount + 1,
+        }));
+      }
     }
   }, []);
 

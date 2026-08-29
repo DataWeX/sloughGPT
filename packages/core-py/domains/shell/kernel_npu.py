@@ -669,8 +669,8 @@ class NPUDevice(DeviceDriver):
                 "generated_text": text,
             }
 
-        a_ms = results["a"]["generate_ms"]
-        b_ms = results["b"]["generate_ms"]
+        a_ms = results.get("a", {}).get("generate_ms", float("inf"))
+        b_ms = results.get("b", {}).get("generate_ms", float("inf"))
         speed_ratio = a_ms / b_ms if b_ms > 0 else 1.0
         faster = "a" if a_ms < b_ms else "b" if b_ms < a_ms else "equal"
 

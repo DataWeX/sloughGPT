@@ -3,20 +3,24 @@ export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { Checkbox } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
-import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy } from '@sloughgpt/strui'
+import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy, cn } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
 import { agentsController, type Agent, type OrchestrateTask, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
+import { formatElapsed } from '@/components/training/formatDuration'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
+import { logger } from '@/lib/dev-log'
 
 const AVAILABLE_TOOLS = ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'image_analysis', 'data_analysis']
 
@@ -53,18 +57,6 @@ function taskBadgeStyle(status: RunStatus): string {
   if (status === 'completed') return 'bg-success/15 text-success'
   if (status === 'failed') return 'bg-destructive/15 text-destructive'
   return 'bg-muted text-muted-foreground'
-}
-
-function formatDuration(startedAt: string | null, finishedAt: string | null): string {
-  if (!startedAt) return ''
-  const start = new Date(startedAt).getTime()
-  const end = finishedAt ? new Date(finishedAt).getTime() : Date.now()
-  const ms = end - start
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  const min = Math.floor(ms / 60000)
-  const sec = Math.floor((ms % 60000) / 1000)
-  return `${min}m ${sec}s`
 }
 
 function getAgentTaskStats(tasks: OrchestrateTask[]): Record<string, { completed: number; failed: number; total: number }> {
@@ -133,7 +125,7 @@ export default function AgentsPage() {
       const data = await agentsController.list()
       setAgents(data)
     } catch {
-      addToast('Failed to load agents', 'error')
+      addToast('Could not load agents', 'error')
     }
     setLoading(false)
   }, [addToast])
@@ -146,7 +138,7 @@ export default function AgentsPage() {
       const res = await agentsController.listRuns(20)
       setRuns(res.runs || [])
     } catch {
-      addToast('Failed to load run history', 'error')
+      addToast('Could not load run history', 'error')
     }
     setRunsLoading(false)
   }, [addToast])
@@ -249,7 +241,7 @@ export default function AgentsPage() {
       addToast('Agent created', 'success')
     } catch {
       setAgents(prev => prev.filter(a => a.id !== tempId))
-      addToast('Failed to create agent', 'error')
+      addToast('Could not create agent', 'error')
     }
     setCreating(false)
   }
@@ -292,7 +284,7 @@ export default function AgentsPage() {
       addToast('Agent updated', 'success')
     } catch {
       if (oldAgent) setAgents(prev => prev.map(a => a.id === id ? oldAgent : a))
-      addToast('Update failed', 'error')
+      addToast('Could not update', 'error')
     }
   }
 
@@ -304,11 +296,15 @@ export default function AgentsPage() {
       await agentsController.delete(id)
       addToast('Agent deleted', 'success', undefined, () => {
         setAgents(prev => [deleted, ...prev])
-        agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch(() => {})
+        agentsController.create({ name: deleted.name, description: deleted.description, instructions: deleted.instructions, tools: deleted.tools }).catch((e) => {
+          logger.warning('Could not restore agent', { exception: String(e) })
+          addToast('Could not restore agent', 'error')
+          fetchAgents()
+        })
       })
     } catch {
       setAgents(prev => [deleted, ...prev])
-      addToast('Failed to delete agent', 'error')
+      addToast('Could not delete agent', 'error')
     }
   }
 
@@ -340,7 +336,7 @@ export default function AgentsPage() {
       addToast(`Deleted ${deletedIds.size} agents`, 'success')
     } catch {
       setAgents(prev => [...deletedAgents, ...prev])
-      addToast('Failed to delete some agents', 'error')
+      addToast('Could not delete some agents', 'error')
     }
   }
 
@@ -364,7 +360,7 @@ export default function AgentsPage() {
       const res = await agentsController.execute(id, execPrompt)
       setExecResult(res.response)
     } catch {
-      setExecResult('Execution failed')
+      setExecResult('Could not execution')
     }
     setExecRunning(false)
   }
@@ -443,7 +439,7 @@ export default function AgentsPage() {
       addToast(`Cloned "${agent.name}"`, 'success')
       await fetchAgents()
     } catch {
-      addToast('Failed to clone agent', 'error')
+      addToast('Could not clone agent', 'error')
     }
   }
 
@@ -472,6 +468,7 @@ export default function AgentsPage() {
         </KpiGrid>
 
         {/* Create */}
+        <SectionErrorBoundary sectionName="Agent creator">
         <Card>
           <CardHeader><CardTitle className="text-base">New Agent</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -481,6 +478,7 @@ export default function AgentsPage() {
                 {AGENT_TEMPLATES.map(t => (
                   <button
                     key={t.name}
+                    type="button"
                     onClick={() => { setNewName(t.name); setNewDesc(t.desc); setNewInstructions(t.instructions); setNewTools([...t.tools]) }}
                     className="rounded-full px-3 py-1 text-xs font-medium border border-border/60 bg-muted/50 text-muted-foreground hover:bg-primary/10 hover:text-primary hover:border-primary/30 focus:ring-2 focus:ring-primary/30 transition-colors"
                   >
@@ -491,6 +489,7 @@ export default function AgentsPage() {
             </div>
             <div>
               <Input
+                id="create-agent-name"
                 placeholder="Name"
                 aria-label="Agent name"
                 value={newName}
@@ -500,8 +499,9 @@ export default function AgentsPage() {
                 }}
                 className={createErrors.name ? 'border-destructive ring-destructive/20' : ''}
                 aria-invalid={!!createErrors.name}
+                aria-describedby={createErrors.name ? 'create-name-error' : undefined}
               />
-              {createErrors.name && <p className="text-xs text-destructive mt-1" role="alert">{createErrors.name}</p>}
+              {createErrors.name && <p id="create-name-error" className="text-xs text-destructive mt-1" role="alert">{createErrors.name}</p>}
             </div>
             <Input placeholder="Description (optional)" value={newDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDesc(e.target.value)} />
             <textarea
@@ -515,13 +515,10 @@ export default function AgentsPage() {
               {AVAILABLE_TOOLS.map(t => (
                 <button
                   key={t}
+                  type="button"
                   onClick={() => toggleTool(t, newTools, setNewTools)}
                   aria-pressed={newTools.includes(t)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                    newTools.includes(t)
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                  }`}
+                  className={cn('rounded-full px-3 py-1 text-xs font-medium border transition-colors', newTools.includes(t) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary/50')}
                 >
                   {t.replace(/_/g, ' ')}
                 </button>
@@ -533,6 +530,7 @@ export default function AgentsPage() {
             </Button>
           </CardContent>
         </Card>
+        </SectionErrorBoundary>
 
         {/* List */}
         <Card>
@@ -562,6 +560,7 @@ export default function AgentsPage() {
                 {agents.length > 2 && (
                   <input
                     type="text"
+                    aria-label="Search agents"
                     value={agentSearch}
                     onChange={e => setAgentSearch(e.target.value)}
                     placeholder="Search agents..."
@@ -571,10 +570,10 @@ export default function AgentsPage() {
                 {filteredAgents.length > 0 && (
                   <div className="flex items-center gap-2 text-xs">
                     <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedIds.size === filteredAgents.length && filteredAgents.length > 0}
-                        onChange={selectAll}
+                        onCheckedChange={selectAll}
+                        aria-label="Select all agents"
                         className="rounded border-border"
                       />
                       <span className="text-muted-foreground">Select all</span>
@@ -602,11 +601,12 @@ export default function AgentsPage() {
                   </div>
                 ) : (
                   filteredAgents.map(agent => (
-                <div key={agent.id} className={`rounded-lg border p-4 space-y-2 transition-colors ${execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50'}`}>
+                <div key={agent.id} className={cn('rounded-lg border p-4 space-y-2 transition-colors', execAgentId === agent.id ? 'bg-primary/[0.08] border-primary/40' : 'border-border/60 hover:bg-muted/50')}>
                   {editingId === agent.id ? (
                     <div className="space-y-2">
                       <div>
                         <Input
+                          id="edit-agent-name"
                           value={editName}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                             setEditName(e.target.value)
@@ -616,8 +616,9 @@ export default function AgentsPage() {
                           aria-label="Agent name"
                           className={editErrors.name ? 'border-destructive ring-destructive/20' : ''}
                           aria-invalid={!!editErrors.name}
+                          aria-describedby={editErrors.name ? 'edit-name-error' : undefined}
                         />
-                        {editErrors.name && <p className="text-xs text-destructive mt-1" role="alert">{editErrors.name}</p>}
+                        {editErrors.name && <p id="edit-name-error" className="text-xs text-destructive mt-1" role="alert">{editErrors.name}</p>}
                       </div>
                       <Input value={editDesc} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditDesc(e.target.value)} placeholder="Description" aria-label="Agent description" />
                       <textarea
@@ -630,13 +631,10 @@ export default function AgentsPage() {
                         {AVAILABLE_TOOLS.map(t => (
                           <button
                             key={t}
+                            type="button"
                             onClick={() => toggleTool(t, editTools, setEditTools)}
                             aria-pressed={editTools.includes(t)}
-                            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-                              editTools.includes(t)
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                            }`}
+                            className={cn('rounded-full px-3 py-1 text-xs font-medium border transition-colors', editTools.includes(t) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary/50')}
                           >
                             {t.replace(/_/g, ' ')}
                           </button>
@@ -651,10 +649,10 @@ export default function AgentsPage() {
                     <>
                       <div className="flex items-start justify-between">
                         <div className="flex items-start gap-2 min-w-0 flex-1">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={selectedIds.has(agent.id)}
-                            onChange={() => toggleSelect(agent.id)}
+                            onCheckedChange={() => toggleSelect(agent.id)}
+                            aria-label={`Select agent ${agent.name}`}
                             className="mt-1 rounded border-border"
                           />
                           <div className="min-w-0 flex-1">
@@ -692,6 +690,7 @@ export default function AgentsPage() {
                           <div className="space-y-2">
                             <div>
                               <Input
+                                id="exec-prompt"
                                 placeholder="What should this agent do?"
                                 value={execPrompt}
                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -701,8 +700,9 @@ export default function AgentsPage() {
                                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleExecute(agent.id) } }}
                                 className={execErrors.prompt ? 'border-destructive ring-destructive/20' : ''}
                                 aria-invalid={!!execErrors.prompt}
+                                aria-describedby={execErrors.prompt ? 'exec-prompt-error' : undefined}
                               />
-                              {execErrors.prompt && <p className="text-xs text-destructive mt-1" role="alert">{execErrors.prompt}</p>}
+                              {execErrors.prompt && <p id="exec-prompt-error" className="text-xs text-destructive mt-1" role="alert">{execErrors.prompt}</p>}
                             </div>
                             <div className="flex gap-2">
                               <Button size="sm" onClick={() => handleExecute(agent.id)} disabled={execRunning || !execPrompt.trim()}>
@@ -736,6 +736,7 @@ export default function AgentsPage() {
         </Card>
 
         {/* Orchestration */}
+        <SectionErrorBoundary sectionName="Orchestrator panel">
         <Card>
           <CardHeader><CardTitle className="text-base">Multi-Agent Orchestration</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -744,6 +745,7 @@ export default function AgentsPage() {
             </p>
             <div>
               <Input
+                id="orch-goal"
                 placeholder="Goal — e.g. research transformers and write a summary"
                 value={orchGoal}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -753,8 +755,9 @@ export default function AgentsPage() {
                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && !e.shiftKey && orchGoal.trim() && !orchRunning) { e.preventDefault(); handleOrchestrate() } }}
                 className={orchErrors.goal ? 'border-destructive ring-destructive/20' : ''}
                 aria-invalid={!!orchErrors.goal}
+                aria-describedby={orchErrors.goal ? 'orch-goal-error' : undefined}
               />
-              {orchErrors.goal && <p className="text-xs text-destructive mt-1" role="alert">{orchErrors.goal}</p>}
+              {orchErrors.goal && <p id="orch-goal-error" className="text-xs text-destructive mt-1" role="alert">{orchErrors.goal}</p>}
             </div>
             <textarea
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[60px]"
@@ -776,11 +779,7 @@ export default function AgentsPage() {
                           prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
                         )
                       }}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
-                        orchAgentIds.includes(a.id)
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background text-muted-foreground border-border hover:border-primary/50'
-                      }`}
+                      className={cn('rounded-full px-2.5 py-1 text-xs font-medium border transition-colors', orchAgentIds.includes(a.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-muted-foreground border-border hover:border-primary/50')}
                     >
                       {a.name}
                     </button>
@@ -802,11 +801,7 @@ export default function AgentsPage() {
             {/* Phase indicator */}
             {orchPhase && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className={`inline-block h-2 w-2 rounded-full ${
-                  orchPhase === 'COMPLETE' ? 'bg-success' :
-                  orchPhase === 'ERROR' ? 'bg-destructive' :
-                  'bg-warning animate-pulse'
-                }`} />
+                <span className={cn('inline-block h-2 w-2 rounded-full', orchPhase === 'COMPLETE' ? 'bg-success' : orchPhase === 'ERROR' ? 'bg-destructive' : 'bg-warning animate-pulse')} />
                 {orchPhase === 'PLAN' && 'Planning subtasks...'}
                 {orchPhase === 'EXECUTE' && `Executing level ${orchLevel}/${orchTotalLevels}...`}
                 {orchPhase === 'COMPOSE' && 'Composing final response...'}
@@ -823,12 +818,7 @@ export default function AgentsPage() {
                   const status = orchTaskStatuses[task.id] || 'pending'
                   return (
                     <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                        status === 'completed' ? 'bg-success' :
-                        status === 'in_progress' ? 'bg-warning animate-pulse' :
-                        status === 'failed' ? 'bg-destructive' :
-                        'bg-muted-foreground/30'
-                      }`} />
+                      <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', status === 'completed' ? 'bg-success' : status === 'in_progress' ? 'bg-warning animate-pulse' : status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30')} />
                       <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
                       <span className="flex-1 truncate">{task.description}</span>
                       {task.depends_on && task.depends_on.length > 0 && (
@@ -856,22 +846,26 @@ export default function AgentsPage() {
             )}
           </CardContent>
         </Card>
+        </SectionErrorBoundary>
 
         {/* Run history */}
+        <SectionErrorBoundary sectionName="Run history viewer">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">Run History</CardTitle>
               <div className="flex items-center gap-1">
                 <button
+                  type="button"
                   onClick={() => setRunViewMode('list')}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
+                  className={cn('text-xs px-2 py-1 rounded transition-colors', runViewMode === 'list' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80')}
                 >
                   List
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRunViewMode('timeline')}
-                  className={`text-xs px-2 py-1 rounded transition-colors ${runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80'}`}
+                  className={cn('text-xs px-2 py-1 rounded transition-colors', runViewMode === 'timeline' ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-muted/80')}
                 >
                   Timeline
                 </button>
@@ -898,8 +892,9 @@ export default function AgentsPage() {
                         {[null, 'completed', 'failed', 'running'].map(s => (
                           <button
                             key={s ?? 'all'}
+                            type="button"
                             onClick={() => setRunStatusFilter(s)}
-                            className={`text-xs px-2 py-1 rounded-full border transition-colors ${runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                            className={cn('text-xs px-2 py-1 rounded-full border transition-colors', runStatusFilter === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
                           >
                             {s === null ? 'All' : s}
                           </button>
@@ -919,16 +914,18 @@ export default function AgentsPage() {
                       return (
                         <div className="flex flex-wrap gap-1">
                           <button
+                            type="button"
                             onClick={() => setRunAgentFilter(null)}
-                            className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                            className={cn('text-xs px-2 py-1 rounded border transition-colors', runAgentFilter === null ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
                           >
                             All agents
                           </button>
                           {Array.from(agentNames).sort().map(name => (
                             <button
                               key={name}
+                              type="button"
                               onClick={() => setRunAgentFilter(runAgentFilter === name ? null : name)}
-                              className={`text-xs px-2 py-1 rounded border transition-colors ${runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+                              className={cn('text-xs px-2 py-1 rounded border transition-colors', runAgentFilter === name ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
                             >
                               {name}
                             </button>
@@ -947,20 +944,21 @@ export default function AgentsPage() {
                 const expanded = expandedRun === run.id
                 const statusColor = statusDotColor(run.status)
                 return (
-                  <div key={run.id} className={`rounded-lg border border-border/60 transition-colors ${expanded ? 'border-primary/40' : 'hover:bg-muted/50'}`}>
+                  <div key={run.id} className={cn('rounded-lg border border-border/60 transition-colors', expanded ? 'border-primary/40' : 'hover:bg-muted/50')}>
                     <button
+                      type="button"
                       className="w-full flex items-center gap-2 px-3 py-2 text-left"
                       onClick={() => setExpandedRun(expanded ? null : run.id)}
                       aria-expanded={expanded}
                     >
-                      <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${statusColor}`} />
+                      <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', statusColor)} />
                       <span className="flex-1 truncate text-sm">{run.goal}</span>
                       <span className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                         {run.completed_count}/{run.completed_count + run.failed_count} tasks
                       </span>
                       {run.started_at && (
                         <span className="shrink-0 text-xs text-muted-foreground/70">
-                          {formatDuration(run.started_at, run.finished_at)}
+                          {formatElapsed(run.started_at, run.finished_at)}
                         </span>
                       )}
                       <span className="shrink-0 text-xs text-muted-foreground">
@@ -996,11 +994,7 @@ export default function AgentsPage() {
                                 <p className="text-xs font-medium text-muted-foreground">Tasks ({run.tasks.length})</p>
                                 {run.tasks.map(task => (
                                   <div key={task.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
-                                    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${
-                                      task.status === 'completed' ? 'bg-success' :
-                                      task.status === 'failed' ? 'bg-destructive' :
-                                      'bg-muted-foreground/30'
-                                    }`} />
+                                    <span className={cn('inline-block h-2 w-2 shrink-0 rounded-full', task.status === 'completed' ? 'bg-success' : task.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/30')} />
                                     <span className="font-medium text-xs min-w-[64px] text-muted-foreground">{task.agent}</span>
                                     <span className="flex-1 truncate">{task.description}</span>
                                     {task.result_preview && (
@@ -1042,11 +1036,11 @@ export default function AgentsPage() {
                         return (
                           <div key={run.id} className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <span className={`text-xs font-medium ${statusColor}`}>{run.status}</span>
+                              <span className={cn('text-xs font-medium', statusColor)}>{run.status}</span>
                               <span className="text-sm flex-1 truncate">{run.goal}</span>
                               {run.started_at && (
                                 <span className="text-xs text-muted-foreground/70">
-                                  {formatDuration(run.started_at, run.finished_at)}
+                                  {formatElapsed(run.started_at, run.finished_at)}
                                 </span>
                               )}
                               <span className="text-xs text-muted-foreground">{run.started_at ? new Date(run.started_at).toLocaleString() : ''}</span>
@@ -1056,11 +1050,11 @@ export default function AgentsPage() {
                                 const taskColor = taskDotColor(task.status)
                                 return (
                                   <div key={task.id} className="relative flex items-center gap-3">
-                                    <div className={`absolute -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-background ${taskColor}`} />
+                                    <div className={cn('absolute -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-background', taskColor)} />
                                     <span className="text-xs text-muted-foreground w-8 shrink-0">#{i + 1}</span>
                                     <span className="text-xs text-muted-foreground min-w-[64px] shrink-0">{task.agent}</span>
                                     <span className="text-xs flex-1 truncate">{task.description}</span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded ${taskBadgeStyle(task.status)}`}>
+                                    <span className={cn('text-xs px-1.5 py-0.5 rounded', taskBadgeStyle(task.status))}>
                                       {task.status}
                                     </span>
                                   </div>
@@ -1079,6 +1073,7 @@ export default function AgentsPage() {
             )}
           </CardContent>
         </Card>
+        </SectionErrorBoundary>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
         <AlertDialogContent>

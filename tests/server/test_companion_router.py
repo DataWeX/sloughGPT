@@ -3,13 +3,15 @@ Tests for the companion router — personality, presets, chat, prompt.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.companion import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -211,10 +213,14 @@ class TestPrompt:
 class TestChat:
     """POST /companion/chat"""
 
+    @patch("domains.models.provider.get_provider")
     @patch(COMPANION_TARGET)
-    def test_chat(self, mock_get):
+    def test_chat(self, mock_get, mock_provider):
         comp = _mock_companion()
         mock_get.return_value = comp
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="Hello! I'm here for you.")
+        mock_provider.return_value = provider
 
         resp = client.post("/companion/chat", json={"message": "Hello!"})
         assert resp.status_code == 200
@@ -222,10 +228,14 @@ class TestChat:
         assert "response" in data
         assert "system_prompt" in data
 
+    @patch("domains.models.provider.get_provider")
     @patch(COMPANION_TARGET)
-    def test_chat_with_mood(self, mock_get):
+    def test_chat_with_mood(self, mock_get, mock_provider):
         comp = _mock_companion()
         mock_get.return_value = comp
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="I understand.")
+        mock_provider.return_value = provider
 
         resp = client.post("/companion/chat", json={
             "message": "I'm feeling sad",
@@ -234,10 +244,14 @@ class TestChat:
         assert resp.status_code == 200
         comp.adjust_for_mood.assert_called_once_with("sad")
 
+    @patch("domains.models.provider.get_provider")
     @patch(COMPANION_TARGET)
-    def test_chat_no_system_prompt(self, mock_get):
+    def test_chat_no_system_prompt(self, mock_get, mock_provider):
         comp = _mock_companion()
         mock_get.return_value = comp
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="Hi!")
+        mock_provider.return_value = provider
 
         resp = client.post("/companion/chat", json={
             "message": "Hi",
@@ -247,10 +261,14 @@ class TestChat:
         data = resp.json()
         assert data["system_prompt"] == ""
 
+    @patch("domains.models.provider.get_provider")
     @patch(COMPANION_TARGET)
-    def test_chat_with_user_name(self, mock_get):
+    def test_chat_with_user_name(self, mock_get, mock_provider):
         comp = _mock_companion()
         mock_get.return_value = comp
+        provider = MagicMock()
+        provider.chat = AsyncMock(return_value="Hello Alice!")
+        mock_provider.return_value = provider
 
         resp = client.post("/companion/chat", json={
             "message": "Hi there",
@@ -267,9 +285,9 @@ class TestChat:
 
         with patch("domains.models.provider.get_provider", side_effect=Exception("model crash")):
             resp = client.post("/companion/chat", json={"message": "Hello"})
-            assert resp.status_code == 200
+            assert resp.status_code == 500
             data = resp.json()
-            assert "Error" in data["response"] or "error" in data["response"].lower()
+            assert "error" in data
 
 
 class TestListPresets:
@@ -358,8 +376,9 @@ class TestChatValidation:
         assert resp.status_code == 422
 
     def test_empty_message_ok(self):
-        resp = client.post("/companion/chat", json={"message": ""})
-        assert resp.status_code == 200
+        with patch("domains.models.provider.get_provider", return_value=MagicMock(chat=AsyncMock(return_value="Hi!"))):
+            resp = client.post("/companion/chat", json={"message": ""})
+            assert resp.status_code == 200
 
     def test_message_too_long_rejected(self):
         resp = client.post("/companion/chat", json={"message": "x" * 10001})
@@ -371,8 +390,7 @@ class TestChatValidation:
         mock_get.return_value = comp
         with patch("domains.models.provider.get_provider", return_value=None):
             resp = client.post("/companion/chat", json={"message": "Hello"})
-            assert resp.status_code == 200
-            assert "Error" in resp.json()["response"]
+            assert resp.status_code == 503
 
 
 class TestPresetValidation:

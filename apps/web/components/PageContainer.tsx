@@ -131,7 +131,11 @@ export function PageContainer({
         </div>
       )
     }
-    return <PageSkeleton cards={loadingCards} header grid={loadingGrid} />
+    return (
+      <div className={wrapperClass}>
+        <PageSkeleton cards={loadingCards} header grid={loadingGrid} />
+      </div>
+    )
   }
 
   if (error) {

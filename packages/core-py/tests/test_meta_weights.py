@@ -142,7 +142,7 @@ class TestMetaWeightManager:
             "temperature_boost": 5.0,
         }
         weights = manager.get_adjustment("hello")
-        assert weights.temperature == 2.0
+        assert weights.temperature == 1.5
 
     def test_get_adjustment_clamps_repetition(self, manager, mock_db):
         mock_db.get_user_meta_weights.return_value = {

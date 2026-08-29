@@ -21,6 +21,7 @@ Usage:
     # → {"label": "factual", "confidence": 0.8, "reason": "declarative statement"}
 """
 import re
+import threading
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -337,11 +338,21 @@ def _rule_factual(text: str) -> tuple:
 
 # Module-level singleton
 _labeler: Optional[TruthLabeler] = None
+_truth_labeler_lock = threading.Lock()
 
 
 def get_truth_labeler() -> TruthLabeler:
     """Get or create the truth labeler singleton."""
     global _labeler
     if _labeler is None:
-        _labeler = TruthLabeler()
+        with _truth_labeler_lock:
+            if _labeler is None:
+                _labeler = TruthLabeler()
     return _labeler
+
+
+def reset_truth_labeler() -> None:
+    """Reset the singleton (for testing)."""
+    global _labeler
+    with _truth_labeler_lock:
+        _labeler = None

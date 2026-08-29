@@ -54,6 +54,7 @@ declare global {
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onSend?: () => void
   disabled?: boolean
 }
@@ -66,7 +67,7 @@ function WaveformIcon({ className, isActive }: { className?: string; isActive: b
   return <AudioWaveform className={className} isActive={isActive} />
 }
 
-export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) {
+export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
   const [isServerSupported, setIsServerSupported] = useState(false)
@@ -75,10 +76,12 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
   const chunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
+    let active = true
     setIsBrowserSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
     multimodalController.getCapabilities().then(caps => {
-      if (caps.speech_to_text) setIsServerSupported(true)
+      if (active && caps.speech_to_text) setIsServerSupported(true)
     }).catch(() => /* voice capabilities unavailable — browser-only mode */ {})
+    return () => { active = false }
   }, [])
 
   const startBrowserListening = useCallback(() => {
@@ -129,20 +132,23 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
         setIsListening(false)
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         if (blob.size === 0) return
-        const fd = new FormData()
-        fd.append('file', blob, 'recording.webm')
-        fd.append('language', 'en')
+
+        // Pass audio blob to parent for voice message saving
+        if (onAudioRecorded) {
+          onAudioRecorded(blob)
+        }
+
         try {
           const result = await multimodalController.transcribeAudio(blob as File)
           if (result.text) onTranscript(result.text)
         } catch (err) {
           const msg = extractErrorMessage(err)
           if (msg.includes('501') || msg.includes('not available')) {
-            addToast('Server speech recognition not available — use Chrome or Edge for browser voice input', 'error')
+            addToast('Speech recognition not available — use Chrome or Edge for browser voice input', 'error')
           } else {
-            addToast('Audio transcription failed', 'error')
+            addToast('Could not audio transcription', 'error')
           }
-          logger.error('Audio transcription failed', { exception: String(err) })
+          logger.error('Could not audio transcription', { exception: String(err) })
         }
       }
 
@@ -158,9 +164,9 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
       } else {
         addToast('Could not access microphone', 'error')
       }
-      logger.error('Microphone access failed', { exception: String(err) })
+      logger.error('Could not microphone access', { exception: String(err) })
     }
-  }, [onTranscript])
+  }, [onTranscript, onAudioRecorded])
 
   const toggleListening = useCallback(() => {
     if (isListening) {

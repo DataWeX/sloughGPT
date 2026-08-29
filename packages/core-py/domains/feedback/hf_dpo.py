@@ -8,9 +8,12 @@ Preference gradients run through SloNet's numpy autograd. When the supplied mode
 trainer reports an honest ``rejected`` result instead of fabricating metrics.
 """
 from typing import Dict, List, Optional
+import logging
 import time
 
 import numpy as np
+
+logger = logging.getLogger("slo.feedback.hf_dpo")
 
 from domains.feedback.database import get_feedback_db
 
@@ -107,7 +110,8 @@ class HFDPOTrainer:
             return False
         try:
             params = list(params())
-        except Exception:
+        except Exception as e:
+            logger.debug("parameter list failed: %s", e)
             return False
         return len(params) > 0 and callable(getattr(model, "forward", None))
 
@@ -122,7 +126,8 @@ class HFDPOTrainer:
                         ids = fn(text)
                         if isinstance(ids, (list, tuple, np.ndarray)) and len(ids) > 0:
                             return np.array(ids, dtype=np.int64)
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("encode failed: %s", e)
                         break
         ids = [ord(ch) for ch in text if ord(ch) < 128]
         return np.array(ids, dtype=np.int64)

@@ -100,24 +100,26 @@ class VideoProcessor:
             num_frames: Number of frames to extract (default: max_frames)
         Returns:
             List of (224, 224, 3) numpy arrays
+        Raises:
+            ImportError: If cv2 is not installed
+            FileNotFoundError: If video file does not exist
+            RuntimeError: If video cannot be opened or has no frames
         """
         try:
             import cv2
         except ImportError:
-            logger.warning("cv2 not installed, falling back to placeholder frames", extra={"tag": "MODEL"})
-            n = num_frames or self.max_frames
-            return [np.random.randn(224, 224, 3).astype(np.float32) for _ in range(n)]
+            raise ImportError("Video processing requires opencv-python (cv2). Install with: pip install opencv-python")
 
         num_frames = num_frames or self.max_frames
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            logger.warning("Cannot open video: %s, falling back to placeholder frames", video_path, extra={"tag": "MODEL"})
-            return [np.random.randn(224, 224, 3).astype(np.float32) for _ in range(num_frames)]
+            cap.release()
+            raise RuntimeError(f"Cannot open video file: {video_path}")
 
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         if total_frames == 0:
             cap.release()
-            return [np.random.randn(224, 224, 3).astype(np.float32) for _ in range(num_frames)]
+            raise RuntimeError(f"Video has no frames: {video_path}")
 
         # Sample frames evenly
         frame_indices = np.linspace(0, total_frames - 1, num_frames, dtype=int)
@@ -132,8 +134,8 @@ class VideoProcessor:
                 frame = cv2.resize(frame, (224, 224))
                 frames.append(frame.astype(np.float32) / 255.0)
             else:
-                # Fallback to random frame
-                frames.append(np.random.randn(224, 224, 3).astype(np.float32))
+                cap.release()
+                raise RuntimeError(f"Failed to read frame {idx} from video: {video_path}")
 
         cap.release()
         return frames

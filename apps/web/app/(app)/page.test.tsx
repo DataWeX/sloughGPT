@@ -225,17 +225,17 @@ describe('HomePage', () => {
     const input = screen.getByPlaceholderText('e.g., I prefer Python over JavaScript')
     await act(async () => { fireEvent.change(input, { target: { value: 'I like coffee' } }) })
     await act(async () => { fireEvent.submit(screen.getByText('Save').closest('form')!) })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to save', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not save', 'error') })
   })
 
   it('renders feedback stats and links to training', () => {
     state.home = makeHomeData({
       feedbackStats: { db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3, ratio: 0.7 }, train_stats: null, adapter_stats: null },
     })
-    render(<HomePage />)
+    const { container } = render(<HomePage />)
     expect(screen.getByText('10')).toBeTruthy()
-    expect(screen.getByText('👍 7')).toBeTruthy()
-    expect(screen.getByText('👎 3')).toBeTruthy()
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('70% positive')).toBeTruthy()
     const link = screen.getByText('Train from feedback →')
     expect(link.getAttribute('href')).toBe('/training')
@@ -277,12 +277,12 @@ describe('HomePage', () => {
 
   it('dismisses the onboarding card via localStorage', async () => {
     render(<HomePage />)
-    expect(screen.getByText('New here?')).toBeTruthy()
+    expect(screen.getByText('Welcome to SloughGPT')).toBeTruthy()
     await act(async () => {})
-    const gotIt = screen.getByText('Got it')
-    await act(async () => { gotIt.click() })
+    const skip = screen.getByText('Skip')
+    await act(async () => { skip.click() })
     expect(localStorage.getItem('onboarding_dismissed')).toBe('1')
-    expect(screen.queryByText('New here?')).toBeFalsy()
+    expect(screen.queryByText('Welcome to SloughGPT')).toBeFalsy()
   })
 
   it('renders conversation and dataset stats cards from controller data', async () => {

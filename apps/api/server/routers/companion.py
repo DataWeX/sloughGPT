@@ -4,11 +4,13 @@ Companion Router - AI Companion endpoints
 Endpoints to manage and chat with the AI companion.
 """
 import logging
-from fastapi import APIRouter
+import time as _time
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 
-from schemas.common import success_response, classify_and_raise
+from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.companion")
 
@@ -41,7 +43,7 @@ class PresetRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     """Chat with companion."""
-    message: str = Field(max_length=10000)
+    message: str = Field(..., min_length=1, max_length=10000)
     user_name: Optional[str] = Field(default=None, max_length=100)
     user_mood: Optional[str] = Field(default=None, max_length=100)
     include_system_prompt: bool = True
@@ -53,6 +55,7 @@ class ChatResponse(BaseModel):
     """Companion response."""
     response: str
     system_prompt: str
+    elapsed_ms: float = 0.0
 
 
 class CompanionRouter:
@@ -81,56 +84,61 @@ class CompanionRouter:
         return self._companion
 
     async def get_companion_info(self) -> dict:
-        """Return the current companion's full state as a dictionary.
+        """Return the current companion's full state as a dictionary."""
+        try:
+            comp = self._get_companion()
+            return success_response(data=comp.to_dict())
+        except Exception as e:
+            classify_and_raise(e, source="companion.info")
 
-        Returns:
-            Success envelope containing the companion's traits (name,
-            warmth, curiosity, creativity, confidence, humor) and
-            other configuration.
-
-        Side effects:
-            Lazily instantiates the CompanionSystem singleton on first
-            call via get_companion().
-        """
-        comp = self._get_companion()
-        return success_response(data=comp.to_dict())
-
-    async def set_personality(self, req: SetPersonalityRequest) -> dict:
+    async def set_personality(self, req: SetPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Set companion personality (full replacement)."""
-        comp = self._get_companion()
-        comp.set_personality(
-            name=req.name,
-            warmth=req.warmth,
-            curiosity=req.curiosity,
-            creativity=req.creativity,
-            confidence=req.confidence,
-            humor=req.humor,
-        )
-        return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+        try:
+            comp = self._get_companion()
+            comp.set_personality(
+                name=req.name,
+                warmth=req.warmth,
+                curiosity=req.curiosity,
+                creativity=req.creativity,
+                confidence=req.confidence,
+                humor=req.humor,
+            )
+            safe_audit_log("companion.set_personality", detail=f"name={req.name}")
+            return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+        except Exception as e:
+            classify_and_raise(e, source="companion.set_personality")
 
-    async def patch_personality(self, req: PatchPersonalityRequest) -> dict:
+    async def patch_personality(self, req: PatchPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Partial update to companion personality (only provided fields are changed)."""
-        comp = self._get_companion()
-        current = comp.to_dict()["traits"]
-        updates = {k: v for k, v in req.model_dump().items() if v is not None}
-        merged = {**current, **updates}
-        comp.set_personality(
-            name=merged.get("name", current.get("name", "Friend")),
-            warmth=merged.get("warmth", current.get("warmth", 0.7)),
-            curiosity=merged.get("curiosity", current.get("curiosity", 0.6)),
-            creativity=merged.get("creativity", current.get("creativity", 0.5)),
-            confidence=merged.get("confidence", current.get("confidence", 0.5)),
-            humor=merged.get("humor", current.get("humor", 0.4)),
-        )
-        return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+        try:
+            comp = self._get_companion()
+            current = comp.to_dict()["traits"]
+            updates = {k: v for k, v in req.model_dump().items() if v is not None}
+            merged = {**current, **updates}
+            comp.set_personality(
+                name=merged.get("name", current.get("name", "Friend")),
+                warmth=merged.get("warmth", current.get("warmth", 0.7)),
+                curiosity=merged.get("curiosity", current.get("curiosity", 0.6)),
+                creativity=merged.get("creativity", current.get("creativity", 0.5)),
+                confidence=merged.get("confidence", current.get("confidence", 0.5)),
+                humor=merged.get("humor", current.get("humor", 0.4)),
+            )
+            safe_audit_log("companion.patch", detail=f"fields={list(updates.keys())}")
+            return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+        except Exception as e:
+            classify_and_raise(e, source="companion.patch")
 
-    async def reset_companion(self) -> dict:
+    async def reset_companion(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset companion to default personality."""
-        from domains.companion import create_companion
-        self._companion = create_companion()
-        return success_response(data={"status": "ok", "traits": self._companion.to_dict()["traits"]})
+        try:
+            from domains.companion import create_companion
+            self._companion = create_companion()
+            safe_audit_log("companion.reset")
+            return success_response(data={"status": "ok", "traits": self._companion.to_dict()["traits"]})
+        except Exception as e:
+            classify_and_raise(e, source="companion.reset")
 
-    async def use_preset(self, req: PresetRequest) -> dict:
+    async def use_preset(self, req: PresetRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Replace the current companion with a preset personality.
 
         Args:
@@ -145,32 +153,29 @@ class CompanionRouter:
             Replaces the internal CompanionSystem instance with a new
             one configured to the chosen preset.
         """
-        from domains.companion import create_companion
+        try:
+            from domains.companion import create_companion
 
-        self._companion = create_companion(name=req.name, personality=req.preset)
+            self._companion = create_companion(name=req.name, personality=req.preset)
+            safe_audit_log("companion.preset", resource=req.preset, detail=f"name={req.name}")
 
-        return success_response(data={
-            "status": "ok",
-            "preset": req.preset,
-            "traits": self._companion.to_dict()["traits"],
-        })
+            return success_response(data={
+                "status": "ok",
+                "preset": req.preset,
+                "traits": self._companion.to_dict()["traits"],
+            })
+        except Exception as e:
+            classify_and_raise(e, source="companion.preset")
 
     async def get_prompt(self) -> dict:
-        """Return the system prompt currently used by the companion.
+        """Return the system prompt currently used by the companion."""
+        try:
+            comp = self._get_companion()
+            return success_response(data={"system_prompt": comp.get_system_prompt()})
+        except Exception as e:
+            classify_and_raise(e, source="companion.prompt")
 
-        Returns:
-            Success envelope with a system_prompt string containing the
-            full system prompt derived from the companion's personality
-            traits and configuration.
-
-        Side effects:
-            Lazily instantiates the CompanionSystem singleton on first
-            call via get_companion().
-        """
-        comp = self._get_companion()
-        return success_response(data={"system_prompt": comp.get_system_prompt()})
-
-    async def chat(self, req: ChatRequest) -> dict:
+    async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Chat with companion — generates a response using the active model."""
         comp = self._get_companion()
 
@@ -187,51 +192,42 @@ class CompanionRouter:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": req.message})
 
-        response_text = ""
-        error_msg = None
+        _chat_t0 = _time.monotonic()
         try:
             from domains.models.provider import get_provider
             provider = get_provider("default")
-            if provider is not None:
-                response_text = await provider.chat(
-                    messages,
-                    max_tokens=req.max_tokens,
-                    temperature=req.temperature,
-                )
-            else:
-                error_msg = "No model loaded"
+            if provider is None:
+                raise_error("No model loaded — load a model first", "E_BAD_REQUEST", status_code=503)
+            response_text = await provider.chat(
+                messages,
+                max_tokens=req.max_tokens,
+                temperature=req.temperature,
+            )
         except Exception as e:
-            classify_and_raise(e, source="companion_chat")
-            error_msg = str(e)
             logger.warning("Companion chat failed: %s", e, extra={"tag": "MODEL", "context": {"error": str(e)}})
+            classify_and_raise(e, source="companion.chat")
 
-        if not response_text and error_msg:
-            response_text = f"[Error: {error_msg}]"
+        _chat_elapsed_ms = (_time.monotonic() - _chat_t0) * 1000
+        safe_audit_log("companion.chat", detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}")
 
         return ChatResponse(
             response=response_text,
             system_prompt=system_prompt,
+            elapsed_ms=round(_chat_elapsed_ms, 1),
         )
 
     async def list_presets(self) -> dict:
-        """Return the hardcoded list of available companion presets.
-
-        Returns:
-            Success envelope containing a presets array. Each preset
-            has id (warm/curious/playful/balanced), name, description,
-            and a traits dictionary with warmth, curiosity, humor values.
-
-        Side effects:
-            None. The preset list is static and does not read from
-            any external store.
-        """
-        presets = [
-            {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
-            {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},
-            {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
-            {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
-        ]
-        return success_response(data={"presets": presets})
+        """Return the hardcoded list of available companion presets."""
+        try:
+            presets = [
+                {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
+                {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},
+                {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
+                {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
+            ]
+            return success_response(data={"presets": presets})
+        except Exception as e:
+            classify_and_raise(e, source="companion.presets")
 
 
 _companion_router = CompanionRouter()

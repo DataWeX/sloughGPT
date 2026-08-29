@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { feedbackController, type FeedbackStats, type WorkflowStatus, type TrainingStats } from '@/lib/feedback-controller'
@@ -9,12 +10,15 @@ import { FeedbackInsightsCard } from '@/components/feedback/FeedbackInsightsCard
 import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 type Tab = 'stats' | 'conversations' | 'training'
 
 export default function FeedbackPage() {
+  const router = useRouter()
   const [tab, setTab] = useState<Tab>('stats')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
   const [stats, setStats] = useState<FeedbackStats | null>(null)
@@ -23,24 +27,46 @@ export default function FeedbackPage() {
   const [conversations, setConversations] = useState<Awaited<ReturnType<typeof feedbackConversationsController.list>>>([])
   const [newConvName, setNewConvName] = useState('')
   const [creating, setCreating] = useState(false)
+  const [workflowBusy, setWorkflowBusy] = useState(false)
+  const [convSearch, setConvSearch] = useState('')
 
   useEffect(() => {
     Promise.all([
-      feedbackController.getFeedbackStats().catch(() => null),
-      feedbackController.getWorkflowStatus().catch(() => null),
-      feedbackController.getTrainingStats().catch(() => null),
+      feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats', e); return null }),
+      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not load training stats', e); return null }),
     ]).then(([s, w, t]) => {
       setStats(s)
       setWorkflow(w)
       setTrainStats(t)
+      if (!s && !w && !t) setLoadError('Could not load feedback data. Please try again.')
     }).finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefreshStats() }
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setTab('conversations') }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  const handleExport = useCallback(async () => {
+    try {
+      const resp = await feedbackController.exportTrainingData('json')
+      addToast(`Exported ${resp.count} items to ${resp.path ?? 'server'}`, 'success')
+    } catch {
+      addToast('Could not export training data', 'error')
+    }
+  }, [addToast])
+
   const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
-      feedbackController.getFeedbackStats().catch(() => null),
-      feedbackController.getWorkflowStatus().catch(() => null),
-      feedbackController.getTrainingStats().catch(() => null),
+      feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats refresh', e); return null }),
+      feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status refresh', e); return null }),
+      feedbackController.getTrainingStats().catch((e) => { logger.warning('Could not refresh training stats', e); return null }),
     ])
     setStats(s)
     setWorkflow(w)
@@ -51,7 +77,7 @@ export default function FeedbackPage() {
     try {
       setConversations(await feedbackConversationsController.list())
     } catch {
-      addToast('Failed to load conversations', 'error')
+      addToast('Could not load conversations', 'error')
     }
   }
 
@@ -63,7 +89,7 @@ export default function FeedbackPage() {
       setNewConvName('')
       await handleLoadConversations()
     } catch {
-      addToast('Failed to create conversation', 'error')
+      addToast('Could not create conversation', 'error')
     } finally {
       setCreating(false)
     }
@@ -74,7 +100,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.delete(id)
       await handleLoadConversations()
     } catch {
-      addToast('Failed to delete conversation', 'error')
+      addToast('Could not delete conversation', 'error')
     }
   }
 
@@ -83,7 +109,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.togglePin(conv.id, !conv.pinned)
       await handleLoadConversations()
     } catch {
-      addToast('Failed to update pin', 'error')
+      addToast('Could not update pin', 'error')
     }
   }
 
@@ -92,7 +118,7 @@ export default function FeedbackPage() {
       await feedbackConversationsController.toggleStar(conv.id, !conv.starred)
       await handleLoadConversations()
     } catch {
-      addToast('Failed to update star', 'error')
+      addToast('Could not update star', 'error')
     }
   }
 
@@ -105,18 +131,20 @@ export default function FeedbackPage() {
   }
 
   return (
-    <PageContainer title="Feedback" subtitle="Analytics & management">
+    <PageContainer title="Feedback" subtitle="Analytics & management" error={loadError} onRetry={handleRefreshStats}>
       <div className="flex gap-1 border-b border-border/30 pb-0">
         {(['stats', 'conversations', 'training'] as Tab[]).map(t => (
           <button
+            type="button"
+            role="tab"
             key={t}
+            aria-selected={tab === t}
+            aria-label={`${t.charAt(0).toUpperCase() + t.slice(1)} tab`}
             onClick={() => {
               setTab(t)
               if (t === 'conversations') handleLoadConversations()
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -135,7 +163,7 @@ export default function FeedbackPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Feedback Summary</CardTitle>
-              <Button size="sm" variant="ghost" onClick={handleRefreshStats}>
+              <Button size="sm" variant="ghost" onClick={handleRefreshStats} aria-label="Refresh stats">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -150,7 +178,7 @@ export default function FeedbackPage() {
                   ].map(s => (
                     <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                      <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
                     </div>
                   ))}
                 </div>
@@ -182,7 +210,7 @@ export default function FeedbackPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Conversations ({conversations.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleLoadConversations}>
+            <Button size="sm" variant="ghost" onClick={handleLoadConversations} aria-label="Refresh conversations">
               <IconRefresh className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -198,11 +226,22 @@ export default function FeedbackPage() {
                 Create
               </Button>
             </div>
+            {conversations.length > 0 && (
+              <Input
+                value={convSearch}
+                onChange={e => setConvSearch(e.target.value)}
+                placeholder="Search conversations..."
+                aria-label="Search conversations"
+                className="h-8 text-xs"
+              />
+            )}
             {conversations.length === 0 ? (
               <p className="text-sm text-muted-foreground">No conversations yet.</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {conversations.map(conv => (
+                {conversations
+                  .filter(c => !convSearch || c.name.toLowerCase().includes(convSearch.toLowerCase()))
+                  .map(conv => (
                   <div key={conv.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm group hover:bg-muted/50 transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
@@ -242,9 +281,9 @@ export default function FeedbackPage() {
             <CardContent>
               {trainStats ? (
                 <KpiGrid>
-                  <StatCard label="Feedback Pairs" value={String(trainStats.feedback_pairs ?? 0)} />
+                  <StatCard label="Training Jobs" value={String(trainStats.feedback_pairs ?? 0)} />
                   <StatCard label="Last Training" value={trainStats.last_training ? new Date(trainStats.last_training).toLocaleDateString() : 'Never'} />
-                  <StatCard label="Quality Score" value={trainStats.quality_score != null ? `${(trainStats.quality_score * 100).toFixed(1)}%` : '—'} />
+                  <StatCard label="Final Loss" value={trainStats.quality_score != null ? trainStats.quality_score.toFixed(3) : '—'} />
                 </KpiGrid>
               ) : (
                 <div className="text-center py-4 text-sm text-muted-foreground">
@@ -263,7 +302,7 @@ export default function FeedbackPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Workflow Controls</CardTitle>
-                <Button size="sm" variant="ghost" onClick={handleRefreshStats}>
+                <Button size="sm" variant="ghost" onClick={handleRefreshStats} aria-label="Refresh stats">
                   <IconRefresh className="h-4 w-4" />
                 </Button>
               </CardHeader>
@@ -277,7 +316,7 @@ export default function FeedbackPage() {
                   ].map(s => (
                     <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                       <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={`text-lg font-mono font-medium ${s.color ?? ''}`}>{s.value}</div>
+                      <div className={cn('text-base font-mono font-medium', s.color ?? '')}>{s.value}</div>
                     </div>
                   ))}
                 </div>
@@ -288,13 +327,13 @@ export default function FeedbackPage() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => feedbackController.triggerWorkflowAction('aggregate').then(() => { addToast('Aggregation triggered', 'success'); handleRefreshStats() }).catch(() => addToast('Aggregation failed', 'error'))}>
+                  <Button size="sm" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('aggregate'); addToast('Aggregation triggered', 'success'); handleRefreshStats() } catch { addToast('aggregation', 'error') } finally { setWorkflowBusy(false) } }}>
                     Aggregate
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => feedbackController.triggerWorkflowAction('prune').then(() => { addToast('Prune triggered', 'success'); handleRefreshStats() }).catch(() => addToast('Prune failed', 'error'))}>
+                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('prune'); addToast('Prune triggered', 'success'); handleRefreshStats() } catch { addToast('prune', 'error') } finally { setWorkflowBusy(false) } }}>
                     Prune
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => feedbackController.triggerWorkflowAction('export').then(() => { addToast('Export triggered', 'success') }).catch(() => addToast('Export failed', 'error'))}>
+                  <Button size="sm" variant="outline" disabled={workflowBusy} onClick={async () => { setWorkflowBusy(true); try { await feedbackController.triggerWorkflowAction('export'); addToast('Export triggered', 'success') } catch { addToast('export', 'error') } finally { setWorkflowBusy(false) } }}>
                     Export
                   </Button>
                 </div>

@@ -428,7 +428,7 @@ SloughGPT/
 2. **Try different datasets**: Shakespeare, **`tiny`** (small on-disk slice), or a path to your own `.txt`
 3. **Explore model architecture**: Section 5 in the notebook
 4. **Deploy with Docker**: See Docker section above
-5. **Read the docs**: `README.md`, `docs/API.md`, `docs/TODO.md`
+5. **Read the docs**: `README.md`, `docs/API.md`, `docs/DEVELOPER_GUIDE.md`
 
 ---
 

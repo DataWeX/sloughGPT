@@ -12,6 +12,8 @@ This gives SloNet:
   - Meaning (each weight has an identity/function type)
 """
 
+import base64
+
 import numpy as np
 
 from domains.infrastructure.pugqeep.point import Point
@@ -108,7 +110,7 @@ def compress_slonet_to_points(model, method: str = "auto",
             raw_point = RawPoint(
                 identity=name,
                 function_type="raw",
-                params={"data_b64": __import__("base64").b64encode(arr.tobytes()).decode(),
+                params={"data_b64": base64.b64encode(arr.tobytes()).decode(),
                         "dtype": str(arr.dtype)},
                 accuracy=1.0,
                 dtype=str(arr.dtype),

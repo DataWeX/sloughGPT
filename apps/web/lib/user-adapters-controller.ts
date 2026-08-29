@@ -33,8 +33,13 @@ export interface UserAdapterInfo {
   feedback_count: number
 }
 
+export interface UserAdaptersListResponse {
+  adapters: UserAdapterInfo[]
+  stats: UserAdapterStats
+}
+
 export const userAdaptersController = {
-  async list(): Promise<UserAdapterStats> {
+  async list(): Promise<UserAdaptersListResponse> {
     return apiGet('/user-adapters')
   },
 

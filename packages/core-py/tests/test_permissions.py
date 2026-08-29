@@ -2,8 +2,16 @@
 
 import json
 import pytest
-from unittest.mock import patch, mock_open
-from domains.shell.permissions import ShellPermissions, Risk
+from domains.shell.permissions import ShellPermissions, Risk, set_permissions_db, reset_permissions_db
+
+
+@pytest.fixture(autouse=True)
+def _temp_mogdb(tmp_path):
+    """Point the permissions module at a temporary MogDB for every test."""
+    db_path = str(tmp_path / "test_permissions")
+    set_permissions_db(db_path)
+    yield
+    reset_permissions_db()
 
 
 class TestRisk:
@@ -15,11 +23,6 @@ class TestRisk:
 
 
 class TestShellPermissions:
-    @pytest.fixture(autouse=True)
-    def _no_persist(self):
-        with patch.object(ShellPermissions, "_load_persistent"):
-            yield
-
     def test_init(self):
         p = ShellPermissions()
         assert len(p._granted) == 0
@@ -135,17 +138,22 @@ class TestShellPermissions:
         with pytest.raises(PermissionError):
             p.check("rm", "/tmp/other")
 
-    @patch("domains.shell.permissions.Path.write_text")
-    def test_persist_save(self, mock_write):
+    def test_persist_save_and_load(self):
         p = ShellPermissions()
         p.grant("rm")
         p._save_persistent()
-        mock_write.assert_called_once()
-        written = mock_write.call_args[0][0]
-        data = json.loads(written)
-        assert "rm" in data["granted"]
+        p2 = ShellPermissions()
+        assert p2.is_granted("rm")
 
     def test_init_loads_persistent(self):
-        with patch.object(ShellPermissions, "_load_persistent") as mock:
-            p = ShellPermissions()
-            mock.assert_called_once()
+        p = ShellPermissions()
+        p.grant("rm", persist=True)
+        p2 = ShellPermissions()
+        assert p2.is_granted("rm")
+
+    def test_policy_persists(self):
+        p = ShellPermissions()
+        p.set_policy(Risk.DANGEROUS, "allow")
+        p._save_persistent()
+        p2 = ShellPermissions()
+        assert p2._policy[Risk.DANGEROUS] == "allow"

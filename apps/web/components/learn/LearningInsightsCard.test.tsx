@@ -15,9 +15,9 @@ const facts = [
 ]
 
 describe('LearningInsightsCard', () => {
-  it('returns null for empty facts', () => {
+  it('renders empty state for empty facts', () => {
     const { container } = render(<LearningInsightsCard facts={[]} />)
-    expect(container.querySelector('[data-testid="learning-insights"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders insights card', () => {

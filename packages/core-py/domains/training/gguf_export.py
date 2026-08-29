@@ -726,7 +726,7 @@ def detect_architecture(state_dict: StateDict) -> Optional[TensorMapping]:
         return SloughGPTMapping()
 
     detected = max(scores, key=scores.get)
-    logger.info(f"Detected architecture: {detected} (score: {max_score})",
+    logger.info("Detected architecture: %s (score: %s)", detected, max_score,
         extra={"tag": "TRAIN"},)
     return ARCHITECTURE_MAPPINGS.get(detected, SloughGPTMapping())
 
@@ -734,7 +734,7 @@ def detect_architecture(state_dict: StateDict) -> Optional[TensorMapping]:
 def register_architecture(name: str, mapping: TensorMapping) -> None:
     """Register a custom architecture mapping."""
     ARCHITECTURE_MAPPINGS[name] = mapping
-    logger.info(f"Registered custom architecture: {name}",
+    logger.info("Registered custom architecture: %s", name,
         extra={"tag": "TRAIN"},)
 
 
@@ -910,7 +910,7 @@ def export_to_gguf(
     writer.write_tensors_to_file()
     writer.flush()
 
-    logger.info(f"Exported GGUF ({mapping.name}): {output_path}",
+    logger.info("Exported GGUF (%s): %s", mapping.name, output_path,
         extra={"tag": "TRAIN"},)
     return output_path
 
@@ -948,15 +948,15 @@ def quantize_gguf(input_path: str, output_path: str, quantization: str = "Q4_K_M
             capture_output=True, text=True
         )
         if result.returncode == 0:
-            logger.info(f"Quantized: {input_path} -> {output_path}",
+            logger.info("Quantized: %s -> %s", input_path, output_path,
                 extra={"tag": "TRAIN"},)
             return output_path
         else:
-            logger.error(f"Quantization failed: {result.stderr}",
+            logger.error("Quantization failed: %s", result.stderr,
                 extra={"tag": "TRAIN"},)
             return input_path
     except Exception as e:
-        logger.error(f"Quantization error: {e}",
+        logger.error("Quantization error: %s", e,
             extra={"tag": "TRAIN"},)
         return input_path
 

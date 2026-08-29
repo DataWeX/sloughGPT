@@ -17,6 +17,18 @@ vi.mock('@/lib/dataset-controller', () => ({
   },
 }))
 
+vi.mock('@/hooks/useV86', () => ({
+  useV86: vi.fn(() => ({
+    isBooted: false,
+    stateSaved: false,
+    error: null,
+    save: vi.fn(),
+    restore: vi.fn(),
+    reset: vi.fn(),
+    init: vi.fn(),
+  })),
+}))
+
 import { vmController } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import VMPage from './page'
@@ -907,5 +919,44 @@ describe('VMPage', () => {
       (within(second.container).getByLabelText('Steps:') as HTMLInputElement).value,
     ).toBe('250')
     expect(localStorage.getItem('vm-max-steps')).toBe('250')
+  })
+
+  it('renders mode selector with Assembly and Linux buttons', () => {
+    render(<VMPage />)
+    expect(screen.getByRole('button', { name: /assembly/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /linux/i })).toBeInTheDocument()
+  })
+
+  it('defaults to assembly mode', () => {
+    const { container } = render(<VMPage />)
+    expect(container.querySelector('textarea')).toBeInTheDocument()
+  })
+
+  it('switches to linux mode when Linux button is clicked', () => {
+    const { container } = render(<VMPage />)
+    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
+    expect(container.querySelector('textarea')).not.toBeInTheDocument()
+    expect(screen.getByText('Save State')).toBeInTheDocument()
+    expect(screen.getByText('Restore')).toBeInTheDocument()
+  })
+
+  it('switches back to assembly mode from linux', () => {
+    const { container } = render(<VMPage />)
+    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
+    expect(container.querySelector('textarea')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /assembly/i }))
+    expect(container.querySelector('textarea')).toBeInTheDocument()
+  })
+
+  it('linux tab shows boot status', () => {
+    render(<VMPage />)
+    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
+    expect(screen.getByText('Booting...')).toBeInTheDocument()
+  })
+
+  it('linux tab shows v86 info text', () => {
+    render(<VMPage />)
+    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
+    expect(screen.getByText(/Full Linux OS running in your browser/)).toBeInTheDocument()
   })
 })

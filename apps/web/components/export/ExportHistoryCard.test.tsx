@@ -16,9 +16,9 @@ beforeEach(() => {
 })
 
 describe('ExportHistoryCard', () => {
-  it('returns null for empty history', () => {
+  it('renders empty state for empty history', () => {
     const { container } = render(<ExportHistoryCard />)
-    expect(container.querySelector('[data-testid="export-history"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders when history exists', () => {

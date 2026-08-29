@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 
 interface AlertPanelProps {
@@ -10,7 +11,7 @@ interface AlertPanelProps {
   alerts: Array<{ time: string; type: string; value: number }>
 }
 
-export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, onMemThresholdChange, alerts }: AlertPanelProps) {
+export const AlertPanel = memo(function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, onMemThresholdChange, alerts }: AlertPanelProps) {
   const hasNotificationAPI = typeof window !== 'undefined' && 'Notification' in window
 
   return (
@@ -19,6 +20,7 @@ export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, o
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Alert thresholds</span>
         {hasNotificationAPI && (
           <button
+            type="button"
             onClick={() => {
               if (Notification.permission === 'granted') {
                 new Notification('Notifications enabled', { body: 'You will be notified when thresholds are breached.' })
@@ -48,7 +50,7 @@ export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, o
       {alerts.length > 0 && (
         <>
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-3 mb-1 block">Recent alerts</span>
-          <div className="space-y-1 max-h-24 overflow-y-auto">
+          <div className="space-y-1 max-h-24 overflow-y-auto" role="log" aria-live="polite" aria-label="Recent alerts">
             {alerts.slice(0, 5).map((alert, i) => (
               <div key={i} className="flex items-center justify-between text-[10px]">
                 <span className="text-warning">{alert.type} {alert.value.toFixed(0)}%</span>
@@ -60,4 +62,4 @@ export function AlertPanel({ cpuThreshold, memThreshold, onCpuThresholdChange, o
       )}
     </Card>
   )
-}
+})

@@ -34,7 +34,8 @@ describe('ModelStatusCard', () => {
 
   it('shows loading state in KPIs when loading', () => {
     render(<ModelStatusCard {...base} modelsLoading soulsLoading checkpointsLoading />)
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows checkpoints count', () => {

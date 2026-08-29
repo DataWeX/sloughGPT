@@ -59,18 +59,18 @@ export default function TraitRadarChart({ data, label, color }: TraitRadarChartP
           />
           <PolarRadiusAxis
             angle={30}
-            domain={[0, 100]}
-            tick={false}
-            axisLine={false}
-          />
-          <Radar
-            name={label}
-            dataKey="value"
-            stroke={color}
-            fill={color}
-            fillOpacity={0.15}
-            strokeWidth={1.5}
-            dot={false}
+              domain={[0, 100]}
+              tick={false}
+              axisLine={false}
+            />
+            <Radar
+              name={label}
+              dataKey="value"
+              stroke={color}
+              fill={color}
+              fillOpacity={0.15}
+              strokeWidth={1.5}
+              dot={false}
           />
         </RadarChart>
       </ResponsiveContainer>

@@ -18,7 +18,7 @@ import {
   IconRefresh,
   Skeleton,
 } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, cn } from '@sloughgpt/strui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
@@ -115,7 +115,7 @@ export default function SettingsPage() {
       setProcessGuard(status)
       addToast(enabled ? 'Process isolation enabled' : 'Process isolation disabled', 'success')
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Failed to toggle process guard'), 'error')
+      addToast(extractErrorMessage(e, 'Could not toggle process guard'), 'error')
     }
   }
 
@@ -136,7 +136,7 @@ export default function SettingsPage() {
         setConnectionTest({ status: 'error', error: 'Unexpected response' })
       }
     } catch (e: unknown) {
-      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Connection failed') })
+      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Could not connection') })
     }
   }
 
@@ -255,12 +255,13 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Connection</CardTitle>
-            <CardDescription>API server and authentication</CardDescription>
+            <CardDescription>Service connection and authentication</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">API URL</label>
+              <label htmlFor="settings-api-url" className="text-sm font-medium">API URL</label>
               <Input
+                id="settings-api-url"
                 value={settings.apiUrl}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   updateSettings({ apiUrl: e.target.value })
@@ -275,19 +276,20 @@ export default function SettingsPage() {
                   }
                 }}
                 placeholder={PUBLIC_API_URL}
-                className={`font-mono text-xs ${settingsErrors.apiUrl ? 'border-destructive ring-destructive/20' : ''}`}
-                aria-label="API server URL"
+                className={cn('font-mono text-xs', settingsErrors.apiUrl && 'border-destructive ring-destructive/20')}
+                aria-label="Service URL"
                 aria-invalid={!!settingsErrors.apiUrl}
                 aria-describedby={settingsErrors.apiUrl ? 'apiurl-error' : undefined}
               />
               {settingsErrors.apiUrl && (
-                <p id="apiurl-error" className="text-[10px] text-destructive" role="alert">{settingsErrors.apiUrl}</p>
+                <p id="apiurl-error" className="text-xs text-destructive" role="alert">{settingsErrors.apiUrl}</p>
               )}
-              <p className="text-[11px] text-muted-foreground">Backend server address. Changes take effect on next request.</p>
+              <p className="text-[11px] text-muted-foreground">Service address. Changes take effect on next request.</p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">HuggingFace Token</label>
+              <label htmlFor="settings-hf-token" className="text-sm font-medium">HuggingFace Token</label>
               <Input
+                id="settings-hf-token"
                 type="password"
                 value={settings.hfToken}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings({ hfToken: e.target.value })}
@@ -474,7 +476,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             {healthError && !detailed && !metrics ? (
               <div className="text-center py-6">
-                <p className="text-sm text-destructive mb-3">Could not connect to server</p>
+                <p className="text-sm text-destructive mb-3">Could not connect to service</p>
                 <Button size="sm" variant="outline" onClick={fetchHealth}>
                   <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
                   Retry
@@ -487,12 +489,12 @@ export default function SettingsPage() {
               <StatCard
                 label="API"
                 value={<span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${apiOk ? 'bg-success' : 'bg-destructive'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', apiOk ? 'bg-success' : 'bg-destructive')} />}
               />
               <StatCard
                 label="Model"
                 value={<span className="font-mono text-xs">{modelLoaded ? (modelType || 'Loaded') : 'None'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${modelLoaded ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', modelLoaded ? 'bg-success' : 'bg-muted-foreground/50')} />}
               />
               <StatCard
                 label="Uptime"
@@ -508,25 +510,25 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="CPU"
-                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : '...'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : <Skeleton className="h-5 w-10 inline-block" />}</span>}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
               />
               <StatCard
                 label="Memory"
-                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
               />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <StatCard
                 label="Disk"
-                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
+                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : <Skeleton className="h-5 w-20 inline-block" />}</span>}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', (disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success')} />}
               />
               <StatCard
                 label="GPU"
                 value={<span className="font-mono text-xs">{detailed?.gpu ? `${detailed.gpu.backend.toUpperCase()} · ${detailed.gpu.tier}` : 'None'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+                icon={<span className={cn('inline-block w-2 h-2 rounded-full', detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50')} />}
               />
             </div>
 
@@ -544,7 +546,7 @@ export default function SettingsPage() {
               <Button variant="ghost" size="sm" className="text-xs" onClick={fetchHealth}>
                 Refresh health
               </Button>
-              <span className="text-xs text-muted-foreground font-mono">v1.0.0</span>
+              <span className="text-xs text-muted-foreground font-mono">v3.0.0</span>
             </div>
             </>
             )}
@@ -658,7 +660,7 @@ export default function SettingsPage() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground pt-1">
-                  Process isolation runs the model in a subprocess. If it crashes, the server survives and restarts it automatically. Uses ~2 GB more RAM.
+                  Process isolation runs the model in a subprocess. If it crashes, the app survives and restarts it automatically. Uses ~2 GB more RAM.
                 </p>
               </div>
             ) : (

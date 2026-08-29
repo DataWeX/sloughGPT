@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, StatCard, KpiGrid, Skeleton, cn } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
@@ -23,6 +23,7 @@ export default function ExperimentsPage() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -31,13 +32,26 @@ export default function ExperimentsPage() {
     try {
       setExperiments(await experimentsController.list())
     } catch {
-      addToast('Failed to load experiments', 'error')
+      addToast('Could not load experiments', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => { fetchExperiments() }, [])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchExperiments() }
+      if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setCreateDialogOpen(true) }
+      if (e.key === 'e' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleExport() }
+      if (e.key === 'Escape') { setSelectedId(null); setSelectedIds(new Set()); setCreateDialogOpen(false) }
+      if (e.key === 'a' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); toggleSelectAll() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   useEffect(() => {
     if (autoRefresh) {
@@ -58,7 +72,7 @@ export default function ExperimentsPage() {
       setNewName('')
       await fetchExperiments()
     } catch {
-      addToast('Failed to create experiment', 'error')
+      addToast('Could not create experiment', 'error')
     } finally {
       setCreating(false)
     }
@@ -69,7 +83,7 @@ export default function ExperimentsPage() {
       await experimentsController.delete(id)
       await fetchExperiments()
     } catch {
-      addToast('Failed to delete experiment', 'error')
+      addToast('Could not delete experiment', 'error')
     }
   }
 
@@ -129,11 +143,29 @@ export default function ExperimentsPage() {
       await fetchExperiments()
       addToast(`Deleted ${selectedIds.size} experiments`, 'success')
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }
   }
+
+  const handleExport = useCallback(async () => {
+    try {
+      const ids = selectedIds.size > 0 ? Array.from(selectedIds) : experiments.map(e => e.id)
+      if (ids.length === 0) { addToast('No experiments to export', 'error'); return }
+      const data = await Promise.all(ids.map(id => experimentsController.getExperimentData(id)))
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `experiments-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      addToast(`Exported ${ids.length} experiments`, 'success')
+    } catch {
+      addToast('Could not export experiments', 'error')
+    }
+  }, [selectedIds, experiments, addToast])
 
   if (loading) {
     return (
@@ -143,10 +175,10 @@ export default function ExperimentsPage() {
         loading
       >
         <KpiGrid>
-          <StatCard label="Total" value="..." />
-          <StatCard label="Selected" value="..." />
-          <StatCard label="Auto-refresh" value="..." />
-          <StatCard label="Last Created" value="..." />
+          <StatCard label="Total" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Selected" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Auto-refresh" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Last Created" value={<Skeleton className="h-5 w-24" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
       </PageContainer>
@@ -168,7 +200,7 @@ export default function ExperimentsPage() {
         {logMsg && (
           <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
             {logMsg}
-            <button className="ml-2 underline" onClick={() => setLogMsg(null)}>Dismiss</button>
+            <button type="button" className="ml-2 underline" onClick={() => setLogMsg(null)}>Dismiss</button>
           </div>
         )}
 
@@ -198,13 +230,16 @@ export default function ExperimentsPage() {
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search..."
+                placeholder="Search... (R refresh, N new, E export)"
                 className="h-9 w-32 text-sm"
               />
-              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
+              <Button size="sm" variant="ghost" onClick={() => void handleExport()} aria-label="Export">
+                Export
+              </Button>
+              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)} aria-pressed={autoRefresh}>
                 {autoRefresh ? 'Auto' : 'Refresh'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={fetchExperiments}>
+              <Button size="sm" variant="ghost" onClick={fetchExperiments} aria-label="Refresh">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
@@ -219,6 +254,25 @@ export default function ExperimentsPage() {
               </div>
             ) : (
               <>
+                <div className="flex items-center gap-2 mb-3">
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(!createDialogOpen)} aria-pressed={createDialogOpen}>
+                    {createDialogOpen ? 'Cancel' : 'New Experiment'}
+                  </Button>
+                </div>
+                {createDialogOpen && (
+                  <div className="flex gap-2 mb-3">
+                    <Input
+                      value={newName}
+                      onChange={e => setNewName(e.target.value)}
+                      placeholder="Experiment name"
+                      className="h-8 text-xs flex-1"
+                      onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+                    />
+                    <Button size="sm" className="h-8 text-xs" onClick={handleCreate} disabled={creating || !newName.trim()}>
+                      {creating ? 'Creating...' : 'Create'}
+                    </Button>
+                  </div>
+                )}
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 mb-2">
                     <span className="text-sm text-destructive font-medium">{selectedIds.size} selected</span>
@@ -231,10 +285,9 @@ export default function ExperimentsPage() {
                   </div>
                 )}
                 <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer mb-2">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={selectedIds.size === experiments.filter(exp => !search || exp.id.toLowerCase().includes(search.toLowerCase())).length && experiments.length > 0}
-                    onChange={toggleSelectAll}
+                    onCheckedChange={toggleSelectAll}
                     className="rounded border-border"
                   />
                   Select all
@@ -245,21 +298,18 @@ export default function ExperimentsPage() {
                     .map(exp => (
                     <div
                       key={exp.id}
-                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer ${
-                        selectedId === exp.id
-                          ? 'border-primary/40 bg-primary/5'
-                          : selectedIds.has(exp.id)
-                            ? 'border-primary/40 bg-primary/5'
-                            : 'border-border/60 hover:bg-muted/50'
-                      }`}
+                      className={cn('flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer', selectedId === exp.id || selectedIds.has(exp.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 hover:bg-muted/50')}
                       onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(selectedId === exp.id ? null : exp.id); } }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selectedIds.has(exp.id)}
-                          onChange={() => toggleSelect(exp.id)}
+                          onCheckedChange={() => toggleSelect(exp.id)}
                           onClick={e => e.stopPropagation()}
+                          aria-label={`Select experiment ${exp.id}`}
                           className="rounded border-border shrink-0"
                         />
                         <div className="font-medium truncate">{exp.id}</div>

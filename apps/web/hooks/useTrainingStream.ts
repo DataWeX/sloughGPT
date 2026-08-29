@@ -31,12 +31,13 @@ export function useTrainingStream() {
     closeStream()
     trainingJobsController.startAutoTrain(body).then(() => {
       writeTraining({
-        phase: 'TRAINING', method: 'slnet',
+        phase: 'TRAINING', method: 'slonet',
         loss: null, progress: 0, epoch: 0, totalEpochs: 0,
         globalStep: 0, totalSteps: 0, eta: null, stepsPerSec: null,
         elapsedSeconds: null, message: '', lossHistory: [], evalResult: null,
         startTime: Date.now(), error: null,
         checkpoint: null, finalLoss: null, modelPath: null, jobId: null,
+        avgQuality: null, dataQuality: null,
       })
 
       const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
@@ -60,6 +61,7 @@ export function useTrainingStream() {
           if (env.meta?.total_epochs != null) patch.totalEpochs = env.meta.total_epochs
           if (env.message) patch.message = env.message
           if (env.data?.eval_report) patch.evalResult = env.data.eval_report
+          if (env.data?.avg_quality != null) patch.avgQuality = env.data.avg_quality
 
           // lossHistory accumulation — must read current state then write once
           // to avoid stale reads when both loss and eval_loss arrive together.
@@ -82,10 +84,14 @@ export function useTrainingStream() {
 
           if (env.status === 'complete') {
             closeStream()
+            const current = readTraining()
             writeTraining({
               phase: 'complete',
               checkpoint: env.data?.checkpoint ?? null,
               finalLoss: env.data?.final_loss ?? null,
+              modelPath: env.data?.model_path ?? current.modelPath,
+              avgQuality: env.data?.avg_quality ?? current.avgQuality,
+              dataQuality: env.data?.data_quality ?? current.dataQuality,
             })
             addToast('Training complete', 'success')
             onCheckpointUpdate?.()
@@ -106,7 +112,7 @@ export function useTrainingStream() {
           addToast('Connection lost during training', 'error')
         } else { esRetries++ }
       }
-    }).catch(() => addToast('Failed to start training', 'error'))
+    }).catch(() => addToast('Could not start training', 'error'))
   }, [closeStream])
 
   useEffect(() => () => closeStream(), [closeStream])

@@ -7,6 +7,7 @@ Provides:
   - Persistence to disk
   - Pause/resume/cancel support
   - Event callbacks
+  - Worker pool via ProducerConsumerQueue (optional threaded execution)
 """
 
 import json
@@ -95,7 +96,7 @@ class Task:
 
 
 class TaskQueue:
-    """Priority task queue with persistence and routing."""
+    """Priority task queue with persistence, routing, and optional worker pool."""
 
     def __init__(self,
                  name: str = "default",
@@ -119,20 +120,50 @@ class TaskQueue:
         self._paused = False
         self._callbacks: List[Callable] = []
 
+        # Worker pool (optional — via ProducerConsumerQueue)
+        self._worker_queue: Optional[Any] = None  # ProducerConsumerQueue[Task]
+        self._num_workers: int = 0
+
     def submit(self, task: Task) -> Task:
-        """Submit a task to the queue."""
+        """Submit a task to the queue.
+
+        If workers are running, the task is dispatched automatically.
+        Otherwise, it waits in the pending list for manual ``next()`` calls.
+        """
         if len(self._tasks) >= self._max_size:
             raise ValueError(f"Queue full (max {self._max_size} tasks)")
 
         self._tasks[task.id] = task
-        self._pending.append(task.id)
-        self._sort_pending()
+
+        if self._worker_queue is not None and not self._paused:
+            # Dispatch to worker pool (priority mapped from TaskPriority)
+            priority = self._task_priority_to_int(task.priority)
+            dispatched = self._worker_queue.put(task, priority=priority)
+            if not dispatched:
+                logger.warning("TaskQueue[%s]: worker queue full, task %s queued locally",
+                               self.name, task.id)
+                self._pending.append(task.id)
+            else:
+                self._pending.append(task.id)
+        else:
+            self._pending.append(task.id)
+            self._sort_pending()
 
         if self._storage_dir:
             self._persist()
 
         logger.debug("TaskQueue[%s]: submitted %s (%s)", self.name, task.id, task.name)
         return task
+
+    @staticmethod
+    def _task_priority_to_int(p: TaskPriority) -> int:
+        """Map TaskPriority to integer (lower = higher priority) for ProducerConsumerQueue."""
+        return {
+            TaskPriority.URGENT: 0,
+            TaskPriority.HIGH: 1,
+            TaskPriority.NORMAL: 2,
+            TaskPriority.LOW: 3,
+        }.get(p, 2)
 
     def submit_many(self, tasks: List[Task]) -> List[Task]:
         """Submit multiple tasks."""
@@ -221,6 +252,92 @@ class TaskQueue:
 
         return task
 
+    def cancel_many(self, task_ids: List[str]) -> List[Optional[Task]]:
+        """Cancel multiple tasks by ID."""
+        return [self.cancel(tid) for tid in task_ids]
+
+    def cancel_all(self) -> int:
+        """Cancel all pending tasks. Returns count of cancelled tasks."""
+        cancelled = 0
+        for task_id in list(self._pending):
+            self.cancel(task_id)
+            cancelled += 1
+        return cancelled
+
+    def retry(self, task_id: str, reset_retries: bool = False) -> Optional[Task]:
+        """Retry a failed or completed task.
+
+        Moves the task back to PENDING status and re-queues it.
+
+        Args:
+            task_id: Task ID to retry.
+            reset_retries: If True, reset retry counter to 0.
+
+        Returns:
+            The re-queued Task, or None if not found/invalid status.
+        """
+        task = self._tasks.get(task_id)
+        if task is None:
+            return None
+
+        # Remove from completed list if present
+        if task_id in self._completed:
+            self._completed.remove(task_id)
+
+        # Remove from running if present
+        self._running.pop(task_id, None)
+
+        task.status = TaskStatus.PENDING
+        task.error = None
+        task.started_at = None
+        task.completed_at = None
+        if reset_retries:
+            task.retries = 0
+
+        self._pending.append(task.id)
+        self._sort_pending()
+
+        if self._storage_dir:
+            self._persist()
+
+        logger.info("TaskQueue[%s]: retrying %s", self.name, task_id)
+        return task
+
+    def retry_all(self, reset_retries: bool = False) -> int:
+        """Retry all failed tasks. Returns count of re-queued tasks."""
+        retried = 0
+        for task in list(self._tasks.values()):
+            if task.status == TaskStatus.FAILED:
+                self.retry(task.id, reset_retries=reset_retries)
+                retried += 1
+        return retried
+
+    def submit_batch(self, items: List[Dict[str, Any]],
+                     priority: TaskPriority = TaskPriority.NORMAL) -> List[Task]:
+        """Create and submit multiple tasks from dicts.
+
+        Each dict must have at least a "name" key. Optional: "data", "tree_id", "metadata".
+
+        Args:
+            items: List of dicts with task parameters.
+            priority: Default priority for all tasks (overridden by per-item "priority" if present).
+
+        Returns:
+            List of submitted Task objects.
+        """
+        tasks = []
+        for item in items:
+            task = Task(
+                name=item.get("name", ""),
+                data=item.get("data"),
+                priority=TaskPriority(item["priority"]) if "priority" in item else priority,
+                tree_id=item.get("tree_id"),
+                metadata=item.get("metadata", {}),
+            )
+            self.submit(task)
+            tasks.append(task)
+        return tasks
+
     def pause(self) -> None:
         """Pause the queue (no new tasks dispatched)."""
         self._paused = True
@@ -246,9 +363,56 @@ class TaskQueue:
             return list(self._tasks.values())
         return [t for t in self._tasks.values() if t.status == status]
 
+    def wait_for(self, task_id: str, timeout: Optional[float] = None) -> Optional[Task]:
+        """Wait for a specific task to complete.
+
+        Args:
+            task_id: Task ID to wait for.
+            timeout: Maximum seconds to wait. None = wait forever.
+
+        Returns:
+            The completed/failed/cancelled Task, or None if timeout.
+        """
+        import threading as _threading
+        deadline = time.time() + timeout if timeout else None
+
+        while True:
+            task = self._tasks.get(task_id)
+            if task is None:
+                return None
+            if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                return task
+            if deadline and time.time() > deadline:
+                return None
+            _threading.Event().wait(0.05)
+
+    def wait_all(self, timeout: Optional[float] = None) -> List[Task]:
+        """Wait for all running/pending tasks to complete.
+
+        Args:
+            timeout: Maximum seconds to wait. None = wait forever.
+
+        Returns:
+            List of completed/failed/cancelled Tasks.
+        """
+        import threading as _threading
+        deadline = time.time() + timeout if timeout else None
+
+        while True:
+            has_pending = len(self._pending) > 0
+            has_running = len(self._running) > 0
+            if not has_pending and not has_running:
+                break
+            if deadline and time.time() > deadline:
+                break
+            _threading.Event().wait(0.05)
+
+        return [t for t in self._tasks.values()
+                if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)]
+
     def stats(self) -> dict:
         """Queue statistics."""
-        return {
+        result = {
             "name": self.name,
             "total": len(self._tasks),
             "pending": len(self._pending),
@@ -262,6 +426,14 @@ class TaskQueue:
             "paused": self._paused,
             "handlers": list(self._handlers.keys()),
         }
+        if self._worker_queue is not None:
+            result["workers"] = {
+                "num_workers": self._num_workers,
+                "active": self.workers_active,
+                "queue_depth": self.workers_queue_depth,
+                **self.workers_metrics,
+            }
+        return result
 
     def clear_completed(self) -> int:
         """Remove completed tasks. Returns count removed."""
@@ -330,3 +502,88 @@ class TaskQueue:
             except Exception as e:
                 logger.warning("TaskQueue[%s]: callback error: %s", self.name, e,
                     extra={"tag": "INFRA"})
+
+    # ── Worker pool (ProducerConsumerQueue-backed) ────────────────────
+
+    def start_workers(self, num_workers: int = 2, max_queue: int = 128) -> None:
+        """Start worker threads that automatically process submitted tasks.
+
+        Uses ProducerConsumerQueue for bounded execution with backpressure.
+        Tasks submitted after ``start_workers()`` are dispatched to workers
+        automatically — no need to call ``next()`` / ``complete()`` manually.
+
+        Args:
+            num_workers: Number of consumer threads.
+            max_queue: Maximum pending tasks before backpressure kicks in.
+        """
+        if self._worker_queue is not None:
+            return  # already running
+
+        from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+
+        self._num_workers = num_workers
+        self._worker_queue = ProducerConsumerQueue[Task](
+            maxsize=max_queue,
+            num_consumers=num_workers,
+            handler=self._execute_task,
+            name=f"pgq-task-{self.name}",
+        )
+        self._worker_queue.start()
+        logger.info("TaskQueue[%s]: started %d workers (max_queue=%d)",
+                     self.name, num_workers, max_queue,
+                     extra={"tag": "INFRA"})
+
+    def stop_workers(self, timeout: float = 5.0) -> None:
+        """Stop worker threads gracefully (drains pending tasks)."""
+        if self._worker_queue is not None:
+            self._worker_queue.stop(timeout=timeout)
+            self._worker_queue = None
+            self._num_workers = 0
+            logger.info("TaskQueue[%s]: workers stopped", self.name,
+                         extra={"tag": "INFRA"})
+
+    def _execute_task(self, task: Task) -> None:
+        """Worker callback: look up handler and execute the task."""
+        if self._paused:
+            return
+
+        # Move task to running state
+        if task.id in self._pending:
+            self._pending.remove(task.id)
+        task.status = TaskStatus.RUNNING
+        task.started_at = time.time()
+        self._running[task.id] = task
+
+        handler = self._handlers.get(task.name)
+        if handler is None:
+            logger.warning("TaskQueue[%s]: no handler for task '%s'",
+                           self.name, task.name)
+            self.fail(task.id, error=f"No handler registered for '{task.name}'")
+            return
+
+        try:
+            result = handler(task)
+            self.complete(task.id, result=result)
+        except Exception as e:
+            self.fail(task.id, error=str(e))
+
+    @property
+    def workers_active(self) -> int:
+        """Number of active worker threads."""
+        if self._worker_queue is None:
+            return 0
+        return self._worker_queue.active_consumers
+
+    @property
+    def workers_queue_depth(self) -> int:
+        """Number of tasks waiting in the worker queue."""
+        if self._worker_queue is None:
+            return 0
+        return self._worker_queue.qsize
+
+    @property
+    def workers_metrics(self) -> dict:
+        """Worker queue metrics."""
+        if self._worker_queue is None:
+            return {}
+        return self._worker_queue.metrics

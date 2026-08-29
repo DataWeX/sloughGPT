@@ -37,7 +37,7 @@ export function useChatModelValue(opts: Pick<UseChatContextValueOpts, 'model' | 
       await soulsController.loadCheckpoint(name)
       model.setCurrentCheckpoint(name)
       showToast(`Trained version loaded: ${name}`)
-    } catch { showToast('Failed to load trained version', 'error') }
+    } catch { showToast('Could not load trained version', 'error') }
   }, [model.setCurrentCheckpoint, showToast])
 
   const onTrainStep = useCallback(async () => {

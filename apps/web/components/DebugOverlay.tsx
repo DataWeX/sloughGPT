@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useErrorStore } from '@/lib/error-store'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { cn, IconX } from '@sloughgpt/strui'
 
 interface HealthScore {
@@ -23,29 +23,7 @@ interface ModelMetric {
 }
 
 interface BackendDebug {
-  model_loaded: boolean
-  model_type: string | null
-  soul: string | null
-  uptime_seconds: number
-  request_count: number
-  error_count: number
-  inference_count: number
-  total_tokens: number
-  tokens_per_sec: number
-  avg_tokens_per_request: number
-  avg_latency_ms: number
-  requests_per_minute: number
-  health_score: HealthScore
-  model_metrics: ModelMetric[]
-  model_events: Array<{ type: string; model: string; detail: string; ts: number }>
-  health_history: Array<{ score: number; status: string; ts: number }>
-  memory_history: Array<{ rss_mb: number; virtual_mb: number; system_percent: number; ts: number }>
-  rate_violations: Array<{ path: string; count: number; limit: number; ts: number }>
-  path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
-  recent_errors: Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>
   recent_requests: Array<{ path: string; method: string; status: number; elapsed_ms: number }>
-  cpu_percent: number | null
-  memory_percent: number | null
   gpu_backend: string | null
 }
 
@@ -71,7 +49,7 @@ function Sparkline({ data, width = 80, height = 16 }: { data: number[]; width?: 
     return `${x},${y}`
   }).join(' ')
   return (
-    <svg width={width} height={height} className="inline-block">
+    <svg width={width} height={height} className="inline-block" aria-hidden="true">
       <polyline
         points={points}
         fill="none"
@@ -91,64 +69,60 @@ function scoreBg(score: number): string {
 
 export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
   const errors = useErrorStore(s => s.errors)
-  const [live, setLive] = useState<Record<string, string>>({})
-  const [healthScore, setHealthScore] = useState<HealthScore | null>(null)
-  const [modelMetrics, setModelMetrics] = useState<ModelMetric[]>([])
-  const [modelEvents, setModelEvents] = useState<BackendDebug['model_events']>([])
-  const [healthHistory, setHealthHistory] = useState<BackendDebug['health_history']>([])
-  const [memoryHistory, setMemoryHistory] = useState<BackendDebug['memory_history']>([])
-  const [rateViolations, setRateViolations] = useState<BackendDebug['rate_violations']>([])
-  const [pathLats, setPathLats] = useState<BackendDebug['path_latencies']>([])
-  const [recentErrs, setRecentErrs] = useState<BackendDebug['recent_errors']>([])
+  const { health } = useLiveStatus()
+  const [gpuBackend, setGpuBackend] = useState<string | null>(null)
   const [recentReqs, setRecentReqs] = useState<BackendDebug['recent_requests']>([])
   const timerRef = useRef<ReturnType<typeof setInterval>>()
 
+  // Only poll /health/debug for the 2 fields not in the SSE stream (gpu_backend, recent_requests).
+  // 10s interval instead of 3s since this is a debug overlay.
   useEffect(() => {
     if (!open) {
       if (timerRef.current) clearInterval(timerRef.current)
       return
     }
-
     const refresh = async () => {
-      let backend: BackendDebug | null = null
       try {
-        const r = await fetch(`${PUBLIC_API_URL}/health/debug`, { signal: AbortSignal.timeout(3000) })
-        if (r.ok) backend = await r.json()
+        const r = await fetch('/health/debug', { signal: AbortSignal.timeout(3000) })
+        if (r.ok) {
+          const d = await r.json()
+          setGpuBackend(d.gpu_backend || null)
+          setRecentReqs(d.recent_requests || [])
+        }
       } catch { /* debug overlay — server may be offline */ }
-
-      const frontendErrCount = useErrorStore.getState().errors.length
-
-      setLive({
-        model: backend?.model_type || (backend?.model_loaded ? 'loaded' : '—'),
-        soul: backend?.soul || '—',
-        uptime: backend ? `${backend.uptime_seconds.toFixed(0)}s` : '—',
-        requests: backend ? String(backend.request_count) : '—',
-        'req/min': backend ? backend.requests_per_minute.toFixed(0) : '—',
-        'srverrors': backend ? String(backend.error_count) : '—',
-        inferences: backend ? String(backend.inference_count) : '—',
-        'tok/sec': backend ? `${backend.tokens_per_sec.toFixed(1)}` : '—',
-        'avg tok': backend ? `${backend.avg_tokens_per_request.toFixed(0)}` : '—',
-        latency: backend ? `${backend.avg_latency_ms.toFixed(0)}ms` : '—',
-        cpu: backend?.cpu_percent != null ? `${backend.cpu_percent.toFixed(0)}%` : '—',
-        mem: backend?.memory_percent != null ? `${backend.memory_percent.toFixed(0)}%` : '—',
-        gpu: backend?.gpu_backend || '—',
-        'fe errors': String(frontendErrCount),
-      })
-      setHealthScore(backend?.health_score || null)
-      setModelMetrics(backend?.model_metrics || [])
-      setModelEvents(backend?.model_events || [])
-      setHealthHistory(backend?.health_history || [])
-      setMemoryHistory(backend?.memory_history || [])
-      setRateViolations(backend?.rate_violations || [])
-      setPathLats(backend?.path_latencies || [])
-      setRecentErrs(backend?.recent_errors || [])
-      setRecentReqs(backend?.recent_requests || [])
     }
-
     refresh()
-    timerRef.current = setInterval(refresh, 3000)
+    timerRef.current = setInterval(refresh, 10000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [open])
+
+  // Derive everything from the live SSE snapshot (no API call needed).
+  const h = health
+  const frontendErrCount = errors.length
+  const live = {
+    model: h?.model_type || (h?.model_loaded ? 'loaded' : '—'),
+    soul: h?.soul || '—',
+    uptime: h ? `${h.uptime_seconds.toFixed(0)}s` : '—',
+    requests: h ? String(h.request_count) : '—',
+    'req/min': h ? h.requests_per_minute.toFixed(0) : '—',
+    'srverrors': h ? String(h.error_count) : '—',
+    inferences: h ? String(h.inference_count) : '—',
+    'tok/sec': h ? `${h.tokens_per_sec.toFixed(1)}` : '—',
+    'avg tok': h ? `${h.avg_tokens_per_request.toFixed(0)}` : '—',
+    latency: h ? `${h.avg_latency_ms.toFixed(0)}ms` : '—',
+    cpu: h?.cpu_percent != null ? `${h.cpu_percent.toFixed(0)}%` : '—',
+    mem: h?.memory_percent != null ? `${h.memory_percent.toFixed(0)}%` : '—',
+    gpu: gpuBackend || '—',
+    'fe errors': String(frontendErrCount),
+  }
+  const healthScore = h?.health_score != null ? { score: h.health_score, status: h.health_status || '', error_rate_score: 0, latency_score: 0, throughput_score: 0, uptime_score: 0 } : null
+  const modelMetrics = (h?.model_metrics || []) as ModelMetric[]
+  const modelEvents = h?.model_events || []
+  const healthHistory = h?.health_history || []
+  const memoryHistory = h?.memory_history || []
+  const rateViolations = h?.rate_violations || []
+  const pathLats = h?.path_latencies || []
+  const recentErrs = h?.recent_errors || []
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -172,6 +146,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
         <div className="flex items-center gap-2">
           <span className="text-[8px] text-muted-foreground/50">^⇧D</span>
           <button
+            type="button"
             onClick={() => onOpenChange(false)}
             className="p-0.5 rounded hover:bg-muted/60 transition-colors"
             aria-label="Close debug overlay"

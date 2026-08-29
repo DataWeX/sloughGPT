@@ -34,6 +34,8 @@ def app(exp_dir):
     router_instance.EXPERIMENTS_DIR = exp_dir
     app = FastAPI()
     app.include_router(router_instance.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

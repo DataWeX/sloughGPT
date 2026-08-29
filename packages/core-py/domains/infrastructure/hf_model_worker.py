@@ -56,7 +56,7 @@ def _resolve_device(device: str) -> str:
         try:
             from domains.infrastructure.ml_types import auto_device
             return auto_device()
-        except Exception:
-            pass
+        except ImportError as exc:
+            logger.debug("auto_device import failed, falling back to cpu: %s", exc)
         return "cpu"
     return device

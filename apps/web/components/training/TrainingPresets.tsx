@@ -80,6 +80,7 @@ export function TrainingPresets({
             value={presetName}
             onChange={e => setPresetName(e.target.value)}
             placeholder="Preset name..."
+            aria-label="Preset name"
             className="h-7 flex-1 rounded-md border border-border/60 bg-background px-2 text-xs"
             onKeyDown={e => e.key === 'Enter' && handleSave()}
           />
@@ -92,7 +93,8 @@ export function TrainingPresets({
           const isCustom = customPresets.some(cp => cp.name === p.name)
           return (
             <button
-              key={p.name}
+              key={isCustom ? `custom-${p.name}` : p.name}
+              type="button"
               onClick={() => onApply(p)}
               className="group relative flex items-center gap-1 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-[11px] hover:bg-primary/10 hover:border-primary/30 transition-colors"
             >

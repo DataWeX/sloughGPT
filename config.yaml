@@ -14,7 +14,7 @@ model:
 # Data
 data:
   dataset: "shakespeare"
-  data_path: "datasets/shakespeare/input.txt"
+  data_path: "data/shakespeare/input.txt"
   val_split: 0.1
 
 # Training

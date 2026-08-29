@@ -35,8 +35,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
 
   useEffect(() => {
     load(limit, query)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, limit, query, load])
 
   const handleSearch = async () => {
     setExpanded(null)
@@ -114,6 +113,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
             {merges.map(m => (
               <div key={m.rank}>
                 <button
+                  type="button"
                   onClick={() => handleToggleRule(m)}
                   className="w-full flex items-center gap-3 py-1.5 text-sm text-left hover:bg-muted/40 transition-colors px-1 -mx-1 rounded"
                   aria-label={`Toggle lineage for ${display(m.token)}`}

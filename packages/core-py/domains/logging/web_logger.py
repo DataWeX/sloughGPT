@@ -130,10 +130,20 @@ class WebLogger(Logger):
 
     def from_json(self, raw: str) -> LogRecord:
         """Deserialize a JSON string back into a LogRecord."""
-        d = json.loads(raw)
+        try:
+            d = json.loads(raw)
+        except json.JSONDecodeError:
+            return LogRecord(
+                level=LogLevel.WARNING,
+                message=raw,
+                logger="slo",
+                timestamp=time.time(),
+                context={},
+                exception=None,
+            )
         return LogRecord(
-            level=LogLevel(d["level"]),
-            message=d["message"],
+            level=LogLevel(d.get("level", LogLevel.WARNING.value)),
+            message=d.get("message", ""),
             logger=d.get("logger", "slo"),
             timestamp=d.get("timestamp", time.time()),
             context=d.get("context", {}),

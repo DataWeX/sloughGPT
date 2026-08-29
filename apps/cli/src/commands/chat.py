@@ -158,8 +158,10 @@ def cmd_chat(args):
     log.blank()
 
     try:
+        from domains.shell.io import ConsoleIO
+        io = ConsoleIO()
         while True:
-            user_input = input("You: ")
+            user_input = io.read("You: ")
             if user_input.lower() in ["quit", "exit", "q"]:
                 break
 

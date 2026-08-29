@@ -19,7 +19,9 @@ export function TokenTreeQueryCard() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    tokenTreeController.getStats().then(setStats).catch(() => setStats(null))
+    let active = true
+    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
+    return () => { active = false }
   }, [])
 
   const handleSearch = async () => {
@@ -111,6 +113,7 @@ export function TokenTreeQueryCard() {
                 {result.neighbors.map(n => (
                   <button
                     key={n.id}
+                    type="button"
                     onClick={() => handleExpand(n)}
                     className="w-full flex items-center gap-3 text-sm px-2 py-1.5 rounded hover:bg-muted/50 transition-colors text-left"
                     aria-label={`Toggle lineage for ${displayToken(n.token)}`}

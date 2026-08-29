@@ -10,12 +10,7 @@ import { cn, IconMenu, IconGrid } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
-
-function formatDuration(ms: number): string {
-  const s = Math.floor(ms / 1000)
-  if (s < 60) return `${s}s`
-  return `${Math.floor(s / 60)}m ${s % 60}s`
-}
+import { formatDuration } from '@/components/training/formatDuration'
 
 function getFailureSummary(failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[]): string {
   if (failures.length === 0) return ''
@@ -38,8 +33,8 @@ export function StatusBar() {
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
-    getUnseenCount().then(setUnseenCount)
-    const handler = () => { getUnseenCount().then(setUnseenCount) }
+    getUnseenCount().then(setUnseenCount).catch(() => setUnseenCount(0))
+    const handler = () => { getUnseenCount().then(setUnseenCount).catch(() => {}) }
     window.addEventListener('whatsnew-updated', handler)
     return () => window.removeEventListener('whatsnew-updated', handler)
   }, [])
@@ -86,7 +81,7 @@ export function StatusBar() {
   if (connectionStatus === 'connecting' && health === null) {
     statusText = 'Connecting...'
   } else if (connectionStatus === 'offline') {
-    const elapsed = lastOffline ? formatDuration(now - lastOffline) : ''
+    const elapsed = lastOffline ? formatDuration((now - lastOffline) / 1000) : ''
     const failInfo = getFailureSummary(recentFailures)
     statusText = failInfo
       ? `Offline — ${failInfo}${elapsed ? ` (${elapsed})` : ''}`
@@ -96,7 +91,7 @@ export function StatusBar() {
   }
 
   return (
-    <Link href="/settings" className="flex shrink-0 h-7 sm:h-8 items-center justify-between px-2 sm:px-3 border-t border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 hover:bg-muted/40 transition-colors" aria-label="System health and model status">
+    <Link href="/settings" prefetch={false} className="flex shrink-0 h-7 sm:h-8 items-center justify-between px-2 sm:px-3 border-t border-border/30 bg-muted/20 text-[10px] text-muted-foreground/70 hover:bg-muted/40 transition-colors" aria-label="System health and model status">
       <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
         <span className="flex items-center gap-1" aria-live="polite" aria-atomic="true">
           <span className={cn("inline-block h-1.5 w-1.5 rounded-full shrink-0", dot)} aria-hidden="true" />
@@ -125,20 +120,22 @@ export function StatusBar() {
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-output-panel')) }}
           className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors"
-          aria-label="Toggle server output"
-          title="Server output"
+          aria-label="Toggle service output"
+          title="Service output"
         >
-          <IconMenu className="w-3 h-3" />
+          <IconMenu className="w-3 h-3" aria-hidden="true" />
         </button>
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('toggle-whatsnew')) }}
           className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-muted/60 transition-colors relative"
           aria-label={unseenCount > 0 ? `${unseenCount} new feature${unseenCount === 1 ? '' : 's'}` : "What's new"}
           title="What's new"
         >
-          <IconGrid className="w-3 h-3" />
+          <IconGrid className="w-3 h-3" aria-hidden="true" />
           {unseenCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-medium leading-none">
               {unseenCount > 9 ? '9+' : unseenCount}
@@ -146,10 +143,16 @@ export function StatusBar() {
           )}
         </button>
         {health?.tokens_per_sec ? (
-          <span className="hidden sm:inline tabular-nums">{health.tokens_per_sec.toFixed(0)} t/s</span>
+          <span className="hidden sm:inline-flex items-center gap-1 tabular-nums">
+            <span className="inline-block h-1 w-1 rounded-full bg-success animate-pulse" aria-hidden="true" />
+            {health.tokens_per_sec.toFixed(0)} tok/s
+          </span>
         ) : health !== null && health.inference_count != null ? (
-          <span className="hidden sm:inline">{health.inference_count} response{health.inference_count !== 1 ? 's' : ''}</span>
+          <span className="hidden sm:inline tabular-nums">{health.inference_count} req{health.inference_count !== 1 ? 's' : ''}</span>
         ) : null}
+        {health?.uptime_seconds != null && health.uptime_seconds > 0 && (
+          <span className="hidden sm:inline tabular-nums" title="Uptime">{formatDuration(health.uptime_seconds)}</span>
+        )}
       </div>
     </Link>
   )

@@ -12,11 +12,11 @@ describe('SoulNetWebGPU', () => {
     vi.unstubAllGlobals()
   })
 
-  it('throws WebGPU unavailable when no adapter exists', async () => {
+  it('falls back to CPU-only mode when no adapter exists', async () => {
     vi.stubGlobal('navigator', {})
     const engine = new SoulNetWebGPU()
-    await expect(engine.init()).rejects.toThrow('WebGPU unavailable')
-    expect(engine.ready).toBe(false)
+    await engine.init()
+    expect(engine.cpuOnly).toBe(true)
   })
 
   it('init is idempotent', async () => {
@@ -41,7 +41,7 @@ describe('SoulNetWebGPU', () => {
   it('load fetches a URL when given a string', async () => {
     makeWebGPU()
     const sou = lstmSou()
-    const fetchMock = vi.fn(async () => ({ arrayBuffer: async () => sou }))
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou }))
     vi.stubGlobal('fetch', fetchMock)
     const engine = new SoulNetWebGPU()
     await engine.init()
@@ -68,6 +68,28 @@ describe('SoulNetWebGPU', () => {
     const tokens: string[] = []
     for await (const t of engine.generate('', 3, 0)) tokens.push(t)
     expect(tokens).toEqual(['b', 'b', 'b'])
+  })
+
+  it('generate stops early on eosToken', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const engine = new SoulNetWebGPU()
+    await engine.init()
+    // p7 bias makes token 1 (b) the argmax
+    await engine.load(lstmSou({ p7: new Float32Array([1, 5, 2]) }), CFG)
+    const tokens: string[] = []
+    // eosToken=1 means stop when producing 'b' (token 1)
+    for await (const t of engine.generate('', 10, 0, 1)) tokens.push(t)
+    expect(tokens).toEqual([])
+  })
+
+  it('generate with eosToken=0 never stops early', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const engine = new SoulNetWebGPU()
+    await engine.init()
+    await engine.load(lstmSou({ p7: new Float32Array([1, 5, 2]) }), CFG)
+    const tokens: string[] = []
+    for await (const t of engine.generate('', 5, 0, 0)) tokens.push(t)
+    expect(tokens).toHaveLength(5)
   })
 
   it('forward before load throws', async () => {

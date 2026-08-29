@@ -24,6 +24,8 @@ from routers.images import ImagesRouter  # noqa: E402
 def _app(ir: ImagesRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(ir.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

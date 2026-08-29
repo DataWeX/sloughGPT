@@ -13,7 +13,6 @@ import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
 const form: TrainingFormState = makeForm({
-  algo: 'bpe',
   trainingEpochs: 10,
   trainingBatchSize: 32,
   nativeEmbed: 128,

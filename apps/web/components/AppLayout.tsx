@@ -146,6 +146,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           <Sidebar variant="desktop" collapsed={navCollapsed} onToggleCollapse={toggleNav} />
           {/* 3D bookmark tab — protrudes from sidebar edge */}
           <button
+            type="button"
             onClick={toggleNav}
             aria-label={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}

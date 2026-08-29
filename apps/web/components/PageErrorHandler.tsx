@@ -42,6 +42,7 @@ export function PageErrorHandler({ error, reset, title }: PageErrorHandlerProps)
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setShowDetails(!showDetails)}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >

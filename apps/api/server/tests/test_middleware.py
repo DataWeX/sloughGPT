@@ -10,10 +10,12 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from infrastructure.middleware import register_all_middleware
+from infrastructure.exception_handlers import register_app_error_handler
 
 
 def _make_app(timeout: float = 5.0) -> FastAPI:
     app = FastAPI()
+    register_app_error_handler(app)
     register_all_middleware(app, request_timeout=timeout)
 
     @app.get("/ok")

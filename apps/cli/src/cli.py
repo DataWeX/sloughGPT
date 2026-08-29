@@ -1,5 +1,5 @@
 """
-SloughGPT CLI — Click-powered entry point with Rich output.
+SloughGPT CLI — Click-powered entry point with ANSI output.
 
 Commands organized into logical groups. All delegate to existing
 cmd_* functions in commands/ modules.
@@ -20,30 +20,20 @@ for _p in [_CLI_DIR, str(_CORE_PY_DIR)]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-# ── Structured logging (mirrors server setup in main.py) ────────────────
-from domains.logging import CLILogger, BridgeHandler, set_global, LogLevel  # noqa: E402
-from domains.infrastructure.output_buffer import install_log_bridge  # noqa: E402
+# ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
+from domains.logging.config import setup_logging  # noqa: E402
+from domains.logging import CLILogger, BridgeHandler, set_global, get_global  # noqa: E402
 
-_log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
-_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
+# Setup stdlib logging (file + correlation IDs), but skip console handler
+# because CLI uses CLILogger (ANSI-powered) via BridgeHandler instead.
+setup_logging(enable_console=False, enable_output_buffer=False)
 
-_cli_logger = CLILogger("slo", level=_log_level)
+_cli_logger = CLILogger("slo")
 set_global(_cli_logger)
 
+# Bridge stdlib logging → CLILogger (ANSI-powered terminal output)
 _bridge = BridgeHandler(_cli_logger)
-_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
 logging.root.addHandler(_bridge)
-logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
-
-# Suppress noisy third-party loggers
-for _noisy in ("httpx", "httpcore", "urllib3"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
-
-# Wire log output into the shared OutputBuffer (for TUI pager / SSE)
-try:
-    _buf_handler = install_log_bridge()
-except Exception:
-    pass
 
 logger = logging.getLogger("slo")
 
@@ -136,12 +126,7 @@ def cli(ctx, host: str, port: int, config: str):
 
 def _show_welcome_banner():
     """Show a polished welcome banner with version and quick start."""
-    from rich.console import Console
-    from rich.text import Text
-    from rich.panel import Panel
-    from rich.columns import Columns
-
-    console = Console(highlight=False)
+    import sys
 
     # Get version
     try:
@@ -149,57 +134,89 @@ def _show_welcome_banner():
     except Exception:
         version = "dev"
 
-    # Build banner
-    banner = Text()
-    banner.append("  SloughGPT", style="bold cyan")
-    banner.append(f"  {version}", style="dim")
+    # ANSI helpers
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
 
-    console.print()
-    console.print(banner)
-    console.print("  " + "─" * 50)
-    console.print()
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    _line()
+    _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    _line("  " + "─" * 50)
+    _line()
 
     # Quick start commands
-    console.print("  [bold]Quick Start:[/]")
-    console.print("    [cyan]sloughgpt start[/]        Getting started guide")
-    console.print("    [cyan]sloughgpt chat[/]         Start chatting with AI")
-    console.print("    [cyan]sloughgpt model list[/]   List available models")
-    console.print("    [cyan]sloughgpt shell[/]        Interactive shell")
-    console.print()
+    _line(f"  {_c('Quick Start:', _BOLD)}")
+    _line(f"    {_c('sloughgpt start', _CYAN)}        Getting started guide")
+    _line(f"    {_c('sloughgpt chat', _CYAN)}         Start chatting with AI")
+    _line(f"    {_c('sloughgpt model list', _CYAN)}   List available models")
+    _line(f"    {_c('sloughgpt shell', _CYAN)}        Interactive shell")
+    _line()
 
     # Server status
-    _show_server_status(console)
+    _show_server_status()
 
-    console.print()
-    console.print("  [dim]Run 'sloughgpt --help' to see all commands[/]")
-    console.print()
+    _line()
+    _line(f"  {_c('Run \'sloughgpt --help\' to see all commands', _DIM)}")
+    _line()
 
 
-def _show_server_status(console):
+def _show_server_status():
     """Check and display server status."""
+    import sys
     import requests
-    import time
 
-    console.print("  [bold]Server Status:[/]")
+    def _c(text, code):
+        if sys.stdout.isatty():
+            return f"{code}{text}\033[0m"
+        return text
+
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED = "\033[31m"
+
+    _write = sys.stdout.write
+    _flush = sys.stdout.flush
+
+    def _line(text=""):
+        _write(text + "\n")
+        _flush()
+
+    _line(f"  {_c('Server Status:', _BOLD)}")
 
     try:
-        # Try to connect to the server
         response = requests.get("http://localhost:8000/health", timeout=2)
         if response.status_code == 200:
-            data = response.json()
-            status = data.get("data", {})
+            raw = response.json()
+            data = raw.get("data", raw)
 
-            if status.get("model_loaded"):
-                model = status.get("model_type", "unknown")
-                console.print(f"    [green]✓[/] Server running (model: {model})")
+            if data.get("model_loaded"):
+                model = data.get("model_type", "unknown")
+                _line(f"    {_c('✓', _GREEN)} Server running (model: {model})")
             else:
-                console.print("    [yellow]![/] Server running (no model loaded)")
+                _line(f"    {_c('!', _YELLOW)} Server running (no model loaded)")
         else:
-            console.print("    [red]✗[/] Server unreachable")
+            _line(f"    {_c('✗', _RED)} Server unreachable")
     except requests.exceptions.ConnectionError:
-        console.print("    [dim]·[/] Server not running")
-    except Exception as e:
-        console.print(f"    [dim]·[/] Server status unknown")
+        _line(f"    {_c('·', _DIM)} Server not running")
+    except Exception:
+        _line(f"    {_c('·', _DIM)} Server status unknown")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -241,6 +258,13 @@ Version: {format_version_display()}
 """)
 
 
+from commands.logs import logs as _logs_cmd
+cli.add_command(_logs_cmd, 'logs')
+
+from commands.monitor import monitor as _monitor_cmd
+cli.add_command(_monitor_cmd, 'monitor')
+
+
 @cli.command(help="Launch interactive terminal UI (split-pane curses)")
 @click.pass_context
 def tui(ctx):
@@ -250,9 +274,10 @@ def tui(ctx):
 
 @cli.command(help="Launch interactive shell REPL")
 @click.option("--command", "-c", help="Run a single command and exit")
-@click.option("--tui", is_flag=True, help="Boot into the split-pane curses TUI instead of line mode")
+@click.option("--tui/--no-tui", default=None, help="Curses TUI mode (default when TTY)")
+@click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
 @click.pass_context
-def shell(ctx, command, tui):
+def shell(ctx, command, tui, line):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
@@ -260,7 +285,15 @@ def shell(ctx, command, tui):
     from domains.shell import DaitRuntime
 
     os = DaitRuntime(api_url=actual_url)
-    repl = ShellREPL(os, use_tui=True if tui else None)
+    # Default to TUI when TTY, line mode when piped or --line
+    use_tui = True
+    if line:
+        use_tui = False
+    elif tui is not None:
+        use_tui = tui
+    elif not sys.stdout.isatty():
+        use_tui = False
+    repl = ShellREPL(os, use_tui=True if use_tui else None)
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)
         if is_bg:
@@ -661,14 +694,13 @@ def train_eval(checkpoint, data, benchmark):
     cmd_eval(args)
 
 
-@train.command("monitor", help="Monitor training jobs")
-@click.option("--watch", is_flag=True, help="Continuous watch")
-@click.option("--interval", default=5, type=int, help="Refresh interval (s)")
+@train.command("monitor", help="Monitor training jobs (delegates to dashboard)")
+@click.option("--watch", is_flag=True, help="Continuous watch (ignored — always live)")
+@click.option("--interval", default=2, type=int, help="Refresh interval (s)")
 @click.pass_context
 def train_monitor(ctx, watch, interval):
-    from commands.train import _cmd_monitor
-    args = _ns(watch=watch, interval=interval, host=ctx.obj["host"], port=ctx.obj["port"])
-    _cmd_monitor(args)
+    from commands.monitor import monitor as _monitor_cmd
+    ctx.invoke(_monitor_cmd, interval=float(interval), host=ctx.obj["host"], port=ctx.obj["port"], output_json=False, no_clear=False)
 
 
 @train.command("rlhf", help="Run RLHF demo")
@@ -1573,51 +1605,80 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
              layers: int, d_model: int, vocab_size: int, profile: bool,
              asm_source: str | None, do_self_test: bool):
     """Boot the kernel, load a model, run inference, and print metrics."""
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
     import time
+    import sys
     import numpy as np
 
-    console = Console()
-    console.print("\n[bold cyan]Kernel Simulation[/bold cyan]\n")
+    # ANSI helpers
+    _tty = sys.stdout.isatty()
+    def _c(text, code):
+        return f"{code}{text}\033[0m" if _tty else text
+    _BOLD = "\033[1m"
+    _DIM = "\033[2m"
+    _CYAN = "\033[36m"
+    _GREEN = "\033[32m"
+    _YELLOW = "\033[33m"
+    _MAGENTA = "\033[35m"
+    _BLUE = "\033[34m"
+
+    def _p(text=""):
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
+
+    def _table(headers, rows, col_styles=None):
+        widths = [len(h) for h in headers]
+        for row in rows:
+            for i in range(min(len(row), len(widths))):
+                widths[i] = max(widths[i], len(str(row[i])))
+        hdr = "  ".join(_c(h.ljust(widths[i]), _BOLD, _tty) for i, h in enumerate(headers))
+        sep = "  ".join("-" * w for w in widths)
+        _p(hdr)
+        _p(sep)
+        for row in rows:
+            cells = []
+            for i in range(len(headers)):
+                val = str(row[i]) if i < len(row) else ""
+                cells.append(val.ljust(widths[i]))
+            _p("  ".join(cells))
+
+    _p(f"\n{_c('Kernel Simulation', _BOLD + _CYAN)}\n")
 
     # ── Self-test mode ──
     if do_self_test:
         from domains.shell.vm import self_test
-        console.print("[bold]Running VM self-test...[/bold]\n")
+        _p(f"{_c('Running VM self-test...', _BOLD)}\n")
         results = self_test()
         for line in results:
-            console.print(line)
-        console.print()
+            _p(line)
+        _p()
         return
 
     # ── Run assembly mode ──
     if asm_source:
         from domains.shell.vm import VMRunner
-        console.print(f"[bold]Running VM assembly...[/bold]\n")
+        _p(f"{_c('Running VM assembly...', _BOLD)}\n")
         runner = VMRunner()
         t0 = time.perf_counter()
         output = runner.assemble_and_run(asm_source, trace=profile)
         elapsed = time.perf_counter() - t0
         for line in output:
-            console.print(f"  {line}")
-        console.print(f"\n  [dim]Completed in {elapsed*1000:.2f}ms, {runner.cpu._step_count} steps[/dim]")
+            _p(f"  {line}")
+        _p(f"\n  {_c(f'Completed in {elapsed*1000:.2f}ms, {runner.cpu._step_count} steps', _DIM)}")
         if profile:
             trace = runner.cpu.get_trace()
             if trace:
-                prof_table = Table(title="Execution Trace", show_header=True, header_style="bold blue")
-                prof_table.add_column("Step", justify="right")
-                prof_table.add_column("PC", justify="right")
-                prof_table.add_column("Instruction")
-                prof_table.add_column("Registers")
-                for entry in trace[:50]:
-                    regs = ", ".join(f"{k}={v}" for k, v in entry.registers.items())
-                    prof_table.add_row(str(entry.cycle), str(entry.pc), entry.instruction, regs)
+                _p()
+                _table(
+                    ["Step", "PC", "Instruction", "Registers"],
+                    [
+                        [str(e.cycle), str(e.pc), e.instruction,
+                         ", ".join(f"{k}={v}" for k, v in e.registers.items())]
+                        for e in trace[:50]
+                    ],
+                )
                 if len(trace) > 50:
-                    prof_table.add_row("...", "", f"({len(trace)-50} more)", "")
-                console.print(prof_table)
-        console.print()
+                    _p(f"  ... ({len(trace)-50} more)")
+        _p()
         return
 
     # ── Boot ──
@@ -1626,12 +1687,12 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
     k = Kernel()
     boot_msg = k.boot()
     t_boot = time.perf_counter() - t0
-    console.print(f"  [green]✓[/green] Booted in {t_boot*1000:.1f}ms — {boot_msg}")
+    _p(f"  {_c('✓', _GREEN)} Booted in {t_boot*1000:.1f}ms — {boot_msg}")
 
     try:
         # ── Register devices ──
         k.register_devices()
-        console.print(f"  [green]✓[/green] {k.devices.stats()['total_devices']} devices registered")
+        _p(f"  {_c('✓', _GREEN)} {k.devices.stats()['total_devices']} devices registered")
 
         # ── Load model ──
         t1 = time.perf_counter()
@@ -1661,8 +1722,8 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
             npu.open()
             result = npu.load_model(model, f"huggingface:{model}")
             if not result.success:
-                console.print(f"  [yellow]⚠ Could not load '{model}': {result.error}[/yellow]")
-                console.print("  [dim]Falling back to mock model. Install transformers for real models.[/dim]")
+                _p(f"  {_c(f'⚠ Could not load \'{model}\': {result.error}', _YELLOW)}")
+                _p(f"  {_c('Falling back to mock model. Install transformers for real models.', _DIM)}")
                 class FallbackModel:
                     def __init__(self):
                         self.call_count = 0
@@ -1685,13 +1746,13 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
                 provider = npu._models[model].provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
-        console.print(f"  [green]✓[/green] Model '{model}' loaded in {t_load*1000:.1f}ms")
+        _p(f"  {_c('✓', _GREEN)} Model '{model}' loaded in {t_load*1000:.1f}ms")
 
         # ── Tokenize ──
         t2 = time.perf_counter()
         tokens = k.tokenize(prompt)
         t_tok = time.perf_counter() - t2
-        console.print(f"  [green]✓[/green] Tokenized '{prompt[:40]}...' → {len(tokens)} tokens in {t_tok*1000:.2f}ms")
+        _p(f"  {_c('✓', _GREEN)} Tokenized '{prompt[:40]}...' → {len(tokens)} tokens in {t_tok*1000:.2f}ms")
 
         # ── Create inference process ──
         from domains.shell.kernel_neural import NeuralProcessType
@@ -1732,42 +1793,366 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
         ks = k.stats()
 
         # ── Print results ──
-        console.print()
-
-        # Summary table
-        table = Table(title="Simulation Results", show_header=True, header_style="bold magenta")
-        table.add_column("Metric", style="cyan")
-        table.add_column("Value", justify="right", style="green")
-        table.add_row("Boot time", f"{t_boot*1000:.1f}ms")
-        table.add_row("Model load", f"{t_load*1000:.1f}ms")
-        table.add_row("Tokenize", f"{t_tok*1000:.2f}ms")
-        table.add_row("Tokens in prompt", str(len(tokens)))
-        table.add_row("Iterations", str(iterations))
-        table.add_row("Avg latency", f"{avg_latency*1000:.1f}ms")
-        table.add_row("Total tokens generated", str(total_tokens))
-        table.add_row("Throughput", f"{throughput:.1f} tok/s")
-        table.add_row("Processes", str(ks["process_count"]))
-        table.add_row("KV cache layers", str(ns["kv_caches"]))
-        table.add_row("KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps")
-        table.add_row("Uptime", f"{k.uptime:.2f}s")
-        console.print(table)
+        _p()
+        _table(
+            ["Metric", "Value"],
+            [
+                ["Boot time", f"{t_boot*1000:.1f}ms"],
+                ["Model load", f"{t_load*1000:.1f}ms"],
+                ["Tokenize", f"{t_tok*1000:.2f}ms"],
+                ["Tokens in prompt", str(len(tokens))],
+                ["Iterations", str(iterations)],
+                ["Avg latency", f"{avg_latency*1000:.1f}ms"],
+                ["Total tokens generated", str(total_tokens)],
+                ["Throughput", f"{throughput:.1f} tok/s"],
+                ["Processes", str(ks["process_count"])],
+                ["KV cache layers", str(ns["kv_caches"])],
+                ["KV cache memory", f"{ns['gradient_accumulator']['step_count']} steps"],
+                ["Uptime", f"{k.uptime:.2f}s"],
+            ],
+        )
 
         if profile:
-            prof_table = Table(title="Per-Iteration Profile", show_header=True, header_style="bold blue")
-            prof_table.add_column("Iter", justify="right")
-            prof_table.add_column("Latency", justify="right")
-            prof_table.add_column("Tokens", justify="right")
-            prof_table.add_column("tok/s", justify="right")
-            for i, (lat, tok) in enumerate(zip(latencies, tokens_generated)):
-                tps = tok / lat if lat > 0 else 0
-                prof_table.add_row(str(i + 1), f"{lat*1000:.1f}ms", str(tok), f"{tps:.1f}")
-            console.print(prof_table)
+            _p()
+            _table(
+                ["Iter", "Latency", "Tokens", "tok/s"],
+                [
+                    [str(i + 1), f"{lat*1000:.1f}ms", str(tok),
+                     f"{tok / lat:.1f}" if lat > 0 else "0.0"]
+                    for i, (lat, tok) in enumerate(zip(latencies, tokens_generated))
+                ],
+            )
 
-        console.print(f"\n[bold green]Simulation complete.[/bold green]\n")
+        _p(f"\n{_c('Simulation complete.', _BOLD + _GREEN)}\n")
 
     finally:
         k.shutdown()
-        console.print("  [dim]Kernel shut down.[/dim]")
+        _p(f"  {_c('Kernel shut down.', _DIM)}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Collections — data feed ingestion
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Collect data from files, URLs, RSS feeds, and APIs")
+def collect():
+    pass
+
+
+@collect.command("file", help="Collect data from a local file")
+@click.argument("path")
+@click.option("--output", "-o", default=None, help="Output JSONL file")
+@click.option("--min-length", default=10, type=int, help="Min record length")
+@click.option("--dedup/--no-dedup", default=True, help="Deduplicate records")
+def collect_file(path, output, min_length, dedup):
+    from domains.collections import FileSource, MemoryStore, FileStore, Collector
+    from domains.collections import LengthFilter, DedupFilter
+    source = FileSource(path)
+    store = FileStore(output) if output else MemoryStore()
+    filters = []
+    if min_length > 0:
+        filters.append(LengthFilter(min_length=min_length))
+    if dedup:
+        filters.append(DedupFilter())
+    collector = Collector(source, store, filters=filters)
+    count = collector.collect()
+    log.success(f"Collected {count} records from {path}")
+    if output:
+        log.info(f"Output: {output}")
+
+
+@collect.command("url", help="Collect data from a URL")
+@click.argument("url")
+@click.option("--output", "-o", default=None, help="Output JSONL file")
+@click.option("--min-length", default=10, type=int, help="Min record length")
+def collect_url(url, output, min_length):
+    from domains.collections import UrlSource, MemoryStore, FileStore, Collector
+    from domains.collections import LengthFilter
+    source = UrlSource(url)
+    store = FileStore(output) if output else MemoryStore()
+    filters = [LengthFilter(min_length=min_length)] if min_length > 0 else []
+    collector = Collector(source, store, filters=filters)
+    count = collector.collect()
+    log.success(f"Collected {count} records from {url}")
+    if output:
+        log.info(f"Output: {output}")
+
+
+@collect.command("rss", help="Collect data from an RSS/Atom feed")
+@click.argument("url")
+@click.option("--output", "-o", default=None, help="Output JSONL file")
+def collect_rss(url, output):
+    from domains.collections import RssSource, MemoryStore, FileStore, Collector
+    source = RssSource(url)
+    store = FileStore(output) if output else MemoryStore()
+    collector = Collector(source, store)
+    count = collector.collect()
+    log.success(f"Collected {count} records from RSS feed")
+    if output:
+        log.info(f"Output: {output}")
+
+
+@collect.command("merge", help="Merge multiple JSONL files into one")
+@click.argument("inputs", nargs=-1, required=True)
+@click.option("--output", "-o", required=True, help="Output JSONL file")
+def collect_merge(inputs, output):
+    import json
+    from pathlib import Path
+    count = 0
+    with open(output, "w") as out_f:
+        for input_path in inputs:
+            p = Path(input_path)
+            if not p.exists():
+                log.warning(f"Skipping {input_path} (not found)")
+                continue
+            with open(p) as in_f:
+                for line in in_f:
+                    line = line.strip()
+                    if line:
+                        out_f.write(line + "\n")
+                        count += 1
+    log.success(f"Merged {len(inputs)} files → {output} ({count} records)")
+
+
+@collect.command("stats", help="Show collection statistics")
+@click.argument("path")
+def collect_stats(path):
+    import json
+    from pathlib import Path
+    p = Path(path)
+    if not p.exists():
+        log.error(f"File not found: {path}")
+        return
+    count = 0
+    total_bytes = 0
+    with open(p) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                count += 1
+                total_bytes += len(line)
+    log.header(f"Collection Stats: {p.name}")
+    log.key_value("Records", str(count))
+    log.key_value("Total Size", f"{total_bytes:,} bytes")
+    log.key_value("Avg Size", f"{total_bytes // max(count, 1):,} bytes")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# World rendering
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Render and simulate the programmable world")
+def world():
+    pass
+
+
+@world.command("render", help="Render the current world state")
+@click.option("--width", default=160, type=int, help="Render width")
+@click.option("--height", default=120, type=int, help="Render height")
+@click.option("--samples", default=16, type=int, help="Render samples")
+@click.option("--output", "-o", default=None, help="Output file (PPM)")
+@click.option("--neural", is_flag=True, help="Run neural processing on render")
+def world_render(width, height, samples, output, neural):
+    from domains.shell.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+    from domains.shell.simulation import WorldGrid
+    import numpy as np
+
+    cfg = RenderConfig(width=width, height=height, samples=samples)
+
+    if neural:
+        bridge = NeuralRenderBridge(cfg)
+    else:
+        bridge = RenderBridge(cfg)
+
+    world = WorldGrid()
+    for x in range(10, 54):
+        world.material[world.idx(x, 0, 32)] = 1
+    for x in range(20, 44):
+        world.material[world.idx(x, 0, 32)] = 2
+        world.energy[world.idx(x, 0, 32)] = 3.0
+    world.material[world.idx(32, 1, 32)] = 4
+    world.energy[world.idx(32, 1, 32)] = 5.0
+
+    log.header("Rendering world...")
+    bridge.build_scene(world)
+    image = bridge.render()
+    log.success(f"Rendered {image.shape[1]}x{image.shape[0]} image ({bridge.stats['total_time_ms']:.0f}ms)")
+
+    if output:
+        img_uint8 = (np.clip(image, 0, 1) * 255).astype(np.uint8)
+        header = f"P6\n{img_uint8.shape[1]} {img_uint8.shape[0]}\n255\n"
+        with open(output, "wb") as f:
+            f.write(header.encode() + img_uint8.tobytes())
+        log.info(f"Saved: {output}")
+
+    if neural:
+        result = bridge.process_neural()
+        emb = result.get("embedding")
+        if emb is not None:
+            log.key_value("Embedding dim", str(len(emb)))
+            log.key_value("Embedding norm", f"{np.linalg.norm(emb):.4f}")
+        desc = bridge.get_descriptor()
+        log.key_value("Scene features", str(len(desc.get("tensor_stats", {}))))
+
+
+@world.command("tick", help="Run simulation ticks with optional rendering")
+@click.option("--ticks", default=5, type=int, help="Number of ticks")
+@click.option("--babies", default=4, type=int, help="Number of baby agents")
+@click.option("--render", is_flag=True, help="Enable rendering")
+@click.option("--neural", is_flag=True, help="Enable neural processing")
+@click.option("--verbose", is_flag=True, help="Verbose output")
+def world_tick(ticks, babies, render, neural, verbose):
+    from domains.shell.simulation import SimScene, Simulation, WorldParams
+    from domains.shell.world_render import RenderBridge, NeuralRenderBridge, RenderConfig
+
+    params = WorldParams()
+    scene = SimScene(params)
+
+    for _ in range(babies):
+        from domains.shell.simulation import SimBaby, Entity, EntityType
+        baby = SimBaby()
+        baby.entity.position[0] = 32 + np.random.randint(-10, 10)
+        baby.entity.position[2] = 32 + np.random.randint(-10, 10)
+        scene.add_baby(baby)
+
+    render_bridge = None
+    if render or neural:
+        if neural:
+            render_bridge = NeuralRenderBridge()
+        else:
+            render_bridge = RenderBridge()
+
+    sim = Simulation(scene, max_ticks=ticks, verbose=verbose, render_bridge=render_bridge)
+    log.header(f"Running {ticks} ticks with {len(scene.babies)} babies...")
+    sim.run()
+    summary = sim.summary()
+
+    log.key_value("Ticks", str(summary.get("total_ticks", 0)))
+    log.key_value("Babies at end", str(summary.get("alive_at_end", False)))
+    log.key_value("Avg energy", f"{summary.get('avg_energy', 0):.1f}")
+    log.key_value("Cells written", str(summary.get("total_cells_written", 0)))
+
+    if render_bridge:
+        log.key_value("Renders", str(render_bridge.stats.get("renders", 0)))
+        log.key_value("Render time", f"{render_bridge.stats.get('total_time_ms', 0):.0f}ms")
+
+
+@world.command("analyze", help="Analyze render history over simulation ticks")
+@click.option("--ticks", default=20, type=int, help="Number of ticks to simulate")
+@click.option("--babies", default=4, type=int, help="Number of baby agents")
+@click.option("--threshold", default=0.1, type=float, help="Change detection threshold")
+def world_analyze(ticks, babies, threshold):
+    from domains.shell.simulation import SimScene, Simulation, WorldParams
+    from domains.shell.world_render import RenderBridge, RenderAnalyzer, RenderConfig
+
+    config = RenderConfig(width=64, height=48, samples=1)
+    bridge = RenderBridge(config)
+
+    params = WorldParams()
+    scene = SimScene(params)
+
+    for _ in range(babies):
+        from domains.shell.simulation import SimBaby
+        baby = SimBaby()
+        baby.entity.position[0] = 32 + np.random.randint(-10, 10)
+        baby.entity.position[2] = 32 + np.random.randint(-10, 10)
+        scene.add_baby(baby)
+
+    sim = Simulation(scene, max_ticks=ticks, render_bridge=bridge)
+    analyzer = RenderAnalyzer(bridge._history if hasattr(bridge, '_history') else None)
+
+    sim.run()
+
+    for i, entry in enumerate(bridge._history._entries if hasattr(bridge, '_history') else []):
+        analyzer.history.add(entry["image"], tick=entry["tick"])
+
+    summary = analyzer.summary()
+    log.header("Render Analysis")
+    log.key_value("Total renders", str(summary.get("count", 0)))
+    log.key_value("Significant changes", str(summary.get("significant_changes", 0)))
+    if summary.get("mean_range"):
+        log.key_value("Mean range", f"{summary['mean_range'][0]:.4f} - {summary['mean_range'][1]:.4f}")
+    if summary.get("mean_trend") is not None:
+        log.key_value("Mean trend", f"{summary['mean_trend']:+.4f}")
+
+    changes = analyzer.detect_significant_changes(threshold)
+    if changes:
+        log.header("Significant Changes")
+        for c in changes:
+            log.info(f"  Tick {c['tick_from']} -> {c['tick_to']}: "
+                     f"{c['change_ratio']:.1%} changed, MSE={c['mse']:.6f}")
+
+
+@world.command("diff", help="Compare two render images")
+@click.argument("image_a", type=click.Path(exists=True))
+@click.argument("image_b", type=click.Path(exists=True))
+def world_diff(image_a, image_b):
+    from domains.shell.world_render import RenderDiff
+    from PIL import Image as PILImage
+
+    a = np.array(PILImage.open(image_a)).astype(np.float32) / 255.0
+    b = np.array(PILImage.open(image_b)).astype(np.float32) / 255.0
+
+    diff = RenderDiff(a, b)
+    s = diff.summary()
+
+    log.header("Render Diff")
+    log.key_value("MSE", f"{s['mse']:.6f}")
+    log.key_value("MAE", f"{s['mae']:.6f}")
+    log.key_value("Max diff", f"{s['max_diff']:.4f}")
+    log.key_value("Changed pixels", f"{s['changed_pixels']}/{s['total_pixels']} ({s['change_ratio']:.1%})")
+    log.key_value("Mean A", f"{s['mean_a']:.4f}")
+    log.key_value("Mean B", f"{s['mean_b']:.4f}")
+
+
+@world.command("ingest", help="Feed data into the world grid")
+@click.argument("source_type", type=click.Choice(["file", "url", "rss", "records"]))
+@click.argument("source_value")
+@click.option("--radius", default=15, type=int, help="Placement radius around center")
+@click.option("--decay", default=0.95, type=float, help="Energy decay rate per tick")
+@click.option("--verbose", is_flag=True, help="Verbose output")
+def world_ingest(source_type, source_value, radius, decay, verbose):
+    from domains.collections.perception import WorldPerception, PerceptionConfig
+    from domains.collections.sources import FileSource, UrlSource, RssSource, GeneratorSource, Record
+    from domains.shell.simulation import WorldGrid
+
+    config = PerceptionConfig(radius=radius, decay_rate=decay)
+    perception = WorldPerception(config)
+    world = WorldGrid()
+
+    if source_type == "file":
+        records = []
+        with open(source_value, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(Record(content=line))
+        events = perception.ingest_records(records)
+    elif source_type == "url":
+        from domains.collections.sources import UrlSource
+        source = UrlSource(source_value)
+        events = perception.ingest_source(source)
+    elif source_type == "rss":
+        from domains.collections.sources import RssSource
+        source = RssSource(source_value)
+        events = perception.ingest_source(source)
+    else:
+        records = [Record(content=source_value)]
+        events = perception.ingest_records(records)
+
+    perception.apply_to_grid(world, events)
+
+    log.header("World Ingestion")
+    log.key_value("Records ingested", str(len(events)))
+    log.key_value("Grid cells filled", str(np.sum(world.material != 0)))
+    log.key_value("Avg energy", f"{np.mean(world.energy[world.material != 0]):.2f}" if np.any(world.material != 0) else "0.00")
+
+    if verbose:
+        summary = perception.summary()
+        for cls, count in summary.get("material_counts", {}).items():
+            log.key_value(f"  {cls}", str(count))
 
 
 # ═══════════════════════════════════════════════════════════════════════

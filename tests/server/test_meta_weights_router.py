@@ -12,7 +12,9 @@ from apps.api.server.routers.meta_weights import router
 
 @pytest.fixture
 def app():
+    from apps.api.server.infrastructure.exception_handlers import register_all_handlers
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -22,12 +24,14 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False)
 
 
-def _make_weight(temperature=0.8, repetition_penalty=1.0, top_p=0.9, top_k=50):
+def _make_weight(temperature=0.8, repetition_penalty=1.0, top_p=0.9, top_k=50, style_bias=0.0, confidence_boost=0.0):
     return type("W", (), {
         "temperature": temperature,
         "repetition_penalty": repetition_penalty,
         "top_p": top_p,
         "top_k": top_k,
+        "style_bias": style_bias,
+        "confidence_boost": confidence_boost,
     })()
 
 

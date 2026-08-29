@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
@@ -15,7 +15,6 @@ export default function AdaptersPage() {
   const router = useRouter()
   const [stats, setStats] = useState<UserAdapterStats | null>(null)
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
-  const [quality, setQuality] = useState<{ count: number; adapters: UserAdapterInfo[] } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
@@ -23,27 +22,17 @@ export default function AdaptersPage() {
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
   const [evalHistory, setEvalHistory] = useState<LoraEvalResult[]>([])
+  const [pendingResetUserId, setPendingResetUserId] = useState<string | null>(null)
   const [runningEval, setRunningEval] = useState(false)
 
-  const fetchData = async () => {
-    setLoading(true)
-    setError(null)
+  const refreshData = async () => {
     try {
-      const [statsRes, qualityRes] = await Promise.all([
-        userAdaptersController.list(),
-        userAdaptersController.getQuality(3),
-      ])
-      setStats(statsRes)
-      setQuality(qualityRes)
-      setAdapters(qualityRes.adapters ?? [])
-      try {
-        const evalResults = await loraEvalController.getHistory(10)
-        setEvalHistory(evalResults)
-      } catch { /* optional */ }
+      setError(null)
+      const listRes = await userAdaptersController.list()
+      setStats(listRes.stats)
+      setAdapters(listRes.adapters ?? [])
     } catch (e) {
-      setError(extractErrorMessage(e, 'Failed to load adapters'))
-    } finally {
-      setLoading(false)
+      addToast(extractErrorMessage(e, 'Could not refresh adapters'), 'error')
     }
   }
 
@@ -53,16 +42,12 @@ export default function AdaptersPage() {
       setLoading(true)
       setError(null)
       try {
-        const [statsRes, qualityRes] = await Promise.all([
-          userAdaptersController.list(),
-          userAdaptersController.getQuality(3),
-        ])
+        const listRes = await userAdaptersController.list()
         if (ignore) return
-        setStats(statsRes)
-        setQuality(qualityRes)
-        setAdapters(qualityRes.adapters ?? [])
+        setStats(listRes.stats)
+        setAdapters(listRes.adapters ?? [])
       } catch (e) {
-        if (!ignore) setError(extractErrorMessage(e, 'Failed to load adapters'))
+        if (!ignore) setError(extractErrorMessage(e, 'Could not load adapters'))
       } finally {
         if (!ignore) setLoading(false)
       }
@@ -83,7 +68,7 @@ export default function AdaptersPage() {
         setAggregateResult(`Aggregated ${res.user_count ?? 0} adapters`)
       }
     } catch (err) {
-      setAggregateResult(err instanceof Error ? err.message : 'Aggregation failed')
+      setAggregateResult(err instanceof Error ? err.message : 'Could not aggregation')
     } finally {
       setAggregating(false)
     }
@@ -94,22 +79,11 @@ export default function AdaptersPage() {
     try {
       const res = await userAdaptersController.prune()
       setAggregateResult(`Pruned ${res.deleted_count} adapters`)
-      await fetchData()
+      await refreshData()
     } catch (err) {
-      setAggregateResult(err instanceof Error ? err.message : 'Prune failed')
+      setAggregateResult(err instanceof Error ? err.message : 'Could not prune')
     } finally {
       setPruning(false)
-    }
-  }
-
-  const handleReset = async (userId: string) => {
-    if (!window.confirm(`Reset adapter for ${userId}? This cannot be undone.`)) return
-    try {
-      await userAdaptersController.reset(userId)
-      await fetchData()
-      addToast(`Adapter for ${userId} reset`, 'success')
-    } catch {
-      addToast('Failed to reset adapter', 'error')
     }
   }
 
@@ -121,7 +95,7 @@ export default function AdaptersPage() {
       setEvalHistory(evalResults)
       addToast('Evaluation complete', 'success')
     } catch {
-      addToast('Eval failed', 'error')
+      addToast('Could not eval', 'error')
     } finally {
       setRunningEval(false)
     }
@@ -131,15 +105,17 @@ export default function AdaptersPage() {
     return (
       <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" loadingCards={1}>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-      </PageContainer>
+  
+    </PageContainer>
     )
   }
 
   if (error) {
     return (
-      <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" error={error} onRetry={() => void fetchData()}>
+      <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" error={error} onRetry={() => void refreshData()}>
         <></>
-      </PageContainer>
+  
+    </PageContainer>
     )
   }
 
@@ -147,12 +123,12 @@ export default function AdaptersPage() {
     <PageContainer
       title="Adapters"
       subtitle="Per-user LoRA adapter management"
-      headerRight={<Button size="sm" variant="ghost" onClick={fetchData}><IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /></Button>}
+      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} /></Button>}
     >
       {aggregateResult && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
           {aggregateResult}
-          <button className="ml-2 underline" onClick={() => setAggregateResult(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setAggregateResult(null)}>Dismiss</button>
         </div>
       )}
 
@@ -171,7 +147,7 @@ export default function AdaptersPage() {
               ].map(s => (
                 <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">{s.label}</div>
-                  <div className="text-lg font-mono font-medium">{s.value}</div>
+                  <div className="text-base font-mono font-medium">{s.value}</div>
                 </div>
               ))}
             </div>
@@ -184,8 +160,8 @@ export default function AdaptersPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Actions</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
-            <IconRefresh className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh">
+            <IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} />
           </Button>
         </CardHeader>
         <CardContent>
@@ -234,7 +210,7 @@ export default function AdaptersPage() {
                     size="sm"
                     variant="ghost"
                     className="text-destructive"
-                    onClick={() => handleReset(a.user_id)}
+                    onClick={() => setPendingResetUserId(a.user_id)}
                   >
                     <IconTrash className="h-4 w-4" />
                   </Button>
@@ -259,11 +235,7 @@ export default function AdaptersPage() {
                 <div key={i} className="rounded-md border border-border/60 p-3 text-xs space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{String(r.adapter_path ?? '—')}</span>
-                    <span className={`px-1.5 py-0.5 rounded font-medium ${
-                      r.verdict === 'accept' ? 'bg-success/15 text-success' :
-                      r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
+                    <span className={cn('px-1.5 py-0.5 rounded font-medium', r.verdict === 'accept' ? 'bg-success/15 text-success' : r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>
                       {String(r.verdict ?? '—')}
                     </span>
                     {r.timestamp && (
@@ -282,6 +254,23 @@ export default function AdaptersPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={pendingResetUserId !== null} onOpenChange={(open) => { if (!open) setPendingResetUserId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset adapter?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset the adapter for this user. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => { const userId = pendingResetUserId; setPendingResetUserId(null); if (userId) { try { await userAdaptersController.reset(userId); await refreshData(); addToast(`Adapter for ${userId} reset`, 'success') } catch { addToast('Could not reset adapter', 'error') } } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageContainer>
   )
 }

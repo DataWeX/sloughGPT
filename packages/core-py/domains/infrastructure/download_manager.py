@@ -235,7 +235,7 @@ class DownloadManager:
                 return True
             return False
 
-    def _set_progress(self, model_id: str, **kwargs):
+    def _set_progress(self, model_id: str, **kwargs) -> None:
         with self._lock:
             if model_id not in self._downloads:
                 self._downloads[model_id] = DownloadProgress(
@@ -247,15 +247,17 @@ class DownloadManager:
                 if hasattr(entry, key):
                     setattr(entry, key, value)
 
-    def _notify_callbacks(self, model_id: str):
+    def _notify_callbacks(self, model_id: str) -> None:
         with self._lock:
             for cb in self._callbacks.get(model_id, []):
                 try:
                     cb(self._downloads[model_id].to_dict())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("download_manager: callback failed", extra={
+                        "model_id": model_id, "error": str(e),
+                    })
 
-    def on_progress(self, model_id: str, callback: Callable):
+    def on_progress(self, model_id: str, callback: Callable) -> None:
         with self._lock:
             self._callbacks.setdefault(model_id, []).append(callback)
 
@@ -269,6 +271,8 @@ class DownloadManager:
         Unlike the old implementation (which cleaned up and restarted on every
         resume), this delegates to ``downcraft`` which preserves partial
         downloads across restarts via ``~/.downcraft/state.json``.
+
+        Registers with CancelManager so downloads appear in /operations.
         """
         if is_download_complete(model_id):
             return {"status": "already_cached", "model_id": model_id}
@@ -301,15 +305,39 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
+        # Register with CancelManager
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        mgr = get_cancel_manager()
+        cancel_event = threading.Event()
+        op_id = mgr.register(
+            op_type=OpType.DOWNLOAD,
+            label=f"download:{model_id}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        mgr.start(op_id)
+
         loop = asyncio.get_event_loop()
-        task = asyncio.create_task(self._download_worker(model_id, total_est))
+        task = asyncio.create_task(self._download_worker(model_id, total_est, cancel_event))
         self._tasks[model_id] = task
 
         try:
             result = await task
+            if result.get("status") == "complete":
+                mgr.finish(op_id)
+            elif result.get("status") == "cancelled":
+                mgr.finish(op_id, "cancelled")
+            else:
+                mgr.finish(op_id, result.get("error", "unknown"))
             return result
         except asyncio.CancelledError:
             self._set_progress(model_id, status=DownloadStatus.CANCELLED)
+            mgr.finish(op_id, "cancelled")
+            # Record dashboard event
+            try:
+                from domains.infrastructure.event_buffer import get_event_buffer
+                get_event_buffer().record("DOWNLOAD", f"{model_id} cancelled")
+            except Exception:
+                pass
             return {"status": "cancelled", "model_id": model_id}
         except Exception as e:
             self._set_progress(
@@ -318,32 +346,75 @@ class DownloadManager:
                 error=str(e),
             )
             self._notify_callbacks(model_id)
+            mgr.finish(op_id, str(e))
+            # Record dashboard event
+            try:
+                from domains.infrastructure.event_buffer import get_event_buffer
+                get_event_buffer().record("ERROR", f"download {model_id} failed: {str(e)[:40]}")
+            except Exception:
+                pass
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
-    async def _download_worker(self, model_id: str, total_bytes_hint: int):
+    async def _download_worker(self, model_id: str, total_bytes_hint: int, cancel_event: Optional[threading.Event] = None):
         """Run the downcraft in a thread executor, updating progress."""
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.CANCELLED:
+                return {"status": "cancelled", "model_id": model_id}
         self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
         self._notify_callbacks(model_id)
         start_time = time.time()
 
+        # Record dashboard event with size info
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            size_str = ""
+            if total_est > 0:
+                if total_est > 1e9:
+                    size_str = f" ({total_est / 1e9:.1f}GB)"
+                elif total_est > 1e6:
+                    size_str = f" ({total_est / 1e6:.0f}MB)"
+            get_event_buffer().record("DOWNLOAD", f"{model_id} started{size_str}")
+        except Exception:
+            pass
+
         def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
-            pct = (downloaded / total * 100) if total > 0 else 0
-            self._set_progress(
-                mid,
-                bytes_downloaded=downloaded,
-                total_bytes=total,
-                speed_bytes_per_sec=speed,
-                percentage=pct,
-                status=DownloadStatus.DOWNLOADING,
-            )
-            self._notify_callbacks(mid)
+            try:
+                with self._lock:
+                    cur = self._downloads.get(mid)
+                    if cur and cur.status == DownloadStatus.CANCELLED:
+                        return
+                pct = (downloaded / total * 100) if total > 0 else 0
+                self._set_progress(
+                    mid,
+                    bytes_downloaded=downloaded,
+                    total_bytes=total,
+                    speed_bytes_per_sec=speed,
+                    percentage=pct,
+                    status=DownloadStatus.DOWNLOADING,
+                )
+                self._notify_callbacks(mid)
+            except Exception as e:
+                logger.warning("download_manager: progress callback failed", extra={
+                    "model_id": mid, "error": str(e),
+                })
 
         def _file_cb(mid: str, fpath: str):
-            self._set_progress(mid, current_file=fpath)
-            self._notify_callbacks(mid)
+            try:
+                self._set_progress(mid, current_file=fpath)
+                self._notify_callbacks(mid)
+            except Exception as e:
+                logger.warning("download_manager: file callback failed", extra={
+                    "model_id": mid, "file": fpath, "error": str(e),
+                })
 
         def _do_download():
             from domains.infrastructure.hf_hub import download_hf_model
+
+            def _cancel_check():
+                if cancel_event and cancel_event.is_set():
+                    raise InterruptedError("Download cancelled")
+
             download_hf_model(
                 model_id,
                 on_progress=_progress_cb,
@@ -351,6 +422,11 @@ class DownloadManager:
             )
 
         await asyncio.to_thread(_do_download)
+
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.CANCELLED:
+                return {"status": "cancelled", "model_id": model_id}
 
         elapsed = time.time() - start_time
         cache_dir = _cache_dir(model_id)
@@ -362,6 +438,13 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            get_event_buffer().record("DOWNLOAD", f"{model_id} complete ({elapsed:.1f}s)")
+        except Exception:
+            pass
+
         logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir,
             extra={"tag": "INFRA"})
         return {
@@ -371,7 +454,7 @@ class DownloadManager:
             "elapsed_seconds": round(elapsed, 1),
         }
 
-    def cleanup_stale(self, max_age: float = 300):
+    def cleanup_stale(self, max_age: float = 300) -> None:
         now = time.time()
         with self._lock:
             stale = []
@@ -389,10 +472,20 @@ class DownloadManager:
 
 
 _download_manager: Optional[DownloadManager] = None
+_download_manager_lock = threading.Lock()
 
 
 def get_download_manager() -> DownloadManager:
     global _download_manager
     if _download_manager is None:
-        _download_manager = DownloadManager()
+        with _download_manager_lock:
+            if _download_manager is None:
+                _download_manager = DownloadManager()
     return _download_manager
+
+
+def reset_download_manager() -> None:
+    """Reset the singleton (for testing)."""
+    global _download_manager
+    with _download_manager_lock:
+        _download_manager = None

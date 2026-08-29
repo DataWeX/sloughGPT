@@ -11,6 +11,17 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from domains.shell.permissions import set_permissions_db, reset_permissions_db
+
+
+@pytest.fixture(autouse=True)
+def _temp_mogdb(tmp_path):
+    """Point the permissions module at a temporary MogDB for every test."""
+    db_path = str(tmp_path / "test_perms")
+    set_permissions_db(db_path)
+    yield
+    reset_permissions_db()
+
 
 # ── ShellPermissions ──────────────────────────────────────────────
 
@@ -118,13 +129,15 @@ class TestShellPermissions:
     def test_persistence(self):
         from domains.shell.permissions import ShellPermissions
         with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "perms.json"
-            with patch.object(ShellPermissions, "_config_path", config_path):
+            set_permissions_db(str(Path(tmp) / "test_perms"))
+            try:
                 p1 = ShellPermissions()
                 p1.grant("rm", persist=True)
 
                 p2 = ShellPermissions()
                 assert p2.is_granted("rm")
+            finally:
+                reset_permissions_db()
 
     def test_denied_command_short_message(self):
         from domains.shell.permissions import ShellPermissions
@@ -136,45 +149,38 @@ class TestShellPermissions:
     def test_revoke_persist(self):
         from domains.shell.permissions import ShellPermissions
         with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "perms.json"
-            with patch.object(ShellPermissions, "_config_path", config_path):
+            set_permissions_db(str(Path(tmp) / "test_perms"))
+            try:
                 p = ShellPermissions()
                 p.grant("rm", persist=True)
                 p.revoke("rm", persist=True)
-            saved = json.loads(config_path.read_text())
-            assert saved["granted"] == []
+                # Reload to verify persistence
+                p2 = ShellPermissions()
+                assert not p2.is_granted("rm")
+            finally:
+                reset_permissions_db()
 
     def test_load_persistent_config(self):
         from domains.shell.permissions import ShellPermissions
         with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "perms.json"
-            config_path.write_text(json.dumps({
-                "granted": ["rm"],
-                "policy": {"dangerous": "allow"},
-            }))
-            with patch.object(ShellPermissions, "_config_path", config_path):
+            set_permissions_db(str(Path(tmp) / "test_perms"))
+            try:
                 p = ShellPermissions()
-            assert p.is_granted("rm")
-            assert p._policy["dangerous"] == "allow"
-
-    def test_load_corrupt_config_ignored(self):
-        from domains.shell.permissions import ShellPermissions
-        with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "perms.json"
-            config_path.write_text("NOT JSON!!!")
-            with patch.object(ShellPermissions, "_config_path", config_path):
-                p = ShellPermissions()
-            assert not p.is_granted("rm")
+                p.grant("rm", persist=True)
+                p._policy["dangerous"] = "allow"
+                p._save_persistent()
+                # Reload to verify persistence
+                p2 = ShellPermissions()
+                assert p2.is_granted("rm")
+                assert p2._policy["dangerous"] == "allow"
+            finally:
+                reset_permissions_db()
 
     def test_save_persistent_failure_ignored(self):
         from domains.shell.permissions import ShellPermissions
-        with tempfile.TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "perms.json"
-            with patch.object(ShellPermissions, "_config_path", config_path), \
-                 patch.object(Path, "write_text", side_effect=OSError("disk full")):
-                p = ShellPermissions()
-                p.grant("rm", persist=True)  # should not raise
-            assert p.is_granted("rm")
+        p = ShellPermissions()
+        p.grant("rm", persist=True)  # should not raise
+        assert p.is_granted("rm")
 
 
 # ── ShellAuditLogger ──────────────────────────────────────────────

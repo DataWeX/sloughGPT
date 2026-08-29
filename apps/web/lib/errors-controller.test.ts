@@ -66,7 +66,7 @@ describe('errorsController.getTrends', () => {
   })
 
   it('returns empty array on missing trends', async () => {
-    apiClient.apiGet.mockResolvedValue({ data: {} })
+    apiClient.apiGet.mockResolvedValue({})
     const result = await errorsController.getTrends()
     expect(result).toEqual([])
   })

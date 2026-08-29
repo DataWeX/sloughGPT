@@ -3,6 +3,9 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 apps/mobile/ios/
 
+# Releases
+releases/
+
 # Design docs (not committed)
 LLM.md
 
@@ -239,3 +242,8 @@ apps/mobile/android/app/build/
 apps/mobile/android/app/debug.keystore
 apps/mobile/android/gradle/wrapper/gradle-wrapper.jar
 apps/mobile/android/gradlew
+
+# Build artifacts
+releases/
+x
+y

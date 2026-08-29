@@ -81,7 +81,7 @@ class SloManager:
             return
 
         if not self.slos_dir.exists():
-            logger.warning(f"Slos directory not found: {self.slos_dir}", extra={"tag": "SOUL"})
+            logger.warning("Slos directory not found: %s", self.slos_dir, extra={"tag": "SOUL"})
             return
 
         # Find personality profiles (.slo) and checkpoint files (.soul) — recursive
@@ -92,7 +92,7 @@ class SloManager:
                     if soul_info:
                         self._souls_cache[soul_info.name] = soul_info
                 except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                    logger.debug(f"Failed to parse soul {sou_path}: {e}")  # pragma: no cover
+                    logger.debug("Failed to parse soul %s: %s", sou_path, e)  # pragma: no cover
 
         # Find text profile files in souls/ subdirectory (both .slo and .soul)
         soul_candidates = [self.slos_dir / "souls"]
@@ -111,10 +111,10 @@ class SloManager:
                             if soul_info and soul_info.name not in self._souls_cache:
                                 self._souls_cache[soul_info.name] = soul_info
                         except Exception as e:  # pragma: no cover (unreachable — _parse_soul_info swallows all errors)
-                            logger.debug(f"Failed to parse soul profile {soul_path}: {e}")  # pragma: no cover
+                            logger.debug("Failed to parse soul profile %s: %s", soul_path, e)  # pragma: no cover
 
         if not hasattr(self, '_scanned'):
-            logger.info(f"Found {len(self._souls_cache)} souls", extra={"tag": "SOUL"})
+            logger.info("Found %s souls", len(self._souls_cache), extra={"tag": "SOUL"})
             self._scanned = True
 
     def _parse_soul_info(self, sou_path: str) -> Optional[SloInfo]:
@@ -130,8 +130,20 @@ class SloManager:
                 if header == b"SOUL":
                     ver = struct.unpack("<I", f.read(4))[0]
                     config_len = struct.unpack("<I", f.read(4))[0]
+                    file_size = os.path.getsize(sou_path)
+                    if config_len > file_size - 12:
+                        raise ValueError(
+                            f"config_len ({config_len}) exceeds remaining file size "
+                            f"({file_size - 12}) in {sou_path}"
+                        )
                     config_bytes = f.read(config_len)
-                    config = json.loads(config_bytes.decode("utf-8"))
+                    try:
+                        config = json.loads(config_bytes.decode("utf-8"))
+                    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                        raise ValueError(
+                            f"Corrupted config header in {sou_path}: "
+                            f"config_len={config_len}, read={len(config_bytes)} bytes: {exc}"
+                        ) from exc
                     name = config.get("name", Path(sou_path).stem)
                     description = config.get("description", "") or config.get("tagline", "") or name
                     traits = config.get("traits", config.get("personality_traits", []))
@@ -195,7 +207,7 @@ class SloManager:
                 traits=traits,
             )
         except Exception as e:
-            logger.debug(f"Parse error for {sou_path}: {e}")
+            logger.debug("Parse error for %s: %s", sou_path, e)
             return None
 
     def _load_preference(self) -> None:
@@ -205,9 +217,9 @@ class SloManager:
                 name = self._preference_file.read_text().strip()
                 if name in self._souls_cache:
                     self._current_soul = name
-                    logger.info(f"Restored soul preference: {name}", extra={"tag": "SOUL"})
-            except Exception:
-                pass
+                    logger.info("Restored soul preference: %s", name, extra={"tag": "SOUL"})
+            except Exception as e:
+                logger.warning("Failed to load soul preference: %s", e)
 
     def _save_preference(self) -> None:
         """Save current soul preference."""
@@ -215,8 +227,8 @@ class SloManager:
             try:
                 self._preference_file.parent.mkdir(parents=True, exist_ok=True)
                 self._preference_file.write_text(self._current_soul)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to save soul preference: %s", e)
 
     def list_souls(self) -> List[SloInfo]:
         """List all available souls."""
@@ -262,7 +274,7 @@ class SloManager:
         soul = self._souls_cache[name]
         soul.loaded_at = os.times().elapsed
 
-        logger.info(f"Switched to soul: {name}", extra={"tag": "SOUL"})
+        logger.info("Switched to soul: %s", name, extra={"tag": "SOUL"})
 
         return {
             "success": True,
@@ -387,8 +399,8 @@ class SloManager:
                                 for k, v in meta[group].items():
                                     if k in result.get(group, {}):
                                         result[group][k] = v
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to merge trait weights from soul: %s", e)
 
         # Overlay live values from TraitWeightsConfig (feedback-driven)
         try:
@@ -400,8 +412,8 @@ class SloManager:
                     for k, v in live[group].items():
                         if k in result.get(group, {}):
                             result[group][k] = v
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Failed to merge live trait weights: %s", e)
 
         return result
 

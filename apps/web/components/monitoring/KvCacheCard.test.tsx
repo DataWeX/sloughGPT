@@ -50,8 +50,9 @@ describe('KvCacheCard', () => {
     expect(screen.getByText(/LRU cap: 10 simultaneous sessions/)).toBeDefined()
   })
 
-  it('shows placeholder age when oldest session age missing', () => {
+  it('shows skeleton age when oldest session age missing', () => {
     render(<KvCacheCard kvSessions={{ ...kvSessions, oldest_session_age: undefined } as any} />)
-    expect(screen.getByText('...')).toBeDefined()
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(1)
   })
 })

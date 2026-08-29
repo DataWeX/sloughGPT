@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for the POST /training/recovery/recover/{job_id} endpoint.
 
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient
 router_mod = importlib.import_module("training.router")
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(router_mod.router)
 client = TestClient(app)
 
@@ -136,7 +138,7 @@ def _recover(tmp_path, job, patches=()):
 def test_recover_404_when_job_missing(tmp_path, deps):
     resp = _recover(tmp_path, None)
     assert resp.status_code == 404
-    assert resp.json()["detail"] == "Job not found"
+    assert resp.json()["error"] == "Job not found"
     assert deps[0].submitted == []
 
 
@@ -145,7 +147,7 @@ def test_recover_400_when_status_not_interruptible(tmp_path, deps):
     job["status"] = "completed"
     resp = _recover(tmp_path, job)
     assert resp.status_code == 400
-    assert "only 'interrupted' or 'failed'" in resp.json()["detail"]
+    assert "only 'interrupted' or 'failed'" in resp.json()["error"]
     assert deps[0].submitted == []
 
 
@@ -157,7 +159,7 @@ def test_recover_400_when_recovering_with_fresh_heartbeat(tmp_path, deps):
     job["last_heartbeat"] = datetime.now().isoformat()
     resp = _recover(tmp_path, job)
     assert resp.status_code == 400
-    assert "stale heartbeat" in resp.json()["detail"]
+    assert "stale heartbeat" in resp.json()["error"]
     assert deps[0].submitted == []
 
 
@@ -192,7 +194,7 @@ def test_recover_corrupt_recorded_path_422_no_job(tmp_path, deps):
         ],
     )
     assert resp.status_code == 422
-    assert "Cannot resume from" in resp.json()["detail"]
+    assert "Cannot resume from" in resp.json()["error"]
     assert "recovery_job-1" not in router_mod.training_jobs
     assert deps[0].submitted == []
 
@@ -211,7 +213,7 @@ def test_recover_missing_recorded_path_422_no_job(tmp_path, deps):
         ],
     )
     assert resp.status_code == 422
-    assert "missing or unsupported" in resp.json()["detail"]
+    assert "missing or unsupported" in resp.json()["error"]
     assert "recovery_job-1" not in router_mod.training_jobs
     assert deps[0].submitted == []
 
@@ -225,7 +227,7 @@ def test_recover_recorded_path_missing_on_disk_422(tmp_path, deps):
     job = _base_job(str(tmp_path), checkpoint_path=missing)
     resp = _recover(tmp_path, job)
     assert resp.status_code == 422
-    assert "missing or unsupported" in resp.json()["detail"]
+    assert "missing or unsupported" in resp.json()["error"]
     assert "recovery_job-1" not in router_mod.training_jobs
     assert deps[0].submitted == []
 

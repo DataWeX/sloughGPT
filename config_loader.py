@@ -25,7 +25,7 @@ class ModelConfig:
 @dataclass
 class DataConfig:
     dataset: str = "shakespeare"
-    data_path: str = "datasets/shakespeare/input.txt"
+    data_path: str = "data/shakespeare/input.txt"
     val_split: float = 0.1
 
 
@@ -172,7 +172,7 @@ def merge_args_with_config(config: Config, args) -> Config:
 
     if hasattr(args, 'dataset') and args.dataset:
         config.data.dataset = args.dataset
-        config.data.data_path = f"datasets/{args.dataset}/input.txt"
+        config.data.data_path = f"data/{args.dataset}/input.txt"
 
     if hasattr(args, 'epochs') and args.epochs:
         config.training.epochs = args.epochs

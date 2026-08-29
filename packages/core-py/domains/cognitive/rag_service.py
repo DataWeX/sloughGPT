@@ -75,9 +75,12 @@ class RAGService:
                     if not line:
                         continue
                     doc = json.loads(line)
+                    content = doc.get("content")
+                    if not content:
+                        continue
                     self._documents.append(doc)
                     self.rag.add_document(
-                        content=doc["content"],
+                        content=content,
                         metadata=doc.get("metadata", {}),
                         chunk_size=doc.get("chunk_size", 512),
                         overlap=doc.get("overlap", 50),
@@ -184,7 +187,24 @@ class RAGService:
         Returns:
             Dict with 'context' (concatenated text), 'results' (ranked list), 'num_results'.
         """
-        return self.rag.query(question, top_k=top_k, return_context=True)
+        import time as _time
+        t0 = _time.monotonic()
+        try:
+            result = self.rag.query(question, top_k=top_k, return_context=True)
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.info("rag_service: query complete", extra={
+                "question_len": len(question), "top_k": top_k,
+                "num_results": result.get("num_results", 0),
+                "elapsed_ms": round(elapsed_ms, 1),
+            })
+            return result
+        except Exception as e:
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.error("rag_service: query failed", extra={
+                "question_len": len(question), "top_k": top_k,
+                "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
+            })
+            raise
 
     def verify_and_ground(
         self,
@@ -200,7 +220,24 @@ class RAGService:
         Returns:
             Dict with 'verification', 'citations', 'confidence', 'is_verified'.
         """
-        return self.rag.verify_and_ground(generated_text, question)
+        import time as _time
+        t0 = _time.monotonic()
+        try:
+            result = self.rag.verify_and_ground(generated_text, question)
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.info("rag_service: verify_and_ground complete", extra={
+                "is_verified": result.get("is_verified", False),
+                "confidence": result.get("confidence", 0),
+                "num_citations": len(result.get("citations", [])),
+                "elapsed_ms": round(elapsed_ms, 1),
+            })
+            return result
+        except Exception as e:
+            elapsed_ms = (_time.monotonic() - t0) * 1000
+            logger.error("rag_service: verify_and_ground failed", extra={
+                "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
+            })
+            raise
 
     def list_documents(self) -> List[Dict[str, Any]]:
         """List all ingested documents (metadata only, no content)."""
@@ -504,11 +541,28 @@ class KGTrainingPipeline:
 # ---------------------------------------------------------------------------
 
 _rag_service: Optional[RAGService] = None
+_rag_service_lock = threading.Lock()
+
+
+def is_rag_service_ready() -> bool:
+    """Return True if the RAG service singleton has been initialized.
+
+    Non-blocking check — does NOT create the service if absent.
+    """
+    return _rag_service is not None
 
 
 def get_rag_service() -> RAGService:
-    """Get or create the singleton RAGService."""
+    """Get or create the singleton RAGService.
+
+    Thread-safe: the first caller initializes the instance while
+    subsequent callers wait on a lock instead of creating duplicates.
+    """
     global _rag_service
-    if _rag_service is None:
+    if _rag_service is not None:
+        return _rag_service
+    with _rag_service_lock:
+        if _rag_service is not None:
+            return _rag_service
         _rag_service = RAGService()
     return _rag_service

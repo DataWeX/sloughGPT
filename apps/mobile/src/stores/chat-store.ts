@@ -5,6 +5,7 @@ import {useSettingsStore} from './settings-store';
 import {useHybridStore} from './hybrid-inference-store';
 import {useProvidersStore} from './providers-store';
 import {streamProviderChat, ProviderError} from '../services/providers-client';
+import {onMessageSent} from '../services/app-review';
 import {
   cacheMessages,
   getCachedMessages,
@@ -44,6 +45,7 @@ interface ChatState {
 }
 
 let _abortController: AbortController | null = null;
+let _everConnected = false;
 
 function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -57,7 +59,9 @@ async function saveSessionContext(
     await api.post(`/session/${sessionId}/context`, {
       messages: messages.map(m => ({role: m.role, content: m.content})),
     });
-  } catch {}
+  } catch (e) {
+    if (__DEV__) console.warn('[chat-store] sendContext failed:', e);
+  }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -82,17 +86,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const data = await api.get<{messages: Message[]}>(
         `/session/${id}/messages`,
       );
+      _everConnected = true;
       const msgs = data.messages || [];
       set({activeSessionId: id, messages: msgs});
       await cacheActiveSessionId(id);
       await cacheMessages(id, msgs);
     } catch {
-      // offline — load from cache
       const cached = await getCachedMessages(id);
       if (cached.length > 0) {
         set({activeSessionId: id, messages: cached});
       }
-      set({error: 'Offline — showing cached messages'});
+      if (_everConnected) {
+        set({error: 'Offline — showing cached messages'});
+      }
     }
   },
 
@@ -242,6 +248,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ]);
       await get().refreshSessions();
       set({streaming: false});
+      onMessageSent().catch(() => {});
     };
 
     const handleError = async (err: any) => {
@@ -287,7 +294,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           await finalizeSuccess(result.text);
           return;
         }
-      } catch {}
+      } catch (e) {
+        if (__DEV__) console.warn('[chat-store] local inference failed, falling back:', e);
+      }
       // Fall through to remote if local fails
     }
 

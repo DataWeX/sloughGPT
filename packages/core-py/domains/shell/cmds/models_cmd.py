@@ -1,72 +1,126 @@
-"""models / unload — manage AI models in the inference server."""
+"""Model management commands: models, unload, precision, quantize, dequantize.
 
+Follows the cmds/ protocol:
+    def run(argv, out, api, env) -> int
+"""
 from __future__ import annotations
 
-from ..console import Console
-from ..commands import ShellCommands, _api_get
-
-help = "List models, unload/quantize/dequantize, or set compute precision"
+help = "List, unload, or configure models"
 names = ["models", "unload", "precision", "quantize", "dequantize"]
 
+_VALID_PRECISION = {"auto", "fp32", "fp16"}
+_VALID_BITS = {"4", "8"}
+_VALID_SCHEME = {"symmetric", "asymmetric"}
 
-def run(argv: list[str], out: Console, api: ShellCommands,
-        env: dict[str, str]) -> int:
+
+def _format_error(e: Exception, cmd: str = "") -> str:
+    """Format an exception into a user-friendly error message."""
+    from domains.shell.error import format_error
+    return format_error(e, cmd, color=False)
+
+
+def run(argv: list[str], out, api, env: dict) -> int:
     cmd = argv[0] if argv else "models"
+    args = argv[1:]
 
-    if cmd == "models":
-        with out.spinner("Fetching models") as s:
-            models = api.models()
-            try:
-                health = api._api_get("/health")
-                if isinstance(health, dict):
-                    hdata = health.get("data", health)
-                    loaded_model = hdata.get("model_type") or hdata.get("model_id", "")
-                    if loaded_model:
-                        models = [m for m in models if m.get("model_id") != loaded_model]
-                        models.insert(0, {"model_id": loaded_model, "status": "loaded", "loaded": True})
-            except Exception:
-                pass
-        s.ok("Models loaded")
-        if not models:
-            out.print("  No models available")
-            return 0
-        rows = []
-        for m in models:
-            name = m.get("model_id", m.get("name", m.get("id", "?")))
-            sz = m.get("size_gb", 0) or m.get("size_mb", 0) / 1024
-            sz_str = f"{sz:.2f}G" if sz else ""
-            loaded = m.get("status") == "loaded" or m.get("loaded")
-            rows.append([name, m.get("type", ""), sz_str, "\u2713 loaded" if loaded else ""])
-        out.table(rows, ["Model", "Type", "Size", "Status"])
+    handlers = {
+        "models": _models,
+        "unload": _unload,
+        "precision": _precision,
+        "quantize": _quantize,
+        "dequantize": _dequantize,
+    }
+
+    handler = handlers.get(cmd, _models)
+    return handler(args, out, api)
+
+
+def _models(args, out, api):
+    try:
+        models = api.models()
+    except Exception as e:
+        out.write(_format_error(e, "models"))
+        return 1
+    if not models:
+        out.write("No models available.")
         return 0
 
-    if cmd == "unload":
-        with out.spinner("Unloading model") as s:
-            result = api.unload_model()
-        s.ok("Model unloaded")
-        out.json(result)
-        return 0
+    for m in models:
+        mid = m.get("model_id", m.get("name", "?"))
+        mtype = m.get("type", "?")
+        size = m.get("size_gb", "?")
+        out.write(f"  {mid:20s}  type={mtype}  size={size} GB")
 
-    if cmd in ("precision",):
-        modes = {"auto": "auto", "fp32": "fp32", "fp16": "fp16"}
-        mode = modes.get(argv[1]) if len(argv) > 1 else "auto"
-        with out.spinner(f"Setting precision to {mode}") as s:
-            result = api.set_precision(mode)
-        out.json(result)
-        return 0
+    try:
+        health = api._api_get("/health")
+        loaded = health.get("data", {}).get("model_type")
+        if loaded:
+            out.write(f"\n  Loaded: {loaded}")
+    except Exception:
+        pass  # non-critical; models list already shown
 
-    if cmd == "quantize":
-        bits = int(argv[1]) if len(argv) > 1 and argv[1].isdigit() else 8
-        qmode = argv[2] if len(argv) > 2 and argv[2] in ("symmetric", "asymmetric") else "symmetric"
-        with out.spinner(f"Quantizing model ({bits}-bit, {qmode})") as s:
-            result = api.quantize_model(bits, qmode)
-        out.json(result)
-        return 0
+    return 0
 
-    if cmd == "dequantize":
-        with out.spinner("Dequantizing model") as s:
-            result = api.dequantize_model()
-        out.json(result)
-        return 0
 
+def _unload(args, out, api):
+    try:
+        result = api.unload_model()
+    except Exception as e:
+        out.write(_format_error(e, "unload"))
+        return 1
+    status = result.get("status", "error")
+    if status == "unloaded":
+        out.write("Model unloaded.")
+        return 0
+    out.write(f"Unload result: {status}")
+    return 0
+
+
+def _precision(args, out, api):
+    mode = args[0] if args else "auto"
+    if mode not in _VALID_PRECISION:
+        out.write(f"Invalid precision: {mode!r}. Must be one of: {', '.join(sorted(_VALID_PRECISION))}")
+        return 1
+    try:
+        result = api.set_precision(mode)
+    except Exception as e:
+        out.write(_format_error(e, "precision"))
+        return 1
+    out.write(f"Precision set to: {result.get('mode', mode)}")
+    return 0
+
+
+def _quantize(args, out, api):
+    bits = args[0] if args else "4"
+    scheme = args[1] if len(args) > 1 else "symmetric"
+    if bits not in _VALID_BITS:
+        out.write(f"Invalid bits: {bits!r}. Must be one of: {', '.join(sorted(_VALID_BITS))}")
+        return 1
+    if scheme not in _VALID_SCHEME:
+        out.write(f"Invalid scheme: {scheme!r}. Must be one of: {', '.join(sorted(_VALID_SCHEME))}")
+        return 1
+    try:
+        result = api.quantize_model(bits=bits, scheme=scheme)
+    except Exception as e:
+        out.write(_format_error(e, "quantize"))
+        return 1
+    status = result.get("status", "error")
+    if status == "ok":
+        out.write(f"Quantized to {bits}-bit ({scheme}).")
+        return 0
+    out.write(f"Quantize result: {status}")
+    return 0
+
+
+def _dequantize(args, out, api):
+    try:
+        result = api.dequantize_model()
+    except Exception as e:
+        out.write(_format_error(e, "dequantize"))
+        return 1
+    status = result.get("status", "error")
+    if status == "ok":
+        out.write("Dequantized.")
+        return 0
+    out.write(f"Dequantize result: {status}")
     return 0

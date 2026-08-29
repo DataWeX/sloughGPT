@@ -3,17 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
+import { timeAgo } from '@/lib/time-ago'
 
 interface ChatSessionStatsCardProps {
   sessionId: string | null
-}
-
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60000) return 'just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-  return `${Math.floor(diff / 86400000)}d ago`
 }
 
 export function ChatSessionStatsCard({ sessionId }: ChatSessionStatsCardProps) {
@@ -54,19 +47,19 @@ export function ChatSessionStatsCard({ sessionId }: ChatSessionStatsCardProps) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Sessions</div>
-            <div className="text-lg font-semibold">{stats.totalSessions}</div>
+            <div className="text-sm font-semibold">{stats.totalSessions}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Messages</div>
-            <div className="text-lg font-semibold">{stats.totalMessages}</div>
+            <div className="text-sm font-semibold">{stats.totalMessages}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Avg/Session</div>
-            <div className="text-lg font-semibold">{stats.avgMessages.toFixed(1)}</div>
+            <div className="text-sm font-semibold">{stats.avgMessages.toFixed(1)}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last Active</div>
-            <div className="text-lg font-semibold">
+            <div className="text-sm font-semibold">
               {stats.lastActive ? timeAgo(stats.lastActive) : '—'}
             </div>
           </div>

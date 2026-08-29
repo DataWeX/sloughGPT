@@ -64,7 +64,7 @@ describe('t function', () => {
         <LocaleReader fn={(x) => { t = x.t }} />
       </LocaleProvider>
     )
-    expect(t!('home.apiOffline.body', { url: 'http://localhost:8000' })).toBe('API server at http://localhost:8000 is not reachable')
+    expect(t!('home.apiOffline.body', { url: 'http://localhost:8000' })).toBe('Service at http://localhost:8000 is not reachable')
   })
 
   it('interpolates multiple params', () => {
@@ -74,7 +74,7 @@ describe('t function', () => {
         <LocaleReader fn={(x) => { t = x.t }} />
       </LocaleProvider>
     )
-    expect(t!('home.apiOffline.body', { url: 'http://example.com:9000' })).toBe('API server at http://example.com:9000 is not reachable')
+    expect(t!('home.apiOffline.body', { url: 'http://example.com:9000' })).toBe('Service at http://example.com:9000 is not reachable')
   })
 })
 

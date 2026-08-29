@@ -1,4 +1,5 @@
 import { apiGet, apiPut, apiPatch, apiDelete, apiPost } from './http-client'
+import { logger } from './dev-log'
 
 export interface ChatMessage {
   id: string
@@ -41,6 +42,15 @@ export interface QuickPrompt {
   prompt: string
   icon: string
   category: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface MessageNote {
+  id: string
+  sessionId: string
+  messageId: string
+  content: string
   createdAt: number
   updatedAt: number
 }
@@ -122,7 +132,7 @@ export class DbCircuitBreaker {
     if (this._dead) return
     this._dead = true
     const msg = err instanceof Error ? err.message : String(err)
-    console.warn('[ManDB] DocStore marked dead — all further error writes will be skipped:', msg)
+    logger.warning('ManDB DocStore marked dead — all further error writes will be skipped', { error: msg })
   }
 }
 
@@ -355,12 +365,51 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
       if (breaker.isDead()) return []
       try {
         return await apiGet<ErrorEntry[]>(docUrl('errors'), { sort: 'timestamp', dir: '-1', limit: String(limit) })
-      } catch { return [] }
+      } catch (err) {
+        logger.warning('chatDB.getErrors failed', { exception: String(err) })
+        return []
+      }
     },
 
     async clearErrors(): Promise<void> {
       if (breaker.isDead()) return
-      try { await apiDelete(docUrl('errors')) } catch { /* ignore */ }
+      try { await apiDelete(docUrl('errors')) } catch (err) {
+        logger.warning('chatDB.clearErrors failed', { exception: String(err) })
+      }
+    },
+
+    async getMessageNotes(sessionId: string): Promise<MessageNote[]> {
+      if (breaker.isDead()) return []
+      try {
+        return await apiGet<MessageNote[]>(docUrl('message-notes'), { session_id: sessionId })
+      } catch (err) {
+        logger.warning('chatDB.getMessageNotes failed', { exception: String(err) })
+        return []
+      }
+    },
+
+    async saveMessageNote(note: MessageNote): Promise<void> {
+      if (breaker.isDead()) return
+      try { await apiPost(docUrl('message-notes'), note) } catch (err) {
+        logger.warning('chatDB.saveMessageNote failed', { exception: String(err) })
+      }
+    },
+
+    async removeMessageNote(sessionId: string, messageId: string): Promise<void> {
+      if (breaker.isDead()) return
+      try { await apiDelete(docUrl(`message-notes/${sessionId}/${messageId}`)) } catch (err) {
+        logger.warning('chatDB.removeMessageNote failed', { exception: String(err) })
+      }
+    },
+
+    async searchMessageNotes(query: string): Promise<MessageNote[]> {
+      if (breaker.isDead()) return []
+      try {
+        return await apiGet<MessageNote[]>(docUrl('message-notes/search'), { q: query })
+      } catch (err) {
+        logger.warning('chatDB.searchMessageNotes failed', { exception: String(err) })
+        return []
+      }
     },
   }
 }

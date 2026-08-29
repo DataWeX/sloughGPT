@@ -28,9 +28,13 @@ def _api_get(path: str) -> dict[str, Any] | list:
         r = requests.get(f"{get_api_base()}{path}", timeout=15)
         if r.status_code == 200:
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+    except requests.ConnectionError:
+        return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+    except requests.Timeout:
+        return {"error": "Request timed out", "error_type": "Timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
@@ -39,18 +43,28 @@ def _api_post(path: str, data: dict | None = None) -> dict[str, Any] | list:
         r = requests.post(f"{get_api_base()}{path}", json=data or {}, timeout=120)
         if r.status_code in (200, 201):
             return r.json()
-        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+        return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+    except requests.ConnectionError:
+        return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+    except requests.Timeout:
+        return {"error": "Request timed out", "error_type": "Timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 def _api_delete(path: str) -> dict[str, Any]:
     import requests
     try:
         r = requests.delete(f"{get_api_base()}{path}", timeout=15)
-        return r.json() if r.status_code == 200 else {"error": f"HTTP {r.status_code}"}
+        if r.status_code == 200:
+            return r.json()
+        return {"error": f"HTTP {r.status_code}", "error_type": "HTTPError", "status_code": r.status_code}
+    except requests.ConnectionError:
+        return {"error": "Cannot connect to API server", "error_type": "ConnectionError"}
+    except requests.Timeout:
+        return {"error": "Request timed out", "error_type": "Timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_type": type(e).__name__}
 
 
 class ShellCommands:
@@ -91,9 +105,13 @@ class ShellCommands:
             )
             if r.status_code in (200, 201):
                 return r.json()
-            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200]}
+            return {"error": f"HTTP {r.status_code}", "detail": r.text[:200], "error_type": "HTTPError", "status_code": r.status_code}
+        except requests.ConnectionError as e:
+            return {"error": f"Cannot connect to API server: {e}", "error_type": "ConnectionError"}
+        except requests.Timeout as e:
+            return {"error": f"Request timed out: {e}", "error_type": "Timeout"}
         except Exception as e:
-            return {"error": str(e)}
+            return {"error": str(e), "error_type": type(e).__name__}
 
     @staticmethod
     def unload_model() -> dict[str, Any]:
@@ -317,3 +335,31 @@ class ShellCommands:
     def dequantize_model() -> dict[str, Any]:
         """Restore quantized model to float32."""
         return _api_post("/models/dequantize")
+
+    # ── Operations ───────────────────────────────────────────────────────
+
+    @staticmethod
+    def operations(op_type: str = "") -> list[dict[str, Any]]:
+        """List active and recent operations (training, inference, download, import)."""
+        path = "/operations"
+        if op_type:
+            path += f"?type={op_type}"
+        result = _api_get(path)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict):
+            return result.get("data", result).get("operations", []) if isinstance(result.get("data"), dict) else result.get("operations", [])
+        return []
+
+    @staticmethod
+    def cancel_operation(op_id: str) -> dict[str, Any]:
+        """Cancel a running operation by ID."""
+        return _api_post(f"/cancel/{op_id}")
+
+    @staticmethod
+    def cancel_all_operations(op_type: str = "") -> dict[str, Any]:
+        """Cancel all active operations, optionally filtered by type."""
+        path = "/cancel-all"
+        if op_type:
+            path += f"?type={op_type}"
+        return _api_post(path)

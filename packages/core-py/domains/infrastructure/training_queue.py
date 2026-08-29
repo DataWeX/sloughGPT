@@ -72,7 +72,10 @@ async def training_handler(task) -> dict:
     payload = task.payload
     enqueue = task.metadata.get("enqueue")
     if enqueue is None:
-        logger.error("training_handler: no enqueue callback in task metadata")
+        logger.error("training_handler: no enqueue callback in task metadata", extra={
+            "task_id": task.id, "task_type": task.task_type,
+            "metadata_keys": list(task.metadata.keys()),
+        })
         return {"status": "failed", "error": "No enqueue callback"}
 
     # Bridge task queue asyncio events → threading events for the trainer.
@@ -94,14 +97,23 @@ async def training_handler(task) -> dict:
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Cancel bridge auto_train import failed: %s", exc)
             await asyncio.sleep(0.1)
 
     async def _bridge_pause():
         """Propagate task queue pause → threading pause_event."""
         while True:
-            if task.pause_event.is_set():
+            paused = task.pause_event.is_set()
+            try:
+                import routers.auto_train as _at
+                at_pause = getattr(_at, "_auto_train_pause_event", None)
+                if at_pause is not None and at_pause.is_set():
+                    paused = True
+            except Exception as exc:
+                logger.warning("Pause bridge auto_train event check failed: %s", exc)
+                paused = True
+            if paused:
                 pause_event.clear()  # Paused
             else:
                 pause_event.set()  # Resumed
@@ -131,7 +143,7 @@ async def training_handler(task) -> dict:
         early_stopping_patience=payload.get("early_stopping_patience", 5),
     )
 
-    def _on_progress(info):
+    def _on_progress(info) -> None:
         if cancel_event.is_set():
             raise InterruptedError("Training cancelled by user")
         loss = info.get("train_loss")
@@ -151,6 +163,7 @@ async def training_handler(task) -> dict:
                 "learning_rate": info.get("learning_rate", 0),
                 "done": info.get("done", False),
                 "done_reason": info.get("done_reason"),
+                "avg_quality": info.get("avg_quality"),
             },
             meta={
                 "epoch": info.get("epoch", 0),
@@ -235,7 +248,10 @@ async def training_sessions_handler(task) -> dict:
     payload = task.payload
     enqueue = task.metadata.get("enqueue")
     if enqueue is None:
-        logger.error("training_sessions_handler: no enqueue callback in task metadata")
+        logger.error("training_sessions_handler: no enqueue callback in task metadata", extra={
+            "task_id": task.id, "task_type": task.task_type,
+            "metadata_keys": list(task.metadata.keys()),
+        })
         return {"status": "failed", "error": "No enqueue callback"}
 
     cancel_event = threading.Event()
@@ -251,8 +267,8 @@ async def training_sessions_handler(task) -> dict:
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
                     return
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Cancel bridge auto_train import failed: %s", exc)
             await asyncio.sleep(0.1)
 
     cancel_task = asyncio.create_task(_bridge_cancel())

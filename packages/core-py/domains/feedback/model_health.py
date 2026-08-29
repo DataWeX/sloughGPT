@@ -76,7 +76,8 @@ class ModelHealthMonitor:
             try:
                 data = json.loads(self.db_path.read_text())
                 self._history = data if isinstance(data, list) else []
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to load health history from %s, resetting: %s", self.db_path, e)
                 self._history = []
 
     def _save_history(self) -> None:
@@ -84,7 +85,7 @@ class ModelHealthMonitor:
         try:
             self.db_path.write_text(json.dumps(self._history[-200:], indent=2))
         except Exception as e:
-            logger.warning(f"Failed to save health history: {e}", extra={"tag": "INFRA"})
+            logger.warning("Failed to save health history: %s", e, extra={"tag": "INFRA"})
 
     def run_benchmark(self) -> Optional[HealthSnapshot]:
         """Run model on the benchmark corpus and compute average perplexity.
@@ -150,7 +151,7 @@ class ModelHealthMonitor:
 
             return snapshot
         except Exception as e:
-            logger.warning(f"Health benchmark failed: {e}", extra={"tag": "INFRA"})
+            logger.warning("Health benchmark failed: %s", e, extra={"tag": "INFRA"})
             return None
 
     def get_trend(self, window: int = 20) -> Dict[str, Any]:

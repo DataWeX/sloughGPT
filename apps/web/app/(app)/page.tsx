@@ -7,28 +7,30 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import {
   IconChat,
   IconModels,
 } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve } from '@sloughgpt/strui'
+import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve, IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { chatController } from '@/lib/chat-controller'
+import { timeAgo } from '@/lib/time-ago'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { OnboardingCard } from '@/components/onboarding/OnboardingCard'
 import { sessionController } from '@/lib/session-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { chatDB } from '@/lib/db'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
-import { MS_PER_MINUTE, formatBytes } from '@/lib/format-bytes'
+import { formatBytes } from '@/lib/format-bytes'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -161,6 +163,63 @@ export default function HomePage() {
         <LossCurve className="w-full h-full" />
       </div>
 
+      {apiStatus === 'online' && modelStatus.loaded && (
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                  </span>
+                  <span className="text-xs font-medium text-success uppercase tracking-wider">Active Model</span>
+                </div>
+                <h3 className="text-sm font-semibold truncate">{healthSummary || 'Unknown'}</h3>
+                {currentSoul && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Personality: <span className="text-foreground/80">{currentSoul.name}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/models"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-primary bg-primary/10 hover:bg-primary/15 transition-colors"
+                >
+                  <IconModels className="h-3 w-3" />
+                  Switch
+                </Link>
+                <Link
+                  href="/chat"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-accent-foreground bg-accent/15 hover:bg-accent/25 transition-colors"
+                >
+                  <IconChat className="h-3 w-3" />
+                  Chat
+                </Link>
+              </div>
+            </div>
+            {inferenceCount !== null && inferenceCount !== undefined && (
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/40">
+                <span className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground/80 tabular-nums">{inferenceCount.toLocaleString()}</span> conversations
+                </span>
+                {liveHealth?.tokens_per_sec && (
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground/80 tabular-nums">{liveHealth.tokens_per_sec.toFixed(1)}</span> tok/s
+                  </span>
+                )}
+                {liveHealth?.uptime_seconds && liveHealth.uptime_seconds > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Uptime: <span className="font-medium text-foreground/80">{formatUptime(liveHealth.uptime_seconds)}</span>
+                  </span>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {apiStatus === 'offline' ? (
         startup ? (
           <Card className="border-warning/35 bg-warning/5">
@@ -172,7 +231,7 @@ export default function HomePage() {
               <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                 <div className="h-full bg-warning transition-all duration-500" style={{width: `${(startup.step / startup.total) * 100}%`}} />
               </div>
-              <p className="text-xs text-muted-foreground">Server may take 90s on first cold start (PyTorch import).</p>
+              <p className="text-xs text-muted-foreground">First startup may take 90 seconds while AI components load.</p>
             </CardContent>
           </Card>
         ) : (
@@ -235,7 +294,7 @@ export default function HomePage() {
               <CardContent className="pb-4 px-4">
                 <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
                 {inferenceCount !== null && inferenceCount !== undefined && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
+                  <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
                 )}
               </CardContent>
             </Card>
@@ -250,12 +309,12 @@ export default function HomePage() {
                     <span className="text-sm font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-success">👍 {feedbackStats.db_stats.thumbs_up}</span>
-                    <span className="text-sm text-destructive">👎 {feedbackStats.db_stats.thumbs_down}</span>
+                    <span className="text-sm text-success flex items-center gap-1"><IconThumbUp className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_up}</span>
+                    <span className="text-sm text-destructive flex items-center gap-1"><IconThumbDown className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_down}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm text-muted-foreground">Ratio</span>
-                    <span className={`text-sm font-medium ${feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning'}`}>
+                    <span className={cn('text-sm font-medium', feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning')}>
                       {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
                     </span>
                   </div>
@@ -310,7 +369,7 @@ export default function HomePage() {
                       const result = await chatController.send('Hello!')
                       data.setTestResponse(result.message || 'No response')
                     } catch (e: unknown) {
-                      data.setTestResponse(extractErrorMessage(e, 'Failed to connect'))
+                      data.setTestResponse(extractErrorMessage(e, 'Could not connect'))
                     } finally {
                       data.setTestRunning(false)
                     }
@@ -342,11 +401,12 @@ export default function HomePage() {
                   input.value = ''
                   data.setKnowledgeCount(k => k + 1)
                   addToast('Fact saved', 'success')
-                } catch { addToast('Failed to save', 'error') }
+                } catch { addToast('Could not save', 'error') }
               }} className="flex gap-2">
                 <input
                   type="text"
                   placeholder="e.g., I prefer Python over JavaScript"
+                  aria-label="Quick add knowledge"
                   className="flex-1 h-9 rounded-md border border-border/60 bg-background px-2.5 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 />
                 <Button size="sm" type="submit" className="h-8 text-xs shrink-0">Save</Button>
@@ -377,9 +437,10 @@ export default function HomePage() {
             <div className="space-y-1.5">
               {recentSessions.slice(0, 3).map(s => (
                 <button
-                  key={s.id}
-                  onClick={() => router.push(`/chat?session=${s.id}`)}
-                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                   key={s.id}
+                   type="button"
+                   onClick={() => router.push(`/chat?session=${s.id}`)}
+                   className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
                   <span className="text-xs truncate flex-1">{s.name}</span>
@@ -387,22 +448,15 @@ export default function HomePage() {
                   {s.pinned && <span className="text-xs text-primary shrink-0">📌</span>}
                   <span className="text-xs text-muted-foreground shrink-0">
                     {s.message_count != null && <span>{s.message_count}m · </span>}
-                    {(() => {
-                      const d = Date.now() - new Date(s.updated_at).getTime()
-                      const m = Math.floor(d / MS_PER_MINUTE)
-                      if (m < 1) return 'now'
-                      if (m < 60) return `${m}m`
-                      const h = Math.floor(m / 60)
-                      return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`
-                    })()}
+                    {timeAgo(s.updated_at)}
                   </span>
                 </button>
               ))}
               {recentJobs.slice(0, 2).map(j => (
                 <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40'}`} />
+                  <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
                   <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground'}`}>{j.status}</span>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
                 </div>
               ))}
             </div>
@@ -415,19 +469,20 @@ export default function HomePage() {
           <CardContent className="py-3">
             <div className="flex items-center gap-2 mb-2">
               <p className="text-sm font-medium">Recent datasets</p>
-              <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+              <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
             </div>
             <div className="space-y-1.5">
               {recentDatasets.map(ds => (
                 <button
                   key={ds.id}
+                  type="button"
                   onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
                   className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
                   <span className="text-xs truncate flex-1">{ds.name}</span>
                   {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
-                  <span className="text-[10px] text-primary shrink-0">Train →</span>
+                  <span className="text-xs text-primary shrink-0">Train →</span>
                 </button>
               ))}
             </div>
@@ -436,25 +491,14 @@ export default function HomePage() {
       )}
 
       {!onboardingDismissed && (
-        <Card className="border-dashed border-primary/20 bg-primary/[0.02]">
-          <CardContent className="py-3 flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">New here?</span>{' '}
-              Start chatting, then train the model on your conversations. The more you chat, the better it gets.
-            </p>
-            <button
-              type="button"
-              className="text-xs text-muted-foreground hover:text-foreground shrink-0 transition-colors"
-              onClick={() => setOnboardingDismissed(true)}
-            >
-              Got it
-            </button>
-          </CardContent>
-        </Card>
+        <OnboardingCard
+          onComplete={() => setOnboardingDismissed(true)}
+        />
       )}
 
       {recentSessions.length > 0 && (
         <button
+          type="button"
           onClick={() => router.push(`/chat?session=${recentSessions[0].id}`)}
           className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
         >
@@ -464,10 +508,10 @@ export default function HomePage() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
-              {recentSessions[0].starred && <span className="text-[10px]">★</span>}
-              {recentSessions[0].pinned && <span className="text-[10px] text-primary">📌</span>}
+              {recentSessions[0].starred && <span className="text-xs">★</span>}
+              {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
               {new Date(recentSessions[0].updated_at).toLocaleDateString()}
             </p>
@@ -483,28 +527,28 @@ export default function HomePage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-medium">Your stats</p>
-                  <p className="text-[10px] text-muted-foreground">Usage overview</p>
+                  <p className="text-xs text-muted-foreground">Usage overview</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.totalConversations}</p>
-                    <p className="text-[10px] text-muted-foreground">Conversations</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalConversations}</p>
+                    <p className="text-xs text-muted-foreground">Conversations</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Messages</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Messages</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Words</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Words</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{convStats.activeDays}</p>
-                    <p className="text-[10px] text-muted-foreground">Active days</p>
+                    <p className="text-base font-semibold tabular-nums">{convStats.activeDays}</p>
+                    <p className="text-xs text-muted-foreground">Active days</p>
                   </div>
                 </div>
                 {convStats.mostActiveHour !== null && (
-                  <p className="text-[10px] text-muted-foreground mt-2">
+                  <p className="text-xs text-muted-foreground mt-2">
                     Most active at {convStats.mostActiveHour}:00
                   </p>
                 )}
@@ -516,22 +560,22 @@ export default function HomePage() {
               <CardContent className="py-3">
                 <div className="flex items-center gap-2 mb-2">
                   <p className="text-xs font-medium">Datasets</p>
-                  <Link href="/datasets" className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
+                  <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
-                    <p className="text-[10px] text-muted-foreground">Datasets</p>
+                    <p className="text-base font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
+                    <p className="text-xs text-muted-foreground">Datasets</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">
+                    <p className="text-base font-semibold tabular-nums">
                       {formatBytes(datasetStats.totalSize)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">Total size</p>
+                    <p className="text-xs text-muted-foreground">Total size</p>
                   </div>
                   <div>
-                    <p className="text-lg font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">Samples</p>
+                    <p className="text-base font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Samples</p>
                   </div>
                 </div>
               </CardContent>
@@ -546,30 +590,30 @@ export default function HomePage() {
             <CardContent className="py-3">
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-xs font-medium">System</p>
-                <Link href="/monitoring" className="text-[10px] text-primary hover:text-primary/80 ml-auto">Details →</Link>
+                <Link href="/monitoring" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">Details →</Link>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <p className="text-sm font-semibold tabular-nums">
                     {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">CPU</p>
+                  <p className="text-xs text-muted-foreground">CPU</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums">
                     {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">Memory</p>
+                  <p className="text-xs text-muted-foreground">Memory</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground">Requests</p>
+                  <p className="text-xs text-muted-foreground">Requests</p>
                 </div>
                 <div>
                   <p className="text-sm font-semibold tabular-nums">
                     {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">Uptime</p>
+                  <p className="text-xs text-muted-foreground">Uptime</p>
                 </div>
               </div>
             </CardContent>
@@ -653,7 +697,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <p className="text-xs sm:text-sm font-semibold">Datasets</p>
                 {datasetStats && datasetStats.totalDatasets > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
                 )}
               </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
@@ -675,7 +719,7 @@ export default function HomePage() {
               <div className="flex items-center gap-2">
                 <p className="text-xs sm:text-sm font-semibold">Teach me</p>
                 {datasetStats && datasetStats.totalDatasets > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
                 )}
               </div>
               <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>

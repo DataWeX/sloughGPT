@@ -88,8 +88,8 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
         logger.info("Loaded %d weights from %s (mmap)", len(weights), model_id,
             extra={"tag": "INFRA"})
         return config, weights
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("safetensors mmap failed for %s, falling back to bfloat16: %s", model_id, e)
 
     # bfloat16 fallback
     logger.info("bfloat16 fallback for %s", model_id,

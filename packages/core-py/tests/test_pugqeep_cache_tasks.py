@@ -248,9 +248,10 @@ class TestCacheMemoryStore:
         for i in range(5):
             store.put(f"k{i}", i, 30)
         evicted = store.evict_lru(target_bytes=10)
+        evicted_keys = [k for k, _ in evicted]
         assert len(evicted) >= 1
         assert store.size_bytes() <= 100 - 10
-        assert all(k in evicted for k in evicted)
+        assert all(k in evicted_keys for k in evicted_keys)
 
     def test_evict_lru_returns_empty_when_under_limit(self):
         store = CacheMemoryStore(max_size_bytes=1000)
@@ -264,8 +265,9 @@ class TestCacheMemoryStore:
         store.get("k3")
         store.get("k3")
         evicted = store.evict_lfu(target_bytes=10, access_counts={"k0": 0, "k1": 1, "k2": 2, "k3": 5})
-        assert "k0" in evicted
-        assert "k3" not in evicted
+        evicted_keys = [k for k, _ in evicted]
+        assert "k0" in evicted_keys
+        assert "k3" not in evicted_keys
 
     def test_evict_lfu_returns_empty_when_enough_space(self):
         store = CacheMemoryStore(max_size_bytes=1000)

@@ -20,9 +20,10 @@ describe('ModelCacheCard', () => {
     expect(screen.getByText('GPT 2')).toBeDefined()
   })
 
-  it('shows loading state when cacheUsage is null', () => {
+  it('shows skeleton loading state when cacheUsage is null', () => {
     render(<ModelCacheCard {...base} cacheUsage={null} />)
-    expect(screen.getByText('Loading cache stats...')).toBeDefined()
+    const skeletons = document.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows None when model not loaded', () => {

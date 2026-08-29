@@ -3,6 +3,7 @@
  */
 
 import { apiGet, apiPost, apiDelete, apiPatch, authFetch, streamSSE } from './http-client'
+import { extractErrorMessage } from '@/lib/error-utils'
 import type { Checkpoint } from './souls-controller'
 
 export interface TrainingJob {
@@ -39,6 +40,7 @@ export interface TrainingJob {
   error?: string
   explanation?: string
   status_message?: string
+  avg_quality?: number
 }
 
 export interface TrainingStatus {
@@ -72,6 +74,7 @@ export interface AutoTrainStartRequest {
   temperature?: number
   source_text?: string
   checkpoint_name?: string
+  experiment_id?: string
 }
 
 export interface AutoTrainStartResponse {
@@ -83,8 +86,14 @@ export interface AutoTrainStartResponse {
 }
 
 export interface WebhookStats {
-  total: number
-  success_rate: number
+  total_webhooks: number
+  active_webhooks: number
+  total_deliveries: number
+  successful_deliveries: number
+  failed_deliveries: number
+  success_rate: string | number
+  pending_retries: number
+  dead_letters: number
 }
 
 export interface FineTunedModel {
@@ -130,6 +139,7 @@ export interface TurboTrainStartRequest {
   method?: 'slonet' | 'transformer'
   dataset_id?: string
   data_path?: string
+  checkpoint_name?: string
   epochs?: number
   batch_size?: number
   learning_rate?: number
@@ -139,6 +149,7 @@ export interface TurboTrainStartRequest {
   n_layer?: number
   block_size?: number
   dropout?: number
+  experiment_id?: string
   // Legacy fields (kept for backward compat)
   n_decoder_layers?: number
   max_tgt_len?: number
@@ -165,8 +176,10 @@ export interface TurboJobStatus {
   steps_per_sec?: number | null
   eta_s?: number | null
   elapsed_s?: number | null
+  avg_quality?: number | null
   error?: string | null
   result?: Record<string, unknown> | null
+  paused?: boolean
 }
 
 export interface TrainFromSessionsParams {
@@ -180,6 +193,7 @@ export interface TrainFromSessionsParams {
   min_pair_quality?: number
   max_pairs?: number
   session_ids?: string[]
+  experiment_id?: string
 }
 
 export const trainingJobsController = {
@@ -211,10 +225,8 @@ export const trainingJobsController = {
   },
 
   async getTrainingLog(): Promise<string[]> {
-    try {
-      const data = await apiGet<{ lines: string[] }>('/auto-train/log')
-      return data.lines ?? []
-    } catch { return [] }
+    const data = await apiGet<{ lines: string[] }>('/auto-train/log')
+    return data.lines ?? []
   },
 
   async resumeTraining(): Promise<{ success: boolean }> {
@@ -245,10 +257,8 @@ export const trainingJobsController = {
   },
 
   async listFineTuned(): Promise<FineTunedModel[]> {
-    try {
-      const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
-      return Array.isArray(data) ? data : (data?.models ?? [])
-    } catch { return [] }
+    const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
+    return Array.isArray(data) ? data : (data?.models ?? [])
   },
 
   async loadFineTuned(name: string): Promise<FineTunedModelLoadResponse> {
@@ -262,8 +272,9 @@ export const trainingJobsController = {
   async get(id: string): Promise<TrainingJob | null> {
     try {
       return await apiGet<TrainingJob>(`/training/jobs/${id}`)
-    } catch {
-      return null
+    } catch (err) {
+      if (extractErrorMessage(err).includes('404')) return null
+      throw err
     }
   },
 
@@ -385,6 +396,19 @@ export const trainingJobsController = {
     return apiGet<WebhookStats>('/training/webhooks/stats')
   },
 
+  async getWebhookRetryQueue(): Promise<{ retries: Array<{
+    delivery_id: string; webhook_id: string; event: string; attempt_count: number; next_retry_at: number
+  }> }> {
+    return apiGet('/training/webhooks/retry-queue')
+  },
+
+  async getWebhookDeadLetters(limit: number = 50): Promise<{ dead_letters: Array<{
+    delivery_id: string; webhook_id: string; event: string; error: string | null;
+    status_code: number | null; attempt_count: number; dead_lettered_at: string
+  }> }> {
+    return apiGet(`/training/webhooks/dead-letters?limit=${limit}`)
+  },
+
   // Recovery
   async getRecoveryStats(): Promise<Record<string, number>> {
     return apiGet<Record<string, number>>('/recovery/stats')
@@ -399,13 +423,21 @@ export const trainingJobsController = {
     return apiPost('/training/webhooks/test', { url })
   },
 
+  async getWebhookDeliveries(webhookId: string, limit?: number): Promise<Array<{
+    id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string
+  }>> {
+    const qs = limit ? `?limit=${limit}` : ''
+    const data = await apiGet<{ deliveries: Array<{ id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string }> }>(`/training/webhooks/${webhookId}/deliveries${qs}`)
+    return data.deliveries || []
+  },
+
   // Training status
   async getStatus(): Promise<Record<string, unknown>> {
     return apiGet<Record<string, unknown>>('/training/status')
   },
 
   async trainFromFeedback(params?: { epochs?: number; batch_size?: number; learning_rate?: number; use_lora?: boolean }): Promise<{
-    status: string; job_id?: string; samples?: number; message?: string
+    status: string; job_id?: string; samples?: number; checkpoint?: string; message?: string
   }> {
     return apiPost('/training/from-feedback', params ?? {})
   },
@@ -447,6 +479,11 @@ export const trainingJobsController = {
     const res = await authFetch(`/training/export/${jobId}`)
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
+  },
+
+  async purgeJobs(status?: string): Promise<{ purged: number }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+    return apiPost<{ purged: number }>(`/training/jobs/purge${qs}`)
   },
 
   // ---------------------------------------------------------------------------
@@ -495,7 +532,7 @@ export const trainingJobsController = {
       if (event.status === 'complete') {
         finalResult = event.data ?? {}
       } else if (event.status === 'error') {
-        throw new Error(event.message || 'Training failed')
+        throw new Error(event.message || 'Training request failed')
       }
     }
     return {
@@ -574,7 +611,7 @@ export const trainingJobsController = {
     delta?: { perplexity_delta: number; bleu_delta: number; throughput_delta: number; verdict: string }
     report?: string
   }> {
-    return apiGet('/lora-eval/run', { adapter_path: adapterPath, soul })
+    return apiPost('/lora-eval/run', { adapter_path: adapterPath, soul })
   },
 
   async listTrainingPairs(params?: {
@@ -616,8 +653,8 @@ export const trainingJobsController = {
   },
 
   async listChatSessions(): Promise<ChatSession[]> {
-    const data = await apiGet<{ data: ChatSession[] } | ChatSession[]>('/chat/sessions')
-    return Array.isArray(data) ? data : (data as { data: ChatSession[] }).data || []
+    const data = await apiGet<ChatSession[]>('/chat/sessions')
+    return Array.isArray(data) ? data : []
   },
 
   async exportTrainingPairs(params?: {

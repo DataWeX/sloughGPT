@@ -123,7 +123,8 @@ def test_estimate_size():
     tree = ModelTree("m1")
     tree._weight_shapes["w"] = (4, 4)
     assert tree._estimate_size("w") == 16
-    assert tree._estimate_size("missing") == 1000
+    # Unknown weight returns 0 (safer than arbitrary fallback)
+    assert tree._estimate_size("missing") == 0
 
 
 def test_tree_stats():

@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 const { mockGet, mockPost, mockAddToast } = vi.hoisted(() => ({
   mockGet: vi.fn(), mockPost: vi.fn(), mockAddToast: vi.fn(),
 }))
@@ -54,8 +58,8 @@ afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
   mockGet.mockImplementation((url: string) => {
-    if (url.includes('gallery')) return Promise.resolve({ data: { images: [] } })
-    if (url.includes('styles')) return Promise.resolve({ data: { styles: [['realistic', 'Realistic'], ['cartoon', 'Cartoon']] } })
+    if (url.includes('gallery')) return Promise.resolve({ images: [] })
+    if (url.includes('styles')) return Promise.resolve({ styles: [['realistic', 'Realistic'], ['cartoon', 'Cartoon']] })
     return Promise.resolve(null)
   })
   mockPost.mockResolvedValue({ image: 'base64data' })
@@ -168,9 +172,9 @@ describe('ImagesPage — gallery display', () => {
   it('displays images when gallery has items', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.includes('gallery')) return Promise.resolve({
-        data: { images: [{ id: '1', path: '/img1.png', created: Date.now() }] }
+        images: [{ id: '1', path: '/img1.png', created: Date.now() }]
       })
-      if (url.includes('styles')) return Promise.resolve({ data: { styles: [] } })
+      if (url.includes('styles')) return Promise.resolve({ styles: [] })
       return Promise.resolve(null)
     })
     render(<ImagesPage />)

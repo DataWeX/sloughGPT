@@ -7,12 +7,14 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.registry import router
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -107,7 +109,7 @@ class TestGetModel:
         reg = mock_get_reg.return_value
         reg.list_models.return_value = []
         resp = client.get("/registry/models/missing-model")
-        assert "not found" in resp.json()["detail"].lower()
+        assert "not found" in resp.json()["error"].lower()
 
     @patch("domains.infrastructure.model_registry.get_model_registry")
     def test_returns_correct_model(self, mock_get_reg, client):

@@ -46,6 +46,8 @@ def _mock_ctrl(**overrides) -> MagicMock:
 def _app(fr: FeedbackRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(fr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 
@@ -140,7 +142,7 @@ class TestConversations:
         client = TestClient(_app(fr))
         resp = client.delete("/feedback/conversations/conv-1")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
+        assert resp.json()["data"]["status"] == "deleted"
 
 
 class TestGetFeedback:

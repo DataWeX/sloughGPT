@@ -114,7 +114,12 @@ def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
     tokenizer_path = snap / "tokenizer.json"
     if tokenizer_path.exists():
         tok_data = json.loads(tokenizer_path.read_text())
-        vocab = tok_data["model"]["vocab"]  # dict: string → int
+        model = tok_data.get("model")
+        vocab = model.get("vocab") if isinstance(model, dict) else None
+        if not isinstance(vocab, dict):
+            raise RuntimeError(
+                f"tokenizer.json missing 'model.vocab' mapping in {tokenizer_path}"
+            )
         itos = {i: s for s, i in vocab.items()}
         stoi = {s: i for s, i in vocab.items()}
     else:
@@ -709,4 +714,4 @@ if __name__ == "__main__":  # pragma: no cover (requires GPT-2 download)
         log_interval=5, eval_interval=25,
     )
     model, meta = distill_gpt2_to_slo(text, config)
-    print(json.dumps(meta, indent=2))
+    logger.info("%s", json.dumps(meta, indent=2))

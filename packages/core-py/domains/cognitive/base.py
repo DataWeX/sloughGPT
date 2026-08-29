@@ -66,7 +66,7 @@ class CognitiveDomain(BaseDomain):
             self.logger.info("Cognitive Domain initialized successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to initialize Cognitive Domain: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to initialize Cognitive Domain: %s", e, extra={"tag": "COG"})
             raise CognitiveException(f"Initialization failed: {e}")
 
     async def _on_shutdown(self) -> None:
@@ -91,7 +91,7 @@ class CognitiveDomain(BaseDomain):
             self.logger.info("Cognitive Domain shutdown successfully", extra={"tag": "COG"})
 
         except Exception as e:
-            self.logger.error(f"Failed to shutdown Cognitive Domain: {e}", extra={"tag": "COG"})
+            self.logger.error("Failed to shutdown Cognitive Domain: %s", e, extra={"tag": "COG"})
             raise CognitiveException(f"Shutdown failed: {e}")
 
     async def _initialize_memory_manager(self) -> None:
@@ -151,7 +151,7 @@ class CognitiveDomain(BaseDomain):
                     await self.memory_manager.consolidate_memories()
                 await asyncio.sleep(60)  # Consolidate every minute
             except Exception as e:
-                self.logger.error(f"Memory consolidation error: {e}", extra={"tag": "COG"})
+                self.logger.error("Memory consolidation error: %s", e, extra={"tag": "COG"})
                 await asyncio.sleep(10)
 
     async def _metacognitive_monitoring_loop(self) -> None:
@@ -162,7 +162,7 @@ class CognitiveDomain(BaseDomain):
                     await self.metacognitive_monitor.monitor_thought_process(self.active_thoughts)
                 await asyncio.sleep(30)  # Monitor every 30 seconds
             except Exception as e:
-                self.logger.error(f"Metacognitive monitoring error: {e}", extra={"tag": "COG"})
+                self.logger.error("Metacognitive monitoring error: %s", e, extra={"tag": "COG"})
                 await asyncio.sleep(10)
 
     async def _reasoning_optimization_loop(self) -> None:
@@ -173,7 +173,7 @@ class CognitiveDomain(BaseDomain):
                     await self.reasoning_engine.optimize_reasoning_strategies()
                 await asyncio.sleep(300)  # Optimize every 5 minutes
             except Exception as e:
-                self.logger.error(f"Reasoning optimization error: {e}", extra={"tag": "COG"})
+                self.logger.error("Reasoning optimization error: %s", e, extra={"tag": "COG"})
                 await asyncio.sleep(30)
 
     async def _shutdown_component(self, component_name: str) -> None:
@@ -183,7 +183,7 @@ class CognitiveDomain(BaseDomain):
             if hasattr(component, "shutdown"):
                 await component.shutdown()
         except Exception as e:
-            self.logger.error(f"Error shutting down {component_name}: {e}", extra={"tag": "COG"})
+            self.logger.error("Error shutting down %s: %s", component_name, e, extra={"tag": "COG"})
 
     # Public API methods
 

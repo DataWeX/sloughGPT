@@ -245,7 +245,10 @@ class FeedbackWorkflowManager:
             if not all_ppls:
                 return None
             return float(np.mean(all_ppls))
-        except Exception:
+        except Exception as e:
+            logger.warning("workflow: _benchmark_ppl failed", extra={
+                "error": str(e),
+            })
             return None
 
     def _snapshot_weights(self, net):
@@ -376,7 +379,7 @@ class FeedbackWorkflowManager:
             except Exception as e:
                 logger.debug("Health monitor benchmark failed: %s", e)
         except Exception as e:
-            logger.warning(f"Auto-train skipped: {e}", extra={"tag": "INFRA"})
+            logger.warning("Auto-train skipped: %s", e, extra={"tag": "INFRA"})
 
     def _maybe_dpo_train(self):
         """Run DPO preference learning on mixed-feedback pairs.
@@ -468,8 +471,8 @@ class FeedbackWorkflowManager:
                     rejected = True
                     self._last_rollback_time = time.time()
                     logger.warning(
-                        f"DPO train rejected: PPL increased {ppl_delta:+.1f}% "
-                        f"({before_ppl:.1f} → {after_ppl:.1f})", extra={"tag": "INFRA"}
+                        "DPO train rejected: PPL increased %+.1f%% "
+                        "(%s -> %s)", ppl_delta, before_ppl, after_ppl, extra={"tag": "INFRA"}
                     )
 
             self._stats["dpo_train_steps"] = self._stats.get("dpo_train_steps", 0) + 1
@@ -484,7 +487,7 @@ class FeedbackWorkflowManager:
                     f"ppl={after_ppl:.1f if after_ppl else '?'}", extra={"tag": "INFRA"}
                 )
         except Exception as e:
-            logger.warning(f"DPO train skipped: {e}", extra={"tag": "INFRA"})
+            logger.warning("DPO train skipped: %s", e, extra={"tag": "INFRA"})
 
     def _do_aggregate(self) -> None:
         """Run adapter aggregation and log the result.
@@ -623,12 +626,13 @@ class FeedbackWorkflowManager:
             if rejected:
                 self._stats["user_adapter_rejected"] = self._stats.get("user_adapter_rejected", 0) + 1
 
+            status = "rejected" if rejected else "trained"
             logger.info(
-                f"User adapter {'rejected' if rejected else 'trained'} for {user_id}: "
-                f"{steps} steps, loss={avg_loss:.4f}", extra={"tag": "INFRA"}
+                "User adapter %s for %s: %s steps, loss=%.4f",
+                status, user_id, steps, avg_loss, extra={"tag": "INFRA"}
             )
         except Exception as e:
-            logger.warning(f"User adapter training skipped: {e}", extra={"tag": "INFRA"})
+            logger.warning("User adapter training skipped: %s", e, extra={"tag": "INFRA"})
 
     def run_scheduled_tasks(self):
         """Execute periodic tasks based on configured intervals.
@@ -673,20 +677,27 @@ class FeedbackWorkflowManager:
 
     def _do_prune(self):
         """Perform pruning task."""
+        import time as _time
+        t0 = _time.monotonic()
         try:
             deleted = self.lora_store.prune_low_quality(
                 min_feedback_count=1,
                 max_age_days=7,
             )
+            elapsed_ms = (_time.monotonic() - t0) * 1000
             if deleted:
                 self._stats["prunes_performed"] += 1
-                logger.info("Pruned %d adapters", len(deleted), extra={"tag": "INFRA"})
+                logger.info("Pruned %d adapters", len(deleted), extra={
+                    "tag": "INFRA", "elapsed_ms": round(elapsed_ms, 1),
+                })
         except Exception as e:
             logger.warning("Prune error: %s", e, extra={"tag": "INFRA"})
 
 
     def _do_export(self):
         """Perform training data export task."""
+        import time as _time
+        t0 = _time.monotonic()
         try:
             from pathlib import Path
 
@@ -697,8 +708,11 @@ class FeedbackWorkflowManager:
             filepath = export_path / f"feedback_export_{timestamp}.jsonl"
 
             self.db.export_feedback_jsonl(str(filepath))
+            elapsed_ms = (_time.monotonic() - t0) * 1000
             self._stats["exports_performed"] += 1
-            logger.info("Exported training data to %s", filepath, extra={"tag": "INFRA"})
+            logger.info("Exported training data to %s", filepath, extra={
+                "tag": "INFRA", "elapsed_ms": round(elapsed_ms, 1),
+            })
         except Exception as e:
             logger.warning("Export error: %s", e, extra={"tag": "INFRA"})
 

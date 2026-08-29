@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type JSX } from 'react'
-import { cn, IconChevronDown } from '@sloughgpt/strui'
+import { useState, type JSX, type ReactNode } from 'react'
+import { cn, IconChevronDown, IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconTraining, IconBolt, IconDocument, IconMic } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -12,19 +12,20 @@ import {
   DropdownMenuLabel,
 } from '@sloughgpt/strui'
 
-export type ChatMode = 'chat' | 'write' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'
+export type ChatMode = 'chat' | 'write' | 'rewrite' | 'decide' | 'explain' | 'translate' | 'brainstorm' | 'wellness' | 'create' | 'read' | 'talk'
 
-const MODES: { value: ChatMode; label: string; icon: string }[] = [
-  { value: 'chat', label: 'Chat', icon: '💬' },
-  { value: 'write', label: 'Write', icon: '✍️' },
-  { value: 'decide', label: 'Decide', icon: '⚖️' },
-  { value: 'explain', label: 'Explain', icon: '🔍' },
-  { value: 'translate', label: 'Translate', icon: '🌐' },
-  { value: 'brainstorm', label: 'Brainstorm', icon: '💡' },
-  { value: 'wellness', label: 'Wellness', icon: '🧘' },
-  { value: 'create', label: 'Create', icon: '🎨' },
-  { value: 'read', label: 'Read', icon: '📄' },
-  { value: 'talk', label: 'Talk', icon: '🎙️' },
+const MODES: { value: ChatMode; label: string; icon: ReactNode }[] = [
+  { value: 'chat', label: 'Chat', icon: <IconChat className="h-3.5 w-3.5" /> },
+  { value: 'write', label: 'Write', icon: <IconEdit className="h-3.5 w-3.5" /> },
+  { value: 'rewrite', label: 'Rewrite', icon: <IconEdit className="h-3.5 w-3.5" /> },
+  { value: 'decide', label: 'Decide', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'explain', label: 'Explain', icon: <IconSearch className="h-3.5 w-3.5" /> },
+  { value: 'translate', label: 'Translate', icon: <IconVision className="h-3.5 w-3.5" /> },
+  { value: 'brainstorm', label: 'Brainstorm', icon: <IconBolt className="h-3.5 w-3.5" /> },
+  { value: 'wellness', label: 'Wellness', icon: <IconBrain className="h-3.5 w-3.5" /> },
+  { value: 'create', label: 'Create', icon: <IconVision className="h-3.5 w-3.5" /> },
+  { value: 'read', label: 'Read', icon: <IconDocument className="h-3.5 w-3.5" /> },
+  { value: 'talk', label: 'Talk', icon: <IconMic className="h-3.5 w-3.5" /> },
 ]
 
 const TONES = ['Friendly', 'Professional', 'Funny', 'Short', 'Detailed'] as const
@@ -35,11 +36,13 @@ const LANG_PAIRS = ['EN→ES', 'EN→FR', 'EN→DE', 'EN→ZH', 'EN→JA', 'ES�
 const BRAINSTORM_TOPICS = ['Name Ideas', 'Weekend Plans', 'Gift Ideas', 'Solve a Problem', 'Plan an Event'] as const
 const WELLNESS_TYPES = ['Sleep Story', 'Meditation', 'Breathing', 'Affirmation'] as const
 const CREATE_STYLES = ['Realistic', 'Cartoon', 'Watercolor', 'Sketch', 'Fantasy'] as const
+const REWRITE_OPTIONS = ['Fix Grammar', 'Make Shorter', 'Make Friendlier', 'Make Professional', 'Sound Like Me'] as const
 
 interface ModeBarProps {
   mode: ChatMode
   tone: string
   type: string
+  rewriteStyle: string
   decideStructure: string
   difficulty: string
   langPair: string
@@ -49,6 +52,7 @@ interface ModeBarProps {
   onModeChange: (mode: ChatMode) => void
   onToneChange: (tone: string) => void
   onTypeChange: (type: string) => void
+  onRewriteStyleChange: (style: string) => void
   onDecideStructureChange: (structure: string) => void
   onDifficultyChange: (difficulty: string) => void
   onLangPairChange: (pair: string) => void
@@ -60,6 +64,7 @@ interface ModeBarProps {
 function SubOptionPill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "px-2 py-0.5 rounded text-[11px] transition-all",
@@ -74,9 +79,9 @@ function SubOptionPill({ active, label, onClick }: { active: boolean; label: str
   )
 }
 
-function SubOptions({ mode, tone, type, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
-  onToneChange, onTypeChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
-}: Pick<ModeBarProps, 'mode' | 'tone' | 'type' | 'decideStructure' | 'difficulty' | 'langPair' | 'brainstormTopic' | 'wellnessType' | 'createStyle' | 'onToneChange' | 'onTypeChange' | 'onDecideStructureChange' | 'onDifficultyChange' | 'onLangPairChange' | 'onBrainstormTopicChange' | 'onWellnessTypeChange' | 'onCreateStyleChange'>) {
+function SubOptions({ mode, tone, type, rewriteStyle, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
+  onToneChange, onTypeChange, onRewriteStyleChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
+}: Pick<ModeBarProps, 'mode' | 'tone' | 'type' | 'rewriteStyle' | 'decideStructure' | 'difficulty' | 'langPair' | 'brainstormTopic' | 'wellnessType' | 'createStyle' | 'onToneChange' | 'onTypeChange' | 'onRewriteStyleChange' | 'onDecideStructureChange' | 'onDifficultyChange' | 'onLangPairChange' | 'onBrainstormTopicChange' | 'onWellnessTypeChange' | 'onCreateStyleChange'>) {
   if (mode === 'write') {
     return (
       <div className="flex items-center gap-3 px-3 py-1 border-b border-border/20 bg-muted/5">
@@ -88,6 +93,17 @@ function SubOptions({ mode, tone, type, decideStructure, difficulty, langPair, b
         <div className="flex items-center gap-1">
           <span className="text-[11px] text-muted-foreground/60">Type</span>
           {TYPES.map(t => <SubOptionPill key={t} active={type === t} label={t} onClick={() => onTypeChange(t)} />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'rewrite') {
+    return (
+      <div className="flex items-center gap-3 px-3 py-1 border-b border-border/20 bg-muted/5">
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-muted-foreground/60">Action</span>
+          {REWRITE_OPTIONS.map(o => <SubOptionPill key={o} active={rewriteStyle === o} label={o} onClick={() => onRewriteStyleChange(o)} />)}
         </div>
       </div>
     )
@@ -121,8 +137,8 @@ function SubOptions({ mode, tone, type, decideStructure, difficulty, langPair, b
 }
 
 export function ModeBar({
-  mode, tone, type, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
-  onModeChange, onToneChange, onTypeChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
+  mode, tone, type, rewriteStyle, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
+  onModeChange, onToneChange, onTypeChange, onRewriteStyleChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
 }: ModeBarProps): JSX.Element {
   const [open, setOpen] = useState(false)
   const current = MODES.find(m => m.value === mode) ?? MODES[0]
@@ -153,10 +169,10 @@ export function ModeBar({
       </div>
 
       <SubOptions
-        mode={mode} tone={tone} type={type} decideStructure={decideStructure}
+        mode={mode} tone={tone} type={type} rewriteStyle={rewriteStyle} decideStructure={decideStructure}
         difficulty={difficulty} langPair={langPair} brainstormTopic={brainstormTopic}
         wellnessType={wellnessType} createStyle={createStyle}
-        onToneChange={onToneChange} onTypeChange={onTypeChange}
+        onToneChange={onToneChange} onTypeChange={onTypeChange} onRewriteStyleChange={onRewriteStyleChange}
         onDecideStructureChange={onDecideStructureChange} onDifficultyChange={onDifficultyChange}
         onLangPairChange={onLangPairChange} onBrainstormTopicChange={onBrainstormTopicChange}
         onWellnessTypeChange={onWellnessTypeChange} onCreateStyleChange={onCreateStyleChange}

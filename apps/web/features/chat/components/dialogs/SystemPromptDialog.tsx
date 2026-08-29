@@ -44,14 +44,18 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
   const [showSaveInput, setShowSaveInput] = useState(false)
 
   useEffect(() => {
+    let active = true
     loadPresets().then(stored => {
-      if (stored.length === 0) {
-        savePresets(DEFAULTS)
-        setPresets(DEFAULTS)
-      } else {
-        setPresets(stored)
+      if (active) {
+        if (stored.length === 0) {
+          savePresets(DEFAULTS)
+          setPresets(DEFAULTS)
+        } else {
+          setPresets(stored)
+        }
       }
     })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -145,6 +149,7 @@ export function SystemPromptDialog({ open, onOpenChange, value, onSave }: System
                 {showSaveInput ? (
                   <div className="flex items-center gap-1">
                     <Input
+                      aria-label="Preset name"
                       value={presetName}
                       onChange={e => setPresetName(e.target.value)}
                       placeholder="Preset name..."

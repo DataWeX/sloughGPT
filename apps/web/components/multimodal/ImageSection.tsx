@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import { useState, useEffect, useCallback } from 'react'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { apiGet, apiPost } from '@/lib/http-client'
+import { apiPost } from '@/lib/http-client'
+import { imagesController } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -30,22 +31,42 @@ export function ImageSection() {
   const [genError, setGenError] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [galleryRes, stylesRes] = await Promise.all([
-        apiGet<{ data?: { images?: GalleryImage[] } }>('/images/gallery').catch(() => null),
-        apiGet<{ data?: { styles?: Array<[string, string]> } }>('/images/styles').catch(() => null),
+        imagesController.gallery().catch(() => null),
+        imagesController.styles().catch(() => null),
       ])
-      setGallery(galleryRes?.data?.images ?? [])
-      setStyles((stylesRes?.data?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+      setGallery(galleryRes?.images ?? [])
+      setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
     } catch {
-      addToast('Failed to load image data', 'error')
+      addToast('Could not load image data', 'error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [addToast])
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      try {
+        const [galleryRes, stylesRes] = await Promise.all([
+          imagesController.gallery().catch(() => null),
+          imagesController.styles().catch(() => null),
+        ])
+        if (active) {
+          setGallery(galleryRes?.images ?? [])
+          setStyles((stylesRes?.styles ?? []).map((s: [string, string]) => ({ key: s[0], name: s[1] })))
+        }
+      } catch {
+        if (active) addToast('Could not load image data', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -61,7 +82,7 @@ export function ImageSection() {
       setLastGenerated(data.image ?? null)
       await fetchData()
     } catch (err) {
-      setGenError(err instanceof Error ? err.message : 'Generation failed')
+      setGenError(err instanceof Error ? err.message : 'Could not generation')
     } finally {
       setGenerating(false)
     }
@@ -77,7 +98,7 @@ export function ImageSection() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Generate</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchData}>
+          <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
             <IconRefresh className="h-4 w-4" />
           </Button>
         </CardHeader>
@@ -92,12 +113,11 @@ export function ImageSection() {
             {styles.map(s => (
               <button
                 key={s.key}
+                type="button"
                 onClick={() => setSelectedStyle(s.key)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                  selectedStyle === s.key
+                className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', selectedStyle === s.key
                     ? 'bg-primary/15 text-primary border border-primary/30'
-                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted'
-                }`}
+                    : 'bg-muted/50 text-muted-foreground border border-border/60 hover:bg-muted')}
               >
                 {s.name}
               </button>
@@ -121,7 +141,7 @@ export function ImageSection() {
             <CardTitle className="text-base">Last Generated</CardTitle>
           </CardHeader>
           <CardContent>
-            <img src={lastGenerated} alt="Generated" className="w-full max-w-md rounded-md border border-border/60" />
+            <img src={lastGenerated} alt="Generated" loading="lazy" className="w-full max-w-md rounded-md border border-border/60" />
           </CardContent>
         </Card>
       )}

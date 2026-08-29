@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback, useRef, type RefObject } from 'react'
+import { useState, useCallback, useRef, memo, type RefObject } from 'react'
 import { ChatInputAccessories } from './ChatInputAccessories'
 import { ChatInputField } from './ChatInputField'
 import { ChatSendButton } from './ChatSendButton'
 import { SlashCommandMenu } from './SlashCommandMenu'
 import { MentionMenu } from './MentionMenu'
-import { cn } from '@sloughgpt/strui'
+import { cn, IconStop } from '@sloughgpt/strui'
+import { estimateTokens } from '@/lib/format-bytes'
 import type { ChatCommand } from '@/lib/chat-commands'
 
 interface ChatInputRowProps {
@@ -14,25 +15,28 @@ interface ChatInputRowProps {
   onChange: (value: string) => void
   onSend: () => void
   onStop?: () => void
+  onCancel?: () => void
   loading: boolean
   disabled: boolean
   placeholder: string
   textareaRef: RefObject<HTMLTextAreaElement>
   onImage: (dataUrl: string) => void
   onTranscript: (text: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onAudioTranscript?: (text: string) => void
   onGeneratedImage?: (dataUrl: string, prompt: string) => void
   onPDFAnalysis?: (analysis: string, filename: string) => void
   onPDFError?: (error: string) => void
   hasContent: boolean
   onExecuteCommand?: (cmd: ChatCommand, args: string[]) => void
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
-export function ChatInputRow({
-  value, onChange, onSend, onStop,
+export const ChatInputRow = memo(function ChatInputRow({
+  value, onChange, onSend, onStop, onCancel,
   loading, disabled, placeholder,
-  textareaRef, onImage, onTranscript, onAudioTranscript, onGeneratedImage,
-  onPDFAnalysis, onPDFError, hasContent, onExecuteCommand,
+  textareaRef, onImage, onTranscript, onAudioRecorded, onAudioTranscript, onGeneratedImage,
+  onPDFAnalysis, onPDFError, hasContent, onExecuteCommand, onKeyDown,
 }: ChatInputRowProps) {
   const [showSlashMenu, setShowSlashMenu] = useState(false)
   const [slashMenuDismissed, setSlashMenuDismissed] = useState(false)
@@ -112,6 +116,7 @@ export function ChatInputRow({
       <ChatInputAccessories
         onImage={onImage}
         onTranscript={onTranscript}
+        onAudioRecorded={onAudioRecorded}
         disabled={disabled}
         onAudioTranscript={onAudioTranscript}
         onGeneratedImage={onGeneratedImage}
@@ -129,6 +134,7 @@ export function ChatInputRow({
         disabled={disabled}
         textareaRef={textareaRef}
         suppressEnter={showSlash || showMention}
+        onKeyDown={onKeyDown}
       />
       {value.length > 0 && (
         <span
@@ -138,10 +144,20 @@ export function ChatInputRow({
           )}
           aria-live="polite"
           aria-atomic="true"
-          aria-label={`Estimated ${Math.ceil(value.length / 4)} tokens`}
+          aria-label={`Estimated ${estimateTokens(value)} tokens`}
         >
-          ~{Math.ceil(value.length / 4)}
+          ~{estimateTokens(value)}
         </span>
+      )}
+      {loading && onCancel && (
+        <button
+          type="button"
+          className="h-10 w-10 shrink-0 flex items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+          onClick={onCancel}
+          aria-label="Cancel generation"
+        >
+          <IconStop className="h-4 w-4" aria-hidden="true" />
+        </button>
       )}
       <ChatSendButton
         loading={loading}
@@ -153,4 +169,4 @@ export function ChatInputRow({
       </div>
     </div>
   )
-}
+})

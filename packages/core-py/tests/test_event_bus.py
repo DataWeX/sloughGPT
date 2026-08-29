@@ -1,400 +1,427 @@
 """
-Tests for Event Bus (event_bus.py).
+Tests for domains/infrastructure/event_bus.py — async pub/sub event bus.
+
+Covers:
+    - Subscribe (on) and emit
+    - Once subscription (auto-remove after one emission)
+    - Wildcard subscriptions
+    - Unsubscribe (off)
+    - Clear subscriptions
+    - Event history and replay
+    - Priority ordering (CRITICAL > HIGH > NORMAL > MONITOR)
+    - Error isolation (bad handler doesn't crash bus)
+    - emit_sync (non-async emit)
+    - subscriber_count
+    - Singleton get/set
+    - _is_noisy filter
 """
 
 import asyncio
-import logging
+import sys
+from pathlib import Path
 import pytest
-from domains.infrastructure import event_bus as eb
+
+_CORE_PY = Path(__file__).resolve().parents[1]
+if str(_CORE_PY) not in sys.path:
+    sys.path.insert(0, str(_CORE_PY))
+
 from domains.infrastructure.event_bus import (
-    EventBus, Event, EventPriority,
-    get_event_bus, set_event_bus,
+    EventBus,
+    Event,
+    EventPriority,
+    Subscription,
+    get_event_bus,
+    set_event_bus,
+    _is_noisy,
+    install_log_subscriber,
+    _LOG_SUBSCRIBER_INSTALLED,
 )
 
 
-@pytest.fixture
-def bus():
-    return EventBus(max_history=10)
+# ── Subscribe + Emit ──────────────────────────────────────────────────
 
 
-class TestEvent:
-    def test_default_fields(self):
-        e = Event(name="test.event")
-        assert e.name == "test.event"
-        assert e.data == {}
-        assert e.id.startswith("evt_")
-        assert isinstance(e.timestamp, float)
-        assert e.source == ""
-
-
-@pytest.mark.asyncio
-class TestEventBus:
-    async def test_on_and_emit(self, bus):
+class TestSubscribeEmit:
+    def test_on_and_emit(self):
+        bus = EventBus()
         received = []
-
-        async def handler(event, data):
-            received.append((event, data))
-
-        bus.on("test.event", handler)
-        n = await bus.emit("test.event", {"key": "val"})
-        assert n == 1
+        bus.on("test.event", lambda name, data: received.append((name, data)))
+        count = bus.emit_sync("test.event", {"key": "val"})
+        assert count == 1
         assert received == [("test.event", {"key": "val"})]
 
-    async def test_multiple_handlers(self, bus):
+    def test_no_data_defaults_to_empty(self):
+        bus = EventBus()
+        received = []
+        bus.on("test.event", lambda name, data: received.append(data))
+        bus.emit_sync("test.event")
+        assert received == [{}]
+
+    def test_multiple_handlers(self):
+        bus = EventBus()
         results = []
+        bus.on("x", lambda n, d: results.append("a"))
+        bus.on("x", lambda n, d: results.append("b"))
+        bus.emit_sync("x")
+        assert results == ["a", "b"]
 
-        async def h1(event, data):
-            results.append("h1")
+    def test_handler_receives_source(self):
+        bus = EventBus()
+        received = []
+        bus.on("x", lambda n, d: received.append(d))
+        bus.emit_sync("x", {"msg": "hi"}, source="test")
+        assert received[0]["msg"] == "hi"
 
-        async def h2(event, data):
-            results.append("h2")
 
-        bus.on("test", h1)
-        bus.on("test", h2)
-        n = await bus.emit("test")
-        assert n == 2
-        assert results == ["h1", "h2"]
+# ── Once ──────────────────────────────────────────────────────────────
 
-    async def test_emit_with_no_subscribers(self, bus):
-        n = await bus.emit("no_one_listens")
-        assert n == 0
 
-    async def test_once_auto_unsubscribes(self, bus):
-        calls = []
+class TestOnce:
+    def test_once_fires_once(self):
+        bus = EventBus()
+        count = []
+        bus.once("x", lambda n, d: count.append(1))
+        bus.emit_sync("x")
+        bus.emit_sync("x")
+        assert count == [1]
 
-        async def handler(event, data):
-            calls.append(1)
+    def test_once_not_in_subscriber_count_after(self):
+        bus = EventBus()
+        bus.once("x", lambda n, d: None)
+        assert bus.subscriber_count == 1
+        bus.emit_sync("x")
+        assert bus.subscriber_count == 0
 
-        bus.once("test.once", handler)
-        await bus.emit("test.once")
-        await bus.emit("test.once")
-        await bus.emit("test.once")
-        assert calls == [1]
 
-    async def test_off_removes_handler(self, bus):
-        calls = []
+# ── Wildcard ──────────────────────────────────────────────────────────
 
-        async def handler(event, data):
-            calls.append(1)
 
-        bus.on("test", handler)
-        ok = bus.off("test", handler)
-        assert ok is True
-        await bus.emit("test")
-        assert calls == []
+class TestWildcard:
+    def test_wildcard_receives_all(self):
+        bus = EventBus()
+        received = []
+        bus.on("*", lambda n, d: received.append(n))
+        bus.emit_sync("a")
+        bus.emit_sync("b")
+        assert received == ["a", "b"]
 
-    async def test_off_nonexistent_returns_false(self, bus):
-        async def handler(event, data):
-            pass
+    def test_wildcard_and_specific(self):
+        bus = EventBus()
+        specific = []
+        wild = []
+        bus.on("target", lambda n, d: specific.append(1))
+        bus.on("*", lambda n, d: wild.append(1))
+        bus.emit_sync("target")
+        assert specific == [1]
+        assert wild == [1]
 
-        ok = bus.off("test", handler)
-        assert ok is False
 
-    async def test_clear_event(self, bus):
-        async def handler(event, data):
-            pass
+# ── Off ───────────────────────────────────────────────────────────────
 
-        bus.on("a", handler)
-        bus.on("b", handler)
+
+class TestOff:
+    def test_off_removes_handler(self):
+        bus = EventBus()
+        received = []
+        handler = lambda n, d: received.append(1)
+        bus.on("x", handler)
+        assert bus.off("x", handler) is True
+        bus.emit_sync("x")
+        assert received == []
+
+    def test_off_returns_false_if_not_found(self):
+        bus = EventBus()
+        assert bus.off("x", lambda n, d: None) is False
+
+    def test_off_wildcard(self):
+        bus = EventBus()
+        handler = lambda n, d: None
+        bus.on("*", handler)
+        assert bus.off("*", handler) is True
+        assert bus.subscriber_count == 0
+
+
+# ── Clear ─────────────────────────────────────────────────────────────
+
+
+class TestClear:
+    def test_clear_specific_event(self):
+        bus = EventBus()
+        bus.on("a", lambda n, d: None)
+        bus.on("b", lambda n, d: None)
         bus.clear("a")
         assert bus.subscriber_count == 1
 
-    async def test_clear_all(self, bus):
-        async def handler(event, data):
-            pass
-
-        bus.on("a", handler)
-        bus.on("b", handler)
+    def test_clear_all(self):
+        bus = EventBus()
+        bus.on("a", lambda n, d: None)
+        bus.on("b", lambda n, d: None)
+        bus.on("*", lambda n, d: None)
         bus.clear()
         assert bus.subscriber_count == 0
 
-    async def test_error_isolation(self, bus):
-        """One handler that throws should not prevent other handlers from running."""
-        results = []
-
-        async def bad_handler(event, data):
-            raise ValueError("oops")
-
-        async def good_handler(event, data):
-            results.append("ok")
-
-        bus.on("test", bad_handler)
-        bus.on("test", good_handler)
-        n = await bus.emit("test")
-        assert n == 2
-        assert results == ["ok"]
-
-    async def test_wildcard_subscription(self, bus):
-        results = []
-
-        async def wild(event, data):
-            results.append((event, data.get("x")))
-
-        bus.on("*", wild)
-        await bus.emit("a", {"x": 1})
-        await bus.emit("b", {"x": 2})
-        assert results == [("a", 1), ("b", 2)]
-
-    async def test_wildcard_off(self, bus):
-        calls = []
-
-        async def handler(event, data):
-            calls.append(1)
-
-        bus.on("*", handler)
-        bus.off("*", handler)
-        await bus.emit("test")
-        assert calls == []
-
-    async def test_priority_ordering(self, bus):
-        order = []
-
-        async def low(event, data):
-            order.append("low")
-
-        async def high(event, data):
-            order.append("high")
-
-        bus.on("test", low, priority=EventPriority.MONITOR)
-        bus.on("test", high, priority=EventPriority.CRITICAL)
-        await bus.emit("test")
-        assert order == ["high", "low"]
-
-    async def test_history_stored(self, bus):
-        await bus.emit("e1", {"n": 1})
-        await bus.emit("e2", {"n": 2})
-        assert len(bus.history()) == 2
-        assert len(bus.history("e1")) == 1
-        assert len(bus.history("e2")) == 1
-
-    async def test_history_max(self, bus):
-        bus._max_history = 3
-        for i in range(5):
-            await bus.emit("e", {"i": i})
-        assert len(bus.history("e")) == 3
-
-    async def test_replay_to_handler(self, bus):
-        await bus.emit("e", {"x": 1})
-        await bus.emit("e", {"x": 2})
-        results = []
-
-        def handler(event, data):
-            results.append(data["x"])
-
-        bus.replay("e", handler)
-        assert results == [1, 2]
-
-    async def test_replay_no_handler_returns_events(self, bus):
-        await bus.emit("e", {"x": 1})
-        events = bus.replay("e")
-        assert len(events) == 1
-        assert events[0].data["x"] == 1
-
-    async def test_event_id_unique(self, bus):
-        e1 = Event(name="a")
-        e2 = Event(name="a")
-        assert e1.id != e2.id
-
-    async def test_event_source_propagated(self, bus):
-        received = []
-
-        async def handler(event, data):
-            received.append(data.get("_source"))
-
-        bus.on("test", handler)
-        await bus.emit("test", {"msg": "hi"}, source="test-suite")
-        hist = bus.history("test")
-        assert hist[0].source == "test-suite"
-
-    async def test_sync_emit(self, bus):
-        results = []
-
-        def handler(event, data):
-            results.append(data.get("x"))
-
-        bus.on("test", handler)
-        n = bus.emit_sync("test", {"x": 42})
-        assert n == 1
-        assert results == [42]
-
-    async def test_singleton(self):
-        b1 = get_event_bus()
-        b2 = get_event_bus()
-        assert b1 is b2
-
-    async def test_set_singleton(self):
-        b = EventBus()
-        set_event_bus(b)
-        assert get_event_bus() is b
-
-    async def test_subscriber_count(self, bus):
-        assert bus.subscriber_count == 0
-
-        async def h(event, data):
-            pass
-
-        bus.on("a", h)
-        bus.on("b", h)
-        assert bus.subscriber_count == 2
-
-    async def test_on_raises_on_non_callable(self, bus):
-        with pytest.raises(TypeError, match="handler must be callable"):
-            bus.on("test", "not_callable")
-
-    async def test_once_raises_on_non_callable(self, bus):
-        with pytest.raises(TypeError, match="handler must be callable"):
-            bus.once("test", 42)
-
-    async def test_clear_star_clears_wildcards(self, bus):
-        async def h(event, data):
-            pass
-        bus.on("*", h)
+    def test_clear_wildcard(self):
+        bus = EventBus()
+        bus.on("*", lambda n, d: None)
+        bus.on("x", lambda n, d: None)
         bus.clear("*")
-        assert bus.subscriber_count == 0
-
-    @pytest.mark.filterwarnings("ignore:coroutine .* was never awaited:RuntimeWarning")
-    async def test_emit_sync_skips_async_handlers(self, bus):
-        results = []
-        async def async_handler(event, data):
-            results.append("async")
-
-        bus.on("test", async_handler)
-        n = bus.emit_sync("test")
-        assert n == 1
-        assert results == []
-
-    async def test_mixed_handler_types(self, bus):
-        results = []
-        def sync_h(event, data):
-            results.append("sync")
-        async def async_h(event, data):
-            results.append("async")
-
-        bus.on("test", sync_h)
-        bus.on("test", async_h)
-        n = await bus.emit("test")
-        assert n == 2
-        assert results == ["sync", "async"]
-
-    async def test_wildcard_and_specific_both_receive(self, bus):
-        results = []
-        async def wild(event, data):
-            results.append(f"wild:{event}")
-        async def specific(event, data):
-            results.append(f"specific:{event}")
-
-        bus.on("*", wild)
-        bus.on("foo", specific)
-        await bus.emit("foo")
-        assert "wild:foo" in results
-        assert "specific:foo" in results
-
-    async def test_replay_empty_history_returns_empty_list(self, bus):
-        events = bus.replay("nonexistent")
-        assert events == []
-
-    async def test_off_twice_returns_false(self, bus):
-        async def h(event, data):
-            pass
-        bus.on("test", h)
-        bus.off("test", h)
-        assert bus.off("test", h) is False
-
-    async def test_emit_count_includes_errored_handlers(self, bus):
-        async def bad(event, data):
-            raise ValueError("fail")
-
-        bus.on("test", bad)
-        n = await bus.emit("test")
-        assert n == 1
+        assert bus.subscriber_count == 1
 
 
-# ── Sync / once / replay / log-subscriber branch coverage ──
+# ── History ───────────────────────────────────────────────────────────
 
 
-class TestEventBusCoverage:
-    def test_once_wildcard_fires_once(self, bus):
-        calls = []
+class TestHistory:
+    def test_emit_stores_history(self):
+        bus = EventBus()
+        bus.emit_sync("x", {"v": 1})
+        bus.emit_sync("y", {"v": 2})
+        h = bus.history()
+        assert len(h) == 2
 
-        def h(event, data):
-            calls.append(event)
+    def test_history_filtered(self):
+        bus = EventBus()
+        bus.emit_sync("a")
+        bus.emit_sync("b")
+        bus.emit_sync("a")
+        assert len(bus.history("a")) == 2
+        assert len(bus.history("b")) == 1
 
-        bus.once("*", h)
-        n1 = bus.emit_sync("a")
-        n2 = bus.emit_sync("b")
-        assert calls == ["a"]
-        assert n1 == 1
-        assert n2 == 0
+    def test_history_max_limit(self):
+        bus = EventBus(max_history=3)
+        for i in range(5):
+            bus.emit_sync("x", {"i": i})
+        assert len(bus.history("x")) == 3
 
-    def test_once_specific_fires_once_sync(self, bus):
-        calls = []
+    def test_replay_calls_handler(self):
+        bus = EventBus()
+        bus.emit_sync("x", {"v": 1})
+        bus.emit_sync("y", {"v": 2})
+        replayed = []
+        bus.replay(handler=lambda n, d: replayed.append(n))
+        assert replayed == ["x", "y"]
 
-        def h(event, data):
-            calls.append(1)
+    def test_replay_returns_events(self):
+        bus = EventBus()
+        bus.emit_sync("x")
+        events = bus.replay()
+        assert len(events) == 1
+        assert events[0].name == "x"
 
-        bus.once("test", h)
-        bus.emit_sync("test")
-        bus.emit_sync("test")
-        assert calls == [1]
 
-    def test_emit_sync_errored_once_handler(self, bus, caplog):
-        def bad(event, data):
+# ── Priority ──────────────────────────────────────────────────────────
+
+
+class TestPriority:
+    def test_high_priority_runs_first(self):
+        bus = EventBus()
+        order = []
+        bus.on("x", lambda n, d: order.append("normal"), priority=EventPriority.NORMAL)
+        bus.on("x", lambda n, d: order.append("high"), priority=EventPriority.HIGH)
+        bus.on("x", lambda n, d: order.append("critical"), priority=EventPriority.CRITICAL)
+        bus.emit_sync("x")
+        assert order == ["critical", "high", "normal"]
+
+
+# ── Error Isolation ──────────────────────────────────────────────────
+
+
+class TestErrorIsolation:
+    def test_bad_handler_doesnt_crash_bus(self):
+        bus = EventBus()
+        def bad_handler(n, d):
             raise ValueError("boom")
+        good = []
+        bus.on("x", bad_handler)
+        bus.on("x", lambda n, d: good.append(1))
+        count = bus.emit_sync("x")
+        assert count == 2
+        assert good == [1]
 
-        bus.once("test", bad)
-        with caplog.at_level(logging.ERROR, logger="slo.event_bus"):
-            n = bus.emit_sync("test")
-        assert n == 1
-        assert "Sync handler failed for" in caplog.text
+    def test_async_handler_error_isolated(self):
+        bus = EventBus()
+        async def bad(n, d):
+            raise RuntimeError("async boom")
+        good = []
+        bus.on("x", bad)
+        bus.on("x", lambda n, d: good.append(1))
+
+        async def run():
+            return await bus.emit("x")
+
+        result = asyncio.run(run())
+        assert result == 2
+        assert good == [1]
+
+
+# ── emit_sync vs emit ─────────────────────────────────────────────────
+
+
+class TestEmitSync:
+    def test_sync_skips_async_handlers(self):
+        import warnings
+        bus = EventBus()
+        called = []
+        async def handler(n, d):
+            called.append(1)
+        bus.on("x", handler)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            count = bus.emit_sync("x")
+        assert count == 1
+        assert called == []  # sync emit skips coroutine results
+
+    def test_async_emit_awaits_async_handlers(self):
+        bus = EventBus()
+        called = []
+        async def handler(n, d):
+            called.append(1)
+        bus.on("x", handler)
+
+        async def run():
+            return await bus.emit("x")
+
+        result = asyncio.run(run())
+        assert result == 1
+        assert called == [1]
+
+
+# ── subscriber_count ──────────────────────────────────────────────────
+
+
+class TestSubscriberCount:
+    def test_count(self):
+        bus = EventBus()
         assert bus.subscriber_count == 0
+        bus.on("a", lambda n, d: None)
+        bus.on("a", lambda n, d: None)
+        bus.on("*", lambda n, d: None)
+        assert bus.subscriber_count == 3
 
-    @pytest.mark.filterwarnings("ignore:coroutine .* was never awaited:RuntimeWarning")
-    def test_replay_async_handler_warns_filtered(self, bus):
-        async def h(event, data):
+
+# ── Singleton ─────────────────────────────────────────────────────────
+
+
+class TestSingleton:
+    def test_get_returns_same(self):
+        bus1 = get_event_bus()
+        bus2 = get_event_bus()
+        assert bus1 is bus2
+
+    def test_set_replaces(self):
+        original = get_event_bus()
+        new_bus = EventBus()
+        set_event_bus(new_bus)
+        assert get_event_bus() is new_bus
+        set_event_bus(original)  # restore
+
+    def test_reset_creates_new_instance(self):
+        from domains.infrastructure.event_bus import reset_event_bus
+        original = get_event_bus()
+        reset_event_bus()
+        new = get_event_bus()
+        assert new is not original
+        assert isinstance(new, EventBus)
+
+
+# ── _is_noisy ─────────────────────────────────────────────────────────
+
+
+class TestIsNoisy:
+    def test_heartbeat(self):
+        assert _is_noisy("heartbeat") is True
+
+    def test_metric(self):
+        assert _is_noisy("metric.cpu") is True
+
+    def test_cache(self):
+        assert _is_noisy("cache.hit") is True
+
+    def test_normal_event(self):
+        assert _is_noisy("model.loaded") is False
+
+    def test_error_event(self):
+        assert _is_noisy("error.raised") is False
+
+
+# ── Event dataclass ───────────────────────────────────────────────────
+
+
+class TestEventDataclass:
+    def test_defaults(self):
+        evt = Event(name="test")
+        assert evt.name == "test"
+        assert evt.data == {}
+        assert evt.id.startswith("evt_")
+        assert evt.timestamp > 0
+        assert evt.source == ""
+
+    def test_custom(self):
+        evt = Event(name="x", data={"k": "v"}, source="src")
+        assert evt.data == {"k": "v"}
+        assert evt.source == "src"
+
+
+# ── Non-callable handler rejection ────────────────────────────────────
+
+
+class TestHandlerValidation:
+    def test_on_rejects_non_callable(self):
+        bus = EventBus()
+        with pytest.raises(TypeError, match="callable"):
+            bus.on("x", "not a function")
+
+    def test_once_rejects_non_callable(self):
+        bus = EventBus()
+        with pytest.raises(TypeError, match="callable"):
+            bus.once("x", 42)
+
+
+# ── install_log_subscriber ─────────────────────────────────────────────
+
+
+class TestInstallLogSubscriber:
+    def test_idempotent(self):
+        """Calling install_log_subscriber twice doesn't add duplicate handlers."""
+        import domains.infrastructure.event_bus as mod
+        original = mod._LOG_SUBSCRIBER_INSTALLED
+        mod._LOG_SUBSCRIBER_INSTALLED = False
+        try:
+            bus = EventBus()
+            install_log_subscriber(bus)
+            count_after_first = bus.subscriber_count
+            install_log_subscriber(bus)  # second call — should be no-op
+            assert bus.subscriber_count == count_after_first
+        finally:
+            mod._LOG_SUBSCRIBER_INSTALLED = original
+
+    def test_noisy_events_filtered(self):
+        """Noisy events (heartbeat, metric, cache) should not reach the log handler."""
+        import logging
+        import domains.infrastructure.event_bus as mod
+        original = mod._LOG_SUBSCRIBER_INSTALLED
+        mod._LOG_SUBSCRIBER_INSTALLED = False
+        try:
+            bus = EventBus()
+            install_log_subscriber(bus)
+            # Emit a noisy event — should not raise
+            count = bus.emit_sync("heartbeat", {"ts": 1.0})
+            assert count >= 1  # handler was invoked (but filtered inside)
+        finally:
+            mod._LOG_SUBSCRIBER_INSTALLED = original
+
+    def test_replay_with_async_handler_warns(self):
+        """replay() with an async handler should emit a warning."""
+        bus = EventBus()
+        bus.emit_sync("x", {"v": 1})
+
+        async def async_handler(name, data):
             pass
 
-        bus.emit_sync("e", {"x": 1})
-        with pytest.warns(UserWarning, match="async handler passed to sync replay"):
-            bus.replay("e", h)
-
-    def test_replay_errored_handler_logs(self, bus, caplog):
-        def bad(event, data):
-            raise ValueError("nope")
-
-        bus.emit_sync("e", {"x": 1})
-        with caplog.at_level(logging.ERROR, logger="slo.event_bus"):
-            bus.replay("e", bad)
-        assert "Replay handler failed for" in caplog.text
-
-    def test_is_noisy(self):
-        assert eb._is_noisy("heartbeat")
-        assert eb._is_noisy("metric.cpu")
-        assert not eb._is_noisy("model.loaded")
-
-    def test_install_log_subscriber(self, monkeypatch, caplog):
-        monkeypatch.setattr(eb, "_LOG_SUBSCRIBER_INSTALLED", False)
-        b = EventBus(max_history=5)
-        eb.install_log_subscriber(b)
-        assert b.subscriber_count == 1
-        with caplog.at_level(logging.INFO, logger="slo.event_sensor"):
-            b.emit_sync("model.loaded", {"name": "gpt2"})
-            b.emit_sync("heartbeat")
-        assert "EVENT model.loaded" in caplog.text
-        assert "{'name': 'gpt2'}" in caplog.text
-        assert "EVENT heartbeat" not in caplog.text
-
-    def test_install_log_subscriber_idempotent(self, monkeypatch):
-        monkeypatch.setattr(eb, "_LOG_SUBSCRIBER_INSTALLED", False)
-        b1 = EventBus()
-        b2 = EventBus()
-        eb.install_log_subscriber(b1)
-        eb.install_log_subscriber(b2)
-        assert b1.subscriber_count == 1
-        assert b2.subscriber_count == 0
-
-    def test_install_log_subscriber_default_bus(self, monkeypatch):
-        monkeypatch.setattr(eb, "_LOG_SUBSCRIBER_INSTALLED", False)
-        b = EventBus()
-        monkeypatch.setattr(eb, "get_event_bus", lambda: b)
-        eb.install_log_subscriber()
-        assert b.subscriber_count == 1
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            bus.replay(handler=async_handler)
+            async_warnings = [x for x in w if issubclass(x.category, RuntimeWarning)]
+            assert len(async_warnings) == 1
+            assert "async" in str(async_warnings[0].message).lower()

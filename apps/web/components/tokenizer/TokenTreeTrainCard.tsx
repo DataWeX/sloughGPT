@@ -37,7 +37,7 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
       onTrained?.()
     } catch (err) {
       setFailed(true)
-      addToast(err instanceof Error ? err.message : 'Failed to train token tree', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not train token tree', 'error')
     } finally {
       setTraining(false)
     }
@@ -57,7 +57,7 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
         )}
         {failed && !training && (
           <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-            Training failed. Check the server logs and try again.
+            Training failed. Check the logs and try again.
           </div>
         )}
         <div className="space-y-2">

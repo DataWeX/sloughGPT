@@ -21,6 +21,12 @@ vi.mock('@/lib/error-store', () => ({
   useErrorStore: mockUseErrorStore,
 }))
 
+const mockUseLiveStatus = vi.hoisted(() => vi.fn())
+vi.mock('@/hooks/useLiveStatus', () => ({
+  useLiveStatus: mockUseLiveStatus,
+  useLiveStatusStore: vi.fn(() => ({ connectionStatus: 'connected' })),
+}))
+
 const mockDebugData = {
   model_loaded: true,
   model_type: 'gpt2',
@@ -34,20 +40,9 @@ const mockDebugData = {
   avg_tokens_per_request: 600,
   avg_latency_ms: 250,
   requests_per_minute: 5,
-  health_score: {
-    score: 85,
-    status: 'healthy',
-    error_rate_score: 90,
-    latency_score: 80,
-    throughput_score: 85,
-    uptime_score: 90,
-  },
-  model_metrics: [
-    { model: 'gpt2', count: 75, total_tokens: 45000, tokens_per_sec: 12.5, avg_tokens: 600 },
-  ],
-  model_events: [
-    { type: 'load', model: 'gpt2', detail: 'loaded', ts: 1000 },
-  ],
+  health_score: 85,
+  health_status: 'healthy',
+  health_summary: '',
   health_history: [
     { score: 80, status: 'healthy', ts: 1000 },
     { score: 85, status: 'healthy', ts: 2000 },
@@ -65,12 +60,29 @@ const mockDebugData = {
   recent_errors: [
     { path: '/chat/stream', method: 'POST', status: 500, message: 'timeout', error_type: 'TimeoutError', ts: 1000 },
   ],
+  model_metrics: [
+    { model: 'gpt2', count: 75, total_tokens: 45000, tokens_per_sec: 12.5, avg_tokens: 600 },
+  ],
+  model_events: [
+    { type: 'load', model: 'gpt2', detail: 'loaded', ts: 1000 },
+  ],
+  diagnoses: [],
+  num_parameters: null,
+  quantization: null,
+  training_pool: null,
+  cpu_percent: 45,
+  memory_percent: 60,
+  device: null,
+  model_loading: false,
+  is_inferencing: false,
+  p95_latency_ms: 400,
+}
+
+const mockFetchDebugData = {
+  gpu_backend: null,
   recent_requests: [
     { path: '/chat/stream', method: 'POST', status: 200, elapsed_ms: 250 },
   ],
-  cpu_percent: 45,
-  memory_percent: 60,
-  gpu_backend: null,
 }
 
 import { DebugOverlay } from './DebugOverlay'
@@ -81,13 +93,14 @@ describe('DebugOverlay', () => {
     mockFetch.mockReset()
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(mockDebugData),
+      json: () => Promise.resolve(mockFetchDebugData),
     })
     mockUseErrorStore.mockImplementation((sel: (s: unknown) => unknown) => {
       const state = { errors: [] }
       return sel(state)
     })
     mockUseErrorStore.getState = vi.fn(() => ({ errors: [] }))
+    mockUseLiveStatus.mockReturnValue({ health: mockDebugData })
   })
 
   afterEach(() => {

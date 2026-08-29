@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from schemas.common import error_response, set_correlation_id
+from domains.logging.config import set_request_id
 
 logger = logging.getLogger("slo.middleware")
 
@@ -91,6 +92,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         corr_id = request.headers.get(self.HEADER) or request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
         request.scope["correlation_id"] = corr_id
         set_correlation_id(corr_id)
+        set_request_id(corr_id)  # also set for logging contextvars
         response = await call_next(request)
         response.headers[self.HEADER] = corr_id
         return response
@@ -216,6 +218,69 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             collector.record_request(path, status_code, elapsed)
 
 
+class PayloadLoggingMiddleware(BaseHTTPMiddleware):
+    """Logs request/response payloads at DEBUG level for debugging.
+
+    Only active when root logger level is DEBUG. Truncates large bodies.
+    Never buffers StreamingResponse (checks response class).
+    """
+
+    MAX_BODY_LOG = 2048  # chars
+
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        if not logger.isEnabledFor(logging.DEBUG):
+            return await call_next(request)
+
+        corr_id = request.scope.get("correlation_id", "-")
+        path = request.url.path
+        method = request.method
+
+        # Read request body (non-streaming only)
+        req_body = None
+        if method in ("POST", "PUT", "PATCH"):
+            try:
+                raw = await request.body()
+                if raw:
+                    req_body = raw[:self.MAX_BODY_LOG]
+                    if len(raw) > self.MAX_BODY_LOG:
+                        req_body += f"... ({len(raw)} bytes total)"
+            except Exception:
+                req_body = "<read error>"
+
+        logger.debug(
+            ">>> %s %s corr=%s body=%s",
+            method, path, corr_id, req_body,
+            extra={"tag": "PAYLOAD", "context": {"phase": "request", "path": path}},
+        )
+
+        response = await call_next(request)
+
+        # Log response body for non-streaming responses only
+        resp_body = None
+        is_streaming = hasattr(response, 'body_iterator') or isinstance(
+            response, (Response.__class__.__mro__[0],)
+        )
+        # Check if it's a StreamingResponse — skip body logging
+        from starlette.responses import StreamingResponse
+        if not isinstance(response, StreamingResponse):
+            try:
+                resp_body_raw = response.body if hasattr(response, 'body') else None
+                if resp_body_raw:
+                    resp_body = resp_body_raw[:self.MAX_BODY_LOG]
+                    if len(resp_body_raw) > self.MAX_BODY_LOG:
+                        resp_body += f"... ({len(resp_body_raw)} bytes total)"
+            except Exception:
+                resp_body = "<read error>"
+
+        logger.debug(
+            "<<< %s %s %d corr=%s body=%s",
+            method, path, response.status_code, corr_id, resp_body,
+            extra={"tag": "PAYLOAD", "context": {"phase": "response", "path": path, "status": response.status_code}},
+        )
+
+        return response
+
+
 class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
     """Adds a DEBUG note for client-side errors originating from browser extensions.
 
@@ -257,6 +322,7 @@ def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) 
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
         (MetricsMiddleware, {}),
+        (PayloadLoggingMiddleware, {}),
         (UnifiedRequestMiddleware, {}),
         (CorrelationIdMiddleware, {}),
         (ClientErrorFilterMiddleware, {}),

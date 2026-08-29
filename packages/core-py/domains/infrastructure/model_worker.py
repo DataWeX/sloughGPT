@@ -42,8 +42,10 @@ import gc
 import traceback
 import sys
 import threading
-from typing import Any, Optional, Callable, Generator
-from dataclasses import dataclass, field
+from typing import Any, Optional, Generator
+from dataclasses import dataclass
+
+from .constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STARTUP_TIMEOUT
 
 logger = logging.getLogger("slo.infrastructure.model_worker")
 
@@ -134,15 +136,7 @@ def _worker_loop(
             try:
                 session_id, prompt, kwargs = payload
                 result = generate_fn(prompt, **kwargs)
-                try:
-                    resp_q.put_nowait(("result", session_id, result))
-                except Exception as put_e:
-                    logger.error("Worker[%s]: resp_q.put failed: %s", worker_id, put_e,
-                        extra={"tag": "INFRA"})
-                    try:
-                        resp_q.put_nowait(("error", session_id, f"put failed: {put_e}"))
-                    except Exception:
-                        pass
+                resp_q.put_nowait(("result", session_id, result))
                 requests_served += 1
             except Exception as e:
                 tb = traceback.format_exc()
@@ -151,7 +145,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: generate error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "generate_stream":
             session_id = None
@@ -166,7 +161,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: stream error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "load_adapter":
             session_id = None
@@ -184,7 +180,8 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: load_adapter error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
         if cmd == "unload_adapter":
             session_id = None
@@ -202,13 +199,15 @@ def _worker_loop(
                 try:
                     resp_q.put_nowait(("error", session_id, f"{type(e).__name__}: {e}"))
                 except Exception:
-                    pass
+                    logger.error("Worker[%s]: unload_adapter error fallback also failed", worker_id,
+                        extra={"tag": "INFRA"})
 
     if cleanup_fn:
         try:
             cleanup_fn()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Worker[%s]: cleanup_fn failed: %s", worker_id, e,
+                extra={"tag": "INFRA"})
     gc.collect()
     hb_q.put_nowait(("dead", os.getpid()))
     logger.info("Worker[%s]: stopped", worker_id,
@@ -264,7 +263,7 @@ def _slo_worker_main(
     except Exception as e:
         logger.error("Worker[%s]: SloNet load failed: %s", worker_id, e,
             extra={"tag": "INFRA"})
-        resp_q.put_nowait(("error", f"Model load failed: {e}"))
+        resp_q.put_nowait(("error", None, f"Model load failed: {e}"))
         hb_q.put_nowait(("dead", os.getpid()))
         return
 
@@ -294,8 +293,8 @@ def _slo_worker_main(
             while not _hb_stop.is_set():
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: heartbeat put failed: %s", exc)
                 _hb_stop.wait(timeout=5.0)
 
         hb_thread = _threading.Thread(target=_hb_tick, daemon=True)
@@ -366,13 +365,14 @@ def _slo_worker_main(
             if hb_q is not None:
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: heartbeat put failed: %s", exc)
             decoded = provider._tokenizer.decode([tok_id])
             if decoded:
                 try:
                     resp_q_inner.put(("token", session_id, decoded), timeout=_STREAM_PUT_TIMEOUT_S)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("worker: token put failed for session %s: %s", session_id, exc)
                     break
                 tokens_generated += 1
 
@@ -383,8 +383,8 @@ def _slo_worker_main(
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
             }), timeout=_STREAM_PUT_TIMEOUT_S)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("worker: result put failed for session %s: %s", session_id, exc)
 
     def _cleanup():
         nonlocal provider
@@ -456,8 +456,8 @@ def _slo_worker_main(
                 if hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B'):
                     has_lora = True
                     break
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("worker: LoRA detection failed: %s", exc)
 
         if not has_lora:
             return {"status": "no_adapter", "message": "No LoRA adapter loaded."}
@@ -620,11 +620,12 @@ def _hf_worker_main(
             if hb_q is not None:
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: heartbeat put failed: %s", exc)
             try:
                 resp_q_inner.put(("token", session_id, text_chunk), timeout=_STREAM_PUT_TIMEOUT_S)
-            except Exception:
+            except Exception as exc:
+                logger.debug("worker: HF token put failed for session %s: %s", session_id, exc)
                 break
             tokens_generated += 1
 
@@ -637,8 +638,8 @@ def _hf_worker_main(
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
             }), timeout=_STREAM_PUT_TIMEOUT_S)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("worker: HF result put failed for session %s: %s", session_id, exc)
 
     def _cleanup():
         nonlocal model, tokenizer
@@ -675,7 +676,8 @@ class ModelWorkerProcess:
     def __init__(
         self,
         worker_id: str = "worker",
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+        startup_timeout: float = DEFAULT_STARTUP_TIMEOUT,
         stall_timeout: float = _STALL_TIMEOUT_S,
         extra_sys_paths: Optional[list] = None,
         # SloNet mode (preferred)
@@ -691,6 +693,7 @@ class ModelWorkerProcess:
     ):
         self.worker_id = worker_id
         self._generate_timeout = generate_timeout
+        self._startup_timeout = startup_timeout
         self._stall_timeout = stall_timeout
         self._extra_sys_paths = extra_sys_paths or []
 
@@ -776,8 +779,8 @@ class ModelWorkerProcess:
         self._health.alive = True
         self._health.started_at = self._started_at
 
-        # Wait for ready signal
-        deadline = time.time() + 120.0
+        # Wait for ready signal (use startup timeout, not generate timeout)
+        deadline = time.time() + self._startup_timeout
         ready = False
         while time.time() < deadline:
             try:
@@ -795,7 +798,7 @@ class ModelWorkerProcess:
 
         if not ready:
             raise RuntimeError(
-                f"Worker[{self.worker_id}]: failed to start within 120s"
+                f"Worker[{self.worker_id}]: failed to start within {self._startup_timeout}s"
             )
 
         logger.info(
@@ -810,8 +813,9 @@ class ModelWorkerProcess:
             return
         try:
             self._req_q.put_nowait(("stop", None))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Worker[%s]: failed to send stop signal: %s", self.worker_id, e,
+                extra={"tag": "INFRA"})
         self._process.join(timeout=timeout)
         if self._process.is_alive():
             logger.warning("Worker[%s]: killing unresponsive process", self.worker_id,
@@ -829,12 +833,12 @@ class ModelWorkerProcess:
             if q is not None:
                 try:
                     q.close()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: queue close failed for %s: %s", q_name, exc)
                 try:
                     q.join_thread()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("worker: queue join_thread failed for %s: %s", q_name, exc)
 
     # ── Health ─────────────────────────────────────────────────────────
 
@@ -1113,7 +1117,7 @@ class ModelWorkerProcess:
 
     # ── Adapter loading ──────────────────────────────────────────────────
 
-    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = 120.0) -> dict:
+    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = DEFAULT_GENERATE_TIMEOUT) -> dict:
         """Send load_adapter request to worker and wait for result.
 
         Args:

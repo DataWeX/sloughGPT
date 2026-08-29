@@ -1,182 +1,219 @@
-"""datasets / knowledge / remember / recall / checkpoints / finetuned / tokenizer — data & training commands."""
+"""Data-related shell commands: datasets, checkpoints, finetuned, knowledge, remember, recall, tokenizer.
 
+Extracted from monolithic REPL; follows the cmds/ protocol:
+    def run(argv, out, api, env) -> int
+"""
 from __future__ import annotations
 
-from ..console import Console
-from ..commands import ShellCommands
-
-help = "List datasets, knowledge, checkpoints, or fine-tuned models"
-names = ["datasets", "knowledge", "remember", "recall", "checkpoints", "finetuned", "tokenizer"]
+help = "Manage datasets, knowledge, checkpoints, and more"
+names = ["datasets", "checkpoints", "finetuned", "knowledge", "remember", "recall", "tokenizer"]
 
 
-def run(argv: list[str], out: Console, api: ShellCommands,
-        env: dict[str, str]) -> int:
+def _format_error(e: Exception, cmd: str = "") -> str:
+    """Format an exception into a user-friendly error message."""
+    from domains.shell.error import format_error
+    return format_error(e, cmd, color=False)
+
+
+def run(argv: list[str], out, api, env: dict) -> int:
     cmd = argv[0] if argv else "datasets"
+    args = argv[1:]
 
-    if cmd == "datasets":
-        with out.spinner("Fetching datasets") as s:
-            datasets = api.datasets()
-        s.ok("Datasets loaded")
-        if not datasets:
-            out.print("  No datasets available")
-            return 0
-        rows = []
-        for d in datasets:
-            name = d.get("name", "?")
-            samples = d.get("samples", 0)
-            sz = d.get("size", 0)
-            sz_str = f"{sz / 1048576:.1f}M" if sz else ""
-            rows.append([name, str(samples), sz_str])
-        out.table(rows, ["Dataset", "Samples", "Size"])
+    handlers = {
+        "datasets": _datasets,
+        "checkpoints": _checkpoints,
+        "finetuned": _finetuned,
+        "knowledge": _knowledge,
+        "remember": _remember,
+        "recall": _recall,
+        "tokenizer": _tokenizer,
+    }
+
+    handler = handlers.get(cmd, _datasets)
+    return handler(args, out, api)
+
+
+def _datasets(args, out, api):
+    try:
+        data = api.datasets()
+    except Exception as e:
+        out.write(_format_error(e, "datasets"))
+        return 1
+    if not data:
+        out.write("No datasets found.")
         return 0
+    for ds in data:
+        name = ds.get("name", "?")
+        samples = ds.get("samples", "?")
+        size = ds.get("size", 0)
+        if isinstance(size, (int, float)) and size > 0:
+            if size >= 1048576:
+                size_str = f"{size / 1048576:.1f} MB"
+            elif size >= 1024:
+                size_str = f"{size / 1024:.1f} KB"
+            else:
+                size_str = f"{size} B"
+        else:
+            size_str = "-"
+        out.write(f"  {name:20s}  {samples} samples  {size_str}")
+    return 0
 
-    if cmd == "knowledge":
-        query = " ".join(argv[1:]) if len(argv) > 1 else ""
-        if query:
-            with out.spinner("Searching knowledge") as s:
-                results = api.list_knowledge(query)
-            s.ok("Search complete")
-            if not results:
-                out.print("  No results")
-                return 0
-            for r in results[:20]:
-                out.print(f"  \u2022 {r.get('content', '')[:120]}")
-            return 0
-        with out.spinner("Fetching knowledge stats") as s:
-            stats = api.knowledge_stats()
-        s.ok("Knowledge stats loaded")
-        count = stats.get("total_items", 0)
-        if count == 0:
-            out.print("  Knowledge base is empty")
-            out.print("  Use: remember <fact>  to add a fact")
-            return 0
-        out.print(f"  Knowledge base: {count} fact(s)")
-        topics = stats.get("topics", {})
-        if topics:
-            out.print(f"  Topics: {', '.join(sorted(topics.keys()))}")
+
+def _checkpoints(args, out, api):
+    try:
+        data = api.checkpoints()
+    except Exception as e:
+        out.write(_format_error(e, "checkpoints"))
+        return 1
+    if not data:
+        out.write("No checkpoints found.")
         return 0
+    for cp in data:
+        name = cp.get("name", "?")
+        loss = cp.get("loss", "?")
+        mtype = cp.get("model_type", "?")
+        out.write(f"  {name:20s}  loss={loss}  type={mtype}")
+    return 0
 
-    if cmd == "remember":
-        content = " ".join(argv[1:]) if len(argv) > 1 else ""
-        if not content:
-            out.print("  Usage: remember <fact>")
-            out.print("    remember this project uses FastAPI")
+
+def _finetuned(args, out, api):
+    if not args:
+        try:
+            data = api.finetuned_models()
+        except Exception as e:
+            out.write(_format_error(e, "finetuned"))
             return 1
-        with out.spinner("Storing fact") as s:
-            result = api.add_knowledge(content)
-        if isinstance(result, dict) and result.get("status") == "stored":
-            topic = result.get("topic", "general")
-            preview = content[:80].replace("\n", "\\n")
-            s.ok(f"Stored fact [{topic}]")
-            out.print(f"  {preview}...")
-        else:
-            s.fail("Failed to store")
-            out.print(f"  Error: {result}")
-        return 0
-
-    if cmd == "recall":
-        query = " ".join(argv[1:]) if len(argv) > 1 else ""
-        if not query:
-            with out.spinner("Fetching knowledge stats") as s:
-                stats = api.knowledge_stats()
-            s.ok("Knowledge stats loaded")
-            count = stats.get("total_items", 0)
-            if count == 0:
-                out.print("  Knowledge base is empty")
-                return 0
-            out.print(f"  Knowledge base: {count} fact(s)")
-            topics = stats.get("topics", {})
-            if topics:
-                out.print(f"  Topics: {', '.join(sorted(topics.keys()))}")
-            out.print("  Use: recall <query>  to search")
+        if not data:
+            out.write("No fine-tuned models found.")
             return 0
-        with out.spinner("Searching knowledge") as s:
-            results = api.list_knowledge(query)
-        s.ok("Search complete")
-        if not results:
-            out.print("  No matching facts")
-            return 0
-        for r in results[:10]:
-            topic = r.get("topic", "")
-            content = r.get("content", "")[:120]
-            out.print(f"  [{topic}] {content}")
-        return 0
-
-    if cmd == "checkpoints":
-        with out.spinner("Fetching checkpoints") as s:
-            cps = api.checkpoints()
-        s.ok("Checkpoints loaded")
-        if not cps:
-            out.print("  No checkpoints")
-            return 0
-        rows = []
-        for cp in cps:
-            rows.append([
-                cp.get("name", ""),
-                f"{cp.get('loss', '\u2014')}",
-                cp.get("model_type", ""),
-            ])
-        out.table(rows, ["Checkpoint", "Loss", "Type"])
-        return 0
-
-    if cmd == "finetuned":
-        sub = argv[1] if len(argv) > 1 else ""
-        if sub == "load":
-            name = argv[2] if len(argv) > 2 else ""
-            if not name:
-                out.print("  Usage: finetuned load <name>")
-                return 1
-            with out.spinner(f"Loading {name}") as s:
-                result = api.load_finetuned(name)
-            status = result.get("status", "?")
-            if status == "loaded":
-                s.ok(f"{name} loaded for chat")
+        for m in data:
+            name = m.get("model_name", "?")
+            loss = m.get("final_loss", "?")
+            epochs = m.get("epochs", "?")
+            size = m.get("size_bytes", 0)
+            if isinstance(size, (int, float)) and size >= 1048576:
+                size_str = f"{size / 1048576:.1f} MB"
             else:
-                s.fail("Load failed")
-                out.print(f"  Error: {result.get('error', result)}")
-                return 1
-            return 0
-        if sub in ("rm", "del", "delete"):
-            name = argv[2] if len(argv) > 2 else ""
-            if not name:
-                out.print("  Usage: finetuned rm <name>")
-                return 1
-            with out.spinner(f"Deleting {name}") as s:
-                result = api.delete_finetuned(name)
-            if result.get("status") == "deleted":
-                s.ok(f"Deleted {name}")
-            else:
-                s.fail("Delete failed")
-                out.print(f"  Error: {result}")
-                return 1
-            return 0
-        with out.spinner("Fetching fine-tuned models") as s:
-            models = api.finetuned_models()
-        s.ok("Fine-tuned models loaded")
-        if not models:
-            out.print("  No fine-tuned models")
-            return 0
-        rows = []
-        for m in models:
-            name = m.get("model_name", "")
-            loss = m.get("final_loss", "\u2014")
-            ep = m.get("epochs", 0)
-            sz_bytes = m.get("size_bytes", 0)
-            sz_str = f"{sz_bytes / 1048576:.0f}M"
-            rows.append([name, f"{loss}", f"{ep}ep", sz_str])
-        out.table(rows, ["Model", "Loss", "Epochs", "Size"])
-        out.print("  Use: finetuned load <name>  |  finetuned rm <name>")
+                size_str = f"{size} B"
+            out.write(f"  {name:20s}  loss={loss}  epochs={epochs}  {size_str}")
         return 0
 
-    if cmd == "tokenizer":
-        with out.spinner("Fetching tokenizer stats") as s:
-            stats = api.tokenizer_stats()
-        s.ok("Tokenizer stats loaded")
-        if isinstance(stats, dict) and "error" not in stats:
-            for k, v in stats.items():
-                out.print(f"  {k}: {v}")
-        else:
-            out.json(stats)
-        return 0
+    sub = args[0]
+    if sub == "load":
+        if len(args) < 2:
+            out.write("Usage: finetuned load <name>")
+            return 1
+        name = args[1]
+        try:
+            result = api.load_finetuned(name)
+        except Exception as e:
+            out.write(_format_error(e, "finetuned load"))
+            return 1
+        status = result.get("status", "error")
+        if status == "loaded":
+            out.write(f"Loaded: {name}")
+            return 0
+        out.write(f"Failed: {result.get('error', status)}")
+        return 1
 
+    if sub in ("rm", "delete", "del"):
+        if len(args) < 2:
+            out.write(f"Usage: finetuned {sub} <name>")
+            return 1
+        name = args[1]
+        try:
+            result = api.delete_finetuned(name)
+        except Exception as e:
+            out.write(_format_error(e, "finetuned rm"))
+            return 1
+        status = result.get("status", "error")
+        if status == "deleted":
+            out.write(f"Deleted: {name}")
+            return 0
+        out.write(f"Failed: {status}")
+        return 1
+
+    out.write(f"Unknown subcommand: {sub}")
+    return 1
+
+
+def _knowledge(args, out, api):
+    if args:
+        return _knowledge_search(args, out, api)
+    try:
+        stats = api.knowledge_stats()
+    except Exception as e:
+        out.write(_format_error(e, "knowledge"))
+        return 1
+    total = stats.get("total_items", 0)
+    topics = stats.get("topics", {})
+    out.write(f"Knowledge: {total} items")
+    if topics:
+        for topic, count in topics.items():
+            out.write(f"  {topic}: {count}")
+    return 0
+
+
+def _knowledge_search(args, out, api):
+    query = " ".join(args)
+    try:
+        results = api.list_knowledge(query)
+    except Exception as e:
+        out.write(_format_error(e, "knowledge search"))
+        return 1
+    if not results:
+        out.write(f"No results for '{query}'.")
+        return 0
+    for item in results:
+        content = item.get("content", "?")
+        out.write(f"  - {content}")
+    return 0
+
+
+def _remember(args, out, api):
+    if not args:
+        out.write("Usage: remember <fact>")
+        return 1
+    fact = " ".join(args)
+    try:
+        result = api.add_knowledge(fact)
+    except Exception as e:
+        out.write(_format_error(e, "remember"))
+        return 1
+    status = result.get("status", "error")
+    if status == "stored":
+        out.write("Remembered.")
+        return 0
+    out.write(f"Could not store: {status}")
+    return 0
+
+
+def _recall(args, out, api):
+    if not args:
+        try:
+            stats = api.knowledge_stats()
+        except Exception as e:
+            out.write(_format_error(e, "recall"))
+            return 1
+        total = stats.get("total_items", 0)
+        if total == 0:
+            out.write("No facts stored.")
+            return 0
+        out.write(f"{total} facts stored. Use 'recall <query>' to search.")
+        return 0
+    return _knowledge_search(args, out, api)
+
+
+def _tokenizer(args, out, api):
+    try:
+        stats = api.tokenizer_stats()
+    except Exception as e:
+        out.write(_format_error(e, "tokenizer"))
+        return 1
+    if "error" in stats:
+        out.write(f"Tokenizer error: {stats['error']}")
+        return 0
+    vocab = stats.get("vocab_size", "?")
+    merges = stats.get("merges", "?")
+    out.write(f"Vocab: {vocab}  Merges: {merges}")
     return 0

@@ -67,14 +67,11 @@ export interface SoulNetArch {
   archType: 'lstm' | 'transformer'
 }
 
-export interface SoulTransformerArch {
+export interface SoulTransformerArch extends SoulNetArch {
   archType: 'transformer'
-  embedDim: number
   numHeads: number
   numKVHeads: number
-  numLayers: number
   dimFF: number
-  vocabSize: number
   maxSeqLen: number
   eps: number
 }
@@ -83,11 +80,13 @@ export interface SoulTransformerArch {
 
     Heuristic: vocab size from last param length, hidden dim from second-last,
     embed dim from first param. LSTM vs transformer detected by param count.
+    Transformer: reads n_head/n_kv_head from JSON metadata, infers dimFF from
+    w1 weight shape.
 
     @param buffer - raw .sou file bytes
     @returns architecture details (embedDim, hiddenDim, vocabSize, numLayers, archType)
 */
-export function inferArch(buffer: ArrayBuffer): SoulNetArch {
+export function inferArch(buffer: ArrayBuffer): SoulNetArch | SoulTransformerArch {
   const view = new DataView(buffer)
   const magic = new Uint8Array(buffer, 0, 4)
   for (let i = 0; i < 4; i++) {
@@ -95,6 +94,8 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
   }
   const version = view.getUint32(4, true)
   const jsonLen = view.getUint32(8, true)
+  const jsonData = new TextDecoder().decode(new Uint8Array(buffer, 12, jsonLen))
+  const meta = JSON.parse(jsonData)
   // Data starts immediately after JSON metadata
   let offset = 12 + jsonLen
 
@@ -133,7 +134,25 @@ export function inferArch(buffer: ArrayBuffer): SoulNetArch {
     const embedDim = Math.round(Math.sqrt(sizes['p2']!))
     const vocabSize = sizes['p0']! / embedDim
     const numLayers = Math.floor((N - 3) / 9)
-    return { embedDim, hiddenDim: embedDim, vocabSize, numLayers, archType: 'transformer' }
+    // Infer dimFF from w1 weight shape (p7 = first layer's gate_proj: [dimFF, embedDim])
+    const dimFF = sizes['p7'] ? Math.round(sizes['p7'] / embedDim) : embedDim * 4
+    // Read head count from metadata (SloTransformer stores n_head/n_kv_head)
+    const numHeads = meta?.metadata?.n_head ?? meta?.n_head ?? Math.min(8, embedDim)
+    const numKVHeads = meta?.metadata?.n_kv_head ?? meta?.n_kv_head ?? numHeads
+    const maxSeqLen = meta?.metadata?.max_seq_len ?? meta?.max_seq_len ?? 2048
+    const eps = meta?.metadata?.eps ?? meta?.eps ?? 1e-5
+    return {
+      archType: 'transformer',
+      embedDim,
+      hiddenDim: embedDim,
+      vocabSize,
+      numLayers,
+      numHeads,
+      numKVHeads,
+      dimFF,
+      maxSeqLen,
+      eps,
+    } satisfies SoulTransformerArch
   }
 
   const vocabSize = sizes[`p${N - 1}`]!

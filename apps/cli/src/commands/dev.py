@@ -1,6 +1,7 @@
 """
 Dev commands - Development server, health checks, and API status.
 """
+import re
 import subprocess
 import sys
 import os
@@ -43,6 +44,56 @@ def _check_port(port: int) -> bool:
         return False
 
 
+def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
+    """Extract the most useful error lines from captured output.
+
+    Shows the actual error instead of shutdown noise. Priority:
+    1. Lines with CRITICAL/ERROR/exception/traceback/failed keywords
+    2. Lines showing startup phase progress
+    3. Lines showing lifecycle transitions
+    4. Last N lines as fallback
+    """
+    all_lines = list(lines)
+    if not all_lines:
+        return ["(no output captured)"]
+
+    # Noise to suppress — shutdown hook completions, uvicorn boilerplate
+    noise_re = re.compile(
+        r"(Shutdown hook .* completed in|Application shutdown complete|"
+        r"Finished server process|Waiting for application (startup|shutdown)|"
+        r"Application startup complete|Uvicorn running on)",
+    )
+
+    # Phase 1: Find actual errors and critical messages
+    error_keywords = re.compile(
+        r"(CRITICAL|ERROR|exception|traceback|failed|error|crashed|timed out|refused|exit code|ModuleNotFoundError|ImportError)",
+        re.IGNORECASE,
+    )
+    error_lines = [l for l in all_lines if error_keywords.search(l)]
+
+    # Phase 2: Find startup phase progress lines
+    phase_keywords = re.compile(
+        r"(Phase \d|lifecycle|startup|registering_routers|model_load|ready|preparing|Starting SloughGPT)",
+        re.IGNORECASE,
+    )
+    phase_lines = [l for l in all_lines if phase_keywords.search(l) and not noise_re.search(l)]
+
+    # Deduplicate while preserving order
+    seen = set()
+    result = []
+    for l in error_lines + phase_lines:
+        if l not in seen:
+            seen.add(l)
+            result.append(l)
+
+    if result:
+        return result[-max_lines:]
+
+    # Fallback: last N non-noise lines
+    useful = [l for l in all_lines if not noise_re.search(l)]
+    return useful[-max_lines:] if useful else all_lines[-max_lines:]
+
+
 def _check_api_ready(port: int) -> bool:
     """Check if API health endpoint responds."""
     try:
@@ -66,10 +117,9 @@ def _get_startup_progress(port: int) -> dict | None:
 
 
 def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
-    """Wait for API with live ProgressBar showing startup phases."""
-    from utils.progress import ProgressBar
+    """Wait for API with live spinner showing startup phases."""
+    from utils.progress import Spinner
 
-    bar = ProgressBar(total=timeout, desc="Starting API", width=30, show_eta=True)
     phase_names = {
         "initializing": "Initializing",
         "task_queue": "Task queue",
@@ -82,34 +132,31 @@ def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
         "ready": "Ready",
     }
 
+    spinner = Spinner(text="Waiting for API")
+    spinner.start()
+
     for elapsed in range(timeout):
         if _check_api_ready(port):
-            bar.set_progress(timeout)
-            bar.desc = "API ready"
-            bar.finish()
+            spinner.stop("API ready")
             return True
 
         progress = _get_startup_progress(port)
         if progress:
             phase = progress.get("phase", "initializing")
             step = progress.get("step", 0)
-            total = progress.get("total", 9)
-            msg = progress.get("message", "")
+            total = progress.get("total", 8)
             name = phase_names.get(phase, phase)
-            bar.desc = f"[{step}/{total}] {name}"
-            bar.set_progress(min(elapsed, timeout - 1))
+            spinner.text = f"[{step}/{total}] {name}"
         else:
-            bar.desc = "Waiting for API"
-            bar.set_progress(min(elapsed, timeout - 1))
+            spinner.text = "Waiting for API"
 
         time.sleep(1)
 
-    bar.desc = "Timed out"
-    bar.finish()
+    spinner.stop("Timed out")
     return False
 
 
-def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True):
+def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True, echo_event: threading.Event = None):
     """Read lines from a subprocess stream into a deque until stop is set.
 
     Args:
@@ -117,7 +164,10 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
         lines: deque to accumulate lines (for later inspection on failure).
         stop: threading.Event to signal shutdown.
         echo: if True, print each line to stdout in real-time.
+        echo_event: if provided, suppress echo until this event is set.
+                    Useful for suppressing output during progress bar display.
     """
+    waiting = echo_event is not None and not echo_event.is_set()
     try:
         for line in iter(stream.readline, ""):
             if stop.is_set():
@@ -125,7 +175,10 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True)
             if line:
                 clean = line.rstrip("\n\r")
                 lines.append(clean)
-                if echo:
+                # Check if echo should be enabled now
+                if waiting and echo_event and echo_event.is_set():
+                    waiting = False
+                if echo and not waiting:
                     print(clean, flush=True)
             else:
                 break
@@ -401,8 +454,8 @@ def _cmd_api_only(args):
 
     if not _wait_for_api_with_progress(api_port):
         log.error("API failed to start within 90s")
-        log.info("Last output:")
-        for line in list(api_lines)[-20:]:
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
             log.info(f"  | {line}")
         stop_event.set()
         _kill_port(api_port)
@@ -524,8 +577,8 @@ def _cmd_api_and_mobile(args):
     # ── Wait for API readiness ────────────────────────────
     if not _wait_for_api_with_progress(api_port):
         log.error("API failed to start within 90s")
-        log.info("Last API output:")
-        for line in list(api_lines)[-20:]:
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
             log.info(f"  | {line}")
         stop_event.set()
         _cleanup(api_proc, mobile_proc, api_port, 8081)
@@ -540,8 +593,8 @@ def _cmd_api_and_mobile(args):
             break
         if mobile_proc.poll() is not None:
             log.error(f"Metro bundler exited with code {mobile_proc.returncode}")
-            log.info("Last metro output:")
-            for line in list(mobile_lines)[-20:]:
+            log.info("Relevant metro output:")
+            for line in _extract_error_lines(mobile_lines):
                 log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, mobile_proc, api_port, 8081)
@@ -655,6 +708,7 @@ def _cmd_api_and_web(args):
     api_lines: deque = deque(maxlen=_LOG_BUF)
     web_lines: deque = deque(maxlen=_LOG_BUF)
     stop_event = threading.Event()
+    api_ready_event = threading.Event()  # suppress echo until API is ready
 
     # ── Start FastAPI server ─────────────────────────────────────
     python = Path(find_server_python(root))
@@ -668,7 +722,8 @@ def _cmd_api_and_web(args):
         text=True,
     )
     api_thread = threading.Thread(
-        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event),
+        kwargs={"echo_event": api_ready_event}, daemon=True,
     )
     api_thread.start()
 
@@ -700,8 +755,8 @@ def _cmd_api_and_web(args):
         build_proc.wait()
         if build_proc.returncode != 0:
             log.error("Next.js build failed")
-            log.info("Build output (last 20 lines):")
-            for line in list(build_lines)[-20:]:
+            log.info("Relevant build output:")
+            for line in _extract_error_lines(build_lines):
                 log.info(f"  | {line}")
             stop_event.set()
             _kill_port(api_port)
@@ -760,20 +815,23 @@ def _cmd_api_and_web(args):
         )
 
     web_thread = threading.Thread(
-        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
+        kwargs={"echo_event": api_ready_event}, daemon=True,
     )
     web_thread.start()
 
     # ── Wait for API readiness ────────────────────────────────────
     if not _wait_for_api_with_progress(api_port):
         log.error("API failed to start within 90s")
-        log.info("Last API output:")
-        for line in list(api_lines)[-20:]:
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
             log.info(f"  | {line}")
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
         return
 
+    # API ready — enable echo on stream threads
+    api_ready_event.set()
     log.success("API ready")
 
     # ── Wait for web readiness ────────────────────────────────────
@@ -784,8 +842,8 @@ def _cmd_api_and_web(args):
         # Check if web process died
         if web_proc.poll() is not None:
             log.error(f"Web server exited with code {web_proc.returncode}")
-            log.info("Last web output:")
-            for line in list(web_lines)[-20:]:
+            log.info("Relevant web output:")
+            for line in _extract_error_lines(web_lines):
                 log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, web_proc, api_port, web_port)

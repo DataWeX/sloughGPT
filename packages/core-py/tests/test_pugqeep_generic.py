@@ -534,10 +534,11 @@ class TestPGQGeneric:
         del registry.function_types._types["custom_ft"]
         del registry.function_types._code_map[b"CUST"]
 
-    def test_estimate_n_fallback_1000(self):
+    def test_estimate_n_fallback_unknown_shape(self):
         sys = PGQGeneric(name="test", storage=MemoryStorage())
         point = Point(identity="direct", function_type="linear", params={"a": 1.0, "b": 0.0})
         sys._storage.save(point)
         result = sys.get("direct")
+        # When shape is unknown, returns 0-element array (safer than arbitrary fallback)
         assert result is not None
-        assert result.shape == (1000,)
+        assert result.shape == (0,)

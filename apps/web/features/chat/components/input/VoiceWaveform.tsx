@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useMemo } from 'react'
+import { cn } from '@sloughgpt/strui'
 
 interface VoiceWaveformProps {
   /** 0–1 mic or speaker level from useVoiceChat */
@@ -60,7 +61,7 @@ export function VoiceWaveform({
   return (
     <div
       ref={containerRef}
-      className={`flex items-center justify-center gap-[2px] ${className}`}
+      className={cn("flex items-center justify-center gap-[2px]", className)}
       style={{ width, height }}
       role="img"
       aria-label={`Audio ${variant} waveform`}
@@ -68,7 +69,7 @@ export function VoiceWaveform({
       {barHeights.map((h, i) => (
         <div
           key={i}
-          className={`${color} rounded-full transition-all duration-100 ease-out ${glowColor ? `shadow-sm ${glowColor}` : ''}`}
+          className={cn(color, 'rounded-full transition-all duration-100 ease-out', glowColor && `shadow-sm ${glowColor}`)}
           style={{
             width: Math.max(2, (width - bars * 2) / bars),
             height: `${h * height * 0.9}px`,
@@ -145,10 +146,7 @@ export function VoiceOrb({
 
       {/* Main orb */}
       <div
-        className={`
-          relative z-10 w-24 h-24 rounded-full flex items-center justify-center
-          border-2 ${orbColor} transition-all duration-200 shadow-lg
-        `}
+        className={cn('relative z-10 w-24 h-24 rounded-full flex items-center justify-center border-2', orbColor, 'transition-all duration-200 shadow-lg')}
         style={{ transform: `scale(${orbScale})` }}
       >
         {children}

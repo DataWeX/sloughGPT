@@ -15,8 +15,11 @@ Everything else (parsing, expansion, command dispatch) stays in ShellREPL.
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Callable, Optional, Protocol
+
+logger = logging.getLogger("slo.shell.io")
 
 
 # ── Protocol ────────────────────────────────────────────────────────
@@ -48,11 +51,16 @@ class ConsoleIO:
     def __init__(self) -> None:
         self._tty = None
         self._has_readline = False
+        self._uses_stdin = False
 
         try:
             self._tty = open("/dev/tty", "r+", buffering=1)
         except OSError:
             self._tty = None
+
+        # Fallback: if stdin is a TTY, use stdin/stdout directly
+        if self._tty is None and sys.stdin.isatty():
+            self._uses_stdin = True
 
         try:
             import readline  # noqa: F401
@@ -62,7 +70,7 @@ class ConsoleIO:
 
     @property
     def _is_tty(self) -> bool:
-        return self._tty is not None
+        return self._tty is not None or self._uses_stdin
 
     def write(self, text: str, end: str = "\n") -> None:
         if self._tty:
@@ -95,8 +103,8 @@ class ConsoleIO:
             readline.parse_and_bind("tab: complete")
             readline.parse_and_bind('"\\C-r": reverse-search-history')
             readline.parse_and_bind('"\\C-s": forward-search-history')
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("readline setup failed: %s", e)
 
     def save_history(self, path: str) -> None:
         if not self._has_readline:
@@ -104,8 +112,8 @@ class ConsoleIO:
         try:
             import readline
             readline.write_history_file(path)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("readline history save failed: %s", e)
 
     def load_history(self, path: str) -> None:
         if not self._has_readline:
@@ -117,12 +125,22 @@ class ConsoleIO:
         except FileNotFoundError:
             pass
 
+    def __del__(self) -> None:
+        """Close the TTY handle if not already closed."""
+        self.close()
+
+    def __enter__(self) -> "ConsoleIO":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
     def close(self) -> None:
         if self._tty is not None:
             try:
                 self._tty.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("tty close failed: %s", e)
             self._tty = None
 
 
@@ -136,6 +154,7 @@ class MemoryIO:
         self._output: list[str] = []
         self._inputs: list[str] = []
         self._input_idx = 0
+        self._is_tty: bool = False
 
     def write(self, text: str, end: str = "\n") -> None:
         self._output.append(text + end if text else end)
@@ -203,11 +222,17 @@ def capture_cmd(repl, method, *args) -> str:
     mem = MemoryIO()
     old_io = repl.io
     old_console_io = repl.console._io
+    old_interactive_io = repl.console._interactive._io
+    old_interactive_tty = repl.console._interactive._is_tty
     repl.io = mem
     repl.console._io = mem
+    repl.console._interactive._io = mem
+    repl.console._interactive._is_tty = False
     try:
         method(*args)
     finally:
         repl.io = old_io
         repl.console._io = old_console_io
+        repl.console._interactive._io = old_interactive_io
+        repl.console._interactive._is_tty = old_interactive_tty
     return mem.get_output()

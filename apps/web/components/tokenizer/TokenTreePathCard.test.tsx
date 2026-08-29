@@ -83,7 +83,7 @@ describe('TokenTreePathCard', () => {
     mocks.mockPath.mockRejectedValue(new Error('boom'))
     render(<TokenTreePathCard />)
     fireEvent.click(screen.getByRole('button', { name: /^Trace$/ }))
-    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Failed to trace the token path', 'error'))
+    await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Could not trace the token path', 'error'))
   })
 
   it('renders step numbers as #1, #2, etc.', async () => {

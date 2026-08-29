@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 const {
   mockList, mockGetExportFormats, mockExportFeedbackPairs, mockApiGet,
   mockDownloadJson, mockDownloadBlob, mockAddToast,
@@ -92,12 +96,11 @@ describe('ExportPage — initial load flow', () => {
     })
   })
 
-  it('shows fallback formats when controller fails', async () => {
+  it('shows error when controller fails', async () => {
     mockGetExportFormats.mockRejectedValue(new Error('no formats'))
     render(<ExportPage />)
     await waitFor(() => {
-      expect(screen.getAllByText(/sou|soul/i).length).toBeGreaterThanOrEqual(1)
-      expect(screen.getByText(/onnx/i)).toBeTruthy()
+      expect(screen.getByText(/Could not load export formats/i)).toBeTruthy()
     })
   })
 })
@@ -215,8 +218,7 @@ describe('ExportPage — error handling flow', () => {
     mockGetExportFormats.mockRejectedValue(new Error('no formats'))
     render(<ExportPage />)
     await waitFor(() => {
-      // Should show fallback formats
-      expect(screen.getByText(/sou|soul/i)).toBeTruthy()
+      expect(screen.getByText(/Could not load export formats/i)).toBeTruthy()
     })
   })
 })

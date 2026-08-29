@@ -20,7 +20,7 @@ SloughGPT is an enterprise-grade AI framework with production-ready ML infrastru
 ├── infra/docker/            # docker-compose and deployment assets
 ├── tests/                   # pytest suites
 ├── requirements.txt         # Root Python deps (install first)
-└── docs/TODO.md             # Roadmap notes
+└── docs/DEVELOPER_GUIDE.md  # Developer guide
 ```
 
 ## Key Features

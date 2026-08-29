@@ -26,7 +26,6 @@ import sys
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,50 +54,20 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="urllib3")
 warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL.*")
 warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
 
-# ── Structured logging ───────────────────────────────────────────────
-from domains.logging import ConsoleLogger, BridgeHandler, set_global, LogLevel  # noqa: E402
+# ── Structured logging (centralized) ─────────────────────────────────
+from domains.logging.config import setup_logging  # noqa: E402
 
-_log_level_name = os.environ.get("SLO_LOG_LEVEL", "INFO").upper()
-_log_level = getattr(LogLevel, _log_level_name, LogLevel.INFO)
-_log_format = os.environ.get("SLO_LOG_FORMAT", "human").lower()  # "human" or "json"
-
-_console_logger = ConsoleLogger("slo", level=_log_level, format=_log_format)
-set_global(_console_logger)
-
-_bridge = BridgeHandler(_console_logger)
-_bridge.setLevel(getattr(logging, _log_level_name, logging.INFO))
-logging.root.addHandler(_bridge)
-logging.root.setLevel(getattr(logging, _log_level_name, logging.INFO))
-
-# ── Suppress noisy third-party loggers ────────────────────────────────
-for _noisy in ("httpx", "httpcore", "uvicorn.access", "urllib3"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
-
+_log_setup = setup_logging()
 logger = logging.getLogger("slo")
-
-# Log bridge → output buffer (for SSE streaming via /system/stream)
-try:
-    from domains.infrastructure.output_buffer import install_log_bridge, install_stdio_bridge
-    _buf_handler = install_log_bridge()
-    install_stdio_bridge()
-    logger.info("Output buffer bridge installed (handler=%s)", _buf_handler, extra={"tag": "START"})
-except Exception as exc:
-    logger.warning("Output buffer bridge install failed: %s", exc, extra={"tag": "START"})
-
-# ── Filter client-side extension errors ────────────────────────────────
-class _ClientExtensionFilter(logging.Filter):
-    """Suppress noisy client errors from browser extensions (crypto wallets, etc.)."""
-    _PATTERNS = ("CLIENT ERROR", "0 0", "chrome-extension://", "moz-extension://")
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        msg = record.getMessage()
-        return not any(p in msg for p in self._PATTERNS)
-
-logging.root.addFilter(_ClientExtensionFilter())
+logger.info(
+    "Logging: level=%s format=%s log_dir=%s",
+    _log_setup["level"], _log_setup["format"], _log_setup["log_dir"],
+    extra={"tag": "START"},
+)
 
 
 # ── Config ──────────────────────────────────────────────────────────
-from config import GenerationConfig, ServerConfig  # noqa: E402
+from config import ServerConfig  # noqa: E402
 
 cfg = ServerConfig.from_env()
 
@@ -149,19 +118,21 @@ async def lifespan(app_inst: FastAPI):
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
 
         # Auto-ingest repo docs into production RAG (if empty)
-        try:
-            from domains.cognitive.rag_service import get_rag_service
-            _rag = get_rag_service()
-            if _rag.stats().get("total_chunks", 0) == 0:
-                import threading
-                def _rag_auto_ingest():
+        # Moved to background thread: importing rag_service chains through
+        # rag.py → HybridRetriever and blocks the lifespan.
+        import threading
+        def _rag_init_and_ingest():
+            try:
+                from domains.cognitive.rag_service import get_rag_service
+                _rag = get_rag_service()
+                if _rag.stats().get("total_chunks", 0) == 0:
                     try:
                         _rag.auto_ingest_directory(str(find_repo_root(Path(__file__).resolve())), max_files=150)
                     except Exception as e:
                         logger.debug("RAG auto-ingest failed: %s", e)
-                threading.Thread(target=_rag_auto_ingest, daemon=True).start()
-        except Exception as e:
-            logger.debug("RAG auto-ingest skipped: %s", e)
+            except Exception as e:
+                logger.debug("RAG init skipped: %s", e)
+        threading.Thread(target=_rag_init_and_ingest, daemon=True, name="rag-init").start()
 
         # Start background daemons (moved from pre-uvicorn to post-startup)
         _start_feedback_workflow()
@@ -187,8 +158,8 @@ async def lifespan(app_inst: FastAPI):
         try:
             from domains.infrastructure.model_server import get_idle_manager
             get_idle_manager().shutdown()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Idle manager shutdown failed: %s", e)
 
         # Stop auto-trainer
         try:
@@ -239,8 +210,8 @@ def _cancel_stack_dump_timer() -> None:
     """Cancel the faulthandler dump timer installed by ``_install_stack_dump_timer``."""
     try:
         faulthandler.cancel_dump_traceback_later()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Faulthandler cancel failed: %s", e)
 
 
 # ── FastAPI application ─────────────────────────────────────────────
@@ -260,6 +231,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# GZip omitted — Starlette GZipMiddleware buffers responses, which kills SSE streaming.
+# /chat/stream and /inference/generate/stream send chunked text/event-stream that must
+# not be buffered. Non-streaming responses (health, models, etc.) are <5KB — compression
+# overhead exceeds bandwidth savings at that size. Add back only if large payload
+# endpoints (/datasets/export, /training/export-text) need it, using per-route config.
+
 # Register structured middleware from the infrastructure package.
 from infrastructure.middleware import register_all_middleware  # noqa: E402
 register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
@@ -271,9 +248,11 @@ register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 # heavy imports.
 from routers.health import router as _health_router
 from routers.status import router as _status_router
+from routers.dashboard import router as _dashboard_router
 app.include_router(_health_router)
 app.include_router(_status_router)
-# Health/status routes are now registered pre-lifespan.
+app.include_router(_dashboard_router)
+# Health/status/dashboard routes are now registered pre-lifespan.
 # _phase6_routers() skips them by checking existing route prefixes.
 
 # Feature routers are registered by StartupOrchestrator._phase6_routers()
@@ -484,6 +463,12 @@ if __name__ == "__main__":
         default=False,
         help="Run as daemon (detach from terminal)",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Kill existing process on port and start fresh (default: connect to existing)",
+    )
     args = parser.parse_args()
 
     # Daemonize if requested — use subprocess to avoid fork() issues
@@ -492,6 +477,8 @@ if __name__ == "__main__":
         cmd = [sys.executable, __file__]
         if args.port:
             cmd += ["--port", str(args.port)]
+        if args.force:
+            cmd += ["--force"]
         proc = sp.Popen(
             cmd,
             stdin=sp.DEVNULL,
@@ -502,16 +489,67 @@ if __name__ == "__main__":
         logger.info("Server started as daemon (PID %s)", proc.pid)
         sys.exit(0)
 
-    # Kill orphan processes on target port to avoid port conflicts
     bind_port = args.port or cfg.port
+
+    # ── Singleton gate ────────────────────────────────────────────────
+    # Detect whether the port is in use.  If it is, determine whether
+    # the occupant is a healthy SloughGPT server or something else.
+    # Without --force: healthy server -> exit 0 (reuse); non-server -> exit 1.
+    # With --force: kill everything on the port and proceed.
+    import socket as _sock
+    _port_open = True
     try:
-        orphans = subprocess.check_output(["lsof", "-ti", f":{bind_port}"], timeout=5).decode().strip().split()
-        for pid in orphans:
-            if pid and pid != str(os.getpid()):
-                os.kill(int(pid), 9)
-                logger.warning("Killed orphan process %s on port %d", pid, bind_port, extra={"tag": "START"})
-    except Exception:
+        with _sock.create_connection(("127.0.0.1", bind_port), timeout=1.0):
+            _port_open = False
+    except (ConnectionRefusedError, OSError, TimeoutError):
         pass
+
+    if not _port_open:
+        # Something is listening -- is it a SloughGPT server?
+        import urllib.request as _urllib_request
+        _is_server = False
+        try:
+            req = _urllib_request.Request(f"http://127.0.0.1:{bind_port}/health", method="GET")
+            with _urllib_request.urlopen(req, timeout=2) as resp:
+                if resp.status == 200:
+                    _is_server = True
+        except Exception as e:
+            logger.debug("Health check on port %d failed: %s", bind_port, e)
+
+        if _is_server and not args.force:
+            logger.info(
+                "Server already running on port %d -- exiting (use --force to replace)",
+                bind_port, extra={"tag": "START"},
+            )
+            sys.exit(0)
+
+        if args.force:
+            try:
+                pids = subprocess.check_output(
+                    ["lsof", "-ti", f":{bind_port}"], timeout=5,
+                ).decode().strip().split()
+                for pid in pids:
+                    if pid and pid != str(os.getpid()):
+                        os.kill(int(pid), 9)
+                        logger.warning("Killed process %s on port %d (--force)", pid, bind_port, extra={"tag": "START"})
+            except Exception as e:
+                logger.warning("Failed to force-kill processes on port %d: %s", bind_port, e)
+        elif not _is_server:
+            # Port occupied by a non-server process
+            try:
+                pids = subprocess.check_output(
+                    ["lsof", "-ti", f":{bind_port}"], timeout=5,
+                ).decode().strip().split()
+                pids = [p for p in pids if p and p != str(os.getpid())]
+                if pids:
+                    logger.error(
+                        "Port %d occupied by process %s (not a SloughGPT server). "
+                        "Use --force to kill it.",
+                        bind_port, ",".join(pids), extra={"tag": "START"},
+                    )
+                    sys.exit(1)
+            except Exception as e:
+                logger.warning("Failed to detect processes on port %d: %s", bind_port, e)
 
     # Background daemons start AFTER uvicorn binds (moved from pre-uvicorn)
     # They are now started in the lifespan context below.

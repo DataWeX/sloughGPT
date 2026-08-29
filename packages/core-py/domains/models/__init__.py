@@ -97,12 +97,12 @@ class ModelLoader:
     @classmethod
     def register(cls, name: str, model_class: type):
         cls._registry[name] = model_class
-        logger.info(f"Registered model backend: {name}", extra={"tag": "MODEL"})
+        logger.info("Registered model backend: %s", name, extra={"tag": "MODEL"})
 
     @classmethod
     def register_loader(cls, suffix: str, loader_func: Callable):
         cls._loader_funcs[suffix] = loader_func
-        logger.info(f"Registered loader for: {suffix}", extra={"tag": "MODEL"})
+        logger.info("Registered loader for: %s", suffix, extra={"tag": "MODEL"})
 
     @classmethod
     def load(cls, path: str, device: str = "cpu", **kwargs) -> ModelInterface:
@@ -120,28 +120,26 @@ class ModelLoader:
 
     @classmethod
     def _load_sou(cls, path: str, device: str, **kwargs) -> ModelInterface:
-        from domains.inference import load_soul
-        soul, state_dict = load_soul(path)
-        cfg = state_dict.get("config", {}) if isinstance(state_dict, dict) else {}
+        from domains.infrastructure.weight_loader import SoulWeightLoader
+
+        loader = SoulWeightLoader(path)
+        meta = loader.load_metadata()
+        soul = meta.pop("soul")
+        cfg = soul.metadata.get("config", {})
         model_type = cfg.get("model_type", "sloughgpt")
-        vocab_size = cfg.get("vocab_size", 256)
-        n_embed = cfg.get("n_embed", 256)
-        n_layer = cfg.get("n_layer", 6)
-        n_head = cfg.get("n_head", 8)
-        block_size = cfg.get("block_size", 128)
+
         if model_type == "sloughgpt":
             model = SloughGPTModel(
-                vocab_size=vocab_size, n_embed=n_embed, n_layer=n_layer,
-                n_head=n_head, n_kv_head=cfg.get("n_kv_head"),
-                block_size=block_size, max_seq_len=cfg.get("max_seq_len", 2048),
+                vocab_size=meta["vocab_size"], n_embed=meta["n_embed"],
+                n_layer=meta["n_layer"], n_head=meta["n_head"],
+                n_kv_head=cfg.get("n_kv_head"),
+                block_size=meta["block_size"],
+                max_seq_len=cfg.get("max_seq_len", 2048),
             )
         else:
             model = cls._load_external_model(model_type, cfg)
-        if isinstance(state_dict, dict):
-            filtered = {k: v for k, v in state_dict.items() if k not in ("config", "metadata")}
-            model.load_state_dict(filtered, strict=False)
-        else:
-            model.load_state_dict(state_dict, strict=False)
+
+        loader.load(model)
         model._soul = soul
         return model
 

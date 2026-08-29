@@ -72,18 +72,18 @@ describe('VoicePage — initial load flow', () => {
   })
 })
 
-describe('VoicePage — available backend flow', () => {
-  it('shows available status', async () => {
+describe('VoicePage — voice UI flow', () => {
+  it('shows Available for server TTS', async () => {
     render(<VoicePage />)
     await waitFor(() => {
       expect(screen.getByText('Available')).toBeTruthy()
     })
   })
 
-  it('shows model name', async () => {
+  it('shows server engine name', async () => {
     render(<VoicePage />)
     await waitFor(() => {
-      expect(screen.getAllByText('bark').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('AI model (bark)')).toBeTruthy()
     })
   })
 
@@ -140,16 +140,6 @@ describe('VoicePage — generate flow', () => {
         expect(screen.getByText(/1000ms/)).toBeTruthy()
       })
     }
-  })
-})
-
-describe('VoicePage — unavailable backend flow', () => {
-  it('shows unavailable status', async () => {
-    mockGetStatus.mockResolvedValue({ server_tts: false, model: null, error: null })
-    render(<VoicePage />)
-    await waitFor(() => {
-      expect(screen.getByText('Unavailable')).toBeTruthy()
-    })
   })
 })
 

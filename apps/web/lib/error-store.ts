@@ -2,6 +2,7 @@
 
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 export type ErrorSeverity = 'error' | 'warning' | 'info'
 
@@ -29,20 +30,6 @@ export interface ActivityEntry {
 const DEDUP_WINDOW_MS = 30_000
 const MAX_ERRORS = 20
 const MAX_ACTIVITY = 50
-
-function extractErrorMessage(err: unknown): string {
-  if (typeof err === 'string') return err
-  if (err instanceof Error) return err.message
-  if (err && typeof err === 'object') {
-    const e = err as Record<string, unknown>
-    if (typeof e.message === 'string') return e.message
-    if (typeof e.error === 'string') return e.error
-    if (typeof e.detail === 'string') return e.detail
-    if (typeof e.msg === 'string') return e.msg
-    try { return JSON.stringify(err).slice(0, 300) } catch { return 'Unknown error' }
-  }
-  return String(err)
-}
 
 function extractErrorTitle(err: unknown): string {
   if (err && typeof err === 'object') {

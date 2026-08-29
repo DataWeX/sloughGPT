@@ -1,9 +1,17 @@
 """
 LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
-from fastapi import APIRouter, HTTPException, Query
+import asyncio
+import logging
+import re
+from pathlib import Path
+from fastapi import APIRouter, Depends, Query
 
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+
+_VALID_ADAPTER_PATH = re.compile(r'^[\w\-/]+\.npz$')
+_ADAPTER_BASE = Path("data/user_adapters").resolve()
 
 
 class LoraEvalRouter:
@@ -12,7 +20,7 @@ class LoraEvalRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("/run", self.run_eval, methods=["GET"])
+        self.router.add_api_route("/run", self.run_eval, methods=["POST"])
         self.router.add_api_route("/history", self.get_eval_history, methods=["GET"])
         self.router.add_api_route("/aggregate", self.trigger_aggregation, methods=["POST"])
 
@@ -35,36 +43,47 @@ class LoraEvalRouter:
             - calls LoRAEvaluator.run() with and without adapter
             - saves results to eval history
         """
+        if not _VALID_ADAPTER_PATH.match(adapter_path):
+            raise_error(f"Invalid adapter path: {adapter_path!r}", code="E_VAL_REQUEST", details={"adapter_path": adapter_path})
+        resolved = Path(adapter_path).resolve()
+        if not str(resolved).startswith(str(_ADAPTER_BASE)):
+            raise_error(f"Adapter path must be under data/user_adapters/: {adapter_path!r}", code="E_VAL_REQUEST", details={"adapter_path": adapter_path})
         try:
+            import time as _time
             from domains.feedback.lora_eval import get_lora_evaluator
 
             evaluator = get_lora_evaluator()
             adapter_file = adapter_path
 
+            _t0 = _time.monotonic()
             baseline = evaluator.run(adapter_path=None, soul_name=soul, save=True)
 
             try:
-                from pathlib import Path
-                if Path(adapter_file).exists():
+                if await asyncio.to_thread(Path(adapter_file).exists):
                     with_adapter = evaluator.run(adapter_path=adapter_file, soul_name=soul, save=True)
                     delta = evaluator.compare(baseline, with_adapter)
+                    _elapsed_ms = (_time.monotonic() - _t0) * 1000
+                    safe_audit_log("lora_eval.run_eval", resource=soul or "default", detail=f"elapsed={_elapsed_ms:.0f}ms")
                     return success_response(data={
                         "status": "compared",
                         "baseline": baseline.to_dict(),
                         "with_adapter": with_adapter.to_dict(),
                         "delta": delta,
                         "report": evaluator.compare_with_report(baseline, with_adapter),
+                        "elapsed_ms": round(_elapsed_ms, 1),
                     })
             except Exception as e:
-                import logging
                 logging.getLogger("slo.lora_eval").warning("Adapter comparison failed: %s", e)
 
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("lora_eval.run_eval", resource=soul or "default", detail=f"baseline_only elapsed={_elapsed_ms:.0f}ms")
             return success_response(data={
                 "status": "baseline_only",
                 "baseline": baseline.to_dict(),
                 "note": "No adapter found — run aggregate first",
             })
         except Exception as e:
+            logging.getLogger("slo.lora_eval").warning("LoRA eval run failed: %s", e)
             classify_and_raise(e, source="lora_eval_run")
 
     async def get_eval_history(
@@ -89,7 +108,7 @@ class LoraEvalRouter:
             results = evaluator.get_history(limit=limit)
             return success_response(data={"results": [r.to_dict() for r in results]})
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
 
     async def trigger_aggregation(
         self,
@@ -97,6 +116,7 @@ class LoraEvalRouter:
         min_feedback: int = Query(default=5, ge=1),
         output_name: str = Query(default="best_aggregated"),
         run_eval: bool = Query(default=True),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """
         Trigger aggregation of top-k best user adapters.
@@ -143,6 +163,7 @@ class LoraEvalRouter:
                 "total_feedback": result["total_feedback"],
             })
         except Exception as e:
+            logging.getLogger("slo.lora_eval").warning("LoRA eval aggregate failed: %s", e)
             classify_and_raise(e, source="lora_eval_aggregate")
 
 

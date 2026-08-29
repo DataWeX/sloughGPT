@@ -2,7 +2,7 @@
 
 import { IconMoon, IconSun } from '@/components/icons/NavIcons'
 
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { useTheme, THEMES } from './ThemeProvider'
 import { PALETTE_IDS, PALETTE_LABELS, PALETTE_COLORS } from '@/lib/theme-storage'
 
@@ -27,12 +27,11 @@ export function ThemeSwitcher() {
           {THEMES.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTheme(t.id)}
-              className={`h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth ${
-                theme === t.id
+              className={cn('h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth', theme === t.id
                   ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110 shadow-sm'
-                  : 'opacity-80 hover:scale-105 hover:opacity-100'
-              }`}
+                  : 'opacity-80 hover:scale-105 hover:opacity-100')}
               style={{ backgroundColor: t.color }}
               role="radio"
               aria-checked={theme === t.id}
@@ -47,12 +46,11 @@ export function ThemeSwitcher() {
         {PALETTE_IDS.map((id) => (
           <button
             key={id}
+            type="button"
             onClick={() => setPalette(id)}
-            className={`h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth ${
-              palette === id
+            className={cn('h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth', palette === id
                 ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110 shadow-sm'
-                : 'opacity-80 hover:scale-105 hover:opacity-100'
-            }`}
+                : 'opacity-80 hover:scale-105 hover:opacity-100')}
             style={{ backgroundColor: PALETTE_COLORS[id] }}
             role="radio"
             aria-checked={palette === id}

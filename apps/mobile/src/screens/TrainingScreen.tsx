@@ -7,13 +7,14 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  Dimensions,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {
   useTrainingStore,
-  type TrainPhase,
+  cleanupTraining,
 } from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
@@ -98,6 +99,7 @@ export function TrainingScreen() {
   const [testResult, setTestResult] = useState('');
   const [testLoading, setTestLoading] = useState(false);
   const [testModalVisible, setTestModalVisible] = useState(false);
+  const [soulNames, setSoulNames] = useState<string[]>([]);
   const prevPhaseRef = useRef(phase);
   const hapticPress = useHapticPress();
 
@@ -117,11 +119,27 @@ export function TrainingScreen() {
 
   const prevErrorRef = useRef(error);
   useEffect(() => {
-    if (error && error !== prevErrorRef.current) {
+    if (prevErrorRef.current !== error && error) {
       triggerHaptic('error');
     }
     prevErrorRef.current = error;
   }, [error]);
+
+  // Cleanup SSE + poll timers on unmount (BUG 1 fix)
+  useEffect(() => {
+    return () => {
+      cleanupTraining();
+    };
+  }, []);
+
+  useEffect(() => {
+    api.get<{souls: {name: string}[]}>('/souls')
+      .then(data => {
+        const names = (data?.souls || []).map((s: any) => s.name || '').filter(Boolean);
+        if (names.length > 0) setSoulNames(names);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -224,12 +242,14 @@ export function TrainingScreen() {
   const isFailed = phase === 'FAILED';
   const accent = colors.primary;
   const progress =
-    totalEpochs > 0 ? Math.round((epoch / totalEpochs) * 100) : 0;
+    totalEpochs > 0 ? Math.min(100, Math.round((epoch / totalEpochs) * 100)) : 0;
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
 
   const LossChart = useCallback(
     ({data}: {data: {step: number; value: number}[]}) => {
-      if (data.length < 2) {
+      // Filter NaN/Inf values
+      const valid = data.filter(d => Number.isFinite(d.value));
+      if (valid.length < 2) {
         return (
           <YStack
             height={80}
@@ -244,10 +264,10 @@ export function TrainingScreen() {
         );
       }
 
-      const maxLoss = Math.max(...data.map(d => d.value));
-      const minLoss = Math.min(...data.map(d => d.value));
+      const maxLoss = valid.reduce((max, d) => (d.value > max ? d.value : max), valid[0].value);
+      const minLoss = valid.reduce((min, d) => (d.value < min ? d.value : min), valid[0].value);
       const range = maxLoss - minLoss || 1;
-      const W = 280;
+      const W = Dimensions.get('window').width - 32;
       const H = 80;
       const pad = 4;
 
@@ -258,15 +278,15 @@ export function TrainingScreen() {
             borderRadius={4}
             overflow="hidden"
             style={{width: W, height: H}}>
-            {data.map((point, i) => {
-              const x = pad + (i / (data.length - 1)) * (W - pad * 2);
+            {valid.map((point, i) => {
+              const x = pad + (i / (valid.length - 1)) * (W - pad * 2);
               const y =
                 H -
                 pad -
                 ((point.value - minLoss) / range) * (H - pad * 2);
-              const dotSize = i === data.length - 1 ? 6 : 3;
+              const dotSize = i === valid.length - 1 ? 6 : 3;
               const color =
-                i === data.length - 1 ? colors.primary : '#C0AAF4';
+                i === valid.length - 1 ? colors.primary : colors.primaryAlpha(0.5);
               return (
                 <YStack
                   key={i}
@@ -288,7 +308,7 @@ export function TrainingScreen() {
               {minLoss.toFixed(2)}
             </Text>
             <Text fontSize={11} color={colors.textSecondary}>
-              {data.length} points
+              {((minLoss + maxLoss) / 2).toFixed(2)}
             </Text>
             <Text fontSize={11} color={colors.textSecondary}>
               {maxLoss.toFixed(2)}
@@ -347,7 +367,7 @@ export function TrainingScreen() {
       pressStyle={{opacity: 0.7}}>
       <Text
         fontSize={11}
-        color={selected ? '#FFFFFF' : '$color10'}
+        color={selected ? colors.white : colors.textMuted}
         letterSpacing={0.2}>
         {label}
       </Text>
@@ -421,7 +441,7 @@ export function TrainingScreen() {
                     pressStyle={{opacity: 0.7}}>
                     <Text
                       fontSize={13}
-                      color={method === m ? '#FFFFFF' : '$color10'}
+                      color={method === m ? colors.white : colors.textMuted}
                       fontWeight="500">
                       {m === 'distill' ? 'Distill' : 'Fine-tune'}
                     </Text>
@@ -451,13 +471,13 @@ export function TrainingScreen() {
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 8,
                     borderWidth: 1,
-                    borderColor: '#E4E0F2',
+                    borderColor: colors.border,
                     lineHeight: 22,
                   }}
                 />
@@ -470,6 +490,7 @@ export function TrainingScreen() {
                   marginBottom={4}>
                   Dataset
                 </Text>
+                <ScrollView style={{maxHeight: 200}}>
                 <YStack gap={4}>
                   {datasets.length === 0 ? (
                     <Text
@@ -550,6 +571,7 @@ export function TrainingScreen() {
                     ))
                   )}
                 </YStack>
+                </ScrollView>
               </YStack>
               <YStack marginBottom={12}>
                 <Text
@@ -639,7 +661,7 @@ export function TrainingScreen() {
                       width={20}
                       height={20}
                       borderRadius={10}
-                      backgroundColor="transparent"
+                      backgroundColor={colors.white}
                       alignSelf={
                         hfOpts.use_lora ? 'flex-end' : 'flex-start'
                       }
@@ -700,7 +722,7 @@ export function TrainingScreen() {
                     <Text
                       fontSize={13}
                       color={
-                        inputMode === mode ? '#FFFFFF' : '$color10'
+                        inputMode === mode ? colors.white : colors.textMuted
                       }
                       fontWeight="500">
                       {mode === 'text' ? 'Paste Text' : 'Dataset'}
@@ -719,7 +741,7 @@ export function TrainingScreen() {
                   textAlignVertical="top"
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
@@ -729,6 +751,7 @@ export function TrainingScreen() {
                   }}
                 />
               ) : (
+                <ScrollView style={{maxHeight: 200}}>
                 <YStack gap={4}>
                   {datasets.length === 0 ? (
                     <Text
@@ -827,6 +850,7 @@ export function TrainingScreen() {
                     </Text>
                   </YStack>
                 </YStack>
+                </ScrollView>
               )}
             </Section>
           )}
@@ -881,7 +905,7 @@ export function TrainingScreen() {
                   Soul
                 </Text>
                 <XStack gap={4} flexWrap="wrap">
-                  {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(
+                  {(soulNames.length > 0 ? soulNames : ['assistant', 'creative', 'coder', 'teacher', 'analyst']).map(
                     v => (
                       <Pill
                         key={v}
@@ -946,7 +970,7 @@ export function TrainingScreen() {
                     fontSize={16}
                     fontWeight="600"
                     color={colors.text}>
-                    {loss !== null ? loss.toFixed(4) : '—'}
+                    {loss !== null && Number.isFinite(loss) ? loss.toFixed(4) : '—'}
                   </Text>
                 </YStack>
                 <YStack>
@@ -960,7 +984,7 @@ export function TrainingScreen() {
                     fontSize={16}
                     fontWeight="600"
                     color={colors.text}>
-                    {steps}
+                    {steps.toLocaleString()}
                   </Text>
                 </YStack>
               </XStack>
@@ -1034,7 +1058,7 @@ export function TrainingScreen() {
                 color={colors.textSecondary}
                 letterSpacing={0.2}
                 marginTop={4}>
-                Final loss: {loss?.toFixed(4) || '—'} · {steps} steps
+                Final loss: {loss?.toFixed(4) || '—'} · {steps.toLocaleString()} steps
               </Text>
               <XStack gap={8} marginTop={12}>
                 <YStack
@@ -1098,7 +1122,7 @@ export function TrainingScreen() {
                 color={colors.textSecondary}
                 letterSpacing={0.2}
                 marginTop={4}>
-                Loss: {loss?.toFixed(4) || '—'} · {steps} steps
+                Loss: {loss?.toFixed(4) || '—'} · {steps.toLocaleString()} steps
               </Text>
               <XStack gap={8} marginTop={12}>
                 <YStack
@@ -1154,13 +1178,13 @@ export function TrainingScreen() {
           {/* ── Job History (with per-job stop + delete) ─────────────────── */}
           {hfJobs.length > 0 && (
             <Section title="Job History">
-              {hfJobs.slice().reverse().map((job: any) => {
+              {hfJobs.slice().reverse().map((job: any, index: number) => {
                 const jobId = job.job_id || job.id;
                 const isRunning =
                   job.status === 'running' || job.phase === 'TRAINING';
                 return (
                   <XStack
-                    key={jobId || Math.random()}
+                    key={jobId || `job-${index}`}
                     alignItems="center"
                     justifyContent="space-between"
                     paddingVertical={8}
@@ -1218,7 +1242,7 @@ export function TrainingScreen() {
                           height={28}
                           borderRadius={999}
                           style={{
-                            backgroundColor: 'rgba(212, 76, 86, 0.15)',
+                            backgroundColor: colors.errorAlpha(0.15),
                           }}
                           alignItems="center"
                           justifyContent="center"
@@ -1321,7 +1345,7 @@ export function TrainingScreen() {
                       height={28}
                       borderRadius={999}
                       style={{
-                        backgroundColor: 'rgba(212, 76, 86, 0.15)',
+                        backgroundColor: colors.errorAlpha(0.15),
                       }}
                       alignItems="center"
                       justifyContent="center"
@@ -1429,7 +1453,7 @@ export function TrainingScreen() {
                       height={28}
                       borderRadius={999}
                       style={{
-                        backgroundColor: 'rgba(212, 76, 86, 0.15)',
+                        backgroundColor: colors.errorAlpha(0.15),
                       }}
                       alignItems="center"
                       justifyContent="center"
@@ -1469,7 +1493,7 @@ export function TrainingScreen() {
       <Modal visible={previewVisible} animationType="slide" transparent>
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={colors.overlay(0.4)}
           justifyContent="flex-end">
           <YStack
             backgroundColor={colors.background}
@@ -1547,7 +1571,7 @@ export function TrainingScreen() {
       <Modal visible={showImportModal} animationType="slide" transparent>
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={colors.overlay(0.4)}
           justifyContent="flex-end">
           <YStack
             backgroundColor={colors.background}
@@ -1621,7 +1645,7 @@ export function TrainingScreen() {
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
@@ -1642,7 +1666,7 @@ export function TrainingScreen() {
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
@@ -1656,7 +1680,7 @@ export function TrainingScreen() {
                 alignItems="center"
                 backgroundColor={
                   importing || !importSource.trim()
-                    ? 'rgba(124, 82, 196, 0.3)'
+                    ? colors.primaryAlpha(0.3)
                     : colors.primary
                 }
                 onPress={hapticPress('light', handleImport)}
@@ -1682,7 +1706,7 @@ export function TrainingScreen() {
       <Modal visible={testModalVisible} animationType="slide" transparent>
         <YStack
           flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
+          backgroundColor={colors.overlay(0.4)}
           justifyContent="flex-end">
           <YStack
             backgroundColor={colors.background}
@@ -1733,7 +1757,7 @@ export function TrainingScreen() {
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
@@ -1748,7 +1772,7 @@ export function TrainingScreen() {
                 alignItems="center"
                 backgroundColor={
                   testLoading || !testPrompt.trim()
-                    ? 'rgba(124, 82, 196, 0.3)'
+                    ? colors.primaryAlpha(0.3)
                     : colors.primary
                 }
                 onPress={hapticPress('light', handleTestModel)}
@@ -1770,6 +1794,7 @@ export function TrainingScreen() {
                   <Text fontSize={13} color={colors.textSecondary}>
                     Response
                   </Text>
+                  <ScrollView style={{maxHeight: 200}}>
                   <YStack
                     backgroundColor={colors.primaryAlpha(0.04)}
                     borderRadius={8}
@@ -1781,6 +1806,7 @@ export function TrainingScreen() {
                       {testResult}
                     </Text>
                   </YStack>
+                  </ScrollView>
                 </YStack>
               ) : null}
             </YStack>

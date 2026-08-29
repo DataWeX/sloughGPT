@@ -121,16 +121,16 @@ class Kernel:
             try:
                 from .addons import neural
                 self.install_addon(neural)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("neural addon install skipped: %s", e)
 
         # Auto-install shell_ui addon if not yet installed
         if "shell_ui" not in self._addons:
             try:
                 from .addons import shell_ui
                 self.install_addon(shell_ui)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("shell_ui addon install skipped: %s", e)
 
         # Register built-in devices
         self._devices.register(NullDevice())
@@ -143,7 +143,7 @@ class Kernel:
         )
 
         msg = f"Kernel booted (pid={init_proc.pid}, memory={self._memory.capacity // (1024 * 1024)}MB)"
-        logger.info(msg)
+        logger.debug(msg)
         return msg
 
     def shutdown(self) -> str:
@@ -166,7 +166,7 @@ class Kernel:
             self._memory.free_pid(pid)
 
         msg = f"Kernel shut down (uptime={self.uptime:.1f}s, ticks={self._tick_count})"
-        logger.info(msg)
+        logger.debug(msg)
         return msg
 
     @property
@@ -318,6 +318,8 @@ class Kernel:
         if sn is not None:
             # Handle TENSOR_ALLOC directly
             if sn == SyscallNumber.TENSOR_ALLOC:
+                if not args:
+                    return SyscallResult(success=False, error="TENSOR_ALLOC requires at least a shape argument")
                 shape, dtype = args[0], args[1] if len(args) > 1 else "float32"
                 info = self.alloc_tensor(shape, dtype)
                 return SyscallResult(success=True, value=info)

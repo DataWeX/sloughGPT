@@ -54,7 +54,7 @@ export default function DatasetInlineImportModal({ open, onOpenChange, onImporte
       onImported()
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      addToast(extractErrorMessage(err, 'Import failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not import'), 'error')
     } finally {
       abortRef.current = null
       setImporting(false)

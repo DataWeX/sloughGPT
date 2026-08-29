@@ -23,6 +23,8 @@ from routers.status import StatusRouter  # noqa: E402
 def _app(sr: StatusRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(sr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

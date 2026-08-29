@@ -102,7 +102,7 @@ class DatasetManager:
 
     def register_dataset(self, config: DatasetConfig) -> None:
         self.datasets[config.name] = config
-        self.logger.info(f"Registered: {config.name} ({config.dataset_type.value})",
+        self.logger.info("Registered: %s (%s)", config.name, config.dataset_type.value,
             extra={"tag": "TRAIN"},)
 
     def list_by_type(self, dtype: DatasetType) -> List[DatasetConfig]:
@@ -141,7 +141,7 @@ class DatasetManager:
                 if line.strip():
                     yield json.loads(line)
 
-    def scan_directory(self, directory: str = "datasets") -> int:
+    def scan_directory(self, directory: str = "data") -> int:
         """Auto-discover and register all datasets in a directory.
 
         Scans each subdirectory for .txt, .jsonl, .json files and auto-detects
@@ -157,7 +157,7 @@ class DatasetManager:
 
         base = Path(directory)
         if not base.exists():
-            self.logger.warning(f"Directory not found: {directory}",
+            self.logger.warning("Directory not found: %s", directory,
                 extra={"tag": "TRAIN"},)
             return 0
 
@@ -186,7 +186,8 @@ class DatasetManager:
             )
             self.datasets[entry.name] = config
             count += 1
-            self.logger.info(f"  [{dtype.value:>12}] {entry.name} ({files[0].name})",
+            dtype_label = f"{dtype.value:>12}"
+            self.logger.info("  [%s] %s (%s)", dtype_label, entry.name, files[0].name,
                 extra={"tag": "TRAIN"},)
 
         return count
@@ -287,13 +288,13 @@ class TrainingPipeline:
         return self
 
     async def run(self, train_data: Iterator[Any]) -> Dict[str, Any]:
-        self.logger.info(f"Running pipeline: {self.config.name}",
+        self.logger.info("Running pipeline: %s", self.config.name,
             extra={"tag": "TRAIN"},)
         results = {"epochs": 0, "stages": []}
 
         for epoch in range(self.config.epochs):
             for stage in self.stages:
-                self.logger.debug(f"Stage: {stage['name']}")
+                self.logger.debug("Stage: %s", stage['name'])
                 results["stages"].append(stage["name"])
             results["epochs"] = epoch + 1
 
@@ -332,7 +333,7 @@ class ModelManager:
 
     def register_model(self, config: ModelConfig) -> None:
         self.models[config.name] = config
-        self.logger.info(f"Registered model: {config.name}",
+        self.logger.info("Registered model: %s", config.name,
             extra={"tag": "TRAIN"},)
 
     def create_model(self, name: str) -> Dict[str, Any]:

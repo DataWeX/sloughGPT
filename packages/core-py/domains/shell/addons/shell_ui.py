@@ -273,4 +273,4 @@ def setup(kernel: Any) -> None:
     for attr_name, fn in _fns.items():
         setattr(kernel, attr_name, fn)
     kernel._addons["shell_ui"] = True
-    logger.info("Shell UI addon installed")
+    logger.debug("Shell UI addon installed")

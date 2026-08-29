@@ -10,9 +10,12 @@ Architecture:
 """
 
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
+
+logger = logging.getLogger("slo.context.managers")
 import threading
 
 from domains.infrastructure.repository import FileRepository, JsonSerializer
@@ -245,7 +248,8 @@ class TraitWeightsConfig:
             with open(tmp, "w") as f:
                 json.dump({k: round(v, 4) for k, v in self._weights.items()}, f)
             tmp.rename(self._path)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to save trait weights to %s: %s", self._path, e)
             if tmp.exists():
                 tmp.unlink()
 
@@ -259,7 +263,8 @@ class TraitWeightsConfig:
                         for k, v in json.load(f).items()
                         if k in ALL_TRAITS
                     }
-            except Exception:
+            except Exception as e:
+                logger.warning("Failed to load trait weights from %s, resetting to empty: %s", self._path, e)
                 self._weights = {}
 
 

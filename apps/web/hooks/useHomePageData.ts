@@ -1,15 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
-import { soulsController, type Soul } from '@/lib/souls-controller'
+import { type Soul } from '@/lib/souls-controller'
 import { sessionController } from '@/lib/session-controller'
 import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
+import { datasetController } from '@/lib/dataset-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { useApiReady } from '@/hooks/useLiveStatus'
+import { useModels, useSouls } from '@/lib/query/api-hooks'
+import { logger } from '@/lib/dev-log'
 
 export interface HomePageData {
   modelCount: number | null
@@ -66,27 +68,43 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
 
   const ready = useApiReady()
 
+  // Use shared query cache for models and souls — eliminates 2 redundant API calls.
+  const { data: modelsData } = useModels()
+  const { data: soulsData } = useSouls()
+
+  // Derive model count from the query cache instead of a separate API call.
+  useEffect(() => {
+    if (modelsData) {
+      const list = modelsData ?? []
+      setModelCount(list.length)
+    }
+  }, [modelsData])
+
+  // Derive current soul from the query cache instead of a separate API call.
+  useEffect(() => {
+    if (soulsData) {
+      const active = soulsData.current_soul
+        ? (soulsData.souls || [])?.find((s: Soul) => s.name === soulsData.current_soul)
+        : null
+      setCurrentSoul(active || null)
+    }
+  }, [soulsData])
+
+  // Use health snapshot for model status instead of a separate API call.
+  useEffect(() => {
+    if (health && health !== 'offline') {
+      setModelStatus({ loaded: health.model_loaded, model: health.model_type })
+    }
+  }, [health])
+
   const inferenceCount = health && health !== 'offline' ? health.inference_count ?? 0 : null
   const healthSummary = health && health !== 'offline' ? health.model_type ?? null : null
-  const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
   useEffect(() => {
     if (!ready) return
     const cancelled = { current: false }
-    modelController.status().then(status => {
-      if (!cancelled.current) setModelStatus({ loaded: status.loaded, model: status.model_type })
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
-    soulsController.list().then(data => {
-      if (!cancelled.current) {
-        const active = data.current_soul
-          ? data.souls?.find((s: Soul) => s.name === data.current_soul)
-          : null
-        setCurrentSoul(active || null)
-      }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, soul: true })) })
-    modelController.list().then(models => {
-      if (!cancelled.current) setModelCount(models.length)
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
+    // Sessions, training, knowledge, feedback, and datasets are NOT available
+    // via SSE/live status — these still need dedicated API calls.
     sessionController.list().then(sessions => {
       if (!cancelled.current) {
         const sorted = [...sessions]
@@ -103,7 +121,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           }))
         setRecentSessions(sorted)
       }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
+    }).catch(e => { logger.warning('Could not home sessions list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
     trainingController.list().then(jobs => {
       if (!cancelled.current) {
         const running = jobs.find(j => j.status === 'running')
@@ -113,13 +131,13 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           .slice(0, 3)
         setRecentJobs(recent)
       }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
+    }).catch(e => { logger.warning('Could not home training list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
     knowledgeController.stats().then(s => {
       if (!cancelled.current) setKnowledgeCount(s.total_items)
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
+    }).catch(e => { logger.warning('Could not home knowledge stats', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
     feedbackController.getFeedbackStats().then(s => {
       if (!cancelled.current) setFeedbackStats(s)
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
+    }).catch(e => { logger.warning('Could not home feedback stats', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
     datasetController.list().then(list => {
       if (!cancelled.current) {
         const sorted = [...list]
@@ -134,7 +152,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
           }))
         setRecentDatasets(sorted)
       }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
+    }).catch(e => { logger.warning('Could not home datasets list', { exception: String(e?.message || e) }); if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
     return () => { cancelled.current = true }
   }, [ready])
 

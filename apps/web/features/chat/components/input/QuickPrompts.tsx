@@ -1,9 +1,27 @@
 'use client'
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, type ReactNode } from 'react'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Button, Input } from '@sloughgpt/strui'
 import type { QuickPrompt } from '@/lib/quick-prompts'
 import { listPromptsByCategory, createPrompt, updatePrompt, deletePrompt, resetToDefaults, applyPrompt } from '@/lib/quick-prompts'
+import { Lightbulb, FileText, Brain, Zap, ListTodo, Search, Palette, Pencil, Scale, Recycle, FlaskConical, BookOpen, MessageCircle } from 'lucide-react'
+
+const EMOJI_TO_ICON: Record<string, ReactNode> = {
+  '💡': <Lightbulb className="h-3.5 w-3.5" />,
+  '📝': <FileText className="h-3.5 w-3.5" />,
+  '🧠': <Brain className="h-3.5 w-3.5" />,
+  '⚡': <Zap className="h-3.5 w-3.5" />,
+  '📋': <ListTodo className="h-3.5 w-3.5" />,
+  '🔍': <Search className="h-3.5 w-3.5" />,
+  '🎭': <Palette className="h-3.5 w-3.5" />,
+  '✏️': <Pencil className="h-3.5 w-3.5" />,
+  '⚖️': <Scale className="h-3.5 w-3.5" />,
+  '♻️': <Recycle className="h-3.5 w-3.5" />,
+  '🧪': <FlaskConical className="h-3.5 w-3.5" />,
+  '📚': <BookOpen className="h-3.5 w-3.5" />,
+  '💬': <MessageCircle className="h-3.5 w-3.5" />,
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   writing: 'Writing',
@@ -28,13 +46,23 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     const result = await listPromptsByCategory()
     setGrouped(result)
   }, [])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      const result = await listPromptsByCategory()
+      if (active) setGrouped(result)
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return grouped
@@ -78,9 +106,17 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
     await refresh()
   }
 
-  const handleDelete = async (id: string) => {
-    await deletePrompt(id)
+  const handleDelete = (id: string) => {
+    setPendingDeleteId(id)
+    setConfirmOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return
+    await deletePrompt(pendingDeleteId)
     await refresh()
+    setConfirmOpen(false)
+    setPendingDeleteId(null)
   }
 
   const handleUse = (p: QuickPrompt) => {
@@ -150,12 +186,13 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
                   ) : (
                     <>
                       <button
+                        type="button"
                         className="w-full text-left"
                         onClick={() => handleUse(p)}
-                        title="Click to insert"
+                        title="Use this prompt"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span className="text-xs">{p.icon}</span>
+                          <span className="text-xs text-muted-foreground">{EMOJI_TO_ICON[p.icon as string] ?? <MessageCircle className="h-3.5 w-3.5" />}</span>
                           <span className="text-xs font-medium">{p.name}</span>
                           {p.category === 'custom' && (
                             <span className="text-[9px] text-muted-foreground ml-auto">custom</span>
@@ -177,6 +214,15 @@ export function QuickPrompts({ onUsePrompt }: QuickPromptsProps) {
           </div>
         ))
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Delete quick prompt"
+        description="Delete this quick prompt?"
+        confirmLabel="Delete"
+        onConfirm={() => void confirmDelete()}
+      />
     </div>
   )
 }

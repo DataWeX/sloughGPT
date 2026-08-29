@@ -28,15 +28,15 @@ import queue
 import time
 import gc
 import os
-import functools
-from threading import Lock, Thread, Event
+from threading import Lock, Thread
 from typing import Generator as GeneratorType
 
 from typing import Any, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
-from domains.infrastructure.structured_log import StructuredLogger, LogContext
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
+from domains.infrastructure.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.model_server")
 
@@ -56,8 +56,8 @@ def _emit_gen_event(event: str, data: dict) -> None:
     try:
         bus = _get_gen_bus()
         bus.emit_sync(event, data, source="model_server")
-    except Exception:
-        pass  # EventBus unavailable or disabled — generation still works
+    except Exception as exc:
+        logger.debug("EventBus emit failed: %s", exc)  # EventBus unavailable or disabled — generation still works
 
 
 # ---------------------------------------------------------------------------
@@ -402,14 +402,17 @@ def _optimize_cpu_threads() -> None:
 
 
 def _is_intel_mac() -> bool:
+    """Return True when running on macOS with Intel (x86_64) architecture."""
     try:
         import platform
         return platform.system() == "Darwin" and platform.machine() == "x86_64"
-    except Exception:
+    except (ImportError, AttributeError):
         return False
 
 
 class ModelStatus(Enum):
+    """Lifecycle states of a ModelServer instance."""
+
     UNINITIALIZED = "uninitialized"
     LOADING = "loading"
     READY = "ready"
@@ -455,6 +458,10 @@ class ModelMetrics:
     def record_timeout(self) -> None:
         self.requests_timed_out += 1
         self.consecutive_failures += 1
+
+    def reset(self) -> None:
+        """Reset all counters to defaults."""
+        self.__init__()
 
     @property
     def avg_generation_time_ms(self) -> float:
@@ -535,7 +542,11 @@ class IdleManager:
             self._models.pop(model_id, None)
 
     def touch(self, model_id: str) -> bool:
-        """Update last request time. Returns True if model was idle and reloaded."""
+        """Update last request time. Returns True if model was idle and reloaded.
+
+        Reload happens synchronously in the calling thread. For async reload,
+        use ``touch_async()`` instead.
+        """
         reloaded = False
         with self._lock:
             entry = self._models.get(model_id)
@@ -561,6 +572,61 @@ class IdleManager:
             entry["last_touch"] = time.time()
         return reloaded
 
+    def touch_async(self, model_id: str) -> str:
+        """Update last request time. Returns status: 'ok', 'reloading', 'reload_failed'.
+
+        If the model was idle-unloaded, triggers reload in a background thread
+        and returns 'reloading' immediately. The caller should return 503.
+        """
+        with self._lock:
+            entry = self._models.get(model_id)
+            if entry is None:
+                return "ok"
+            entry["last_touch"] = time.time()
+            if entry["unloaded_at"] is not None:
+                reload_fn = entry.get("reload_fn")
+                if not reload_fn:
+                    return "reload_failed"
+                # Check if already reloading
+                if entry.get("_reloading"):
+                    return "reloading"
+                entry["_reloading"] = True
+
+                def _do_reload():
+                    try:
+                        self._logger.info(
+                            "Auto-reloading idle model %s (background)", model_id,
+                            extra={"tag": "IDLE"},
+                        )
+                        reload_fn()
+                        with self._lock:
+                            entry["unloaded_at"] = None
+                            entry["_reloading"] = False
+                        self._logger.info(
+                            "Auto-reload complete for %s", model_id,
+                            extra={"tag": "IDLE"},
+                        )
+                    except Exception as e:
+                        self._logger.error(
+                            "Auto-reload failed for %s: %s", model_id, e,
+                            extra={"tag": "IDLE"},
+                        )
+                        with self._lock:
+                            entry["_reloading"] = False
+
+                try:
+                    _get_bg_queue().put_nowait(_do_reload)
+                except Exception:
+                    Thread(target=_do_reload, daemon=True, name=f"idle-reload-{model_id}").start()
+                return "reloading"
+        return "ok"
+
+    def is_reloading(self, model_id: str) -> bool:
+        """Check if a model is currently being reloaded after idle timeout."""
+        with self._lock:
+            entry = self._models.get(model_id)
+            return entry is not None and entry.get("_reloading", False)
+
     def is_idle_unloaded(self, model_id: str) -> bool:
         """Check if a model was unloaded due to idle timeout."""
         with self._lock:
@@ -584,9 +650,10 @@ class IdleManager:
 
     def _ensure_running(self) -> None:
         """Start the background check thread if not already running."""
-        if self._running:
-            return
-        self._running = True
+        with self._lock:
+            if self._running:
+                return
+            self._running = True
         self._thread = Thread(target=self._check_loop, daemon=True, name="idle-manager")
         self._thread.start()
 
@@ -618,23 +685,36 @@ class IdleManager:
 
     def shutdown(self) -> None:
         """Stop the background check thread."""
-        self._running = False
+        with self._lock:
+            self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
 
+    def reset(self) -> None:
+        """Stop background thread and clear all tracked models (for testing)."""
+        self.shutdown()
+        with self._lock:
+            self._models.clear()
+            self._running = False
+
 
 _idle_manager: Optional[IdleManager] = None
+_idle_manager_lock = Lock()
 
 
 def get_idle_manager() -> IdleManager:
     """Get or create the global IdleManager singleton."""
     global _idle_manager
     if _idle_manager is None:
-        _idle_manager = IdleManager()
+        with _idle_manager_lock:
+            if _idle_manager is None:
+                _idle_manager = IdleManager()
     return _idle_manager
 
 
 class CircuitBreakerState(Enum):
+    """States of a circuit breaker: closed (normal), open (failing), half_open (testing)."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -699,16 +779,52 @@ def _mps_oom_recovery() -> None:
         from domains.infrastructure.ml_types import mps as ml_mps
         if _has_mps():
             ml_mps.empty_cache()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("MPS OOM recovery failed: %s", exc)
+
+
+_GC_COUNTER = 0
+_GC_INTERVAL = 10  # Run GC every N generations
+_gc_counter_lock = Lock()
+
+# Bounded background work queue — replaces raw Thread spawning for GC, etc.
+_bg_queue: Optional[Any] = None
+_bg_queue_lock = Lock()
+
+
+def _get_bg_queue():
+    """Lazily create the global background work queue."""
+    global _bg_queue
+    if _bg_queue is None:
+        with _bg_queue_lock:
+            if _bg_queue is None:
+                from domains.infrastructure.producer_consumer import ProducerConsumerQueue
+                _bg_queue = ProducerConsumerQueue[Any](
+                    maxsize=32,
+                    num_consumers=2,
+                    handler=lambda item: item() if callable(item) else None,
+                    name="model-server-bg",
+                )
+                _bg_queue.start()
+    return _bg_queue
 
 
 def _schedule_gc() -> None:
-    """Schedule gc.collect() in a background thread to avoid blocking the event loop."""
+    """Schedule gc.collect() via the background queue, throttled to every N generations.
+
+    Python's generational GC handles most cleanup automatically. Manual
+    gc.collect() is only needed for large object graphs (KV caches, model weights).
+    Throttling reduces GIL contention from frequent thread creation.
+    """
+    global _GC_COUNTER
+    with _gc_counter_lock:
+        _GC_COUNTER += 1
+        if _GC_COUNTER % _GC_INTERVAL != 0:
+            return
     try:
-        Thread(target=gc.collect, daemon=True).start()
-    except Exception:
-        pass
+        _get_bg_queue().put_nowait(gc.collect)
+    except Exception as exc:
+        logger.debug("GC queue put failed: %s", exc)
 
 
 # ── Generate Backends ─────────────────────────────────────────────────────────
@@ -747,7 +863,7 @@ class GenerateBackend:
         top_p: float,
         top_k: int,
         repetition_penalty: float,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         """Streaming generation.  Yields tokens, returns final result dict."""
@@ -806,7 +922,7 @@ class GuardBackend(GenerateBackend):
         top_p: float,
         top_k: int,
         repetition_penalty: float,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         safe_kwargs = {k: v for k, v in kwargs.items()
@@ -831,7 +947,7 @@ class _TokenStreamer:
     Provides the same text_queue / stop_signal interface used by generate_stream_sync.
     """
 
-    def __init__(self, tokenizer, skip_prompt: bool = False, timeout: float = 120.0):
+    def __init__(self, tokenizer, skip_prompt: bool = False, timeout: float = DEFAULT_GENERATE_TIMEOUT):
         self._tokenizer = tokenizer
         self._skip_prompt = skip_prompt
         self._timeout = timeout
@@ -856,9 +972,6 @@ class _TokenStreamer:
 
     def end(self):
         self.text_queue.put(self.stop_signal)
-
-
-import queue as queue
 
 
 class LocalBackend(GenerateBackend):
@@ -978,8 +1091,10 @@ class LocalBackend(GenerateBackend):
                                getattr(self._model_ref, "past_key_values", None)
                     if captured is not None:
                         SESSION_KV_CACHE.store(session_id, input_ids[0].tolist(), captured)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("model_server: KV cache capture failed", extra={
+                        "session_id": session_id, "error": str(e),
+                    })
 
         return {"text": text, "tokens_generated": tokens_generated}
 
@@ -991,7 +1106,7 @@ class LocalBackend(GenerateBackend):
         top_p: float,
         top_k: int,
         repetition_penalty: float,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         session_id: Optional[str] = None,
         _pre_tokenized: Optional[dict] = None,
         **kwargs: Any,
@@ -1029,7 +1144,7 @@ class LocalBackend(GenerateBackend):
                     session_id, prefix_len, input_ids.shape[1],
                 )
 
-        streamer = _TokenStreamer(self._tokenizer, skip_prompt=True, timeout=120.0)
+        streamer = _TokenStreamer(self._tokenizer, skip_prompt=True, timeout=DEFAULT_GENERATE_TIMEOUT)
 
         gen_kwargs = dict(
             input_ids=input_ids,
@@ -1062,6 +1177,19 @@ class LocalBackend(GenerateBackend):
             try:
                 with self._gen_lock:
                     self._model_ref.generate(**gen_kwargs)
+                # Capture updated KV cache after generation
+                if pkv is not None:
+                    # Cache was passed — it's been extended in-place during generate
+                    _pkv_holder[0] = pkv
+                else:
+                    # No cache passed — try to capture from model state
+                    try:
+                        captured = getattr(self._model_ref, "_past_key_values", None) or \
+                                   getattr(self._model_ref, "past_key_values", None)
+                        if captured is not None:
+                            _pkv_holder[0] = captured
+                    except Exception:
+                        pass
             except Exception as e:
                 _error.append(e)
 
@@ -1075,9 +1203,12 @@ class LocalBackend(GenerateBackend):
             if _error:
                 raise _error[0]
             try:
-                text = streamer.text_queue.get(timeout=0.02)
+                text = streamer.text_queue.get(timeout=0.005)
             except queue.Empty:
-                time.sleep(0.005)
+                time.sleep(0.001)
+                continue
+            if isinstance(text, Exception):
+                _error.append(text)
                 continue
             if text == streamer.stop_signal:
                 break
@@ -1127,7 +1258,7 @@ class ModelServer:
         tokenizer: Any = None,
         model_id: str = "unknown",
         max_concurrent: Optional[int] = None,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         failure_threshold: int = 3,
         recovery_timeout: float = 30.0,
@@ -1213,6 +1344,7 @@ class ModelServer:
         self._status_lock = Lock()
 
         # Lifecycle hooks
+        self._hooks_lock = Lock()
         self._pre_generate_hooks: list[Callable[[], None]] = []
         self._post_generate_hooks: list[Callable[[], None]] = []
         self._on_error_hooks: list[Callable[[Exception], None]] = []
@@ -1350,6 +1482,7 @@ class ModelServer:
                 extra={"tag": "IDLE"},
             )
         except Exception as e:
+            self._status = ModelStatus.ERROR
             logger.error(
                 "Idle reload failed for %s: %s", self.model_id, e,
                 extra={"tag": "IDLE"},
@@ -1419,10 +1552,13 @@ class ModelServer:
             if hasattr(self._model_ref, "device"):
                 self._device = str(self._model_ref.device)
             elif hasattr(self._model_ref, "parameters"):
-                p = next(self._model_ref.parameters(), None)
+                p = next(iter(self._model_ref.parameters()), None)
                 if p is not None:
                     self._device = str(p.device)
-        except Exception:
+        except Exception as e:
+            logger.warning("model_server: device detection failed", extra={
+                "model_id": self.model_id, "error": str(e),
+            })
             self._device = "unknown"
         # Sync device to local backend
         if self._local_backend is not None:
@@ -1483,19 +1619,25 @@ class ModelServer:
                 "new_state": new.value,
                 "failure_count": self._circuit_breaker._failure_count,
             }, source="model_server")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("model_server: circuit breaker state change event failed", extra={
+                "model_id": self.model_id, "old_state": old.value,
+                "new_state": new.value, "error": str(e),
+            })
 
     # --- Lifecycle hooks ---
 
     def add_pre_generate_hook(self, hook: Callable[[], None]) -> None:
-        self._pre_generate_hooks.append(hook)
+        with self._hooks_lock:
+            self._pre_generate_hooks.append(hook)
 
     def add_post_generate_hook(self, hook: Callable[[], None]) -> None:
-        self._post_generate_hooks.append(hook)
+        with self._hooks_lock:
+            self._post_generate_hooks.append(hook)
 
     def add_on_error_hook(self, hook: Callable[[Exception], None]) -> None:
-        self._on_error_hooks.append(hook)
+        with self._hooks_lock:
+            self._on_error_hooks.append(hook)
 
     # --- Status ---
 
@@ -1539,8 +1681,10 @@ class ModelServer:
         workers = [asyncio.create_task(q.worker()) for _ in range(n_workers)]
         try:
             await asyncio.gather(*workers)
-        except Exception:
-            pass  # workers run forever
+        except Exception as e:
+            logger.error("model_server: queue worker pool crashed", extra={
+                "model_id": self.model_id, "n_workers": n_workers, "error": str(e),
+            })
 
     async def _get_read_semaphore(self) -> Optional[asyncio.Semaphore]:
         """Get a read semaphore for the current event loop.
@@ -1557,6 +1701,8 @@ class ModelServer:
             return None
         loop_id = id(loop)
         if loop_id not in self._read_semaphores:
+            if len(self._read_semaphores) > 10:
+                self._read_semaphores.clear()
             self._read_semaphores[loop_id] = asyncio.Semaphore(self._max_readers)
         return self._read_semaphores[loop_id]
 
@@ -1659,7 +1805,16 @@ class ModelServer:
 
         # Touch idle manager — updates last request timestamp, auto-reloads if needed
         if self._idle_timeout_s > 0:
-            get_idle_manager().touch(self.model_id)
+            idle_status = get_idle_manager().touch_async(self.model_id)
+            if idle_status == "reloading":
+                raise RuntimeError(
+                    f"Model {self.model_id} is reloading after idle timeout. "
+                    "Please retry in a few seconds."
+                )
+            elif idle_status == "reload_failed":
+                raise RuntimeError(
+                    f"Model {self.model_id} failed to reload after idle timeout."
+                )
 
         # Circuit breaker check
         if self._circuit_breaker and not self._circuit_breaker.allow_request():
@@ -1669,7 +1824,9 @@ class ModelServer:
             )
 
         # Pre-generation hooks (OOM check, cache warm)
-        for hook in self._pre_generate_hooks:
+        with self._hooks_lock:
+            pre_hooks = list(self._pre_generate_hooks)
+        for hook in pre_hooks:
             try:
                 hook()
             except Exception as e:
@@ -1772,6 +1929,13 @@ class ModelServer:
         to LocalBackend when guard is dead or absent.
         """
         backend = self._select_backend()
+        if backend is None:
+            backend = self._select_backend()
+            if backend is None:
+                raise RuntimeError(
+                    f"No backend available — model '{self.model_id}' may have "
+                    "been idle-unloaded. Reload the model before generating."
+                )
         is_local = isinstance(backend, LocalBackend)
         return backend.generate(
             prompt, max_new_tokens, temperature,
@@ -1790,7 +1954,7 @@ class ModelServer:
         top_p: float = 0.9,
         top_k: int = 50,
         repetition_penalty: float = 1.0,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         session_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
@@ -1819,7 +1983,7 @@ class ModelServer:
         top_p: float = 0.9,
         top_k: int = 50,
         repetition_penalty: float = 1.0,
-        cancel_event=None,
+        cancel_event: Optional[Any] = None,
         session_id: Optional[str] = None,
         priority: Priority = Priority.MEDIUM,
         **kwargs: Any,
@@ -1848,7 +2012,16 @@ class ModelServer:
 
         # Touch idle manager — updates last request timestamp, auto-reloads if needed
         if self._idle_timeout_s > 0:
-            get_idle_manager().touch(self.model_id)
+            idle_status = get_idle_manager().touch_async(self.model_id)
+            if idle_status == "reloading":
+                raise RuntimeError(
+                    f"Model {self.model_id} is reloading after idle timeout. "
+                    "Please retry in a few seconds."
+                )
+            elif idle_status == "reload_failed":
+                raise RuntimeError(
+                    f"Model {self.model_id} failed to reload after idle timeout."
+                )
 
         # Circuit breaker check
         if self._circuit_breaker and not self._circuit_breaker.allow_request():
@@ -1858,7 +2031,9 @@ class ModelServer:
             )
 
         # Pre-generation hooks
-        for hook in self._pre_generate_hooks:
+        with self._hooks_lock:
+            pre_hooks = list(self._pre_generate_hooks)
+        for hook in pre_hooks:
             try:
                 hook()
             except Exception as e:
@@ -1903,7 +2078,8 @@ class ModelServer:
                 _pre_tokenized = await asyncio.to_thread(
                     self._tokenizer, prompt, return_tensors="pt"
                 )
-            except Exception:
+            except Exception as exc:
+                logger.debug("Pre-tokenization failed, using slow path: %s", exc)
                 _pre_tokenized = None
 
         start = time.time()
@@ -2019,7 +2195,9 @@ class ModelServer:
             raise
         finally:
             # Post-generation hooks (KV cache reset, memory cleanup)
-            for hook in self._post_generate_hooks:
+            with self._hooks_lock:
+                post_hooks = list(self._post_generate_hooks)
+            for hook in post_hooks:
                 try:
                     hook()
                 except Exception as e:
@@ -2047,7 +2225,8 @@ class ModelServer:
             except StopIteration:
                 pass
             except Exception as e:
-                logger.debug("Streaming pump generator failed: %s", e)
+                logger.warning("Streaming pump generator failed: %s", e, extra={"tag": "MODEL"})
+                q.put(e)  # Propagate exception to caller
             finally:
                 q.put(stop_signal)
 
@@ -2064,7 +2243,9 @@ class ModelServer:
 
     def _on_generation_error(self, error: Exception) -> None:
         self.set_status(ModelStatus.DEGRADED)
-        for hook in self._on_error_hooks:
+        with self._hooks_lock:
+            error_hooks = list(self._on_error_hooks)
+        for hook in error_hooks:
             try:
                 hook(error)
             except Exception as e:
@@ -2077,6 +2258,12 @@ class ModelServer:
         with self._lock:
             old = self._model_ref
             self._model_ref = new_model
+            # Reset queue under lock so concurrent generate() sees fresh state
+            if self._request_queue is not None:
+                self._request_queue.close()
+            self._request_queue = None
+            self._queue_task = None
+            self._queue_loop = None
         # Sync local backend
         if self._local_backend is not None:
             self._local_backend._model_ref = new_model
@@ -2090,13 +2277,6 @@ class ModelServer:
             "model_id": self.model_id,
         })
         logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
-        # Reset queue so the next generate() creates fresh workers on
-        # whichever event loop it runs on (warmup thread or test).
-        if self._request_queue is not None:
-            self._request_queue.close()
-        self._request_queue = None
-        self._queue_task = None
-        self._queue_loop = None
         # Re-warmup with new model
         with self._warmup_lock:
             self._warmup_completed = False

@@ -17,10 +17,12 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from config import ServerConfig
+from schemas.common import raise_error
+from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger("slo.auth")
 
@@ -76,9 +78,9 @@ class JWTAuth:
         try:
             return pyjwt.decode(token, self._secret, algorithms=[self._algorithm])
         except pyjwt.ExpiredSignatureError:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+            raise_error("Token expired", "E_AUTH_MISSING", status_code=401)
         except pyjwt.InvalidTokenError as e:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}")
+            raise_error(f"Invalid token: {e}", "E_AUTH_MISSING", status_code=401)
 
     def refresh_token(self, token: str) -> Optional[str]:
         """Validate a token and issue a new one with a fresh expiry.
@@ -94,7 +96,7 @@ class JWTAuth:
         """
         try:
             payload = self.verify_token(token)
-        except HTTPException:
+        except AppError:
             return None
         if not payload:
             return None
@@ -110,10 +112,7 @@ class JWTAuth:
             HTTPException 401: If no token or invalid.
         """
         if credentials is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing Authorization header",
-            )
+            raise_error("Missing Authorization header", "E_AUTH_MISSING", status_code=401)
         return self.verify_token(credentials.credentials)
 
     async def optional_user(self, credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security)) -> Optional[dict]:
@@ -122,7 +121,7 @@ class JWTAuth:
             return None
         try:
             return self.verify_token(credentials.credentials)
-        except HTTPException:
+        except AppError:
             return None
 
 
@@ -337,8 +336,5 @@ async def require_auth_if_enabled(
     if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
         return None
     if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization required (set SLO_AUTH_REQUIRED=false to disable)",
-        )
+        raise_error("Authorization required (set SLO_AUTH_REQUIRED=false to disable)", "E_AUTH_MISSING", status_code=401)
     return get_jwt_auth().verify_token(credentials.credentials)

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from pathlib import Path
 from unittest.mock import patch
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.experiments import ExperimentsRouter
 
 
@@ -21,6 +22,7 @@ def experiments_router(tmp_path):
 @pytest.fixture
 def app(experiments_router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(experiments_router.router)
     return _app
 
@@ -134,6 +136,7 @@ class TestGetExperimentRuns:
         r = ExperimentsRouter()
         r.EXPERIMENTS_DIR = tmp_path / "experiments2"
         _app = FastAPI()
+        register_all_handlers(_app)
         _app.include_router(r.router)
         c = TestClient(_app, raise_server_exceptions=False)
 

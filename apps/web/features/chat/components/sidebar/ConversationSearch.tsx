@@ -5,6 +5,7 @@ import { Input } from '@sloughgpt/strui'
 import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
 import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
+import { truncate } from '@/lib/conversations-utils'
 
 interface SearchResult {
   session: ChatSession
@@ -16,10 +17,6 @@ interface ConversationSearchProps {
   open: boolean
   onClose: () => void
   onNavigate: (sessionId: string) => void
-}
-
-function truncate(text: string, len = 80): string {
-  return text.length > len ? text.slice(0, len) + '…' : text
 }
 
 function snippet(content: string, query: string, maxLen = 100): React.ReactNode {
@@ -117,7 +114,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
         aria-label="Search all conversations"
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-border/50">
-          <IconSearch className="h-4 w-4 text-muted-foreground shrink-0" />
+          <IconSearch className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
           <Input
             ref={inputRef}
             value={query}
@@ -134,7 +131,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
           <kbd className="hidden sm:inline-flex text-xs text-muted-foreground/50 border border-border/40 rounded px-1.5 py-0.5 font-mono">Esc</kbd>
         </div>
 
-        <div className="max-h-[50vh] overflow-y-auto p-2">
+        <div className="max-h-[50vh] overflow-y-auto p-2" aria-busy={loading} aria-live="polite">
           {loading && (
             <div className="flex items-center justify-center py-8">
               <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
@@ -154,6 +151,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
               </p>
               {results.map(r => (
                 <button
+                  type="button"
                   key={r.session.id}
                   onClick={() => { onNavigate(r.session.id); onClose() }}
                   className="w-full text-left p-2.5 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40"

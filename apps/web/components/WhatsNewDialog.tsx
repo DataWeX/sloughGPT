@@ -1,12 +1,27 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { whatsNewItems, type WhatsNewItem } from '@/lib/whats-new-data'
 import { cn, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
+import { Sparkles, Palette, GraduationCap, Cpu, MessageCircle, Mic, Zap, BarChart3, Brain, Settings, Trash2 } from 'lucide-react'
+
+const EMOJI_TO_ICON: Record<string, ReactNode> = {
+  '✨': <Sparkles className="h-4 w-4" />,
+  '🎨': <Palette className="h-4 w-4" />,
+  '🎓': <GraduationCap className="h-4 w-4" />,
+  '🧠': <Brain className="h-4 w-4" />,
+  '💬': <MessageCircle className="h-4 w-4" />,
+  '🎤': <Mic className="h-4 w-4" />,
+  '⚡': <Zap className="h-4 w-4" />,
+  '📊': <BarChart3 className="h-4 w-4" />,
+  '🤖': <Cpu className="h-4 w-4" />,
+  '⚙️': <Settings className="h-4 w-4" />,
+  '🗑️': <Trash2 className="h-4 w-4" />,
+}
 
 const SEEN_KEY = 'whatsnew_seen'
 
@@ -46,7 +61,9 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const markStartedRef = useRef(false)
 
   useEffect(() => {
-    getSeenIds().then(setSeen)
+    let active = true
+    getSeenIds().then(s => { if (active) setSeen(s) })
+    return () => { active = false }
   }, [])
 
   useEffect(() => {
@@ -76,7 +93,7 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <DialogDescription>Recent features and improvements across builds.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+        <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar-container">
           {whatsNewItems.map(item => {
             const isUnseen = !seen.has(item.id)
             return (
@@ -88,11 +105,11 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
                 )}
               >
                 <div className="flex items-start gap-2.5">
-                  <span className="text-lg leading-none mt-0.5 shrink-0">{item.icon}</span>
+                  <span className="text-lg leading-none mt-0.5 shrink-0 text-muted-foreground">{EMOJI_TO_ICON[item.icon] ?? <Sparkles className="h-4 w-4" />}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       {item.href ? (
-                        <Link href={item.href} onClick={() => onOpenChange(false)} className="text-sm font-medium hover:underline">
+                        <Link href={item.href} prefetch={false} onClick={() => onOpenChange(false)} className="text-sm font-medium hover:underline">
                           {item.title}
                         </Link>
                       ) : (

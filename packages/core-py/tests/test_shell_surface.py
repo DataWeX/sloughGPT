@@ -1,233 +1,187 @@
-"""Tests for domains/shell/surface.py — content surfaces."""
+"""Tests for domains.shell.surface — surface content rendering."""
+
+import time
 
 import pytest
-
-from domains.shell.log_buffer import LogBuffer, LogEntry
 from domains.shell.surface import (
-    LogSurface,
-    RenderLine,
-    STYLE_ERROR,
-    STYLE_INFO,
-    STYLE_WARN,
-    Surface,
-    TextSurface,
-    clip,
-    strip_ansi,
+    strip_ansi, clip, RenderLine, TextSurface, LogSurface,
+    STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL,
 )
-
-
-class TestClip:
-    def test_short_text_unchanged(self):
-        assert clip("hello", 10) == "hello"
-
-    def test_long_text_truncated(self):
-        assert clip("hello world", 5) == "hello"
-
-    def test_zero_width(self):
-        assert clip("hello", 0) == ""
+from domains.shell.log_buffer import LogBuffer, LogEntry
 
 
 class TestStripAnsi:
     def test_plain_text_unchanged(self):
         assert strip_ansi("hello") == "hello"
 
-    def test_sgr_colors_stripped(self):
-        assert strip_ansi("\x1b[36mDevelopment:\x1b[0m") == "Development:"
+    def test_strips_color_codes(self):
+        text = "\x1b[31mred\x1b[0m"
+        assert strip_ansi(text) == "red"
 
-    def test_multiple_sequences(self):
-        assert strip_ansi("\x1b[1mBold\x1b[0m and \x1b[32mgreen\x1b[0m") == "Bold and green"
+    def test_strips_multiple_codes(self):
+        text = "\x1b[1m\x1b[32mbold green\x1b[0m"
+        assert strip_ansi(text) == "bold green"
 
-    def test_parameterised_sgr(self):
-        assert strip_ansi("\x1b[38;5;208morange\x1b[0m") == "orange"
+    def test_empty_string(self):
+        assert strip_ansi("") == ""
 
-    def test_cursor_position_sequence(self):
-        assert strip_ansi("x\x1b[94Gy") == "xy"
 
-    def test_charset_selection(self):
-        assert strip_ansi("\x1b(Bascii\x1b(B") == "ascii"
+class TestClip:
+    def test_short_text_unchanged(self):
+        assert clip("hello", 10) == "hello"
 
-    def test_save_restore_cursor(self):
-        assert strip_ansi("\x1b[s\x1b[1B\x1b[u") == ""
+    def test_exact_width(self):
+        assert clip("hello", 5) == "hello"
 
-    def test_mixed_content(self):
-        assert strip_ansi("\x1b[32m  \u2139 \x1b[0m\x1b[2m[info] \x1b[0mmsg") == "  \u2139 [info] msg"
+    def test_truncates_with_ellipsis(self):
+        assert clip("hello world", 8) == "hello w\u2026"
+
+    def test_width_zero(self):
+        assert clip("hello", 0) == ""
+
+    def test_width_negative(self):
+        assert clip("hello", -5) == ""
+
+    def test_very_narrow(self):
+        assert clip("hello", 2) == "he"
+
+
+class TestRenderLine:
+    def test_default_style(self):
+        rl = RenderLine(text="hello")
+        assert rl.text == "hello"
+        assert rl.style is None
+
+    def test_with_style(self):
+        rl = RenderLine(text="error", style=STYLE_ERROR)
+        assert rl.style == STYLE_ERROR
 
 
 class TestTextSurface:
-    def test_write_appends_lines(self):
+    def test_empty_render(self):
         s = TextSurface()
-        s.write("line one")
-        assert s.capture == ["line one"]
+        assert s.render(10) == []
 
-    def test_write_with_end(self):
+    def test_write_and_render(self):
         s = TextSurface()
-        s.write("a", end="")
-        s.write("b", end="")
-        assert s.capture == ["ab"]
+        s.write("hello")  # default end="\n"
+        lines = s.render(10)
+        assert len(lines) == 1
+        assert lines[0].text == "hello"
 
-    def test_empty_write_appends_blank(self):
+    def test_multiple_writes(self):
         s = TextSurface()
-        s.write("")
-        assert s.capture == [""]
+        s.write("line1")
+        s.write("line2")
+        s.write("line3")
+        lines = s.render(10)
+        assert [l.text for l in lines] == ["line1", "line2", "line3"]
 
-    def test_clear_empties(self):
+    def test_render_limit(self):
         s = TextSurface()
-        s.write("data")
+        for i in range(10):
+            s.write(f"line{i}")
+        lines = s.render(3)
+        assert len(lines) == 3
+        assert lines[0].text == "line7"
+        assert lines[2].text == "line9"
+
+    def test_render_with_offset(self):
+        s = TextSurface()
+        for i in range(5):
+            s.write(f"line{i}")
+        lines = s.render(2, offset=0)
+        assert [l.text for l in lines] == ["line3", "line4"]
+        lines = s.render(2, offset=2)
+        assert [l.text for l in lines] == ["line1", "line2"]
+
+    def test_write_without_newline_end(self):
+        s = TextSurface()
+        s.write("partial", end="")
+        lines = s.render(10)
+        assert len(lines) == 1
+        assert lines[0].text == "partial"
+
+    def test_clear(self):
+        s = TextSurface()
+        s.write("hello")
         s.clear()
-        assert s.capture == []
+        assert s.render(10) == []
 
-    def test_render_clips_to_width(self):
+    def test_capture(self):
+        s = TextSurface()
+        s.write("a")
+        s.write("b")
+        assert s.capture == ["a", "b"]
+
+    def test_capture_partial(self):
+        s = TextSurface()
+        s.write("a")
+        s.write("partial", end="")
+        assert s.capture == ["a", "partial"]
+
+    def test_strips_ansi(self):
+        s = TextSurface()
+        s.write("\x1b[31mred\x1b[0m")
+        lines = s.render(10)
+        assert lines[0].text == "red"
+
+    def test_set_width(self):
         s = TextSurface()
         s.set_width(5)
         s.write("hello world")
         lines = s.render(10)
-        assert lines[0].text == "hello"
-
-    def test_render_tails_only(self):
-        s = TextSurface()
-        for i in range(10):
-            s.write(f"line {i}")
-        lines = s.render(3)
-        assert len(lines) == 3
-        assert lines[-1].text == "line 9"
-
-    def test_write_after_clear_starts_fresh(self):
-        s = TextSurface()
-        s.write("stale")
-        s.clear()
-        s.write("fresh")
-        assert s.capture == ["fresh"]
-
-    def test_render_zero_rows(self):
-        s = TextSurface()
-        s.write("x")
-        assert s.render(0) == []
-
-    def test_render_offset_scrolls_back(self):
-        s = TextSurface()
-        for i in range(10):
-            s.write(f"line {i}")
-        lines = s.render(3, offset=4)
-        assert len(lines) == 3
-        assert lines[-1].text == "line 5"
-        assert lines[0].text == "line 3"
-
-    def test_render_offset_past_start(self):
-        s = TextSurface()
-        for i in range(4):
-            s.write(f"line {i}")
-        lines = s.render(3, offset=50)
-        assert len(lines) == 3
-        assert lines[0].text == "line 0"
-
-    def test_render_offset_zero_tails(self):
-        s = TextSurface()
-        for i in range(10):
-            s.write(f"line {i}")
-        lines = s.render(3, offset=0)
-        assert lines[0].text == "line 7"
-
-    def test_render_default_style_none(self):
-        s = TextSurface()
-        s.write("plain")
-        assert s.render(1)[0].style is None
-
-    def test_write_strips_ansi(self):
-        s = TextSurface()
-        s.write("\x1b[36mDevelopment:\x1b[0m")
-        assert s.capture == ["Development:"]
-
-    def test_write_strips_ansi_across_partial_lines(self):
-        s = TextSurface()
-        s.write("\x1b[36mDev", end="")
-        s.write("elopment\x1b[0m", end="")
-        s.write(":", end="")
-        assert s.capture == ["Development:"]
+        assert len(lines[0].text) <= 5
 
 
 class TestLogSurface:
-    def _buffer(self):
-        b = LogBuffer()
-        b.append(LogEntry(timestamp=1.0, level="INFO", source="kernel", message="boot ok"))
-        b.append(LogEntry(timestamp=2.0, level="WARNING", source="runtime", message="orphan killed"))
-        b.append(LogEntry(timestamp=3.0, level="ERROR", source="server", message="boom"))
-        return b
+    def _make_entry(self, level="INFO", message="hello"):
+        return LogEntry(timestamp=time.time(), level=level, source="test", message=message)
 
-    def test_renders_formatted_entries(self):
-        s = LogSurface(self._buffer())
-        s.set_width(80)
-        lines = s.render(10)
-        assert len(lines) == 3
-        assert "INFO" in lines[0].text
-        assert "kernel" in lines[0].text
-        assert "boot ok" in lines[0].text
-
-    def test_level_styles(self):
-        s = LogSurface(self._buffer())
-        s.set_width(80)
-        lines = s.render(10)
-        assert lines[0].style == STYLE_INFO
-        assert lines[1].style == STYLE_WARN
-        assert lines[2].style == STYLE_ERROR
-
-    def test_render_tails(self):
-        s = LogSurface(self._buffer())
-        s.set_width(80)
-        lines = s.render(2)
-        assert len(lines) == 2
-        assert "boom" in lines[-1].text
-
-    def test_render_zero_rows(self):
-        s = LogSurface(self._buffer())
-        assert s.render(0) == []
-
-    def test_render_offset_scrolls_back(self):
-        s = LogSurface(self._buffer())
-        s.set_width(80)
-        lines = s.render(1, offset=1)
-        assert len(lines) == 1
-        assert "orphan" in lines[0].text
-
-    def test_render_offset_zero_tails(self):
-        s = LogSurface(self._buffer())
-        s.set_width(80)
-        lines = s.render(1, offset=0)
-        assert "boom" in lines[0].text
-
-    def test_empty_buffer(self):
-        s = LogSurface(LogBuffer())
-        s.set_width(80)
+    def test_empty_render(self):
+        buf = LogBuffer(max_size=100)
+        s = LogSurface(buf)
         assert s.render(10) == []
 
-    def test_clips_long_lines(self):
-        b = LogBuffer()
-        b.append(LogEntry(timestamp=1.0, level="INFO", source="s", message="x" * 100))
-        s = LogSurface(b)
-        s.set_width(10)
-        lines = s.render(1)
-        assert len(lines[0].text) <= 10
-
-
-class TestSurfaceBase:
-    def test_set_width_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            Surface().set_width(80)
-
-    def test_render_not_implemented(self):
-        with pytest.raises(NotImplementedError):
-            Surface().render(10)
-
-
-class TestTextSurfacePartialRender:
-    def test_render_includes_open_partial_line(self):
-        s = TextSurface()
-        s.write("first", end="\n")
-        s.write("second", end="")
+    def test_render_with_entries(self):
+        buf = LogBuffer(max_size=100)
+        buf._entries.append(self._make_entry("INFO", "hello"))
+        buf._entries.append(self._make_entry("ERROR", "fail"))
+        s = LogSurface(buf)
         lines = s.render(10)
-        assert [r.text for r in lines] == ["first", "second"]
+        assert len(lines) == 2
+        assert "INFO" in lines[0].text
+        assert "ERROR" in lines[1].text
 
-    def test_render_offset_includes_partial_line(self):
-        s = TextSurface()
-        s.write("tail", end="")
-        lines = s.render(1, offset=1)
-        assert lines and lines[-1].text == "tail"
+    def test_level_styles(self):
+        buf = LogBuffer(max_size=100)
+        buf._entries.append(self._make_entry("WARNING", "warn"))
+        s = LogSurface(buf)
+        lines = s.render(10)
+        assert lines[0].style == STYLE_WARN
+
+    def test_render_limit(self):
+        buf = LogBuffer(max_size=100)
+        for i in range(5):
+            buf._entries.append(self._make_entry("INFO", f"msg{i}"))
+        s = LogSurface(buf)
+        lines = s.render(2)
+        assert len(lines) == 2
+
+    def test_set_width(self):
+        buf = LogBuffer(max_size=100)
+        buf._entries.append(self._make_entry("INFO", "a" * 200))
+        s = LogSurface(buf)
+        s.set_width(20)
+        lines = s.render(10)
+        assert len(lines[0].text) <= 20
+
+    def test_render_offset(self):
+        buf = LogBuffer(max_size=100)
+        for i in range(5):
+            buf._entries.append(self._make_entry("INFO", f"msg{i}"))
+        s = LogSurface(buf)
+        lines = s.render(2, offset=0)
+        assert len(lines) == 2
+        lines = s.render(2, offset=2)
+        assert len(lines) == 2

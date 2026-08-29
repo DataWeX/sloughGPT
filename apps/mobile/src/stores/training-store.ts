@@ -98,6 +98,18 @@ interface TrainingState {
 let abortController: AbortController | null = null;
 let hfPollTimer: ReturnType<typeof setInterval> | null = null;
 
+/** Cleanup SSE + poll timers — call on screen unmount. */
+export function cleanupTraining() {
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  if (hfPollTimer) {
+    clearInterval(hfPollTimer);
+    hfPollTimer = null;
+  }
+}
+
 const defaultConfig: TrainConfig = {
   epochs: 10,
   learning_rate: 0.001,
@@ -196,7 +208,7 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             lossHistory: [
               ...s.lossHistory,
               {step: Number(step), value: Number(rawData.loss)},
-            ],
+            ].slice(-200),
           }));
         }
 

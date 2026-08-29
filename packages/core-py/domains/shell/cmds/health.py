@@ -12,9 +12,16 @@ help = "Show API server status"
 
 def run(argv: list[str], out: Console, api: ShellCommands,
         env: dict[str, str]) -> int:
-    with out.spinner("Checking health") as s:
-        h = api.health()
-    s.ok("Health check complete")
+    try:
+        with out.spinner("Checking health") as s:
+            h = api.health()
+    except Exception as e:
+        out.status("error", f"Health check failed: {type(e).__name__}: {e}")
+        out.note("Use 'api start' to launch the API server.")
+        return 1
+    if not isinstance(h, dict):
+        out.status("error", "API server returned invalid response")
+        return 1
     status = h.get("status", "unknown")
     if status == "unknown":
         out.status("error", "API server is not responding")

@@ -24,13 +24,13 @@ from domains.training.token_tree import TokenTree
 
 def _pick_dataset() -> Path:
     candidates = [
-        REPO_ROOT / "datasets" / "tinyshakespeare" / "input.txt",
-        REPO_ROOT / "datasets" / "api_conversations" / "input.txt",
+        REPO_ROOT / "data" / "tinyshakespeare" / "input.txt",
+        REPO_ROOT / "data" / "api_conversations" / "input.txt",
     ]
     for c in candidates:
         if c.exists():
             return c
-    raise FileNotFoundError("no dataset found (expected datasets/*/input.txt)")
+    raise FileNotFoundError("no dataset found (expected data/*/input.txt)")
 
 
 def main() -> int:

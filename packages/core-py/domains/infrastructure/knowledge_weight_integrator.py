@@ -266,8 +266,8 @@ def get_adapter_status() -> Dict[str, Any]:
     if _MANIFEST_PATH.exists():
         try:
             manifest = json.loads(_MANIFEST_PATH.read_text())
-        except Exception:
-            pass
+        except (json.JSONDecodeError, KeyError, ValueError) as exc:
+            logger.debug("manifest info parse failed: %s", exc)
 
     adapter_exists = _DELTA_PATH.exists() or (
         _ADAPTER_PATH / "adapter_config.json"

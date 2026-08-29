@@ -6,6 +6,7 @@ Hierarchical: if centroids follow linear pattern, store as function.
 LRUCache: cache decompressed weights.
 """
 
+import threading
 from collections import OrderedDict
 from typing import Optional
 
@@ -74,16 +75,19 @@ class LRUCache:
     def __init__(self, max_size: int = 100):
         self._cache: OrderedDict = OrderedDict()
         self._max_size = max_size
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[np.ndarray]:
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            return self._cache[key]
-        return None
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            return None
 
     def put(self, key: str, value: np.ndarray):
-        if key in self._cache:
-            self._cache.move_to_end(key)
-        self._cache[key] = value
-        if len(self._cache) > self._max_size:
-            self._cache.popitem(last=False)
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+            self._cache[key] = value
+            if len(self._cache) > self._max_size:
+                self._cache.popitem(last=False)

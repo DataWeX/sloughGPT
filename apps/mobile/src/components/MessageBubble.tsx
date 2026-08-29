@@ -54,6 +54,7 @@ interface Props {
   message: Message;
   sessionId?: string;
   highlight?: boolean;
+  searchQuery?: string;
   streaming?: boolean;
   onRegenerate?: () => void;
   onFeedback?: (positive: boolean) => void;
@@ -68,7 +69,7 @@ interface Props {
   onLongPressSelect?: () => void;
 }
 
-export function MessageBubble({message, sessionId, highlight, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
+export function MessageBubble({message, sessionId, highlight, searchQuery, streaming, onRegenerate, onFeedback, onDelete, onRetry, onEdit, onReply, onForward, selectMode, selected, onSelect, onLongPressSelect}: Props) {
   const colors = useColors();
   const bg = colors.background;
   const border = colors.border;
@@ -80,28 +81,23 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
     row: {
       paddingHorizontal: S.lg,
       marginBottom: 6,
-      alignItems: 'flex-start',
-      overflow: 'visible',
+      alignItems: 'stretch',
     },
-    rowUser: {
-      alignItems: 'flex-end',
+    innerRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
     },
-    deleteContainer: {
-      position: 'absolute',
-      right: S.lg,
-      top: 0,
-      bottom: 0,
-      justifyContent: 'center',
-      width: DELETE_WIDTH,
-      alignItems: 'center',
+    innerRowUser: {
+      flexDirection: 'row-reverse',
     },
     deleteBtn: {
+      position: 'absolute',
+      right: 36,
+      top: 0,
+      bottom: 0,
       width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.error,
-      alignItems: 'center',
       justifyContent: 'center',
+      alignItems: 'center',
     },
     selectCheckbox: {
       width: 32,
@@ -125,7 +121,8 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       borderColor: primary,
     },
     swipeable: {
-      maxWidth: '80%',
+      flex: 1,
+      overflow: 'hidden',
     },
     bubble: {
       paddingHorizontal: S.md + 2,
@@ -141,10 +138,10 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
       borderBottomRightRadius: R.sm,
     },
     assistantBubble: {
-      backgroundColor: colors.primaryAlpha(0.06),
-      borderWidth: 0.5,
-      borderColor: colors.primaryAlpha(0.1),
-      borderBottomLeftRadius: R.sm,
+      backgroundColor: colors.primaryAlpha(0.04),
+      borderRadius: 4,
+      paddingHorizontal: S.sm,
+      paddingVertical: 2,
     },
     pinnedBubble: {
       borderWidth: 1,
@@ -479,75 +476,76 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
   };
 
   return (
-    <Animated.View style={[styles.row, isUser && styles.rowUser, {opacity, transform: [{translateY}]}]}>
-      {selectMode && (
-        <Pressable
-          style={styles.selectCheckbox}
-          onPress={onSelect}>
-          <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
-            {selected && <Icon name="check" size={12} color="white" />}
-          </View>
-        </Pressable>
-      )}
-
-      <View style={styles.deleteContainer}>
+    <Animated.View style={[styles.row, {opacity, transform: [{translateY}]}]}>
+      <View style={[styles.innerRow, isUser && styles.innerRowUser]}>
         <Pressable style={styles.deleteBtn} onPress={handleDelete}>
           <Icon name="trash-2" size={16} color="white" />
         </Pressable>
-      </View>
 
-      <Animated.View
-        style={[styles.swipeable, {transform: [{translateX}]}]}
-        {...panResponder.panHandlers}>
-        <Pressable
-          style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight, pinned && styles.pinnedBubble]}
-          onPress={selectMode ? onSelect : handleDoubleTap}
-          onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}>
-          {pinned && (
-            <View style={styles.pinIcon}>
-              <Icon name="pin" size={12} color={primary} />
+        {selectMode && (
+          <Pressable
+            style={styles.selectCheckbox}
+            onPress={onSelect}>
+            <View style={[styles.checkbox, selected && styles.checkboxSelected]}>
+              {selected && <Icon name="check" size={12} color="white" />}
             </View>
-          )}
-          {message.images && message.images.length > 0 && (
-            <View style={styles.imageContainer}>
-              {message.images.map((uri, i) => (
-                <Image
-                  key={i}
-                  source={{uri}}
-                  style={styles.messageImage}
-                  resizeMode="cover"
-                />
-              ))}
-            </View>
-          )}
-          {(message._voice || message.audio_path || message.audio) && (
-            <AudioPlayer
-              audioUrl={message.audio}
-              audioPath={message.audio_path}
-              durationMs={message.audio_duration_ms}
-            />
-          )}
-          {isUser ? (
-            <Markdown content={message.content} />
-          ) : (
-            <Markdown
-              content={collapsed && message.content.length > 500
-                ? message.content.slice(0, 500) + '...'
-                : message.content || 'Thinking...'}
-              streaming={streaming}
-            />
-          )}
-          {!isUser && !streaming && message.content && message.content.length > 500 && (
-            <View style={{marginTop: 4}}>
-              <Pressable onPress={() => setCollapsed(c => !c)} hitSlop={8}>
-                <Text style={[styles.timestamp, {color: primary}]}>
-                  {collapsed ? 'Show full response' : 'Show less'}
-                </Text>
-              </Pressable>
-            </View>
-          )}
-        </Pressable>
-      </Animated.View>
+          </Pressable>
+        )}
+
+        <Animated.View
+          style={[styles.swipeable, {transform: [{translateX}]}]}
+          {...panResponder.panHandlers}>
+          <Pressable
+            style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, highlight && styles.highlight, pinned && styles.pinnedBubble]}
+            onPress={selectMode ? onSelect : handleDoubleTap}
+            onLongPress={selectMode ? onSelect : (onLongPressSelect || handleLongPress)}>
+            {pinned && (
+              <View style={styles.pinIcon}>
+                <Icon name="pin" size={12} color={primary} />
+              </View>
+            )}
+            {message.images && message.images.length > 0 && (
+              <View style={styles.imageContainer}>
+                {message.images.map((uri, i) => (
+                  <Image
+                    key={i}
+                    source={{uri}}
+                    style={styles.messageImage}
+                    resizeMode="cover"
+                  />
+                ))}
+              </View>
+            )}
+            {(message._voice || message.audio_path || message.audio) && (
+              <AudioPlayer
+                audioUrl={message.audio}
+                audioPath={message.audio_path}
+                durationMs={message.audio_duration_ms}
+              />
+            )}
+            {isUser ? (
+              <Markdown content={message.content} highlight={searchQuery} />
+            ) : (
+              <Markdown
+                content={collapsed && message.content.length > 500
+                  ? message.content.slice(0, 500) + '...'
+                  : message.content || 'Thinking...'}
+                streaming={streaming}
+                highlight={searchQuery}
+              />
+            )}
+            {!isUser && !streaming && message.content && message.content.length > 500 && (
+              <View style={{marginTop: 4}}>
+                <Pressable onPress={() => setCollapsed(c => !c)} hitSlop={8}>
+                  <Text style={[styles.timestamp, {color: primary}]}>
+                    {collapsed ? 'Show full response' : 'Show less'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </Pressable>
+        </Animated.View>
+      </View>
 
       <Pressable
         onPress={() => setShowFullDate(d => !d)}
@@ -561,6 +559,51 @@ export function MessageBubble({message, sessionId, highlight, streaming, onRegen
           )}
         </Text>
       </Pressable>
+
+      {/* Compact action bar for AI messages */}
+      {!isUser && !streaming && message.content && (
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 6, marginLeft: 2}}>
+          <Pressable
+            style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+            onPress={() => {
+              copyToClipboard(message.content || '');
+              triggerHaptic('light');
+              toast.success('Copied');
+            }}>
+            <Icon name="copy" size={14} color={textMuted} />
+          </Pressable>
+          {onFeedback && (
+            <>
+              <Pressable
+                style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+                onPress={() => {
+                  triggerHaptic('light');
+                  onFeedback(true);
+                }}>
+                <Icon name="thumbs-up" size={14} color={textMuted} />
+              </Pressable>
+              <Pressable
+                style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+                onPress={() => {
+                  triggerHaptic('light');
+                  onFeedback(false);
+                }}>
+                <Icon name="thumbs-down" size={14} color={textMuted} />
+              </Pressable>
+            </>
+          )}
+          {onRegenerate && (
+            <Pressable
+              style={{paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6}}
+              onPress={() => {
+                triggerHaptic('medium');
+                onRegenerate();
+              }}>
+              <Icon name="refresh-cw" size={14} color={textMuted} />
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {message.status === 'failed' && (
         <View style={{flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4}}>

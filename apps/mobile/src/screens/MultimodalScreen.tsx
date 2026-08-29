@@ -1,4 +1,4 @@
-import React, {useEffect, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
 import {FlatList, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
@@ -8,6 +8,7 @@ import {Icon} from '../components/Icon';
 import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
 import {toast} from '../services/toast';
+import {startRecording, transcribeAudio} from '../services/voice-input';
 
 type Tab = 'status' | 'vision' | 'audio' | 'generate';
 
@@ -37,6 +38,8 @@ export function MultimodalScreen() {
 
   // Audio / Transcribe
   const [transcribeResult, setTranscribeResult] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const recordingRef = useRef<{stop: () => Promise<{uri: string; duration: number} | null>} | null>(null);
 
   // Image generation
   const [genPrompt, setGenPrompt] = useState('');
@@ -83,10 +86,30 @@ export function MultimodalScreen() {
   const handleTranscribe = async () => {
     try {
       triggerHaptic('light');
-      const result = await api.post<{text: string}>('/multimodal/transcribe', {});
-      setTranscribeResult(result.text || 'No result');
-      toast.success('Transcription complete');
+      if (isRecording && recordingRef.current) {
+        // Stop recording and transcribe
+        setIsRecording(false);
+        const recording = await recordingRef.current.stop();
+        recordingRef.current = null;
+        if (recording) {
+          const text = await transcribeAudio(recording.uri);
+          setTranscribeResult(text || 'No speech detected');
+          if (text) {
+            toast.success('Transcription complete');
+          } else {
+            toast.warn('No speech detected in recording');
+          }
+        }
+      } else {
+        // Start recording
+        const {stop} = await startRecording();
+        recordingRef.current = {stop};
+        setIsRecording(true);
+        toast.success('Recording started — tap again to stop');
+      }
     } catch {
+      setIsRecording(false);
+      recordingRef.current = null;
       toast.error('Transcription failed');
     }
   };
@@ -219,11 +242,11 @@ export function MultimodalScreen() {
           <YStack gap={10}>
             <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <Text fontSize={15} fontWeight="600" color={colors.text}>Transcribe Audio</Text>
-              <Text fontSize={12} color={colors.textMuted}>Record audio and transcribe it to text.</Text>
+              <Text fontSize={12} color={colors.textMuted}>{isRecording ? 'Recording... tap to stop and transcribe.' : 'Tap to record audio. Tap again to stop and transcribe.'}</Text>
               <Pressable onPress={handleTranscribe}>
-                <XStack padding={10} borderRadius={8} backgroundColor={colors.primary} alignItems="center" justifyContent="center" gap={6}>
-                  <Icon name="mic" size={16} color="white" />
-                  <Text fontSize={13} fontWeight="600" color="white">Record & Transcribe</Text>
+                <XStack padding={10} borderRadius={8} backgroundColor={isRecording ? colors.error : colors.primary} alignItems="center" justifyContent="center" gap={6}>
+                  <Icon name={isRecording ? 'square' : 'mic'} size={16} color="white" />
+                  <Text fontSize={13} fontWeight="600" color="white">{isRecording ? 'Stop & Transcribe' : 'Record & Transcribe'}</Text>
                 </XStack>
               </Pressable>
               {transcribeResult ? (

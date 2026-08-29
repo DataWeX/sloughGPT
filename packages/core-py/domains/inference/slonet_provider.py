@@ -21,7 +21,6 @@ Features:
 - Seed control for reproducible generation
 - Per-request metadata (timing, token count, model info)
 """
-import logging
 import threading
 import time
 from pathlib import Path
@@ -29,12 +28,13 @@ from typing import Optional, Dict, List, Tuple, Union, Any
 import numpy as np
 
 from domains.infrastructure.structured_log import StructuredLogger
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT
 
 logger = StructuredLogger("slo.inference.slonet_provider")
 
 # Streaming robustness timeouts (overridable in tests).
 _STREAM_GET_TIMEOUT_S = 30.0
-_STREAM_TOTAL_TIMEOUT_S = 120.0
+_STREAM_TOTAL_TIMEOUT_S = DEFAULT_GENERATE_TIMEOUT
 
 # Lazy import to avoid circular dependency
 _SloLayerNorm = None
@@ -210,6 +210,7 @@ def convert_hf_to_slonet(
     hf_state_dict: Dict[str, np.ndarray],
     n_layer: int,
     config: Optional[dict] = None,
+    param_map: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, np.ndarray]:
     """Universal HF → SloTransformer weight converter.
 
@@ -229,11 +230,19 @@ def convert_hf_to_slonet(
         n_layer: Number of transformer layers.
         config: Optional HuggingFace config.json dict. If None, auto-detected
             from weight keys via ArchConfig.
+        param_map: Optional dict mapping SloTransformer parameter names →
+            Parameter objects. When provided, weights are written directly
+            into model parameters (fused convert+load), eliminating the
+            intermediate mapped dict. Returns empty dict.
 
     Returns:
         Dict mapping SloTransformer canonical names → weight arrays.
+        Empty dict when param_map is provided (writes done in-place).
     """
+    import time as _time
     from domains.infrastructure.arch_config import build_arch
+
+    _t0 = _time.monotonic()
 
     # Auto-detect architecture
     if config is None:
@@ -243,12 +252,9 @@ def convert_hf_to_slonet(
         config=config,
         weight_keys=set(hf_state_dict.keys()),
     )
+    _t_arch = _time.monotonic()
 
-    logger.info("convert_hf_to_slonet: arch=%s (norm=%s, pos=%s, act=%s, attn=%s, transpose=%s)",
-                arch.name, arch.norm, arch.positional, arch.activation, arch.attention, arch.transpose_weights,
-                extra={"tag": "INF"})
-
-    result = {}
+    result = {} if param_map is None else None
     W = arch.weight_map
 
     # Embeddings and lm_head are NOT weight matrices — never transpose them
@@ -260,80 +266,130 @@ def convert_hf_to_slonet(
     # Build the full mapping: shared + FFN-specific
     arch_to_slonet = dict(_ARCH_TO_SLONET_SHARED)
     if arch.activation == "swiglu":
-        # SwiGLU: has separate gate_proj + up_proj → w1 + w3
         arch_to_slonet.update(_ARCH_TO_SLONET_SWIGLU)
     else:
-        # GELU: up_proj → w1, w3 synthesized as identity
         arch_to_slonet.update(_ARCH_TO_SLONET_GELU)
 
-    # LayerNorm has bias — include norm bias mappings (RMSNorm drops them via None)
     if arch.norm == "layer_norm":
         arch_to_slonet["layers.{i}.attn_norm.bias"] = "blocks.{i}.attn_norm.bias"
         arch_to_slonet["layers.{i}.ff_norm.bias"] = "blocks.{i}.ff_norm.bias"
         arch_to_slonet["final_norm.bias"] = "norm.bias"
 
-    for hf_key, arr in hf_state_dict.items():
-        mapped = False
+    # Pre-compute reverse mapping: HF key → (slo_target, canonical, layer_idx|None)
+    # Eliminates O(n_keys × n_mappings × n_layer) nested loop
+    hf_to_slo: Dict[str, Tuple[str, str, Optional[int]]] = {}
+    for canonical, slo_target in arch_to_slonet.items():
+        mapped_hf_key = W.get(canonical)
+        if mapped_hf_key is None:
+            continue
+        if slo_target is None:
+            # None targets: fused QKV, dropped bias, positional — handle via special paths
+            continue
+        if "{i}" in mapped_hf_key:
+            for i in range(n_layer):
+                concrete = mapped_hf_key.replace("{i}", str(i))
+                slo_key = slo_target.replace("{i}", str(i))
+                hf_to_slo[concrete] = (slo_key, canonical, i)
+        else:
+            hf_to_slo[mapped_hf_key] = (slo_target, canonical, None)
 
-        for canonical, slo_target in arch_to_slonet.items():
-            if slo_target is None:
-                # Skip dropped keys (bias, fused QKV, positional)
-                if has_fused_qkv and "qkv" in canonical:
-                    # Handle fused QKV separately
-                    if hf_key == W.get(canonical, "").replace("{i}", "") or \
-                       any(hf_key == W.get(canonical, "").replace("{i}", str(i)) for i in range(n_layer)):
-                        result.update(_split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict))
-                        mapped = True
-                        break
-                continue
-
-            # Resolve canonical → actual HF key via weight map
-            mapped_hf_key = W.get(canonical)
-            if mapped_hf_key is None:
-                continue
-
-            if "{i}" in mapped_hf_key:
-                # Per-layer key
+    # Pre-compute fused QKV HF keys (weight + bias) for O(1) lookup
+    fused_qkv_hf_keys: set = set()
+    if has_fused_qkv:
+        for canonical in ["layers.{i}.qkv.weight", "layers.{i}.qkv.bias"]:
+            qkv_mapped = W.get(canonical, "")
+            if qkv_mapped:
+                fused_qkv_hf_keys.add(qkv_mapped.replace("{i}", ""))
                 for i in range(n_layer):
-                    concrete = mapped_hf_key.replace("{i}", str(i))
-                    if hf_key == concrete:
-                        slo_key = slo_target.replace("{i}", str(i))
-                        w = arr
-                        # Transpose if arch stores (in, out) but SloTransformer expects (out, in)
-                        # Embeddings and lm_head are NOT linear weights — skip transposition
-                        if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
-                            w = w.T
-                        result[slo_key] = w
-                        mapped = True
-                        break
-            else:
-                # Global key (embed, final norm, lm_head)
-                if hf_key == mapped_hf_key:
-                    w = arr
-                    if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
-                        w = w.T  # pragma: no cover — no global 2D key outside NO_TRANSPOSE_KEYS
-                    result[slo_target] = w
-                    mapped = True
-                    break
+                    fused_qkv_hf_keys.add(qkv_mapped.replace("{i}", str(i)))
 
-        # Handle fused QKV for GPT-2 style (matched in the canonical None-branch above).
+    _t_precomp = _time.monotonic()
+
+    n_written = 0
+
+    def _write_param(slo_key, w):
+        """Write weight into model parameter or result dict."""
+        nonlocal n_written
+        if param_map is not None and slo_key in param_map:
+            p = param_map[slo_key]
+            if w.dtype != np.float32:
+                w = w.astype(np.float32)
+            if p.data.shape == w.shape:
+                p.data[:] = w
+            elif p.data.ndim == 2 and w.ndim == 2 and p.data.shape[1] == w.shape[1]:
+                p.data[:w.shape[0]] = w[:p.data.shape[0]]
+            elif p.data.ndim == 1 and w.ndim == 1:
+                min_d = min(p.data.shape[0], w.shape[0])
+                p.data[:min_d] = w[:min_d]
+            n_written += 1
+        elif result is not None:
+            result[slo_key] = w
+            n_written += 1
+
+    n_mapped = 0
+    for hf_key, arr in hf_state_dict.items():
+        # Fast path: check pre-computed reverse mapping first (O(1) lookup)
+        if hf_key in hf_to_slo:
+            slo_key, canonical, _layer_idx = hf_to_slo[hf_key]
+            w = arr
+            if arch.transpose_weights and w.ndim == 2 and canonical not in NO_TRANSPOSE_KEYS:
+                w = w.T
+            _write_param(slo_key, w)
+            n_mapped += 1
+            continue
+
+        # Fused QKV path (weight + bias)
+        if has_fused_qkv and hf_key in fused_qkv_hf_keys:
+            fused = _split_fused_qkv(hf_key, arr, arch.n_embed, n_layer, hf_state_dict)
+            for k, v in fused.items():
+                _write_param(k, v)
+            n_mapped += 1
+            continue
+
+    _t_main = _time.monotonic()
 
     # GELU: synthesize SwiGLU gate (w3) as identity — w3=identity means
     # w2(act(w1(x)) * w3(x)) = w2(act(w1(x)) * 1) = w2(act(w1(x)))
     if arch.activation != "swiglu":
         for i in range(n_layer):
             w1_key = f"blocks.{i}.ff.w1.weight"
-            if w1_key in result and f"blocks.{i}.ff.w3.weight" not in result:
-                w1 = result[w1_key]
-                result[f"blocks.{i}.ff.w3.weight"] = np.zeros_like(w1)
-                result[f"blocks.{i}.ff.w3.bias"] = np.ones(w1.shape[0], dtype=np.float32)
+            w3_key = f"blocks.{i}.ff.w3.weight"
+            w3_bias_key = f"blocks.{i}.ff.w3.bias"
+            w1_val = result[w1_key] if result is not None else (
+                param_map[w1_key].data if param_map is not None and w1_key in param_map else None
+            )
+            if w1_val is not None:
+                if result is not None:
+                    if w3_key not in result:
+                        result[w3_key] = np.zeros_like(w1_val)
+                        result[w3_bias_key] = np.ones(w1_val.shape[0], dtype=np.float32)
+                elif param_map is not None:
+                    if w3_key in param_map and w3_bias_key in param_map:
+                        param_map[w3_key].data[:] = 0
+                        param_map[w3_bias_key].data[:] = 1
 
     # Tie lm_head to token embedding if not separate
-    if "lm_head.weight" not in result and "tok_emb.weight" in result:
-        result["lm_head.weight"] = result["tok_emb.weight"]
+    if param_map is not None:
+        if "tok_emb.weight" in param_map and "lm_head.weight" in param_map:
+            tok_emb_p = param_map["tok_emb.weight"]
+            lm_head_p = param_map["lm_head.weight"]
+            lm_head_p.data[:] = tok_emb_p.data
+    else:
+        if "lm_head.weight" not in result and "tok_emb.weight" in result:
+            result["lm_head.weight"] = result["tok_emb.weight"]
 
-    logger.info("convert_hf_to_slonet: mapped %d keys (arch=%s)", len(result), arch.name, extra={"tag": "INF"})
-    return result
+    _t_end = _time.monotonic()
+    count = len(result) if result is not None else (len(param_map) if param_map else 0)
+    logger.info(
+        "convert_hf_to_slonet: arch=%s norm=%s act=%s transpose=%s fused=%s "
+        "mapped=%d keys wrote=%d params (arch=%.3fs precomp=%.3fs main=%.3fs synth=%.3fs total=%.3fs)",
+        arch.name, arch.norm, arch.activation, arch.transpose_weights,
+        param_map is not None, count, n_written,
+        _t_arch - _t0, _t_precomp - _t_arch, _t_main - _t_precomp,
+        _t_end - _t_main, _t_end - _t0,
+        extra={"tag": "INF"},
+    )
+    return result if result is not None else {}
 
 
 class SloNetChatProvider:
@@ -473,72 +529,49 @@ class SloNetChatProvider:
         Returns:
             SloNetChatProvider using mmap-backed (optionally quantized) weights
         """
-        from domains.infrastructure.slnc.parser import SLNCParser
-        from domains.training.slonet import SloTransformer
+        import time as _time
 
+        from domains.infrastructure.slnc.parser import SLNCParser
+        from domains.infrastructure.weight_loader import build_model_from_config
+
+        _t0 = _time.monotonic()
         parser = SLNCParser(slnc_path)
         config = parser.config
+        _t_parse = _time.monotonic()
 
-        n_embed = config.get("n_embd", config.get("hidden_size", 768))
-        n_head = config.get("n_head", config.get("num_attention_heads", 12))
+        model = build_model_from_config(config, _lazy=True)
         n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
-        vocab_size = config.get("vocab_size", 50257)
-        intermediate_size = config.get("n_inner") or config.get("intermediate_size", n_embed * 4)
-        max_pos = config.get("n_positions", config.get("max_position_embeddings", 1024))
+        _t_model = _time.monotonic()
 
-        # Auto-detect positional encoding from config
-        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
-        use_abs_pos = not has_rope
+        # Unified loading path: DirectWeightLoader (single-pass mmap→parameter)
+        try:
+            from domains.infrastructure.weight_loader import DirectWeightLoader, build_load_plan
+            weights_dict = parser.get_weights_dict_parallel()
+            plan = build_load_plan(weights_dict, n_layer, config)
+            loader = DirectWeightLoader._from_plan(parser, plan, weights_dict)
+            result = loader.load(model)
+            _t_weights = _t_model + result.timing.get("direct", 0)
+            _t_convert = _t_weights + result.timing.get("direct", 0)
+            _t_load = _t_convert + result.timing.get("fused_qkv", 0) + result.timing.get("tied_synth", 0)
+            del loader, weights_dict, plan
+        except Exception as e:
+            logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"tag": "INF"})
+            # Fallback: build plan + generic loader (same mapping, no mmap optimization)
+            from domains.infrastructure.weight_loader import build_load_plan, load_into_model
+            weights_dict = parser.get_weights_dict_parallel()
+            _t_weights = _time.monotonic()
+            plan = build_load_plan(weights_dict, n_layer, config)
+            load_into_model(model, plan, weights_dict)
+            _t_convert = _time.monotonic()
+            _t_load = _t_convert
+            del weights_dict, plan
 
-        # Auto-detect norm type from config
-        has_rms = config.get("rms_norm_eps") is not None
-        norm_type = "rms_norm" if has_rms else "layer_norm"
-        # Also check explicit config field
-        if config.get("layer_norm_type"):
-            norm_type = config["layer_norm_type"]
-
-        # Auto-detect GQA (n_kv_head < n_head)
-        n_kv_head = config.get("num_key_value_heads", n_head)
-
-        # Auto-detect activation from config — LLaMA/Qwen/Mistral use SwiGLU (silu)
-        hidden_act = config.get("hidden_act", "gelu")
-        activation = "silu" if hidden_act == "silu" else "gelu"
-
-        # Create SloTransformer — pass HF config's rms_norm_eps to match model exactly
-        hf_eps = config.get("rms_norm_eps", 1e-5)
-        model = SloTransformer(
-            vocab_size=vocab_size,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
-            n_kv_head=n_kv_head,
-            intermediate_size=intermediate_size,
-            block_size=max_pos,
-            max_seq_len=max_pos,
-            use_rope=not use_abs_pos,
-            rope_base=config.get("rope_theta", 10000.0),
-            dropout=0.0,
-            eps=hf_eps,
-            tie_weights=True,
-            use_abs_pos_emb=use_abs_pos,
-            norm_type=norm_type,
-            activation=activation,
-            _lazy=True,
+        logger.info(
+            "from_slnc timing: parse=%.2fs model=%.2fs weights=%.2fs convert=%.2fs load_state=%.2fs total=%.2fs",
+            _t_parse - _t0, _t_model - _t_parse, _t_weights - _t_model,
+            _t_convert - _t_weights, _t_load - _t_convert, _t_load - _t0,
+            extra={"tag": "INF"},
         )
-
-        # Load weights directly from mmap (zero copy)
-        weights_dict = parser.get_weights_dict()
-
-        # Convert and load into model
-        mapped = convert_hf_to_slonet(weights_dict, n_layer=n_layer, config=config)
-        model.load_state_dict(mapped)
-
-        # Drop the transient conversion buffers immediately — they are copies
-        # (2x the fp32 weight bytes) and would otherwise pin peak RSS until
-        # this method returns. load_state_dict already wrote their values into
-        # the model's parameters.
-        del weights_dict
-        del mapped
 
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)
@@ -559,7 +592,7 @@ class SloNetChatProvider:
         # silently skip quantization — float32 BLAS is both faster and exact.
         if quantize:
             from domains.infrastructure.quant_core.wrapper import HAS_AVX2 as _HAS_AVX2
-            from domains.infrastructure.quantization import Quantine, walk_slo_linears, TensorInfo
+            from domains.infrastructure.quantization import Quantine, walk_slo_linears
             from pathlib import Path as PathlibPath
 
             if not bool(_HAS_AVX2):
@@ -691,8 +724,8 @@ class SloNetChatProvider:
                 import ctypes
                 libc = ctypes.CDLL("libc.so.6")
                 libc.malloc_trim(0)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("malloc_trim skipped: %s", e)
 
         # Apply ResourceManager compute limits (BLAS threads, OMP_NUM_THREADS, etc.)
         try:
@@ -700,16 +733,18 @@ class SloNetChatProvider:
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
-        except Exception:  # pragma: no cover — defensive; real ResourceManager never raises here
-            pass
+        except Exception as e:  # pragma: no cover — defensive; real ResourceManager never raises here
+            logger.warning("ResourceManager.apply_blas_env skipped: %s", e)
 
         # Load tokenizer
+        _t_tok_start = _time.monotonic()
         instance._tokenizer = instance._load_tokenizer(
             Path(slnc_path).parent, config
         )
+        _t_tok = _time.monotonic()
 
-        logger.info("SloNetChatProvider.from_slnc: %s, %d layers",
-                     slnc_path, n_layer, extra={"tag": "INF"})
+        logger.info("SloNetChatProvider.from_slnc: %s, %d layers (tokenizer=%.2fs)",
+                     slnc_path, n_layer, _t_tok - _t_tok_start, extra={"tag": "INF"})
 
         # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
         instance._kv_states: Dict[str, Any] = {}
@@ -719,6 +754,13 @@ class SloNetChatProvider:
         # Guard for the session KV map — mutated from to_thread workers and
         # API routes concurrently, so check-then-set races must be serialized.
         instance._kv_lock = threading.Lock()
+
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            get_event_buffer().record("MODEL", f"loaded {model_id} ({n_layer} layers)")
+        except Exception:
+            pass
 
         return instance
 
@@ -799,6 +841,8 @@ class SloNetChatProvider:
             "trim_allocator_after_load": trim_allocator_after_load,
         }
         instance._lazy_lock = threading.Lock()
+        instance._materializing = threading.Event()
+        instance._materializing.set()  # Start "not loading" — cleared during materialize_model()
         instance._loaded = False
         instance._meta = {
             "model_id": model_id,
@@ -853,31 +897,23 @@ class SloNetChatProvider:
             ValueError: If the .soul file is invalid or missing model config
         """
         from domains.inference.slo_format import load_soul
-        from domains.training.slonet import SloTransformer
+        from domains.infrastructure.weight_loader import SoulWeightLoader, build_model_from_config
 
-        soul, state_dict = load_soul(soul_path)
+        loader = SoulWeightLoader(soul_path)
+        meta = loader.load_metadata()
+        soul = meta.pop("soul")
 
-        # Extract model config from soul metadata
-        cfg = soul.metadata.get("config", {})
-        vocab_size = soul.metadata.get("vocab_size", cfg.get("vocab_size", 256))
-        n_embed = cfg.get("n_embed", 128)
-        n_layer = cfg.get("n_layer", 4)
-        n_head = cfg.get("n_head", 4)
-        block_size = cfg.get("block_size", 128)
+        # Native .soul models don't use RoPE or RMSNorm — use simple config
+        model = build_model_from_config({
+            "vocab_size": meta["vocab_size"],
+            "hidden_size": meta["n_embed"],
+            "num_hidden_layers": meta["n_layer"],
+            "num_attention_heads": meta.get("n_head", 4),
+            "max_position_embeddings": meta.get("block_size", 128),
+        }, _lazy=True)
 
-        # Create SloTransformer with the trained architecture
-        model = SloTransformer(
-            vocab_size=vocab_size,
-            n_embed=n_embed,
-            n_layer=n_layer,
-            n_head=n_head,
-            block_size=block_size,
-            dropout=0.0,
-            _lazy=True,
-        )
-
-        # Load weights directly — already in SloNet format from training
-        model.load_state_dict(state_dict)
+        # Load weights — already in SloNet format from training
+        loader.load(model)
 
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)
@@ -894,8 +930,8 @@ class SloNetChatProvider:
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("ResourceManager.apply_blas_env skipped (soul load): %s", e)
 
         # Load tokenizer from soul metadata if available
         tokenizer_meta = soul.metadata.get("tokenizer")
@@ -919,7 +955,7 @@ class SloNetChatProvider:
 
         logger.info(
             "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",
-            soul_path, n_layer, vocab_size, n_embed, extra={"tag": "INF"},
+            soul_path, meta["n_layer"], meta["vocab_size"], meta["n_embed"], extra={"tag": "INF"},
         )
 
         # Cross-turn KV cache state
@@ -1154,15 +1190,34 @@ class SloNetChatProvider:
         load is deferred until the model is actually needed; a per-provider
         lock serializes concurrent first-access loads.
 
+        When the parent materializes weights, any attached ProcessGuard is
+        stopped to release the subprocess copy and avoid double-memory OOM.
+
         Returns:
-            The SloTransformer model, or None if not loadable.
+            The SloTransformer model.
+
+        Raises:
+            RuntimeError: If the model has not been loaded.
         """
         model = getattr(self, "_model", None)
         if model is not None:
             return model
         lock = getattr(self, "_lazy_lock", None)
         if lock is None:
-            return None
+            raise RuntimeError(f"Model '{self._model_id}' not loaded — no lazy lock initialized")
+        # If another thread (e.g. parent preload) is already loading, wait
+        # for it to finish instead of blocking on the lock.
+        mat = getattr(self, "_materializing", None)
+        if mat is not None and not mat.is_set():
+            # Wait for background preload to finish (up to 300s).
+            # Uses Event.wait() instead of busy loop for efficiency.
+            if not mat.wait(timeout=300):
+                raise RuntimeError(
+                    f"Model materialization timed out for '{self._model_id}'"
+                )
+            model = self._model
+            if model is not None:
+                return model
         with lock:
             model = self._model
             if model is not None:
@@ -1187,6 +1242,48 @@ class SloNetChatProvider:
                 self._model_id, extra={"tag": "INF"},
             )
             return self._model
+
+    def materialize_model(self):
+        """Load the model directly, bypassing _get_model() lock.
+
+        Used by parent preload to load weights without holding _lazy_lock
+        for the entire duration. Sets _materializing flag so other threads
+        wait instead of blocking on the lock.
+
+        Note: Guard lifecycle is managed by the caller (startup.py preload
+        thread), not by this method.
+        """
+        model = getattr(self, "_model", None)
+        if model is not None:
+            return model
+        mat = getattr(self, "_materializing", None)
+        if mat is None:
+            return self._get_model()
+        # Signal that materialization is in progress
+        mat.clear()
+        try:
+            eager = self.from_slnc(
+                self._slnc_path, model_id=self._model_id, **self._load_kwargs
+            )
+            self._model = eager._model
+            self._parser = eager._parser
+            self._quant_engine = eager._quant_engine
+            self._kv_states = eager._kv_states
+            self._kv_last_access = eager._kv_last_access
+            self._kv_ttl = eager._kv_ttl
+            self._kv_max_sessions = eager._kv_max_sessions
+            self._kv_lock = eager._kv_lock
+            self._loaded = True
+            if self._meta is not None:
+                self._meta["quantized"] = eager._quant_engine is not None
+                self._meta["lazy"] = True
+            logger.info(
+                "SloNetChatProvider: %s weights now resident (materialize)",
+                self._model_id, extra={"tag": "INF"},
+            )
+            return self._model
+        finally:
+            mat.set()  # Signal completion — wake all waiters
 
     def release_model(self) -> bool:
         """Drop the resident model and return its memory to the OS.
@@ -1219,18 +1316,24 @@ class SloNetChatProvider:
         try:
             import gc as _gc
             _gc.collect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("gc.collect failed: %s", e)
         try:
             import ctypes
             libc = ctypes.CDLL("libc.so.6")
             libc.malloc_trim(0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("malloc_trim failed: %s", e)
         logger.info(
             "SloNetChatProvider.release_model: %s weights released to OS",
             self._model_id, extra={"tag": "INF"},
         )
+        # Record dashboard event
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            get_event_buffer().record("MODEL", f"unloaded {self._model_id}")
+        except Exception:
+            pass
         return True
 
     def num_parameters(self) -> int:
@@ -1475,9 +1578,7 @@ class SloNetChatProvider:
                 for token in _stream_generate():
                     q.put(token)
             except Exception as e:
-                import sys, traceback
-                print(f"[chat_stream] Producer error: {e}", file=sys.stderr, flush=True)
-                traceback.print_exc(file=sys.stderr)
+                logger.error("[chat_stream] Producer error: %s", e, exc_info=True)
                 err_q.put(e)
             finally:
                 q.put(sentinel)

@@ -50,6 +50,7 @@ describe('useChatMode', () => {
     const modes: [string, string][] = [
       ['chat', 'Type a message...'],
       ['write', 'What do you want to write about?'],
+      ['rewrite', 'Paste text to rewrite...'],
       ['decide', 'What do you need help deciding?'],
       ['explain', 'What do you want explained?'],
       ['translate', 'Text to translate...'],

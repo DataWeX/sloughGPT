@@ -155,7 +155,7 @@ class Logger(ABC):
     """Abstract base for all interface-specific loggers.
 
     Subclass and implement ``emit()`` to route records to your output
-    (terminal colors, Rich console, browser console, structured JSON, etc.).
+    (terminal colors, ANSI console, browser console, structured JSON, etc.).
 
     The convenience methods (``debug``, ``info``, ``warning``, ``error``,
     ``critical``) build a ``LogRecord`` and call ``emit()``.  Override them
@@ -201,6 +201,7 @@ class Logger(ABC):
         self._context.update(kwargs)
 
     def clear_context(self) -> None:
+        """Remove all default context key-value pairs."""
         self._context.clear()
 
     # ── Abstract ────────────────────────────────────────────────────────
@@ -223,7 +224,17 @@ class Logger(ABC):
         error_code: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> LogRecord:
-        merged = {**self._context, **(context or {})}
+        # Merge: logger defaults → thread-local context → call-site context
+        from .config import get_request_id, get_log_context
+
+        merged = {}
+        merged.update(get_log_context())
+        rid = get_request_id()
+        if rid:
+            merged["request_id"] = rid
+        merged.update(self._context)
+        merged.update(context or {})
+
         return LogRecord(
             level=level,
             message=message,
@@ -238,22 +249,27 @@ class Logger(ABC):
         return level >= self._level
 
     def debug(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+        """Log at DEBUG level.  Accepts ``error_code`` and arbitrary keyword context."""
         if self._should_emit(LogLevel.DEBUG):
             self.emit(self._make_record(LogLevel.DEBUG, msg, ctx, error_code=error_code))
 
     def info(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+        """Log at INFO level.  Accepts ``error_code`` and arbitrary keyword context."""
         if self._should_emit(LogLevel.INFO):
             self.emit(self._make_record(LogLevel.INFO, msg, ctx, error_code=error_code))
 
     def warning(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
+        """Log at WARNING level.  Accepts ``error_code`` and arbitrary keyword context."""
         if self._should_emit(LogLevel.WARNING):
             self.emit(self._make_record(LogLevel.WARNING, msg, ctx, error_code=error_code))
 
     def error(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
+        """Log at ERROR level.  Accepts ``exception``, ``error_code``, and arbitrary keyword context."""
         if self._should_emit(LogLevel.ERROR):
             self.emit(self._make_record(LogLevel.ERROR, msg, ctx, exception=exception, error_code=error_code))
 
     def critical(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
+        """Log at CRITICAL level.  Accepts ``exception``, ``error_code``, and arbitrary keyword context."""
         if self._should_emit(LogLevel.CRITICAL):
             self.emit(self._make_record(LogLevel.CRITICAL, msg, ctx, exception=exception, error_code=error_code))
 
@@ -389,3 +405,47 @@ class ChildLogger(Logger):
 
     def emit(self, record: LogRecord) -> None:
         self._parent.emit(record)
+
+
+class CompositeLogger(Logger):
+    """A logger that emits to multiple downstream loggers.
+
+    Useful for writing to both console and file, or for debugging by
+    outputting to multiple destinations simultaneously.
+
+    Usage::
+
+        console = CLILogger("slo.console")
+        file_log = ConsoleLogger("slo.file", stream=open("app.log", "w"))
+        multi = CompositeLogger("slo", children=[console, file_log])
+        multi.info("this goes to both outputs")
+    """
+
+    def __init__(
+        self,
+        name: str = "slo",
+        children: Optional[List[Logger]] = None,
+        level: LogLevel = LogLevel.DEBUG,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        super().__init__(name=name, level=level, context=context)
+        self._children: List[Logger] = list(children) if children else []
+
+    def add(self, logger: Logger) -> "CompositeLogger":
+        """Add a child logger. Returns self for chaining."""
+        self._children.append(logger)
+        return self
+
+    def remove(self, logger: Logger) -> None:
+        """Remove a child logger."""
+        self._children.remove(logger)
+
+    @property
+    def children(self) -> List[Logger]:
+        """List of child loggers."""
+        return list(self._children)
+
+    def emit(self, record: LogRecord) -> None:
+        """Emit the record to all children."""
+        for child in self._children:
+            child.emit(record)

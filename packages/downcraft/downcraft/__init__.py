@@ -12,10 +12,8 @@ the application layer (``domains.infrastructure.hf_hub``), composed from
 the generic primitives here (``downloader``, ``state``, ``verify``).
 
 Submodules:
-    - ``downloader``: byte-level resume via Range headers
-    - ``resolver``: extract real download URLs from ad-heavy pages
-    - ``state``: persistent download state across restarts
-    - ``verify``: checksum / size verification
+    - ``download``: direct file download with resume
+    - ``resolve``: extract real download URLs from ad-heavy pages
 
 Use cases:
     1. Direct download::
@@ -24,7 +22,7 @@ Use cases:
 
     2. Resolve + download (scrape page, find real link)::
 
-        from downcraft.resolver import resolve_and_download
+        from downcraft.resolve import resolve_and_download
         resolve_and_download("https://example.com/download-page", "/tmp/file.zip")
 
     3. CLI::
@@ -38,8 +36,11 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, Optional, Union
 
-from . import downloader, resolver, state, verify
-from .resolver import resolve_page, resolve_and_download
+from .download import download_file, DownloadError
+from .download import state
+from .resolve import resolve_page, resolve_and_download
+from .resolve import patterns
+from .server import start_capture_server, CaptureEntry
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +49,11 @@ __all__ = [
     "resolve_page",
     "resolve_and_download",
     "state",
-    "downloader",
-    "resolver",
-    "verify",
+    "patterns",
+    "download_file",
+    "DownloadError",
+    "start_capture_server",
+    "CaptureEntry",
 ]
 
 
@@ -117,14 +120,14 @@ def download(
     st.create(lookup_key, str(dest.parent))
 
     try:
-        downloader.download_file(
+        download_file(
             url=url,
             dest=dest,
             expected_size=expected_size,
             checksum=checksum,
             on_chunk=_chunk_cb,
         )
-    except downloader.DownloadError:
+    except DownloadError:
         st.set_status(lookup_key, "failed", error=f"Failed to download {label}")
         st.flush()
         raise

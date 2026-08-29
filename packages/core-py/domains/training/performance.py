@@ -688,7 +688,7 @@ def benchmark_training(
             weight_decay=0.01, max_grad_norm=1.0,
         )
     except Exception as e:  # pragma: no cover (SloAdam imports successfully)
-        logger.warning(f"SloAdam unavailable: {e}", extra={"tag": "TRAIN"})
+        logger.warning("SloAdam unavailable: %s", e, extra={"tag": "TRAIN"})
 
     loader = _NumpyBatchIterator(dataset, batch_size, shuffle=True)
     x, y = next(iter(loader))

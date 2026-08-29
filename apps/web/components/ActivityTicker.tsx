@@ -3,15 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useErrorStore } from '@/lib/error-store'
 import { cn } from '@sloughgpt/strui'
-
-function timeAgo(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000)
-  if (s < 5) return 'just now'
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  return `${Math.floor(m / 60)}h ago`
-}
+import { timeAgo } from '@/lib/time-ago'
 
 interface ActivityTickerProps {
   className?: string
@@ -22,7 +14,7 @@ interface ActivityTickerProps {
 /**
  * Compact live ticker showing error activity.
  * Single line: dot + count + last error + time.
- * Click to expand into full list.
+ * Expand into full list.
  */
 export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
   const errors = useErrorStore(s => s.errors)
@@ -62,6 +54,7 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
 
   return (
     <button
+      type="button"
       onClick={onExpand}
       className={cn(
         'flex items-center gap-2 px-3 py-1.5 rounded-md text-xs text-left w-full',
@@ -72,6 +65,7 @@ export function ActivityTicker({ className, onExpand }: ActivityTickerProps) {
         className,
       )}
       aria-label={`${errorCount} error${errorCount !== 1 ? 's' : ''}. ${latest?.title || ''}`}
+      aria-live="polite"
     >
       <span className={cn(
         'inline-block h-1.5 w-1.5 rounded-full shrink-0',
@@ -125,7 +119,7 @@ export function ErrorList({ className }: { className?: string }) {
         </button>
       </div>
       {errors.map(e => (
-        <div key={e.id} className={`flex items-start gap-2 p-2 rounded border text-xs ${severityColor[e.severity] || severityColor.error}`}>
+        <div key={e.id} className={cn('flex items-start gap-2 p-2 rounded border text-xs', severityColor[e.severity] || severityColor.error)}>
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate flex items-center gap-1.5">
               {e.title}
@@ -142,6 +136,7 @@ export function ErrorList({ className }: { className?: string }) {
             </div>
           </div>
           <button
+            type="button"
             onClick={() => dismissError(e.id)}
             className="shrink-0 opacity-50 hover:opacity-100 text-xs leading-none"
             aria-label="Dismiss"

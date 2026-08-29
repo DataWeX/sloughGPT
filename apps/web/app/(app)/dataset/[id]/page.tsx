@@ -55,7 +55,7 @@ export default function DatasetDetailPage() {
       const d = await datasetController.get(datasetId)
       setDataset(d)
     } catch {
-      addToast('Failed to load dataset', 'error')
+      addToast('Could not load dataset', 'error')
     } finally {
       setLoading(false)
     }
@@ -102,7 +102,7 @@ export default function DatasetDetailPage() {
       addToast('Snapshot created', 'success')
       fetchVersions()
     } catch {
-      addToast('Snapshot failed', 'error')
+      addToast('Could not snapshot', 'error')
     } finally {
       setSnapshotting(false)
     }
@@ -115,7 +115,7 @@ export default function DatasetDetailPage() {
       addToast(res.message || 'Version restored', 'success')
       fetchVersions()
     } catch {
-      addToast('Restore failed', 'error')
+      addToast('Could not restore', 'error')
     } finally {
       setRestoreTarget(null)
     }
@@ -154,7 +154,7 @@ export default function DatasetDetailPage() {
       addToast('Renamed', 'success')
       setRenaming(false)
     } catch {
-      addToast('Rename failed', 'error')
+      addToast('Could not rename', 'error')
     }
   }
 
@@ -165,7 +165,7 @@ export default function DatasetDetailPage() {
       addToast(`Deleted "${dataset.name}"`, 'info')
       router.push('/datasets')
     } catch {
-      addToast('Delete failed', 'error')
+      addToast('Could not delete', 'error')
     } finally {
       setShowDelete(false)
     }
@@ -178,7 +178,7 @@ export default function DatasetDetailPage() {
       downloadBlob(blob, `${dataset.name || dataset.id}.jsonl`)
       addToast('Exported', 'success')
     } catch {
-      addToast('Export failed', 'error')
+      addToast('Could not export', 'error')
     }
   }
 
@@ -204,7 +204,7 @@ export default function DatasetDetailPage() {
       downloadBlob(new Blob([csv], { type: 'text/csv' }), `${dataset.name || dataset.id}.csv`)
       addToast('Exported as CSV', 'success')
     } catch {
-      addToast('CSV export failed', 'error')
+      addToast('Could not csv export', 'error')
     }
   }
 
@@ -220,7 +220,7 @@ export default function DatasetDetailPage() {
       setConvertResult(res)
       addToast('Converted to chat format', 'success')
     } catch {
-      addToast('Conversion failed', 'error')
+      addToast('Could not conversion', 'error')
     } finally {
       setConverting(false)
     }
@@ -285,6 +285,7 @@ export default function DatasetDetailPage() {
                       onClick={() => setExportOpen(!exportOpen)}
                       onKeyDown={(e) => { if (e.key === 'Escape') setExportOpen(false) }}
                       aria-expanded={exportOpen}
+                      aria-pressed={exportOpen}
                       aria-haspopup="true"
                     >
                       <IconDownload className="h-4 w-4 mr-1" /> Export <IconChevronDown className="h-3 w-3 ml-1" />
@@ -292,10 +293,10 @@ export default function DatasetDetailPage() {
                     {exportOpen && (
                       <div className="absolute right-0 top-full mt-1 z-50">
                         <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-                          <button onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button type="button" onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
                             Export as JSONL
                           </button>
-                          <button onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button type="button" onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
                             Export as CSV
                           </button>
                         </div>

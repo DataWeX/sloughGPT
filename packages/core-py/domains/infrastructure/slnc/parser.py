@@ -18,6 +18,7 @@ import logging
 import mmap
 import os
 import struct
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -150,10 +151,9 @@ class SLNCParser:
         offset, shape, dtype, crc = self._tensor_map[name]
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
 
-        # Copy from mmap to avoid segfaults when mmap is closed/GC'd
-        # while numpy arrays still reference the pages
-        data = self._mm[offset:offset + nbytes]
-        arr = np.frombuffer(bytes(data), dtype=dtype).reshape(shape).copy()
+        # np.frombuffer with mmap slice, .copy() creates independent array
+        # (avoids extra bytes() intermediate copy)
+        arr = np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape).copy()
 
         # Optional integrity check
         if self._verify:
@@ -163,6 +163,43 @@ class SLNCParser:
                 raise ValueError(f"Checksum mismatch for {name}: expected {crc:#x}, got {actual_crc:#x}")
 
         return arr
+
+    def get_tensor_info(self, name: str) -> Tuple[int, Tuple[int, ...], np.dtype, int]:
+        """Get tensor metadata without reading data.
+
+        Args:
+            name: Tensor name
+
+        Returns:
+            (offset, shape, dtype, crc) — file offset, array shape, element dtype, CRC32
+
+        Raises:
+            KeyError: if tensor name not found
+        """
+        if name not in self._tensor_map:
+            raise KeyError(f"Unknown tensor: {name}")
+        return self._tensor_map[name]
+
+    def read_tensor_region(self, name: str) -> np.ndarray:
+        """Read tensor directly from mmap into numpy array.
+
+        Like get_tensor() but returns a writable copy that can be assigned
+        directly to model parameter buffers.
+
+        Args:
+            name: Tensor name
+
+        Returns:
+            numpy array — writable copy of mmap data
+        """
+        offset, shape, dtype, crc = self.get_tensor_info(name)
+        nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
+        return np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape).copy()
+
+    @property
+    def tensor_names(self) -> List[str]:
+        """List of all tensor names in the file."""
+        return list(self._tensor_map.keys())
 
     def get_block(self, layer_idx: int) -> Dict[str, np.ndarray]:
         """Get all weights for a transformer block.
@@ -187,6 +224,30 @@ class SLNCParser:
     def get_weights_dict(self) -> Dict[str, np.ndarray]:
         """Get all weights as a dict (backward compatibility)."""
         return {name: self.get_tensor(name) for name in self._tensor_map}
+
+    def get_weights_dict_parallel(self, max_workers: Optional[int] = None) -> Dict[str, np.ndarray]:
+        """Get all weights as a dict using parallel tensor loading.
+
+        Numpy operations release the GIL, so a thread pool can load multiple
+        tensors concurrently. For models with many tensors (e.g. 0.5B+),
+        this can significantly reduce wall-clock load time on multi-core CPUs.
+
+        Args:
+            max_workers: Thread pool size. Defaults to min(32, os.cpu_count() + 4).
+
+        Returns:
+            Dict mapping tensor names → numpy arrays (copies from mmap).
+        """
+        names = list(self._tensor_map.keys())
+
+        def _load(name):
+            return name, self.get_tensor(name)
+
+        result = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            for name, arr in pool.map(lambda n: _load(n), names):
+                result[name] = arr
+        return result
 
     def release_file_pages(self) -> bool:
         """Discard resident file-backed pages back to the OS.
@@ -274,24 +335,24 @@ class SLNCParser:
         try:
             if self._mm is not None:
                 self._mm.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("mmap close failed: %s", exc)
         try:
             os.close(self._fd)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("fd close failed: %s", exc)
         self._mm = None
 
     def __del__(self):
         try:
             if self._mm is not None:
                 self._mm.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("mmap close failed in __del__: %s", exc)
         try:
             os.close(self._fd)
-        except Exception:
-            pass
+        except OSError as exc:
+            logger.debug("fd close failed in __del__: %s", exc)
 
     def __repr__(self) -> str:
         return (

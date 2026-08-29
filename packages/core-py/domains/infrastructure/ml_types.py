@@ -19,6 +19,10 @@ Usage:
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger("slo.infrastructure.ml_types")
+
 import platform
 import sys
 from typing import Any, Optional, Tuple, Union
@@ -89,8 +93,8 @@ def dtype(name_or_value: Any) -> np.dtype:
         # torch.float32.numpy() → np.float32
         try:
             return name_or_value.numpy()
-        except Exception:
-            pass
+        except (RuntimeError, AttributeError) as exc:
+            logger.debug("numpy conversion failed: %s", exc)
     # Try to use as-is (might be a numpy dtype already)
     return np.dtype(name_or_value)
 

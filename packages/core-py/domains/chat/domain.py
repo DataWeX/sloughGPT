@@ -158,12 +158,12 @@ class ChatDomain:
                     temperature=temperature,
                     session_id=session_id,
                 ),
-                timeout=60.0,
+                timeout=300.0,
             )
             return result or ""
 
         except asyncio.TimeoutError:
-            return "[Error: Generation timed out after 60 seconds]"
+            return "[Error: Generation timed out after 300 seconds]"
         except Exception as e:
             logger.error("Chat generation failed: %s", e, exc_info=True)
             return f"[Error: {type(e).__name__}: {str(e)}]"

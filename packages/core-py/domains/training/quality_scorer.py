@@ -226,3 +226,92 @@ def score_batch(pairs: List[Dict[str, str]]) -> List[float]:
         score_pair(p.get("user_msg", ""), p.get("assistant_msg", ""))
         for p in pairs
     ]
+
+
+def score_text_chunk(text: str) -> float:
+    """Score a raw text chunk for training quality (0-5 scale).
+
+    Evaluates repetition, language quality, and vocabulary diversity
+    of a text segment. Used to assess training data quality when
+    (user, assistant) pair structure is not available.
+
+    Args:
+        text: Raw text chunk to score.
+
+    Returns:
+        Quality score from 0.0 (lowest) to 5.0 (highest).
+    """
+    if not text or len(text) < 20:
+        return 0.0
+
+    repetition = _repetition_score(text)
+    language = _language_quality_score(text)
+
+    words = _tokenize(text)
+    if len(words) > 10:
+        unique_ratio = len(set(words)) / len(words)
+        diversity = min(1.0, unique_ratio * 1.5)
+    else:
+        diversity = 0.5
+
+    combined = (repetition * 0.4 + language * 0.3 + diversity * 0.3)
+    score = round(combined * 5, 1)
+    return max(0.0, min(5.0, score))
+
+
+def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
+    """Compute aggregate quality metrics for a training text corpus.
+
+    Samples chunks from the text and computes average quality scores,
+    giving an overall picture of training data quality.
+
+    Args:
+        text: Full training text corpus.
+        sample_size: Number of chunks to sample for scoring.
+
+    Returns:
+        Dict with avg_quality, repetition_rate, diversity, language_quality
+        on a 0-5 scale.
+    """
+    if not text or len(text) < 100:
+        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
+
+    chunk_size = min(500, len(text) // max(1, sample_size))
+    if chunk_size < 50:
+        chunk_size = min(50, len(text))
+
+    chunks = []
+    step = max(1, (len(text) - chunk_size) // max(1, sample_size - 1))
+    for i in range(0, min(len(text), chunk_size * sample_size), step):
+        end = min(i + chunk_size, len(text))
+        if end - i >= 50:
+            chunks.append(text[i:end])
+        if len(chunks) >= sample_size:
+            break
+
+    if not chunks:
+        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
+
+    qualities = []
+    repetitions = []
+    diversities = []
+    languages = []
+
+    for chunk in chunks:
+        words = _tokenize(chunk)
+        rep = _repetition_score(chunk)
+        lang = _language_quality_score(chunk)
+        div = min(1.0, (len(set(words)) / max(1, len(words))) * 1.5) if len(words) > 10 else 0.5
+
+        combined = (rep * 0.4 + lang * 0.3 + div * 0.3)
+        qualities.append(round(combined * 5, 1))
+        repetitions.append(rep)
+        diversities.append(div)
+        languages.append(lang)
+
+    return {
+        "avg_quality": round(sum(qualities) / len(qualities), 2),
+        "repetition_rate": round(1.0 - (sum(repetitions) / len(repetitions)), 2),
+        "diversity": round(sum(diversities) / len(diversities), 2),
+        "language_quality": round(sum(languages) / len(languages), 2),
+    }

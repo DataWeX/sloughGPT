@@ -78,7 +78,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         tags: m.tags,
       })))
     } catch (err) {
-      _log.error('Failed to fetch models', { exception: String(err) })
+      _log.error('Could not fetch models', { exception: String(err) })
     }
   }, [])
 
@@ -154,7 +154,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      await modelController.unloadModel(modelId)
+      await modelController.unloadModel()
 
       await refreshModels()
       await refreshHealth()

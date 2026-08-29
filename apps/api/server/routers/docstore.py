@@ -19,11 +19,12 @@ Collections:
 
 import os
 from pathlib import Path as PathLib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Path, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 
-from schemas.common import success_response, raise_error
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
 from mogdb import MogDB
 
 COLLECTIONS = frozenset({
@@ -100,154 +101,137 @@ class DocStoreRouter:
         ),
         limit: Optional[int] = Query(default=None, gt=0, description="Max results"),
     ) -> dict:
-        """List all documents in a collection, optionally sorted/limited.
-
-        Args:
-            collection: Whitelisted collection name.
-            sort: Field name to sort on (any document field).
-            direction: 1 = ascending, -1 = descending.
-            limit: Maximum number of documents to return.
-
-        Returns:
-            success_response with a list of docs (MogDB meta stripped).
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        sort_by = [(sort, direction)] if sort else None
-        docs = _collection(collection).find(sort=sort_by, limit=limit)
-        return success_response(data=[_strip_meta(d) for d in docs])
+        """List all documents in a collection, optionally sorted/limited."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            sort_by = [(sort, direction)] if sort else None
+            docs = _collection(collection).find(sort=sort_by, limit=limit)
+            return success_response(data=[_strip_meta(d) for d in docs])
+        except Exception as e:
+            classify_and_raise(e, source="docstore.list")
 
     def get_doc(
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
     ) -> dict:
-        """Get a single document by ``doc_id``.
-
-        Returns:
-            success_response with the doc (meta stripped) or ``None``.
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        doc = _collection(collection).find_one({"_id": doc_id})
-        return success_response(data=_strip_meta(doc) if doc else None)
+        """Get a single document by ``doc_id``."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            doc = _collection(collection).find_one({"_id": doc_id})
+            return success_response(data=_strip_meta(doc) if doc else None)
+        except Exception as e:
+            classify_and_raise(e, source="docstore.get")
 
     def put_doc(
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
         body: Dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Upsert a document: replace it if it exists, otherwise insert.
-
-        Args:
-            collection: Whitelisted collection name.
-            doc_id: Document key (stored as ``_id``).
-            body: Full document body; the client's ``id`` field is preserved.
-
-        Returns:
-            success_response with ``{"id": doc_id, "created": bool}``.
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        coll = _collection(collection)
-        doc = dict(body)
-        doc["_id"] = doc_id
-        created = coll.find_one({"_id": doc_id}) is None
-        if not created:
-            coll.delete_one({"_id": doc_id})
-        coll.insert_one(doc)
-        return success_response(data={"id": doc_id, "created": created})
+        """Upsert a document: replace it if it exists, otherwise insert."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            coll = _collection(collection)
+            doc = dict(body)
+            doc["_id"] = doc_id
+            created = coll.find_one({"_id": doc_id}) is None
+            if not created:
+                coll.delete_one({"_id": doc_id})
+            coll.insert_one(doc)
+            return success_response(data={"id": doc_id, "created": created})
+        except Exception as e:
+            classify_and_raise(e, source="docstore.put")
 
     def patch_doc(
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
         body: Dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Merge fields into an existing document (no-op if it does not exist).
-
-        Mirrors Dexie ``Table.update``: a missing document is not created.
-
-        Returns:
-            success_response with ``{"modified": 0|1}``.
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        update = dict(body)
-        update.pop("_id", None)
-        if not update:
-            return success_response(data={"modified": 0})
-        modified = _collection(collection).update_one({"_id": doc_id}, {"$set": update})
-        return success_response(data={"modified": modified})
+        """Merge fields into an existing document (no-op if it does not exist)."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            update = dict(body)
+            update.pop("_id", None)
+            if not update:
+                return success_response(data={"modified": 0})
+            modified = _collection(collection).update_one({"_id": doc_id}, {"$set": update})
+            return success_response(data={"modified": modified})
+        except Exception as e:
+            classify_and_raise(e, source="docstore.patch")
 
     def delete_doc(
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Delete a single document by ``doc_id``.
+        """Delete a single document by ``doc_id``."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            deleted = _collection(collection).delete_one({"_id": doc_id})
+            safe_audit_log("docstore.delete", resource=f"{collection}/{doc_id}")
+            return success_response(data={"deleted": bool(deleted)})
+        except Exception as e:
+            classify_and_raise(e, source="docstore.delete")
 
-        Returns:
-            success_response with ``{"deleted": bool}``.
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        deleted = _collection(collection).delete_one({"_id": doc_id})
-        return success_response(data={"deleted": bool(deleted)})
-
-    def clear_collection(self, collection: str = Path(...)) -> dict:
-        """Delete every document in a collection (drops its journal files).
-
-        Returns:
-            success_response with ``{"cleared": True}``.
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        _collection(collection).drop()
-        return success_response(data={"cleared": True})
+    def clear_collection(self, collection: str = Path(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Delete every document in a collection."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            _collection(collection).drop()
+            safe_audit_log("docstore.clear", resource=collection)
+            return success_response(data={"cleared": True})
+        except Exception as e:
+            classify_and_raise(e, source="docstore.clear")
 
     def bulk_put(
         self,
         collection: str = Path(...),
         body: Dict[str, Any] = Body(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Upsert many documents in one request.
-
-        Args:
-            collection: Whitelisted collection name.
-            body: ``{"docs": [...]}``; each doc must carry an ``id`` field.
-
-        Returns:
-            success_response with ``{"imported": n}``.
-        """
-        err = self._validate(collection)
-        if err:
-            return err
-        docs = body.get("docs")
-        if not isinstance(docs, list):
-            raise_error("body.docs must be an array", code="E_BAD_REQUEST")
-        coll = _collection(collection)
-        count = 0
-        for raw in docs:
-            if not isinstance(raw, dict):
-                continue
-            doc_id = raw.get("id")
-            if not doc_id:
-                continue
-            doc = dict(raw)
-            doc["_id"] = doc_id
-            if coll.find_one({"_id": doc_id}):
-                coll.delete_one({"_id": doc_id})
-            coll.insert_one(doc)
-            count += 1
-        return success_response(data={"imported": count})
+        """Upsert many documents in one request."""
+        try:
+            err = self._validate(collection)
+            if err:
+                return err
+            docs = body.get("docs")
+            if not isinstance(docs, list):
+                raise_error("body.docs must be an array", code="E_BAD_REQUEST")
+            coll = _collection(collection)
+            count = 0
+            for raw in docs:
+                if not isinstance(raw, dict):
+                    continue
+                doc_id = raw.get("id")
+                if not doc_id:
+                    continue
+                doc = dict(raw)
+                doc["_id"] = doc_id
+                if coll.find_one({"_id": doc_id}):
+                    coll.delete_one({"_id": doc_id})
+                coll.insert_one(doc)
+                count += 1
+            safe_audit_log("docstore.bulk_put", resource=collection, detail=f"imported={count}")
+            return success_response(data={"imported": count})
+        except Exception as e:
+            classify_and_raise(e, source="docstore.bulk_put")
 
 
 router = DocStoreRouter().router

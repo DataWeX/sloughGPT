@@ -2,7 +2,7 @@
 ShellLogger — ANSI output for the interactive REPL.
 
 Inherits Logger and routes records through ANSI escape codes for
-in-terminal display.  Designed for the shell REPL where Rich is
+in-terminal display.  Designed for the shell REPL where external packages
 not available and raw ANSI is the output model.
 
 Usage::

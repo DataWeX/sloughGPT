@@ -10,7 +10,7 @@ Thread-safe via ``threading.Lock``.  No external dependencies (no Redis).
 import time
 import threading
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class RateLimiter:
@@ -54,7 +54,8 @@ class RateLimiter:
 
 # ── Singleton ────────────────────────────────────────────────────────
 
-_limiter: RateLimiter = None
+_limiter: Optional[RateLimiter] = None
+_rate_limiter_lock = threading.Lock()
 
 
 def get_rate_limiter(
@@ -63,8 +64,17 @@ def get_rate_limiter(
 ) -> RateLimiter:
     global _limiter
     if _limiter is None:
-        _limiter = RateLimiter(max_requests, window_seconds)
+        with _rate_limiter_lock:
+            if _limiter is None:
+                _limiter = RateLimiter(max_requests, window_seconds)
     return _limiter
+
+
+def reset_rate_limiter() -> None:
+    """Reset the singleton (for testing)."""
+    global _limiter
+    with _rate_limiter_lock:
+        _limiter = None
 
 
 # ── FastAPI Middleware ────────────────────────────────────────────────

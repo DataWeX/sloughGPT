@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => (open ? <div>{children}</div> : null),
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -74,7 +75,7 @@ describe('DatasetImportModal', () => {
     expect(screen.getByText('HuggingFace')).toBeDefined()
     expect(screen.getByText('Kaggle')).toBeDefined()
     expect(screen.getByText('URL')).toBeDefined()
-    expect(screen.getByText('Server Path')).toBeDefined()
+    expect(screen.getByText('Folder Path')).toBeDefined()
   })
 
   it('renders name input', () => {
@@ -102,8 +103,8 @@ describe('DatasetImportModal', () => {
 
   it('shows Server Path input when Local source selected', () => {
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    fireEvent.click(screen.getByText('Server Path'))
-    expect(screen.getByLabelText('Server Path')).toBeDefined()
+    fireEvent.click(screen.getByText('Folder Path'))
+    expect(screen.getByLabelText('Folder Path')).toBeDefined()
   })
 
   it('shows Kaggle dataset ID input when Kaggle source selected', () => {
@@ -137,10 +138,10 @@ describe('DatasetImportModal', () => {
 
   it('shows error for empty server path', async () => {
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    fireEvent.click(screen.getByText('Server Path'))
+    fireEvent.click(screen.getByText('Folder Path'))
     fireEvent.click(screen.getByText('Import'))
     await waitFor(() => {
-      expect(screen.getByText('Server path is required')).toBeDefined()
+      expect(screen.getByText('Folder path is required')).toBeDefined()
     })
   })
 
@@ -246,8 +247,8 @@ describe('DatasetImportModal', () => {
 
   it('auto-populates name from path for local source', () => {
     render(<DatasetImportModal open={true} onOpenChange={() => {}} onImportComplete={() => {}} />)
-    fireEvent.click(screen.getByText('Server Path'))
-    const pathInput = screen.getByLabelText('Server Path')
+    fireEvent.click(screen.getByText('Folder Path'))
+    const pathInput = screen.getByLabelText('Folder Path')
     fireEvent.change(pathInput, { target: { value: '/Users/test/my_data' } })
     expect(screen.getByDisplayValue('my_data')).toBeDefined()
   })
@@ -257,8 +258,8 @@ describe('DatasetImportModal', () => {
     const { rerender } = render(
       <DatasetImportModal open={true} onOpenChange={onClose} onImportComplete={() => {}} />,
     )
-    fireEvent.click(screen.getByText('Server Path'))
-    fireEvent.change(screen.getByLabelText('Server Path'), { target: { value: '/some/path' } })
+    fireEvent.click(screen.getByText('Folder Path'))
+    fireEvent.change(screen.getByLabelText('Folder Path'), { target: { value: '/some/path' } })
     rerender(<DatasetImportModal open={true} onOpenChange={onClose} onImportComplete={() => {}} />)
     fireEvent.click(screen.getByText('GitHub'))
     expect(screen.getByLabelText('Search for a repository')).toBeDefined()

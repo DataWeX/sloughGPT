@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 import { formatTokens } from './TrafficCard'
@@ -8,7 +9,7 @@ interface ModelMetricsCardProps {
   liveHealth: LiveHealthSnapshot | null
 }
 
-export function ModelMetricsCard({ liveHealth }: ModelMetricsCardProps) {
+export const ModelMetricsCard = memo(function ModelMetricsCard({ liveHealth }: ModelMetricsCardProps) {
   const metrics = liveHealth?.model_metrics ?? []
   if (metrics.length === 0) return null
 
@@ -30,4 +31,4 @@ export function ModelMetricsCard({ liveHealth }: ModelMetricsCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

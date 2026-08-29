@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
 import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
 
 interface AuditLog {
   event_type: string
@@ -18,7 +19,8 @@ interface AuditLog {
 }
 
 interface AuditResponse {
-  data?: { logs?: AuditLog[] }
+  logs?: AuditLog[]
+  count?: number
 }
 
 function mergeLogs(a: AuditLog[], b: AuditLog[]): AuditLog[] {
@@ -47,23 +49,23 @@ export default function SecurityPage() {
     return f ? `&event_type=${encodeURIComponent(f)}` : ''
   }
 
-  const fetchData = async (useHistory = false) => {
+  const fetchData = useCallback(async (useHistory = false) => {
     setLoading(true)
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
       const [logsRes, keysRes] = await Promise.all([
-        apiGet<AuditResponse>(auditUrl).catch(() => null),
-        apiGet<{ data?: { count: number; configured: boolean } } | { count: number; configured: boolean }>('/security/keys').catch(() => null),
+        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('Could not audit log fetch', e); return null }),
+        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('Could not security keys fetch', e); return null }),
       ])
-      setLogs(logsRes?.data?.logs ?? [])
-      const keysData = keysRes && 'data' in keysRes && keysRes.data ? keysRes.data : keysRes
-      setKeyInfo(keysData as { count: number; configured: boolean } | null)
+      setLogs(logsRes?.logs ?? [])
+      const keysData = keysRes && 'count' in keysRes ? keysRes : null
+      setKeyInfo(keysData)
     } catch {
-      addToast('Failed to load security data', 'error')
+      addToast('Could not load security data', 'error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const toggleHistory = () => {
     const next = !historyMode
@@ -82,16 +84,16 @@ export default function SecurityPage() {
       if (!oldest) return
       const before = encodeURIComponent(oldest)
       const res = await apiGet<AuditResponse>(`/security/audit?history=true&limit=100&before=${before}${eventParam()}`)
-      const older = res?.data?.logs ?? []
+      const older = res?.logs ?? []
       setLogs(prev => mergeLogs(prev, older))
     } catch {
-      addToast('Failed to load older audit logs', 'error')
+      addToast('Could not load older audit logs', 'error')
     } finally {
       setLoadingMore(false)
     }
   }
 
-  useEffect(() => { fetchData(false) }, [])
+  useEffect(() => { fetchData(false) }, [fetchData])
 
   const filteredLogs = filter.trim()
     ? logs.filter(l => l.event_type?.toLowerCase().includes(filter.toLowerCase()))
@@ -101,10 +103,10 @@ export default function SecurityPage() {
     return (
       <PageContainer title="Security" subtitle="Audit logs & API keys" loadingCards={4}>
         <KpiGrid>
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
-          <StatCard label="Loading" value="..." />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
         <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>

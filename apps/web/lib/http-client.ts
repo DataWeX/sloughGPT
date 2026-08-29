@@ -9,9 +9,29 @@ export class ApiError extends Error {
     this.name = 'ApiError'
   }
 }
+import { logger } from './dev-log'
 
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
+
+// ── Correlation ID propagation ───────────────────────────────────────
+// Generate a short UUID for each request so the frontend can correlate
+// with server-side logs via `X-Correlation-ID`. The server reads this
+// header and includes it in every log line.
+
+function _corrId(): string {
+  // 8-char hex ID matching server-side format
+  return Math.random().toString(16).slice(2, 10)
+}
+
+// Store last N correlation IDs for debugging
+const _recentCorrIds: Array<{ id: string; url: string; ts: number }> = []
+const MAX_RECENT = 20
+
+/** Get the last N correlation IDs for debugging. */
+export function getRecentCorrelationIds(): Array<{ id: string; url: string; ts: number }> {
+  return _recentCorrIds.slice()
+}
 
 export interface RequestOptions {
   signal?: AbortSignal
@@ -35,6 +55,7 @@ async function request<T>(
   opts?: RequestOptions,
 ): Promise<T> {
   const apiUrl = `${PUBLIC_API_URL}${url}`
+  const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (!opts?.raw) headers['Content-Type'] = 'application/json'
   if (opts?.headers) Object.assign(headers, opts.headers)
@@ -42,6 +63,13 @@ async function request<T>(
     const token = useAuthStore.getState().token
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
+  headers['X-Correlation-ID'] = corrId
+
+  // Track for debugging
+  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
+
+  logger.debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
   const timeoutMs = opts?.timeout ?? DEFAULT_TIMEOUT_MS
   let retries = 0
@@ -62,6 +90,8 @@ async function request<T>(
       })
       if (timer) clearTimeout(timer)
 
+      logger.debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, { corrId, method, url, status: res.status })
+
       if (!res.ok) {
         const status = res.status
         const isRetryable = RETRYABLE_STATUSES.has(status)
@@ -78,7 +108,7 @@ async function request<T>(
         let detail: string | undefined
         try { const j = JSON.parse(text); detail = j.detail ?? j.message ?? j.error }
         catch { detail = text || res.statusText }
-        const message = Array.isArray(detail) ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ') : detail || 'Request failed'
+        const message = Array.isArray(detail) ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ') : detail || 'Could not request'
 
         if (!opts?.silent) {
           const apiErr = new ApiError(message, status, { raw: text }, requestId)
@@ -120,7 +150,7 @@ async function request<T>(
       const isConnRefused = message_ === 'Failed to fetch' || cause?.code === 'ECONNREFUSED'
       const message = isTimeout
         ? `Request timed out after ${timeoutMs / 1000}s`
-        : isConnRefused ? 'Connection unavailable — server may be starting up' : (message_ || 'Request failed')
+        : isConnRefused ? 'Connection unavailable — server may be starting up' : (message_ || 'Could not request')
 
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
@@ -156,9 +186,24 @@ async function request<T>(
   }
 }
 
+// In-flight GET dedup: concurrent identical GETs share one network round-trip.
+// Skipped when a signal is provided (caller owns cancellation semantics).
+const _inflight = new Map<string, Promise<unknown>>()
+
 export async function apiGet<T>(url: string, params?: Record<string, string>, opts?: RequestOptions): Promise<T> {
   const qs = params ? '?' + new URLSearchParams(params).toString() : ''
-  return request<T>('GET', url + qs, undefined, opts)
+  const fullUrl = url + qs
+  if (!opts?.signal) {
+    const existing = _inflight.get(fullUrl)
+    if (existing) return existing as Promise<T>
+  }
+  const p = request<T>('GET', fullUrl, undefined, opts)
+  if (!opts?.signal) _inflight.set(fullUrl, p)
+  try {
+    return await p
+  } finally {
+    if (!opts?.signal) _inflight.delete(fullUrl)
+  }
 }
 
 export async function apiPost<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
@@ -225,6 +270,7 @@ export interface SSEEvent {
   meta?: Record<string, unknown>
   message?: string
   error?: string
+  id?: string
 }
 
 interface AuthFetchOptions extends RequestInit {
@@ -237,6 +283,7 @@ interface AuthFetchOptions extends RequestInit {
  * unsuitable.
  */
 export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<Response> {
+  const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (!opts?.noAuth) {
     const token = useAuthStore.getState().token
@@ -249,6 +296,9 @@ export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<R
       Object.assign(headers, opts.headers)
     }
   }
+  headers['X-Correlation-ID'] = corrId
+  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
   return fetch(url, { ...opts, headers })
 }
 
@@ -257,6 +307,7 @@ interface StreamSSEOptions {
   body?: unknown
   signal?: AbortSignal
   noAuth?: boolean
+  lastEventId?: string
 }
 
 /**
@@ -266,22 +317,42 @@ interface StreamSSEOptions {
  */
 export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGenerator<SSEEvent> {
   const method = opts?.method ?? 'POST'
+  const corrId = _corrId()
   const headers: Record<string, string> = {}
   if (method !== 'GET') headers['Content-Type'] = 'application/json'
   if (!opts?.noAuth) {
     const token = useAuthStore.getState().token
     if (token) headers['Authorization'] = `Bearer ${token}`
   }
+  if (opts?.lastEventId) {
+    headers['Last-Event-ID'] = opts.lastEventId
+  }
+  headers['X-Correlation-ID'] = corrId
 
-  const res = await fetch(`${PUBLIC_API_URL}${url}`, {
-    method,
-    headers,
-    body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
-    signal: opts?.signal,
-  })
+  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
+
+  logger.debug(`>>> SSE ${method} ${url} corr=${corrId}`, { corrId, method, url })
+
+  let res: Response
+  try {
+    res = await fetch(`${PUBLIC_API_URL}${url}`, {
+      method,
+      headers,
+      body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
+      signal: opts?.signal,
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Network error'
+    logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
+    yield { status: 'error', message: `Connection error: ${msg}` }
+    return
+  }
+
+  logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, { corrId, status: res.status })
 
   if (!res.ok || !res.body) {
-    yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}` }
+    yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`, data: { http_status: res.status, error: `HTTP ${res.status}` } }
     return
   }
 
@@ -290,9 +361,16 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
   let buffer = ''
   try {
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
+      let chunk: ReadableStreamReadResult<Uint8Array>
+      try {
+        chunk = await reader.read()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'Read error'
+        yield { status: 'error', message: `Stream disconnected: ${msg}` }
+        return
+      }
+      if (chunk.done) break
+      buffer += decoder.decode(chunk.value, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() || ''
       for (const line of lines) {
@@ -302,7 +380,9 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
         if (!payload || payload === '[DONE]') continue
         try {
           yield JSON.parse(payload) as SSEEvent
-        } catch { /* skip malformed */ }
+        } catch (e) {
+          logger.warning('SSE malformed JSON payload skipped', { payload: payload.slice(0, 80), exception: String(e) })
+        }
       }
     }
     // Drain remaining buffer

@@ -45,7 +45,7 @@ describe('useTrainingDatasets', () => {
     const { result } = renderHook(() => useTrainingDatasets(addToast))
     await act(async () => { await result.current.fetchDatasets() })
     expect(result.current.datasets).toEqual([])
-    expect(addToast).toHaveBeenCalledWith('Failed to fetch datasets', 'error')
+    expect(addToast).toHaveBeenCalledWith('Could not fetch datasets', 'error')
   })
 
   it('setSelectedDataset updates selectedDataset', () => {

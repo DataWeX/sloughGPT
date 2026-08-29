@@ -38,6 +38,8 @@ def reset_executor():
 def client():
     app = FastAPI()
     app.include_router(router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -94,8 +96,8 @@ class TestExecutorEndpoints:
         from domains.training.executor import get_training_executor
         get_training_executor()  # ensure initialized
         resp = client.get("/system/executor/nonexistent")
-        data = resp.json()["data"]
-        assert "not found" in data["error"]
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["error"]
 
     def test_get_result_completed_job(self, client):
         import numpy as np
@@ -130,10 +132,9 @@ class TestExecutorEndpoints:
         time.sleep(0.05)
 
         resp = client.get("/system/executor/run_res/result")
-        data = resp.json()["data"]
-        assert "error" in data
+        assert resp.status_code == 400
+        assert "error" in resp.json()
         evt.set()
-        time.sleep(0.1)
 
     def test_purge_old_jobs(self, client):
         from domains.training.executor import get_training_executor
@@ -210,7 +211,7 @@ class TestExecutorEndpoints:
         assert data["initialized"] is False
 
         resp = client.get("/system/executor/any_id")
-        assert resp.status_code == 200
+        assert resp.status_code == 503
 
         resp = client.post("/system/executor/purge?max_age_s=1")
         data = resp.json()["data"]

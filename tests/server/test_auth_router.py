@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.auth import AuthRouter
 
 
@@ -18,6 +19,7 @@ def router():
 @pytest.fixture
 def app(router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router.router)
     return _app
 
@@ -35,8 +37,9 @@ def _make_jwt_mock():
 
 class TestRegister:
     def test_registers_user(self, router, client):
-        router._load_users = MagicMock(return_value={})
-        router._save_users = MagicMock()
+        router._users.find_one = MagicMock(return_value=None)
+        router._users.find = MagicMock(return_value=[])
+        router._save_user = MagicMock()
         router._hash_password = MagicMock(return_value="v1:abc:def")
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
@@ -48,18 +51,19 @@ class TestRegister:
         assert data["user"]["username"] == "alice"
 
     def test_rejects_duplicate_username(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "x"},
-        })
+        router._users.find_one = MagicMock(return_value={"_id": "uid1", "username": "alice"})
         resp = client.post("/auth/register", json={
             "username": "alice", "email": "a@b.com", "password": "secret",
         })
         assert resp.status_code == 409
 
     def test_rejects_duplicate_email(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "x"},
-        })
+        router._users.find_one = MagicMock(return_value=None)
+        router._users.find = MagicMock(return_value=[])
+        router._save_user = MagicMock()
+        router._hash_password = MagicMock(return_value="v1:abc:def")
+        router._get_auth_deps = MagicMock(return_value=
+            (["key"], 24, _make_jwt_mock(), MagicMock()))
         resp = client.post("/auth/register", json={
             "username": "bob", "email": "a@b.com", "password": "secret",
         })
@@ -72,8 +76,9 @@ class TestRegister:
     def test_register_returns_token(self, router, client):
         jwt = _make_jwt_mock()
         jwt.create_token.return_value = "reg_token"
-        router._load_users = MagicMock(return_value={})
-        router._save_users = MagicMock()
+        router._users.find_one = MagicMock(return_value=None)
+        router._users.find = MagicMock(return_value=[])
+        router._save_user = MagicMock()
         router._hash_password = MagicMock(return_value="v1:abc:def")
         router._get_auth_deps = MagicMock(return_value=(["key"], 24, jwt, MagicMock()))
         resp = client.post("/auth/register", json={
@@ -82,8 +87,9 @@ class TestRegister:
         assert resp.json()["token"] == "reg_token"
 
     def test_register_user_excludes_password_hash(self, router, client):
-        router._load_users = MagicMock(return_value={})
-        router._save_users = MagicMock()
+        router._users.find_one = MagicMock(return_value=None)
+        router._users.find = MagicMock(return_value=[])
+        router._save_user = MagicMock()
         router._hash_password = MagicMock(return_value="v1:abc:def")
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
@@ -94,8 +100,9 @@ class TestRegister:
 
     def test_register_persists_v1_hash(self, router, client):
         saved = {}
-        router._load_users = MagicMock(return_value={})
-        router._save_users = MagicMock(side_effect=lambda users: saved.update(users))
+        router._users.find_one = MagicMock(return_value=None)
+        router._users.find = MagicMock(return_value=[])
+        router._save_user = MagicMock(side_effect=lambda uid, data: saved.update({uid: data}))
         router._hash_password = MagicMock(return_value="v1:abc:def")
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
@@ -127,11 +134,10 @@ class TestRegister:
 
 class TestLogin:
     def test_login_success(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {
-                "username": "alice", "email": "a@b.com",
-                "password_hash": "v1:salt:" + "ab" * 32,
-            },
+        router._users.find_one = MagicMock(return_value={
+            "_id": "uid1",
+            "username": "alice", "email": "a@b.com",
+            "password_hash": "v1:salt:" + "ab" * 32,
         })
         router._verify_password = MagicMock(return_value=True)
         router._get_auth_deps = MagicMock(return_value=
@@ -143,8 +149,8 @@ class TestLogin:
         assert resp.json()["user"]["username"] == "alice"
 
     def test_login_wrong_password(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "v1:salt:xx"},
+        router._users.find_one = MagicMock(return_value={
+            "_id": "uid1", "username": "alice", "email": "a@b.com", "password_hash": "v1:salt:xx",
         })
         router._verify_password = MagicMock(return_value=False)
         resp = client.post("/auth/login", json={
@@ -153,45 +159,43 @@ class TestLogin:
         assert resp.status_code == 401
 
     def test_login_unknown_user(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "v1:salt:xx"},
-        })
+        router._users.find_one = MagicMock(return_value=None)
         resp = client.post("/auth/login", json={"username": "ghost", "password": "x"})
         assert resp.status_code == 401
 
     def test_login_migrates_legacy_hash(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "legacy"},
+        router._users.find_one = MagicMock(return_value={
+            "_id": "uid1", "username": "alice", "email": "a@b.com", "password_hash": "legacy",
         })
         router._verify_password = MagicMock(return_value=True)
         router._hash_password = MagicMock(return_value="v1:migrated")
-        router._save_users = MagicMock()
+        router._save_user = MagicMock()
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
         resp = client.post("/auth/login", json={"username": "alice", "password": "secret"})
         assert resp.status_code == 200
-        router._save_users.assert_called_once()
+        router._save_user.assert_called_once()
 
     def test_login_missing_fields_422(self, router, client):
         resp = client.post("/auth/login", json={"username": "alice"})
         assert resp.status_code == 422
 
     def test_login_user_missing_password_hash_401(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com"},
+        router._users.find_one = MagicMock(return_value={
+            "_id": "uid1", "username": "alice", "email": "a@b.com",
         })
         resp = client.post("/auth/login", json={"username": "alice", "password": "x"})
         assert resp.status_code == 401
 
     def test_login_failed_migration_does_not_save(self, router, client):
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "legacy"},
+        router._users.find_one = MagicMock(return_value={
+            "_id": "uid1", "username": "alice", "email": "a@b.com", "password_hash": "legacy",
         })
         router._verify_password = MagicMock(return_value=False)
-        router._save_users = MagicMock()
+        router._save_user = MagicMock()
         resp = client.post("/auth/login", json={"username": "alice", "password": "wrong"})
         assert resp.status_code == 401
-        router._save_users.assert_not_called()
+        router._save_user.assert_not_called()
 
     def test_login_overlong_password_422(self, client):
         resp = client.post("/auth/login", json={
@@ -265,9 +269,7 @@ class TestGetMe:
         jwt.verify_token.return_value = {"sub": "uid1"}
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, jwt, MagicMock()))
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "x"},
-        })
+        router._users.find_one = MagicMock(return_value={"_id": "uid1", "username": "alice", "email": "a@b.com"})
         resp = client.get("/auth/me", headers={"Authorization": "Bearer t"})
         assert resp.status_code == 200
         assert resp.json()["username"] == "alice"
@@ -277,7 +279,7 @@ class TestGetMe:
         jwt.verify_token.return_value = {"sub": "nope"}
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, jwt, MagicMock()))
-        router._load_users = MagicMock(return_value={})
+        router._users.find_one = MagicMock(return_value=None)
         resp = client.get("/auth/me", headers={"Authorization": "Bearer t"})
         assert resp.status_code == 401
 
@@ -298,9 +300,7 @@ class TestGetMe:
         jwt.verify_token.return_value = {"sub": "uid1"}
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, jwt, MagicMock()))
-        router._load_users = MagicMock(return_value={
-            "uid1": {"username": "alice", "email": "a@b.com", "password_hash": "x"},
-        })
+        router._users.find_one = MagicMock(return_value={"_id": "uid1", "username": "alice", "email": "a@b.com", "password_hash": "x"})
         resp = client.get("/auth/me", headers={"Authorization": "Bearer t"})
         assert set(resp.json().keys()) == {"id", "username", "email"}
 

@@ -129,7 +129,7 @@ class ResponseTracker:
                 }) + "\n")
 
         self._buffer.clear()
-        logger.info(f"Flushed {len(self._buffer)} responses to {self.current_file}", extra={"tag": "INFRA"})
+        logger.info("Flushed %s responses to %s", len(self._buffer), self.current_file, extra={"tag": "INFRA"})
 
     def get_responses(
         self,
@@ -153,7 +153,8 @@ class ResponseTracker:
                             continue
 
                         responses.append(ResponseLog(**data))
-                    except (json.JSONDecodeError, ValueError, KeyError):
+                    except (json.JSONDecodeError, ValueError, KeyError) as e:
+                        logger.debug("Skipping malformed response log line: %s", e)
                         continue
 
         return responses[-limit:]
@@ -173,7 +174,7 @@ class ResponseTracker:
                     "session_id": entry.session_id,
                 }) + "\n")
 
-        logger.info(f"Exported to {output_path}", extra={"tag": "INFRA"})
+        logger.info("Exported to %s", output_path, extra={"tag": "INFRA"})
         return str(output_path)
 
     def get_stats(self) -> Dict[str, Any]:

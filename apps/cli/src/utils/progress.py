@@ -2,7 +2,7 @@
 Progress bars and spinners for CLI operations.
 
 Provides visual feedback for long-running operations.
-Uses Rich for terminal-formatted progress bars with ETA, speed, and color.
+Uses raw ANSI escape codes for terminal-formatted progress bars with ETA, speed, and color.
 """
 import os
 import sys

@@ -46,6 +46,8 @@ def _mock_manager() -> MagicMock:
 def _app(mr: MultimodalRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(mr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

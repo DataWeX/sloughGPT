@@ -171,3 +171,22 @@ class TestInternalBranchCoverage:
 
     def test_language_high_caps_ratio(self):
         assert _language_quality_score("AAAA BBBB CCCC DDDD EEEE") == pytest.approx(0.5)
+
+    def test_language_all_caps_string(self):
+        """All-caps text should get a low caps-ratio penalty."""
+        score = _language_quality_score("THIS IS ALL CAPS TEXT AND IT IS VERY LOUD AND HARD TO READ")
+        assert score < 0.8  # caps penalty kicks in
+
+    def test_repetition_score_empty_trigrams(self):
+        """3-word string has no trigrams — should still return a valid score."""
+        score = _repetition_score("one two three")
+        assert 0.0 <= score <= 1.0
+
+    def test_length_score_both_short(self):
+        """Both messages under 10 chars → 0.0."""
+        assert _length_score("hi", "yo") == 0.0
+
+    def test_coherence_ratio_very_large(self):
+        """User very short, assistant very long → ratio_score 0.2."""
+        score = _coherence_score("ok", "a" * 5000)
+        assert 0.0 <= score <= 1.0

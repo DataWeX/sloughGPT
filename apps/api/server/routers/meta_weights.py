@@ -1,14 +1,16 @@
 """
 Meta Weights Router - Feedback-driven weight adaptation.
-
-Exposes meta-weight adjustments computed from user feedback history
-and similar-message vector search. Also wired into the inference
-pipeline so generation parameters are automatically tuned per-user.
 """
-from fastapi import APIRouter, Request, HTTPException
+import asyncio
+import logging
+import time as _time
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from schemas.common import success_response
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
+
+logger = logging.getLogger("slo.routers.meta_weights")
 
 
 class GetMetaWeightsRequest(BaseModel):
@@ -37,47 +39,44 @@ class MetaWeightsRouter:
         self.router.add_api_route("/get", self.get_meta_weights, methods=["POST"], response_model=MetaWeightResponse)
         self.router.add_api_route("/stats", self.get_meta_weight_stats, methods=["GET"])
 
-    async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request) -> dict:
-        """Get meta-weight adjustments based on similar past feedback.
-
-        Combines per-user accumulated boosts with pattern-based adjustments
-        from k nearest similar messages in the feedback database.
-
-        Side effects:
-            - reads from feedback database (vector search)
-            - appends to weight history
-        """
-        from domains.feedback import get_meta_weight_manager as _get_manager
-        manager = _get_manager()
-        if manager is None:
-            raise HTTPException(status_code=503, detail="Meta-weight system not available")
-        weights = manager.get_adjustment(
-            user_message=request.user_message, k=request.k or 5, user_id=request.user_id or "default"
-        )
-        return MetaWeightResponse(
-            temperature=weights.temperature,
-            repetition_penalty=weights.repetition_penalty,
-            top_p=weights.top_p,
-            top_k=weights.top_k,
-            style_bias=weights.style_bias,
-            confidence_boost=weights.confidence_boost,
-            based_on_samples=len(manager._weight_history),
-        )
+    async def get_meta_weights(self, request: GetMetaWeightsRequest, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Get meta-weight adjustments based on similar past feedback."""
+        try:
+            _t0 = _time.monotonic()
+            from domains.feedback import get_meta_weight_manager as _get_manager
+            manager = _get_manager()
+            if manager is None:
+                raise_error("Meta-weight system not available", "E_BAD_REQUEST", status_code=503)
+            weights = await asyncio.to_thread(
+                manager.get_adjustment,
+                user_message=request.user_message, k=request.k or 5, user_id=request.user_id or "default",
+            )
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            logger.info("Meta-weights computed in %.1fms (samples=%d)", _elapsed_ms, len(manager._weight_history))
+            safe_audit_log("meta_weights.get", resource=request.user_message[:80], detail=f"elapsed={_elapsed_ms:.0f}ms samples={len(manager._weight_history)}")
+            return MetaWeightResponse(
+                temperature=weights.temperature,
+                repetition_penalty=weights.repetition_penalty,
+                top_p=weights.top_p,
+                top_k=weights.top_k,
+                style_bias=weights.style_bias,
+                confidence_boost=weights.confidence_boost,
+                based_on_samples=len(manager._weight_history),
+            )
+        except Exception as e:
+            classify_and_raise(e, source="meta_weights.get")
 
     async def get_meta_weight_stats(self, req: Request) -> dict:
-        """Get meta-weight system statistics.
-
-        Returns db stats, quality trend, current average weights,
-        and history length.
-
-        Side effects:
-            - reads from feedback database
-        """
-        from domains.feedback import get_meta_weight_manager as _get_manager
-        manager = _get_manager()
-        if manager is None:
-            raise HTTPException(status_code=503, detail="Meta-weight system not available")
-        return success_response(data=manager.get_stats())
+        """Get meta-weight system statistics."""
+        try:
+            from domains.feedback import get_meta_weight_manager as _get_manager
+            manager = _get_manager()
+            if manager is None:
+                raise_error("Meta-weight system not available", "E_BAD_REQUEST", status_code=503)
+            stats = await asyncio.to_thread(manager.get_stats)
+            return success_response(data=stats)
+        except Exception as e:
+            classify_and_raise(e, source="meta_weights.stats")
 
     async def ping(self) -> dict:
         """
@@ -89,7 +88,10 @@ class MetaWeightsRouter:
         Side effects:
             - none
         """
-        return success_response(data={"status": "ok"})
+        try:
+            return success_response(data={"status": "ok"})
+        except Exception as e:
+            classify_and_raise(e, source="meta_weights.ping")
 
 
 router = MetaWeightsRouter().router

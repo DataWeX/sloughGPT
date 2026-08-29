@@ -1,35 +1,32 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { cn, Switch, Button } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
-import { memoryController, type MemoryItem, type MemoryStats } from '@/lib/memory-controller'
-import { subscribeMemoryEvents } from '@/lib/memory-events'
+import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
-import { logger } from '@/lib/dev-log'
+import { useToastStore } from '@/lib/toast-store'
+import { useChatMemory } from './useChatMemory'
+import { useMemoryData } from '@/components/knowledge/useMemoryData'
 
 const MAX_VISIBLE = 8
-const HIGHLIGHT_MS = 4000
-const SEARCH_DEBOUNCE_MS = 300
 
-/**
- * Compact memory panel for the chat tool sidebar. Surfaces what the AI
- * currently remembers (facts it stores automatically as you chat) with the
- * master Remember switch, debounced semantic search, per-item delete, and a
- * confirmed clear. The actual remembering happens in the chat loop.
- */
 export function MemoryTab() {
-  const [stats, setStats] = useState<MemoryStats | null>(null)
-  const [items, setItems] = useState<MemoryItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const addToast = useToastStore(s => s.addToast)
+  const {
+    stats, items, loading, searched, searchResults,
+    setSearch, search, fetchData, setSearchResults, setSearched, setItems,
+  } = useMemoryData()
+
+  const {
+    highlightedId, copiedId, consolidateMsg, consolidating,
+    handleCopy, handleConsolidate, highlightItem, pendingSseFact, consumePendingSseFact,
+  } = useChatMemory(fetchData)
+
   const [toggling, setToggling] = useState(false)
   const [pendingClear, setPendingClear] = useState(false)
-  const [highlightedId, setHighlightedId] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<MemoryItem[] | null>(null)
-  const [searched, setSearched] = useState(false)
   const [showAll, setShowAll] = useState(false)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
   const [newContent, setNewContent] = useState('')
   const [newTopic, setNewTopic] = useState('')
@@ -43,201 +40,17 @@ export function MemoryTab() {
   const [editImportance, setEditImportance] = useState(0.5)
   const [savingEdit, setSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
-  const [consolidating, setConsolidating] = useState(false)
-  const [consolidateMsg, setConsolidateMsg] = useState<string | null>(null)
-  const pendingFactRef = useRef<string | null>(null)
-  const highlightTimerRef = useRef<number | null>(null)
-  const copyTimerRef = useRef<number | null>(null)
-  const consolidateTimerRef = useRef<number | null>(null)
-  const searchRef = useRef('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const handleSearch = useCallback(async (q: string) => {
-    if (!q.trim()) {
-      setSearchResults(null)
-      setSearched(false)
-      return
-    }
-    try {
-      const result = await memoryController.search(q)
-      setSearchResults(result.results || [])
-      setSearched(true)
-      setShowAll(false)
-    } catch {
-      setSearchResults([])
-      setSearched(true)
-    }
-  }, [])
 
   useEffect(() => {
-    searchRef.current = search
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => { void handleSearch(search) }, SEARCH_DEBOUNCE_MS)
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (pendingSseFact) {
+      const fact = consumePendingSseFact()
+      if (fact) highlightItem(fact, items)
     }
-  }, [search, handleSearch])
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [statsResult, listResult] = await Promise.all([
-        memoryController.stats().catch(() => null),
-        memoryController.list().catch(() => ({ items: [], total: 0 })),
-      ])
-      setStats(statsResult)
-      setItems(listResult.items || [])
-      const pending = pendingFactRef.current
-      if (pending) {
-        pendingFactRef.current = null
-        const match = (listResult.items || []).find(i => i.content === pending)
-        if (match) {
-          setHighlightedId(match.id)
-          if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
-          highlightTimerRef.current = window.setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS)
-        }
-      }
-    } catch {
-      // all fetches already fail-soft above; nothing left to surface
-    } finally {
-      setLoading(false)
-    }
-    if (searchRef.current.trim()) void handleSearch(searchRef.current)
-  }, [handleSearch])
-
-  useEffect(() => { fetchData() }, [fetchData])
+  }, [pendingSseFact, items, consumePendingSseFact, highlightItem])
 
   useEffect(() => {
-    const unsubscribe = subscribeMemoryEvents((info) => {
-      if (info.stored) {
-        if (info.fact || (info.facts && info.facts.length > 0)) {
-          pendingFactRef.current = info.facts?.[0] ?? info.fact ?? null
-        }
-        fetchData()
-      }
-    })
-    return unsubscribe
-  }, [fetchData])
-
-  useEffect(() => {
-    return () => {
-      if (highlightTimerRef.current) window.clearTimeout(highlightTimerRef.current)
-      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
-      if (consolidateTimerRef.current) window.clearTimeout(consolidateTimerRef.current)
-    }
-  }, [])
-
-  const handleCopy = useCallback(async (content: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-      setCopiedId(id)
-      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current)
-      copyTimerRef.current = window.setTimeout(() => setCopiedId(null), 1500)
-    } catch (err) {
-      logger.debug('Memory copy failed', { exception: String(err) })
-    }
-  }, [])
-
-  const handleAdd = useCallback(async () => {
-    if (!newContent.trim()) return
-    setAdding(true)
-    setAddError(null)
-    try {
-      const result = await memoryController.store(newContent, newTopic.trim() || 'manual')
-      if (result.stored) {
-        pendingFactRef.current = newContent.trim()
-        setNewContent('')
-        setNewTopic('')
-        setShowAdd(false)
-        await fetchData()
-      } else {
-        setAddError('Already remembered (or memory is disabled)')
-      }
-    } catch {
-      setAddError('Failed to store fact')
-    } finally {
-      setAdding(false)
-    }
-  }, [newContent, newTopic, fetchData])
-
-  const startEdit = useCallback((item: MemoryItem) => {
-    setShowAdd(false)
-    setEditingItem(item)
-    setEditContent(item.content)
-    setEditTopic(item.topic || '')
-    setEditImportance(typeof item.importance === 'number' ? item.importance : 0.5)
-    setEditError(null)
-  }, [])
-
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingItem || !editContent.trim()) return
-    setSavingEdit(true)
-    setEditError(null)
-    try {
-      const result = await memoryController.update(editingItem.id, editContent, editTopic, editImportance)
-      if (result.updated > 0) {
-        setEditingItem(null)
-        const content = editContent.trim()
-        const topic = editTopic.trim() || editingItem.topic
-        const patch = (i: MemoryItem): MemoryItem => (i.id === editingItem.id ? { ...i, content, topic, importance: editImportance } : i)
-        setItems(prev => prev.map(patch))
-        setSearchResults(prev => (prev === null ? prev : prev.map(patch)))
-        await fetchData()
-      } else if (result.duplicate) {
-        setEditError('That fact already exists in memory')
-      } else {
-        setEditError('Memory item not found')
-      }
-    } catch {
-      setEditError('Failed to update memory item')
-    } finally {
-      setSavingEdit(false)
-    }
-  }, [editingItem, editContent, editTopic, editImportance, fetchData])
-
-  const handleConsolidate = useCallback(async () => {
-    setConsolidating(true)
-    setConsolidateMsg(null)
-    try {
-      const result = await memoryController.consolidate()
-      setConsolidateMsg(
-        result.removed > 0
-          ? `Consolidated ${result.removed} duplicate fact(s), kept ${result.kept}`
-          : 'No near-duplicate facts found'
-      )
-    } catch {
-      setConsolidateMsg('Failed to consolidate memory')
-    } finally {
-      setConsolidating(false)
-      if (consolidateTimerRef.current) window.clearTimeout(consolidateTimerRef.current)
-      consolidateTimerRef.current = window.setTimeout(() => setConsolidateMsg(null), 3500)
-    }
-    fetchData()
-  }, [fetchData])
-
-  const deleteItem = async (item: MemoryItem) => {
-    setItems(prev => prev.filter(i => i.id !== item.id))
-    setSearchResults(prev => (prev === null ? prev : prev.filter(i => i.id !== item.id)))
-    try {
-      await memoryController.delete(item.id)
-    } catch (err) {
-      logger.debug('Memory delete failed', { exception: String(err) })
-      fetchData()
-    }
-  }
-
-  const clearAll = async () => {
-    setPendingClear(false)
-    try {
-      const result = await memoryController.clear()
-      logger.debug('Memory cleared', { cleared: result.cleared })
-    } catch (err) {
-      logger.debug('Memory clear failed', { exception: String(err) })
-    }
-    fetchData()
-  }
-
-  const enabled = stats?.enabled ?? true
+    if (!search) setShowAll(false)
+  }, [search])
 
   const topics = useMemo(() => {
     const seen = new Set<string>()
@@ -264,18 +77,89 @@ export function MemoryTab() {
 
   const displayed = showAll ? topicFiltered : topicFiltered.slice(0, MAX_VISIBLE)
 
-  const toggleEnabled = async (next: boolean) => {
+  const handleAdd = useCallback(async () => {
+    if (!newContent.trim()) return
+    setAdding(true)
+    setAddError(null)
+    try {
+      const result = await memoryController.store(newContent, newTopic.trim() || 'manual')
+      if (result.stored) {
+        const content = newContent.trim()
+        setNewContent('')
+        setNewTopic('')
+        setShowAdd(false)
+        await fetchData()
+        highlightItem(content, items)
+      } else {
+        setAddError('Already remembered (or memory is disabled)')
+      }
+    } catch {
+      setAddError('Could not store fact')
+    } finally {
+      setAdding(false)
+    }
+  }, [newContent, newTopic, fetchData, items, highlightItem])
+
+  const startEdit = useCallback((item: MemoryItem) => {
+    setShowAdd(false)
+    setEditingItem(item)
+    setEditContent(item.content)
+    setEditTopic(item.topic || '')
+    setEditImportance(typeof item.importance === 'number' ? item.importance : 0.5)
+    setEditError(null)
+  }, [])
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingItem || !editContent.trim()) return
+    setSavingEdit(true)
+    setEditError(null)
+    try {
+      const result = await memoryController.update(editingItem.id, editContent, editTopic, editImportance)
+      if (result.updated > 0) {
+        setEditingItem(null)
+        await fetchData()
+      } else if (result.duplicate) {
+        setEditError('That fact already exists in memory')
+      } else {
+        setEditError('Memory item not found')
+      }
+    } catch {
+      setEditError('Could not update memory item')
+    } finally {
+      setSavingEdit(false)
+    }
+  }, [editingItem, editContent, editTopic, editImportance, fetchData])
+
+  const deleteItem = useCallback(async (item: MemoryItem) => {
+    setItems(prev => prev.filter(i => i.id !== item.id))
+    setSearchResults(searchResults?.filter(i => i.id !== item.id) ?? null)
+    try {
+      await memoryController.delete(item.id)
+    } catch {
+      await fetchData()
+    }
+  }, [searchResults, fetchData, setItems, setSearchResults])
+
+  const clearAll = useCallback(async () => {
+    setPendingClear(false)
+    try {
+      await memoryController.clear()
+    } catch {
+      await fetchData()
+    }
+  }, [fetchData])
+
+  const toggleEnabled = useCallback(async (next: boolean) => {
     setToggling(true)
     try {
-      const result = await memoryController.setEnabled(next)
-      setStats(prev => (prev ? { ...prev, enabled: result.enabled } : prev))
-    } catch (err) {
-      logger.debug('Memory toggle failed', { exception: String(err) })
+      await memoryController.setEnabled(next)
+      await fetchData()
     } finally {
       setToggling(false)
     }
-    fetchData()
-  }
+  }, [fetchData])
+
+  const enabled = stats?.enabled ?? true
 
   return (
     <div className="space-y-2">
@@ -287,6 +171,7 @@ export function MemoryTab() {
           </span>
           {enabled && items.length > 0 && (
             <button
+              type="button"
               onClick={handleConsolidate}
               disabled={consolidating}
               className="text-[10px] text-primary hover:underline disabled:opacity-40 disabled:no-underline transition-colors"
@@ -308,6 +193,7 @@ export function MemoryTab() {
             />
           </div>
           <button
+            type="button"
             onClick={fetchData}
             disabled={loading}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
@@ -316,6 +202,7 @@ export function MemoryTab() {
             <IconRefresh className={cn('h-3 w-3', loading && 'animate-spin')} />
           </button>
           <button
+            type="button"
             onClick={() => setPendingClear(true)}
             disabled={items.length === 0}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
@@ -342,6 +229,7 @@ export function MemoryTab() {
               />
               {search && (
                 <button
+                  type="button"
                   onClick={() => setSearch('')}
                   className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Clear search"
@@ -402,7 +290,7 @@ export function MemoryTab() {
               <button
                 type="button"
                 onClick={() => setActiveTopic(null)}
-                className={`shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+                className={cn('shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === null ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
               >
                 All
               </button>
@@ -411,7 +299,7 @@ export function MemoryTab() {
                   key={topic}
                   type="button"
                   onClick={() => setActiveTopic(activeTopic === topic ? null : topic)}
-                  className={`shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors ${activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}
+                  className={cn('shrink-0 text-[10px] px-2 py-1 rounded-full font-medium transition-colors', activeTopic === topic ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground hover:bg-muted/70')}
                 >
                   {topic}
                 </button>
@@ -478,6 +366,7 @@ export function MemoryTab() {
         <div className="text-center py-4">
           <p className="text-xs text-muted-foreground">No memory matches that search.</p>
           <button
+            type="button"
             onClick={() => setSearch('')}
             className="mt-1 text-[10px] text-primary hover:underline"
             aria-label="Clear search"
@@ -503,7 +392,7 @@ export function MemoryTab() {
                   <div className="flex items-start justify-between gap-1">
                     <span
                       className="block cursor-pointer select-text hover:text-foreground/80 transition-colors"
-                      title="Click to copy"
+                      title="Copy to clipboard"
                       role="button"
                       tabIndex={0}
                       onClick={() => handleCopy(item.content, item.id)}
@@ -547,6 +436,7 @@ export function MemoryTab() {
                     <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">{item.score.toFixed(2)}</span>
                   )}
                   <button
+                    type="button"
                     onClick={() => startEdit(item)}
                     className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-primary transition-opacity"
                     aria-label="Edit memory item"
@@ -554,6 +444,7 @@ export function MemoryTab() {
                     <IconEdit className="h-3 w-3" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => deleteItem(item)}
                     className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
                     aria-label="Delete memory item"
@@ -566,8 +457,10 @@ export function MemoryTab() {
           </ul>
           {searchResults === null && topicFiltered.length > MAX_VISIBLE && (
             <button
+              type="button"
               onClick={() => setShowAll(v => !v)}
               className="block mx-auto mt-1.5 text-[10px] text-primary hover:underline"
+              aria-expanded={showAll}
             >
               {showAll ? 'Show fewer' : `Show all ${topicFiltered.length}`}
             </button>
@@ -583,12 +476,13 @@ export function MemoryTab() {
         </div>
       )}
 
-      <a
+      <Link
         href="/knowledge"
+        prefetch={false}
         className="block text-center text-[10px] text-muted-foreground hover:text-foreground pt-1 border-t border-border/30 transition-colors"
       >
         Manage memory →
-      </a>
+      </Link>
     </div>
   )
 }

@@ -127,11 +127,11 @@ describe('useFeedbackStore', () => {
 
   describe('fetchAdapterStats', () => {
     it('updates adapterStats on success', async () => {
-      const adapters = { total_users: 3, total_size_mb: 1.2 }
-      mockUserAdaptersList.mockResolvedValue(adapters)
+      const res = { stats: { total_users: 3, total_size_mb: 1.2 } }
+      mockUserAdaptersList.mockResolvedValue(res)
 
       await useFeedbackStore.getState().fetchAdapterStats()
-      expect(useFeedbackStore.getState().adapterStats).toEqual(adapters)
+      expect(useFeedbackStore.getState().adapterStats).toEqual(res.stats)
     })
   })
 

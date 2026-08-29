@@ -7,10 +7,13 @@ from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from routers.mobile import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.mobile import MobileRouter
 
 app = FastAPI()
-app.include_router(router)
+register_all_handlers(app)
+_m = MobileRouter()
+app.include_router(_m.router)
 client = TestClient(app, raise_server_exceptions=False)
 
 
@@ -63,7 +66,7 @@ class TestTrainStats:
     def test_stats_returns_fields(self):
         resp = client.get("/mobile/train/stats")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["total"] == 100
         assert data["pending"] == 30
         assert data["synced"] == 70
@@ -75,7 +78,7 @@ class TestTrainPending:
     def test_pending_returns_pairs(self):
         resp = client.get("/mobile/train/pending")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["count"] == 5
         assert len(data["pairs"]) == 5
         assert data["pairs"][0]["id"] == "pair_0"
@@ -89,7 +92,7 @@ class TestTrainSession:
     def test_session_returns_pairs(self):
         resp = client.get("/mobile/train/session/s1")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["session_id"] == "s1"
         assert data["count"] == 1
 
@@ -98,7 +101,7 @@ class TestUpdateQuality:
     def test_update_quality(self):
         resp = client.patch("/mobile/train/pair/pair_001", json={"quality": 1.0})
         assert resp.status_code == 200
-        assert resp.json()["quality"] == 1.0
+        assert resp.json()["data"]["quality"] == 1.0
 
     def test_update_quality_not_found(self, mock_store):
         mock_store.update_quality.return_value = False
@@ -110,7 +113,7 @@ class TestDeletePair:
     def test_delete_pair(self):
         resp = client.delete("/mobile/train/pair/pair_001")
         assert resp.status_code == 200
-        assert resp.json()["pair_id"] == "pair_001"
+        assert resp.json()["data"]["pair_id"] == "pair_001"
 
     def test_delete_pair_not_found(self, mock_store):
         mock_store.delete_pair.return_value = False
@@ -122,14 +125,14 @@ class TestDeleteSynced:
     def test_delete_synced(self):
         resp = client.delete("/mobile/train/synced")
         assert resp.status_code == 200
-        assert resp.json()["count"] == 10
+        assert resp.json()["data"]["count"] == 10
 
 
 class TestCompactStore:
     def test_compact(self):
         resp = client.post("/mobile/train/compact")
         assert resp.status_code == 200
-        assert resp.json()["count"] == 90
+        assert resp.json()["data"]["count"] == 90
 
 
 def _parse_sse_events(resp) -> list[dict]:
@@ -269,7 +272,7 @@ class TestAutoTrainStatus:
     def test_status_returns_fields(self):
         resp = client.get("/mobile/train/auto-status")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "enabled" in data
         assert "threshold" in data
         assert "interval_s" in data
@@ -284,7 +287,7 @@ class TestListTrainingPairs:
     def test_list_top_level_fields(self):
         resp = client.get("/mobile/train/pairs")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["offset"] == 0
         assert data["total"] == 100
         assert data["count"] == 1
@@ -330,7 +333,7 @@ class TestDeletePairsBulk:
     def test_bulk_delete_counts(self):
         resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["pair_001", "pair_002"]})
         assert resp.status_code == 200
-        assert resp.json()["count"] == 2
+        assert resp.json()["data"]["count"] == 2
 
     def test_bulk_delete_missing_ids_is_422(self):
         assert client.delete("/mobile/train/pairs/bulk").status_code == 422
@@ -341,7 +344,7 @@ class TestDeletePairsBulk:
         mock_store.delete_pair.side_effect = _delete
         resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["pair_001", "pair_002"]})
         assert resp.status_code == 200
-        assert resp.json()["count"] == 1
+        assert resp.json()["data"]["count"] == 1
 
 
 class TestMobileTrain:
@@ -366,7 +369,7 @@ class TestUpdateAutoConfig:
             resp = client.patch("/mobile/train/auto-config", params={"threshold": 42})
             assert resp.status_code == 200
             assert trainer.threshold == 42
-            assert resp.json()["threshold"] == 42
+            assert resp.json()["data"]["threshold"] == 42
 
     def test_updates_interval(self, mock_store):
         with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:

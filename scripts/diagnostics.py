@@ -89,7 +89,7 @@ def check_directories():
 
     dirs = [
         ("Models", "models"),
-        ("Datasets", "datasets"),
+        ("Datasets", "data"),
         ("Experiments", "experiments"),
         ("Configs", "configs"),
         ("Checkpoints", "checkpoints"),
@@ -123,7 +123,7 @@ def check_datasets():
     """Check available datasets."""
     print("\n[Available Datasets]")
 
-    datasets_dir = Path("datasets")
+    datasets_dir = Path("data")
     if not datasets_dir.exists():
         print("  Datasets directory not found")
         return

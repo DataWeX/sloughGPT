@@ -28,6 +28,7 @@ import os
 from typing import Any, Optional, Callable, Generator
 
 from domains.infrastructure.model_worker import WorkerStreamStalledError
+from domains.infrastructure.constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STALL_TIMEOUT
 
 
 def resolve_memory_limit_mb(
@@ -82,8 +83,8 @@ class ProcessGuard:
     def __init__(
         self,
         worker_id: str = "guard",
-        generate_timeout: float = 120.0,
-        stall_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+        stall_timeout: float = DEFAULT_STALL_TIMEOUT,
         max_restarts: int = 3,
         restart_delay: float = 1.0,
         health_check_interval: float = 1.0,
@@ -125,6 +126,7 @@ class ProcessGuard:
         self._worker: Optional[Any] = None
         self._restart_count = 0
         self._requests_served = 0
+        self._requests_served_lock = threading.Lock()
         self._crash_callbacks: list[Callable[[str], None]] = []
         self._restart_callbacks: list[Callable[[str], None]] = []
         self._monitor_thread: Optional[threading.Thread] = None
@@ -142,6 +144,9 @@ class ProcessGuard:
 
     def start(self) -> None:
         """Start the worker and begin health monitoring."""
+        logger.info("process_guard: starting", extra={
+            "worker_id": self.worker_id, "model_id": self._model_id,
+        })
         self._launch_worker()
         self._stop_monitor.clear()
         self._monitor_thread = threading.Thread(
@@ -151,6 +156,9 @@ class ProcessGuard:
 
     def stop(self) -> None:
         """Stop the worker and health monitoring."""
+        logger.info("process_guard: stopping", extra={
+            "worker_id": self.worker_id, "model_id": self._model_id,
+        })
         self._stop_monitor.set()
         if self._worker is not None:
             self._worker.stop()
@@ -175,7 +183,8 @@ class ProcessGuard:
             except (TimeoutError, WorkerStreamStalledError) as e:
                 self._recover_from_stall()
                 raise
-        self._requests_served += 1
+        with self._requests_served_lock:
+            self._requests_served += 1
         return result
 
     def generate_stream(
@@ -212,16 +221,16 @@ class ProcessGuard:
         Uses the same restart budget as crash recovery. Callbacks are fired
         as for a crash. Raises RuntimeError when the budget is exhausted.
         """
-        if self._restart_count >= self.max_restarts:
-            logger.error(
-                "ProcessGuard[%s]: worker stalled and restart budget exhausted",
-                self.worker_id, extra={"tag": "INFRA"},
-            )
-            raise RuntimeError(
-                f"ProcessGuard[{self.worker_id}]: worker restart budget exhausted "
-                f"({self.max_restarts} restarts)"
-            )
         with self._restart_lock:
+            if self._restart_count >= self.max_restarts:
+                logger.error(
+                    "ProcessGuard[%s]: worker stalled and restart budget exhausted",
+                    self.worker_id, extra={"tag": "INFRA"},
+                )
+                raise RuntimeError(
+                    f"ProcessGuard[{self.worker_id}]: worker restart budget exhausted "
+                    f"({self.max_restarts} restarts)"
+                )
             self._restart_worker_locked("stalled")
 
     def _memory_mb(self) -> Optional[float]:
@@ -259,13 +268,15 @@ class ProcessGuard:
 
     def on_crash(self, cb: Callable[[str], None]) -> None:
         """Register a callback invoked on worker crash (receives worker_id)."""
-        self._crash_callbacks.append(cb)
+        with self._restart_lock:
+            self._crash_callbacks.append(cb)
 
     def on_restart(self, cb: Callable[[str], None]) -> None:
         """Register a callback invoked after worker restart (receives worker_id)."""
-        self._restart_callbacks.append(cb)
+        with self._restart_lock:
+            self._restart_callbacks.append(cb)
 
-    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = 120.0) -> dict:
+    def load_adapter(self, adapter_path: str, merge: bool = False, timeout: float = DEFAULT_GENERATE_TIMEOUT) -> dict:
         """Load a LoRA adapter into the worker's model.
 
         Delegates to ModelWorkerProcess.load_adapter() which sends the command
@@ -316,6 +327,10 @@ class ProcessGuard:
                 extra_sys_paths=self.extra_sys_paths,
             )
         self._worker.start()
+        logger.info("process_guard: worker launched", extra={
+            "worker_id": self.worker_id, "model_id": self._model_id,
+            "slnc_path": str(self._slnc_path) if self._slnc_path else None,
+        })
 
     def _restart_worker(self, reason: str, fire_callbacks: bool = False) -> None:
         """Stop, relaunch, and count a worker restart under a lock.
@@ -360,10 +375,21 @@ class ProcessGuard:
             time.sleep(self.health_check_interval)
             if self._stop_monitor.is_set():
                 break
-            if self._worker is None:
+            # Snapshot worker reference under the restart lock to avoid racing
+            # with _restart_worker_locked() which swaps self._worker via
+            # _launch_worker().
+            with self._restart_lock:
+                worker = self._worker
+                restarts_left = self._restart_count < self.max_restarts
+            if worker is None:
                 continue
-            if not self._worker.alive and self._restart_count < self.max_restarts:
+            if not worker.alive and restarts_left:
                 self._restart_worker("died", fire_callbacks=True)
+            elif not worker.alive and not restarts_left:
+                logger.error("process_guard: worker dead, restart budget exhausted", extra={
+                    "worker_id": self.worker_id, "model_id": self._model_id,
+                    "restarts": self._restart_count, "max_restarts": self.max_restarts,
+                })
 
 
 def create_model_guard(
@@ -373,8 +399,8 @@ def create_model_guard(
     max_restarts: int = 3,
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
-    generate_timeout: float = 120.0,
-    stall_timeout: float = 120.0,
+    generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+    stall_timeout: float = DEFAULT_STALL_TIMEOUT,
     max_concurrent: Optional[int] = None,
 ) -> ProcessGuard:
     """Create a ProcessGuard for an HF model (legacy path).
@@ -418,8 +444,8 @@ def create_slo_guard(
     max_restarts: int = 3,
     restart_delay: float = 2.0,
     memory_limit_mb: Optional[float] = None,
-    generate_timeout: float = 120.0,
-    stall_timeout: float = 120.0,
+    generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
+    stall_timeout: float = DEFAULT_STALL_TIMEOUT,
     max_concurrent: Optional[int] = None,
     quantize: bool = False,
     quant_bits: int = 8,

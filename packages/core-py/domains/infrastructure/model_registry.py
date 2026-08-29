@@ -13,12 +13,11 @@ Usage::
     metrics = registry.get_metrics()
 """
 
-import asyncio
 import logging
-import time
 from threading import Lock
 from typing import Any, Optional, Union
 
+from .constants import DEFAULT_GENERATE_TIMEOUT
 from .model_server import ModelServer, ModelStatus
 
 logger = logging.getLogger("slo.infrastructure.model_registry")
@@ -43,8 +42,8 @@ class ModelRegistry:
             from .event_bus import get_event_bus
             bus = get_event_bus()
             bus.emit_sync(event, {"model_id": model_id, **extra}, source="model_registry")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("EventBus emit failed for %s/%s: %s", event, model_id, exc, extra={"tag": "INFRA"})
 
     # --- Registration ---
 
@@ -55,7 +54,7 @@ class ModelRegistry:
         tokenizer: Any,
         make_default: bool = False,
         max_concurrent: Optional[int] = None,
-        generate_timeout: float = 120.0,
+        generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         enable_circuit_breaker: bool = True,
         process_guard: Optional[Any] = None,
         idle_timeout_s: float = 0.0,
@@ -158,18 +157,24 @@ class ModelRegistry:
         with self._lock:
             mid = model_id or self._default_id
             if mid is None:
+                logger.debug("model_registry: no model_id and no default set")
                 return None
-            return self._servers.get(mid)
+            server = self._servers.get(mid)
+            if server is None:
+                logger.debug("model_registry: model '%s' not found (available: %s)",
+                    mid, list(self._servers.keys()))
+            return server
 
     def list_models(self) -> list[dict]:
         """List all registered models with their status and metrics."""
         with self._lock:
             servers = list(self._servers.items())
+            default_id = self._default_id
         result = []
         for mid, server in servers:
             entry = server.get_metrics_snapshot()
             entry["model_id"] = mid
-            entry["is_default"] = mid == self._default_id
+            entry["is_default"] = mid == default_id
             result.append(entry)
         return result
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Progress } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
@@ -28,7 +28,7 @@ interface ModelCatalogCardProps {
   onModelLoaded: () => Promise<void>
 }
 
-export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeId, onModelLoaded }: ModelCatalogCardProps) {
+export default memo(function ModelCatalogCard({ models, modelsLoading, activeRuntimeId, onModelLoaded }: ModelCatalogCardProps) {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const { mutateAsync: loadModel } = useLoadModel()
@@ -123,6 +123,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                   value={modelSearch}
                   onChange={e => setModelSearch(e.target.value)}
                   placeholder="Search models..."
+                  aria-label="Search models"
                   className="h-8 w-full max-w-xs rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 />
               </div>
@@ -147,6 +148,7 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <button
+                          type="button"
                           onClick={(e) => toggleFavorite(model.id, e)}
                           className={cn(
                             "h-4 w-4 flex items-center justify-center rounded shrink-0 transition-all",
@@ -238,4 +240,4 @@ export default function ModelCatalogCard({ models, modelsLoading, activeRuntimeI
       </CardContent>
     </Card>
   )
-}
+})

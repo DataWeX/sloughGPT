@@ -200,7 +200,7 @@ class AuthError(AppError):
 # ── Integration helpers ──
 
 
-def emit_error_event(error: AppError, source: str = ""):
+def emit_error_event(error: AppError, source: str = "") -> None:
     """Emit an error event on the EventBus (fire-and-forget)."""
     try:
         from domains.infrastructure.event_bus import get_event_bus
@@ -214,8 +214,11 @@ def emit_error_event(error: AppError, source: str = ""):
             loop.create_task(bus.emit("error.raised", error.to_dict(), source=source))
         else:
             bus.emit_sync("error.raised", error.to_dict(), source=source)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("slo.errors").warning("emit_error_event failed: %s", e, extra={
+            "error_code": error.code, "source": source,
+        })
 
 
 def error_to_sse(error: AppError) -> dict[str, Any]:

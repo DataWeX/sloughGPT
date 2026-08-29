@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 const {
   mockGetFeedbackStats, mockGetWorkflowStatus, mockGetTrainingStats,
   mockListConversations, mockCreateConversation, mockDeleteConversation,
@@ -258,8 +262,8 @@ describe('FeedbackPage — training tab flow', () => {
     if (trainTab) {
       fireEvent.click(trainTab)
       await waitFor(() => {
-        expect(screen.getByTestId('stat-Feedback Pairs')).toBeTruthy()
-        expect(screen.getByTestId('stat-Quality Score')).toBeTruthy()
+        expect(screen.getByTestId('stat-Training Jobs')).toBeTruthy()
+        expect(screen.getByTestId('stat-Final Loss')).toBeTruthy()
       })
     }
   })
@@ -423,7 +427,7 @@ describe('FeedbackPage — workflow actions', () => {
       await waitFor(() => { expect(screen.getAllByRole('button', { name: 'Aggregate' })[0]).toBeTruthy() })
 
       await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: 'Aggregate' })[0]) })
-      expect(mockAddToast).toHaveBeenCalledWith('Aggregation failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('aggregation', 'error')
     }
   })
 })

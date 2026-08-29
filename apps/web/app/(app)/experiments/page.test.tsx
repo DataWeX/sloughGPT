@@ -21,6 +21,9 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value }: any) => <div>{label}: {value}</div>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
   }
 })
 
@@ -115,7 +118,7 @@ describe('ExperimentsPage', () => {
     await waitFor(() => { expect(screen.getByText('Create')).toBeTruthy() })
     await act(async () => { fireEvent.change(screen.getByPlaceholderText('Experiment name'), { target: { value: 'X' } }) })
     await act(async () => { screen.getByText('Create').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to create experiment', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not create experiment', 'error') })
   })
 
   it('deletes an experiment', async () => {
@@ -135,14 +138,14 @@ describe('ExperimentsPage', () => {
     await waitFor(() => { expect(screen.getByText('distill-run-3')).toBeTruthy() })
     const delBtn = container.querySelector('button.text-destructive') as HTMLElement
     await act(async () => { delBtn.click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to delete experiment', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not delete experiment', 'error') })
   })
 
   it('filters experiments by search query', async () => {
     mockList.mockResolvedValue([{ id: 'distill-run-3' }, { id: 'alpha-run' }])
     render(<ExperimentsPage />)
     await waitFor(() => { expect(screen.getByText('distill-run-3')).toBeTruthy() })
-    await act(async () => { fireEvent.change(screen.getByPlaceholderText('Search...'), { target: { value: 'alpha' } }) })
+    await act(async () => { fireEvent.change(screen.getByPlaceholderText(/Search\.\.\./), { target: { value: 'alpha' } }) })
     expect(screen.getByText('alpha-run')).toBeTruthy()
     expect(screen.queryByText('distill-run-3')).toBeNull()
   })

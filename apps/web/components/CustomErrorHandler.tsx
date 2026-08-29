@@ -47,7 +47,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
   const isNetworkError = error.message.includes('fetch') ||
                          error.message.includes('network') ||
                          error.message.includes('ECONNREFUSED') ||
-                         error.message.includes('Failed to fetch')
+                         error.message.includes('Could not fetch')
 
   const isAuthError = error.message.includes('401') ||
                       error.message.includes('Unauthorized')
@@ -75,6 +75,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setShowDetails(!showDetails)}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
@@ -88,6 +89,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Error Details</span>
                 <button
+                  type="button"
                   onClick={copyToClipboard}
                   className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                 >
@@ -119,7 +121,7 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
 
           {isNetworkError && (
             <p className="text-xs text-muted-foreground text-center">
-              Check your internet connection and try again. The server might be unreachable.
+              Check your internet connection and try again. The service might be unreachable.
             </p>
           )}
         </CardContent>

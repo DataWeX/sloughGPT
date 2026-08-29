@@ -78,7 +78,7 @@ def cmd_status(args):
         else:
             log.status("Models", "Directory not found", "error")
 
-        datasets_dir = Path("datasets")
+        datasets_dir = Path("data")
         if datasets_dir.exists():
             datasets = list(datasets_dir.iterdir())
             log.status("Datasets", f"{len([d for d in datasets if d.is_dir()])} found", "ok")
@@ -252,7 +252,7 @@ def cmd_setup(args):
         return
 
     log.section("Creating Directories")
-    dirs = ["models", "datasets", "data", "checkpoints", "experiments", "logs", "cache"]
+    dirs = ["models", "data", "checkpoints", "experiments", "logs", "cache"]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
         log.success(d)

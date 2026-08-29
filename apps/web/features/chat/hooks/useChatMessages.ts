@@ -8,7 +8,7 @@ import {
   exportConversationAsMarkdown, copyConversationAsMarkdown,
   type ChatMessage, type ImageAttachment, type ChatSession,
 } from '@/lib/chat-utils'
-import { logger, devDebug } from '@/lib/dev-log'
+import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { getErrorInfo } from '@/features/chat/components/feedback/ErrorBanner'
 import { chatController } from '@/lib/chat-controller'
@@ -67,6 +67,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [sessionSaved, setSessionSaved] = useState(false)
   const [currentError, setCurrentError] = useState<ReturnType<typeof getErrorInfo> | null>(null)
+  const [contextLayers, setContextLayers] = useState<Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>>([])
   const [toolEvents, setToolEvents] = useState<ToolCallEvent[]>([])
   const [ragVerification, setRagVerification] = useState<{
     confidence: number
@@ -76,6 +77,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
     grounded_claims: number
     hallucinated_claims: number
   } | null>(null)
+  const [pendingToolApproval, setPendingToolApproval] = useState<{
+    toolName: string
+    args?: Record<string, unknown>
+  } | null>(null)
+
+  // ── Message selection for bulk operations ──────────────────────────────────
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set())
+  const [selectionMode, setSelectionMode] = useState(false)
 
   // ── Refs for callback access (read-only, never mutated inside setState) ──
   const messagesRef = useRef<ChatMessage[]>([])
@@ -96,7 +105,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
   // ── Token accumulator for streaming perf ─────────────────────────────────
   // Buffers tokens in a ref and flushes to setMessages every FLUSH_MS.
-  // Avoids O(n) array copy per token — flushes at most ~60x/sec.
+  // Uses targeted splice instead of O(n) map — only touches the streaming message.
   const tokenBufRef = useRef<{ id: string; text: string }[]>([])
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const FLUSH_MS = 16
@@ -114,16 +123,19 @@ export function useChatMessages(config: ChatMessagesConfig) {
       byId.set(id, (byId.get(id) || '') + text)
     }
     setMessages(prev => {
+      let changed = false
       const updated = prev.map(m => {
         const delta = byId.get(m.id)
         if (!delta) return m
+        changed = true
         const content = m.content === 'Thinking...' ? '' : m.content
         return { ...m, content: content + delta }
       })
+      if (!changed) return prev
       const now = Date.now()
       if (now - lastSaveRef.current > 500) {
         lastSaveRef.current = now
-        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch((e) => logger.warning('Session save failed', { error: e }))
+        sessionsRef.current.saveSessionToStorage(updated, sessionIdRef.current).catch((e) => logger.warning('Could not session save', { error: e }))
       }
       return updated
     })
@@ -134,10 +146,29 @@ export function useChatMessages(config: ChatMessagesConfig) {
     flushTimerRef.current = setTimeout(flushTokens, FLUSH_MS)
   }, [flushTokens])
 
-  // Cleanup on unmount
+  // Cleanup on unmount — flush remaining tokens before clearing
   useEffect(() => {
     return () => {
       if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      const buf = tokenBufRef.current
+      if (buf.length > 0) {
+        tokenBufRef.current = []
+        const byId = new Map<string, string>()
+        for (const { id, text } of buf) {
+          byId.set(id, (byId.get(id) || '') + text)
+        }
+        setMessages(prev => {
+          let changed = false
+          const updated = prev.map(m => {
+            const delta = byId.get(m.id)
+            if (!delta) return m
+            changed = true
+            const content = m.content === 'Thinking...' ? '' : m.content
+            return { ...m, content: content + delta }
+          })
+          return changed ? updated : prev
+        })
+      }
     }
   }, [])
 
@@ -192,25 +223,135 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
     setLoading(true)
     try {
-      for await (const data of chatController.regenerateStream(
-        sessionIdRef.current,
-        contextMessages.map(m => ({ role: m.role, content: m.content }))
-      )) {
-        if (data.error) { showToast('Failed to regenerate response', 'error'); break }
-        if (data.token) {
-          tokenBufRef.current.push({ id: assistantId, text: data.token })
-          scheduleFlush()
+      const appState = useAppStore.getState()
+      const customContext = appState.settings.customContext
+      const parts: string[] = []
+      if (customSystemPrompt) parts.push(`[System Override]\n${customSystemPrompt}`)
+      if (customContext) parts.push(`[Custom Instructions]\n${customContext}`)
+      if (currentSoul) {
+        parts.push(`[Personality: ${currentSoul.name}]`)
+        if (currentSoul.description) parts.push(currentSoul.description)
+        if (currentSoul.traits && currentSoul.traits.length > 0) {
+          parts.push(`Traits: ${currentSoul.traits.join(', ')}`)
         }
-        if (data.done) break
       }
+      const systemPrompt = parts.join('\n\n')
+      const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
+
+      await streamChatResponse({
+        messages: contextMessages.map(m => ({ role: m.role, content: m.content })),
+        model, systemPrompt, maxTokens, temperature,
+        userId: userIdRef.current, sessionId: sessionIdRef.current,
+        signal: loadingRef.current?.signal,
+        agentId: currentAgent?.id || undefined,
+        knowledge: knowledgeFacts.length > 0 ? knowledgeFacts : undefined,
+        onToken: (token: string) => {
+          tokenBufRef.current.push({ id: assistantId, text: token })
+          scheduleFlush()
+        },
+        onComplete: () => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId ? { ...msg, content: msg.content || '(empty response)' } : msg
+          ))
+        },
+        onError: (status, text) => {
+          setCurrentError(getErrorInfo(status, text))
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+              : msg
+          ))
+        },
+      })
     } catch (err) {
       _log.error('Regenerate error', { exception: String(err) })
+      setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId
+          ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+          : msg
+      ))
     } finally {
       setLoading(false)
       storeSessionContext(sessionIdRef.current, messagesRef.current)
     }
-  }, [showToast, storeSessionContext, scheduleFlush])
+  }, [showToast, storeSessionContext, scheduleFlush, model, temperature, maxTokens, currentSoul, currentAgent, customSystemPrompt])
   handleRegenerateRef.current = handleRegenerate
+
+  // ── Regenerate with Options ──────────────────────────────────────────────
+  const handleRegenerateWithOptions = useCallback(async (fromMessageId: string, options: { temperature?: number; maxTokens?: number }) => {
+    const currentMessages = messagesRef.current
+    if (currentMessages.length < 2) return
+    const targetIdx = currentMessages.findIndex(m => m.id === fromMessageId)
+    if (targetIdx <= 0) return
+    const contextMessages = currentMessages.slice(0, targetIdx + 1)
+    const assistantId = currentMessages[targetIdx].id
+    const overrideTemp = options.temperature ?? temperature
+
+    // Truncate conversation after this point if regenerating from a non-last message
+    if (targetIdx < currentMessages.length - 1) {
+      setMessages(prev => prev.slice(0, targetIdx).concat({
+        ...currentMessages[targetIdx],
+        content: '',
+        timestamp: new Date(),
+      }))
+    } else {
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId ? { ...msg, content: '', timestamp: new Date() } : msg
+      ))
+    }
+
+    setLoading(true)
+    try {
+      const appState = useAppStore.getState()
+      const customContext = appState.settings.customContext
+      const parts: string[] = []
+      if (customSystemPrompt) parts.push(`[System Override]\n${customSystemPrompt}`)
+      if (customContext) parts.push(`[Custom Instructions]\n${customContext}`)
+      if (currentSoul) {
+        parts.push(`[Personality: ${currentSoul.name}]`)
+        if (currentSoul.description) parts.push(currentSoul.description)
+        if (currentSoul.traits && currentSoul.traits.length > 0) {
+          parts.push(`Traits: ${currentSoul.traits.join(', ')}`)
+        }
+      }
+      const systemPrompt = parts.join('\n\n')
+
+      await streamChatResponse({
+        messages: contextMessages.map(m => ({ role: m.role, content: m.content })),
+        model, systemPrompt, maxTokens, temperature: overrideTemp,
+        userId: userIdRef.current, sessionId: sessionIdRef.current,
+        signal: loadingRef.current?.signal,
+        onToken: (token: string) => {
+          tokenBufRef.current.push({ id: assistantId, text: token })
+          scheduleFlush()
+        },
+        onComplete: () => {
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId ? { ...msg, content: msg.content || '(empty response)' } : msg
+          ))
+        },
+        onError: (_status, text) => {
+          setCurrentError(getErrorInfo(0, text || 'Stream error'))
+          setMessages(prev => prev.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+              : msg
+          ))
+        },
+      })
+    } catch (err) {
+      setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
+      setMessages(prev => prev.map(msg =>
+        msg.id === assistantId
+          ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
+          : msg
+      ))
+    } finally {
+      setLoading(false)
+      storeSessionContext(sessionIdRef.current, messagesRef.current)
+    }
+  }, [model, temperature, maxTokens, currentSoul, customSystemPrompt, showToast, storeSessionContext, scheduleFlush])
 
   // ── Feedback ──────────────────────────────────────────────────────────────
   const handleFeedback = useCallback(async (messageId: string, rating: 'thumbs_up' | 'thumbs_down') => {
@@ -222,7 +363,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
       userMessage: userMsg?.content || '', assistantResponse: assistantMsg?.content || '',
       rating, conversationId: sessionIdRef.current, userId: userIdRef.current,
     })
-    showToast(success ? 'Thanks for the feedback!' : 'Failed to submit feedback', success ? 'success' : 'error')
+    showToast(success ? 'Thanks for the feedback!' : 'Could not submit feedback', success ? 'success' : 'error')
   }, [showToast, recordFeedback])
 
   const handleThumbsUp = useCallback((messageId: string) => {
@@ -258,17 +399,17 @@ export function useChatMessages(config: ChatMessagesConfig) {
   // ── Image handling ────────────────────────────────────────────────────────
   const handleAddImage = useCallback((dataUrl: string) => {
     const newImage: ImageAttachment = {
-      id: Date.now().toString(), dataUrl, name: `image-${Date.now()}.png`,
+      id: crypto.randomUUID(), dataUrl, name: `image-${Date.now()}.png`,
     }
     setImages(prev => [...prev, newImage])
     multimodalController.trainImage(dataUrl, newImage.name).then(res => {
-      devDebug('Vision trained on uploaded image', res.caption)
+      logger.debug('Vision trained on uploaded image', { caption: res.caption })
       multimodalController.getCapabilities().then(caps => {
         multimodalController.getTrainingReport().then(r => {
           onVisionUpdate(caps, r.caption_history || [], r.vocab_size)
-        }).catch(err => _log.warning('Vision report failed', { error: String(err) }))
-      }).catch(err => _log.warning('Vision capabilities failed', { error: String(err) }))
-    }).catch(err => _log.warning('Image training failed', { error: String(err) }))
+        }).catch(err => _log.warning('Could not vision report', { error: String(err) }))
+      }).catch(err => _log.warning('Could not vision capabilities', { error: String(err) }))
+    }).catch(err => _log.warning('Could not image training', { error: String(err) }))
   }, [onVisionUpdate])
 
   const handleRemoveImage = useCallback((id: string) => {
@@ -286,8 +427,58 @@ export function useChatMessages(config: ChatMessagesConfig) {
 
   const handleCopyMarkdown = useCallback(async () => {
     const ok = await copyConversationAsMarkdown(messagesRef.current)
-    showToast(ok ? 'Copied to clipboard' : 'Failed to copy', ok ? 'success' : 'error')
+    showToast(ok ? 'Copied to clipboard' : 'Could not copy', ok ? 'success' : 'error')
   }, [showToast])
+
+  // ── Reactions ──────────────────────────────────────────────────────────
+  const handleReact = useCallback((messageId: string, emoji: string) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== messageId) return msg
+      const reactions = { ...msg.reactions }
+      reactions[emoji] = (reactions[emoji] || 0) + 1
+      return { ...msg, reactions }
+    }))
+  }, [])
+
+  // ── Pin/Unpin Messages ──────────────────────────────────────────────────
+  const handlePin = useCallback((messageId: string) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== messageId) return msg
+      return { ...msg, pinned: !msg.pinned }
+    }))
+  }, [])
+
+  // ── Message Selection ──────────────────────────────────────────────────
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => !prev)
+    setSelectedMessageIds(new Set())
+  }, [])
+
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds(prev => {
+      const next = new Set(prev)
+      if (next.has(messageId)) {
+        next.delete(messageId)
+      } else {
+        next.add(messageId)
+      }
+      return next
+    })
+  }, [])
+
+  const selectAllMessages = useCallback(() => {
+    setSelectedMessageIds(new Set(messages.filter(m => !m.isError).map(m => m.id)))
+  }, [messages])
+
+  const clearSelection = useCallback(() => {
+    setSelectedMessageIds(new Set())
+  }, [])
+
+  const deleteSelectedMessages = useCallback(() => {
+    setMessages(prev => prev.filter(msg => !selectedMessageIds.has(msg.id)))
+    setSelectedMessageIds(new Set())
+    setSelectionMode(false)
+  }, [selectedMessageIds])
 
   // ── Suggestion click ──────────────────────────────────────────────────────
   const handleSuggestionClick = useCallback((text: string) => {
@@ -305,11 +496,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
     const customContext = appState.settings.customContext
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(), role: 'user', content: text.trim(),
+      id: crypto.randomUUID(), role: 'user', content: text.trim(),
       timestamp: new Date(),
       images: userImages.length > 0 ? userImages : undefined,
     }
-    const assistantId = (Date.now() + 1).toString()
+    const assistantId = crypto.randomUUID()
     const assistantMessage: ChatMessage = {
       id: assistantId, role: 'assistant', content: '', timestamp: new Date(),
     }
@@ -321,7 +512,16 @@ export function useChatMessages(config: ChatMessagesConfig) {
     setCurrentError(null)
     setToolEvents([])
     setRagVerification(null)
+    setContextLayers([])
     setLoading(true)
+
+    // Auto-name conversation from first user message
+    if (messagesRef.current.length === 0 && text.trim()) {
+      const title = text.trim().slice(0, 50).replace(/[^\w\s-]/g, '').trim()
+      if (title.length > 5) {
+        sessions.renameSession(sessionIdRef.current!, title)
+      }
+    }
 
     const parts: string[] = []
     if (customSystemPrompt) {
@@ -340,14 +540,25 @@ export function useChatMessages(config: ChatMessagesConfig) {
     if (currentAgent) {
       parts.push(`[Role: ${currentAgent.name}]`)
       if (currentAgent.description) parts.push(currentAgent.description)
-      if (currentAgent.instructions) parts.push(currentAgent.instructions)
     }
     const systemPrompt = parts.join('\n\n')
-    const knowledgeCtx = getKnowledgeContext()
     const knowledgeFacts = appState.injectedKnowledge.map((k: { content: string }) => k.content)
 
+    // Build context layers for reasoning panel
+    const initialContextLayers: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }> = []
+    if (currentSoul) {
+      initialContextLayers.push({ type: 'soul', label: `Personality: ${currentSoul.name}`, detail: currentSoul.description })
+    }
+    if (currentAgent) {
+      initialContextLayers.push({ type: 'system', label: `Agent: ${currentAgent.name}`, detail: currentAgent.description })
+    }
+    if (knowledgeFacts.length > 0) {
+      initialContextLayers.push({ type: 'knowledge', label: 'Knowledge context', detail: `${knowledgeFacts.length} facts injected` })
+    }
+    setContextLayers(initialContextLayers)
+
     const messagesWithNew = [...messagesRef.current, userMessage, assistantMessage]
-    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch((e) => logger.warning('Session save failed', { error: e }))
+    sessions.saveSessionToStorage(messagesWithNew, sessionIdRef.current).catch((e) => logger.warning('Could not session save', { error: e }))
     messagesRef.current = messagesWithNew
     loadingRef.current = new AbortController()
 
@@ -360,7 +571,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
         const prompt = buildLocalPrompt(messagesWithNew, systemPrompt)
         let hasContent = false
         let assistantContentLen = 0
+        const signal = loadingRef.current?.signal
         for await (const token of engineRef.current.generate(prompt, maxTokens, temperature)) {
+          if (signal?.aborted) break
           hasContent = true
           let cleanedToken = token
           if (assistantContentLen < 50) {
@@ -380,9 +593,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
       } else {
         let assistantContentLen = 0
         let streamComplete = false
-        const finalSystemPrompt = knowledgeCtx ? systemPrompt + knowledgeCtx : systemPrompt
+        const finalSystemPrompt = systemPrompt
         await streamChatResponse({
-          messages: messagesWithNew.map(m => ({ role: m.role, content: m.content })),
+          messages: messagesWithNew
+            .filter(m => m.content.trim().length > 0 || m.role === 'user')
+            .map(m => ({ role: m.role, content: m.content })),
           model, systemPrompt: finalSystemPrompt, maxTokens, temperature,
           userId: userIdRef.current, sessionId: sessionIdRef.current,
           images: userImages.length > 0 ? userImages.map(img => img.dataUrl) : undefined,
@@ -420,6 +635,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
           onKnowledge: (source: string, count: number) => {
             showToast(`Knowledge: ${count} facts from ${source}`, 'info')
+            setContextLayers(prev => [...prev, { type: 'knowledge', label: `Knowledge: ${source}`, detail: `${count} facts` }])
           },
           onMemory: (info) => {
             publishMemoryEvent(info)
@@ -429,6 +645,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
               const extra = list.length > 1 ? ` +${list.length - 1} more` : ''
               const shown = first && first.length > 140 ? `${first.slice(0, 140)}…` : first
               showToast(shown ? `Remembered: ${shown}${extra}` : 'New fact saved to memory', 'success')
+              setContextLayers(prev => [...prev, { type: 'memory', label: 'Memory updated', detail: first ? `${list.length} fact${list.length > 1 ? 's' : ''} stored` : undefined }])
             }
           },
           onThinking: () => {
@@ -438,21 +655,42 @@ export function useChatMessages(config: ChatMessagesConfig) {
           },
           onToolCall: (event) => {
             setToolEvents(prev => [...prev, event])
+            setContextLayers(prev => [...prev, { type: 'tool', label: `Tool: ${event.tool}`, detail: event.status }])
+            if (event.status === 'executing' && event.args) {
+              const autoApprove = useAppStore.getState().settings.autoApproveTools
+              if (autoApprove) {
+                chatController.approveTool(sessionIdRef.current, event.tool, true)
+              } else {
+                setPendingToolApproval({ toolName: event.tool, args: event.args })
+              }
+            }
           },
           onRagVerification: (info) => {
             setRagVerification(info)
+            setContextLayers(prev => [...prev, { type: 'rag', label: 'RAG verification', detail: `${(info.confidence * 100).toFixed(0)}% confidence` }])
+          },
+          onControl: (event) => {
+            if (event.action === 'cancelled') {
+              setMessages(prev => prev.map(msg =>
+                msg.id === assistantId
+                  ? { ...msg, content: msg.content || '(cancelled)', isError: true }
+                  : msg
+              ))
+            } else if (event.action === 'context') {
+              setContextLayers(prev => [...prev, { type: 'system', label: 'Context injected', detail: event.context }])
+            }
           },
         })
         if (streamComplete) {
-          storeSessionContext(sessionIdRef.current, messagesRef.current).catch((e) => logger.warning('Session context store failed', { error: e }))
+          storeSessionContext(sessionIdRef.current, messagesRef.current).catch((e) => logger.warning('Could not session context store', { error: e }))
           knowledgeController.context().then(res => {
             onKnowledgeUpdate({ count: res.count, context: res.context })
-          }).catch((e) => logger.debug('Search query failed', e))
+          }).catch((e) => logger.debug('Could not search query', e))
         }
       }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        devDebug('Stream aborted by user')
+        logger.debug('Stream aborted by user')
       } else {
         setCurrentError(getErrorInfo(0, extractErrorMessage(err, 'Network error')))
         setMessages(prev => prev.map(msg =>
@@ -589,6 +827,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     currentError, setCurrentError,
     toolEvents,
     ragVerification,
+    contextLayers,
     messagesRef,
     loadingRef,
     sessionIdRef,
@@ -607,6 +846,7 @@ export function useChatMessages(config: ChatMessagesConfig) {
     renameSession: sessions.renameSession,
     duplicateSession: sessions.duplicateSession,
     handleRegenerate,
+    handleRegenerateWithOptions,
     handleThumbsUp, handleThumbsDown,
     handleEditMessage,
     handleAddImage, handleRemoveImage,
@@ -615,6 +855,29 @@ export function useChatMessages(config: ChatMessagesConfig) {
     handleSuggestionClick,
     handleExportMarkdown,
     handleCopyMarkdown,
+    handleReact,
+    handlePin,
+    selectedMessageIds,
+    selectionMode,
+    toggleSelectionMode,
+    toggleMessageSelection,
+    selectAllMessages,
+    clearSelection,
+    deleteSelectedMessages,
     sidebarConversations: sessions.sidebarConversations,
+    cancelStream: useCallback(() => chatController.cancelStream(sessionIdRef.current).catch((e) => {
+      console.warn('Cancel stream failed:', e)
+    }), []),
+    approveTool: useCallback((toolName: string, approved: boolean) =>
+      chatController.approveTool(sessionIdRef.current, toolName, approved), []),
+    injectContext: useCallback((context: string) =>
+      chatController.injectContext(sessionIdRef.current, context), []),
+    pendingToolApproval,
+    handleToolApproval: useCallback((approved: boolean) => {
+      if (pendingToolApproval) {
+        chatController.approveTool(sessionIdRef.current, pendingToolApproval.toolName, approved)
+        setPendingToolApproval(null)
+      }
+    }, [pendingToolApproval]),
   }
 }

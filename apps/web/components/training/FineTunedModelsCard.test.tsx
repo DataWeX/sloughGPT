@@ -44,6 +44,9 @@ vi.mock('@sloughgpt/strui', () => ({
   IconTrash: () => <span data-testid="icon-trash" />,
   IconRefresh: () => <span data-testid="icon-refresh" />,
   IconX: () => <span data-testid="icon-x" />,
+  Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+    <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+  ),
 }))
 
 import { FineTunedModelsCard } from './FineTunedModelsCard'

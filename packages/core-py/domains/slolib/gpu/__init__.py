@@ -122,8 +122,8 @@ def _detect_best_backend() -> "_Accelerator":
                 vram = metal.vram_gb()
                 priority = 100 + vram  # discrete GPUs score higher
                 candidates.append(("metal", metal, priority))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Metal detection failed: %s", e)
 
     # --- CUDA (NVIDIA) ---
     try:
@@ -132,8 +132,8 @@ def _detect_best_backend() -> "_Accelerator":
             vram = cuda.vram_gb()
             priority = 200 + vram  # CUDA is the fastest GPU path
             candidates.append(("cuda", cuda, priority))
-    except Exception:
-        pass
+    except Exception as e:
+            logger.debug("CUDA detection failed: %s", e)
 
     # --- OpenCL (Intel iGPU / AMD dGPU / integrated) ---
     try:
@@ -142,8 +142,8 @@ def _detect_best_backend() -> "_Accelerator":
             vram = opencl.vram_gb()
             priority = 50 + vram
             candidates.append(("opencl", opencl, priority))
-    except Exception:
-        pass
+    except Exception as e:
+            logger.debug("OpenCL detection failed: %s", e)
 
     # --- CPU with SIMD ---
     cpu = _CPUBackend()
@@ -228,7 +228,8 @@ class _Accelerator:
             if choice == "fp16":
                 self._fp16_mode = True
             return choice
-        except Exception:
+        except Exception as e:
+            logger.debug("Precision benchmark failed: %s", e)
             self._fp16_mode = False
             return "fp32"
 
@@ -651,7 +652,8 @@ class _CPUBackend(_Accelerator):
         try:
             import ctypes.util
             return bool(ctypes.util.find_library("openblas") or ctypes.util.find_library("libopenblas"))
-        except Exception:
+        except Exception as e:
+            logger.debug("OpenBLAS detection failed: %s", e)
             return False
 
     def has_simd(self) -> bool:
@@ -664,8 +666,8 @@ class _CPUBackend(_Accelerator):
             # ARM (Apple Silicon, Raspberry Pi) has NEON
             if arch in ("arm64", "aarch64"):
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("SIMD detection failed: %s", e)
         return False
 
     def openblas_threads(self) -> int:
@@ -682,11 +684,13 @@ class _CPUBackend(_Accelerator):
             try:
                 from domains.infrastructure.resource_manager import get_resource_manager
                 n = get_resource_manager().omp_num_threads
-            except Exception:
+            except Exception as e:
+                logger.debug("ResourceManager thread count failed: %s", e)
                 n = max(1, (os.cpu_count() or 1) - 1)
             self._openblas_threads_cache = n
             return n
-        except Exception:
+        except Exception as e:
+            logger.debug("OpenBLAS thread detection failed: %s", e)
             self._openblas_threads_cache = 1
             return 1
 
@@ -694,8 +698,8 @@ class _CPUBackend(_Accelerator):
         try:
             import psutil
             return psutil.virtual_memory().total / (1024 ** 3) * 0.5  # 50% for compute
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("psutil VRAM detection failed: %s", e)
         return 8.0  # assume 8 GB system RAM available for compute
 
     @property
@@ -743,7 +747,8 @@ class _MetalBackend(_Accelerator):
         try:
             from domains.infrastructure.ml_types import _mps_available
             return _mps_available()
-        except Exception:
+        except Exception as e:
+            logger.debug("Metal availability check failed: %s", e)
             return False
 
     def to_device(self, arr):
@@ -780,7 +785,8 @@ class _CUDABackend(_Accelerator):
             import cupy as cp
             self._cp = cp
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("CUDA availability check failed: %s", e)
             return False
 
     def sync(self) -> None:
@@ -792,8 +798,8 @@ class _CUDABackend(_Accelerator):
             try:
                 mem = self._cp.cuda.Device().mem_info()
                 return mem[1] / (1024 ** 3)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("CUDA VRAM detection failed: %s", e)
         return 4.0
 
     @property
@@ -912,7 +918,8 @@ class _OpenCLBackend(_Accelerator):
             ctx = cl.create_some_context(interactive=False)
             self._cl = cl
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug("OpenCL availability check failed: %s", e)
             return False
 
     def sync(self) -> None:
@@ -925,7 +932,8 @@ class _OpenCLBackend(_Accelerator):
         try:
             dev = self._cl.get_platforms()[0].get_devices()[0]
             return dev.global_mem_size / (1024 ** 3)
-        except Exception:
+        except Exception as e:
+            logger.debug("OpenCL VRAM detection failed: %s", e)
             return 1.0
 
     @property

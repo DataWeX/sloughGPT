@@ -36,7 +36,7 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
       })
       onAnalysis(data.analysis || JSON.stringify(data), file.name)
     } catch (err: unknown) {
-      onError(extractErrorMessage(err, 'Failed to analyze PDF'))
+      onError(extractErrorMessage(err, 'Could not analyze PDF'))
     } finally {
       setUploading(false)
       setFilename(null)

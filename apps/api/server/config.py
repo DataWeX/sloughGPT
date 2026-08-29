@@ -63,6 +63,10 @@ class ServerConfig:
 
     inference_pool_size: int = field(default_factory=lambda: max(1, multiprocessing.cpu_count() // 2))
     request_timeout_seconds: float = 120.0
+    generate_timeout: float = 120.0  # timeout for model.generate() calls (env: SLO_GENERATE_TIMEOUT)
+    startup_model_load_timeout: float = 120.0  # timeout for model loading during startup (env: SLO_STARTUP_MODEL_LOAD_TIMEOUT)
+    startup_total_timeout: float = 120.0  # timeout for entire startup sequence (env: SLO_STARTUP_TOTAL_TIMEOUT)
+    startup_register_generate_timeout: float = 120.0  # timeout for register_generate() calls (env: SLO_REGISTER_GENERATE_TIMEOUT)
     streaming_skip_paths: tuple[str, ...] = (
         "/chat/stream", "/auto-train/stream", "/session/",
         "/generate/stream", "/models/load", "/inference/generate", "/chat",
@@ -80,6 +84,10 @@ class ServerConfig:
     native_soul_path: str = ""  # path to .soul file for native-trained model
     enable_process_guard: bool = True  # production default: guard _load_hf_model() in a subprocess
     lazy_guard_autoload: bool = True  # defer parent weight load when a ProcessGuard + .slnc are available
+    enable_inference_engine: bool = False  # run model in separate subprocess (isolated memory)
+    inference_engine_host: str = "127.0.0.1"  # inference engine bind address
+    inference_engine_port: int = 0  # 0 = auto-assign
+    inference_engine_timeout: float = 300.0  # seconds to wait for engine startup
     process_guard_memory_limit_mb: float = 0.0  # 0 = auto-size from model file
     enable_web: bool = False
 
@@ -107,10 +115,18 @@ class ServerConfig:
             quant_clip=float(os.getenv("SLO_QUANT_CLIP", "0.999")),
             inference_pool_size=int(os.getenv("SLO_INFERENCE_POOL_SIZE", str(max(1, multiprocessing.cpu_count() // 2)))),
             request_timeout_seconds=float(os.getenv("SLO_REQUEST_TIMEOUT", "120.0")),
+            generate_timeout=float(os.getenv("SLO_GENERATE_TIMEOUT", "120.0")),
+            startup_model_load_timeout=float(os.getenv("SLO_STARTUP_MODEL_LOAD_TIMEOUT", "120.0")),
+            startup_total_timeout=float(os.getenv("SLO_STARTUP_TOTAL_TIMEOUT", "120.0")),
+            startup_register_generate_timeout=float(os.getenv("SLO_REGISTER_GENERATE_TIMEOUT", "120.0")),
             enable_watchdog=os.getenv("SLO_WATCHDOG", "true").lower() == "true",
             native_soul_path=os.getenv("SLO_NATIVE_SOUL_PATH", "").strip(),
             enable_process_guard=os.getenv("SLO_ENABLE_PROCESS_GUARD", "true").lower() in ("1", "true", "yes"),
             lazy_guard_autoload=os.getenv("SLO_LAZY_GUARD_AUTOLOAD", "true").lower() in ("1", "true", "yes"),
+            enable_inference_engine=os.getenv("SLO_INFERENCE_ENGINE", "false").lower() in ("1", "true", "yes"),
+            inference_engine_host=os.getenv("SLO_INFERENCE_ENGINE_HOST", "127.0.0.1").strip(),
+            inference_engine_port=int(os.getenv("SLO_INFERENCE_ENGINE_PORT", "0")),
+            inference_engine_timeout=float(os.getenv("SLO_INFERENCE_ENGINE_TIMEOUT", "300")),
             process_guard_memory_limit_mb=float(os.getenv("SLO_PROCESS_GUARD_MEMORY_LIMIT_MB", "0")),
             enable_workflow=os.getenv("SLO_AUTO_WORKFLOW", "true").lower() == "true",
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",

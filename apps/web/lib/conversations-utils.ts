@@ -16,8 +16,12 @@ export function formatDate(dateStr: string | undefined): string {
   return date.toLocaleDateString()
 }
 
+export function truncate(text: string, maxLen = 80): string {
+  return text.length > maxLen ? text.slice(0, maxLen) + '…' : text
+}
+
 export function truncateMessage(content: string, maxLen = 60): string {
   if (!content) return 'Empty conversation'
   const firstLine = content.split('\n')[0]
-  return firstLine.length > maxLen ? firstLine.slice(0, maxLen) + '…' : firstLine
+  return truncate(firstLine, maxLen)
 }

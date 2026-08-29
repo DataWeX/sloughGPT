@@ -5,15 +5,23 @@ Encapsulates router state in ``SloRouterState`` dataclass rather than module-lev
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
 from dataclasses import dataclass
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from typing import Optional, Any, Dict, AsyncGenerator
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import re
-import json, asyncio, numpy as np, logging
+import json, asyncio, logging
+import threading
+import time
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
-from infrastructure.auth import require_auth_if_enabled, audit_user
+from domains.infrastructure.errors import AppError
+from infrastructure.auth import require_auth_if_enabled
+
+# Response cache for list_souls: avoids FS glob + per-soul metadata parse.
+_list_souls_cache: tuple[float, dict] | None = None
+_LIST_SOULS_CACHE_TTL = 30.0
+_list_souls_lock = threading.Lock()
 
 try:
     from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
@@ -27,9 +35,14 @@ except ImportError:
     def sse_token(stream, token, meta=None) -> dict:
         """sse_token."""
         return sse_event(stream, "STREAMING", "working", {"token": token}, meta or {})
-    def sse_error(stream, phase, error, meta=None) -> dict:
+    def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
         """sse_error."""
-        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
     def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done") -> dict:
         """sse_complete."""
         return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
@@ -55,16 +68,16 @@ class SloRouterState:
 
 
 class SwitchRequest(BaseModel):
-    name: str
-    checkpoint_name: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    checkpoint_name: Optional[str] = Field(default=None, max_length=200)
 
 
 class SloChatRequest(BaseModel):
-    checkpoint_name: str
-    prompt: str
-    max_new_tokens: int = 100
-    temperature: float = 0.8
-    top_p: float = 0.9
+    checkpoint_name: str = Field(..., min_length=1, max_length=100)
+    prompt: str = Field(..., min_length=1, max_length=10000)
+    max_new_tokens: int = Field(default=100, ge=1, le=4096)
+    temperature: float = Field(default=0.8, ge=0.1, le=2.0)
+    top_p: float = Field(default=0.9, ge=0.1, le=1.0)
 
 
 class SaveWeightsRequest(BaseModel):
@@ -126,6 +139,7 @@ class SoulsRouter:
         if SloughGPTModel is None:
             raise RuntimeError("SloughGPTModel not available — PyTorch model module not loaded")
         from domains.inference import load_soul
+        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
 
         soul, sd = load_soul(checkpoint_path)
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
@@ -133,38 +147,18 @@ class SoulsRouter:
             if not isinstance(sd, dict):
                 sd = sd.state_dict() if hasattr(sd, 'state_dict') else {}
 
-        vocab = sd["tok_emb.weight"].shape[0]
-        hidden = sd["tok_emb.weight"].shape[1]
-        n_blocks = max(int(k.split(".")[1]) for k in sd if k.startswith("blocks.")) + 1
-
-        n_head = 8
-        q_w = sd.get("blocks.0.attn.q_proj.weight")
-        if q_w is None:
-            q_w = sd.get("blocks.0.q_proj.weight")
-        if q_w is not None:
-            head_dim = hidden // 8
-            if head_dim > 0:
-                detected_heads = q_w.shape[0] // head_dim
-                if detected_heads >= 1:
-                    n_head = detected_heads
-
-        intermediate_size = 4 * hidden // 2
-        for key in sd:
-            if "mlp.w1.weight" in key:
-                w1_shape = sd[key].shape
-                if len(w1_shape) >= 2:
-                    intermediate_size = w1_shape[0]
-                break
+        arch = infer_arch_from_state_dict(sd)
+        tie_weights = "lm_head.weight" not in sd
 
         model = SloughGPTModel(
-            vocab_size=vocab,
-            n_embed=hidden,
-            n_layer=n_blocks,
-            n_head=n_head,
+            vocab_size=arch["vocab_size"],
+            n_embed=arch["n_embed"],
+            n_layer=arch["n_layer"],
+            n_head=arch["n_head"],
             dropout=0.0,
             tie_weights=tie_weights,
             block_size=128,
-            intermediate_size=intermediate_size,
+            intermediate_size=arch["intermediate_size"],
         )
 
         model.load_state_dict(sd, strict=False)
@@ -185,12 +179,15 @@ class SoulsRouter:
             if not self._VALID_CKPT_NAME.match(checkpoint_name) or '..' in checkpoint_name:
                 return {"status": "invalid_name"}
             checkpoint_file = (checkpoints_dir / checkpoint_name).resolve()
-            if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str(checkpoints_dir.resolve())):
+            if not str(checkpoint_file).startswith(str(checkpoints_dir.resolve())):
                 return {"status": "not_found", "path": str(checkpoint_file)}
 
             # Use SloNet import for .soul files
             from domains.training.slonet import import_from_sou
-            soul_net = import_from_sou(str(checkpoint_file))
+            try:
+                soul_net = import_from_sou(str(checkpoint_file))
+            except FileNotFoundError:
+                return {"status": "not_found", "path": str(checkpoint_file)}
             soul_meta = soul_net.soul_signature()
             model_state = soul_net.state_dict()
 
@@ -213,6 +210,7 @@ class SoulsRouter:
 
             return {"status": "no_target_model"}
         except Exception as e:
+            logger.warning("Load checkpoint into model failed: %s", e)
             classify_and_raise(e, source="load_checkpoint_into_model")
 
     def _build_soul_system_prompt(self, soul_info) -> str:
@@ -234,7 +232,7 @@ Be yourself — let your personality shape how you respond."""
     # Route handlers
     # ------------------------------------------------------------------
 
-    async def soul_chat(self, req: SloChatRequest, request: Request) -> AsyncGenerator[str, None]:
+    async def soul_chat(self, req: SloChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
 
         Loads the .soul file (PyTorch ZIP format), creates a SloughGPTModel with matching
@@ -243,9 +241,6 @@ Be yourself — let your personality shape how you respond."""
         Falls back to SloNet (NumPy) for checkpoints that don't match SloughGPTModel.
         """
         try:
-            from domains.slolib.gpu import get_accelerator
-
-            acc = get_accelerator()
             repo_root = self._get_repo_root()
             if not self._VALID_CKPT_NAME.match(req.checkpoint_name) or '..' in req.checkpoint_name:
                 raise_error("Invalid checkpoint name", code="E_VAL_REQUEST")
@@ -253,11 +248,14 @@ Be yourself — let your personality shape how you respond."""
             if not checkpoint_file.exists():
                 checkpoint_file = (repo_root / "models" / (req.checkpoint_name + ".soul")).resolve()
 
-            if not checkpoint_file.exists() or not str(checkpoint_file).startswith(str((repo_root / "models").resolve())):
+            if not str(checkpoint_file).startswith(str((repo_root / "models").resolve())):
                 raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
 
             # Load checkpoint into SloughGPTModel
-            model = self._load_slough_model(checkpoint_file)
+            try:
+                model = self._load_slough_model(checkpoint_file)
+            except FileNotFoundError:
+                raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
 
             chars = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?'-")
             stoi = {c: i for i, c in enumerate(chars)}
@@ -286,6 +284,7 @@ Be yourself — let your personality shape how you respond."""
                     if await request.is_disconnected():
                         return
 
+                    import numpy as np
                     seq = np.array([generated[-128:]], dtype=np.int64)
 
                     logits_arr, _ = model.forward(seq, targets=None)
@@ -321,11 +320,13 @@ Be yourself — let your personality shape how you respond."""
 
                     await asyncio.sleep(0)
 
+                safe_audit_log("soul.chat", resource=req.checkpoint_name, detail=f"chars={len(decode(generated))}")
                 yield sse_complete("souls-chat", data={"response": decode(generated)})
 
             return StreamingResponse(stream(), media_type="text/event-stream")
 
         except Exception as e:
+            logger.warning("Soul chat failed: %s", e)
             classify_and_raise(e, source="soul_chat")
 
     async def switch_soul(
@@ -340,6 +341,8 @@ Be yourself — let your personality shape how you respond."""
         weights into the main chat model (baby model → inference engine).
         """
         try:
+            import time as _time
+            _switch_t0 = _time.monotonic()
             from domains.inference.slo_manager import get_slo_manager
 
             manager = get_slo_manager()
@@ -368,7 +371,7 @@ Be yourself — let your personality shape how you respond."""
 
             # Load checkpoint into main model if requested
             if req.checkpoint_name:
-                loaded = self._load_checkpoint_into_model(req.checkpoint_name)
+                loaded = await asyncio.to_thread(self._load_checkpoint_into_model, req.checkpoint_name)
                 result["checkpoint_loaded"] = loaded
                 try:
                     from domains.infrastructure.server_state import get_server_state
@@ -395,10 +398,20 @@ Be yourself — let your personality shape how you respond."""
             except Exception:
                 logger.debug("Failed to record model event", exc_info=True)
 
-            safe_audit_log("soul.switch", resource=req.name, detail="checkpoint_loaded" if req.checkpoint_name else "", checkpoint_name=req.checkpoint_name or "")
+            # Record dashboard event
+            try:
+                from domains.infrastructure.event_buffer import get_event_buffer
+                detail = f" checkpoint={req.checkpoint_name}" if req.checkpoint_name else ""
+                get_event_buffer().record("SOUL", f"switched to {req.name}{detail}")
+            except Exception:
+                pass
+
+            _switch_elapsed_ms = (_time.monotonic() - _switch_t0) * 1000
+            safe_audit_log("soul.switch", resource=req.name, detail=f"elapsed={_switch_elapsed_ms:.0f}ms checkpoint_loaded" if req.checkpoint_name else f"elapsed={_switch_elapsed_ms:.0f}ms", checkpoint_name=req.checkpoint_name or "")
 
             return success_response(data=result)
         except Exception as e:
+            logger.warning("Switch soul failed: %s", e)
             classify_and_raise(e, source="switch_soul")
 
     async def list_souls(self) -> dict:
@@ -411,15 +424,18 @@ Be yourself — let your personality shape how you respond."""
         Side effects:
             - calls SloManager.list_souls() and get_current_soul()
         """
+        global _list_souls_cache
+        now = time.monotonic()
+        with _list_souls_lock:
+            if _list_souls_cache and (now - _list_souls_cache[0]) < _LIST_SOULS_CACHE_TTL:
+                return _list_souls_cache[1]
         try:
             import asyncio
             from domains.inference.slo_manager import get_slo_manager
             manager = get_slo_manager()
-            # list_souls() is sync (filesystem glob).  Offload the first
-            # scan to a thread so the event loop stays responsive.
             souls = await asyncio.to_thread(manager.list_souls)
             current = manager.get_current_soul()
-            return success_response(data=[
+            result = success_response(data=[
                 {
                     "name": s.name,
                     "path": s.path,
@@ -442,15 +458,19 @@ Be yourself — let your personality shape how you respond."""
                 }
                 for s in souls
             ], meta={"current_soul": current.name if current else None})
+            with _list_souls_lock:
+                _list_souls_cache = (now, result)
+            return result
         except Exception as e:
-            raise_error(str(e), "E_DOMAIN")
+            classify_and_raise(e, source="list_souls")
 
     async def get_soul(self, soul_name: str) -> dict:
         """Get details for a specific soul by name."""
         try:
+            import asyncio
             from domains.inference.slo_manager import get_slo_manager
             manager = get_slo_manager()
-            souls = manager.list_souls()
+            souls = await asyncio.to_thread(manager.list_souls)
             for s in souls:
                 if s.name == soul_name:
                     return success_response(data={
@@ -473,10 +493,11 @@ Be yourself — let your personality shape how you respond."""
                         "emotion": getattr(s, "emotion", {}),
                         "generation_params": getattr(s, "generation_params", {}),
                     })
-            raise HTTPException(status_code=404, detail=f"Soul '{soul_name}' not found")
-        except HTTPException:
-            raise
+            raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
+        except AppError as e:
+            classify_and_raise(e, source="souls.get_soul")
         except Exception as e:
+            logger.warning("Get soul failed: %s", e)
             classify_and_raise(e, source="get_soul")
 
     async def get_trait_weights(self) -> dict:
@@ -501,9 +522,10 @@ Be yourself — let your personality shape how you respond."""
             weights = manager.get_trait_weights()
             return success_response(data=weights)
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get trait weights failed: %s", e)
+            classify_and_raise(e, source="get_trait_weights")
 
-    async def save_trait_weights(self, body: SaveWeightsRequest) -> dict:
+    async def save_trait_weights(self, body: SaveWeightsRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Save trait weights to the persistent config. Accepts a dict of trait
         groups (personality, cognition, emotion) with trait name → 0.0–1.0 values.
@@ -528,7 +550,8 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("soul.weights.save", resource="traits", detail=f"traits_saved={len(flat)}", groups=[g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)])
             return success_response(message="saved")
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Save trait weights failed: %s", e)
+            classify_and_raise(e, source="save_trait_weights")
 
     async def get_trait_modes(self) -> dict:
         """
@@ -560,7 +583,8 @@ Be yourself — let your personality shape how you respond."""
                 "task": TaskManager(config).get_mode(),
             })
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get trait modes failed: %s", e)
+            classify_and_raise(e, source="get_trait_modes")
 
     async def get_current_soul(self) -> dict:
         """
@@ -584,7 +608,8 @@ Be yourself — let your personality shape how you respond."""
                 })
             return success_response(data={"name": None})
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get current soul failed: %s", e)
+            classify_and_raise(e, source="get_current_soul")
 
     async def list_weight_snapshots(self) -> dict:
         """
@@ -601,9 +626,9 @@ Be yourself — let your personality shape how you respond."""
             config = get_trait_config()
             return success_response(data=config.list_snapshots())
         except Exception as e:
-            raise_error(str(e), "E_DOMAIN")
+            classify_and_raise(e, source="list_weight_snapshots")
 
-    async def save_weight_snapshot(self, name: str) -> dict:
+    async def save_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Save current trait weights as a named snapshot.
 
@@ -623,9 +648,10 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.save", resource=name)
             return success_response(data={"path": path}, message="saved")
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Save weight snapshot failed: %s", e)
+            classify_and_raise(e, source="save_weight_snapshot")
 
-    async def load_weight_snapshot(self, name: str) -> dict:
+    async def load_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Load trait weights from a named snapshot.
 
@@ -645,9 +671,10 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.load", resource=name, detail=f"traits_loaded={count}")
             return success_response(data={"traits_loaded": count}, message="loaded")
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Load weight snapshot failed: %s", e)
+            classify_and_raise(e, source="load_weight_snapshot")
 
-    async def delete_weight_snapshot(self, name: str) -> dict:
+    async def delete_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """
         Delete a trait weight snapshot.
 
@@ -667,7 +694,8 @@ Be yourself — let your personality shape how you respond."""
             safe_audit_log("weights.snapshot.delete", resource=name, detail=f"deleted={ok}")
             return success_response(data={"deleted": ok})
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Delete weight snapshot failed: %s", e)
+            classify_and_raise(e, source="delete_weight_snapshot")
 
     async def get_soul_stats(self) -> dict:
         """
@@ -683,7 +711,8 @@ Be yourself — let your personality shape how you respond."""
             from domains.inference.slo_manager import get_slo_manager
             return success_response(data=get_slo_manager().get_stats())
         except Exception as e:
-            classify_and_raise(e, source="soul_handler")
+            logger.warning("Get soul stats failed: %s", e)
+            classify_and_raise(e, source="get_soul_stats")
 
 
 router = SoulsRouter().router

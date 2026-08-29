@@ -5,9 +5,29 @@ Provides better "did you mean?" suggestions, color-coded help, and
 a welcome banner for the CLI.
 """
 
+import sys
 import click
 from difflib import get_close_matches
 from typing import List, Optional
+
+
+# ── ANSI helpers ────────────────────────────────────────────────────────
+
+_TTY = sys.stdout.isatty()
+
+def _c(text: str, code: str) -> str:
+    return f"{code}{text}\033[0m" if _TTY else text
+
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_CYAN = "\033[36m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_RED = "\033[31m"
+
+def _p(text: str = "") -> None:
+    sys.stdout.write(text + "\n")
+    sys.stdout.flush()
 
 
 class SmartGroup(click.Group):
@@ -51,34 +71,23 @@ class SmartGroup(click.Group):
 
     def _show_command_error(self, ctx: click.Context, cmd_name: str) -> None:
         """Show a helpful error message when command is not found."""
-        from rich.console import Console
-        from rich.text import Text
-
-        console = Console(highlight=False)
-
         # Get available commands
         commands = sorted(self.commands.keys())
 
-        # Build error message
-        error = Text()
-        error.append("  ✗ ", style="red")
-        error.append(f"Unknown command: ", style="bold")
-        error.append(cmd_name, style="cyan")
-
-        console.print()
-        console.print(error)
-        console.print()
+        _p()
+        _p(f"  {_c('✗', _RED)} {_c('Unknown command: ', _BOLD)}{_c(cmd_name, _CYAN)}")
+        _p()
 
         # Show suggestions
         if commands:
-            console.print("  [bold]Available commands:[/]")
+            _p(f"  {_c('Available commands:', _BOLD)}")
             for name in commands:
-                console.print(f"    [cyan]{name}[/]")
-            console.print()
+                _p(f"    {_c(name, _CYAN)}")
+            _p()
 
             # Show tip
-            console.print("  [dim]Tip: Use 'sloughgpt --help' to see all commands[/]")
-            console.print()
+            _p(f"  {_c('Tip: Use \'sloughgpt --help\' to see all commands', _DIM)}")
+            _p()
 
     def format_usage(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         """Custom usage format with version info."""
@@ -98,10 +107,6 @@ class SmartGroup(click.Group):
 
     def format_help(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         """Custom help format with color-coded groups and examples."""
-        # Title
-        from rich.console import Console
-        console = Console(highlight=False)
-
         # Print version and title
         try:
             from core.version import format_version_display
@@ -109,24 +114,24 @@ class SmartGroup(click.Group):
         except Exception:
             version = "dev"
 
-        console.print(f"\n  [bold cyan]SloughGPT[/] [dim]({version})[/]\n")
+        _p(f"\n  {_c('SloughGPT', _BOLD + _CYAN)} {_c(f'({version})', _DIM)}\n")
 
         # Description
-        console.print("  [dim]Train, chat, serve, and manage AI models[/]\n")
+        _p(f"  {_c('Train, chat, serve, and manage AI models', _DIM)}\n")
 
         # Commands grouped by category with examples and tips
-        self._format_grouped_commands(ctx, console)
+        self._format_grouped_commands(ctx)
 
         # Global options
-        console.print("  [bold]Global Options:[/]")
-        console.print("    [cyan]--host[/]       API hostname (default: localhost)")
-        console.print("    [cyan]--port[/]       API port (default: 8000)")
-        console.print("    [cyan]-c, --config[/] Config path (default: config.yaml)")
-        console.print("    [cyan]--yes, -y[/]    Skip all confirmations")
-        console.print("    [cyan]--help[/]       Show this help message")
-        console.print()
+        _p(f"  {_c('Global Options:', _BOLD)}")
+        _p(f"    {_c('--host', _CYAN)}       API hostname (default: localhost)")
+        _p(f"    {_c('--port', _CYAN)}       API port (default: 8000)")
+        _p(f"    {_c('-c, --config', _CYAN)} Config path (default: config.yaml)")
+        _p(f"    {_c('--yes, -y', _CYAN)}    Skip all confirmations")
+        _p(f"    {_c('--help', _CYAN)}       Show this help message")
+        _p()
 
-    def _format_grouped_commands(self, ctx: click.Context, console) -> None:
+    def _format_grouped_commands(self, ctx: click.Context) -> None:
         """Format commands grouped by category with examples and tips."""
         # Define command categories with descriptions
         categories = {
@@ -168,7 +173,7 @@ class SmartGroup(click.Group):
                 commands[name] = cmd
 
         # Print grouped commands
-        console.print("  [bold]Commands:[/]")
+        _p(f"  {_c('Commands:', _BOLD)}")
 
         # Track which commands we've printed
         printed = set()
@@ -176,46 +181,48 @@ class SmartGroup(click.Group):
         for cat_name, cat_info in categories.items():
             cat_cmds = [(n, commands[n]) for n in cat_info["cmds"] if n in commands]
             if cat_cmds:
-                console.print(f"\n    [bold yellow]{cat_name}[/] [dim]— {cat_info['desc']}[/]")
+                desc = cat_info["desc"]
+                _p(f"\n    {_c(cat_name, _BOLD + _YELLOW)} {_c(f'— {desc}', _DIM)}")
                 for name, cmd in cat_cmds:
                     help_text = cmd.get_short_help_str(limit=50)
+                    padded = name.ljust(16)
                     if help_text:
-                        console.print(f"      [cyan]{name:<16}[/] [dim]{help_text}[/]")
+                        _p(f"      {_c(padded, _CYAN)} {_c(help_text, _DIM)}")
                     else:
-                        console.print(f"      [cyan]{name}[/]")
+                        _p(f"      {_c(name, _CYAN)}")
                     printed.add(name)
 
         # Print any remaining commands (hidden ones like hf-serve)
         remaining = [(n, commands[n]) for n in sorted(commands.keys()) if n not in printed]
         if remaining:
-            console.print("\n    [bold yellow]Advanced[/]")
+            _p(f"\n    {_c('Advanced', _BOLD + _YELLOW)}")
             for name, cmd in remaining:
                 if getattr(cmd, "hidden", False):
                     continue
                 help_text = cmd.get_short_help_str(limit=50)
+                padded = name.ljust(16)
                 if help_text:
-                    console.print(f"      [cyan]{name:<16}[/] [dim]{help_text}[/]")
+                    _p(f"      {_c(padded, _CYAN)} {_c(help_text, _DIM)}")
                 else:
-                    console.print(f"      [cyan]{name}[/]")
+                    _p(f"      {_c(name, _CYAN)}")
 
         # Print examples
-        console.print("\n  [bold]Examples:[/]")
-        console.print("    [dim]sloughgpt chat[/]                     Start chatting")
-        console.print("    [dim]sloughgpt model download gpt2[/]     Download a model")
-        console.print("    [dim]sloughgpt model status[/]             Check model cache")
-        console.print("    [dim]sloughgpt train dataset shakespeare[/] Train on dataset")
-        console.print("    [dim]sloughgpt shell[/]                    Interactive shell")
-        console.print()
+        _p(f"\n  {_c('Examples:', _BOLD)}")
+        _p(f"    {_c('sloughgpt chat', _DIM)}                     Start chatting")
+        _p(f"    {_c('sloughgpt model download gpt2', _DIM)}     Download a model")
+        _p(f"    {_c('sloughgpt model status', _DIM)}             Check model cache")
+        _p(f"    {_c('sloughgpt train dataset shakespeare', _DIM)} Train on dataset")
+        _p(f"    {_c('sloughgpt shell', _DIM)}                    Interactive shell")
+        _p()
 
         # Print tips
-        console.print("  [bold]Tips:[/]")
-        console.print("    [dim]• Use fuzzy matching — 'sloughgpt md' finds 'model'[/]")
-        console.print("    [dim]• Run 'sloughgpt shell' then 'confirm on' to skip all download prompts[/]")
-        console.print("    [dim]• Run 'sloughgpt shell' for 40+ built-in commands[/]")
-        console.print("    [dim]• Add --yes/-y to skip confirmations for a single command[/]")
-        console.print()
-
-        console.print()
+        _p(f"  {_c('Tips:', _BOLD)}")
+        _p(f"    {_c('• Use fuzzy matching — \'sloughgpt md\' finds \'model\'', _DIM)}")
+        _p(f"    {_c('• Run \'sloughgpt shell\' then \'confirm on\' to skip all download prompts', _DIM)}")
+        _p(f"    {_c('• Run \'sloughgpt shell\' for 40+ built-in commands', _DIM)}")
+        _p(f"    {_c('• Add --yes/-y to skip confirmations for a single command', _DIM)}")
+        _p()
+        _p()
 
     def resolve_command(self, ctx: click.Context, args: List[str]) -> tuple:
         """Resolve command with fuzzy matching and helpful error on failure."""

@@ -6,6 +6,10 @@
 
 import { apiPost, apiGet, streamSSE } from './http-client'
 import { modelController, type ModelStatus } from './model-controller'
+import { logger } from './dev-log'
+import { PUBLIC_API_URL } from './config'
+
+const _log = logger.child('chat-controller')
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -41,7 +45,8 @@ export const chatController = {
         session_id: data.session_id || options?.session_id || 'default',
         done: true,
       }
-    } catch {
+    } catch (err) {
+      _log.warning('chat endpoint failed, falling back to /inference/generate', { error: err instanceof Error ? err.message : String(err) })
       const fallback = await apiPost<{ text?: string }>(
         '/inference/generate',
         {
@@ -122,7 +127,8 @@ export const chatController = {
     try {
       const data = await apiGet<{ suggestions?: { text: string; icon: string }[] }>('/chat/suggestions')
       return data.suggestions || []
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to fetch suggestions', { error: err instanceof Error ? err.message : String(err) })
       return []
     }
   },
@@ -130,9 +136,46 @@ export const chatController = {
   async inspectContext(): Promise<ContextInspector | null> {
     try {
       return await apiGet<ContextInspector>('/context/inspect')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to inspect context', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
+  },
+
+  async sendVoiceMessage(sessionId: string, audioBlob: Blob, language = 'en'): Promise<{
+    audio_path: string
+    audio_duration_ms: number
+    transcript?: string
+  }> {
+    const formData = new FormData()
+    formData.append('file', audioBlob, `voice-${Date.now()}.webm`)
+    formData.append('language', language)
+    return apiPost(`/chat/voice/${sessionId}`, formData, { raw: true })
+  },
+
+  getVoiceAudioUrl(sessionId: string, messageId: string): string {
+    return `${PUBLIC_API_URL}/chat/audio/${sessionId}/${messageId}`
+  },
+
+  async cancelStream(sessionId: string): Promise<void> {
+    await apiPost('/chat/control', { session_id: sessionId, action: 'cancel' })
+  },
+
+  async approveTool(sessionId: string, toolName: string, approved: boolean): Promise<void> {
+    await apiPost('/chat/control', {
+      session_id: sessionId,
+      action: 'approve',
+      tool_name: toolName,
+      approved,
+    })
+  },
+
+  async injectContext(sessionId: string, context: string): Promise<void> {
+    await apiPost('/chat/control', {
+      session_id: sessionId,
+      action: 'context',
+      context,
+    })
   },
 }
 

@@ -8,11 +8,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.kb import router
+from infrastructure.exception_handlers import register_all_handlers
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -20,6 +22,14 @@ def app():
 @pytest.fixture
 def client(app):
     return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def _mock_rag_service():
+    """Prevent real RAG service initialization in any kb test that hits an add/ingest path."""
+    with patch("domains.cognitive.rag_service.get_rag_service") as m:
+        m.return_value = MagicMock()
+        yield m
 
 
 class TestListKnowledge:
@@ -108,7 +118,7 @@ class TestBulkIngest:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "completed"
         assert data["added"] == 2
         assert data["errors"] == 0
@@ -129,7 +139,7 @@ class TestBulkIngest:
             mem = mock_get_mem.return_value
             resp = client.post("/knowledge/bulk-ingest", json={"items": []})
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["status"] == "completed"
         assert data["added"] == 0
 
@@ -385,10 +395,12 @@ class TestIngestUrl:
         err = MagicMock()
         err.http_status = 503
         err.user_message = "upstream failed"
+        err.code = "E_UPSTREAM"
+        err.details = {}
         mock_classify.return_value = err
         resp = client.post("/knowledge/ingest-url", json={"url": "https://example.com/foo"})
         assert resp.status_code == 503
-        mock_emit.assert_called_once()
+        assert mock_emit.call_count == 2
 
 
 class TestLabelMethods:

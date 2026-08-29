@@ -5,7 +5,7 @@ from .resolution import resolve_training_inputs
 
 try:
     from .router import router
-except Exception:
+except ImportError:
     import logging
     logging.getLogger("slo.training").warning("Training router failed to import", exc_info=True)
     from fastapi import APIRouter

@@ -15,11 +15,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 import logging
 
-try:
-    from .consciousness import ConsciousSLO, SLOConfig, Thought, EvolutionStage
-except ImportError:
-    ConsciousSLO = SLOConfig = Thought = EvolutionStage = None
-
 logger = logging.getLogger("slo.soul.quantum")
 
 

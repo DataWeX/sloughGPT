@@ -8,6 +8,7 @@ import { soulsController } from '@/lib/souls-controller'
 import { feedbackController } from '@/lib/feedback-controller'
 import { chatDB } from '@/lib/db'
 import { logger } from '@/lib/dev-log'
+import { useToastStore } from '@/lib/toast-store'
 
 interface SteeringMode {
   label: string
@@ -48,17 +49,19 @@ export function ContextTab() {
   const [loading, setLoading] = useState(true)
   const [showPrompt, setShowPrompt] = useState(false)
 
-  const fetchAll = async () => {
+  const addToast = useToastStore(s => s.addToast)
+
+  const fetchData = async () => {
     setLoading(true)
     try {
       const [insp, modeData, traits, knowledge, fb] = await Promise.all([
         chatController.inspectContext(),
-        soulsController.getModes().catch(() => null),
-        soulsController.getTraitWeights().catch(() => null),
-        chatDB.getKnowledge().catch(() => null),
+        soulsController.getModes().catch((e) => { logger.debug('Could not load modes', { e }); return null }),
+        soulsController.getTraitWeights().catch((e) => { logger.debug('Could not load traits', { e }); return null }),
+        chatDB.getKnowledge().catch((e) => { logger.debug('Could not load knowledge', { e }); return null }),
         feedbackController.getFeedbackStats().then(
           s => ({ up: s.db_stats?.thumbs_up ?? 0, down: s.db_stats?.thumbs_down ?? 0 }),
-          () => null,
+          (e) => { logger.debug('Could not load feedback', { e }); return null },
         ),
       ])
       setInspector(insp)
@@ -67,13 +70,18 @@ export function ContextTab() {
       setKnowledgeCount(Array.isArray(knowledge) ? knowledge.length : null)
       setFeedback(fb)
     } catch (err) {
-      logger.debug('Context inspector fetch failed', { exception: String(err) })
+      addToast('Failed to load context inspector', 'error')
+      logger.debug('Could not context inspector fetch', { exception: String(err) })
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    let active = true
+    void fetchData()
+    return () => { active = false }
+  }, [])
 
   const hasAnything = Boolean(inspector) || Boolean(modes) || Boolean(traitWeights) || knowledgeCount != null || Boolean(feedback)
   const workingCount = inspector?.working_memory?.length ?? 0
@@ -90,7 +98,8 @@ export function ContextTab() {
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">What the model sees</span>
         <button
-          onClick={fetchAll}
+          type="button"
+          onClick={fetchData}
           disabled={loading}
           className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
           aria-label="Refresh context"
@@ -100,10 +109,10 @@ export function ContextTab() {
       </div>
 
       {loading ? (
-        <p className="text-[10px] text-muted-foreground text-center py-3">Loading context…</p>
+        <p className="text-[10px] text-muted-foreground text-center py-3" aria-busy="true">Loading context…</p>
       ) : !hasAnything ? (
         <p className="text-xs text-muted-foreground text-center py-4">
-          Context unavailable right now. Start the API server and load a model.
+          Context unavailable right now. Please try again.
         </p>
       ) : (
         <>
@@ -173,6 +182,7 @@ export function ContextTab() {
               {inspector.system_prompt && (
                 <div className="pt-1 border-t border-border/30">
                   <button
+                    type="button"
                     onClick={() => setShowPrompt(s => !s)}
                     className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
                     aria-expanded={showPrompt}

@@ -43,9 +43,9 @@ const statsOpen: RegistryStats = {
 }
 
 describe('RegistryHealthCard', () => {
-  it('returns null when no models', () => {
+  it('renders empty state when no models', () => {
     const { container } = render(<RegistryHealthCard models={[]} stats={stats} />)
-    expect(container.querySelector('[data-testid="registry-health"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders health card with models', () => {

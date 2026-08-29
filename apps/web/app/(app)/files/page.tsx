@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry } from '@/lib/files-controller'
@@ -11,6 +11,7 @@ import { useToastStore } from '@/lib/toast-store'
 export default function FilesPage() {
   const [files, setFiles] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
@@ -20,17 +21,18 @@ export default function FilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     try {
+      setLoadError(null)
       setFiles(await filesController.list())
     } catch {
-      addToast('Failed to load files', 'error')
+      setLoadError('Could not load files. Please try again.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchFiles() }, [])
+  useEffect(() => { fetchFiles() }, [fetchFiles])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -44,7 +46,7 @@ export default function FilesPage() {
       setUploadMsg(`Uploaded ${data.filename ?? file.name}`)
       await fetchFiles()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Upload failed', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not upload', 'error')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -56,7 +58,7 @@ export default function FilesPage() {
       await filesController.delete(id)
       await fetchFiles()
     } catch {
-      addToast('Failed to delete file', 'error')
+      addToast('Could not delete file', 'error')
     }
   }
 
@@ -66,7 +68,7 @@ export default function FilesPage() {
       await filesController.ingest(id)
       await fetchFiles()
     } catch {
-      addToast('Failed to index file', 'error')
+      addToast('Could not index file', 'error')
     } finally {
       setIngesting(null)
     }
@@ -77,7 +79,7 @@ export default function FilesPage() {
     try {
       setFiles(await filesController.search(searchQuery))
     } catch {
-      addToast('Failed to search files', 'error')
+      addToast('Could not search files', 'error')
     }
   }
 
@@ -107,7 +109,7 @@ export default function FilesPage() {
       await fetchFiles()
       addToast(`Deleted ${selected.size} files`, 'success')
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }
@@ -142,6 +144,8 @@ export default function FilesPage() {
     <PageContainer
       title="Files"
       subtitle={`${files.length} files`}
+      error={loadError}
+      onRetry={fetchFiles}
     >
         <FileStatsCard files={files} />
 
@@ -149,12 +153,13 @@ export default function FilesPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Files</CardTitle>
             <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={fetchFiles}>
+              <Button size="sm" variant="ghost" onClick={fetchFiles} aria-label="Refresh files">
                 <IconRefresh className="h-4 w-4" />
               </Button>
               <input
                 ref={fileInputRef}
                 type="file"
+                aria-label="Upload file"
                 className="hidden"
                 onChange={handleUpload}
                 accept=".txt,.md,.json,.jsonl,.csv,.pdf,.py,.js,.ts,.html,.css"
@@ -194,21 +199,21 @@ export default function FilesPage() {
                 )}
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   <label className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 rounded">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.size === filtered.length && filtered.length > 0}
-                      onChange={toggleSelectAll}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all files"
                       className="h-4 w-4 rounded border-border"
                     />
                     Select all ({filtered.length})
                   </label>
                   {filtered.map(f => (
-                    <div key={f.id} className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors ${selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60'}`}>
+                    <div key={f.id} className={cn('flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors', selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60')}>
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={selected.has(f.id)}
-                          onChange={() => toggleSelect(f.id)}
+                          onCheckedChange={() => toggleSelect(f.id)}
+                          aria-label={`Select file ${f.filename}`}
                           className="h-4 w-4 rounded border-border shrink-0"
                         />
                         <div className="flex-1 min-w-0">

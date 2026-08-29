@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt } from '@sloughgpt/strui'
+import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt, IconChart, IconDownload } from '@sloughgpt/strui'
 import { useChatContext } from '@/features/chat/contexts/ChatContext'
 import { KnowledgeTab } from './KnowledgeTab'
 import { MemoryTab } from './MemoryTab'
@@ -12,6 +12,10 @@ import { VisionTabContent } from './VisionTabContent'
 import { QuickPrompts } from './../input/QuickPrompts'
 import { ChatBookmarksPanel } from './ChatBookmarksPanel'
 import { ChatSessionStatsCard } from './ChatSessionStatsCard'
+import { ConversationSummary } from './../ConversationSummary'
+import { ConversationStats } from './../ConversationStats'
+import { ConversationExport } from './../ConversationExport'
+import { ChatAnalytics } from './../ChatAnalytics'
 
 interface ChatToolPanelProps {
   open: boolean
@@ -20,9 +24,10 @@ interface ChatToolPanelProps {
   bookmarks?: import('@/features/chat/hooks/useChatBookmarks').BookmarkedMessage[]
   onRemoveBookmark?: (id: string) => void
   onClearBookmarks?: () => void
+  messages?: import('@/lib/chat-utils').ChatMessage[]
 }
 
-export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks }: ChatToolPanelProps) {
+export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks, messages = [] }: ChatToolPanelProps) {
   const [showVision, setShowVision] = useState(false)
   const ctx = useChatContext()
 
@@ -71,7 +76,7 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                 visionVocabSize={ctx.visionVocabSize}
                 sessionId={sessionId}
                 onGeneratedImage={(dataUrl, prompt) => {
-                  const event = new CustomEvent('generate-image', { detail: { dataUrl, prompt } })
+                  const event = new CustomEvent('insert-generated-image', { detail: { dataUrl, prompt } })
                   window.dispatchEvent(event)
                 }}
                 onSendText={(text) => {
@@ -81,7 +86,7 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
             ) : (
               <>
                 <ChatSessionStatsCard sessionId={sessionId} />
-                <section>
+                <section aria-label="Knowledge">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Knowledge</span>
@@ -92,28 +97,56 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
                     onOpenShortcuts={ctx.onOpenShortcuts}
                   />
                 </section>
-                <section>
+                <section aria-label="Memory">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconSparkle className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Memory</span>
                   </div>
                   <MemoryTab />
                 </section>
-                <section>
+                <section aria-label="Context">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconCode className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Context</span>
                   </div>
                   <ContextTab />
                 </section>
-                <section>
+                <section aria-label="Quick Prompts">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconBolt className="h-3 w-3 text-muted-foreground" />
                     <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Quick Prompts</span>
                   </div>
                   <QuickPrompts onUsePrompt={(text) => ctx.setInput(text)} />
                 </section>
-                <section>
+                <section aria-label="Summary">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconDocument className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Summary</span>
+                  </div>
+                  <ConversationSummary messages={messages} />
+                </section>
+                <section aria-label="Statistics">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconChart className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Statistics</span>
+                  </div>
+                  <ConversationStats messages={messages} />
+                </section>
+                <section aria-label="Export">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconDownload className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Export</span>
+                  </div>
+                  <ConversationExport messages={messages} model={ctx.model} />
+                </section>
+                <section aria-label="Analytics">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <IconChart className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Analytics</span>
+                  </div>
+                  <ChatAnalytics />
+                </section>
+                <section aria-label="Bookmarks">
                   <ChatBookmarksPanel
                     bookmarks={bookmarks}
                     onRemove={onRemoveBookmark || (() => {})}

@@ -145,6 +145,48 @@ def _check_uptime(uptime_seconds: float) -> Diagnosis:
     return Diagnosis("uptime", severity, score, msg)
 
 
+def _check_resources(cpu_percent: float, memory_percent: float) -> Diagnosis:
+    """Check system resource pressure (CPU + memory).
+
+    High CPU (>85%) or high memory (>90%) degrades the score. Both combined
+    is worse than either alone. A server at 99% CPU and 95% memory should
+    show degraded/unhealthy, not healthy.
+    """
+    if cpu_percent <= 0 and memory_percent <= 0:
+        return Diagnosis("resources", Severity.INFO, 80, "Resource data not available yet.")
+
+    # CPU penalty: 0% at 50%, linear to 0 at 100%
+    cpu_score = max(0.0, 1.0 - max(0, cpu_percent - 50) / 50) * 100
+    # Memory penalty: 0% at 70%, linear to 0 at 100%
+    mem_score = max(0.0, 1.0 - max(0, memory_percent - 70) / 30) * 100
+
+    # Weighted average (CPU 40%, memory 60% — memory pressure is more dangerous)
+    score = cpu_score * 0.4 + mem_score * 0.6
+
+    # Build message
+    parts = []
+    if cpu_percent > 85:
+        parts.append(f"CPU at {cpu_percent:.0f}% — throttling risk")
+    elif cpu_percent > 50:
+        parts.append(f"CPU at {cpu_percent:.0f}%")
+    if memory_percent > 90:
+        parts.append(f"Memory at {memory_percent:.0f}% — near limit")
+    elif memory_percent > 70:
+        parts.append(f"Memory at {memory_percent:.0f}%")
+
+    if not parts:
+        msg = f"CPU {cpu_percent:.0f}%, memory {memory_percent:.0f}% — headroom OK."
+    else:
+        msg = " ".join(parts) + "."
+
+    severity = (
+        Severity.OK if score >= 70
+        else Severity.WARN if score >= 40
+        else Severity.CRITICAL
+    )
+    return Diagnosis("resources", severity, score, msg)
+
+
 # ── The flow ──────────────────────────────────────────────────────────────
 
 def run_health_flow(
@@ -155,6 +197,8 @@ def run_health_flow(
     uptime_seconds: float,
     model_loaded: bool,
     model_type: str = "",
+    cpu_percent: float = 0.0,
+    memory_percent: float = 0.0,
 ) -> HealthFlowResult:
     """Run all checks in order, aggregate into a single health verdict.
 
@@ -167,10 +211,18 @@ def run_health_flow(
         _check_throughput(tokens_per_sec),
         _check_model(model_loaded, model_type),
         _check_uptime(uptime_seconds),
+        _check_resources(cpu_percent, memory_percent),
     ]
 
-    # Weighted score (same weights as before, but now each check is a function)
-    weights = {"errors": 0.35, "latency": 0.25, "throughput": 0.20, "model": 0.10, "uptime": 0.10}
+    # Weighted score — resources added to reflect system pressure
+    weights = {
+        "errors": 0.25,
+        "latency": 0.20,
+        "throughput": 0.15,
+        "model": 0.10,
+        "uptime": 0.05,
+        "resources": 0.25,
+    }
     total = 0.0
     for d in diagnoses:
         w = weights.get(d.check, 0.1)

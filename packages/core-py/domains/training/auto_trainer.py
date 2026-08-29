@@ -26,7 +26,7 @@ logger = logging.getLogger("slo.training.auto_trainer")
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
 _SESSIONS_DIR = _REPO_ROOT / "data" / "chat_sessions"
 _RESPONSE_LOGS_DIR = _REPO_ROOT / "data" / "response_logs"
-_CAPTURED_CORPUS = _REPO_ROOT / "datasets" / "api_conversations" / "corpus.jsonl"
+_CAPTURED_CORPUS = _REPO_ROOT / "data" / "api_conversations" / "corpus.jsonl"
 
 
 class AutoTrainer:
@@ -186,7 +186,14 @@ class AutoTrainer:
                     extra={"tag": "TRAIN"},)
                 return False
 
-            result = json.loads(proc.stdout.strip().split("\n")[-1])
+            try:
+                result = json.loads(proc.stdout.strip().split("\n")[-1])
+            except (json.JSONDecodeError, IndexError) as e:
+                logger.error("AutoTrainer: invalid JSON from subprocess", extra={
+                    "tag": "TRAIN", "error": str(e),
+                    "stdout_tail": proc.stdout[-500:] if proc.stdout else "",
+                })
+                return False
             elapsed = time.time() - t0
 
             if result.get("success"):

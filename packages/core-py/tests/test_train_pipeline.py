@@ -118,7 +118,7 @@ class TestPrepareData:
 
     def test_datasets_dir_fallback(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        d = tmp_path / "datasets" / "corpus2"
+        d = tmp_path / "data" / "corpus2"
         d.mkdir(parents=True)
         (d / "input.txt").write_text("hello world hello", encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data("corpus2", block_size=8)
@@ -127,8 +127,8 @@ class TestPrepareData:
 
     def test_list_with_ratios(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
-        b = tmp_path / "datasets" / "b"
+        a = tmp_path / "data" / "a"
+        b = tmp_path / "data" / "b"
         a.mkdir(parents=True)
         b.mkdir(parents=True)
         (a / "input.txt").write_text("aaaa", encoding="utf-8")
@@ -139,7 +139,7 @@ class TestPrepareData:
 
     def test_list_with_ratios_missing_dataset_warns(self, tmp_path, monkeypatch, caplog):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
+        a = tmp_path / "data" / "a"
         a.mkdir(parents=True)
         (a / "input.txt").write_text("hello there", encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data([("a", 1.0), ("missing", 0.5)], block_size=8)
@@ -153,8 +153,8 @@ class TestPrepareData:
 
     def test_plain_list(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
-        b = tmp_path / "datasets" / "b"
+        a = tmp_path / "data" / "a"
+        b = tmp_path / "data" / "b"
         a.mkdir(parents=True)
         b.mkdir(parents=True)
         (a / "input.txt").write_text("xyz", encoding="utf-8")
@@ -164,7 +164,7 @@ class TestPrepareData:
 
     def test_plain_list_missing_skipped(self, tmp_path, monkeypatch, caplog):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
+        a = tmp_path / "data" / "a"
         a.mkdir(parents=True)
         (a / "input.txt").write_text("xyz", encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data(["a", "nope"], block_size=8)

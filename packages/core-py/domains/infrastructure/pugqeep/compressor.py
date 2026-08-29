@@ -6,7 +6,7 @@ Supports:
   - Function fitting (periodic, linear, polynomial) with residual storage
 """
 
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -50,8 +50,21 @@ class PointCompressor:
         """
         if n_clusters is None:
             n_clusters = self.n_clusters
+
+        # Input validation
+        if weights.size == 0:
+            raise ValueError(f"Cannot compress empty array: {identity}")
+        if not np.isfinite(weights).all():
+            raise ValueError(f"Array contains NaN/Inf values: {identity}")
+        if n_clusters < 1:
+            raise ValueError(f"n_clusters must be >= 1, got {n_clusters}")
+
         flat = weights.flatten().astype(np.float32)
         n = len(flat)
+
+        # Clamp n_clusters to array size
+        if n_clusters > n:
+            n_clusters = n
 
         # Max-min init: quantile + gap-filling → Lloyd's refinement
         quantiles = np.linspace(0, 100, n_clusters + 2)[1:-1]
@@ -85,6 +98,8 @@ class PointCompressor:
             function_type="cluster",
             params={"centroids": centroids, "assignments": assignments},
             accuracy=float(accuracy),
+            dtype=str(weights.dtype),
+            shape=weights.shape,
         )
 
     def compress_function(self, weights: np.ndarray, identity: str = "unknown") -> Point:
@@ -93,6 +108,12 @@ class PointCompressor:
 
         This works for structured weights but not random ones.
         """
+        # Input validation
+        if weights.size == 0:
+            raise ValueError(f"Cannot compress empty array: {identity}")
+        if not np.isfinite(weights).all():
+            raise ValueError(f"Array contains NaN/Inf values: {identity}")
+
         flat = weights.flatten().astype(np.float32)
         n = len(flat)
         var = np.var(flat)
@@ -124,7 +145,28 @@ class PointCompressor:
             params=params,
             residual=residual,
             accuracy=float(accuracy),
+            dtype=str(weights.dtype),
+            shape=weights.shape,
         )
+
+    def compress_batch(self, weights_dict: Dict[str, np.ndarray],
+                       method: Optional[str] = None,
+                       prefix: str = "") -> Dict[str, Point]:
+        """Compress multiple weight tensors in one call.
+
+        Args:
+            weights_dict: Dict mapping weight names to numpy arrays.
+            method: Compression method (overrides self.method).
+            prefix: Optional prefix for point identities.
+
+        Returns:
+            Dict mapping weight names to compressed Points.
+        """
+        results = {}
+        for name, weights in weights_dict.items():
+            identity = f"{prefix}{name}" if prefix else name
+            results[name] = self.compress(weights, identity=identity, method=method)
+        return results
 
     def compress(self, weights: np.ndarray, identity: str = "unknown",
                 method: Optional[str] = None) -> Point:

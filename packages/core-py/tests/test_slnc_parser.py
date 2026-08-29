@@ -262,6 +262,37 @@ class TestSLNCParserValid:
         np.testing.assert_array_equal(weights["b"], d2)
         parser.close()
 
+    def test_get_weights_dict_parallel(self, tmp_path):
+        d1 = np.array([1.0, 2.0], dtype=np.float32)
+        d2 = np.array([3.0, 4.0, 5.0], dtype=np.float32)
+        d3 = np.arange(12, dtype=np.float32).reshape(3, 4)
+        tensors = [
+            {"name": "a", "data": d1},
+            {"name": "b", "data": d2},
+            {"name": "c", "data": d3},
+        ]
+        path = tmp_path / "test.slnc"
+        path.write_bytes(_build_slnc_file(tensors))
+        parser = SLNCParser(str(path))
+        weights = parser.get_weights_dict_parallel()
+        assert set(weights.keys()) == {"a", "b", "c"}
+        np.testing.assert_array_equal(weights["a"], d1)
+        np.testing.assert_array_equal(weights["b"], d2)
+        np.testing.assert_array_equal(weights["c"], d3)
+        parser.close()
+
+    def test_get_weights_dict_parallel_matches_sequential(self, tmp_path):
+        tensors = [_make_tensor(f"t{i}", (10, 8), fill=float(i)) for i in range(20)]
+        path = tmp_path / "test.slnc"
+        path.write_bytes(_build_slnc_file(tensors))
+        parser = SLNCParser(str(path))
+        seq = parser.get_weights_dict()
+        par = parser.get_weights_dict_parallel()
+        assert set(seq.keys()) == set(par.keys())
+        for key in seq:
+            np.testing.assert_array_equal(seq[key], par[key])
+        parser.close()
+
     def test_properties_tensor_count(self, tmp_path):
         tensors = [_make_tensor(f"t{i}", (2,)) for i in range(5)]
         path = tmp_path / "test.slnc"
@@ -550,4 +581,35 @@ class TestSLNCParserMultipleTensors:
         result = parser.get_tensor("rank4")
         assert result.shape == (2, 3, 4, 5)
         np.testing.assert_array_equal(result, data)
+        parser.close()
+
+
+class TestParallelLoadBenchmark:
+    """Benchmark: parallel vs sequential tensor loading."""
+
+    def test_parallel_matches_sequential_large(self, tmp_path):
+        """Verify parallel loading produces identical results with many tensors."""
+        n_tensors = 100
+        tensors = [_make_tensor(f"t{i}", (32, 32), fill=float(i % 7)) for i in range(n_tensors)]
+        path = tmp_path / "bench.slnc"
+        path.write_bytes(_build_slnc_file(tensors))
+        parser = SLNCParser(str(path))
+
+        seq = parser.get_weights_dict()
+        par = parser.get_weights_dict_parallel()
+
+        assert set(seq.keys()) == set(par.keys())
+        for key in seq:
+            np.testing.assert_array_equal(seq[key], par[key])
+        parser.close()
+
+    def test_parallel_tensor_count_matches(self, tmp_path):
+        """Verify parallel loads all tensors."""
+        tensors = [_make_tensor(f"weight_{i}", (16, 16)) for i in range(200)]
+        path = tmp_path / "bench.slnc"
+        path.write_bytes(_build_slnc_file(tensors))
+        parser = SLNCParser(str(path))
+
+        result = parser.get_weights_dict_parallel()
+        assert len(result) == 200
         parser.close()

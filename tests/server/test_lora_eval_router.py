@@ -10,9 +10,11 @@ from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.lora_eval import router
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app)
 

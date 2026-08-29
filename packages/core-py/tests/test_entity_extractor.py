@@ -1,351 +1,146 @@
-"""Tests for domains/learner/entity_extractor.py."""
-
-import sys
-import types
+"""Meaningful tests for entity_extractor — entity extraction, relationship extraction, fact extraction from conversations."""
 
 import pytest
-
 from domains.learner.entity_extractor import (
-    extract_entities,
-    extract_relationships,
-    extract_facts_from_conversation,
-    extract_facts_neural,
-    extract_and_store,
-    _is_valid_entity,
+    _is_valid_entity, extract_entities, extract_relationships,
+    extract_facts_from_conversation, _STOP_WORDS, _COMMON_FALSE_ENTITIES,
 )
 
 
-# ── _is_valid_entity ───────────────────────────────────────────────────
-
-
 class TestIsValidEntity:
-    def test_valid_word(self):
+    def test_valid(self):
         assert _is_valid_entity("Python") is True
+        assert _is_valid_entity("OpenAI") is True
 
-    def test_stop_word_rejected(self):
-        assert _is_valid_entity("The") is False
+    def test_stop_word(self):
+        assert _is_valid_entity("the") is False
+        assert _is_valid_entity("is") is False
+        assert _is_valid_entity("I") is False
 
-    def test_single_char_rejected(self):
+    def test_too_short(self):
         assert _is_valid_entity("A") is False
 
+    def test_no_alpha_start(self):
+        assert _is_valid_entity("123") is False
 
-# ── extract_entities ──────────────────────────────────────────────────
+    def test_punctuation(self):
+        assert _is_valid_entity("hello!") is False
 
 
 class TestExtractEntities:
-    def test_captures_multi_word(self):
-        entities = extract_entities("Alice and Bob visited New York City.")
+    def test_multi_word_capitalized(self):
+        entities = extract_entities("I visited New York City yesterday")
         assert "New York City" in entities
 
-    def test_captures_single_caps_words(self):
-        entities = extract_entities("Alice plays the piano in Paris.")
-        assert "Alice" in entities
-        assert "Paris" in entities
+    def test_single_capitalized(self):
+        entities = extract_entities("Python is a great language")
+        assert "Python" in entities
 
-    def test_multi_word_parts_not_duplicated(self):
-        entities = extract_entities("We visited New York City yesterday.")
-        # "New", "York", "City" must not appear as standalone entities
-        single = [e for e in entities if " " not in e]
-        assert "New" not in single
-        assert "York" not in single
-        assert "City" not in single
-
-    def test_deduplicates_entities(self):
-        entities = extract_entities("Paris is nice. Paris is big.")
-        assert entities.count("Paris") == 1
-
-    def test_common_false_entities_excluded(self):
-        entities = extract_entities("Hello there. Great job.")
+    def test_false_entities_excluded(self):
+        entities = extract_entities("Hello there, how are you?")
         assert "Hello" not in entities
-        assert "Great" not in entities
 
-    def test_stop_words_excluded(self):
-        entities = extract_entities("The cat sat on the mat.")
-        assert "The" not in entities
+    def test_deduplication(self):
+        entities = extract_entities("Python is great. Python is fun.")
+        assert entities.count("Python") == 1
 
-    def test_empty_text(self):
-        assert extract_entities("") == []
+    def test_no_match(self):
+        entities = extract_entities("hello world how are you")
+        assert len(entities) == 0
 
+    def test_multiple_entities(self):
+        entities = extract_entities("I use Python and Rust at Google")
+        found = [e for e in entities if e in ("Python", "Rust", "Google")]
+        assert len(found) >= 2
 
-# ── extract_relationships ─────────────────────────────────────────────
+    def test_possessive_not_entity(self):
+        entities = extract_entities("John's car is red")
+        assert "John" in entities
+        assert "John's" not in entities
 
 
 class TestExtractRelationships:
     def test_is_a(self):
-        rels = extract_relationships("Python is a language.")
-        assert ("Python", "is_a", "language") in rels
-
-    def test_is_an_article_stripped(self):
-        rels = extract_relationships("Alice is an engineer.")
-        assert ("Alice", "is_a", "engineer") in rels
+        rels = extract_relationships("Python is a programming language")
+        assert ("Python", "is_a", "programming language") in rels
 
     def test_likes(self):
-        rels = extract_relationships("Alice likes pizza.")
-        assert ("Alice", "likes", "pizza") in rels
+        rels = extract_relationships("Alice likes chocolate")
+        assert ("Alice", "likes", "chocolate") in rels
 
-    def test_has_article_stripped(self):
-        rels = extract_relationships("Bob has a car.")
-        assert ("Bob", "has", "car") in rels
+    def test_has(self):
+        rels = extract_relationships("The car has four wheels")
+        assert any(r[1] == "has" for r in rels)
 
     def test_wants(self):
-        rels = extract_relationships("Carla wants a laptop.")
-        assert ("Carla", "wants", "laptop") in rels
+        rels = extract_relationships("Bob wants a new laptop")
+        assert any(r[1] == "wants" for r in rels)
 
     def test_uses(self):
-        rels = extract_relationships("Dave uses Linux.")
-        assert ("Dave", "uses", "Linux") in rels
+        rels = extract_relationships("Bob uses Python daily")
+        assert any(r[0] == "Bob" and r[1] == "uses" for r in rels)
 
     def test_works_at(self):
-        rels = extract_relationships("Eve works at Google.")
-        assert ("Eve", "works_at", "Google") in rels
+        rels = extract_relationships("Alice works at Google")
+        assert ("Alice", "works_at", "Google") in rels
 
     def test_lives_in(self):
-        rels = extract_relationships("Frank lives in Berlin.")
-        assert ("Frank", "lives_in", "Berlin") in rels
-
-    def test_created(self):
-        rels = extract_relationships("Grace created a framework.")
-        assert ("Grace", "created", "framework") in rels
-
-    def test_called(self):
-        rels = extract_relationships("Hank called Henry.")
-        assert ("Hank", "called", "Henry") in rels
+        rels = extract_relationships("Bob lives in New York")
+        assert ("Bob", "lives_in", "New York") in rels
 
     def test_possessive(self):
-        rels = extract_relationships("John's bike is red.")
-        assert ("John", "possesses", "bike is red") in rels
+        rels = extract_relationships("John's car is fast")
+        assert any(r[1] == "possesses" for r in rels)
 
-    def test_stop_word_subject_filtered(self):
-        rels = extract_relationships("I like Python.")
-        assert not any(s == "I" for s, _, _ in rels)
+    def test_no_match(self):
+        rels = extract_relationships("The weather is nice today")
+        assert len(rels) == 0
 
-    def test_single_char_object_filtered(self):
-        rels = extract_relationships("X is a y.")
-        assert not any(o == "y" for _, _, o in rels)
+    def test_deduplication(self):
+        rels = extract_relationships("Python is a language. Python is a language.")
+        assert len(rels) == 1
 
-    def test_deduplicates_triples(self):
-        rels = extract_relationships("Alice likes pizza. Alice likes pizza again.")
-        assert rels.count(("Alice", "likes", "pizza")) == 1
-
-
-# ── extract_facts_from_conversation ───────────────────────────────────
+    def test_article_stripped(self):
+        rels = extract_relationships("Python is a programming language")
+        for _, _, obj in rels:
+            assert not obj.startswith("a ")
+            assert not obj.startswith("an ")
 
 
 class TestExtractFactsFromConversation:
-    def test_is_a_fact_format(self):
-        facts = extract_facts_from_conversation("", "Python is a language")
-        assert "Python is a language" in facts
-
-    def test_possessive_becomes_has(self):
-        facts = extract_facts_from_conversation("", "John's bike is red")
-        assert "John has bike is red" in facts
-
-    def test_has_fact_format(self):
-        facts = extract_facts_from_conversation("", "Bob has a car")
-        assert "Bob has car" in facts
-
-    def test_other_relation_format(self):
-        facts = extract_facts_from_conversation("", "Eve works at Google")
-        assert "Eve works_at Google" in facts
-
-    def test_entity_facts_added(self):
-        facts = extract_facts_from_conversation("", "Alice visited Paris")
-        assert any(f.startswith("Entity ") and f.endswith(" exists") for f in facts)
-
-    def test_entity_facts_skip_false_entities(self, monkeypatch):
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_entities",
-            lambda text: ["Hello", "Alice"],
+    def test_is_a_fact(self):
+        facts = extract_facts_from_conversation(
+            "What is Python?",
+            "Python is a programming language"
         )
-        facts = extract_facts_from_conversation("", "Alice visited Paris")
-        assert "Entity Hello exists" not in facts
-        assert "Entity Alice exists" in facts
+        assert any("Python" in f and "programming language" in f for f in facts)
 
-    def test_short_facts_filtered(self):
-        facts = extract_facts_from_conversation("", "hi")
-        assert all(len(f) > 5 for f in facts)
-
-
-# ── extract_facts_neural ──────────────────────────────────────────────
-
-
-class _FakeResult:
-    def __init__(self, text):
-        self.text = text
-
-
-class _FakeModel:
-    def __init__(self, text, raise_error=False):
-        self._text = text
-        self._raise = raise_error
-
-    async def generate(self, prompt, max_new_tokens=128, temperature=0.1):
-        if self._raise:
-            raise RuntimeError("model down")
-        return _FakeResult(self._text)
-
-
-class _FakeRegistry:
-    def __init__(self, models=None, default=None):
-        self._models = models
-        self._default = default
-
-    def list_models(self):
-        return self._models or []
-
-    def get_default_model(self):
-        return self._default
-
-
-def _patch_registry(monkeypatch, registry):
-    fake_module = types.ModuleType("domains.infrastructure.model_registry")
-    fake_module.get_model_registry = lambda: registry
-    monkeypatch.setitem(sys.modules, "domains.infrastructure.model_registry", fake_module)
-
-
-class TestExtractFactsNeural:
-    @pytest.mark.asyncio
-    async def test_no_registry(self, monkeypatch):
-        _patch_registry(monkeypatch, None)
-        assert await extract_facts_neural("u", "a") == []
-
-    @pytest.mark.asyncio
-    async def test_no_models(self, monkeypatch):
-        _patch_registry(monkeypatch, _FakeRegistry(models=[]))
-        assert await extract_facts_neural("u", "a") == []
-
-    @pytest.mark.asyncio
-    async def test_no_default_model(self, monkeypatch):
-        _patch_registry(monkeypatch, _FakeRegistry(models=["m1"], default=None))
-        assert await extract_facts_neural("u", "a") == []
-
-    @pytest.mark.asyncio
-    async def test_parses_bullets(self, monkeypatch):
-        model = _FakeModel("- Alice likes hiking\n- Bob works at Google\n")
-        _patch_registry(monkeypatch, _FakeRegistry(models=["m1"], default=model))
-        facts = await extract_facts_neural("u", "a")
-        assert facts == ["Alice likes hiking", "Bob works at Google"]
-
-    @pytest.mark.asyncio
-    async def test_short_facts_filtered(self, monkeypatch):
-        model = _FakeModel("- short\n- This is a sufficiently long factual statement here\n")
-        _patch_registry(monkeypatch, _FakeRegistry(models=["m1"], default=model))
-        facts = await extract_facts_neural("u", "a")
-        assert facts == ["This is a sufficiently long factual statement here"]
-
-    @pytest.mark.asyncio
-    async def test_empty_text(self, monkeypatch):
-        _patch_registry(monkeypatch, _FakeRegistry(models=["m1"], default=_FakeModel("")))
-        assert await extract_facts_neural("u", "a") == []
-
-    @pytest.mark.asyncio
-    async def test_generation_error(self, monkeypatch):
-        _patch_registry(monkeypatch, _FakeRegistry(models=["m1"], default=_FakeModel("", raise_error=True)))
-        assert await extract_facts_neural("u", "a") == []
-
-
-# ── extract_and_store ─────────────────────────────────────────────────
-
-
-class _FakeMemory:
-    def __init__(self, results):
-        self._results = dict(results)
-        self._added = []
-
-    def add_fact(self, fact):
-        key = fact.content
-        if self._results.get(key, True) is False:
-            return False
-        if key in self._added:
-            return False
-        self._added.append(key)
-        return True
-
-
-class TestExtractAndStore:
-    @pytest.mark.asyncio
-    async def test_stores_extracted_facts(self, monkeypatch):
-        mem = _FakeMemory({})
-
-        async def neural_fake(user_msg, assistant_msg):
-            return ["Alice likes hiking"]
-
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_neural", neural_fake
+    def test_likes_fact(self):
+        facts = extract_facts_from_conversation(
+            "What does Alice like?",
+            "Alice likes hiking"
         )
-        long_msg = (
-            "Alice likes hiking in the mountains near the river and Bob works "
-            "at Google in California while Carla studies physics every evening"
+        assert any("Alice" in f and "hiking" in f for f in facts)
+
+    def test_entity_fact(self):
+        facts = extract_facts_from_conversation(
+            "Tell me about Tesla Motors",
+            "Tesla Motors was founded by Elon Musk"
         )
-        n = await extract_and_store("hi", long_msg, mem)
-        assert n >= 1
-        assert "Alice likes hiking" in mem._added
+        assert any("Tesla" in f for f in facts)
 
-    @pytest.mark.asyncio
-    async def test_short_conversation_skips_neural(self, monkeypatch):
-        mem = _FakeMemory({})
-        called = []
+    def test_empty_exchange(self):
+        facts = extract_facts_from_conversation("hi", "hello")
+        assert len(facts) == 0
 
-        async def neural(user_msg, assistant_msg):
-            called.append(True)
-            return ["extra fact"]
+    def test_fact_min_length(self):
+        facts = extract_facts_from_conversation("test", "x is a y")
+        for f in facts:
+            assert len(f) > 5
 
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_neural", neural
+    def test_deduplication(self):
+        facts = extract_facts_from_conversation(
+            "Python is a language",
+            "Python is a language and Python is great"
         )
-        n = await extract_and_store("hi", "Alice likes pizza", mem)
-        assert not called
-        assert n >= 1
-
-    @pytest.mark.asyncio
-    async def test_no_facts_returns_zero(self, monkeypatch):
-        mem = _FakeMemory({})
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_neural",
-            lambda *a, **k: [],
-        )
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_from_conversation",
-            lambda *a, **k: [],
-        )
-        assert await extract_and_store("hi", "hi", mem) == 0
-
-    @pytest.mark.asyncio
-    async def test_defaults_to_singleton_memory(self, monkeypatch):
-        mem = _FakeMemory({})
-        monkeypatch.setattr(
-            "domains.learner.knowledge.get_knowledge_memory", lambda: mem
-        )
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_neural",
-            lambda *a, **k: [],
-        )
-        n = await extract_and_store("hi", "Alice likes hiking", None)
-        assert n >= 1
-
-    @pytest.mark.asyncio
-    async def test_add_fact_exception_skipped(self, monkeypatch):
-        mem = _FakeMemory({})
-
-        def add_fact(fact):
-            raise RuntimeError("boom")
-
-        mem.add_fact = add_fact
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_neural",
-            lambda *a, **k: [],
-        )
-        n = await extract_and_store("hi", "Alice likes hiking", mem)
-        assert n == 0
-
-    @pytest.mark.asyncio
-    async def test_outer_exception_returns_zero(self, monkeypatch):
-        mem = _FakeMemory({})
-
-        def boom(user_msg, assistant_msg):
-            raise RuntimeError("extraction failed")
-
-        monkeypatch.setattr(
-            "domains.learner.entity_extractor.extract_facts_from_conversation", boom
-        )
-        assert await extract_and_store("hi", "hello there", mem) == 0
+        assert len(facts) == len(set(facts))

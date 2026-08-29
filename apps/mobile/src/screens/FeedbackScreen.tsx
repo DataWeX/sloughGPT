@@ -9,6 +9,13 @@ import {StatusBadge} from '../components/StatusBadge';
 import {triggerHaptic} from '../services/haptics';
 import {toast} from '../services/toast';
 
+interface FeedbackStats {
+  thumbs_up: number;
+  thumbs_down: number;
+  total: number;
+  up_ratio: number;
+}
+
 interface WorkflowStatus {
   active: boolean;
   last_run: string | null;
@@ -16,31 +23,35 @@ interface WorkflowStatus {
   completed_count: number;
 }
 
-interface TrainingStats {
-  total_pairs: number;
-  synced: number;
-  pending: number;
+interface FeedbackItem {
+  _id: string;
+  message_id: string;
+  rating: 'positive' | 'negative';
+  user_message: string;
+  assistant_response: string;
+  timestamp: string;
+  source?: string;
 }
 
 export function FeedbackScreen() {
   const colors = useColors();
-  const [stats, setStats] = useState<{total: number; positive: number; negative: number} | null>(null);
+  const [stats, setStats] = useState<FeedbackStats | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowStatus | null>(null);
-  const [training, setTraining] = useState<TrainingStats | null>(null);
+  const [conversations, setConversations] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [triggering, setTriggering] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [s, w, t] = await Promise.all([
-        api.get<{total: number; positive: number; negative: number}>('/meta-weights/stats').catch(() => null),
+      const [s, w, c] = await Promise.all([
+        api.get<FeedbackStats>('/feedback/stats/summary').catch(() => null),
         api.get<WorkflowStatus>('/workflow/status').catch(() => null),
-        api.get<TrainingStats>('/training/status').catch(() => null),
+        api.get<{conversations: FeedbackItem[]}>('/feedback/conversations?limit=50').catch(() => ({conversations: []})),
       ]);
       setStats(s);
       setWorkflow(w);
-      setTraining(t);
+      setConversations(c.conversations ?? []);
     } catch {
       // handled above
     }
@@ -71,7 +82,17 @@ export function FeedbackScreen() {
     }
   };
 
-  const positiveRate = stats && stats.total > 0 ? ((stats.positive / stats.total) * 100).toFixed(0) : '—';
+  const positiveRate = stats && stats.total > 0 ? ((stats.thumbs_up / stats.total) * 100).toFixed(0) : '—';
+
+  const formatTime = (ts: string) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    return d.toLocaleDateString();
+  };
 
   return (
     <SafeAreaView style={{flex: 1, backgroundColor: colors.background}} edges={['top']}>
@@ -88,10 +109,12 @@ export function FeedbackScreen() {
         </YStack>
       ) : (
         <FlatList
-          data={[]}
-          renderItem={() => null}
+          data={conversations}
+          keyExtractor={item => item._id}
+          contentContainerStyle={{paddingHorizontal: 16, paddingBottom: 20}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
-            <YStack padding={16} gap={12}>
+            <YStack gap={12} marginBottom={16}>
               {/* Stats Cards */}
               <XStack gap={8}>
                 <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
@@ -99,11 +122,11 @@ export function FeedbackScreen() {
                   <Text fontSize={11} color={colors.textMuted}>Total</Text>
                 </YStack>
                 <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
-                  <Text fontSize={22} fontWeight="700" color={colors.success}>{stats?.positive ?? 0}</Text>
+                  <Text fontSize={22} fontWeight="700" color={colors.success}>{stats?.thumbs_up ?? 0}</Text>
                   <Text fontSize={11} color={colors.textMuted}>Positive</Text>
                 </YStack>
                 <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
-                  <Text fontSize={22} fontWeight="700" color={colors.error}>{stats?.negative ?? 0}</Text>
+                  <Text fontSize={22} fontWeight="700" color={colors.error}>{stats?.thumbs_down ?? 0}</Text>
                   <Text fontSize={11} color={colors.textMuted}>Negative</Text>
                 </YStack>
               </XStack>
@@ -159,30 +182,46 @@ export function FeedbackScreen() {
                 </XStack>
               </YStack>
 
-              {/* Training Pairs */}
-              {training && (
-                <YStack padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
-                  <Text fontSize={15} fontWeight="600" color={colors.text}>Training Pairs</Text>
-                  <XStack gap={12}>
-                    <YStack gap={2}>
-                      <Text fontSize={11} color={colors.textMuted}>Total</Text>
-                      <Text fontSize={14} fontWeight="500" color={colors.text}>{training.total_pairs}</Text>
-                    </YStack>
-                    <YStack gap={2}>
-                      <Text fontSize={11} color={colors.textMuted}>Synced</Text>
-                      <Text fontSize={14} fontWeight="500" color={colors.success}>{training.synced}</Text>
-                    </YStack>
-                    <YStack gap={2}>
-                      <Text fontSize={11} color={colors.textMuted}>Pending</Text>
-                      <Text fontSize={14} fontWeight="500" color={colors.warning}>{training.pending}</Text>
-                    </YStack>
-                  </XStack>
-                </YStack>
-              )}
+              {/* Conversations Header */}
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text fontSize={15} fontWeight="600" color={colors.text}>Recent Feedback</Text>
+                <Text fontSize={12} color={colors.textMuted}>{conversations.length} items</Text>
+              </XStack>
             </YStack>
           }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <YStack alignItems="center" paddingVertical={40}>
+              <Icon name="check" size={32} color={colors.success} />
+              <Text fontSize={14} color={colors.textSecondary} marginTop={8}>No feedback yet</Text>
+            </YStack>
+          }
+          renderItem={({item}) => (
+            <YStack
+              backgroundColor={colors.white}
+              borderRadius={8}
+              padding={12}
+              marginBottom={8}
+              borderWidth={0.5}
+              borderColor={colors.border}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
+                <StatusBadge
+                  label={item.rating === 'positive' ? 'Positive' : 'Negative'}
+                  variant={item.rating === 'positive' ? 'success' : 'error'}
+                />
+                <Text fontSize={11} color={colors.textMuted}>{formatTime(item.timestamp)}</Text>
+              </XStack>
+              {item.user_message ? (
+                <Text fontSize={12} color={colors.textMuted} numberOfLines={2} marginBottom={4}>
+                  User: {item.user_message}
+                </Text>
+              ) : null}
+              {item.assistant_response ? (
+                <Text fontSize={12} color={colors.text} numberOfLines={2}>
+                  Assistant: {item.assistant_response}
+                </Text>
+              ) : null}
+            </YStack>
+          )}
         />
       )}
     </SafeAreaView>

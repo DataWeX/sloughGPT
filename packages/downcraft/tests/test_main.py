@@ -34,22 +34,22 @@ class TestStatus:
         assert "not found in state" in capsys.readouterr().out
 
     def test_tracked_key_shows_status(self, capsys):
-        from downcraft.state import PersistentState
+        from downcraft.download.state import PersistentState
         import tempfile
         with tempfile.TemporaryDirectory() as td:
-            with patch("downcraft.state.get_state") as mock_state:
-                st = PersistentState(state_dir=Path(td) / "state")
-                key = "https://example.com/f.bin"
-                st.create(key, cache_dir="")
-                st.update_file_progress(
-                    key,
-                    file_path="f.bin",
-                    url=key,
-                    bytes_downloaded=5 * 1024 * 1024,
-                    total_bytes=10 * 1024 * 1024,
-                )
-                mock_state.return_value = st
-                cli.cmd_status(type("A", (), {"key": key}))
+                with patch("downcraft.__main__.state.get_state") as mock_state:
+                    st = PersistentState(state_dir=Path(td) / "state")
+                    key = "https://example.com/f.bin"
+                    st.create(key, cache_dir="")
+                    st.update_file_progress(
+                        key,
+                        file_path="f.bin",
+                        url=key,
+                        bytes_downloaded=5 * 1024 * 1024,
+                        total_bytes=10 * 1024 * 1024,
+                    )
+                    mock_state.return_value = st
+                    cli.cmd_status(type("A", (), {"key": key}))
                 out = capsys.readouterr().out
                 assert "downloading" in out
                 assert "5 / 10 MB (50.0%)" in out
@@ -61,10 +61,10 @@ class TestList:
         assert "No downloads tracked" in capsys.readouterr().out
 
     def test_lists_tracked_downloads(self, capsys):
-        from downcraft.state import PersistentState
+        from downcraft.download.state import PersistentState
         import tempfile
         with tempfile.TemporaryDirectory() as td:
-            with patch("downcraft.state.get_state") as mock_state:
+            with patch("downcraft.__main__.state.get_state") as mock_state:
                 st = PersistentState(state_dir=Path(td) / "state")
                 st.create("https://example.com/a.bin", cache_dir="")
                 st.create("https://example.com/b.bin", cache_dir="")

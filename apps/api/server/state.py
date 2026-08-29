@@ -1,7 +1,10 @@
 """
 Shared server state — thread-safe global variables with atomic access.
 
-Backward-compatible module that delegates to ``AtomicRef`` instances.
+Backward-compatible module that delegates to the ``ServerState`` singleton.
+
+All reads and writes go through ``get_server_state()`` so there is a single
+source of truth.  The old ``import state; state.model = x`` pattern still works.
 
 Allows::
 
@@ -12,38 +15,46 @@ Allows::
 
 from __future__ import annotations
 
-from typing import Any, Optional
-from domains.infrastructure.server_state import AtomicRef
+from typing import Any
+from domains.infrastructure.server_state import get_server_state
 
-# Atomic state refs stored in a private dict so __getattr__/__setattr__ fire.
-# Module-level variables would shadow __getattr__ (it is only called when the
-# attribute is *not* found via normal lookup), so we store refs behind _refs.
-_refs: dict[str, AtomicRef] = {}
-_ATOMIC_NAMES = frozenset({
-    "model", "tokenizer", "model_type", "checkpoint", "provider",
+# Names that map directly to ServerState AtomicRef fields
+_DIRECT_REFS = frozenset({
+    "model", "tokenizer", "model_type", "checkpoint",
     "soul_engine", "current_soul", "gen_config", "model_request_logger",
-    "autoload_skipped", "training_active", "_self_train_proc",
-    "torch_available",
+    "provider",
 })
 
-for _name in _ATOMIC_NAMES:
-    _refs[_name] = AtomicRef(None, _name)
+# Names that map to plain attributes on ServerState
+_PLAIN_ATTRS = frozenset({
+    "torch_available", "training_active",
+})
 
-# Plain fields (set once at startup) — handled by AtomicRef above
+# Legacy names that no longer exist on ServerState but may be referenced
+_DEPRECATED = frozenset({
+    "autoload_skipped", "_self_train_proc",
+})
 
 
 def __getattr__(name: str) -> Any:
-    """Resolve ``state.model`` to the underlying value via AtomicRef.get()."""
-    ref = _refs.get(name)
-    if ref is not None:
-        return ref.get()
+    """Resolve ``state.model`` to the underlying value via ServerState."""
+    if name in _DIRECT_REFS:
+        return getattr(get_server_state(), name).get()
+    if name in _PLAIN_ATTRS:
+        return getattr(get_server_state(), name)
+    if name in _DEPRECATED:
+        return None
     raise AttributeError(f"module 'state' has no attribute '{name}'")
 
 
 def __setattr__(name: str, value: Any) -> None:
-    """Resolve ``state.model = x`` to ``state.model.set(x)``."""
-    ref = _refs.get(name)
-    if ref is not None:
-        ref.set(value)
+    """Resolve ``state.model = x`` to ``ServerState.model.set(x)``."""
+    if name in _DIRECT_REFS:
+        getattr(get_server_state(), name).set(value)
         return
+    if name in _PLAIN_ATTRS:
+        setattr(get_server_state(), name, value)
+        return
+    if name in _DEPRECATED:
+        return  # silently ignore deprecated writes
     raise AttributeError(f"module 'state' has no attribute '{name}'")

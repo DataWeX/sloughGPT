@@ -30,13 +30,17 @@ All values are computable from ``CpuTopology`` and overridable via env vars:
 
 from __future__ import annotations
 
+import logging
 import os
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Optional
 
 from domains.infrastructure.cpu_topology import CpuTopology, detect_topology
+
+logger = logging.getLogger("slo.infrastructure.resource_manager")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -348,14 +352,14 @@ class ResourceManager:
         try:
             import numpy as np
             np.set_num_threads(self.compute_threads)
-        except (ImportError, AttributeError):
-            pass
+        except (ImportError, AttributeError) as exc:
+            logger.debug("Failed to set numpy thread count: %s", exc)
         # Apply to numexpr directly if available
         try:
             import numexpr
             numexpr.set_num_threads(self.numexpr_num_threads)
-        except (ImportError, AttributeError):
-            pass
+        except (ImportError, AttributeError) as exc:
+            logger.debug("Failed to set numexpr thread count: %s", exc)
 
     def summary(self) -> str:
         return self._alloc.summary()
@@ -366,6 +370,7 @@ class ResourceManager:
 # ---------------------------------------------------------------------------
 
 _global_manager: Optional[ResourceManager] = None
+_global_manager_lock = threading.Lock()
 
 
 def get_resource_manager(mode: str = "balanced") -> ResourceManager:
@@ -376,12 +381,15 @@ def get_resource_manager(mode: str = "balanced") -> ResourceManager:
     """
     global _global_manager
     if _global_manager is None:
-        _global_manager = ResourceManager(mode=mode)
+        with _global_manager_lock:
+            if _global_manager is None:
+                _global_manager = ResourceManager(mode=mode)
     return _global_manager
 
 
 def reset_resource_manager(mode: str = "balanced") -> ResourceManager:
     """Reset the global singleton (useful for tests)."""
     global _global_manager
-    _global_manager = ResourceManager(mode=mode)
+    with _global_manager_lock:
+        _global_manager = ResourceManager(mode=mode)
     return _global_manager

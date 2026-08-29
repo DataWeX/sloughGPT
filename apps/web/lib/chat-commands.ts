@@ -20,6 +20,7 @@ export interface CommandContext {
   archiveConversation: () => void
   renameConversation: (name: string) => void
   searchConversations: (query: string) => void
+  recordFeedback?: (params: { userMessage: string; assistantResponse: string; rating: 'thumbs_up' | 'thumbs_down' }) => Promise<boolean>
 }
 
 export interface CommandResult {
@@ -81,7 +82,7 @@ const commands: ChatCommand[] = [
         await ctx.setModel(name)
         ctx.addSystemMessage(`✅ Switched to model **${name}**`)
       } catch {
-        ctx.addSystemMessage(`❌ Failed to load model **${name}**`)
+        ctx.addSystemMessage(`❌ Could not load model **${name}**`)
       }
       return { handled: true }
     },
@@ -172,9 +173,20 @@ const commands: ChatCommand[] = [
         ctx.showToast('Usage: /feedback <positive|negative> [reason]', 'error')
         return { handled: true }
       }
-      const reason = args.slice(1).join(' ') || '(no reason given)'
-      ctx.addSystemMessage(`Thank you for your ${sentiment} feedback: “${reason}”`)
-      ctx.showToast('Feedback recorded', 'success')
+      const rating = sentiment === 'positive' ? 'thumbs_up' : 'thumbs_down'
+      if (ctx.recordFeedback) {
+        const lastAssistant = 'last-assistant-content'
+        const lastUser = 'last-user-content'
+        await ctx.recordFeedback({
+          userMessage: lastUser,
+          assistantResponse: lastAssistant,
+          rating,
+        })
+        ctx.showToast(`Feedback recorded: ${sentiment}`, 'success')
+      } else {
+        ctx.addSystemMessage(`Thank you for your ${sentiment} feedback`)
+        ctx.showToast('Feedback recorded', 'success')
+      }
       return { handled: true }
     },
   },

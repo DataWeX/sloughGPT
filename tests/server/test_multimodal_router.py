@@ -11,8 +11,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.multimodal import router, _background_job, multimodal_router
+from infrastructure.exception_handlers import register_all_handlers
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -170,7 +172,7 @@ class TestTranscribe:
             files={"file": ("test.txt", b"not audio", "text/plain")},
         )
         assert resp.status_code == 400
-        assert "audio" in resp.json()["detail"].lower()
+        assert "audio" in resp.json()["error"].lower()
 
 
 class TestTrainOnImage:
@@ -194,7 +196,7 @@ class TestTrainOnImage:
             files={"file": ("test.txt", b"not an image", "text/plain")},
         )
         assert resp.status_code == 400
-        assert "image" in resp.json()["detail"].lower()
+        assert "image" in resp.json()["error"].lower()
 
 
 class TestGenerateImage:
@@ -225,7 +227,7 @@ class TestTrainBatch:
         self._reset_job()
         resp = client.post("/multimodal/train-batch")
         assert resp.status_code == 400
-        assert "No images provided" in resp.json()["detail"]
+        assert "No images provided" in resp.json()["error"]
 
     @patch(MGR_TARGET)
     def test_returns_409_when_running(self, mock_get):
@@ -269,7 +271,7 @@ class TestTrainBatch:
         d.mkdir()
         resp = client.post("/multimodal/train-batch", data={"dataset_path": str(d)})
         assert resp.status_code == 400
-        assert "No images found" in resp.json()["detail"]
+        assert "No images found" in resp.json()["error"]
 
 
 class TestDPO:
@@ -278,7 +280,7 @@ class TestDPO:
     def test_requires_loaded_model(self):
         resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
         assert resp.status_code == 400
-        assert "No model loaded" in resp.json()["detail"]
+        assert "No model loaded" in resp.json()["error"]
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_run(self):
@@ -329,7 +331,7 @@ class TestTrainVideo:
                 "data_path": "/tmp/videos", "epochs": 3, "batch_size": 2,
             })
             assert resp.status_code == 409
-            assert "already in progress" in resp.json()["detail"].lower()
+            assert "already in progress" in resp.json()["error"].lower()
         finally:
             self._reset_video_job()
 
@@ -368,7 +370,7 @@ class TestVideoInfer:
         mock_list.return_value = []
         resp = client.post("/multimodal/video-infer", json={"video_path": "/tmp/a.mp4"})
         assert resp.status_code == 400
-        assert "no trained video model" in resp.json()["detail"].lower()
+        assert "no trained video model" in resp.json()["error"].lower()
 
     @patch("domains.training.video_trainer.VideoCaptionTrainer")
     @patch("domains.training.video_trainer.list_video_checkpoints")

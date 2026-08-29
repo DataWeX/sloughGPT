@@ -140,7 +140,13 @@ export function KeyboardShortcutsModal({ open, onOpenChange }: KeyboardShortcuts
             <fieldset key={category}>
               <legend className="mb-2 text-sm font-medium text-muted-foreground">{category}</legend>
               <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full" aria-label="Keyboard shortcuts">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground border-b border-border/30">
+                    <th scope="col" className="py-2 pr-4 font-medium">Action</th>
+                    <th scope="col" className="py-2 text-right font-medium">Shortcut</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {shortcuts.map((shortcut, index) => (
                     <tr key={index} className="border-b border-border/30 last:border-0">

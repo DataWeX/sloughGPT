@@ -6,7 +6,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useRouter } from 'next/navigation'
 import type { ModelEntry } from '@/lib/types/models'
 import { PageContainer } from '@/components/PageContainer'
-import { Button, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { Button, Card, CardHeader, CardTitle, CardContent, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useToastStore } from '@/lib/toast-store'
@@ -26,6 +26,9 @@ import ModelPlaygroundCard from '@/components/models/ModelPlaygroundCard'
 import ModelCacheCard from '@/components/models/ModelCacheCard'
 import ModelUsageCard from '@/components/models/ModelUsageCard'
 import QuantizationCard from '@/components/models/QuantizationCard'
+import DownloadsCard from '@/components/models/DownloadsCard'
+import EngineStatusCard from '@/components/models/EngineStatusCard'
+import ProviderDiagnosticsCard from '@/components/models/ProviderDiagnosticsCard'
 import ModelsCard from '@/components/compare/ModelsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import SummaryCard from '@/components/compare/SummaryCard'
@@ -45,6 +48,7 @@ export default function ModelsPage() {
   const router = useRouter()
   const [switchingSoul, setSwitchingSoul] = useState<string | null>(null)
   const [traitWeights, setTraitWeights] = useState<Record<string, Record<string, number>> | null>(null)
+  const [traitWeightsError, setTraitWeightsError] = useState<string | null>(null)
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
   const refreshHealth = useCallback(async () => {
     await modelController.getHealth()
@@ -70,7 +74,7 @@ export default function ModelsPage() {
       await switchSoul({ name, checkpointName })
       addToast(checkpointName ? `${name} + ${checkpointName}` : name, 'success')
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed'), 'error')
+      addToast(extractErrorMessage(err, 'Could not load model'), 'error')
     } finally {
       setSwitchingSoul(null)
     }
@@ -82,15 +86,20 @@ export default function ModelsPage() {
       addToast('Personality updated', 'success')
       setTraitWeights(weights)
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to save traits'), 'error')
+      addToast(extractErrorMessage(err, 'Could not save traits'), 'error')
     }
   }, [addToast])
 
   const fetchTraitWeights = useCallback(async () => {
     try {
+      setTraitWeightsError(null)
       const w = await soulsController.getTraitWeights()
       if (w && !('error' in w)) setTraitWeights(w)
-    } catch { addToast('Could not load trait weights', 'info') }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not load trait weights'
+      setTraitWeightsError(msg)
+      addToast(msg, 'info')
+    }
   }, [addToast])
 
   const [refreshing, setRefreshing] = useState(false)
@@ -162,15 +171,25 @@ export default function ModelsPage() {
 
   const isOnline = health !== null && health !== 'offline'
   const subtitle = health === null ? 'Connecting...'
-    : !isOnline ? 'API offline'
+    : !isOnline ? 'Service offline'
     : health.model_loaded ? `${modelDisplayName(health.model_type)} · running`
     : 'No model loaded'
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleRefresh() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [handleRefresh])
 
   return (
     <PageContainer
       title="Models & Personalities"
       subtitle={subtitle}
       className="items-start"
+      loading={modelsLoading && soulsLoading}
       headerRight={
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>
@@ -193,14 +212,14 @@ export default function ModelsPage() {
           }}>
             Export
           </Button>
-          <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={`w-3.5 h-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
+          <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={cn('w-3.5 h-3.5 mr-1', refreshing && 'animate-spin')} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
         </div>
       }
     >
         {modelsError && models.length === 0 && (
           <Card>
             <CardContent className="py-4 flex items-center justify-between">
-              <span className="text-sm text-destructive">Failed to load models</span>
+              <span className="text-sm text-destructive">Could not load models</span>
               <Button size="sm" variant="outline" onClick={() => refetchModels()}>Retry</Button>
             </CardContent>
           </Card>
@@ -208,7 +227,7 @@ export default function ModelsPage() {
         {soulsError && souls.length === 0 && (
           <Card>
             <CardContent className="py-4 flex items-center justify-between">
-              <span className="text-sm text-destructive">Failed to load personalities</span>
+              <span className="text-sm text-destructive">Could not load personalities</span>
               <Button size="sm" variant="outline" onClick={() => refetchSouls()}>Retry</Button>
             </CardContent>
           </Card>
@@ -269,6 +288,9 @@ export default function ModelsPage() {
           health={health && health !== 'offline' ? health : null}
           onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
         />
+        <DownloadsCard />
+        <EngineStatusCard />
+        <ProviderDiagnosticsCard />
 
         {/* Comparison section */}
         <Card>

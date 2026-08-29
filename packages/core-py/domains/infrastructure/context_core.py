@@ -8,6 +8,7 @@ from datetime import datetime
 import json
 import hashlib
 import logging
+import threading
 
 logger = logging.getLogger("slo.infrastructure.context_core")
 
@@ -279,8 +280,10 @@ Be concise, accurate, and helpful."""
                 import asyncio
                 ingester = AutoIngester(provider=provider)
                 asyncio.run(ingester.ingest())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("context_core: auto-ingestion failed", extra={
+                    "provider": provider, "error": str(e),
+                })
         threading.Thread(target=_do, daemon=True).start()
 
     async def get_rag_context(self, query: str) -> str:
@@ -301,8 +304,10 @@ Be concise, accurate, and helpful."""
                 facts = await asyncio.to_thread(_query_aug)
                 if facts:
                     return "\n".join(f"[Knowledge] {f}" for f in facts)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("context_core: knowledge augmenter query failed", extra={
+                    "error": str(e),
+                })
             # Auto-ingest if empty, then fallback to semantic memory
             if not hasattr(self, '_auto_ingest_triggered'):
                 self._auto_ingest_triggered = True
@@ -332,7 +337,8 @@ Be concise, accurate, and helpful."""
                 parts.append(f"[Doc: {r.id}] {text}")
 
             return "\n".join(parts)
-        except Exception:
+        except Exception as e:
+            logger.warning("Vector store RAG query failed, falling back to semantic memory: %s", e)
             # Fallback to semantic memory
             facts = self.search_semantic(query, limit=self.rag_top_k)
             if facts:
@@ -515,54 +521,58 @@ Be concise, accurate, and helpful."""
 
 # Global instance
 _context_core: Optional[ContextCore] = None
+_context_core_lock = threading.Lock()
 
 
 def get_context_core() -> ContextCore:
     global _context_core
     if _context_core is None:
-        from domains.context.managers import (
-            PersonalityManager, MemoryManager,
-            StyleManager, TaskManager,
-        )
-        _context_core = ContextCore(
-            personality_manager=PersonalityManager(),
-            memory_manager=MemoryManager(),
-            style_manager=StyleManager(),
-            task_manager=TaskManager(),
-        )
-        # Auto-select vector store from env vars
-        import os
-        vs_provider = os.environ.get("MAN_VECTOR_STORE", "")
-        if vs_provider:
-            try:
-                from domains.inference.vector_store import create_vector_store
-                kwargs = {}
-                if vs_provider == "pinecone":
-                    api_key = os.environ.get("MAN_PINECONE_API_KEY", "")
-                    index_name = os.environ.get("MAN_PINECONE_INDEX", "sloughgpt")
-                    if not api_key:
-                        vs_provider = ""
-                    else:
-                        kwargs = {"api_key": api_key, "index_name": index_name}
-                elif vs_provider == "chromadb":
-                    persist_dir = os.environ.get("MAN_CHROMADB_DIR", "data/vector_store")
-                    kwargs = {"persist_directory": persist_dir}
+        with _context_core_lock:
+            if _context_core is None:
+                from domains.context.managers import (
+                    PersonalityManager, MemoryManager,
+                    StyleManager, TaskManager,
+                )
+                _context_core = ContextCore(
+                    personality_manager=PersonalityManager(),
+                    memory_manager=MemoryManager(),
+                    style_manager=StyleManager(),
+                    task_manager=TaskManager(),
+                )
+                # Auto-select vector store from env vars
+                import os
+                vs_provider = os.environ.get("MAN_VECTOR_STORE", "")
                 if vs_provider:
-                    import asyncio
-                    loop = asyncio.new_event_loop()
                     try:
-                        store = loop.run_until_complete(
-                            create_vector_store(provider=vs_provider, **kwargs)
-                        )
-                    finally:
-                        loop.close()
-                    _context_core.set_vector_store(store)
-                    logger.info("Vector store auto-configured: %s", vs_provider, extra={"tag": "INFRA"})
-            except Exception as e:
-                logger.warning("Failed to auto-configure vector store %s: %s", vs_provider, e, extra={"tag": "INFRA"})
+                        from domains.inference.vector_store import create_vector_store
+                        kwargs = {}
+                        if vs_provider == "pinecone":
+                            api_key = os.environ.get("MAN_PINECONE_API_KEY", "")
+                            index_name = os.environ.get("MAN_PINECONE_INDEX", "sloughgpt")
+                            if not api_key:
+                                vs_provider = ""
+                            else:
+                                kwargs = {"api_key": api_key, "index_name": index_name}
+                        elif vs_provider == "chromadb":
+                            persist_dir = os.environ.get("MAN_CHROMADB_DIR", "data/vector_store")
+                            kwargs = {"persist_directory": persist_dir}
+                        if vs_provider:
+                            import asyncio
+                            loop = asyncio.new_event_loop()
+                            try:
+                                store = loop.run_until_complete(
+                                    create_vector_store(provider=vs_provider, **kwargs)
+                                )
+                            finally:
+                                loop.close()
+                            _context_core.set_vector_store(store)
+                            logger.info("Vector store auto-configured: %s", vs_provider, extra={"tag": "INFRA"})
+                    except Exception as e:
+                        logger.warning("Failed to auto-configure vector store %s: %s", vs_provider, e, extra={"tag": "INFRA"})
     return _context_core
 
 
 def reset_context_core() -> None:
     global _context_core
-    _context_core = None
+    with _context_core_lock:
+        _context_core = None

@@ -76,7 +76,7 @@ export function ModelComparisonInsightsCard({ completedResults, models, bestMetr
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Models Compared</div>
-            <div className="text-lg font-semibold">{completedResults.length}</div>
+            <div className="text-sm font-semibold">{completedResults.length}</div>
             <div className="text-[10px] text-muted-foreground">
               {latencySpread > 30 ? 'Wide gap' : latencySpread > 10 ? 'Moderate gap' : 'Close match'}
             </div>

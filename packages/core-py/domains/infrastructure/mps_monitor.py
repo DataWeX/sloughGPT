@@ -161,15 +161,24 @@ class MPSMemoryMonitor:
             if ml_mps.is_available():
                 ml_mps.empty_cache()
                 logger.info("MPS cache cleared (numpy backend)", extra={"tag": "INFRA"})
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("MPS cache clear failed: %s", exc)
 
 
 _monitor: Optional[MPSMemoryMonitor] = None
+_monitor_lock = threading.Lock()
 
 
 def get_mps_monitor() -> MPSMemoryMonitor:
     global _monitor
     if _monitor is None:
-        _monitor = MPSMemoryMonitor()
+        with _monitor_lock:
+            if _monitor is None:
+                _monitor = MPSMemoryMonitor()
     return _monitor
+
+
+def reset_mps_monitor() -> None:
+    global _monitor
+    with _monitor_lock:
+        _monitor = None

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { ErrorInsightsCard } from '@/components/errors/ErrorInsightsCard'
@@ -34,7 +34,7 @@ export default function ErrorsPage() {
       setTotal(r.total)
       setTrends(t)
     } catch {
-      addToast('Failed to load error data', 'error')
+      addToast('Could not load error data', 'error')
     } finally {
       setLoading(false)
     }
@@ -59,7 +59,7 @@ export default function ErrorsPage() {
       await errorsController.clear()
       await fetchData()
     } catch {
-      addToast('Failed to clear errors', 'error')
+      addToast('Could not clear errors', 'error')
     } finally {
       setClearing(false)
     }
@@ -70,7 +70,7 @@ export default function ErrorsPage() {
       const data = await errorsController.export()
       downloadJson(data, `errors-${Date.now()}.json`)
     } catch {
-      addToast('Failed to export errors', 'error')
+      addToast('Could not export errors', 'error')
     }
   }
 
@@ -101,10 +101,10 @@ export default function ErrorsPage() {
         loading
       >
         <KpiGrid>
-          <StatCard label="Total" value="..." />
-          <StatCard label="Groups" value="..." />
-          <StatCard label="Last Hour" value="..." />
-          <StatCard label="Top Error" value="..." />
+          <StatCard label="Total" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Groups" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Last Hour" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Top Error" value={<Skeleton className="h-5 w-24" />} />
         </KpiGrid>
         <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
       </PageContainer>
@@ -133,10 +133,10 @@ export default function ErrorsPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Actions</CardTitle>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
+              <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)} aria-pressed={autoRefresh}>
                 {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
               </Button>
-              <Button size="sm" variant="ghost" onClick={fetchData}>
+              <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
@@ -222,7 +222,7 @@ export default function ErrorsPage() {
                         <span className="text-xs font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
                           ×{g.count}
                         </span>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
+                        <div className="text-xs text-muted-foreground mt-0.5">
                           {g.latest && new Date(g.latest).toLocaleDateString()}
                         </div>
                       </div>

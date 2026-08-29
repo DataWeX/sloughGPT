@@ -47,6 +47,8 @@ def _app_with_backend(backend):
     vr.router.add_api_route("/tts", vr.text_to_speech, methods=["POST"])
     vr.router.add_api_route("/status", vr.voice_status, methods=["GET"])
     app.include_router(vr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+    register_all_handlers(app)
     return app
 
 

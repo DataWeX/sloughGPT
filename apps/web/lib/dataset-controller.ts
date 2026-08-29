@@ -3,7 +3,10 @@
  */
 
 import { apiGet, apiPost, apiPatch, apiDelete, authFetch } from './http-client'
+import { logger } from './dev-log'
 import type { Method } from '@/hooks/useTrainingForm'
+
+const _log = logger.child('dataset-controller')
 
 export type ImportSource = 'github' | 'huggingface' | 'url' | 'local' | 'kaggle' | 'csv' | 'isbn'
 export type DatasetFormat = 'jsonl' | 'csv' | 'json' | 'messages' | 'dialogue' | 'text'
@@ -56,6 +59,7 @@ export interface Dataset {
   size: number
   samples?: number
   created_at: string
+  updated_at?: string
   tags?: string[]
   vlm_metadata?: {
     type: string
@@ -98,7 +102,8 @@ export const datasetController = {
   async get(id: string): Promise<Dataset | null> {
     try {
       return await apiGet<Dataset>(`/datasets/${id}`)
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get dataset', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },

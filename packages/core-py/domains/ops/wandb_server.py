@@ -78,8 +78,8 @@ def _wandb_finish_run() -> None:
 
         if wandb.run is not None:
             wandb.finish()
-    except Exception:
-        logger.debug("wandb.finish failed", exc_info=True)
+    except Exception as e:
+        logger.debug("wandb.finish failed: %s", e)
 
 
 async def start_wandb_server_background(
@@ -117,8 +117,8 @@ async def start_wandb_server_background(
                 if extra_metrics is not None:
                     try:
                         extra_part = await asyncio.to_thread(extra_metrics)
-                    except Exception:
-                        logger.debug("extra_metrics() failed", exc_info=True)
+                    except Exception as e:
+                        logger.debug("extra_metrics() failed: %s", e)
                 payload = {**http_part, **inf_part, **extra_part}
                 if payload:
                     await asyncio.to_thread(_wandb_log_payload, payload, step)

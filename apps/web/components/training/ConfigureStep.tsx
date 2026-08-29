@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox } from '@sloughgpt/strui'
 import { TrainingPresets } from '@/components/training/TrainingPresets'
 import type { StepProps } from './DataStep'
 
-export function ConfigureStep({ form, onNext, onBack }: StepProps) {
+export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
   const hpErrors = useMemo(() => {
     const errors: string[] = []
     if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
@@ -89,7 +89,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   className="w-full rounded-md border border-border/60 bg-background p-3 pb-7 text-xs font-mono text-foreground resize-y min-h-[80px]"
                   aria-label="Training text input"
                 />
-                <span className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums" aria-live="polite">
+                <span className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground/50 tabular-nums" aria-live="polite" aria-atomic="true">
                   {form.textInput.length > 0 ? `${form.textInput.length.toLocaleString()} chars · ~${Math.ceil(form.textInput.length / 4)} tokens` : ''}
                 </span>
               </div>
@@ -97,9 +97,9 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
 
             {form.method === 'finetune' && form.availableModels.length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
+                <label htmlFor="train-base-model" className="text-[10px] text-muted-foreground uppercase tracking-wider">Base model</label>
                 <Select value={form.selectedModel} onValueChange={form.setSelectedModel}>
-                  <SelectTrigger className="h-8 text-xs font-mono max-w-sm" aria-label="Base model">
+                  <SelectTrigger id="train-base-model" className="h-8 text-xs font-mono max-w-sm" aria-label="Base model">
                     <SelectValue placeholder="Select model..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -116,6 +116,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   onChange={e => form.setTrainingEpochs(Number(e.target.value))}
                   error={form.trainingEpochs < 1 || form.trainingEpochs > 500}
                   aria-invalid={form.trainingEpochs < 1 || form.trainingEpochs > 500}
+                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                   className="h-8 text-xs font-mono" />
               </div>
               <div className="flex flex-col gap-1">
@@ -124,6 +125,7 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   onChange={e => form.setTrainingBatchSize(Number(e.target.value))}
                   error={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
                   aria-invalid={form.trainingBatchSize < 1 || form.trainingBatchSize > 256}
+                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                   className="h-8 text-xs font-mono" />
               </div>
               <div className="flex flex-col gap-1">
@@ -132,12 +134,13 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                   onChange={e => form.setTrainingLR(Number(e.target.value) || 1e-3)}
                   error={form.trainingLR <= 0 || form.trainingLR > 1}
                   aria-invalid={form.trainingLR <= 0 || form.trainingLR > 1}
+                  aria-describedby={hpErrors.length > 0 ? 'configure-hp-errors' : undefined}
                   className="h-8 text-xs font-mono" />
               </div>
             </div>
 
             {hpErrors.length > 0 && (
-              <div className="text-[11px] text-destructive space-y-0.5">
+              <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
                 {hpErrors.map(e => <div key={e}>{e}</div>)}
               </div>
             )}
@@ -145,8 +148,8 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
             {form.method === 'finetune' && (
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-xs">
-                  <input type="checkbox" checked={form.useLoRA} onChange={e => form.setUseLoRA(e.target.checked)}
-                    className="rounded border-border" />
+                  <Checkbox checked={form.useLoRA} onCheckedChange={e => form.setUseLoRA(e === true)}
+                    className="rounded border-border" aria-label="Enable LoRA" />
                   Use LoRA (parameter-efficient fine-tuning)
                 </label>
                 {form.useLoRA && (
@@ -165,6 +168,28 @@ export function ConfigureStep({ form, onNext, onBack }: StepProps) {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {checkpoints && checkpoints.checkpoints.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="resume-checkpoint" className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Resume from checkpoint (optional)
+                </label>
+                <select
+                  id="resume-checkpoint"
+                  value={form.resumeCheckpoint}
+                  onChange={e => form.setResumeCheckpoint(e.target.value)}
+                  aria-label="Resume from checkpoint"
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
+                >
+                  <option value="">Start fresh</option>
+                  {checkpoints.checkpoints.map(c => (
+                    <option key={c.name} value={c.name}>
+                      {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </>

@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { timeAgo } from '@/lib/time-ago'
 
 interface AuditLog {
   event_type: string
@@ -35,21 +36,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   System: 'bg-muted text-muted-foreground',
 }
 
-function timeAgo(ts: string): string {
-  try {
-    const d = new Date(ts)
-    if (isNaN(d.getTime())) return ''
-    const diffMs = Date.now() - d.getTime()
-    const diffM = Math.floor(diffMs / 60000)
-    const diffH = Math.floor(diffM / 60)
-    const diffD = Math.floor(diffH / 24)
-    if (diffD > 0) return `${diffD}d ago`
-    if (diffH > 0) return `${diffH}h ago`
-    if (diffM > 0) return `${diffM}m ago`
-    return 'just now'
-  } catch { return '' }
-}
-
 export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: SecurityOverviewCardProps) {
   const categories: Record<string, number> = {}
   for (const log of logs) {
@@ -80,7 +66,7 @@ export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: Se
             <div className="text-[10px] text-muted-foreground mb-1.5">Event Categories</div>
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(categories).sort((a, b) => b[1] - a[1]).map(([cat, count]) => (
-                <span key={cat} className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.System}`}>
+                <span key={cat} className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', CATEGORY_COLORS[cat] ?? CATEGORY_COLORS.System)}>
                   {cat} ({count})
                 </span>
               ))}
@@ -95,11 +81,9 @@ export function SecurityOverviewCard({ logs, apiKeyConfigured, apiKeyCount }: Se
               {recent.map((log, i) => (
                 <div key={i} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                      log.event_type.toLowerCase().includes('delete') ? 'bg-destructive' :
+                    <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', log.event_type.toLowerCase().includes('delete') ? 'bg-destructive' :
                       log.event_type.toLowerCase().includes('auth') || log.event_type.toLowerCase().includes('login') ? 'bg-primary' :
-                      'bg-success'
-                    }`} />
+                      'bg-success')} />
                     <span className="font-medium truncate">{log.event_type}</span>
                     {log.user && <span className="text-muted-foreground truncate">@{log.user}</span>}
                   </div>

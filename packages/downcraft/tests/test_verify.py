@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from downcraft.verify import _sha256_of, verify_file
+from downcraft.download.verify import _sha256_of, verify_file
 
 
 class TestSha256Of:

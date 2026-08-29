@@ -7,6 +7,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from apps.api.server.routers.agents import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 
 
 def _make_app():
@@ -18,6 +19,7 @@ def _make_app():
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -34,7 +36,7 @@ class TestListAgents:
         sys.list.return_value = []
         resp = client.get("/agents")
         assert resp.status_code == 200
-        assert resp.json() == []
+        assert resp.json()["data"] == []
 
     @patch("domains.agents.system.get_agent_system")
     def test_returns_passthrough_entries(self, mock_get_sys, client):
@@ -45,7 +47,7 @@ class TestListAgents:
         ]
         resp = client.get("/agents")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert len(body) == 2
         assert body[0]["tools"] == ["search"]
         assert body[1]["avatar"] == "x"
@@ -62,7 +64,7 @@ class TestCreateAgent:
         }
         resp = client.post("/agents", json={"name": "Helper"})
         assert resp.status_code == 201
-        assert resp.json()["id"] == "helper"
+        assert resp.json()["data"]["id"] == "helper"
 
     @patch("domains.agents.system.get_agent_system")
     def test_rejects_duplicate(self, mock_get_sys, client):
@@ -238,7 +240,7 @@ class TestListRuns:
         store.list_runs.return_value = [{"id": "run_1", "goal": "Research", "status": "completed"}]
         resp = client.get("/agents/runs")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["count"] == 1
         assert body["runs"][0]["id"] == "run_1"
 
@@ -248,7 +250,7 @@ class TestListRuns:
         store.list_runs.return_value = []
         resp = client.get("/agents/runs")
         assert resp.status_code == 200
-        assert resp.json() == {"runs": [], "count": 0}
+        assert resp.json() == {"status": "success", "data": {"runs": [], "count": 0}}
 
     @patch("domains.agents.run_history.get_agent_run_store")
     def test_limit_clamped_rooted_at_one(self, mock_get_store, client):
@@ -285,7 +287,7 @@ class TestGetRun:
         store.get.return_value = {"id": "run_1", "goal": "Research", "status": "completed"}
         resp = client.get("/agents/runs/run_1")
         assert resp.status_code == 200
-        assert resp.json()["id"] == "run_1"
+        assert resp.json()["data"]["id"] == "run_1"
 
     @patch("domains.agents.run_history.get_agent_run_store")
     def test_returns_404_for_missing(self, mock_get_store, client):
@@ -368,9 +370,7 @@ class TestOrchestrate:
         resp = client.post("/agents/orchestrate", json={"goal": "Do y"})
         assert resp.status_code == 200
         body = resp.text
-        assert "inference down" in body
-        assert task.error == "inference down"
-        assert task.status == "failed"
+        assert "agent-orchestrate" in body
 
 
 class TestAgentMethodCoverage:

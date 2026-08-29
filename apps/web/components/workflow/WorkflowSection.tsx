@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController } from '@/lib/workflow-controller'
 import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
@@ -21,13 +21,28 @@ export function WorkflowSection() {
     try {
       setStatus(await workflowController.status())
     } catch {
-      addToast('Failed to load workflow status', 'error')
+      addToast('Could not load workflow status', 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchStatus() }, [])
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      try {
+        const s = await workflowController.status()
+        if (active) setStatus(s)
+      } catch {
+        if (active) addToast('Could not load workflow status', 'error')
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [])
 
   const handleToggle = async () => {
     setToggling(true)
@@ -39,7 +54,7 @@ export function WorkflowSection() {
       }
       await fetchStatus()
     } catch {
-      addToast('Failed to toggle workflow', 'error')
+      addToast('Could not toggle workflow', 'error')
     } finally {
       setToggling(false)
     }
@@ -63,17 +78,17 @@ export function WorkflowSection() {
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
         <h2 className="text-base font-medium">Feedback Pipeline</h2>
-        <Button size="sm" variant="ghost" onClick={fetchStatus}>
+        <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh">
           <IconRefresh className="h-4 w-4" />
         </Button>
       </div>
 
       {loading ? (
         <KpiGrid>
-          <StatCard label="Status" value="Loading..." />
-          <StatCard label="Feedback" value="..." />
-          <StatCard label="Adapters" value="..." />
-          <StatCard label="Health" value="..." />
+          <StatCard label="Status" value="" loading />
+          <StatCard label="Feedback" value="" loading />
+          <StatCard label="Adapters" value="" loading />
+          <StatCard label="Health" value="" loading />
         </KpiGrid>
       ) : (
         <KpiGrid>
@@ -99,7 +114,7 @@ export function WorkflowSection() {
       {triggerMsg && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
           {triggerMsg}
-          <button className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
         </div>
       )}
 
@@ -109,12 +124,10 @@ export function WorkflowSection() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-3">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-              status?.running
+            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium', status?.running
                 ? 'bg-success/15 text-success'
-                : 'bg-muted text-muted-foreground'
-            }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${status?.running ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                : 'bg-muted text-muted-foreground')}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', status?.running ? 'bg-success' : 'bg-muted-foreground/40')} />
               {status?.running ? 'Running' : 'Stopped'}
             </span>
             <Button size="sm" onClick={handleToggle} disabled={toggling}>

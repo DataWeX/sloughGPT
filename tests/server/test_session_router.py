@@ -154,7 +154,7 @@ class TestSessionInspector:
         mock_get.return_value = [{"role": "user", "content": "Hi"}]
         resp = client.get("/session/sess-1/inspector")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "session" in body
         assert "knowledge" in body
         assert "traits" in body
@@ -167,7 +167,7 @@ class TestSessionInspector:
         mock_get.return_value = []
         resp = client.get("/session/sess-empty/inspector")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["session"]["message_count"] == 0
         assert body["session"]["messages"] == []
 
@@ -176,7 +176,7 @@ class TestSessionInspector:
         mock_get.return_value = [{"role": "user", "content": f"m{i}"} for i in range(25)]
         resp = client.get("/session/sess-25/inspector")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["session"]["message_count"] == 25
         assert len(body["session"]["messages"]) == 10
 
@@ -184,7 +184,7 @@ class TestSessionInspector:
     def test_inspector_has_workspace_and_modes(self, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hi"}]
         resp = client.get("/session/sess-1/inspector")
-        body = resp.json()
+        body = resp.json()["data"]
         assert "workspace" in body
         assert "modes" in body
         assert set(("personality", "memory", "style", "task")) <= set(body["modes"])
@@ -325,7 +325,7 @@ class TestInspectorEdgePaths:
         mock_cc.return_value = cc
         resp = client.get("/session/sess-1/inspector")
         assert resp.status_code == 200
-        ws = resp.json()["workspace"]
+        ws = resp.json()["data"]["workspace"]
         assert ws["working_memory"] == ["note1"]
         assert ws["episodic_count"] == 3
         assert ws["system_prompt"] == "You are a helper."

@@ -18,7 +18,7 @@ const cp = (overrides: Partial<Checkpoint>) => ({ name: 'cp', soul: 'assistant',
 describe('TrainingSummaryCard', () => {
   afterEach(cleanup)
 
-  it('returns null when no checkpoints', () => {
+  it('shows no-data state for empty checkpoints', () => {
     const { container } = render(<TrainingSummaryCard checkpoints={[]} />)
     expect(container.innerHTML).toBe('')
   })

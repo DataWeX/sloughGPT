@@ -56,11 +56,12 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     // Register with backend
     try {
+      const topics = await getStoredTopics();
       await api.post('/mobile/notifications/register', {
         token,
         platform: Platform.OS,
         user_id: 'default',
-        topics: ['chat', 'training'],
+        topics,
       });
     } catch {
       // backend unavailable — token stored locally for retry
@@ -154,19 +155,59 @@ export async function getBadgeCount(): Promise<number> {
 
 // ── Topics ──────────────────────────────────────────────────────────────────
 
+const TOPICS_KEY = '@sloughgpt/topics';
+const DEFAULT_TOPICS = ['chat', 'training'];
+
+async function getStoredTopics(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(TOPICS_KEY);
+  if (raw) {
+    try { return JSON.parse(raw); } catch { /* ignore */ }
+  }
+  return [...DEFAULT_TOPICS];
+}
+
+async function saveTopics(topics: string[]): Promise<void> {
+  await AsyncStorage.setItem(TOPICS_KEY, JSON.stringify(topics));
+}
+
 export async function subscribeToTopic(topic: string): Promise<void> {
   const token = await getStoredPushToken();
-  if (token) {
-    try {
-      // Expo doesn't have native topic subscription — handled server-side
-      // Just update the device registration
-      await api.post('/mobile/notifications/register', {
-        token,
-        platform: Platform.OS,
-        topics: ['chat', 'training', topic],
-      });
-    } catch (e) {
-      if (__DEV__) console.warn('[push-notifications] topic subscribe failed:', e);
-    }
+  if (!token) return;
+
+  try {
+    const current = await getStoredTopics();
+    const merged = [...new Set([...current, topic])];
+    await saveTopics(merged);
+
+    await api.post('/mobile/notifications/register', {
+      token,
+      platform: Platform.OS,
+      topics: merged,
+    });
+  } catch (e) {
+    if (__DEV__) console.warn('[push-notifications] topic subscribe failed:', e);
   }
+}
+
+export async function unsubscribeFromTopic(topic: string): Promise<void> {
+  const token = await getStoredPushToken();
+  if (!token) return;
+
+  try {
+    const current = await getStoredTopics();
+    const merged = current.filter(t => t !== topic);
+    await saveTopics(merged);
+
+    await api.post('/mobile/notifications/register', {
+      token,
+      platform: Platform.OS,
+      topics: merged,
+    });
+  } catch (e) {
+    if (__DEV__) console.warn('[push-notifications] topic unsubscribe failed:', e);
+  }
+}
+
+export async function getSubscribedTopics(): Promise<string[]> {
+  return getStoredTopics();
 }

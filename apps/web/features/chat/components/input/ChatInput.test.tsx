@@ -63,7 +63,7 @@ describe('ChatInput', () => {
   it('shows API offline placeholder when health is offline', () => {
     const { container } = render(<ChatInput {...base} health={'offline' as unknown as ApiHealthSnapshot} />)
     const row = container.querySelector('[data-testid="chat-input-row"]')
-    expect(row?.textContent).toContain('placeholder: API offline...')
+    expect(row?.textContent).toContain('placeholder: Service offline...')
   })
 
   it('shows Loading model... when no model loaded', () => {

@@ -13,6 +13,19 @@ Usage::
         #    "request_id": "abc-123", "model_id": "gpt2",
         #    "msg": "Generating", "tokens": 50, "latency_ms": 123.4}
 
+Timing helpers::
+
+    from domains.infrastructure.structured_log import log_timer, timed
+
+    # Context manager
+    with log_timer(log, "model load"):
+        load_model()
+
+    # Decorator
+    @timed(log)
+    def load_model():
+        ...
+
 FastAPI middleware::
 
     from domains.infrastructure.structured_log import request_log_middleware
@@ -23,12 +36,14 @@ FastAPI middleware::
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import threading
 import time
 import uuid
-from typing import Any, Optional
+from contextlib import contextmanager
+from typing import Any, Callable, Optional
 
 
 # ── Thread-local request context ──────────────────────────────────────
@@ -123,12 +138,31 @@ class StructuredLogger:
         log.info("Loaded %s in %.1fms", "gpt2", 3200, extra={"tag": "MODEL"})
     """
 
-    def __init__(self, name: str, level: int = logging.INFO):
+    def __init__(self, name: str, level: int = logging.INFO, **tags: Any):
         self._logger = logging.getLogger(name)
         self._logger.setLevel(level)
+        self._tags = dict(tags)
+
+    def __repr__(self) -> str:
+        tags = f", tags={self._tags}" if self._tags else ""
+        return f"StructuredLogger({self._logger.name!r}, level={logging.getLevelName(self._logger.level)}{tags})"
 
     def __getattr__(self, attr: str):
         return getattr(self._logger, attr)
+
+    def child(self, suffix: str, **tags: Any) -> "StructuredLogger":
+        """Create a child logger with a dotted name suffix and extra tags.
+
+        Tags merge with parent tags (child overrides parent)::
+
+            parent = StructuredLogger("slo.training")
+            child = parent.child("optimizer", phase="train")
+            child.info("lr updated")
+            # → {"logger": "slo.training.optimizer", "phase": "train", ...}
+        """
+        child_name = f"{self._logger.name}.{suffix}"
+        merged_tags = {**self._tags, **tags}
+        return StructuredLogger(child_name, level=self._logger.level, **merged_tags)
 
     def _log(self, level: int, msg: str, *args: Any, **extra: Any) -> None:
         extra_dict = extra.pop("extra", {})
@@ -136,6 +170,10 @@ class StructuredLogger:
             extra_dict.update(extra)
         else:
             extra_dict = dict(extra)
+        if self._tags:
+            merged = dict(self._tags)
+            merged.update(extra_dict)
+            extra_dict = merged
         if args:
             self._logger.log(level, msg, *args, extra=extra_dict)
         else:
@@ -157,7 +195,139 @@ class StructuredLogger:
         self._log(logging.CRITICAL, msg, *args, **extra)
 
 
-# ── Setup helper ─────────────────────────────────────────────────────
+# ── Timing helpers ────────────────────────────────────────────────────
+
+@contextmanager
+def log_timer(
+    logger: StructuredLogger,
+    label: str,
+    level: int = logging.INFO,
+    **extra: Any,
+):
+    """Context manager that logs elapsed time on exit.
+
+    Usage::
+
+        with log_timer(log, "model load"):
+            load_model()
+        # → "model load completed in 3.2s"
+    """
+    start = time.monotonic()
+    try:
+        yield
+    except Exception:
+        elapsed_ms = (time.monotonic() - start) * 1000
+        logger._log(
+            logging.ERROR,
+            f"{label} failed after {elapsed_ms:.1f}ms",
+            elapsed_ms=round(elapsed_ms, 1),
+            **extra,
+        )
+        raise
+    else:
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if elapsed_ms >= 1000:
+            elapsed_str = f"{elapsed_ms / 1000:.1f}s"
+        else:
+            elapsed_str = f"{elapsed_ms:.0f}ms"
+        logger._log(
+            level,
+            f"{label} completed in {elapsed_str}",
+            elapsed_ms=round(elapsed_ms, 1),
+            **extra,
+        )
+
+
+def timed(
+    logger: StructuredLogger,
+    level: int = logging.INFO,
+    **extra: Any,
+) -> Callable:
+    """Decorator that logs function execution time.
+
+    Usage::
+
+        @timed(log)
+        def load_model():
+            ...
+
+        @timed(log, level=logging.WARNING)
+        def slow_operation():
+            ...
+    """
+    def decorator(fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            start = time.monotonic()
+            try:
+                result = fn(*args, **kwargs)
+            except Exception:
+                elapsed_ms = (time.monotonic() - start) * 1000
+                logger._log(
+                    logging.ERROR,
+                    f"{fn.__name__} failed after {elapsed_ms:.1f}ms",
+                    elapsed_ms=round(elapsed_ms, 1),
+                    **extra,
+                )
+                raise
+            else:
+                elapsed_ms = (time.monotonic() - start) * 1000
+                if elapsed_ms >= 1000:
+                    elapsed_str = f"{elapsed_ms / 1000:.1f}s"
+                else:
+                    elapsed_str = f"{elapsed_ms:.0f}ms"
+                logger._log(
+                    level,
+                    f"{fn.__name__} completed in {elapsed_str}",
+                    elapsed_ms=round(elapsed_ms, 1),
+                    **extra,
+                )
+                return result
+        return wrapper
+    return decorator
+
+
+def tagged(
+    logger: StructuredLogger,
+    **tags: Any,
+) -> StructuredLogger:
+    """Return a proxy that injects ``tags`` into every log call.
+
+    Usage::
+
+        log = tagged(StructuredLogger("slo.training"), phase="train")
+        log.info("Starting", epochs=10)
+        # → {"msg": "Starting", "phase": "train", "epochs": 10}
+    """
+    class _TaggedProxy:
+        __slots__ = ("_inner", "_tags")
+
+        def __init__(self, inner: StructuredLogger, tags: dict):
+            object.__setattr__(self, "_inner", inner)
+            object.__setattr__(self, "_tags", tags)
+
+        def _merge(self, extra: dict) -> dict:
+            merged = dict(self._tags)
+            merged.update(extra)
+            return merged
+
+        def debug(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.DEBUG, msg, *args, **self._merge(extra))
+
+        def info(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.INFO, msg, *args, **self._merge(extra))
+
+        def warning(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.WARNING, msg, *args, **self._merge(extra))
+
+        def error(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.ERROR, msg, *args, **self._merge(extra))
+
+        def critical(self, msg: str, *args: Any, **extra: Any) -> None:
+            self._inner._log(logging.CRITICAL, msg, *args, **self._merge(extra))
+
+    return _TaggedProxy(logger, tags)
+
 
 def setup_structured_logging(
     root_level: int = logging.INFO,

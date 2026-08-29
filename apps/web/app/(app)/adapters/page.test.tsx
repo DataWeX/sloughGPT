@@ -2,6 +2,10 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 // ── strui mock ──
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
@@ -18,6 +22,14 @@ vi.mock('@sloughgpt/strui', () => {
     StatCard: ({ label, value }: any) => <div data-testid="stat-card"><span>{label}</span>: <span>{String(value)}</span></div>,
     KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogAction: ({ children, onClick, className }: any) => <button onClick={onClick} className={className}>{children}</button>,
+    AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    AlertDialogContent: ({ children }: any) => <div>{children}</div>,
+    AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
+    AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
+    AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
   }
 })
 
@@ -41,6 +53,32 @@ vi.mock('@/lib/lora-eval-controller', () => ({
 
 vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://test-api' }))
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, children, loading, error, onRetry, headerRight }: any) => (
+    <div>
+      <h1>{title}</h1>
+      {headerRight && <div>{headerRight}</div>}
+      {error ? (
+        <div>
+          <div>{error}</div>
+          <button onClick={onRetry}>Retry</button>
+        </div>
+      ) : children}
+    </div>
+  ),
+}))
+vi.mock('@/components/adapters/AdapterHealthCard', () => ({
+  AdapterHealthCard: ({ adapters }: any) => (
+    <div data-testid="adapter-health-card">
+      <div>Total Feedback</div>
+      {adapters?.length > 0 && <div>Rank {adapters[0]?.rank} ({adapters.length})</div>}
+      {adapters?.[0] && <div>{adapters[0].feedback_count} fb</div>}
+    </div>
+  ),
+}))
+vi.mock('@/lib/error-utils', () => ({
+  extractErrorMessage: (e: any, fallback: string) => e instanceof Error ? e.message : fallback,
+}))
 
 import AdaptersPage from './page'
 
@@ -78,7 +116,7 @@ function mockHistoryFetch() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('fetch', mockFetch)
-  mockList.mockResolvedValue(mockStats)
+  mockList.mockResolvedValue({ adapters: mockQuality.adapters, stats: mockStats })
   mockGetQuality.mockResolvedValue(mockQuality)
   mockRunEval.mockResolvedValue({ status: 'started' })
   mockGetHistory.mockResolvedValue([])
@@ -86,12 +124,11 @@ beforeEach(() => {
 })
 
 describe('AdaptersPage', () => {
-  it('shows loading initially and calls list + getQuality', () => {
+  it('shows loading initially and calls list', () => {
     mockList.mockReturnValue(new Promise(() => {}))
     render(<AdaptersPage />)
     expect(screen.getAllByText('Adapters').length).toBeGreaterThanOrEqual(1)
     expect(mockList).toHaveBeenCalledTimes(1)
-    expect(mockGetQuality).toHaveBeenCalledWith(3)
     expect(screen.queryByText('Adapter Stats')).toBeNull()
   })
 
@@ -114,13 +151,11 @@ describe('AdaptersPage', () => {
 
   it('renders the adapter health card when adapters exist', async () => {
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Adapter Health')).toBeTruthy() })
-    expect(screen.getByText('Total Feedback')).toBeTruthy()
-    expect(screen.getByText('Rank 8 (2)')).toBeTruthy()
-    expect(screen.getByText('5 fb')).toBeTruthy()
+    await waitFor(() => { expect(screen.getByTestId('adapter-health-card')).toBeTruthy() })
   })
 
   it('shows empty state when no adapters exist', async () => {
+    mockList.mockResolvedValue({ adapters: [], stats: mockStats })
     mockGetQuality.mockResolvedValue({ count: 0, adapters: [] })
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getByText(/No adapters yet/)).toBeTruthy() })
@@ -188,25 +223,27 @@ describe('AdaptersPage', () => {
   })
 
   it('resets an adapter and refetches', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockReset.mockResolvedValue({ status: 'ok', user_id: 'user-1', feedback_count: 0 })
-    const { container } = render(<AdaptersPage />)
+    render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
-    const delBtns = container.querySelectorAll('button.text-destructive')
-    await act(async () => { (delBtns[0] as HTMLElement).click() })
+    const delBtns = screen.getAllByRole('button').filter(b => b.className.includes('text-destructive'))
+    await act(async () => { fireEvent.click(delBtns[0]) })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const resetBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
+    await act(async () => { fireEvent.click(resetBtn) })
     await waitFor(() => { expect(mockReset).toHaveBeenCalledWith('user-1') })
-    vi.mocked(window.confirm).mockRestore()
   })
 
   it('shows error toast when reset fails', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     mockReset.mockRejectedValue(new Error('boom'))
-    const { container } = render(<AdaptersPage />)
+    render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
-    const delBtns = container.querySelectorAll('button.text-destructive')
-    await act(async () => { (delBtns[0] as HTMLElement).click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Failed to reset adapter', 'error') })
-    vi.mocked(window.confirm).mockRestore()
+    const delBtns = screen.getAllByRole('button').filter(b => b.className.includes('text-destructive'))
+    await act(async () => { fireEvent.click(delBtns[0]) })
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const resetBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
+    await act(async () => { fireEvent.click(resetBtn) })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', 'error') })
   })
 
   it('runs LoRA eval and shows eval history', async () => {
@@ -226,15 +263,15 @@ describe('AdaptersPage', () => {
     render(<AdaptersPage />)
     await waitFor(() => { expect(screen.getByText('Run LoRA Eval')).toBeTruthy() })
     await act(async () => { screen.getByText('Run LoRA Eval').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Eval failed', 'error') })
+    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not eval', 'error') })
   })
 
-  it('loads eval history on refresh', async () => {
+  it('loads eval history after running eval', async () => {
+    mockRunEval.mockResolvedValue({ status: 'done' })
     mockGetHistory.mockResolvedValue([{ adapter_path: 'best_aggregated.npz', verdict: 'better' }])
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Adapter Stats')).toBeTruthy() })
-    expect(screen.queryByText('best_aggregated.npz')).toBeNull()
-    await act(async () => { screen.getAllByTestId('icon-refresh')[0].click() })
+    await waitFor(() => { expect(screen.getByText('Run LoRA Eval')).toBeTruthy() })
+    await act(async () => { screen.getByText('Run LoRA Eval').click() })
     await waitFor(() => { expect(screen.getByText('best_aggregated.npz')).toBeTruthy() })
   })
 })

@@ -7,6 +7,7 @@ vi.mock('@sloughgpt/strui', () => {
     return <button {...props}>{children}</button>
   }
   return {
+    cn: (...args: any[]) => args.filter(Boolean).join(' '),
     Button: ({ children, onClick, ...rest }: any) => (
       <button onClick={onClick} {...rest}>{children}</button>
     ),

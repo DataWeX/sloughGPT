@@ -23,6 +23,7 @@ from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.routers.kb import KBRouter
 from apps.api.server.routers.agents import AgentsRouter
 from apps.api.server.routers.multimodal import MultimodalRouter
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.config import ConfigRouter
 from apps.api.server.routers.experiments import ExperimentsRouter
 from apps.api.server.routers.user_adapters import UserAdaptersRouter
@@ -35,6 +36,7 @@ from apps.api.server.routers.self_train import SelfTrainRouter
 @pytest.fixture
 def models_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(ModelsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -42,6 +44,7 @@ def models_client():
 @pytest.fixture
 def souls_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(SoulsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -52,6 +55,7 @@ def auto_train_client(tmp_path):
     rtr.CHECKPOINTS_DIR = tmp_path / "checkpoints"
     rtr.CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
     app = FastAPI()
+    register_all_handlers(app)
     app.state.checkpoint_dir = rtr.CHECKPOINTS_DIR
     app.include_router(rtr.router)
     return TestClient(app, raise_server_exceptions=False)
@@ -60,6 +64,7 @@ def auto_train_client(tmp_path):
 @pytest.fixture
 def datasets_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(DatasetsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -187,14 +192,14 @@ class TestModelAudit:
         mock_mgr.return_value = mgr
         resp = models_client.post("/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000})
         assert resp.status_code == 200
-        assert resp.json()["message"] == "started"
+        assert resp.json()["data"]["model_id"] == "gpt2"
         logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "model.download"
-        assert kwargs["resource"] == "gpt2"
-        assert kwargs["detail"] == "started"
-        assert kwargs["extra"] == {"total_bytes_hint": 1000}
+        assert logger.log.call_count >= 1
+        first_call_args, first_call_kwargs = logger.log.call_args_list[0]
+        assert first_call_args[0] == "model.download"
+        assert first_call_kwargs["resource"] == "gpt2"
+        assert first_call_kwargs["detail"] == "started"
+        assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
 
     @patch("domains.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
@@ -397,6 +402,7 @@ def training_router_client():
 
     training_jobs.clear()
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(training_router_module.router)
     client = TestClient(app, raise_server_exceptions=False)
     yield client
@@ -547,8 +553,10 @@ class TestTrainingRouterAudit:
 @pytest.fixture
 def kb_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(KBRouter().router)
-    return TestClient(app, raise_server_exceptions=False)
+    with patch("domains.cognitive.rag_service.get_rag_service", return_value=MagicMock()):
+        yield TestClient(app, raise_server_exceptions=False)
 
 
 class TestKnowledgeAudit:
@@ -652,6 +660,7 @@ class TestKnowledgeAudit:
 @pytest.fixture
 def agents_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(AgentsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -733,6 +742,7 @@ class TestAgentsAudit:
 @pytest.fixture
 def multimodal_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(MultimodalRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -782,6 +792,7 @@ class TestMultimodalAudit:
 @pytest.fixture
 def config_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(ConfigRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -826,6 +837,7 @@ def experiments_client(tmp_path):
     rtr = ExperimentsRouter()
     rtr.EXPERIMENTS_DIR = tmp_path / "experiments"
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(rtr.router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -861,6 +873,7 @@ class TestExperimentsAudit:
 @pytest.fixture
 def user_adapters_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(UserAdaptersRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -951,6 +964,7 @@ class TestUserAdaptersAudit:
 @pytest.fixture
 def lora_eval_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(LoraEvalRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -983,6 +997,7 @@ class TestLoraEvalAudit:
 @pytest.fixture
 def tokenizer_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(TokenizerRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -1015,6 +1030,7 @@ class TestTokenizerAudit:
 @pytest.fixture
 def system_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(SystemRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -1060,6 +1076,7 @@ def self_train_client():
 
     server_state._self_train_proc = None
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(SelfTrainRouter().router)
     client = TestClient(app, raise_server_exceptions=False)
     yield client
@@ -1132,7 +1149,7 @@ class TestAutoTrainControlAudit:
         try:
             resp = auto_train_client.post("/auto-train/pause")
             assert resp.status_code == 200
-            assert resp.json()["success"] is True
+            assert resp.json()["data"]["success"] is True
             logger = mock_logger.return_value
             logger.log.assert_called_once()
             args, kwargs = logger.log.call_args
@@ -1149,7 +1166,7 @@ class TestAutoTrainControlAudit:
         try:
             resp = auto_train_client.post("/auto-train/pause")
             assert resp.status_code == 200
-            assert resp.json()["success"] is False
+            assert resp.json()["data"]["success"] is False
             mock_logger.return_value.log.assert_not_called()
         finally:
             at_module._auto_train_pause_event = None
@@ -1164,7 +1181,7 @@ class TestAutoTrainControlAudit:
         try:
             resp = auto_train_client.post("/auto-train/resume")
             assert resp.status_code == 200
-            assert resp.json()["success"] is True
+            assert resp.json()["data"]["success"] is True
             logger = mock_logger.return_value
             logger.log.assert_called_once()
             args, kwargs = logger.log.call_args

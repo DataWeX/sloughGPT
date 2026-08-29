@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { memo } from 'react'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import { useTick } from '@/hooks/useTick'
+import { timeAgo } from '@/lib/time-ago'
 
 interface ModelEventsCardProps {
   liveHealth: LiveHealthSnapshot | null
@@ -15,37 +17,21 @@ const EVENT_STYLES: Record<string, string> = {
   error: 'bg-destructive/15 text-destructive',
 }
 
-function timeAgo(ts: number): string {
-  const s = Math.floor((Date.now() / 1000 - ts))
-  if (s < 5) return 'just now'
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  return `${Math.floor(m / 60)}h ago`
-}
-
-export function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {
+export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {
   const events = liveHealth?.model_events ?? []
-  const [tick, setTick] = useState(0)
-
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10_000)
-    return () => clearInterval(id)
-  }, [])
+  useTick()
 
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Model events</span>
-      <CardContent className="p-0 max-h-[220px] overflow-y-auto space-y-1.5">
+      <CardContent className="p-0 max-h-[220px] overflow-y-auto space-y-1.5" role="log" aria-live="polite" aria-label="Model event log">
         {events.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center py-4">No model events yet</p>
         ) : events.map((e, i) => (
           <div key={`${e.ts}-${i}`} className="border border-border/60 hover:bg-muted/50 transition-colors rounded-md p-2">
             <div className="flex items-center justify-between gap-2">
               <span
-                className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium uppercase ${
-                  EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground'
-                }`}
+                className={cn('shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium uppercase', EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground')}
               >
                 {e.type}
               </span>
@@ -62,4 +48,4 @@ export function ModelEventsCard({ liveHealth }: ModelEventsCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

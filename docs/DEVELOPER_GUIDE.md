@@ -128,19 +128,19 @@ import logging
 from typing import Dict, Any, List, Optional
 
 # Class definitions
-class ExampleService(BaseService):
-    """Example service following OOP principles."""
+class ExampleService:
+    """Example service following the project's patterns."""
 
     def __init__(self, config: Dict[str, Any]) -> None:
         """Initialize service with configuration."""
-        super().__init__()
         self.config = config
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("slo.services.example")
 
     async def process_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process data and return results."""
+        self.logger.info("Processing data", extra={"tag": "SERVICE", "context": {"keys": list(data.keys())}})
         # Implementation
-        pass
+        return {}
 ```
 
 ### Type Hints
@@ -251,36 +251,33 @@ Use structured logging with appropriate levels:
 ```python
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("slo.services.example")
 
-class CognitiveService:
+class ExampleService:
     def __init__(self):
-        self.logger = logging.getLogger(f"man.{self.__class__.__name__}")
+        self.logger = logging.getLogger(f"slo.services.{self.__class__.__name__}")
 
     async def process_request(self, request):
-        self.logger.info(f"Processing request: {request.id}")
+        self.logger.info("Processing request: %s", request.id)
         try:
             result = await self._do_process(request)
-            self.logger.info(f"Request {request.id} completed successfully")
+            self.logger.info("Request %s completed successfully", request.id)
             return result
         except Exception as e:
-            self.logger.error(f"Error processing request {request.id}: {e}")
+            self.logger.error("Error processing request %s: %s", request.id, e)
             raise
 ```
 
 ### Metrics Collection
 
-All domains support comprehensive metrics collection:
+Use the built-in `ServerState` for metrics tracking:
 
 ```python
-from domains.shared.monitoring import MetricsCollector
+from domains.infrastructure.server_state import get_server_state
 
-# Track performance
-metrics = MetricsCollector()
-
-# Track custom metrics
-await metrics.track_metric("cognitive_processing_time", processing_time)
-await metrics.track_counter("api_requests_total")
+state = get_server_state()
+state.record_inference(tokens=100, elapsed_ms=500, model="sloughgpt-7b")
+state.record_training(tokens=1000, elapsed_ms=30000)
 ```
 
 ### Debugging
@@ -336,43 +333,45 @@ class OptimizedProcessor:
 
 ### Connection Pooling
 
-Database and cache connections use pooling:
+The server uses `httpx.AsyncClient` for internal calls and `httpx.AsyncClient` for external API calls:
 
 ```python
-from domains.infrastructure.database import DatabaseManager
+import httpx
 
-# Initialize with connection pooling
-db_manager = DatabaseManager(pool_size=20)
-await db_manager.initialize()
-
-# Connections are automatically pooled
-for _ in range(100):
+# Async client with connection pooling
+async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as client:
+    resp = await client.get("/health")
+    data = resp.json()
+```
     result = await db_manager.execute_query("SELECT * FROM table")
 ```
 
 ### Caching Strategy
 
-Implement multi-level caching:
+The server uses in-memory caching with TTL for performance:
 
 ```python
-class CacheStrategy:
-    async def get_data(self, key: str) -> Optional[Any]:
-        # L1: In-memory cache
-        if key in self.memory_cache:
-            return self.memory_cache[key]
+from functools import lru_cache
+import time
 
-        # L2: Redis cache
-        if await self.redis_cache.exists(key):
-            return await self.redis_cache.get(key)
+# Simple TTL cache
+_cache: dict[str, tuple[float, Any]] = {}
+CACHE_TTL = 60.0  # seconds
 
-        # L3: Database cache
-        return await self.database_cache.get(key)
-
-    async def set_data(self, key: str, value: Any, ttl: int = 3600):
-        # Set in all cache levels with different TTLs
-        await self.set_memory_cache(key, value, ttl=60)
-        await self.set_redis_cache(key, value, ttl=300)
-        await self.set_database_cache(key, value, ttl=86400)
+def cached_get(key: str):
+    """Decorator for caching function results with TTL."""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            now = time.monotonic()
+            if key in _cache:
+                ts, val = _cache[key]
+                if now - ts < CACHE_TTL:
+                    return val
+            result = func(*args, **kwargs)
+            _cache[key] = (now, result)
+            return result
+        return wrapper
+    return decorator
 ```
 
 ## 🔒 Security Best Practices

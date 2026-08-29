@@ -61,9 +61,8 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
 }))
 
-vi.mock('@/components/DatasetInlineImportModal', () => ({
-  __esModule: true,
-  default: ({ open, onOpenChange }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
+vi.mock('@/components/DatasetImportModal', () => ({
+  DatasetImportModal: ({ open, onOpenChange }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
 }))
 
 vi.mock('@/lib/conversations-utils', () => ({
@@ -175,7 +174,7 @@ describe('DatasetsPage', () => {
     fireEvent.click(screen.getByLabelText('Export Shakespeare'))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Export failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not export', 'error')
     })
     vi.unstubAllGlobals()
   })

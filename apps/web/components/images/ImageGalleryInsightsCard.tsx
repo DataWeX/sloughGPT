@@ -1,6 +1,7 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { timeAgo } from '@/lib/time-ago'
 
 interface GalleryImage {
   id: string
@@ -11,14 +12,6 @@ interface GalleryImage {
 interface ImageGalleryInsightsCardProps {
   gallery: GalleryImage[]
   styles: Array<{ key: string; name: string }>
-}
-
-function timeAgo(ts: number): string {
-  const diff = Date.now() / 1000 - ts
-  if (diff < 60) return 'just now'
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  return `${Math.floor(diff / 86400)}d ago`
 }
 
 function computeStats(gallery: GalleryImage[]) {
@@ -57,19 +50,19 @@ export function ImageGalleryInsightsCard({ gallery, styles }: ImageGalleryInsigh
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</div>
-            <div className="text-lg font-semibold">{stats.total}</div>
+            <div className="text-sm font-semibold">{stats.total}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last 24h</div>
-            <div className="text-lg font-semibold">{stats.last24h}</div>
+            <div className="text-sm font-semibold">{stats.last24h}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Last 7d</div>
-            <div className="text-lg font-semibold">{stats.last7d}</div>
+            <div className="text-sm font-semibold">{stats.last7d}</div>
           </div>
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Avg Gap</div>
-            <div className="text-lg font-semibold">
+            <div className="text-sm font-semibold">
               {stats.avgGap < 60 ? '<1m' :
                stats.avgGap < 3600 ? `${Math.floor(stats.avgGap / 60)}m` :
                `${Math.floor(stats.avgGap / 3600)}h`}

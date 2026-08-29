@@ -295,8 +295,8 @@ class ToolRegistry:
             try:
                 import os
                 os.unlink(fname)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("temp file cleanup failed: %s", e)
 
     async def _run_file_read(self, path: str) -> Dict[str, Any]:
         """Read a file from the workspace."""

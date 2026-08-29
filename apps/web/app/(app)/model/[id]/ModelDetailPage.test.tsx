@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach, beforeEach, beforeAll, afterAll } 
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
+afterEach(() => { cleanup() })
+
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="responsive-container">{children}</div>,
   LineChart: ({ children }: { children: React.ReactNode }) => <div data-testid="line-chart">{children}</div>,
@@ -122,10 +124,6 @@ beforeEach(() => {
   mockGetHealth.mockResolvedValue(mockHealthLoaded)
   mockApiGet.mockResolvedValue({ logs: [] })
   mockListFineTuned.mockResolvedValue([])
-})
-
-afterEach(() => {
-  cleanup()
 })
 
 describe('ModelDetailPage', () => {

@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, CardHeader, CardTitle, EmptyCard } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, EmptyCard, cn } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -17,12 +17,13 @@ import { useToastStore } from '@/lib/toast-store'
 import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
 import { formatDate } from '@/lib/conversations-utils'
-import DatasetInlineImportModal from '@/components/DatasetInlineImportModal'
+import { DatasetImportModal } from '@/components/DatasetImportModal'
 
 export default function DatasetsPage() {
   const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const [datasets, setDatasets] = useState<Dataset[]>([])
+
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState(false)
   const [search, setSearch] = useState('')
@@ -46,7 +47,7 @@ export default function DatasetsPage() {
       setDatasets(list)
     } catch {
       setFetchError(true)
-      addToast('Failed to load datasets', 'error')
+      addToast('Could not load datasets', 'error')
     } finally {
       setLoading(false)
     }
@@ -122,7 +123,7 @@ export default function DatasetsPage() {
       })
     } catch {
       setDatasets(prev => [deleted, ...prev])
-      addToast('Delete failed', 'error')
+      addToast('Could not delete', 'error')
     }
   }
 
@@ -138,7 +139,7 @@ export default function DatasetsPage() {
       URL.revokeObjectURL(url)
       addToast(`Exported "${ds.name}"`, 'success')
     } catch {
-      addToast('Export failed', 'error')
+      addToast('Could not export', 'error')
     }
   }
 
@@ -165,7 +166,7 @@ export default function DatasetsPage() {
       const preview = await datasetController.preview(ds.id, 5)
       setPreviewData(preview)
     } catch {
-      addToast('Failed to load preview', 'error')
+      addToast('Could not load preview', 'error')
     } finally {
       setPreviewLoading(false)
     }
@@ -218,7 +219,7 @@ export default function DatasetsPage() {
         className="h-9 text-sm max-w-xs"
       />
       {searching && (
-        <span className="text-xs text-muted-foreground flex items-center gap-1.5" role="status">
+        <span className="text-xs text-muted-foreground flex items-center gap-1.5" role="status" aria-live="polite">
           <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
           Searching…
         </span>
@@ -227,8 +228,11 @@ export default function DatasetsPage() {
         {(['date', 'size', 'name'] as const).map(s => (
           <button
             key={s}
+            type="button"
+            aria-pressed={sortBy === s}
+            aria-label={`Sort by ${s}`}
             onClick={() => setSortBy(s)}
-            className={`text-xs px-2 py-1 rounded border transition-colors ${sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80'}`}
+            className={cn('text-xs px-2 py-1 rounded border transition-colors', sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
           >
             {s}
           </button>
@@ -286,19 +290,19 @@ export default function DatasetsPage() {
                     <p className="text-sm font-medium truncate">{d.name}</p>
                     {d.preview ? (
                       <>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           {d.preview.total_samples} samples · {d.preview.total_chars.toLocaleString()} chars
                         </div>
                         <div className="space-y-1">
                           {d.preview.samples.slice(0, 2).map((s, i) => (
-                            <pre key={i} className="text-[10px] bg-muted/30 rounded p-1.5 overflow-x-auto max-h-16 font-mono whitespace-pre-wrap">
+                            <pre key={i} className="text-xs bg-muted/30 rounded p-1.5 overflow-x-auto max-h-16 font-mono whitespace-pre-wrap">
                               {s.content.slice(0, 150)}{s.content.length > 150 ? '…' : ''}
                             </pre>
                           ))}
                         </div>
                       </>
                     ) : (
-                      <p className="text-[10px] text-muted-foreground">No preview</p>
+                      <p className="text-xs text-muted-foreground">No preview</p>
                     )}
                   </div>
                 ))}
@@ -316,7 +320,7 @@ export default function DatasetsPage() {
         ) : fetchError && datasets.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center">
-              <p className="text-sm text-destructive mb-3">Failed to load datasets</p>
+              <p className="text-sm text-destructive mb-3">Could not load datasets</p>
               <Button size="sm" variant="outline" onClick={fetchDatasets}>
                 <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
                 Retry
@@ -335,7 +339,7 @@ export default function DatasetsPage() {
             {filtered.map(ds => (
               <div key={ds.id}>
               <Card
-                className={`group transition-colors ${expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40'}`}
+                className={cn('group transition-colors', expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40')}
                 onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
               >
                   <CardContent className="flex items-center justify-between py-3 px-4">
@@ -343,22 +347,22 @@ export default function DatasetsPage() {
                       <p className="text-sm font-medium truncate">{ds.name}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {ds.source && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                             {ds.source}
                           </span>
                         )}
                         {ds.type && ds.type !== 'text' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                             {ds.type}
                           </span>
                         )}
                         {ds.vlm_metadata && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">
                             VLM · {ds.vlm_metadata.image_count} images
                           </span>
                         )}
                         {ds.tags && ds.tags.length > 0 && ds.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
+                          <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
                             {tag}
                           </span>
                         ))}
@@ -366,13 +370,13 @@ export default function DatasetsPage() {
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
                         <span>{formatBytes(ds.size)}</span>
                         {ds.size > 100 * 1024 * 1024 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-warning/15 text-warning font-medium">
                             Large dataset
                           </span>
                         )}
                         {ds.samples != null && <span>{ds.samples.toLocaleString()} samples</span>}
                         {versionCounts[ds.id] != null && versionCounts[ds.id] > 0 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
                             {versionCounts[ds.id]} version{versionCounts[ds.id] !== 1 ? 's' : ''}
                           </span>
                         )}
@@ -399,7 +403,8 @@ export default function DatasetsPage() {
                         <IconDownload className="h-4 w-4" />
                       </Button>
                       <button
-                        className={`h-6 w-6 rounded border transition-colors flex items-center justify-center ${compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50'}`}
+                        type="button"
+                        className={cn('h-6 w-6 rounded border transition-colors flex items-center justify-center', compareIds.has(ds.id) ? 'bg-primary border-primary text-primary-foreground' : 'border-border hover:border-primary/50')}
                         onClick={() => toggleCompare(ds.id)}
                         aria-label={`Select ${ds.name} for comparison`}
                       >
@@ -412,7 +417,7 @@ export default function DatasetsPage() {
                         onClick={(e) => handlePreview(ds, e)}
                         aria-label={expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`}
                       >
-                        <IconChevronDown className={`h-4 w-4 transition-transform ${expandedId === ds.id ? 'rotate-180' : ''}`} />
+                        <IconChevronDown className={cn('h-4 w-4 transition-transform', expandedId === ds.id && 'rotate-180')} />
                       </Button>
                       <Button
                         variant="ghost"
@@ -442,7 +447,8 @@ export default function DatasetsPage() {
                             value={previewSearch}
                             onChange={e => setPreviewSearch(e.target.value)}
                             placeholder="Filter samples..."
-                            className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-[10px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            aria-label="Filter samples"
+                            className="h-7 w-full max-w-[200px] rounded-md border border-border/60 bg-background px-2 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                           />
                         )}
                         {previewData.samples
@@ -480,7 +486,7 @@ export default function DatasetsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <DatasetInlineImportModal open={importOpen} onOpenChange={setImportOpen} onImported={fetchDatasets} />
+      <DatasetImportModal open={importOpen} onOpenChange={setImportOpen} onImportComplete={fetchDatasets} />
     </PageContainer>
   )
 }

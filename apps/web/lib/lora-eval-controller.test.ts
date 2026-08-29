@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { loraEvalController } from './lora-eval-controller'
 
+const mockApiGet = vi.fn()
+const mockApiPost = vi.fn()
+
 vi.mock('./http-client', () => ({
-  apiGet: vi.fn(),
+  apiGet: (...args: unknown[]) => mockApiGet(...args),
+  apiPost: (...args: unknown[]) => mockApiPost(...args),
 }))
 
-import { apiGet } from './http-client'
-
-const mockGet = vi.mocked(apiGet)
+import { apiGet, apiPost } from './http-client'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -16,45 +18,45 @@ beforeEach(() => {
 describe('loraEvalController', () => {
   describe('runEval', () => {
     it('calls run endpoint with adapter path', async () => {
-      mockGet.mockResolvedValue({ status: 'ok' })
+      mockApiPost.mockResolvedValue({ status: 'ok' })
       await loraEvalController.runEval('data/user_adapters/best.npz')
-      expect(mockGet).toHaveBeenCalledWith('/lora-eval/run?adapter_path=data%2Fuser_adapters%2Fbest.npz')
+      expect(mockApiPost).toHaveBeenCalledWith('/lora-eval/run', { adapter_path: 'data/user_adapters/best.npz', soul: undefined })
     })
   })
 
   describe('getHistory', () => {
     it('returns results from nested data', async () => {
-      mockGet.mockResolvedValue({
-        data: { results: [{ adapter_path: 'a.npz', verdict: 'good' }] },
+      mockApiGet.mockResolvedValue({
+        results: [{ adapter_path: 'a.npz', verdict: 'good' }],
       })
       const results = await loraEvalController.getHistory(5)
       expect(results).toHaveLength(1)
       expect(results[0].verdict).toBe('good')
-      expect(mockGet).toHaveBeenCalledWith('/lora-eval/history?limit=5')
+      expect(mockApiGet).toHaveBeenCalledWith('/lora-eval/history?limit=5')
     })
 
     it('returns flat results', async () => {
-      mockGet.mockResolvedValue({ results: [{ adapter_path: 'b.npz', verdict: 'ok' }] })
+      mockApiGet.mockResolvedValue({ results: [{ adapter_path: 'b.npz', verdict: 'ok' }] })
       const results = await loraEvalController.getHistory()
       expect(results).toHaveLength(1)
     })
 
     it('returns empty array on missing results', async () => {
-      mockGet.mockResolvedValue({})
+      mockApiGet.mockResolvedValue({})
       const results = await loraEvalController.getHistory()
       expect(results).toEqual([])
     })
 
     it('defaults limit to 10', async () => {
-      mockGet.mockResolvedValue({ results: [] })
+      mockApiGet.mockResolvedValue({ results: [] })
       await loraEvalController.getHistory()
-      expect(mockGet).toHaveBeenCalledWith('/lora-eval/history?limit=10')
+      expect(mockApiGet).toHaveBeenCalledWith('/lora-eval/history?limit=10')
     })
 
     it('encodes special chars in path', async () => {
-      mockGet.mockResolvedValue({ results: [] })
+      mockApiPost.mockResolvedValue({ results: [] })
       await loraEvalController.runEval('path with spaces/file.npz')
-      expect(mockGet).toHaveBeenCalledWith('/lora-eval/run?adapter_path=path%20with%20spaces%2Ffile.npz')
+      expect(mockApiPost).toHaveBeenCalledWith('/lora-eval/run', { adapter_path: 'path with spaces/file.npz', soul: undefined })
     })
   })
 })

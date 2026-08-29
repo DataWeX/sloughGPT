@@ -8,6 +8,7 @@ import {StatusBadge} from '../components/StatusBadge';
 import {useHapticPress} from '../hooks/useHapticPress';
 import {useNavigation} from '@react-navigation/native';
 import {api} from '../services/api-client';
+import {useSidebar} from '../contexts/SidebarContext';
 import type {HealthStatus} from '../types';
 
 interface ToolItem {
@@ -15,27 +16,35 @@ interface ToolItem {
   title: string;
   desc: string;
   target: string;
+  mode?: string;
 }
 
 const TOOLS: ToolItem[] = [
+  {icon: 'edit', title: 'Writing Assistant', desc: 'Write emails, posts, stories, and more', target: 'Chat', mode: 'write'},
+  {icon: 'refresh-cw', title: 'Rewrite & Polish', desc: 'Fix grammar, make shorter, sound professional', target: 'Chat', mode: 'rewrite'},
+  {icon: 'message-square', title: 'Translate', desc: 'Translate between languages instantly', target: 'Chat', mode: 'translate'},
+  {icon: 'target', title: 'Help Me Decide', desc: 'Pro/con analysis and recommendations', target: 'Chat', mode: 'decide'},
+  {icon: 'book-open', title: 'Explain Things', desc: 'Simple explanations at any level', target: 'Chat', mode: 'explain'},
+  {icon: 'heart-pulse', title: 'Wellness', desc: 'Sleep stories, meditation, breathing', target: 'Chat', mode: 'wellness'},
   {icon: 'dumbbell', title: 'Training', desc: 'Fine-tune models with live loss tracking', target: 'Training'},
   {icon: 'book-open', title: 'Knowledge', desc: "Manage what the AI knows about you", target: 'Knowledge'},
   {icon: 'bookmark', title: 'Bookmarks', desc: 'Saved messages for quick access', target: 'Bookmarks'},
   {icon: 'search', title: 'Search', desc: 'Find messages across conversations', target: 'Search'},
   {icon: 'brain', title: 'Souls', desc: 'Switch AI personalities and traits', target: 'Souls'},
   {icon: 'package', title: 'Datasets', desc: 'Import and manage training data', target: 'Datasets'},
-  {icon: 'bar-chart', title: 'Benchmark', desc: 'Compare model quality metrics', target: 'Benchmark'},
   {icon: 'refresh-cw', title: 'Adapters', desc: 'Per-user LoRA adapter management', target: 'Adapters'},
   {icon: 'zap', title: 'Feedback', desc: 'Review feedback and improve models', target: 'Feedback'},
-  {icon: 'target', title: 'Workflow', desc: 'Feedback pipeline and automation', target: 'Workflow'},
   {icon: 'mic', title: 'Voice', desc: 'Speech-to-text and audio settings', target: 'Voice'},
   {icon: 'user', title: 'Companion', desc: 'Personality presets and tone', target: 'Companion'},
   {icon: 'book', title: 'Learn', desc: 'Learning progress and insights', target: 'Learn'},
   {icon: 'message-circle', title: 'Agents', desc: 'Multi-agent orchestration', target: 'Agents'},
   {icon: 'image', title: 'Multimodal', desc: 'Vision, image analysis, DPO', target: 'Multimodal'},
-  {icon: 'download', title: 'Export', desc: 'Export models and training data', target: 'Export'},
-  {icon: 'settings', title: 'Tokenizer', desc: 'Vocab stats and tokenization', target: 'Tokenizer'},
-  {icon: 'copy', title: 'Compare', desc: 'Side-by-side model comparison', target: 'Compare'},
+  {icon: 'zap', title: 'Notifications', desc: 'Push alerts, topics, and history', target: 'Notifications'},
+  {icon: 'star', title: "What's New", desc: 'Recent features and updates', target: 'WhatsNew'},
+  {icon: 'lock', title: 'Legal', desc: 'Privacy policy, terms, and licenses', target: 'Legal'},
+  {icon: 'image', title: 'Images', desc: 'AI image generation', target: 'Images'},
+  {icon: 'brain', title: 'Memory', desc: 'Auto-memory store and search', target: 'Memory'},
+  {icon: 'shield', title: 'Auth', desc: 'Login and authentication', target: 'Auth'},
 ];
 
 function formatUptime(seconds: number): string {
@@ -49,6 +58,7 @@ function formatUptime(seconds: number): string {
 export function ToolsScreen() {
   const colors = useColors();
   const navigation = useNavigation<any>();
+  const {open: openSidebar} = useSidebar();
   const accent = colors.primary;
   const muted = colors.textMuted;
   const bgCard = colors.background;
@@ -84,14 +94,23 @@ export function ToolsScreen() {
         backgroundColor={colors.background}
         contentContainerStyle={{padding: 16, gap: 12}}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-        <Text
-          fontSize={24}
-          fontWeight="700"
-          letterSpacing={-0.3}
-          color="$color"
-          paddingBottom={4}>
-          Tools
-        </Text>
+        <XStack alignItems="center" gap={12} paddingBottom={4}>
+          <YStack
+            width={36} height={36} borderRadius={12}
+            alignItems="center" justifyContent="center"
+            onPress={openSidebar}
+            pressStyle={{opacity: 0.6, scale: 0.95}}
+            accessible accessibilityRole="button" accessibilityLabel="Open menu">
+            <Icon name="menu" size={20} color={colors.textSecondary} />
+          </YStack>
+          <Text
+            fontSize={24}
+            fontWeight="700"
+            letterSpacing={-0.3}
+            color="$color">
+            Tools
+          </Text>
+        </XStack>
 
         {/* Server Status */}
         <YStack
@@ -149,8 +168,14 @@ export function ToolsScreen() {
 
         {TOOLS.map(item => (
           <Pressable
-            key={item.target}
-            onPress={() => hapticPress('light', () => navigation.navigate(item.target))}>
+            key={item.target + (item.mode || '')}
+            onPress={() => hapticPress('light', () => {
+              if (item.mode) {
+                navigation.navigate(item.target as any, {mode: item.mode} as any);
+              } else {
+                navigation.navigate(item.target as any);
+              }
+            })}>
             {({pressed}) => (
               <XStack
                 backgroundColor={bgCard}

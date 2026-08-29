@@ -15,7 +15,7 @@ import numpy as np
 
 def main():
     from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
-    data_path = str(Path(__file__).resolve().parents[1] / "datasets" / "tinyshakespeare" / "input.txt")
+    data_path = str(Path(__file__).resolve().parents[1] / "data" / "tinyshakespeare" / "input.txt")
     print(f"Dataset: {data_path}")
     print(f"Data size: {os.path.getsize(data_path) / 1024:.1f} KB")
 

@@ -7,13 +7,21 @@ Classes:
     Logger           — abstract base class (ABC)
     ChildLogger      — delegates emit() to parent
     TaggedLogger     — attaches type tags to every record
+    CompositeLogger  — emits to multiple downstream loggers
     ConsoleLogger    — colored terminal output (API server)
-    CLILogger        — Rich-powered output (CLI commands)
+    CLILogger        — native ANSI output (CLI commands)
     ShellLogger      — ANSI output (interactive REPL)
     WebLogger        — structured JSON (browser / SSR)
     BridgeHandler    — routes Python logging.getLogger() through our Logger
     ErrorCode        — structured error codes (E_AUTH_*, E_MODEL_*, etc.)
     LogTag           — type tags (REQ, MODEL, AUTH, etc.)
+
+Centralized config:
+    setup_logging()       — configure all logging in one place (recommended)
+    get_request_id()      — get current request correlation ID
+    set_request_id()      — set current request correlation ID
+    get_log_context()     — get current structured logging context
+    set_log_context()     — merge fields into logging context
 
 Factory:
     get_logger()     — create a logger by interface name
@@ -23,12 +31,20 @@ Factory:
 
 from typing import Optional
 
-from .base import Logger, LogLevel, LogRecord, ChildLogger, TaggedLogger, ErrorCode, LogTag
+from .base import Logger, LogLevel, LogRecord, ChildLogger, TaggedLogger, CompositeLogger, ErrorCode, LogTag
 from .console_logger import ConsoleLogger
 from .cli_logger import CLILogger
 from .shell_logger import ShellLogger
 from .web_logger import WebLogger
 from .bridge import BridgeHandler
+from .config import (
+    setup_logging,
+    get_request_id,
+    set_request_id,
+    get_log_context,
+    set_log_context,
+    clear_log_context,
+)
 
 __all__ = [
     "LogLevel",
@@ -36,6 +52,7 @@ __all__ = [
     "Logger",
     "ChildLogger",
     "TaggedLogger",
+    "CompositeLogger",
     "ErrorCode",
     "LogTag",
     "ConsoleLogger",
@@ -43,6 +60,12 @@ __all__ = [
     "ShellLogger",
     "WebLogger",
     "BridgeHandler",
+    "setup_logging",
+    "get_request_id",
+    "set_request_id",
+    "get_log_context",
+    "set_log_context",
+    "clear_log_context",
     "get_logger",
     "set_global",
     "get_global",

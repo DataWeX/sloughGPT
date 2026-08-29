@@ -28,6 +28,8 @@ interface ModelEntry {
   name: string
   loaded: boolean
   sizeGb?: number
+  source?: string
+  type?: string
 }
 
 interface SavedSnapshot {
@@ -76,7 +78,7 @@ export default function ComparePage() {
           type: m.type,
         }))
         setModels(entries)
-      } catch { addToast('Failed to load models', 'error')
+      } catch { addToast('Could not load models', 'error')
       } finally { setLoading(false) }
     })()
   }, [addToast])
@@ -89,7 +91,7 @@ export default function ComparePage() {
       setResults(prev => ({ ...prev, [modelId]: result }))
     } catch {
       setResults(prev => ({ ...prev, [modelId]: { error: 'Failed' } as BenchmarkResult }))
-      addToast(`Performance test failed for ${modelId}`, 'error')
+      addToast(`Could not complete performance test for ${modelId}`, 'error')
     } finally { setRunning(prev => { const n = new Set(prev); n.delete(modelId); return n }) }
   }
 
@@ -219,11 +221,11 @@ export default function ComparePage() {
               <div className="flex flex-wrap gap-2">
                 {snapshots.map(snap => (
                   <div key={snap.id} className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/20 px-2 py-1">
-                    <button onClick={() => loadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
+                    <button type="button" onClick={() => loadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
                       {snap.name}
                     </button>
-                    <span className="text-[10px] text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
-                    <button onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-[10px] text-muted-foreground hover:text-destructive ml-1">×</button>
+                    <span className="text-xs text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
+                    <button type="button" onClick={() => deleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-xs text-muted-foreground hover:text-destructive ml-1">×</button>
                   </div>
                 ))}
               </div>
@@ -239,10 +241,10 @@ export default function ComparePage() {
               <p className="text-xs text-muted-foreground/70 max-w-md mx-auto">
                 Run benchmarks on your models to see side-by-side comparisons. Click &ldquo;Benchmark all&rdquo; or use the benchmark button on each model card above.
               </p>
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runAllBenchmarks} disabled={loading || models.length === 0}>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={runAll} disabled={loading || models.length === 0}>
                 Benchmark all
               </Button>
-              <div className="flex items-center justify-center gap-4 text-[10px] text-muted-foreground/50 pt-2">
+              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground/50 pt-2">
                 <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">R</kbd> Benchmark all</span>
                 <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+S</kbd> Save snapshot</span>
                 <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+E</kbd> Export</span>

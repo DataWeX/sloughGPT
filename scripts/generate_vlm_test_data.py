@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUT_DIR = REPO_ROOT / "datasets" / "vlm-demo"
+OUT_DIR = REPO_ROOT / "data" / "vlm-demo"
 IMAGES_DIR = OUT_DIR / "images"
 
 SHAPES = [

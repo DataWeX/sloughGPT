@@ -2,8 +2,8 @@
 PermissionsManager — CLI-side download confirmation and size-aware prompts.
 
 Enforces the bandwidth policy: never download large files without user
-confirmation. Queries HuggingFace Hub for model size, shows a Rich panel
-with the estimate, and prompts the user to confirm.
+confirmation. Queries HuggingFace Hub for model size, shows an estimate
+with the download details, and prompts the user to confirm.
 
 Usage::
 
@@ -124,7 +124,7 @@ class PermissionsManager:
     def confirm_download(self, model_id: str, *, force: bool = False) -> bool:
         """Prompt user to confirm a model download.
 
-        Shows a Rich panel with model ID, estimated size, and file count.
+        Shows download details with model ID, estimated size, and file count.
         Respects ``--yes`` flag, ``SLO_AUTO_DOWNLOAD`` env var, and the
         50 MB auto-approve threshold.
 
@@ -236,20 +236,33 @@ class PermissionsManager:
         return False
 
     def _show_download_panel(self, estimate: ModelSizeEstimate, *, context: str = ""):
-        """Display a Rich panel with download details."""
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.table import Table
+        """Display download details with ANSI formatting."""
+        import sys
 
-        console = Console(highlight=False)
+        _tty = sys.stdout.isatty()
+        def _c(text, code):
+            return f"{code}{text}\033[0m" if _tty else text
+        _BOLD = "\033[1m"
+        _DIM = "\033[2m"
+        _YELLOW = "\033[33m"
 
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Key", style="dim")
-        table.add_column("Value")
+        _p = sys.stdout.write
+        _flush = sys.stdout.flush
 
-        table.add_row("Model", estimate.model_id)
-        table.add_row("Size", estimate.human_size)
-        table.add_row("Files", str(estimate.file_count))
+        def _line(text=""):
+            _p(text + "\n")
+            _flush()
+
+        title = "Download Required"
+        if context:
+            title = f"Download Required ({context})"
+
+        _line()
+        _line(f"  {_c(title, _BOLD + _YELLOW)}")
+        _line(f"  {'─' * 40}")
+        _line(f"    {_c('Model:', _DIM)} {estimate.model_id}")
+        _line(f"    {_c('Size:', _DIM)} {estimate.human_size}")
+        _line(f"    {_c('Files:', _DIM)} {estimate.file_count}")
 
         # Show top 5 largest files
         if estimate.files:
@@ -258,11 +271,4 @@ class PermissionsManager:
                 f"{f['name'].split('/')[-1]} ({format_size(f['size'])})"
                 for f in sorted_files
             )
-            table.add_row("Largest", top_files)
-
-        title = "Download Required"
-        if context:
-            title = f"Download Required ({context})"
-
-        console.print()
-        console.print(Panel(table, title=title, border_style="yellow"))
+            _line(f"    {_c('Largest:', _DIM)} {top_files}")

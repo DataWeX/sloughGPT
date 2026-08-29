@@ -150,7 +150,7 @@ class SloEngine:
         self._init_cognitive()
         self._init_hd_memory()
 
-        logger.info(f"SloEngine initialized: soul={self._soul.name}, device={device}", extra={"tag": "MODEL"})
+        logger.info("SloEngine initialized: soul=%s, device=%s", self._soul.name, device, extra={"tag": "MODEL"})
 
     def _init_cognitive(self):
         """Lazy-load cognitive components."""
@@ -167,7 +167,7 @@ class SloEngine:
             self._logic_engine = FormalLogicEngine()
             self._working_memory = WorkingMemory(capacity=7)
         except Exception as e:
-            logger.debug(f"Cognitive components not available: {e}")
+            logger.debug("Cognitive components not available: %s", e)
             self._reasoning_engine = None
             self._deep_reasoning = None
             self._logic_engine = None
@@ -189,7 +189,7 @@ class SloEngine:
             self._hd_memory = HDMemoryStore(dim=10000, max_items=1000)
             logger.debug("HD Memory initialized")
         except Exception as e:
-            logger.debug(f"HD Memory not available: {e}")
+            logger.debug("HD Memory not available: %s", e)
             self._hd_memory = None
 
     def _init_semantic_cache(self) -> None:
@@ -206,7 +206,7 @@ class SloEngine:
             self._cache_enabled = True
             logger.debug("Semantic cache initialized")
         except Exception as e:
-            logger.debug(f"Semantic cache not available: {e}")
+            logger.debug("Semantic cache not available: %s", e)
             self._semantic_cache = None
 
     @property
@@ -246,11 +246,11 @@ class SloEngine:
             try:
                 from domains.training.tokenizer import SloBPE
                 self._tokenizer = SloBPE.from_dict(tok_config)
-                logger.info(f"BPE tokenizer loaded from soul metadata (vocab={self._tokenizer.vocab_size})", extra={"tag": "MODEL"})
+                logger.info("BPE tokenizer loaded from soul metadata (vocab=%d)", self._tokenizer.vocab_size, extra={"tag": "MODEL"})
             except Exception as e:
-                logger.warning(f"Failed to load BPE tokenizer from soul: {e}", extra={"tag": "MODEL"})
+                logger.warning("Failed to load BPE tokenizer from soul: %s", e, extra={"tag": "MODEL"})
 
-        logger.info(f"Loaded soul: {soul.name} from {sou_path}", extra={"tag": "MODEL"})
+        logger.info("Loaded soul: %s from %s", soul.name, sou_path, extra={"tag": "MODEL"})
         return soul
 
     def load_model(self, model_path: str, **kwargs) -> "SloEngine":
@@ -266,7 +266,7 @@ class SloEngine:
                 system_prompt=f"You are a helpful AI assistant.",
             )
 
-        logger.info(f"Loaded model: {model_path}", extra={"tag": "MODEL"})
+        logger.info("Loaded model: %s", model_path, extra={"tag": "MODEL"})
         return self
 
     def set_soul(self, soul: SloProfile) -> "SloEngine":
@@ -337,8 +337,8 @@ class SloEngine:
             try:
                 stats = self._hd_memory.get_stats()
                 lines.append(f"hd_memory: {stats['total_items']} items stored")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("hd_memory stats unavailable: %s", e)
 
         lines.append("[/SOUL_REASONING]")
         lines.append("")
@@ -424,7 +424,7 @@ class SloEngine:
                     parts.append("[/SEMANTIC_MEMORY]")
                     parts.append("")
             except Exception as e:
-                logger.debug(f"HD context retrieval failed: {e}")
+                logger.debug("HD context retrieval failed: %s", e)
 
         # Knowledge: Auto-inject relevant facts from learner KnowledgeMemory
         try:
@@ -439,8 +439,10 @@ class SloEngine:
                 parts.append(knowledge_text)
                 parts.append("[/KNOWN_FACTS]")
                 parts.append("")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("soul: knowledge memory retrieval failed", extra={
+                "error": str(e),
+            })
 
         parts.append(f"User: {prompt}")
         parts.append("Assistant:")
@@ -541,7 +543,7 @@ class SloEngine:
                         }
                     return cached_response
             except Exception as e:
-                logger.debug(f"Cache lookup failed: {e}")
+                logger.debug("Cache lookup failed: %s", e)
 
         if self._sentiment_analyzer:
             emotional = self._sentiment_analyzer.analyze(prompt)
@@ -567,7 +569,7 @@ class SloEngine:
                         f"hd_memory: found {len(hd_context)} chars relevant context"
                     )
             except Exception as e:
-                logger.debug(f"HD memory encode failed: {e}")
+                logger.debug("HD memory encode failed: %s", e)
 
         # Prior turns live in _session_history only; current user text is added below
         # so we do not duplicate it inside [CONVERSATION_HISTORY].
@@ -658,7 +660,7 @@ class SloEngine:
 
             except Exception as e:
                 import traceback as _tb
-                logger.error(f"Generation failed: {e}\n{_tb.format_exc()}", extra={"tag": "MODEL"})
+                logger.error("Generation failed: %s\n%s", e, _tb.format_exc(), extra={"tag": "MODEL"})
                 generated_text = f"[Error: {e}]"
 
         self._session_history.append({"role": "user", "content": prompt})
@@ -676,7 +678,7 @@ class SloEngine:
                     },
                 )
             except Exception as e:
-                logger.debug(f"HD memory store failed: {e}")
+                logger.debug("HD memory store failed: %s", e)
 
         # Semantic Cache: Store response for future similar queries
         latency_ms = (time.time() - start_time) * 1000
@@ -697,7 +699,7 @@ class SloEngine:
                     },
                 )
             except Exception as e:
-                logger.debug(f"Cache store failed: {e}")
+                logger.debug("Cache store failed: %s", e)
 
         if len(self._session_history) > 100:
             self._session_history = self._session_history[-100:]
@@ -824,7 +826,7 @@ class SloEngine:
         with open(meta_path, "w") as f:
             json.dump(self._soul.to_dict(), f, indent=2, default=str)
 
-        logger.info(f"Saved soul to {output_path}", extra={"tag": "MODEL"})
+        logger.info("Saved soul to %s", output_path, extra={"tag": "MODEL"})
         return output_path
 
     def get_stats(self) -> Dict[str, Any]:
@@ -1116,7 +1118,7 @@ class SloEngine:
         try:
             return self._hd_memory.search(query, top_k=top_k)
         except Exception as e:
-            logger.debug(f"HD memory search failed: {e}")
+            logger.debug("HD memory search failed: %s", e)
             return []
 
     def add_to_hd_memory(self, content: str, role: str = "user") -> str:
@@ -1136,7 +1138,7 @@ class SloEngine:
         try:
             return self._hd_memory.add(content, role=role)
         except Exception as e:
-            logger.debug(f"HD memory add failed: {e}")
+            logger.debug("HD memory add failed: %s", e)
             return ""
 
     def clear_hd_memory(self) -> int:
@@ -1152,7 +1154,7 @@ class SloEngine:
         try:
             return self._hd_memory.clear()
         except Exception as e:
-            logger.debug(f"HD memory clear failed: {e}")
+            logger.debug("HD memory clear failed: %s", e)
             return 0
 
     def get_hd_context(self, query: str, max_chars: int = 500) -> str:
@@ -1172,7 +1174,7 @@ class SloEngine:
         try:
             return self._hd_memory.get_context(query, max_chars=max_chars)
         except Exception as e:
-            logger.debug(f"HD context retrieval failed: {e}")
+            logger.debug("HD context retrieval failed: %s", e)
             return ""
 
     # ===== SEMANTIC CACHE =====
@@ -1250,7 +1252,7 @@ class SloEngine:
         try:
             return self._semantic_cache.clear()
         except Exception as e:
-            logger.debug(f"Cache clear failed: {e}")
+            logger.debug("Cache clear failed: %s", e)
             return 0
 
     def invalidate_cache_entry(self, query: str) -> bool:
@@ -1269,7 +1271,7 @@ class SloEngine:
         try:
             return self._semantic_cache.invalidate(query)
         except Exception as e:
-            logger.debug(f"Cache invalidation failed: {e}")
+            logger.debug("Cache invalidation failed: %s", e)
             return False
 
     def learn(
@@ -1324,7 +1326,7 @@ class SloEngine:
         mgr.train(texts, vocab_size=vocab_size, min_frequency=2, lowercase=True, algo=algo, **algo_kwargs)
         tok = mgr.get_tokenizer()
         self._tokenizer = tok
-        logger.info(f"{algo} tokenizer trained: vocab={tok.vocab_size}", extra={"tag": "MODEL"})
+        logger.info("%s tokenizer trained: vocab=%d", algo, tok.vocab_size, extra={"tag": "MODEL"})
 
         # 2. Create SloNet with matching vocab
         traits = {}
@@ -1342,7 +1344,7 @@ class SloEngine:
             lineage="soulengine-learned",
         )
         self._model = net
-        logger.info(f"SloNet created: vocab={tok.vocab_size}", extra={"tag": "MODEL"})
+        logger.info("SloNet created: vocab=%d", tok.vocab_size, extra={"tag": "MODEL"})
 
         # 3. Training loop
         optimizer = SloAdam(lr=learning_rate)

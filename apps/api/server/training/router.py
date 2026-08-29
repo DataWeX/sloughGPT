@@ -12,17 +12,17 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, Query
 
-from infrastructure.auth import require_auth_if_enabled, audit_user, get_audit_logger
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import raise_error
 
 try:
-    from domains.api.sse_envelope import sse_event, sse_error, sse_complete
+    from domains.api.sse_envelope import sse_event, sse_error
 except ImportError:
     def sse_event(stream, phase, status, data=None, meta=None, message=""):
         import json as _j
@@ -30,15 +30,18 @@ except ImportError:
             "stream": stream, "phase": phase, "status": status,
             "data": data or {}, "meta": meta or {}, "message": message
         }) + "\n\n"
-    def sse_error(stream, phase, error, meta=None):
-        return sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
-    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done"):
-        return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
+    def sse_error(stream, phase, error, meta=None, code=None, http_status=None):
+        data = {"error": error}
+        if code is not None:
+            data["code"] = code
+        if http_status is not None:
+            data["http_status"] = http_status
+        return sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
 
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
 from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, DistillStartRequest, LoraFinetuneRequest
-from .controller import get_training_controller, TrainingState
+from .controller import get_training_controller
 from .webhooks import (
     get_webhook_store,
     TRAINING_EVENTS,
@@ -47,10 +50,30 @@ from .webhooks import (
 from .job_store import get_job_store
 from domains.training.executor import get_training_executor
 from domains.shared import find_repo_root
+from domains.mobile.notifications import get_notification_service
 
 logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training"])
+
+
+def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
+    """Set job status and notify CancelManager so operations store stays in sync."""
+    job = training_jobs.get(job_id)
+    if job is not None:
+        job["status"] = status
+        if error:
+            job["error"] = error
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpStatus
+        mgr = get_cancel_manager()
+        op = mgr.get(job_id)
+        if op is not None and op.status not in (
+            OpStatus.CANCELLED, OpStatus.COMPLETED, OpStatus.FAILED,
+        ):
+            mgr.finish(job_id, error=error or "")
+    except Exception as exc:
+        logger.warning("_finish_job CancelManager.finish failed for %s: %s", job_id, exc)
 
 
 def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
@@ -162,34 +185,55 @@ async def train(request: TrainRequest):
             request.dataset_ref,
         )
     except ManifestError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
     req_snapshot = request.model_dump()
 
     def train_model(job_id: str) -> None:
         try:
+            training_jobs[job_id]["status"] = "running"
             trainer = SloughGPTTrainer(
                 data_path=data_path_str,
                 **_sloughgpt_trainer_kwds(req_snapshot),
             )
-            trainer.train()
+            if not cancel_event.is_set():
+                trainer.train(cancel_event=cancel_event)
+            else:
+                _finish_job(job_id, "cancelled", "Cancelled before start")
+                return
             safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
             trainer.save(f"models/{safe_stem}_trained.soul")
-            training_jobs[job_id]["status"] = "completed"
+            _finish_job(job_id, "completed")
             training_jobs[job_id]["checkpoint"] = f"models/{safe_stem}_trained.soul"
         except Exception as e:
             logger.exception("Background /train failed: %s", e, extra={"tag": "TRAIN"})
-            training_jobs[job_id]["status"] = "failed"
-            training_jobs[job_id]["error"] = str(e)
+            _finish_job(job_id, "failed", str(e))
 
     executor = get_training_executor()
     job_id = f"train_{int(time.time())}"
+    cancel_event = threading.Event()
     training_jobs[job_id] = {
         "status": "queued",
         "data_path": data_path_str,
         "output_checkpoint_stem": out_stem,
         "epochs": request.epochs,
+        "_cancel_event": cancel_event,
     }
+
+    # Register with CancelManager
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        _mgr = get_cancel_manager()
+        op_id = _mgr.register(
+            op_type=OpType.TRAINING,
+            label=f"train:{out_stem}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        _mgr.start(op_id)
+        training_jobs[job_id]["_cancel_manager_op_id"] = op_id
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for %s: %s", job_id, exc)
+
     executor.submit(train_model, job_id)
 
     out: dict[str, Any] = {
@@ -225,7 +269,7 @@ async def train_resolve(body: TrainResolveRequest) -> dict[str, Any]:
             body.dataset_ref,
         )
     except ManifestError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
     out: dict[str, Any] = {
         "ok": True,
@@ -238,12 +282,6 @@ async def train_resolve(body: TrainResolveRequest) -> dict[str, Any]:
     if manifest_meta is not None:
         out["manifest"] = manifest_meta
     return out
-
-
-@router.get("/train/status")
-async def train_status():
-    """Legacy training status stub."""
-    return {"status": "ready", "message": "Use /train endpoint to start training"}
 
 
 @router.get("/training/jobs")
@@ -261,7 +299,7 @@ async def list_training_jobs():
 async def get_training_job(job_id: str):
     """Get one training job by id with plain-language status."""
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     return _job_summary(training_jobs[job_id])
 
 
@@ -269,10 +307,10 @@ async def get_training_job(job_id: str):
 async def stop_training_job(job_id: str):
     """Stop a specific training job by id."""
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     job = training_jobs[job_id]
     if job.get("status") not in ("running", "queued", "starting"):
-        raise HTTPException(status_code=400, detail=f"Job is not running (status: {job.get('status', 'unknown')})")
+        raise_error(f"Job is not running (status: {job.get('status', 'unknown')})", "E_BAD_REQUEST", status_code=400)
     prev_status = job.get("status", "unknown")
     job["status"] = "stopping"
     cancel_event = job.get("_cancel_event")
@@ -281,10 +319,15 @@ async def stop_training_job(job_id: str):
     executor = get_training_executor()
     executor.cancel(job_id)
     try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager
+        get_cancel_manager().cancel(job_id)
+    except Exception as exc:
+        logger.debug("cancel_manager.cancel failed: %s", exc)
+    try:
         from infrastructure.auth import get_audit_logger
         get_audit_logger().log("training.stop", resource=job_id, detail=f"from={prev_status}")
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("audit log failed: %s", exc)
     return {"status": "stopping", "job_id": job_id}
 
 
@@ -296,7 +339,7 @@ async def get_training_summary(job_id: str):
     and what to do next.  No ML jargon — just facts Alex can use.
     """
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     job = training_jobs[job_id]
 
     model = job.get("model", "unknown model")
@@ -360,8 +403,7 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
     files associated with the job from disk.
     """
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     job = training_jobs[job_id]
     deleted_files = []
 
@@ -392,13 +434,48 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
             resource=job_id,
             detail=f"deleted_files={len(deleted_files)}",
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("audit log failed: %s", exc)
 
     return {
         "status": "deleted",
         "job_id": job_id,
         "deleted_files": deleted_files,
+    }
+
+
+@router.post("/training/jobs/purge")
+async def purge_training_jobs(
+    status: str | None = Query(None, description="Only purge jobs in this terminal status"),
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
+    """Remove all terminal training jobs from the in-memory tracker.
+
+    By default purges jobs with status completed, failed, cancelled, or
+    interrupted.  Pass ``?status=completed`` to purge only completed jobs.
+    Only terminal statuses are accepted — running/queued jobs cannot be purged.
+    """
+    terminal = {"completed", "failed", "cancelled", "interrupted"}
+    if status:
+        if status not in terminal:
+            raise_error(
+                f"Cannot purge non-terminal status '{status}'",
+                "E_INVALID_STATUS",
+                status_code=400,
+            )
+        terminal = {status}
+
+    before = len(training_jobs)
+    to_remove = [jid for jid, j in training_jobs.items() if j.get("status") in terminal]
+    for jid in to_remove:
+        del training_jobs[jid]
+    purged = before - len(training_jobs)
+
+    return {
+        "status": "purged",
+        "purged": purged,
+        "remaining": len(training_jobs),
+        "statuses_purged": sorted(terminal),
     }
 
 
@@ -408,21 +485,17 @@ async def export_training_job(job_id: str):
     from fastapi.responses import FileResponse
 
     if job_id not in training_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     job = training_jobs[job_id]
 
     if job.get("status") not in ("completed", "failed", "cancelled"):
-        raise HTTPException(status_code=400, detail="Job must be completed before export")
-
+        raise_error("Job must be completed before export", "E_BAD_REQUEST", status_code=400)
     checkpoint = job.get("checkpoint")
     if not checkpoint:
-        raise HTTPException(status_code=404, detail="No checkpoint found for this job")
-
+        raise_error("No checkpoint found for this job", "E_NOT_FOUND", status_code=404)
     checkpoint_path = Path(checkpoint)
     if not checkpoint_path.exists():
-        raise HTTPException(status_code=404, detail="Checkpoint file not found on disk")
-
+        raise_error("Checkpoint file not found on disk", "E_NOT_FOUND", status_code=404)
     return FileResponse(
         path=checkpoint_path,
         filename=checkpoint_path.name,
@@ -430,23 +503,29 @@ async def export_training_job(job_id: str):
     )
 
 
+class ExportTextRequest(BaseModel):
+    """Request model for /training/export-text."""
+    min_quality: float = Field(default=0, ge=0.0, le=1.0)
+    target_count: int = Field(default=100, ge=1, le=10000)
+
+
 @router.post("/training/export-text")
-async def export_feedback_pairs(request: Request):
+async def export_feedback_pairs(request: ExportTextRequest):
     """Export feedback conversation pairs with a minimum quality threshold."""
     from controllers.feedback import get_feedback_controller
-    body = await request.json()
-    min_quality = body.get("min_quality", 0)
-    target_count = body.get("target_count", 100)
     ctrl = get_feedback_controller()
     pairs = []
     feedback_file = ctrl.feedback_dir / "feedback.jsonl"
     if feedback_file.exists():
         with open(feedback_file) as f:
             for line in f:
-                fb = json.loads(line)
+                try:
+                    fb = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 if fb.get("user_message") and fb.get("assistant_response"):
                     pairs.append(fb)
-                    if len(pairs) >= target_count:
+                    if len(pairs) >= request.target_count:
                         break
     output_file = ctrl.feedback_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
     with open(output_file, "w") as f:
@@ -470,7 +549,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             request.dataset_ref,
         )
     except ManifestError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
     job_id = f"job_{len(training_jobs) + 1}"
     job: dict[str, Any] = {
@@ -508,8 +587,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             detail="char",
             extra={"job_id": job_id, "model": request.model, "epochs": request.epochs, "source_kind": source_kind},
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("audit log failed: %s", exc)
 
     # Trigger webhook notification for training started
     try:
@@ -541,6 +620,19 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
     from training.runtime import get_training_runtime
     get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, req_snapshot)
 
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        get_cancel_manager().register(
+            op_type=OpType.TRAINING,
+            label=str(req_snapshot.get("name") or job_id),
+            cancel_fn=lambda: cancel_event.set(),
+            meta={"job_id": job_id, "method": "slonet"},
+            op_id=job_id,
+        )
+        get_cancel_manager().start(job_id)
+    except Exception as e:
+        logger.warning("CancelManager registration failed for %s: %s", job_id, e)
+
     def run_training(job_id_: str = jid) -> None:
         from domains.training.train_pipeline import SloughGPTTrainer
         from domains.training.wandb_helpers import create_training_tracker_for_api_job
@@ -565,6 +657,9 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
                 rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
                 rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
+                aq = info.get("avg_quality")
+                if aq is not None:
+                    rec["avg_quality"] = float(aq)
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)
@@ -591,13 +686,13 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
             )[:120]
             if cancel_event.is_set():
-                training_jobs[jid]["status"] = "cancelled"
+                _finish_job(jid, "cancelled")
                 training_jobs[jid]["progress"] = 0
                 get_training_runtime().sync(jid)
                 get_training_controller().complete()
                 return
             trainer.save(f"models/{safe_stem}_trained.soul")
-            training_jobs[jid]["status"] = "completed"
+            _finish_job(jid, "completed")
             training_jobs[jid]["progress"] = 100
             training_jobs[jid]["current_epoch"] = int(req_snapshot.get("epochs") or 3)
             bel = result.get("best_eval_loss")
@@ -624,10 +719,22 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 )
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e, extra={"tag": "TRAIN"})
+
+            # Push notification to mobile devices
+            try:
+                loss = training_jobs[jid].get("loss")
+                loss_str = f"Final loss: {loss:.4f}" if loss is not None else "Training"
+                get_notification_service().send_notification_sync(
+                    title="Training Complete",
+                    body=f"{loss_str}. Checkpoint saved.",
+                    data={"screen": "Training", "job_id": jid},
+                    topics=["training"],
+                )
+            except Exception as e:
+                logger.debug("Training completion push failed: %s", e, extra={"tag": "TRAIN"})
         except Exception as e:
             logger.exception("Training job %s failed", jid, extra={"tag": "TRAIN"})
-            training_jobs[jid]["status"] = "failed"
-            training_jobs[jid]["error"] = str(e)
+            _finish_job(jid, "failed", str(e))
             training_jobs[jid]["progress"] = 0
             get_training_runtime().sync(jid)
             get_training_controller().fail(str(e))
@@ -647,8 +754,19 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Training failure webhook failed for %s: %s", jid, exc)
+
+            # Push notification to mobile devices
+            try:
+                get_notification_service().send_notification_sync(
+                    title="Training Failed",
+                    body=f"Job {training_jobs[jid].get('name', jid)} failed: {str(e)[:100]}",
+                    data={"screen": "Training", "job_id": jid},
+                    topics=["training"],
+                )
+            except Exception as exc:
+                logger.warning("Training failure push notification failed for %s: %s", jid, exc)
         finally:
             if tracker is not None:
                 try:
@@ -686,7 +804,7 @@ class VisualTrainRequest(BaseModel):
     use_lora: bool = False
     lora_rank: int = 8
     freeze_vision: bool = True
-    name: Optional[str] = None
+    name: str | None = None
 
 
 @router.post("/training/visual-start")
@@ -699,12 +817,12 @@ async def start_visual_training(request: VisualTrainRequest):
     import uuid
     job_id = str(uuid.uuid4())[:8]
 
-    datasets_dir = find_repo_root(Path(__file__).resolve()) / "datasets"
+    datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
     data_path = datasets_dir / request.dataset
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
     if not data_path.exists():
-        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset}")
+        raise_error(f"Dataset not found: {request.dataset}", "E_BAD_REQUEST", status_code=400)
     data_path_str = str(data_path)
 
     out_stem = request.name or f"vlm_{job_id}"
@@ -726,7 +844,23 @@ async def start_visual_training(request: VisualTrainRequest):
         "result": None,
         "loss_history": [],
     }
+    cancel_event = threading.Event()
+    job["_cancel_event"] = cancel_event
     training_jobs[job_id] = job
+
+    # Register with CancelManager
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        _mgr = get_cancel_manager()
+        op_id = _mgr.register(
+            op_type=OpType.TRAINING,
+            label=f"vlm:{request.dataset}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        _mgr.start(op_id)
+        job["_cancel_manager_op_id"] = op_id
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for visual training %s: %s", job_id, exc)
 
     def run_visual_training(job_id_: str = job_id) -> None:
         try:
@@ -758,7 +892,7 @@ async def start_visual_training(request: VisualTrainRequest):
                 output_dir=str(output_dir),
             )
 
-            training_jobs[job_id]["status"] = "completed"
+            _finish_job(job_id, "completed")
             training_jobs[job_id]["progress"] = 100
             training_jobs[job_id]["result"] = result
 
@@ -770,8 +904,7 @@ async def start_visual_training(request: VisualTrainRequest):
         except Exception as exc:
             logger.exception("Visual training job %s failed", job_id, extra={"tag": "TRAIN"})
             if job_id in training_jobs:
-                training_jobs[job_id]["status"] = "failed"
-                training_jobs[job_id]["error"] = str(exc)
+                _finish_job(job_id, "failed", str(exc))
 
     executor = get_training_executor()
     executor.submit(run_visual_training, job_id)
@@ -796,24 +929,21 @@ async def start_distillation(request: DistillStartRequest):
     import uuid
     job_id = str(uuid.uuid4())[:8]
 
-    datasets_dir = find_repo_root(Path(__file__).resolve()) / "datasets"
+    datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
     data_path = datasets_dir / request.dataset
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
     if not data_path.exists():
-        raise HTTPException(status_code=400, detail=f"Dataset not found: {request.dataset}")
-
+        raise_error(f"Dataset not found: {request.dataset}", "E_BAD_REQUEST", status_code=400)
     input_file = data_path / "input.txt" if data_path.is_dir() else data_path
     if data_path.is_dir():
         candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
         input_file = next((c for c in candidates if c.exists()), None)
     if not input_file or not Path(input_file).exists():
-        raise HTTPException(status_code=400, detail="No training data file (input.txt/corpus.jsonl) in dataset")
-
+        raise_error("No training data file (input.txt/corpus.jsonl) in dataset", "E_BAD_REQUEST", status_code=400)
     data_str = Path(input_file).read_text(encoding="utf-8")
     if not data_str.strip():
-        raise HTTPException(status_code=400, detail="Training data is empty")
-
+        raise_error("Training data is empty", "E_BAD_REQUEST", status_code=400)
     out_stem = request.name or f"distill_{job_id}"
     _REPO_ROOT = find_repo_root(Path(__file__).resolve())
     output_dir = _REPO_ROOT / "models" / "auto-training"
@@ -831,10 +961,26 @@ async def start_distillation(request: DistillStartRequest):
         "config": request.model_dump(),
     }
     training_jobs[job_id] = job
+    cancel_event = threading.Event()
+    training_jobs[job_id]["_cancel_event"] = cancel_event
+
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        get_cancel_manager().register(
+            op_type=OpType.TRAINING,
+            label=str(request.name or f"distill-{job_id}"),
+            cancel_fn=lambda: cancel_event.set(),
+            meta={"job_id": job_id, "method": "distill"},
+            op_id=job_id,
+        )
+        get_cancel_manager().start(job_id)
+    except Exception as e:
+        logger.warning("CancelManager registration failed for distill %s: %s", job_id, e)
 
     def _run_distill(job_id_: str = job_id):
         """Background thread that runs distillation."""
         try:
+            training_jobs[job_id_]["status"] = "running"
             import numpy as np
             import random as _random
             _random.seed(42)
@@ -866,8 +1012,7 @@ async def start_distillation(request: DistillStartRequest):
                         teacher_tokenizer = provider.tokenize
 
             if teacher_model is None:
-                training_jobs[job_id]["status"] = "failed"
-                training_jobs[job_id]["error"] = f"Teacher model '{request.teacher_model}' not loaded"
+                _finish_job(job_id, "failed", f"Teacher model '{request.teacher_model}' not loaded")
                 return
 
             # Tokenize training data
@@ -918,8 +1063,7 @@ async def start_distillation(request: DistillStartRequest):
                     targets_list.append(y)
 
             if not inputs_list:
-                training_jobs[job_id]["status"] = "failed"
-                training_jobs[job_id]["error"] = "Not enough data for training"
+                _finish_job(job_id, "failed", "Not enough data for training")
                 return
 
             inputs_np = np.array(inputs_list, dtype=np.int64)
@@ -967,6 +1111,9 @@ async def start_distillation(request: DistillStartRequest):
             # Training loop
             epoch_losses = []
             for epoch in range(request.epochs):
+                if cancel_event.is_set():
+                    _finish_job(job_id, "cancelled")
+                    return
                 indices = list(range(n_samples))
                 _random.shuffle(indices)
                 epoch_loss = 0.0
@@ -1008,7 +1155,6 @@ async def start_distillation(request: DistillStartRequest):
             })
 
             training_jobs[job_id].update({
-                "status": "completed",
                 "progress": 100,
                 "loss": float(epoch_losses[-1]) if epoch_losses else None,
                 "checkpoint": str(ckpt_path),
@@ -1017,12 +1163,12 @@ async def start_distillation(request: DistillStartRequest):
                     for i, v in enumerate(epoch_losses)
                 ],
             })
+            _finish_job(job_id, "completed")
             logger.info("Distillation complete: %s loss=%.4f", ckpt_path, epoch_losses[-1] if epoch_losses else 0, extra={"tag": "TRAIN"})
 
         except Exception as e:
             logger.exception("Distillation job %s failed", job_id, extra={"tag": "TRAIN"})
-            training_jobs[job_id]["status"] = "failed"
-            training_jobs[job_id]["error"] = str(e)
+            _finish_job(job_id, "failed", str(e))
 
     executor = get_training_executor()
     executor.submit(_run_distill, job_id)
@@ -1057,11 +1203,7 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
         if alt_path.is_file():
             model_path = alt_path
         else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Model not found: {request.model_path}. Provide a .slnc file path.",
-            )
-
+            raise_error(f"Model not found: {request.model_path}. Provide a .slnc file path.", "E_BAD_REQUEST", status_code=400)
     # Validate dataset
     repo_root = find_repo_root(Path(__file__).resolve())
     datasets_dir = repo_root / "datasets"
@@ -1074,11 +1216,7 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                 data_path = p
                 break
     if data_path is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.",
-        )
-
+        raise_error(f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.", "E_BAD_REQUEST", status_code=400)
     model_stem = model_path.stem
     dataset_name = request.dataset.strip() if request.dataset else data_path.stem
 
@@ -1123,8 +1261,8 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             detail="lora",
             extra={"job_id": job_id, "model": model_stem, "rank": request.rank, "epochs": request.epochs},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Audit log failed for LoRA training start %s: %s", job_id, e)
 
     # Webhook notification
     try:
@@ -1155,8 +1293,21 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     try:
         from training.runtime import get_training_runtime
         get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, request.model_dump())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Training runtime registration failed for %s: %s", job_id, e)
+
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        get_cancel_manager().register(
+            op_type=OpType.TRAINING,
+            label=str(request.model_dump().get("dataset") or job_id),
+            cancel_fn=lambda: cancel_event.set(),
+            meta={"job_id": job_id, "method": "lora"},
+            op_id=job_id,
+        )
+        get_cancel_manager().start(job_id)
+    except Exception as e:
+        logger.warning("CancelManager registration failed for LoRA %s: %s", job_id, e)
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
@@ -1216,13 +1367,12 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
             result = trainer.train(on_progress=on_progress)
 
             if cancel_event.is_set():
-                training_jobs[job_id]["status"] = "cancelled"
+                _finish_job(job_id, "cancelled")
                 training_jobs[job_id]["progress"] = 0
                 get_training_controller().complete()
                 return
 
             training_jobs[job_id].update({
-                "status": "completed",
                 "progress": 100,
                 "current_epoch": result.epochs_completed or request.epochs,
                 "loss": result.final_loss,
@@ -1235,13 +1385,14 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                 },
                 "checkpoint": result.model_path,
             })
+            _finish_job(job_id, "completed")
 
             # Sync runtime
             try:
                 from training.runtime import get_training_runtime
                 get_training_runtime().sync(job_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Training runtime sync failed for %s: %s", job_id, e)
 
             get_training_controller().complete()
 
@@ -1265,13 +1416,12 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("LoRA training completion webhook failed for %s: %s", job_id, e)
 
         except Exception as exc:
             logger.exception("LoRA fine-tune job %s failed", job_id, extra={"tag": "TRAIN"})
-            training_jobs[job_id]["status"] = "failed"
-            training_jobs[job_id]["error"] = str(exc)
+            _finish_job(job_id, "failed", str(exc))
             get_training_controller().complete()
 
     executor = get_training_executor()
@@ -1300,30 +1450,7 @@ def _resolve_adapter_path(raw: str) -> Path:
         alt = base / raw
         if alt.is_file():
             return alt
-    raise HTTPException(status_code=400, detail=f"Adapter not found: {raw}")
-
-
-def _is_slonet_model(model) -> bool:
-    """Check if a model is a SloNet SloTransformer."""
-    try:
-        from domains.models import SloughGPTModel
-        return isinstance(model, SloughGPTModel)
-    except Exception:
-        return hasattr(model, '__class__') and 'SloTransformer' in type(model).__name__
-
-
-def _is_hf_model(model) -> bool:
-    """Check if a model is a HuggingFace transformers model."""
-    try:
-        import torch.nn as nn
-        return isinstance(model, nn.Module) and not _is_slonet_model(model)
-    except ImportError:
-        return False
-
-
-def _is_per_layer_adapter(adapter) -> bool:
-    """Check if adapter has per-layer keys (from hf_lora_finetune) vs flat W_a/W_b."""
-    return any(k.startswith("layers.") for k in adapter.files)
+    raise_error(f"Adapter not found: {raw}", "E_BAD_REQUEST", status_code=400)
 
 
 @router.post("/training/load-adapter")
@@ -1341,132 +1468,21 @@ async def load_adapter(request: LoadAdapterRequest):
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
         process_guard = getattr(ctrl, '_process_guard', None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to get process guard for adapter load: %s", e)
 
     if process_guard is None or not hasattr(process_guard, 'load_adapter'):
-        raise HTTPException(status_code=400,
-            detail="No subprocess worker found. Load adapter via direct model access instead.")
-
+        raise_error("No subprocess worker found. Load adapter via direct model access instead.", "E_BAD_REQUEST", status_code=400)
     try:
         result = process_guard.load_adapter(
-            str(adapter_path), merge=request.merge, timeout=120.0
+            str(adapter_path), merge=request.merge
         )
         logger.info("Loaded adapter via worker: %s", adapter_path.name, extra={"tag": "TRAIN"})
         return result
     except Exception as exc:
         logger.exception("Failed to load adapter: %s", exc, extra={"tag": "TRAIN"})
-        raise HTTPException(status_code=500, detail=f"Failed to load adapter: {exc}")
+        raise_error(f"Failed to load adapter: {exc}", "E_INFRA_STARTUP", status_code=500)
 
-
-def _load_adapter_slonet(model, adapter, adapter_path: Path, request) -> dict:
-    """Apply LoRA adapter to a SloNet model."""
-    rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
-    alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
-
-    target_modules = []
-    n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
-    for i in range(n_modules):
-        key = f"_config/target_module_{i}"
-        if key in adapter:
-            chars = adapter[key].tolist()
-            target_modules.append("".join(chr(c) for c in chars))
-    if not target_modules:
-        target_modules = ["W_q", "W_k", "W_v", "W_o"]
-
-    from domains.training.lora import LoRAConfig, apply_lora_to_model, count_lora_parameters
-    from domains.training.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
-
-    lora_config = LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
-    new_model = apply_lora_to_model(model, lora_config)
-    load_lora_adapter(new_model, str(adapter_path))
-    n_params = count_lora_parameters(new_model)
-
-    result = {
-        "status": "loaded",
-        "model_type": "slonet",
-        "adapter_path": str(adapter_path),
-        "rank": rank,
-        "alpha": alpha,
-        "target_modules": target_modules,
-        "n_params": n_params,
-        "merged": False,
-    }
-
-    if request.merge:
-        merged_model = merge_lora_adapter(new_model)
-        new_model = merged_model
-        result["merged"] = True
-
-    logger.info("Loaded SloNet LoRA adapter %s (rank=%d, alpha=%.1f, %d params)",
-        adapter_path, rank, alpha, n_params, extra={"tag": "TRAIN"})
-    return result
-
-
-def _load_adapter_hf(model, adapter, adapter_path: Path, request) -> dict:
-    """Apply LoRA adapter to a HuggingFace model via peft."""
-    rank = int(adapter.get("_config/rank", [8])[0]) if "_config/rank" in adapter else 8
-    alpha = float(adapter.get("_config/alpha", [16.0])[0]) if "_config/alpha" in adapter else 16.0
-
-    target_modules = []
-    n_modules = int(adapter.get("_config/target_modules", [0])[0]) if "_config/target_modules" in adapter else 0
-    for i in range(n_modules):
-        key = f"_config/target_module_{i}"
-        if key in adapter:
-            chars = adapter[key].tolist()
-            target_modules.append("".join(chr(c) for c in chars))
-    if not target_modules:
-        target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
-
-    try:
-        from peft import LoraConfig, get_peft_model, TaskType
-        import torch
-    except ImportError:
-        raise HTTPException(status_code=500,
-            detail="peft library not installed. Install with: pip install peft")
-
-    lora_config = LoraConfig(
-        task_type=TaskType.CAUSAL_LM,
-        r=rank,
-        lora_alpha=alpha,
-        target_modules=target_modules,
-        lora_dropout=0.0,
-        bias="none",
-    )
-
-    hf_model = get_peft_model(model, lora_config)
-
-    loaded_keys = 0
-    for name, param in hf_model.named_parameters():
-        if name in adapter:
-            param.data = torch.tensor(adapter[name], dtype=param.dtype)
-            loaded_keys += 1
-
-    n_params = sum(p.numel() for p in hf_model.parameters() if p.requires_grad)
-
-    import state as server_state
-    server_state.model = hf_model
-
-    result = {
-        "status": "loaded",
-        "model_type": "huggingface",
-        "adapter_path": str(adapter_path),
-        "rank": rank,
-        "alpha": alpha,
-        "target_modules": target_modules,
-        "n_params": n_params,
-        "loaded_keys": loaded_keys,
-        "merged": False,
-    }
-
-    if request.merge:
-        hf_model = hf_model.merge_and_unload()
-        server_state.model = hf_model
-        result["merged"] = True
-
-    logger.info("Loaded HF LoRA adapter %s (rank=%d, alpha=%.1f, %d params, %d keys)",
-        adapter_path, rank, alpha, n_params, loaded_keys, extra={"tag": "TRAIN"})
-    return result
 
 
 @router.post("/training/unload-adapter")
@@ -1481,81 +1497,23 @@ async def unload_adapter():
         from controllers.models import get_models_controller
         ctrl = get_models_controller()
         process_guard = getattr(ctrl, '_process_guard', None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to get process guard for adapter unload: %s", e)
 
     if process_guard is None or not hasattr(process_guard, 'unload_adapter'):
-        raise HTTPException(status_code=400,
-            detail="No subprocess worker found. Unload adapter via direct model access instead.")
-
+        raise_error("No subprocess worker found. Unload adapter via direct model access instead.", "E_BAD_REQUEST", status_code=400)
     try:
         result = process_guard.unload_adapter(timeout=60.0)
         logger.info("Unloaded adapter via worker", extra={"tag": "TRAIN"})
         return result
     except Exception as exc:
         logger.exception("Failed to unload adapter: %s", exc, extra={"tag": "TRAIN"})
-        raise HTTPException(status_code=500, detail=f"Failed to unload adapter: {exc}")
+        raise_error(f"Failed to unload adapter: {exc}", "E_INFRA_STARTUP", status_code=500)
 
-
-def _unload_adapter_slonet(model, server=None) -> dict:
-    """Unload LoRA from a SloNet model by reloading base .slnc."""
-    has_lora = any(
-        hasattr(mod, 'lora_A') or hasattr(mod, 'lora_B')
-        for _, mod in model.named_modules() if hasattr(mod, 'named_modules')
-    ) if hasattr(model, 'named_modules') else False
-
-    if not has_lora:
-        return {"status": "no_adapter", "message": "No LoRA adapter loaded — model is already base weights."}
-
-    slnc_path = getattr(model, '_slnc_path', None)
-    if slnc_path is None:
-        raise HTTPException(status_code=400, detail="Cannot determine base model path — reload via POST /models/load.")
-
-    from domains.inference.slonet_provider import SloNetChatProvider
-    base_provider = SloNetChatProvider.from_slnc(slnc_path, model_id="base")
-
-    if server is not None:
-        server.swap_model(base_provider._model)
-    else:
-        import state as server_state
-        server_state.model = base_provider._model
-
-    logger.info("Unloaded SloNet LoRA adapter, reverted to: %s", slnc_path, extra={"tag": "TRAIN"})
-    return {"status": "unloaded", "model_type": "slonet", "message": f"Reverted to base: {Path(slnc_path).name}"}
-
-
-def _unload_adapter_hf(model, server=None) -> dict:
-    """Unload LoRA from an HF model by reloading the original base model."""
-    model_path = getattr(model, '_slnc_path', None)
-    if model_path is None:
-        base_model_name = getattr(getattr(model, 'config', None), '_name_or_path', None)
-        if base_model_name:
-            model_path = base_model_name
-    if model_path is None:
-        raise HTTPException(status_code=400,
-            detail="Cannot determine base model path. Load base model via POST /models/load.")
-
-    try:
-        from transformers import AutoModelForCausalLM
-        import torch
-        base_model = AutoModelForCausalLM.from_pretrained(
-            str(model_path), torch_dtype=torch.float32, device_map="cpu"
-        )
-
-        if server is not None:
-            server.swap_model(base_model)
-        else:
-            import state as server_state
-            server_state.model = base_model
-
-        logger.info("Unloaded HF LoRA adapter, reverted to: %s", model_path, extra={"tag": "TRAIN"})
-        return {"status": "unloaded", "model_type": "huggingface", "message": f"Reverted to base: {model_path}"}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to reload base model: {exc}")
 
 
 @router.post("/training/from-feedback")
-async def train_from_feedback():
+async def train_from_feedback(req: dict | None = None):
     """Train a model from collected feedback data.
 
     This endpoint:
@@ -1563,9 +1521,11 @@ async def train_from_feedback():
     2. Starts training with the exported data
     3. Returns the job ID for tracking
     """
-    import os
     import uuid
-    from pathlib import Path
+
+    epochs = (req or {}).get("epochs", 3)
+    learning_rate = (req or {}).get("learning_rate", 1e-4)
+    batch_size = (req or {}).get("batch_size", 16)
 
     try:
         from domains.feedback.training import FeedbackTrainer
@@ -1589,6 +1549,7 @@ async def train_from_feedback():
         data_path = str(sft_path)
         out_stem = f"feedback_model_{timestamp}"
 
+        cancel_event = threading.Event()
         training_jobs[jid] = {
             "id": jid,
             "name": f"Feedback Training {timestamp}",
@@ -1596,10 +1557,25 @@ async def train_from_feedback():
             "progress": 0,
             "dataset": str(sft_path),
             "data_source": "feedback",
-            "epochs": 3,
+            "epochs": epochs,
             "checkpoint_interval": 100,
             "output_checkpoint_stem": out_stem,
+            "_cancel_event": cancel_event,
         }
+
+        # Register with CancelManager
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            _mgr = get_cancel_manager()
+            op_id = _mgr.register(
+                op_type=OpType.TRAINING,
+                label=f"feedback:{out_stem}",
+                cancel_fn=lambda: cancel_event.set(),
+            )
+            _mgr.start(op_id)
+            training_jobs[jid]["_cancel_manager_op_id"] = op_id
+        except Exception as exc:
+            logger.warning("CancelManager registration failed for feedback training %s: %s", jid, exc)
 
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")
@@ -1614,9 +1590,9 @@ async def train_from_feedback():
                     n_layer=6,
                     n_head=8,
                     block_size=256,
-                    epochs=3,
-                    batch_size=16,
-                    lr=1e-4,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    lr=learning_rate,
                     use_lora=True,
                     lora_rank=8,
                     lora_alpha=16,
@@ -1641,7 +1617,7 @@ async def train_from_feedback():
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
                 trainer.save(f"models/{safe_stem}.soul")
 
-                training_jobs[jid]["status"] = "completed"
+                _finish_job(jid, "completed")
                 training_jobs[jid]["progress"] = 100
                 training_jobs[jid]["checkpoint"] = f"models/{safe_stem}.soul"
                 training_jobs[jid]["samples_used"] = count
@@ -1668,8 +1644,7 @@ async def train_from_feedback():
 
             except Exception as e:
                 logger.exception("Feedback training job %s failed", jid, extra={"tag": "TRAIN"})
-                training_jobs[jid]["status"] = "failed"
-                training_jobs[jid]["error"] = str(e)
+                _finish_job(jid, "failed", str(e))
                 get_training_controller().fail(str(e))
 
                 # Trigger webhook notification
@@ -1687,24 +1662,25 @@ async def train_from_feedback():
                             },
                         )
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Feedback training failure webhook failed for %s: %s", jid, e)
 
         executor = get_training_executor()
         executor.submit(run_feedback_training, jid)
 
+        safe_out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
         return {
             "status": "started",
             "job_id": jid,
             "samples": count,
             "data_path": str(sft_path),
+            "checkpoint": f"models/{safe_out_stem}.soul",
             "message": "Training started from feedback data",
         }
 
     except Exception as e:
         logger.exception("Failed to start feedback training", extra={"tag": "TRAIN"})
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
 
 # ===== TRAINING STATE CONTROLLER =====
 
@@ -1764,7 +1740,7 @@ async def control_start_training():
     }
 
 
-def _signal_current_job(pause: Optional[bool] = None, cancel: bool = False) -> Dict[str, Any]:
+def _signal_current_job(pause: bool | None = None, cancel: bool = False) -> dict[str, Any]:
     """Signal the controller's current job with cooperative control events.
 
     Sets/clears the job's ``_pause_event`` and sets ``_cancel_event`` so the
@@ -1778,7 +1754,7 @@ def _signal_current_job(pause: Optional[bool] = None, cancel: bool = False) -> D
     job = training_jobs.get(jid)
     if not job:
         return {}
-    signaled: Dict[str, Any] = {}
+    signaled: dict[str, Any] = {}
     if pause is not None:
         ev = job.get("_pause_event")
         if ev is not None:
@@ -1793,6 +1769,11 @@ def _signal_current_job(pause: Optional[bool] = None, cancel: bool = False) -> D
         if ev is not None:
             ev.set()
             signaled["cancel"] = "requested"
+        try:
+            from domains.infrastructure.cancel_manager import get_cancel_manager
+            get_cancel_manager().cancel(jid)
+        except Exception as e:
+            logger.warning("CancelManager.cancel failed for %s: %s", jid, e)
     return signaled
 
 
@@ -1916,7 +1897,7 @@ async def register_webhook(
     url: str,
     events: str,  # JSON stringified array
     description: str = "",
-    secret: Optional[str] = None,
+    secret: str | None = None,
 ):
     """
     Register a new webhook endpoint.
@@ -1933,20 +1914,14 @@ async def register_webhook(
     try:
         events_list = json.loads(events) if isinstance(events, str) else events
     except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid events format. Must be JSON array.")
-
+        raise_error("Invalid events format. Must be JSON array.", "E_BAD_REQUEST", status_code=400)
     # Validate URL
     if not url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="URL must start with http:// or https://")
-
+        raise_error("URL must start with http:// or https://", "E_BAD_REQUEST", status_code=400)
     # Validate events
     invalid_events = [e for e in events_list if e not in TRAINING_EVENTS]
     if invalid_events:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid events: {invalid_events}. Available: {TRAINING_EVENTS}",
-        )
-
+        raise_error(f"Invalid events: {invalid_events}. Available: {TRAINING_EVENTS}", "E_BAD_REQUEST", status_code=400)
     store = get_webhook_store()
     webhook_id = store.register(
         url=url,
@@ -1965,8 +1940,8 @@ async def register_webhook(
             resource=url,
             extra={"webhook_id": webhook_id, "events": events_list},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Audit log failed for webhook registration %s: %s", webhook_id, e)
 
     return {
         "id": webhook_id,
@@ -1977,6 +1952,9 @@ async def register_webhook(
     }
 
 
+# ── Static webhook sub-routes MUST come before /{webhook_id} ──────────
+
+
 @router.get("/training/webhooks/stats")
 async def get_webhook_stats():
     """Get webhook statistics."""
@@ -1984,67 +1962,18 @@ async def get_webhook_stats():
     return store.get_stats()
 
 
-@router.delete("/training/webhooks/{webhook_id}")
-async def unregister_webhook(webhook_id: str):
-    """Unregister a webhook."""
+@router.get("/training/webhooks/retry-queue")
+async def get_webhook_retry_queue():
+    """Get pending webhook retries."""
     store = get_webhook_store()
-
-    if not store.get(webhook_id):
-        raise HTTPException(status_code=404, detail="Webhook not found")
-
-    store.unregister(webhook_id)
-
-    try:
-        from infrastructure.auth import get_audit_logger
-        get_audit_logger().log("training.webhook.delete", resource=webhook_id)
-    except Exception:
-        pass
-
-    return {"status": "deleted", "webhook_id": webhook_id}
+    return {"retries": store.get_retry_queue()}
 
 
-@router.get("/training/webhooks/{webhook_id}")
-async def get_webhook(webhook_id: str):
-    """Get webhook details (without secret)."""
+@router.get("/training/webhooks/dead-letters")
+async def get_webhook_dead_letters(limit: int = 50):
+    """Get dead-lettered webhook deliveries."""
     store = get_webhook_store()
-    webhook = store.get(webhook_id)
-
-    if not webhook:
-        raise HTTPException(status_code=404, detail="Webhook not found")
-
-    return {
-        "id": webhook.id,
-        "url": webhook.url,
-        "events": webhook.events,
-        "description": webhook.description,
-        "is_active": webhook.is_active,
-        "created_at": webhook.created_at.isoformat(),
-    }
-
-
-@router.get("/training/webhooks/{webhook_id}/deliveries")
-async def get_webhook_deliveries(webhook_id: str, limit: int = 50):
-    """Get delivery log for a webhook."""
-    store = get_webhook_store()
-
-    if not store.get(webhook_id):
-        raise HTTPException(status_code=404, detail="Webhook not found")
-
-    deliveries = store.get_deliveries(webhook_id, limit=limit)
-
-    return {
-        "deliveries": [
-            {
-                "id": d.id,
-                "event": d.event,
-                "success": d.success,
-                "status_code": d.status_code,
-                "attempted_at": d.attempted_at.isoformat(),
-                "error": d.error,
-            }
-            for d in deliveries
-        ]
-    }
+    return {"dead_letters": store.get_dead_letters(limit=limit)}
 
 
 class TestWebhookRequest(BaseModel):
@@ -2087,6 +2016,69 @@ async def test_webhook(req: TestWebhookRequest):
         "status_code": delivery.status_code,
         "error": delivery.error,
         "response_body": delivery.response_body,
+    }
+
+
+# ── Parameterized webhook routes (after all static sub-routes) ────────
+
+
+@router.delete("/training/webhooks/{webhook_id}")
+async def unregister_webhook(webhook_id: str):
+    """Unregister a webhook."""
+    store = get_webhook_store()
+
+    if not store.get(webhook_id):
+        raise_error("Webhook not found", "E_NOT_FOUND", status_code=404)
+    store.unregister(webhook_id)
+
+    try:
+        from infrastructure.auth import get_audit_logger
+        get_audit_logger().log("training.webhook.delete", resource=webhook_id)
+    except Exception as e:
+        logger.warning("Audit log failed for webhook deletion %s: %s", webhook_id, e)
+
+    return {"status": "deleted", "webhook_id": webhook_id}
+
+
+@router.get("/training/webhooks/{webhook_id}")
+async def get_webhook(webhook_id: str):
+    """Get webhook details (without secret)."""
+    store = get_webhook_store()
+    webhook = store.get(webhook_id)
+
+    if not webhook:
+        raise_error("Webhook not found", "E_NOT_FOUND", status_code=404)
+    return {
+        "id": webhook.id,
+        "url": webhook.url,
+        "events": webhook.events,
+        "description": webhook.description,
+        "is_active": webhook.is_active,
+        "created_at": webhook.created_at.isoformat(),
+    }
+
+
+@router.get("/training/webhooks/{webhook_id}/deliveries")
+async def get_webhook_deliveries(webhook_id: str, limit: int = 50):
+    """Get delivery log for a webhook."""
+    store = get_webhook_store()
+
+    if not store.get(webhook_id):
+        raise_error("Webhook not found", "E_NOT_FOUND", status_code=404)
+    deliveries = store.get_deliveries(webhook_id, limit=limit)
+
+    return {
+        "deliveries": [
+            {
+                "id": d.id,
+                "event": d.event,
+                "success": d.success,
+                "status_code": d.status_code,
+                "attempted_at": d.attempted_at.isoformat(),
+                "error": d.error,
+            }
+            for d in deliveries
+        ]
     }
 
 
@@ -2222,16 +2214,24 @@ def _resolve_finetuned(name: str) -> Path:
     base = _finetuned_dir().resolve()
     target = (base / name).resolve()
     if base not in target.parents:
-        raise HTTPException(status_code=400, detail="Invalid fine-tuned model name")
+        raise_error("Invalid fine-tuned model name", "E_BAD_REQUEST", status_code=400)
     if not target.is_dir():
-        raise HTTPException(status_code=404, detail=f"Fine-tuned model not found: {name}")
+        raise_error(f"Fine-tuned model not found: {name}", "E_NOT_FOUND", status_code=404)
     return target
+
+
+_finetuned_models_cache: tuple[float, dict] | None = None
+_FINETUNED_CACHE_TTL = 30.0
 
 
 @router.get("/training/finetuned-models")
 async def list_finetuned_models():
     """List HF fine-tuned model directories under ``models/hf-finetuned/``."""
+    global _finetuned_models_cache
     base = _finetuned_dir()
+    now = time.monotonic()
+    if _finetuned_models_cache and (now - _finetuned_models_cache[0]) < _FINETUNED_CACHE_TTL:
+        return _finetuned_models_cache[1]
     models = []
     if base.is_dir():
         for d in sorted(base.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
@@ -2248,12 +2248,13 @@ async def list_finetuned_models():
                 "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
                 "model": meta.get("model") or display_name,
                 "dataset": meta.get("dataset") or (d.name.split("_")[1] if "_" in d.name else ""),
-                # Legacy keys consumed by the shell `finetuned` command table.
                 "model_name": d.name,
                 "final_loss": meta.get("final_loss"),
                 "epochs": meta.get("epochs") or 0,
             })
-    return {"models": models}
+    result = {"models": models}
+    _finetuned_models_cache = (now, result)
+    return result
 
 
 @router.post("/training/finetuned-models/{name}/load")
@@ -2267,7 +2268,7 @@ async def load_finetuned_model(name: str):
     from controllers.models import get_models_controller
     result = get_models_controller().load_model_path(str(target), "cpu", identity=name)
     if result.get("status") != "loaded":
-        raise HTTPException(status_code=500, detail=result.get("error", "Failed to load fine-tuned model"))
+        raise_error(result.get("error", "Failed to load fine-tuned model"), "E_INFRA_STARTUP", status_code=500)
     return {"status": "loaded", "name": name, "model_path": str(target),
             "model_id": result.get("model_id")}
 
@@ -2330,19 +2331,15 @@ async def recover_job(job_id: str):
     job = store.get(job_id)
 
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     if job["status"] not in ("interrupted", "failed") and not (
         job["status"] == "recovering" and store.is_stale_heartbeat(job)
     ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs "
-                "(or a 'recovering' job with a stale heartbeat) can be recovered"
-            ),
+        raise_error(
+            f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs "
+            "(or a 'recovering' job with a stale heartbeat) can be recovered",
+            "E_BAD_REQUEST", status_code=400,
         )
-
     # Get config and checkpoint. The store's checkpoint_dir column is only
     # written on completion, so interrupted jobs have it NULL — the job's
     # stored request config is the authoritative source for the scan directory.
@@ -2367,27 +2364,20 @@ async def recover_job(job_id: str):
     resume_bundle = None
     if checkpoint_path:
         if not CheckpointManager.is_resumable(checkpoint_path):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                    "unsupported (use a .soul or .npz file)"
-                ),
+            raise_error(
+                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                "unsupported (use a .soul or .npz file)",
+                "E_VAL_REQUEST", status_code=422,
             )
         try:
             resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
         except Exception as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
-            ) from exc
+            raise_error(f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})", "E_VAL_REQUEST", status_code=422)
         if resume_bundle is None:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                    "unsupported (use a .soul or .npz file)"
-                ),
+            raise_error(
+                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                "unsupported (use a .soul or .npz file)",
+                "E_VAL_REQUEST", status_code=422,
             )
     else:
         checkpoint_path, resume_bundle = manager.load_latest_with_path()
@@ -2430,6 +2420,20 @@ async def recover_job(job_id: str):
     recovery_job["_cancel_event"] = cancel_event
     recovery_job["_pause_event"] = pause_event
 
+    # Register with CancelManager
+    try:
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        _mgr = get_cancel_manager()
+        op_id = _mgr.register(
+            op_type=OpType.TRAINING,
+            label=f"recover:{job_name}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        _mgr.start(op_id)
+        recovery_job["_cancel_manager_op_id"] = op_id
+    except Exception as exc:
+        logger.warning("CancelManager registration failed for recovery training %s: %s", jid, exc)
+
     def run_recovery(job_id_: str = jid):
         try:
             from domains.training.train_pipeline import SloughGPTTrainer
@@ -2453,6 +2457,9 @@ async def recover_job(job_id: str):
                 rec["steps_per_sec"] = info.get("steps_per_sec", rec.get("steps_per_sec"))
                 rec["eta_s"] = info.get("eta_s", rec.get("eta_s"))
                 rec["elapsed_s"] = info.get("elapsed_s", rec.get("elapsed_s"))
+                aq = info.get("avg_quality")
+                if aq is not None:
+                    rec["avg_quality"] = float(aq)
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)
@@ -2483,13 +2490,13 @@ async def recover_job(job_id: str):
             # persistent original row is the durable record, so terminal state
             # and the produced checkpoint path are written to it.
             if cancel_event.is_set():
-                training_jobs[jid]["status"] = "cancelled"
+                _finish_job(jid, "cancelled")
                 training_jobs[jid]["progress"] = 0
                 store.update(job_id, status="interrupted")
                 controller.complete()
                 return
 
-            training_jobs[jid]["status"] = "completed"
+            _finish_job(jid, "completed")
             training_jobs[jid]["progress"] = 100
             recovery_checkpoint = getattr(trainer, "_last_checkpoint_path", None) or checkpoint_for_recovery
             training_jobs[jid]["checkpoint_path"] = recovery_checkpoint
@@ -2512,13 +2519,17 @@ async def recover_job(job_id: str):
                         },
                     )
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Recovery webhook failed for %s: %s", jid, e)
 
+        except FileNotFoundError as e:
+            logger.error("Recovery failed (missing file): %s", e, extra={"tag": "TRAIN"})
+            _finish_job(jid, "failed", f"Data file not found: {e}")
+            store.mark_failed(job_id, f"Data file not found: {e}")
+            controller.fail()
         except Exception as e:
             logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})
-            training_jobs[jid]["status"] = "failed"
-            training_jobs[jid]["error"] = str(e)
+            _finish_job(jid, "failed", str(e))
             store.mark_failed(job_id, str(e))
             controller.fail()
 
@@ -2543,8 +2554,7 @@ async def abandon_recovery(job_id: str):
     job = store.get(job_id)
 
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-
+        raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     store.update(job_id, status="abandoned")
 
     return {

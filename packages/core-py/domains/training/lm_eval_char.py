@@ -163,7 +163,7 @@ def main() -> None:
     try:
         out = evaluate_soul_char_lm(args.checkpoint, args.data)
     except Exception as e:
-        print(f"lm_eval_char: {e}", file=sys.stderr)
+        logger.error("lm_eval_char: %s", e)
         sys.exit(1)
     if args.json:
         # JSON-safe perplexity (inf)
@@ -172,14 +172,14 @@ def main() -> None:
         payload["perplexity"] = pl if pl != float("inf") else None
         print(json_lib.dumps(payload, indent=2))
         return
-    print(f"mean_loss: {out['mean_loss']:.6f}")
+    logger.info("mean_loss: %.6f", out['mean_loss'])
     ppl = out["perplexity"]
-    print(f"perplexity: {ppl:.6f}" if ppl != float("inf") else "perplexity: inf")
-    print(f"tokens_scored: {out['num_token_positions']}")
-    print(f"chars_skipped: {out['num_chars_skipped']}")
-    print(f"block_size: {out['block_size']}  vocab_size: {out['vocab_size']}")
+    logger.info("perplexity: %.6f", ppl) if ppl != float("inf") else logger.info("perplexity: inf")
+    logger.info("tokens_scored: %d", out['num_token_positions'])
+    logger.info("chars_skipped: %d", out['num_chars_skipped'])
+    logger.info("block_size: %d  vocab_size: %d", out['block_size'], out['vocab_size'])
     for w in out.get("warnings") or []:
-        print(f"warning: {w}")
+        logger.warning("warning: %s", w)
 
 
 if __name__ == "__main__":

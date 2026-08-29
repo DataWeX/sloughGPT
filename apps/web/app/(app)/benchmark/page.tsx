@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse } from '@/lib/benchmark-controller'
+import { modelController } from '@/lib/model-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -16,12 +17,13 @@ export default function BenchmarkPage() {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('metrics')
   const [metrics, setMetrics] = useState<BenchmarkResult | null>(null)
-  const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number } | null>(null)
+  const [quality, setQuality] = useState<{ coherence_score: number; quality_score: number; repetition_rate: number; total_responses: number; avg_length: number } | null>(null)
   const [responses, setResponses] = useState<LoggedBenchmarkResponse[]>([])
   const [stats, setStats] = useState<{ total: number; avg_tokens: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [currentModel, setCurrentModel] = useState<string>('gpt2')
 
   const [pplxText, setPplxText] = useState('')
   const [pplxResult, setPplxResult] = useState<{ perplexity: number; loss: number; tokens: number } | null>(null)
@@ -29,25 +31,40 @@ export default function BenchmarkPage() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    Promise.all([
-      benchmarkController.run({ model: 'gpt2' }).catch(() => null),
-      benchmarkController.quality().catch(() => null),
-      benchmarkController.stats().catch(() => null),
-    ]).then(([m, q, s]) => {
-      setMetrics(m)
-      setQuality(q)
-      setStats(s)
-      if (!m && !q && !s) setLoadError('Could not load benchmark data. Is the server running?')
-    }).finally(() => setLoading(false))
+    const loadBenchmark = async () => {
+      let model = 'gpt2'
+      try {
+        const h = await modelController.getHealth()
+        model = h?.model_type ?? 'gpt2'
+        setCurrentModel(model)
+      } catch { /* use default */ }
+
+      try {
+        const [m, q, s] = await Promise.all([
+          benchmarkController.metrics(model).catch(() => null),
+          benchmarkController.quality().catch(() => null),
+          benchmarkController.stats().catch(() => null),
+        ])
+        setMetrics(m)
+        setQuality(q)
+        setStats(s)
+        if (!m && !q && !s) setLoadError('Could not load benchmark data. Please try again.')
+      } catch {
+        setLoadError('Could not load benchmark data. Please try again.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadBenchmark()
   }, [])
 
   const handleRefreshMetrics = async () => {
     setRunning(true)
     try {
-      const m = await benchmarkController.run({ model: 'gpt2' })
+      const m = await benchmarkController.run({ model: currentModel })
       setMetrics(m)
     } catch {
-      addToast('Failed to run benchmark', 'error')
+      addToast('Could not run benchmark', 'error')
     } finally {
       setRunning(false)
     }
@@ -58,7 +75,7 @@ export default function BenchmarkPage() {
       const data = await benchmarkController.history(20)
       setResponses(data)
     } catch {
-      addToast('Failed to load responses', 'error')
+      addToast('Could not load responses', 'error')
     }
   }
 
@@ -68,7 +85,7 @@ export default function BenchmarkPage() {
       setResponses([])
       setStats(null)
     } catch {
-      addToast('Failed to clear history', 'error')
+      addToast('Could not clear history', 'error')
     }
   }
 
@@ -82,7 +99,7 @@ export default function BenchmarkPage() {
       )
       setPplxResult(data)
     } catch {
-      addToast('Failed to calculate perplexity', 'error')
+      addToast('Could not calculate perplexity', 'error')
     } finally {
       setPplxLoading(false)
     }
@@ -100,13 +117,12 @@ export default function BenchmarkPage() {
         {(['metrics', 'quality', 'responses', 'perplexity'] as Tab[]).map(t => (
           <button
             key={t}
+            type="button"
             onClick={() => {
               setTab(t)
               if (t === 'responses') handleLoadResponses()
             }}
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -127,8 +143,8 @@ export default function BenchmarkPage() {
           <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Model Metrics</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running}>
-              <IconRefresh className={`h-4 w-4 ${running ? 'animate-spin' : ''}`} />
+            <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running} aria-label="Refresh metrics">
+              <IconRefresh className={cn('h-4 w-4', running && 'animate-spin')} />
             </Button>
           </CardHeader>
           <CardContent>
@@ -183,7 +199,7 @@ export default function BenchmarkPage() {
                 ].map(s => (
                   <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                     <div className="text-xs text-muted-foreground">{s.label}</div>
-                    <div className={`text-lg font-mono font-medium ${s.color}`}>{s.value}</div>
+                    <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
                   </div>
                 ))}
               </div>
@@ -204,7 +220,7 @@ export default function BenchmarkPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={handleLoadResponses}>
+              <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses">
                 <IconRefresh className="h-4 w-4" />
               </Button>
               <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
@@ -256,15 +272,15 @@ export default function BenchmarkPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Perplexity</div>
-                  <div className="text-lg font-mono font-medium">{pplxResult.perplexity}</div>
+                  <div className="text-base font-mono font-medium">{pplxResult.perplexity}</div>
                 </div>
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Loss</div>
-                  <div className="text-lg font-mono font-medium">{pplxResult.loss}</div>
+                  <div className="text-base font-mono font-medium">{pplxResult.loss}</div>
                 </div>
                 <div className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-xs text-muted-foreground">Tokens</div>
-                  <div className="text-lg font-mono font-medium">{pplxResult.tokens}</div>
+                  <div className="text-base font-mono font-medium">{pplxResult.tokens}</div>
                 </div>
               </div>
             )}

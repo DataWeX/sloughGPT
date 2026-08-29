@@ -8,7 +8,6 @@ import logging
 import time
 import threading
 import os
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -83,18 +82,14 @@ class ModelsController:
 
     def _infer_config(self, state_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Infer model config from state dict"""
-        config = {}
-
-        for key, value in state_dict.items():
-            if "tok_emb.weight" in key:
-                config["vocab_size"] = value.shape[0]
-                config["n_embed"] = value.shape[1]
-                config["block_size"] = value.shape[1]
-            elif "blocks.0.attn.q_proj.weight" in key:
-                config["n_embed"] = value.shape[1]
-                config["n_layer"] = len([k for k in state_dict.keys() if k.startswith("blocks.") and ".norm1.weight" in k])
-
-        return config
+        from domains.infrastructure.weight_loader import infer_arch_from_state_dict
+        arch = infer_arch_from_state_dict(state_dict)
+        return {
+            "vocab_size": arch["vocab_size"],
+            "n_embed": arch["n_embed"],
+            "n_layer": arch["n_layer"],
+            "block_size": arch["n_embed"],
+        }
 
     def list_available_models(self) -> List[Dict[str, Any]]:
         """List available models"""
@@ -119,6 +114,14 @@ class ModelsController:
         """
         if model_id.endswith('.gguf'):
             return self._load_gguf_model(model_id, device)
+
+        # Check if another load is in progress
+        from domains.infrastructure.model_loader import ModelLoader
+        if ModelLoader.is_loading():
+            return {
+                "status": "error",
+                "error": "Another model is currently loading. Please wait.",
+            }
 
         import state as server_state
 
@@ -199,15 +202,15 @@ class ModelsController:
                 if active == "fp16":
                     logger.info("GPU precision set to fp16 (auto-selected via benchmark)",
                                 extra={"tag": "MODEL"})
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("GPU precision auto-select failed: %s", e, extra={"tag": "MODEL"})
         except Exception as e:
             logger.error("Failed to register SloNet provider for %s: %s", model_id, e, extra={"tag": "MODEL"})
             raise
 
         # Publish the SloNet provider to server_state so the inference/chat
         # readiness guards (``state.model is not None``) accept the loaded
-        # model. Mirrors the autoload path in startup._autoload_model.
+        # model. state.py delegates to ServerState so only one write needed.
         try:
             from domains.models.provider import get_provider
             slonet_provider = get_provider("slonet-native") or get_provider("slonet")
@@ -223,15 +226,7 @@ class ModelsController:
             server_state.model = slonet_provider
             server_state.provider = slonet_provider
             server_state.model_type = model_id
-
-            # Mirror to the core ServerState singleton — the source for
-            # get_health_score() — so /health/detailed reports a loaded model
-            # consistently across both model slots (Bug D).
-            from domains.infrastructure.server_state import get_server_state
-            core = get_server_state()
-            core.model.set(slonet_provider)
-            core.model_type.set(model_id)
-            logger.info("SloNet provider published to server_state and ServerState: %s", model_id, extra={"tag": "MODEL"})
+            logger.info("SloNet provider published to server_state: %s", model_id, extra={"tag": "MODEL"})
         except Exception as e:
             logger.error("Failed to publish SloNet provider for %s to server_state: %s", model_id, e, extra={"tag": "MODEL"})
             raise
@@ -260,8 +255,8 @@ class ModelsController:
         if self._process_guard is not None:
             try:
                 self._process_guard.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("ProcessGuard stop failed: %s", e, extra={"tag": "MODEL"})
             self._process_guard = None
 
         from config import get_process_guard_enabled
@@ -286,7 +281,7 @@ class ModelsController:
                 worker_id=f"slo-{model_id.split('/')[-1]}",
                 max_restarts=3,
                 restart_delay=2.0,
-                generate_timeout=120.0,
+                generate_timeout=cfg.generate_timeout,
                 memory_limit_mb=resolve_memory_limit_mb(slnc_path, cfg.process_guard_memory_limit_mb),
                 quantize=cfg.quantize_slonet,
                 quant_bits=cfg.quant_bits,
@@ -307,7 +302,7 @@ class ModelsController:
         try:
             from llama_cpp import Llama
 
-            logger.info(f"Loading GGUF model: {model_path}", extra={"tag": "MODEL"})
+            logger.info("Loading GGUF model: %s", model_path, extra={"tag": "MODEL"})
 
             # Determine device for llama.cpp
             if device == "mps" or device == "cuda":
@@ -331,7 +326,7 @@ class ModelsController:
                 "n_ctx": 4096,
             }
         except Exception as e:
-            logger.error(f"Failed to load GGUF model {model_path}: {e}", extra={"tag": "MODEL"})
+            logger.error("Failed to load GGUF model %s: %s", model_path, e, extra={"tag": "MODEL"})
             raise
 
     def load_model(self, model_id: str, device: str = "auto", quantize: Optional[str] = None,
@@ -343,7 +338,7 @@ class ModelsController:
         resolved_device = self._resolve_device(device)
 
         try:
-            result = self._load_hf_model(model_id, resolved_device)
+            self._load_hf_model(model_id, resolved_device)
             self._current_model = model_id
             self._current_device = resolved_device
             self._loaded_at = datetime.now()
@@ -386,14 +381,14 @@ class ModelsController:
             mid = get_model_registry().default_id
             if mid:
                 return mid
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("ModelRegistry default_id lookup failed: %s", e, extra={"tag": "MODEL"})
         try:
             import state as server_state
             if getattr(server_state, "model_type", None):
                 return server_state.model_type
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("server_state.model_type lookup failed: %s", e, extra={"tag": "MODEL"})
         return None
 
     def adopt_process_guard(self, guard: Any, model_id: Optional[str] = None) -> None:
@@ -628,7 +623,7 @@ class ModelsController:
                 worker_id=f"slo-{Path(model_id).name}-finetuned",
                 max_restarts=3,
                 restart_delay=2.0,
-                generate_timeout=120.0,
+                generate_timeout=cfg.generate_timeout,
                 memory_limit_mb=resolve_memory_limit_mb(str(slnc_path), cfg.process_guard_memory_limit_mb),
                 quantize=cfg.quantize_slonet,
                 quant_bits=cfg.quant_bits,

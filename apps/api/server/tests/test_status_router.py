@@ -1,3 +1,4 @@
+from infrastructure.exception_handlers import register_app_error_handler
 """
 Tests for status router — /status, /ready, /live endpoints.
 """
@@ -8,6 +9,7 @@ from fastapi import FastAPI
 from routers.status import router as status_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(status_router)
 client = TestClient(app)
 

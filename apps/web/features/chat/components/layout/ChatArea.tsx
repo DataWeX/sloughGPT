@@ -9,13 +9,15 @@ import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { cn, IconChevronDown } from '@sloughgpt/strui'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
+export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onCancel' | 'onAudioRecorded' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]
   loading: boolean
   sessionLoading?: boolean
   health: ApiHealthSnapshot
   suggestions?: { text: string; icon: string }[]
   toolEvents?: ToolCallEvent[]
+  streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
+  streamingToolName?: string
   ragVerification?: {
     confidence: number
     is_verified: boolean
@@ -26,10 +28,12 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
+  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
   onAddImage?: (dataUrl: string) => void
@@ -41,6 +45,23 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  temperature?: number
+  contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
+  noteMap?: Record<string, string>
+  onAddNote?: (messageId: string) => void
+  onPin?: (messageId: string) => void
+  selectionMode?: boolean
+  selectedMessageIds?: Set<string>
+  onToggleSelection?: (messageId: string) => void
+  hasThread?: (id: string) => boolean
+  onThread?: (messageId: string) => void
+  onForward?: (content: string) => void
+  onExportMessageAsMarkdown?: (messageId: string, content: string, role: string, timestamp: string | number) => void
+  onQuickReply?: (messageId: string) => void
+  conversationSearchQuery?: string
+  setConversationSearchQuery?: (query: string) => void
+  conversationSearchOpen?: boolean
+  setConversationSearchOpen?: (open: boolean) => void
 }
 
 export interface ChatAreaRef {
@@ -61,14 +82,17 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onRefreshHealth,
     onCopy,
     onRegenerate,
+    onRegenerateWithOptions,
     onThumbsUp,
     onThumbsDown,
     onEdit,
+    onReact,
     searchQuery,
     onSuggestionClick,
     images,
     onAddImage,
     onRemoveImage,
+    onAudioRecorded,
     onAudioTranscript,
     onGeneratedImage,
     className,
@@ -78,18 +102,31 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onDelete,
     onSaveToKnowledge,
     collapsibleLength,
+    temperature,
+    contextLayers,
+    noteMap,
+    onAddNote,
+    onPin,
+    selectionMode,
+    selectedMessageIds,
+    onToggleSelection,
+    hasThread,
+    onThread,
+    streamingStatus,
+    streamingToolName,
     ...inputProps
   }, ref) {
     const scrollRef = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const [isNearBottom, setIsNearBottom] = useState(true)
+    const [autoScroll, setAutoScroll] = useState(true)
     const prevMessageCountRef = useRef(messages.length)
     const prevLastContentLenRef = useRef(0)
     const lastScrollTimeRef = useRef(0)
 
-    const filteredMessages = searchQuery
+    const filteredMessages = useMemo(() => searchQuery
       ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-      : messages
+      : messages, [messages, searchQuery])
 
     useImperativeHandle(ref, () => ({
       scrollToBottom: () => {
@@ -107,18 +144,24 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
       setIsNearBottom(distFromBottom < NEAR_BOTTOM_THRESHOLD)
     }, [])
 
-    // Auto-scroll on new messages AND during streaming when user is near bottom
+    // Auto-scroll on new messages AND during streaming when user is near bottom.
+    // Uses requestAnimationFrame to batch scroll calls during fast token flushes.
+    const rafRef = useRef<number>(0)
     useEffect(() => {
       const lastMsg = messages[messages.length - 1]
       const lastContentLen = lastMsg?.content?.length ?? 0
       const contentGrew = lastContentLen > prevLastContentLenRef.current
       const msgAdded = messages.length > prevMessageCountRef.current
 
-      if (isNearBottom && (msgAdded || contentGrew)) {
-        scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
+      if (isNearBottom && autoScroll && (msgAdded || contentGrew)) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = requestAnimationFrame(() => {
+          scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
+        })
       }
       prevMessageCountRef.current = messages.length
       prevLastContentLenRef.current = lastContentLen
+      return () => cancelAnimationFrame(rafRef.current)
     }, [messages, isNearBottom])
 
     // Scroll to bottom on initial load
@@ -146,9 +189,12 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onRefreshHealth={onRefreshHealth}
             onCopy={onCopy}
             onRegenerate={onRegenerate}
+            onRegenerateWithOptions={onRegenerateWithOptions}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
             onEdit={onEdit}
+            onReact={onReact}
+            onPin={onPin}
             searchQuery={searchQuery}
             onSuggestionClick={onSuggestionClick}
             toolEvents={toolEvents}
@@ -158,29 +204,58 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onDelete={onDelete}
             onSaveToKnowledge={onSaveToKnowledge}
             collapsibleLength={collapsibleLength}
+            temperature={temperature}
+            contextLayers={contextLayers}
+            noteMap={noteMap}
+            onAddNote={onAddNote}
+            selectionMode={selectionMode}
+            selectedMessageIds={selectedMessageIds}
+            onToggleSelection={onToggleSelection}
+            hasThread={hasThread}
+            onThread={onThread}
           />
 
           {filteredMessages.length > 0 && !isNearBottom && (
-            <button
-              onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
-              aria-label="Jump to latest messages"
-            >
-              <IconChevronDown className="h-3.5 w-3.5" />
-              {filteredMessages.length > 0 && (
-                <span className="text-muted-foreground">{filteredMessages.length}</span>
-              )}
-            </button>
+            <div className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAutoScroll(!autoScroll)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-1.5 text-[10px] font-medium rounded-full border backdrop-blur-sm shadow-lg transition-all",
+                  autoScroll
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-background/80 border-border text-muted-foreground"
+                )}
+                aria-label={autoScroll ? "Disable auto-scroll" : "Enable auto-scroll"}
+              >
+                <IconChevronDown className="h-3 w-3" />
+                {autoScroll ? 'Auto' : 'Manual'}
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
+                aria-label="Jump to latest messages"
+              >
+                <IconChevronDown className="h-3.5 w-3.5" />
+                {filteredMessages.length > 0 && (
+                  <span className="text-muted-foreground">{filteredMessages.length}</span>
+                )}
+              </button>
+            </div>
           )}
         </div>
 
         <ChatInput
           {...inputProps}
           loading={loading}
+          streamingStatus={streamingStatus}
+          streamingToolName={streamingToolName}
           health={health}
           images={images}
           onAddImage={onAddImage}
           onRemoveImage={onRemoveImage}
+          onAudioRecorded={onAudioRecorded}
           onAudioTranscript={onAudioTranscript}
           onGeneratedImage={onGeneratedImage}
         />

@@ -21,14 +21,14 @@ const presets = [
 ]
 
 describe('CompanionInsightsCard', () => {
-  it('returns null for null traits', () => {
+  it('renders empty state for null traits', () => {
     const { container } = render(<CompanionInsightsCard traits={null} presets={[]} />)
-    expect(container.querySelector('[data-testid="companion-insights"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
-  it('returns null for empty traits', () => {
+  it('renders empty state for empty traits', () => {
     const { container } = render(<CompanionInsightsCard traits={{ name: 'empty', warmth: 0, curiosity: 0, creativity: 0, confidence: 0, humor: 0 }} presets={[]} />)
-    expect(container.querySelector('[data-testid="companion-insights"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
   it('renders card with traits', () => {
