@@ -27,7 +27,7 @@
       "id": "20260830_103238_test-coverage-expansion-core-python-modules",
       "title": "Test Coverage Expansion - Core Python Modules",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "testing",
@@ -188,7 +188,7 @@
       "id": "20260829_121936_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
       "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
       "description": "",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "world-realm",
@@ -7829,7 +7829,7 @@
       "id": "20260830T094845_buildroot-docker-test",
       "title": "Add Docker build test for Buildroot",
       "description": "The Buildroot Dockerfile and build.sh exist but haven't been tested.\n\n**Files:** packages/core-py/tests/test_buildroot_docker.py (new)\n\n**Test cases:**\n1. Dockerfile exists and is valid Docker syntax\n2. build.sh has executable permission\n3. build.sh references correct Docker image name\n4. build.sh has all required functions\n5. Docker commands use correct volume mounts\n\n**Note:** Don't actually run Docker in tests (too slow).",
-      "column": "todo",
+      "column": "done",
       "priority": "low",
       "tags": [
         "buildroot",
@@ -7863,7 +7863,7 @@
       "id": "20260830T094845_module-loader-tests",
       "title": "Expand module_loader tests for hot-reload",
       "description": "Add comprehensive tests for hot-reload and error isolation.\n\n**Files:** packages/core-py/tests/test_vm_debugger.py (extend TestModuleLoader)\n\n**Test cases:**\n1. Hot-reload: load addon, modify source, reload, verify new behavior\n2. Error isolation: load addon with bad import, verify other addons still work\n3. Dependency tracking: addon A depends on addon B, unload B first fails\n4. Concurrent loading: load multiple addons simultaneously\n5. Missing addon directory: graceful error handling\n\n**Implementation:** Create temp addon files in /tmp/test_addons/ for testing.",
-      "column": "todo",
+      "column": "done",
       "priority": "low",
       "tags": [
         "vm",
