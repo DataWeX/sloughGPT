@@ -6526,6 +6526,25 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_065500_feat-planner-add-card-blocking-and-blocked-by-relationships",
+      "title": "feat(planner): add card blocking and blocked-by relationships",
+      "description": "Added blocked_by field to Card dataclass. Added block_card, unblock_card, is_blocked methods to KanbanStore. Added CLI commands: block, unblock, blocked. Updated board rendering to show BLOCKED indicator. Updated GUI cardHtml to show blocked badge.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "planner",
+        "kanban",
+        "blocking",
+        "dependencies",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T06:55:00+00:00",
+      "updated_at": "2026-08-30T06:55:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
