@@ -319,3 +319,25 @@ def test_list_cards_by_assignee(board_dir):
     store.add_card("Theirs")
     results = store.list_cards(assignee="mana")
     assert [c.title for c in results] == ["Mine"]
+
+
+def test_block_and_unblock_card(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    blocker = store.add_card("Blocker")
+    blocked = store.add_card("Blocked")
+    blocker_id = blocker.id
+
+    assert store.block_card(blocked.id, blocker_id) is not None
+    assert store.is_blocked(blocked.id) is True
+
+    assert store.unblock_card(blocked.id, blocker_id) is not None
+    assert store.is_blocked(blocked.id) is False
+
+
+def test_block_duplicate_ignored(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    blocker = store.add_card("Blocker")
+    blocked = store.add_card("Blocked")
+    store.block_card(blocked.id, blocker.id)
+    store.block_card(blocked.id, blocker.id)
+    assert len(store.get_card(blocked.id).blocked_by) == 1

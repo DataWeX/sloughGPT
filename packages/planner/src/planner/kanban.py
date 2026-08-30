@@ -29,7 +29,7 @@ import sys
 import json
 import shutil
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Any
