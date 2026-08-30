@@ -46,6 +46,17 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
+const { chatDBMock } = vi.hoisted(() => {
+  const kv: Record<string, string> = {}
+  const chatDBMock = {
+    getKV: vi.fn(async (key: string) => kv[key] ?? undefined),
+    setKV: vi.fn(async (key: string, value: string) => { kv[key] = value }),
+  }
+  return { chatDBMock }
+})
+
+vi.mock('@/lib/db', () => ({ chatDB: chatDBMock }))
+
 import { ConversationSidebar } from './ConversationSidebar'
 import type { Conversation } from '@/lib/session-controller'
 
@@ -367,8 +378,7 @@ describe('ConversationSidebar', () => {
     expect(updatedBtn.className).toContain('text-primary')
   })
 
-  it('persists sort preference across remounts', () => {
-    localStorage.clear()
+  it('persists sort preference across remounts', async () => {
     const conversations = [
       createConv('1', { name: 'Zebra', updated_at: '2026-01-01' }),
       createConv('2', { name: 'Apple', updated_at: '2026-01-02' }),
@@ -377,13 +387,18 @@ describe('ConversationSidebar', () => {
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     fireEvent.click(screen.getByLabelText('Sort conversations'))
     fireEvent.click(screen.getByText('Name'))
-    expect(localStorage.getItem('sloughgpt:sidebar-sort')).toBe('name')
+    await vi.waitFor(() => {
+      expect(chatDBMock.setKV).toHaveBeenCalledWith('sloughgpt:sidebar-sort', 'name')
+    })
     cleanup()
 
-    // Second render: sort should persist from localStorage as 'name' (non-default)
+    // Second render: sort should persist from chatDB as 'name' (non-default)
+    chatDBMock.getKV.mockImplementation(async (key: string) => key === 'sloughgpt:sidebar-sort' ? 'name' : '')
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
-    const sortBtn = screen.getByLabelText('Sort conversations')
-    expect(sortBtn.className).toContain('text-primary')
+    await vi.waitFor(() => {
+      const sortBtn = screen.getByLabelText('Sort conversations')
+      expect(sortBtn.className).toContain('text-primary')
+    })
     // Items should appear in name order
     const items = screen.getAllByText(/^(Apple|Zebra)$/)
     expect(items[0]).toHaveProperty('textContent', 'Apple')

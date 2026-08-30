@@ -46,6 +46,12 @@ vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: _useApiMonitor,
 }))
 
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  IconMenu: (props: any) => <span />,
+  IconGrid: (props: any) => <span />,
+}))
+
 import { StatusBar } from './StatusBar'
 
 describe('StatusBar', () => {
@@ -74,14 +80,14 @@ describe('StatusBar', () => {
   it('renders tokens per second from live health', async () => {
     mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     render(<StatusBar />)
-    const tps = await screen.findAllByText('15 t/s')
+    const tps = await screen.findAllByText('15 tok/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders inference count when no tps', async () => {
     mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 0, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     render(<StatusBar />)
-    const count = await screen.findAllByText('42 responses')
+    const count = await screen.findAllByText('42 reqs')
     expect(count.length).toBeGreaterThanOrEqual(1)
   })
 
