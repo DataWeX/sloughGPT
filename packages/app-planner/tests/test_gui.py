@@ -13,9 +13,9 @@ import threading
 import httpx
 import pytest
 
-from planner.gui import GuiHandler, GuiServer, GUI_HTML, _bind_server
-from planner.core import NoteStore, cli_main
-from planner.kanban import KanbanStore
+from app_planner.gui import GuiHandler, GuiServer, GUI_HTML, _bind_server
+from app_planner.core import NoteStore, cli_main
+from app_planner.kanban import KanbanStore
 
 BACKENDS = ["file", "mogdb"]
 
@@ -287,7 +287,7 @@ def test_cli_gui_subcommand_dispatches():
 
 def test_python_m_dispatch():
     proc = subprocess.run(
-        [sys.executable, "-m", "planner", "gui", "--help"],
+        [sys.executable, "-m", "app_planner", "gui", "--help"],
         capture_output=True, text=True, timeout=30,
     )
     assert proc.returncode == 0

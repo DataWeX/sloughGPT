@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from planner import config
+from app_planner import config
 
 
 def _write_board(root: Path) -> Path:
@@ -44,7 +44,7 @@ def test_find_project_root_falls_back_to_package_location(tmp_path, monkeypatch)
     root = _write_board(tmp_path / "proj")
     monkeypatch.setattr(
         config, "__file__",
-        str(root / "packages" / "planner" / "src" / "planner" / "config.py"),
+        str(root / "packages" / "app_planner" / "src" / "app_planner" / "config.py"),
     )
     (tmp_path / "elsewhere").mkdir(parents=True)
     monkeypatch.chdir(tmp_path / "elsewhere")

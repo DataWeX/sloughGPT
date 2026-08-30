@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "packages" / "planner" / "src"))
-from planner import Note, NoteStore  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "packages" / "app-planner" / "src"))
+from app_planner import Note, NoteStore  # noqa: E402
 
 
 @pytest.fixture

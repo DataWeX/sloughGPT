@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from planner.kanban import KanbanStore, cli_main, reset_kanban_store
+from app_planner.kanban import KanbanStore, cli_main, reset_kanban_store
 
 
 @pytest.fixture(autouse=True)

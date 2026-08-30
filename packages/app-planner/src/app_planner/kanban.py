@@ -6,7 +6,7 @@ Every operation is non-interactive and scriptable.
 
 Usage as a module::
 
-    from planner import KanbanStore
+    from app_planner import KanbanStore
     store = KanbanStore()
     card = store.add_card("Fix boot order", column="todo", priority="high")
     store.move_card(card.id, "in_progress")

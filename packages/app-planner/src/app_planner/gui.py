@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-import planner.core as core_module
+import app_planner.core as core_module
 
 from . import config
 from .kanban import KanbanStore, Board

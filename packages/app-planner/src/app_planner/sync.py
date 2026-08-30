@@ -13,8 +13,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from planner import config
-from planner.kanban import KanbanStore
+from app_planner import config
+from app_planner.kanban import KanbanStore
 
 
 def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int, int]:
@@ -82,7 +82,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true", help="Only print the summary line")
     args = parser.parse_args(argv)
 
-    from planner.core import NoteStore
+    from app_planner.core import NoteStore
 
     notes_dir = Path(args.notes_dir) if args.notes_dir else config.default_notes_dir()
     note_store = NoteStore(

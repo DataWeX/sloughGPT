@@ -1,21 +1,21 @@
-# planner
+# app-planner
 
 Local-first notes + kanban toolchain, delivered as one CLI. Four commands —
 `planner`, `notes`, `kanban`, `sync-notes-to-board` — share a single config
-module (`planner.config`) so they always resolve the same stores and stay in
+module (`app_planner.config`) so they always resolve the same stores and stay in
 step with each other. Pure Python stdlib: no external dependencies, no servers.
 
 ## Philosophy
 
 - **One source of truth.** Data locations, storage backend, and the
-  status <-> column mapping live in `planner/config.py`, not scattered across
+  status <-> column mapping live in `app_planner/config.py`, not scattered across
   commands. Every tool reads the same answer.
 - **Repo-aware by default.** Run any command from inside a repo and it finds
   the repo's own `.dev-notes/` and `.kanban/` (version-controlled alongside
   the code). Outside a repo it falls back to `~/.config/`.
 - **Backend is inferred.** A notes directory that already contains a MogDB
   journal (`store/notes.journal.jsonl`) is opened as `mogdb`; anything else is
-  plain `file`. `PLANNER_BACKEND` overrides when set.
+  plain `file`. `APP_PLANNER_BACKEND` overrides when set.
 - **Status and column are the same fact.** Notes store a status; cards live in
   a column. `sync` reconciles both directions — missing cards are created and
   out-of-step cards are moved.
@@ -23,7 +23,7 @@ step with each other. Pure Python stdlib: no external dependencies, no servers.
 ## Install
 
 ```bash
-pip install -e packages/planner        # editable, console scripts auto-installed
+pip install -e packages/app-planner        # editable, console scripts auto-installed
 ```
 
 ## Quick start
@@ -52,12 +52,12 @@ planner gui
 
 | Command | Entry point | Purpose |
 |---------|-------------|---------|
-| `planner` | `planner.core:cli_main` | Notes CLI. Subcommands: `new`, `list`, `show`, `edit`, `delete`/`rm`, `search`, `today`, `export`, `tags`, `status`, `timeline`, `sprint` |
-| `planner gui` | `planner.gui:main` | Local web interface for notes + board (`--host --port --no-open --sync`) |
-| `planner sync` | `planner.sync:cli_main` | Sync notes -> board (`--quiet` for one-line summary) |
-| `notes` | `planner.core:cli_main` | Alias for `planner` |
-| `kanban` | `planner.kanban:cli_main` | Board CLI. Subcommands: `init`, `add`, `list`, `show`, `edit`, `move`, `delete`, `board`, `note`, `columns`, `column-add/rename/rm`, `archive`, `search`, `stats` |
-| `sync-notes-to-board` | `planner.sync:cli_main` | Alias for `planner sync` |
+| `planner` | `app_planner.core:cli_main` | Notes CLI. Subcommands: `new`, `list`, `show`, `edit`, `delete`/`rm`, `search`, `today`, `export`, `tags`, `status`, `timeline`, `sprint` |
+| `planner gui` | `app_planner.gui:main` | Local web interface for notes + board (`--host --port --no-open --sync`) |
+| `planner sync` | `app_planner.sync:cli_main` | Sync notes -> board (`--quiet` for one-line summary) |
+| `notes` | `app_planner.core:cli_main` | Alias for `planner` |
+| `kanban` | `app_planner.kanban:cli_main` | Board CLI. Subcommands: `init`, `add`, `list`, `show`, `edit`, `move`, `delete`, `board`, `note`, `columns`, `column-add/rename/rm`, `archive`, `search`, `stats` |
+| `sync-notes-to-board` | `app_planner.sync:cli_main` | Alias for `planner sync` |
 
 ## Configuration
 
@@ -66,7 +66,7 @@ Resolution order, first match wins:
 | Priority | Source |
 |----------|--------|
 | 1 | Explicit CLI flag (`--notes-dir`, `--board-dir`, `--backend`) |
-| 2 | Environment: `PLANNER_NOTES_DIR`, `PLANNER_BOARD_DIR`, `PLANNER_BACKEND` |
+| 2 | Environment: `APP_PLANNER_NOTES_DIR`, `APP_PLANNER_BOARD_DIR`, `APP_PLANNER_BACKEND` |
 | 3 | Repo root: nearest ancestor containing `.kanban/board.json` -> `<root>/.dev-notes`, `<root>/.kanban` |
 | 4 | User config: `~/.config/dev-notes`, `~/.config/kanban` |
 
@@ -80,14 +80,14 @@ Resolution order, first match wins:
 | `done`      | `done`       |
 | `blocked`   | `todo`       |
 
-Mapping lives in `planner.config.STATUS_TO_COLUMN` / `COLUMN_TO_STATUS`.
+Mapping lives in `app_planner.config.STATUS_TO_COLUMN` / `COLUMN_TO_STATUS`.
 Board columns define the inverse: `todo -> open`, `in_progress -> wip`,
 `review -> review`, `done -> done`. Moving a card in the GUI updates the
 matching note's status and vice versa.
 
 ## Sync semantics
 
-`planner.sync.sync_notes_to_board(note_store, kanban_store)`:
+`app_planner.sync.sync_notes_to_board(note_store, kanban_store)`:
 
 1. A note matches a card by title (case-sensitive).
 2. Notes without a card get one, placed in the column for their status.
@@ -96,9 +96,9 @@ matching note's status and vice versa.
 4. Returns `(added, updated, total)`; repeated runs are idempotent.
 
 ```python
-from planner.core import NoteStore
-from planner.kanban import KanbanStore
-from planner.sync import sync_notes_to_board
+from app_planner.core import NoteStore
+from app_planner.kanban import KanbanStore
+from app_planner.sync import sync_notes_to_board
 
 notes = NoteStore(notes_dir="<root>/.dev-notes", backend="mogdb")
 board = KanbanStore(board_dir="<root>/.kanban")
@@ -125,10 +125,10 @@ requested port is taken it steps to the next free port and reports the change;
 ## Development
 
 ```bash
-cd packages/planner
+cd packages/app-planner
 python3 -m pytest tests/        # 127 tests: config (16), sync (8), gui (38), core (34), kanban (31)
 ```
 
-The package is installed editable (`__editable__.planner-*.pth` points at
-`packages/planner/src`), so source edits take effect immediately; reinstall
+The package is installed editable (`__editable__.app-planner-*.pth` points at
+`packages/app-planner/src`), so source edits take effect immediately; reinstall
 only regenerates the console scripts.

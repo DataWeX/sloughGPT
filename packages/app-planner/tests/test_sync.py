@@ -5,9 +5,9 @@ Tests for planner.sync — shared notes -> board card sync used by
 
 import pytest
 
-from planner.core import NoteStore
-from planner.kanban import KanbanStore
-from planner.sync import cli_main, sync_notes_to_board
+from app_planner.core import NoteStore
+from app_planner.kanban import KanbanStore
+from app_planner.sync import cli_main, sync_notes_to_board
 
 
 @pytest.fixture

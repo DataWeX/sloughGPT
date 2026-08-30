@@ -5,8 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "packages" / "planner" / "src"))
-from planner.kanban import (  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "packages" / "app-planner" / "src"))
+from app_planner.kanban import (  # noqa: E402
     KanbanStore, Card, ColumnDef, Board, Note,
     _make_id, _abbrev, _render_board,
 )
@@ -355,7 +355,7 @@ def test_render_board_no_columns(tmp_path):
 
 
 def test_get_kanban_store(tmp_path):
-    from planner.kanban import get_kanban_store, reset_kanban_store
+    from app_planner.kanban import get_kanban_store, reset_kanban_store
     reset_kanban_store()
     s1 = get_kanban_store(tmp_path)
     s2 = get_kanban_store()
@@ -363,7 +363,7 @@ def test_get_kanban_store(tmp_path):
 
 
 def test_reset_kanban_store(tmp_path):
-    from planner.kanban import get_kanban_store, reset_kanban_store
+    from app_planner.kanban import get_kanban_store, reset_kanban_store
     reset_kanban_store()
     s1 = get_kanban_store(tmp_path)
     reset_kanban_store()
