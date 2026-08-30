@@ -803,7 +803,8 @@ function renderNotes(q) {
     const matchesQ = !q ||
       n.title.toLowerCase().includes(q) ||
       n.tags.join(" ").toLowerCase().includes(q) ||
-      n.body.toLowerCase().includes(q);
+      n.body.toLowerCase().includes(q) ||
+      (n.author || "").toLowerCase().includes(q);
     const matchesAuthor = !authorFilter || n.author === authorFilter;
     return matchesQ && matchesAuthor;
   });

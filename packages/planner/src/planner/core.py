@@ -422,7 +422,8 @@ class NoteStore:
         for note in self._bk.all_notes():
             if (q in note.title.lower()
                     or q in " ".join(note.tags).lower()
-                    or q in note.body.lower()):
+                    or q in note.body.lower()
+                    or q in (note.author or "").lower()):
                 results.append(note)
                 if len(results) >= limit:
                     break
