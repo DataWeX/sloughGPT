@@ -24,6 +24,17 @@ export {
   IconTokenizer,
   IconDocument,
   IconCode,
+  IconChart,
+  IconBookmark,
+  IconSparkle,
+  IconBeaker,
+  IconBenchmark,
+  IconMapPin,
+  IconError,
+  IconMic,
+  IconThumbUp,
+  IconGrid,
+  IconLabs,
 } from '@sloughgpt/strui'
 
 import { IconX } from '@sloughgpt/strui'
