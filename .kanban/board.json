@@ -6425,6 +6425,27 @@
       "due_date": "",
       "assignee": "",
       "notes": []
+    },
+    {
+      "id": "20260830_062800_feat-planner-distinguish-note-author-from-assignee",
+      "title": "feat(planner): distinguish note author from assignee across core, GUI, and sync",
+      "description": "Added author field to Note dataclass, separate from assignee. Author = note creator/owner, assignee = responsible party. Updated markdown serialization, CLI (--author/--assignee flags), GUI editor and note list display, and sync propagation. Added tests for author/assignee creation, update, and sync.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "planner",
+        "author",
+        "assignee",
+        "notes",
+        "gui",
+        "sync",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T06:28:00+00:00",
+      "updated_at": "2026-08-30T06:28:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
