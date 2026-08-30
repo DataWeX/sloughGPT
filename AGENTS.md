@@ -34,6 +34,8 @@ sloughGPT/
 │   └── mobile/                # React Native (no node_modules in sandbox)
 └── packages/
     ├── core-py/domains/       # Python core logic (SloNet, training, inference, feedback, multimodal)
+    ├── downcraft/             # Model downloader — HTTP resume, link resolution, state tracking, integrity verification
+    ├── planner/               # Kanban board + notes sync (CLI + GUI)
     ├── strui/                 # @sloughgpt/strui component library
     └── mogdb/                 # Document database
 ```
@@ -94,7 +96,9 @@ All SSE endpoints emit standard envelope:
 ### TrainingSequence Protocol
 All training follows: `GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPLOY → COMPLETE`
 - Enum: `TrainingSequence` in `packages/core-py/domains/training/sequence.py`
-- Router: `apps/api/server/routers/auto_train.py`
+- Router: `apps/api/server/training/router.py` (split into `execution.py`, `jobs_api.py`, `control.py`)
+- Core service: `packages/core-py/domains/training/service.py` (zero HTTP deps)
+- Runtime protocol: `packages/core-py/domains/training/runtime_protocol.py` (core defines interface, API layer implements)
 
 ### Critical Gotchas
 - **MPS on Intel Mac**: PyTorch 2.x reports MPS available on x86_64 but crashes at runtime. `_resolve_device()` returns `"cpu"` on Intel Macs.
@@ -102,6 +106,31 @@ All training follows: `GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPL
 - **No external downloads at runtime**: SloNet trains from scratch. HF models convert to `.slnc` on first load. Never `pip install` heavy deps without asking.
 - **No hardcoded paths**: Use `_DATASETS_DIR = Path(__file__).resolve().parents[4] / "datasets"` pattern.
 - **ProcessGuard inference**: `ModelServer` delegates to `ProcessGuard` for subprocess isolation. Circuit breaker: 3 failures → 30s open.
+
+## Downcraft — Model Downloader
+
+`packages/downcraft/` handles downloading model files from the internet with resume support, link resolution, state persistence, and integrity verification.
+
+### Modules
+
+| Module | Purpose |
+|--------|---------|
+| `downloader.py` | HTTP downloader with byte-level resume via Range headers. Downloads to `.sgpart` temp file, atomic rename on completion. |
+| `resolver.py` | Extract real download URLs from ad-heavy pages. Pure HTTP + regex + HTML parsing — no headless browser. |
+| `state.py` | Persistent download state at `~/.downcraft/state.json`. Survives restarts. Tracks per-model progress, checksums, completion. |
+| `verify.py` | SHA-256 file integrity verification. HuggingFace-agnostic — checks a single file against expected checksum. |
+
+### Downcraft Rules
+
+- **Atomic writes** — Downloads go to `.sgpart` temp files, renamed only on full completion. Never write directly to the final path.
+- **Resume by default** — Always check for existing `.sgpart` and send `Range` headers. Do not re-download completed portions.
+- **State flushed every chunk** — `ModelState` writes to `~/.downcraft/state.json` after every chunk. Do not buffer state in memory only.
+- **No headless browser** — `resolver.py` uses regex + HTML parsing. Never add Selenium, Playwright, or Puppeteer deps.
+- **HuggingFace-agnostic verification** — `verify.py` checks one file against a checksum. Model-level verification (snapshots, weight lists) lives in `domains.infrastructure.hf_hub`.
+- **Checksum is SHA-256** — Always. Never MD5, CRC32, or other hashes for integrity.
+- **State file is JSON** — `~/.downcraft/state.json`. Do not switch to SQLite, pickle, or other formats.
+- **Thread-safe state** — `ModelState` uses a lock. Do not remove the threading primitives.
+- **No network at import time** — All network calls happen inside functions, not at module level. Enables testing without connectivity.
 
 ## Frontend Conventions
 
@@ -156,3 +185,24 @@ Run manually: `make precommit-run`
 - **Reversible** — can roll back if broken; deprecate before deleting
 - **Formal tone** — no contractions, slang, emojis, exclamation marks
 - **Concise** — no verbose summaries; state results in 1-3 bullets
+
+## Smart Code Methodology
+
+Frame architectural boundaries as **descriptive facts**, not prescriptive rules.
+
+- **"Core would not know about HTTP"** — not "should not know"
+- **"The service returns raw data"** — not "must not wrap responses"
+- **"Dependencies flow inward"** — not "must not import outward"
+
+When you say "should not know", you imply someone might violate it and needs enforcement. When you say "would not know", the architecture itself prevents the violation. No linters, no rules, no code reviews catching violations — the structure makes them impossible.
+
+**Practice:** Before writing a boundary, ask: "Does this code *know* about the other layer?" If yes, the abstraction is leaky. Redraw the boundary until the dependency direction is the only one that exists.
+
+```
+# Wrong: prescriptive rule
+# "Core must not import from API layer"
+
+# Right: descriptive fact
+# Core returns dicts. API wraps with success_response.
+# The import direction emerges from the data flow.
+```
