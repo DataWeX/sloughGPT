@@ -6602,6 +6602,26 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_072000_feat-planner-add-board-export-and-import-commands",
+      "title": "feat(planner): add board export and import commands",
+      "description": "Added  and  CLI commands. Export writes board state to JSON file. Import reads JSON and replaces board state. Useful for backup, migration, and sharing boards.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "kanban",
+        "export",
+        "import",
+        "json",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T07:20:00+00:00",
+      "updated_at": "2026-08-30T07:20:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
