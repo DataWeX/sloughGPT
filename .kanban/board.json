@@ -6506,6 +6506,26 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_064500_feat-planner-add-due-date-filtering-and-overdue-detection",
+      "title": "feat(planner): add due date filtering and overdue detection",
+      "description": "Added due_before, due_after, and --overdue filters to kanban list CLI. Updated KanbanStore.list_cards() to support due date filtering. Updated board rendering to show OVERDUE indicator for cards past due date. Updated GUI cardHtml to show overdue badge in red.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "kanban",
+        "due-date",
+        "overdue",
+        "filter",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T06:45:00+00:00",
+      "updated_at": "2026-08-30T06:45:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
