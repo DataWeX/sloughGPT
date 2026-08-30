@@ -7712,7 +7712,7 @@
       "id": "20260830T094845_vm-fix-hlt-detection",
       "title": "Fix VMEngine HLT detection with 0x66 prefix",
       "description": "When mov eax, imm32 is assembled, it gets a 0x66 prefix. The run() loop reads the opcode at eip and checks for 0xF4 (HLT) or 0x66, but the 0x66 prefix handling is broken. After executing the 0x66-prefixed instruction, eip advances past it, but the HLT detection still checks the saved eip which points to 0x66, not the actual HLT opcode.\n\n**Files:** packages/core-py/domains/shell/vm_engine.py:575-609\n\n**Fix:** Save the opcode at eip BEFORE calling self._cpu.step(), then use that saved opcode for HLT detection.\n\n**Test:** Add test that runs 'mov eax, 42\\nhlt' and verifies halt exit_reason and eax=0x2a.",
-      "column": "in_progress",
+      "column": "done",
       "priority": "high",
       "tags": [
         "vm",
@@ -7720,14 +7720,13 @@
         "core"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185",
-      "assignee": "systems-engineer"
+      "updated_at": "2026-08-30T09:48:45.585185"
     },
     {
       "id": "20260830T094845_vm-add-program-runner",
       "title": "Add vm run <program_name> shortcut",
       "description": "Allow running built-in programs by name without writing assembly. Example: `slooughgpt vm run test_syscalls` should load and execute the TEST_SYSCALLS_ASM constant from vm_programs.py.\n\n**Files:** apps/cli/src/commands/vm.py\n\n**Implementation:**\n1. Check if source matches a known program name (case-insensitive)\n2. If match found, import the corresponding *_ASM constant from vm_programs\n3. Pass the assembly source to VMEngine\n4. Add --list flag to show available program names\n\n**Test:** Add test that verifies program name resolution.",
-      "column": "in_progress",
+      "column": "todo",
       "priority": "medium",
       "tags": [
         "vm",
@@ -7735,14 +7734,13 @@
         "enhancement"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185",
-      "assignee": "systems-engineer"
+      "updated_at": "2026-08-30T09:48:45.585185"
     },
     {
       "id": "20260830T094845_build-add-init-command",
       "title": "Add build init command to clone Buildroot",
       "description": "The `build status` tells users to run `slooughgpt build init` but that command doesn't exist. Add it.\n\n**Files:** apps/cli/src/commands/build.py, apps/cli/src/cli.py\n\n**Implementation:**\n1. Add `cmd_build_init(args)` function in build.py\n2. Clone Buildroot repo: git clone --depth 1 --branch 2024.02.x https://github.com/buildroot/buildroot.git buildroot\n3. Register as `build init` in cli.py\n4. Handle existing directory gracefully\n5. Copy configs/ and overlays/ into the cloned repo\n\n**Test:** Add test that verifies the init function exists.",
-      "column": "in_progress",
+      "column": "todo",
       "priority": "medium",
       "tags": [
         "buildroot",
@@ -7750,8 +7748,7 @@
         "enhancement"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185",
-      "assignee": "systems-engineer"
+      "updated_at": "2026-08-30T09:48:45.585185"
     },
     {
       "id": "20260830T094845_cli-end-to-end-tests",
@@ -7771,7 +7768,7 @@
       "id": "20260830T094845_vm-run-max-steps-default",
       "title": "Set default max_steps=100000 in VMEngine.run()",
       "description": "The run() method defaults to max_steps=0 (unlimited), causing programs that don't halt to run until memory fault.\n\n**Files:** packages/core-py/domains/shell/vm_engine.py:613\n\n**Change:** Default max_steps from 0 to 100000. When hit, exit_reason='max_steps' (already implemented at line 652).\n\n**Test:** Add test that runs infinite loop and verifies it stops at max_steps.",
-      "column": "in_progress",
+      "column": "done",
       "priority": "low",
       "tags": [
         "vm",
@@ -7779,8 +7776,7 @@
         "safety"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185",
-      "assignee": "systems-engineer"
+      "updated_at": "2026-08-30T09:48:45.585185"
     },
     {
       "id": "20260830T094845_buildroot-docker-test",

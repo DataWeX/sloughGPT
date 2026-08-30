@@ -61,10 +61,10 @@ def cmd_vm_run(args):
     """Run assembly code in the VM."""
     log.header("VM Execution")
 
-    source = args.get("source", "")
+    source = getattr(args, "source", "") or ""
     if not source:
         # Try to read from file
-        file_path = args.get("file")
+        file_path = getattr(args, "file", None)
         if file_path:
             try:
                 source = Path(file_path).read_text()
@@ -89,13 +89,14 @@ def cmd_vm_run(args):
         elapsed = time.time() - start_time
 
         log.section("Result")
-        log.key_value("Status", "Completed" if result.success else "Failed")
-        log.key_value("Cycles", str(result.cycles))
+        log.key_value("Status", "Completed" if result.exit_reason == "halt" else "Failed")
+        log.key_value("Cycles", str(result.total_instructions))
         log.key_value("Time", f"{elapsed:.3f}s")
 
-        if result.output:
+        output = bytes(engine._console.output)
+        if output:
             log.section("Output")
-            print(result.output)
+            print(output.decode("ascii", errors="replace"))
 
         log.section("Registers")
         regs = engine.registers()
@@ -162,9 +163,9 @@ def cmd_vm_debug(args):
         log.info("Commands: bp <addr>, stepi, step_over, step_out, continue")
         log.info("          regs, flags, mem <addr> [len], stack, symbols, quit")
 
-        source = args.get("source", "")
+        source = getattr(args, "source", "") or ""
         if not source:
-            file_path = args.get("file")
+            file_path = getattr(args, "file", None)
             if file_path:
                 try:
                     source = Path(file_path).read_text()

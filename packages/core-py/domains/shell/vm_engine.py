@@ -219,6 +219,11 @@ class VMEngine:
         self._device_bus.register_out(0x3F8, self._console.write_byte)
         self._device_bus.register_in(0x3F8, self._console.read_byte)
 
+        # Connect DeviceBus to CPU I/O handlers
+        # CPU io_out expects fn(val), DeviceBus expects fn(port, val, width)
+        self._cpu.register_io_out(0x3F8, lambda val: self._console.write_byte(0x3F8, val, 8))
+        self._cpu.register_io_in(0x3F8, lambda: self._console.read_byte(0x3F8))
+
     # ── Properties ───────────────────────────────────────────────────────
 
     @property
