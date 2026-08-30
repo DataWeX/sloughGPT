@@ -6564,6 +6564,25 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_071000_feat-planner-add-card-types-with-icons",
+      "title": "feat(planner): add card types with icons for bug, feature, chore, spike, docs",
+      "description": "Added card_type field to Card dataclass with values: task, bug, feature, chore, spike, docs. Added CARD_TYPE_ICONS mapping. Updated CLI add/edit commands with --type flag. Updated show command to display type. Updated board rendering and GUI to show type icons on cards.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "kanban",
+        "card-type",
+        "icons",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T07:10:00+00:00",
+      "updated_at": "2026-08-30T07:10:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
