@@ -278,6 +278,12 @@ class Logger(ABC):
         exc_str = f"{type(exc).__name__}: {exc}"
         self.error(msg, exception=exc_str, **ctx)
 
+    def hide_cursor(self) -> None:
+        """Hide the terminal cursor.  Override in CLILogger for ANSI output."""
+
+    def show_cursor(self) -> None:
+        """Restore the terminal cursor.  Override in CLILogger for ANSI output."""
+
     # ── Tagged convenience ──────────────────────────────────────────────
 
     def tag(self, tag: str) -> "TaggedLogger":

@@ -156,7 +156,7 @@ def _enriched_record_factory(*args, **kwargs):
     rid = _request_id.get()
     if not rid:
         try:
-            from schemas.common import get_correlation_id
+            from domains.infrastructure.correlation import get_correlation_id
             rid = get_correlation_id()
         except (ImportError, AttributeError):
             pass
@@ -404,7 +404,92 @@ class SloFormatter(logging.Formatter):
         if record.exc_info and record.exc_info[0]:
             entry["exception"] = self.formatException(record.exc_info)
 
-        return json.dumps(entry, default=str, ensure_ascii=False)
+        raw = json.dumps(entry, default=str, ensure_ascii=False)
+
+        if not self._colors:
+            return raw
+
+        return _colorize_json(raw)
+
+
+def _colorize_json(raw: str) -> str:
+    """Apply ANSI syntax highlighting to a JSON string.
+
+    Semantic coloring:
+      - Keys: cyan
+      - Strings: green
+      - true: green (ok=true), yellow (other)
+      - false: red (ok=false), yellow (other)
+      - null: grey
+      - Numbers: yellow
+      - lvl values: green(INFO), yellow(WRN), red(ERR/CRI)
+    """
+    out = []
+    i = 0
+    n = len(raw)
+    while i < n:
+        ch = raw[i]
+        if ch == '"':
+            # Find end of string
+            j = i + 1
+            while j < n:
+                if raw[j] == '\\':
+                    j += 2
+                    continue
+                if raw[j] == '"':
+                    j += 1
+                    break
+                j += 1
+            s = raw[i:j]
+            # Check if this is a key (followed by ':')
+            k = j
+            while k < n and raw[k] == ' ':
+                k += 1
+            if k < n and raw[k] == ':':
+                out.append(f"{_A.CYAN}{s}{_A.RESET}")
+            else:
+                out.append(f"{_A.GREEN}{s}{_A.RESET}")
+            i = j
+        elif ch in ('{', '}', '[', ']'):
+            out.append(f"{_A.GREY}{ch}{_A.RESET}")
+            i += 1
+        elif ch == ':':
+            out.append(f"{_A.GREY}:{_A.RESET}")
+            i += 1
+        elif ch == ',':
+            out.append(f"{_A.GREY},{_A.RESET}")
+            i += 1
+        elif ch == ' ':
+            out.append(' ')
+            i += 1
+        elif raw[i:i+4] == 'true':
+            # Check context: is this an "ok" value?
+            preceding = raw[max(0, i-20):i]
+            if '"ok"' in preceding:
+                out.append(f"{_A.GREEN}true{_A.RESET}")
+            else:
+                out.append(f"{_A.YELLOW}true{_A.RESET}")
+            i += 4
+        elif raw[i:i+5] == 'false':
+            preceding = raw[max(0, i-20):i]
+            if '"ok"' in preceding:
+                out.append(f"{_A.RED}false{_A.RESET}")
+            else:
+                out.append(f"{_A.YELLOW}false{_A.RESET}")
+            i += 5
+        elif raw[i:i+4] == 'null':
+            out.append(f"{_A.GREY}null{_A.RESET}")
+            i += 4
+        elif ch == '-' or ch.isdigit():
+            j = i + 1
+            while j < n and (raw[j].isdigit() or raw[j] in ('.', 'e', 'E', '+', '-')):
+                j += 1
+            out.append(f"{_A.MAGENTA}{raw[i:j]}{_A.RESET}")
+            i = j
+        else:
+            out.append(ch)
+            i += 1
+    return ''.join(out)
 
 
 # ── Third-party logger suppression ───────────────────────────────────

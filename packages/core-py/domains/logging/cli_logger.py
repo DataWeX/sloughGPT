@@ -117,6 +117,11 @@ def _write(stream: TextIO, text: str) -> None:
         pass
 
 
+def _is_tty(stream: TextIO) -> bool:
+    """Return True if *stream* is an interactive terminal."""
+    return hasattr(stream, "isatty") and stream.isatty()
+
+
 # ── CLILogger ───────────────────────────────────────────────────────────
 
 class CLILogger(Logger):
@@ -134,6 +139,9 @@ class CLILogger(Logger):
         context: Default context attached to every record.
     """
 
+    _HIDE_CURSOR = "\033[?25l"
+    _SHOW_CURSOR = "\033[?25h"
+
     def __init__(
         self,
         name: str = "slo.cli",
@@ -145,6 +153,21 @@ class CLILogger(Logger):
         super().__init__(name=name, level=level, context=context)
         self._stream = stream or sys.stdout
         self._colors = _color_enabled(self._stream) if colors is None else colors
+        self._cursor_hidden = False
+
+    # ── Cursor lifecycle ─────────────────────────────────────────────────
+
+    def hide_cursor(self) -> None:
+        """Hide the terminal cursor. Safe to call multiple times."""
+        if not self._cursor_hidden and _is_tty(self._stream):
+            _write(self._stream, self._HIDE_CURSOR)
+            self._cursor_hidden = True
+
+    def show_cursor(self) -> None:
+        """Restore the terminal cursor. Safe to call multiple times."""
+        if self._cursor_hidden and _is_tty(self._stream):
+            _write(self._stream, self._SHOW_CURSOR)
+            self._cursor_hidden = False
 
     # ── Core emit ───────────────────────────────────────────────────────
 
