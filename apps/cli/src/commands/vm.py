@@ -164,8 +164,87 @@ def cmd_vm_info(args):
         log.error(f"VM modules not available: {e}")
 
 
+def _run_debug_script(debugger, script_path: str, log):
+    """Run debug commands from a script file (non-interactive mode)."""
+    try:
+        script = Path(script_path).read_text()
+    except FileNotFoundError:
+        log.error(f"Script not found: {script_path}")
+        return
+
+    log.section("Script Mode")
+    log.key_value("Script", script_path)
+
+    for line_num, line in enumerate(script.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        parts = line.split()
+        action = parts[0].lower()
+
+        log.info(f"[{line_num}] {line}")
+
+        try:
+            if action in ("quit", "q", "exit"):
+                break
+            elif action == "bp":
+                target = parts[1] if len(parts) > 1 else "eip"
+                label = parts[2] if len(parts) > 2 else ""
+                debugger.bp_set(target, label)
+            elif action == "stepi" or action == "si":
+                count = int(parts[1]) if len(parts) > 1 else 1
+                if not debugger.stepi(count):
+                    log.warning("Fault or halt")
+                    break
+            elif action == "cont" or action == "c":
+                trace = debugger.continue_exec()
+                log.key_value("Exit", trace.exit_reason)
+            elif action == "regs" or action == "r":
+                debugger.dump_regs()
+            elif action == "mem" or action == "m":
+                addr = parts[1] if len(parts) > 1 else "eip"
+                length = int(parts[2]) if len(parts) > 2 else 64
+                debugger.dump_memory(addr, length)
+            elif action == "stack" or action == "st":
+                depth = int(parts[1]) if len(parts) > 1 else 8
+                debugger.dump_stack(depth)
+            elif action == "assert_eax":
+                expected = int(parts[1], 0)
+                actual = debugger.engine.get_reg("eax")
+                if actual != expected:
+                    log.error(f"ASSERT FAIL: eax=0x{actual:08x}, expected 0x{expected:08x}")
+                    return 1
+                log.info(f"PASS: eax=0x{actual:08x}")
+            elif action == "assert_reg":
+                reg = parts[1].lower()
+                expected = int(parts[2], 0)
+                actual = debugger.engine.get_reg(reg)
+                if actual != expected:
+                    log.error(f"ASSERT FAIL: {reg}=0x{actual:08x}, expected 0x{expected:08x}")
+                    return 1
+                log.info(f"PASS: {reg}=0x{actual:08x}")
+            elif action == "assert_exit":
+                expected = parts[1]
+                # Run to completion and check exit reason
+                trace = debugger.continue_exec()
+                if trace.exit_reason != expected:
+                    log.error(f"ASSERT FAIL: exit={trace.exit_reason}, expected {expected}")
+                    return 1
+                log.info(f"PASS: exit={trace.exit_reason}")
+            else:
+                log.warning(f"Unknown command: {action}")
+
+        except Exception as e:
+            log.error(f"Error at line {line_num}: {e}")
+            return 1
+
+    log.section("Script Complete")
+    return 0
+
+
 def cmd_vm_debug(args):
-    """Debug assembly code interactively."""
+    """Debug assembly code interactively or from a script file."""
     log.header("VM Debugger")
 
     try:
@@ -200,6 +279,12 @@ def cmd_vm_debug(args):
 
         log.section("Loaded")
         log.key_value("Entry", f"0x{engine.get_reg('eip'):08x}")
+
+        # Check for non-interactive script mode
+        script_path = getattr(args, "script", None)
+        if script_path:
+            _run_debug_script(debugger, script_path, log)
+            return
 
         # Interactive loop
         while True:

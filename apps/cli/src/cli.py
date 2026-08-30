@@ -2191,12 +2191,13 @@ def vm_info_cmd():
     cmd_vm_info(_ns())
 
 
-@vm.command("debug", help="Debug assembly code interactively")
+@vm.command("debug", help="Debug assembly code interactively or from script")
 @click.argument("source", required=False)
 @click.option("--file", "-f", help="File containing assembly source")
-def vm_debug(source, file):
+@click.option("--script", "-s", help="Script file with debug commands (non-interactive)")
+def vm_debug(source, file, script):
     from commands.vm import cmd_vm_debug
-    cmd_vm_debug(_ns(source=source, file=file))
+    cmd_vm_debug(_ns(source=source, file=file, script=script))
 
 
 # ═══════════════════════════════════════════════════════════════════════
