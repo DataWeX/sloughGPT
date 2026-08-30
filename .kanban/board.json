@@ -24,6 +24,135 @@
   ],
   "cards": [
     {
+      "id": "20260830_073405_consolidate-sse-fallback-into-single-module",
+      "title": "Consolidate SSE fallback into single module",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "infra",
+        "refactor"
+      ],
+      "created_at": "2026-08-30T07:34:05.633269+00:00",
+      "updated_at": "2026-08-30T07:34:05.633269+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_070100_wire-shell-sandbox-security-validation",
+      "title": "Wire shell_sandbox security validation",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "security",
+        "shell"
+      ],
+      "created_at": "2026-08-30T07:01:00.392323+00:00",
+      "updated_at": "2026-08-30T07:01:00.392323+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_063653_continue-building-session",
+      "title": "Continue building session",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-30T06:36:53.836135+00:00",
+      "updated_at": "2026-08-30T07:01:00.427982+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_060940_component-naming-cleanup",
+      "title": "Component naming cleanup",
+      "description": "Completed component naming cleanup: split specialized.tsx and display.tsx into individual files, moved hooks to hooks/ and utils to lib/, renamed cryptic components (DPOCard\u2192PreferenceOptimizationCard, KvCacheCard\u2192KVCacheCard, TurboCard\u2192QuickTrainCard, ShellPanel\u2192TerminalPanel), standardized Modal\u2192Dialog suffix (DatasetImportModal\u2192DatasetImportDialog, DatasetInlineImportModal\u2192QuickImportDialog, KeyboardShortcutsModal\u2192KeyboardShortcutsDialog), and renamed StatusCard\u2192SystemStatusCard. All changes pass typecheck and lint.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "frontend",
+        "refactoring"
+      ],
+      "created_at": "2026-08-30T06:09:40.217148+00:00",
+      "updated_at": "2026-08-30T06:09:40.217148+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_055735_write-comprehensive-tests-for-pugqeep-engine",
+      "title": "Write comprehensive tests for pugqeep engine",
+      "description": "Wrote 174 comprehensive tests for pugqeep engine covering: Process lifecycle/callbacks/streaming/progress, Stem lifecycle/to_dict, Tree branching/execution/failure/max_stems/store-recall, EngineMetrics all record methods/reset/snapshot/thread-safety, ResultCache put/get/LRU-eviction/TTL-expiry/invalidate/clear/stats, ProcessMonitor track/untrack/stall-detection/restart-delay/backoff/start-stop/stats, ProcessGroup add/results/errors/cancel/gather, Engine spawn/dispatch/routing/round-robin/batching/run-loop/callbacks/cancellation/dependencies/critical-path/orphans/chain/batch/cache/save-state/config/to_dict/summary. All pure logic, no mocks.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "infrastructure",
+        "pugqeep"
+      ],
+      "created_at": "2026-08-30T05:57:35.936122+00:00",
+      "updated_at": "2026-08-30T05:57:35.936122+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_055735_update-sdk-test-files-to-match-new-training-urls",
+      "title": "Update SDK test files to match new training URLs",
+      "description": "",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-30T05:57:35.911840+00:00",
+      "updated_at": "2026-08-30T06:36:53.911204+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_055735_add-strui-mocks-to-test-files",
+      "title": "Add strui mocks to test files",
+      "description": "Added @sloughgpt/strui mocks to 15 test files: StatusBar, SoulVisualizer, PersonalitySummary, ExportHistoryCard, VisualComparisonCard, VoicePresetCard, MessageActions, MessageBubble, AudioPlayer (added IconStop), ChatInputAccessories, CodeExecutionResults, TokenBilling, ChatSessionFolders, ChatScreen. Skipped ThemeProvider, TraitRadarChart, SystemChart, TrendChart (no strui imports).",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-30T05:57:35.887356+00:00",
+      "updated_at": "2026-08-30T05:57:35.887356+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_055735_run-linting-process",
+      "title": "Run Linting Process",
+      "description": "Linting completed with warnings only (no errors). All warnings are related to React hooks dependencies.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "area",
+        "subarea"
+      ],
+      "created_at": "2026-08-30T05:57:35.855774+00:00",
+      "updated_at": "2026-08-30T05:57:35.855774+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260829_121936_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
       "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
       "description": "",
@@ -7578,6 +7707,122 @@
       "due_date": "",
       "assignee": "",
       "notes": []
+    },
+    {
+      "id": "20260830T094845_vm-fix-hlt-detection",
+      "title": "Fix VMEngine HLT detection with 0x66 prefix",
+      "description": "When mov eax, imm32 is assembled, it gets a 0x66 prefix. The run() loop reads the opcode at eip and checks for 0xF4 (HLT) or 0x66, but the 0x66 prefix handling is broken. After executing the 0x66-prefixed instruction, eip advances past it, but the HLT detection still checks the saved eip which points to 0x66, not the actual HLT opcode.\n\n**Files:** packages/core-py/domains/shell/vm_engine.py:575-609\n\n**Fix:** Save the opcode at eip BEFORE calling self._cpu.step(), then use that saved opcode for HLT detection.\n\n**Test:** Add test that runs 'mov eax, 42\\nhlt' and verifies halt exit_reason and eax=0x2a.",
+      "column": "in_progress",
+      "priority": "high",
+      "tags": [
+        "vm",
+        "bug",
+        "core"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "assignee": "systems-engineer"
+    },
+    {
+      "id": "20260830T094845_vm-add-program-runner",
+      "title": "Add vm run <program_name> shortcut",
+      "description": "Allow running built-in programs by name without writing assembly. Example: `slooughgpt vm run test_syscalls` should load and execute the TEST_SYSCALLS_ASM constant from vm_programs.py.\n\n**Files:** apps/cli/src/commands/vm.py\n\n**Implementation:**\n1. Check if source matches a known program name (case-insensitive)\n2. If match found, import the corresponding *_ASM constant from vm_programs\n3. Pass the assembly source to VMEngine\n4. Add --list flag to show available program names\n\n**Test:** Add test that verifies program name resolution.",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "vm",
+        "cli",
+        "enhancement"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "assignee": "systems-engineer"
+    },
+    {
+      "id": "20260830T094845_build-add-init-command",
+      "title": "Add build init command to clone Buildroot",
+      "description": "The `build status` tells users to run `slooughgpt build init` but that command doesn't exist. Add it.\n\n**Files:** apps/cli/src/commands/build.py, apps/cli/src/cli.py\n\n**Implementation:**\n1. Add `cmd_build_init(args)` function in build.py\n2. Clone Buildroot repo: git clone --depth 1 --branch 2024.02.x https://github.com/buildroot/buildroot.git buildroot\n3. Register as `build init` in cli.py\n4. Handle existing directory gracefully\n5. Copy configs/ and overlays/ into the cloned repo\n\n**Test:** Add test that verifies the init function exists.",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "buildroot",
+        "cli",
+        "enhancement"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "assignee": "systems-engineer"
+    },
+    {
+      "id": "20260830T094845_cli-end-to-end-tests",
+      "title": "Add CLI end-to-end integration tests",
+      "description": "Current CLI tests only check file structure. Add tests that actually invoke CLI commands and verify output.\n\n**Files:** packages/core-py/tests/test_cli_e2e.py (new)\n\n**Test cases:**\n1. `vm status` outputs 'x86 Virtual Machine' header\n2. `vm list` outputs 'VM Programs' and lists known programs\n3. `vm info` outputs 'Memory' and 'CPU' sections\n4. `vm run --file test.asm` with valid assembly completes\n5. `build status` outputs 'Buildroot Status'\n6. All commands exit with code 0\n\n**Implementation:** Use subprocess.run() with capture_output=True. Mark as @pytest.mark.slow.",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "cli",
+        "testing",
+        "integration"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185"
+    },
+    {
+      "id": "20260830T094845_vm-run-max-steps-default",
+      "title": "Set default max_steps=100000 in VMEngine.run()",
+      "description": "The run() method defaults to max_steps=0 (unlimited), causing programs that don't halt to run until memory fault.\n\n**Files:** packages/core-py/domains/shell/vm_engine.py:613\n\n**Change:** Default max_steps from 0 to 100000. When hit, exit_reason='max_steps' (already implemented at line 652).\n\n**Test:** Add test that runs infinite loop and verifies it stops at max_steps.",
+      "column": "in_progress",
+      "priority": "low",
+      "tags": [
+        "vm",
+        "core",
+        "safety"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "assignee": "systems-engineer"
+    },
+    {
+      "id": "20260830T094845_buildroot-docker-test",
+      "title": "Add Docker build test for Buildroot",
+      "description": "The Buildroot Dockerfile and build.sh exist but haven't been tested.\n\n**Files:** packages/core-py/tests/test_buildroot_docker.py (new)\n\n**Test cases:**\n1. Dockerfile exists and is valid Docker syntax\n2. build.sh has executable permission\n3. build.sh references correct Docker image name\n4. build.sh has all required functions\n5. Docker commands use correct volume mounts\n\n**Note:** Don't actually run Docker in tests (too slow).",
+      "column": "todo",
+      "priority": "low",
+      "tags": [
+        "buildroot",
+        "testing",
+        "docker"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185"
+    },
+    {
+      "id": "20260830T094845_vm-debug-noninteractive",
+      "title": "Add non-interactive vm debug mode",
+      "description": "Add non-interactive mode for scripted debugging.\n\n**Files:** apps/cli/src/commands/vm.py, apps/cli/src/cli.py\n\n**Implementation:**\n1. --steps N flag to execute N instructions and print state\n2. --breakpoint ADDR flag to set breakpoint before execution\n3. --output flag to print register state after execution\n4. When any flag present, run non-interactively\n\n**Example:** `slooughgpt vm debug --file prog.asm --steps 10 --output`\n\n**Test:** Add test that runs debug with --steps flag.",
+      "column": "todo",
+      "priority": "low",
+      "tags": [
+        "vm",
+        "cli",
+        "enhancement"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185"
+    },
+    {
+      "id": "20260830T094845_module-loader-tests",
+      "title": "Expand module_loader tests for hot-reload",
+      "description": "Add comprehensive tests for hot-reload and error isolation.\n\n**Files:** packages/core-py/tests/test_vm_debugger.py (extend TestModuleLoader)\n\n**Test cases:**\n1. Hot-reload: load addon, modify source, reload, verify new behavior\n2. Error isolation: load addon with bad import, verify other addons still work\n3. Dependency tracking: addon A depends on addon B, unload B first fails\n4. Concurrent loading: load multiple addons simultaneously\n5. Missing addon directory: graceful error handling\n\n**Implementation:** Create temp addon files in /tmp/test_addons/ for testing.",
+      "column": "todo",
+      "priority": "low",
+      "tags": [
+        "vm",
+        "testing",
+        "module-loader"
+      ],
+      "created_at": "2026-08-30T09:48:45.585185",
+      "updated_at": "2026-08-30T09:48:45.585185"
     }
   ]
 }

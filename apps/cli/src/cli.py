@@ -1035,7 +1035,7 @@ def checkpoint_list(ctx, sort, json_output):
     """
     import requests
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.get(f"{base_url}/auto-train/checkpoints", timeout=10)
+    resp = requests.get(f"{base_url}/training/checkpoints", timeout=10)
     if resp.status_code != 200:
         log.error(f"Failed to list checkpoints: {resp.text}")
         return
@@ -1071,7 +1071,7 @@ def checkpoint_load(ctx, name):
     """
     import requests
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.post(f"{base_url}/auto-train/checkpoints/{name}/load", timeout=30)
+    resp = requests.post(f"{base_url}/training/checkpoints/{name}/load", timeout=30)
     if resp.status_code == 200:
         data = resp.json()
         log.success(f"Loaded checkpoint: {name}")
@@ -1097,7 +1097,7 @@ def checkpoint_delete(ctx, name, yes):
         click.confirm(f"Delete checkpoint '{name}'?", abort=True)
     import requests
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.delete(f"{base_url}/auto-train/checkpoints/{name}", timeout=10)
+    resp = requests.delete(f"{base_url}/training/checkpoints/{name}", timeout=10)
     if resp.status_code == 200:
         log.success(f"Deleted: {name}")
     else:
@@ -2153,6 +2153,84 @@ def world_ingest(source_type, source_value, radius, decay, verbose):
         summary = perception.summary()
         for cls, count in summary.get("material_counts", {}).items():
             log.key_value(f"  {cls}", str(count))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# vm  — Virtual Machine
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="x86 Virtual Machine console and management")
+def vm():
+    pass
+
+
+@vm.command("status", help="Show VM status and information")
+def vm_status():
+    from commands.vm import cmd_vm
+    cmd_vm(_ns())
+
+
+@vm.command("run", help="Run assembly code in the VM")
+@click.argument("source", required=False)
+@click.option("--file", "-f", help="File containing assembly source")
+def vm_run(source, file):
+    from commands.vm import cmd_vm_run
+    cmd_vm_run(_ns(source=source, file=file))
+
+
+@vm.command("list", help="List available VM programs")
+def vm_list():
+    from commands.vm import cmd_vm_list
+    cmd_vm_list(_ns())
+
+
+@vm.command("info", help="Show detailed VM information")
+def vm_info_cmd():
+    from commands.vm import cmd_vm_info
+    cmd_vm_info(_ns())
+
+
+@vm.command("debug", help="Debug assembly code interactively")
+@click.argument("source", required=False)
+@click.option("--file", "-f", help="File containing assembly source")
+def vm_debug(source, file):
+    from commands.vm import cmd_vm_debug
+    cmd_vm_debug(_ns(source=source, file=file))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# build  — Buildroot image building
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Buildroot image building for v86 browser VM")
+def build():
+    pass
+
+
+@build.command("run", help="Build a Buildroot image")
+def build_run():
+    from commands.build import cmd_build
+    cmd_build(_ns())
+
+
+@build.command("clean", help="Clean build output")
+def build_clean():
+    from commands.build import cmd_build_clean
+    cmd_build_clean(_ns())
+
+
+@build.command("status", help="Show build status")
+def build_status():
+    from commands.build import cmd_build_status
+    cmd_build_status(_ns())
+
+
+@build.command("install", help="Install image to web public directory")
+def build_install():
+    from commands.build import cmd_build_install
+    cmd_build_install(_ns())
 
 
 # ═══════════════════════════════════════════════════════════════════════
