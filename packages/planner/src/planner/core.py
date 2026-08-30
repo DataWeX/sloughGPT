@@ -396,7 +396,7 @@ class NoteStore:
         return True
 
     def list_notes(self, tag: str | None = None, status: str | None = None,
-                   sprint: str | None = None, limit: int = 50,
+                   author: str | None = None, sprint: str | None = None, limit: int = 50,
                    today: bool = False) -> list[Note]:
         notes: list[Note] = []
         today_str = date.today().isoformat() if today else ""
@@ -406,6 +406,8 @@ class NoteStore:
             if tag and tag not in note.tags:
                 continue
             if status and note.status != status:
+                continue
+            if author and note.author != author:
                 continue
             if sprint and note.sprint != sprint:
                 continue
@@ -586,6 +588,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_list = sub.add_parser("list", help="List notes")
     p_list.add_argument("--tag", default=None, help="Filter by tag")
     p_list.add_argument("--status", default=None, choices=config.STATUSES + [None])
+    p_list.add_argument("--author", default=None, help="Filter by author")
     p_list.add_argument("--sprint", default=None, help="Filter by sprint")
     p_list.add_argument("--limit", type=int, default=20, help="Max results")
     p_list.add_argument("--today", action="store_true", help="Only today's notes")
@@ -649,7 +652,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "list":
         notes = store.list_notes(tag=args.tag, status=args.status,
-                                 sprint=args.sprint, limit=args.limit,
+                                 author=args.author, sprint=args.sprint, limit=args.limit,
                                  today=args.today)
         if not notes:
             print("No notes found.")
@@ -661,9 +664,10 @@ def cli_main(argv: list[str] | None = None) -> int:
             print(f"\n  {date_str}")
             for n in day_notes:
                 tags_str = f"  [{', '.join(n.tags)}]" if n.tags else ""
+                author_str = f"  @{n.author}" if n.author else ""
                 icons = STATUS_ICONS
                 icon = icons.get(n.status, "?")
-                print(f"    {icon} {n.short_id}  {n.title}{tags_str}")
+                print(f"    {icon} {n.short_id}  {n.title}{tags_str}{author_str}")
         print(f"\n  {len(notes)} note(s)")
         return 0
 
