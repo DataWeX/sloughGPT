@@ -144,14 +144,25 @@ class ModuleLoader:
 
             # Import the module
             module_path = Path(info.path)
+            module_key = f"slo_addon_{name}"
+
+            # Invalidate bytecode cache for hot reload
+            if hot_reload:
+                importlib.invalidate_caches()
+                # Remove any cached .pyc files
+                pyc_dir = module_path.parent / "__pycache__"
+                if pyc_dir.exists():
+                    for pyc in pyc_dir.glob(f"{module_path.stem}*.pyc"):
+                        pyc.unlink(missing_ok=True)
+
             spec = importlib.util.spec_from_file_location(
-                f"slo_addon_{name}", str(module_path)
+                module_key, str(module_path)
             )
             if spec is None or spec.loader is None:
                 raise ImportError(f"Cannot load module spec: {name}")
 
             module = importlib.util.module_from_spec(spec)
-            sys.modules[f"slo_addon_{name}"] = module
+            sys.modules[module_key] = module
             spec.loader.exec_module(module)
 
             # Find the setup function or Addon class
