@@ -21,7 +21,7 @@ Before any edit, read the relevant docs for the area. Use `opencode doc-aware` t
 - Infra → `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`
 - CLI → `docs/integration/CLI_README.md`
 - Config → `docs/ENVIRONMENT.md`
-Full map in `.opencode/agents/doc-aware-engineer.md`.
+Full map in `~/.config/opencode/agents/doc-aware-engineer.md`.
 
 ## Repo Layout & Boundaries
 
@@ -106,6 +106,71 @@ All training follows: `GENERATE_DATA → DISTILL → TRAIN → EVALUATE → DEPL
 - **No external downloads at runtime**: SloNet trains from scratch. HF models convert to `.slnc` on first load. Never `pip install` heavy deps without asking.
 - **No hardcoded paths**: Use `_DATASETS_DIR = Path(__file__).resolve().parents[4] / "datasets"` pattern.
 - **ProcessGuard inference**: `ModelServer` delegates to `ProcessGuard` for subprocess isolation. Circuit breaker: 3 failures → 30s open.
+
+## Feature Stages
+
+All features are grouped into 4 stages. Work on **core stages first** before moving to advanced ones. Each stage must be stable before proceeding.
+
+### Stage 1 — Core (must work)
+Everything else depends on these. Break these, nothing works.
+
+| Feature | CLI | API | Web | Core |
+|---------|-----|-----|-----|------|
+| System health/status | `system status/info/health/doctor` | `/system`, `/health` | `/settings` | `infrastructure/` |
+| Inference | `chat`, `generate`, `serve` | `/infer`, `/inference` | `/chat`, `/infer` | `inference/` |
+| Model management | `model list/status/info/download/export` | `/models` | `/models`, `/model/[id]` | `infrastructure/model_*` |
+| Training | `train start/monitor/eval` | `/training/*` | `/training` | `training/slonet.py`, `training/service.py` |
+| Datasets | `dataset list/stats/import/export` | `/datasets` | `/datasets` | `training/dataset.py` |
+| Memory | `memory stats/search/store` | `/memory` | `/memory` | `memory/` |
+| Checkpoints | `checkpoint list/load/delete` | (training sub) | (training page) | `training/checkpoint.py` |
+| Logging | `logs`, `monitor` | `/dashboard` | `/monitoring` | `logging/` |
+| Config | `system config` | `/config` | `/settings` | `shared/feature_flags.py` |
+| Auth | `system api` | `/auth` | `/auth` | `infrastructure/auth.py` |
+
+### Stage 2 — Intelligence (AI features)
+Builds on Stage 1. These make the system smart.
+
+| Feature | CLI | API | Web | Core |
+|---------|-----|-----|-----|------|
+| Knowledge base | `knowledge search/dedup/categorize/gaps` | `/knowledge` | `/knowledge`, `/kb` | `learner/`, `cognitive/rag.py` |
+| Feedback loop | `feedback export/prepare` | `/feedback` | `/feedback` | `feedback/` |
+| Personality | `personality list/load/create` | `/souls` | `/souls` | `ai_personality.py`, `soul/` |
+| LoRA adapters | `adapter list/info/merge/delete` | `/user-adapters` | `/adapters` | `feedback/per_user_lora.py` |
+| Experiments | `experiment list/create/info/metrics` | `/experiments` | `/experiments` | `benchmark/` |
+| Token tree | `token-tree train/encode/decode/stats` | `/token-tree` | `/token-tree` | `training/token_tree.py` |
+| Errors | `error recent/grouped/trends/clear` | `/errors` | `/errors` | (API-level) |
+| Tokens billing | — | `/tokens` | `/settings` | `billing/token_service.py` |
+
+### Stage 3 — Advanced (power features)
+Requires Stage 1+2 to be stable.
+
+| Feature | CLI | API | Web | Core |
+|---------|-----|-----|-----|------|
+| Agents | `agent list/create/execute/orchestrate` | `/agents` | `/agents` | `agents/` |
+| Sessions | `session list/messages/search` | `/session` | `/session` | `chat/domain.py` |
+| Collections | `collect file/url/rss/merge` | `/collections` | `/collections` | `collections/` |
+| Companion | — | `/companion` | `/companion` | `companion.py` |
+| Multimodal | — | `/multimodal` | `/multimodal` | `multimodal/` |
+| Images | — | `/images` | `/images` | `multimodal/diffusion.py` |
+| Voice | — | `/voice` | `/voice` | `multimodal/tts.py` |
+| Vector store | — | `/vector` | `/vector` | `inference/vector_store.py` |
+| Meta-weights | — | `/meta-weights` | `/meta-weights` | `feedback/meta_weights.py` |
+| Learner | — | `/learn` | `/learn` | `learner/continual.py` |
+| Planner | `notes`, `board` | `/api/planner/*` | `/kanban` (planner) | `packages/planner/` |
+
+### Stage 4 — Specialized (niche/infra)
+Only if specifically needed.
+
+| Feature | CLI | API | Web | Core |
+|---------|-----|-----|-----|------|
+| Docker | `docker start/stop/status/build` | — | — | `Makefile` |
+| World sim | `world render/tick/analyze` | `/world` | `/world` | `shell/world_*.py` |
+| x86 VM | `vm run/list/debug` | `/vm` | `/vm` | `shell/vm_engine.py` |
+| Shell/TUI | `shell`, `tui` | `/shell` | `/shell` | `shell/` |
+| Build | `build run/init/clean` | — | — | `Makefile` |
+| Security | — | `/security` | `/security` | (audit logs) |
+| Docstore | — | `/docstore` | `/docstore` | `mogdb/` |
+| Feeds | — | `/feeds` | — | (RSS output) |
 
 ## Downcraft — Model Downloader
 
@@ -206,3 +271,55 @@ When you say "should not know", you imply someone might violate it and needs enf
 # Core returns dicts. API wraps with success_response.
 # The import direction emerges from the data flow.
 ```
+
+## Multi-Agent Workflow — Git Worktrees
+
+All frontend development runs in an isolated worktree. The main agent never pushes to it; the frontend agent never pushes to `main`.
+
+### Layout
+
+```
+/home/mana/Documents/Default Project/sloughGPT/          ← main worktree (backend + core)
+/home/mana/Documents/Default Project/sloughGPT-frontend/  ← frontend worktree (feat/frontend branch)
+```
+
+### Frontend Agent
+
+**Workflow file**: `~/.config/opencode/agents/frontend-agent.md`
+
+1. Frontend agent works in `../sloughGPT-frontend`
+2. Commits to `feat/frontend` branch only
+3. After push, notifies main agent for visual review
+4. Main agent audits in browser before merge
+
+### Main Agent — Review Protocol
+
+When the frontend agent pushes:
+
+```bash
+cd ../sloughGPT-frontend
+npm run typecheck
+npm run test:changed
+make web   # open in browser, screenshot pages
+```
+
+Visual audit checklist:
+- [ ] No design system violations (hex colors, arbitrary spacing)
+- [ ] Page layout matches Noir Violet spec
+- [ ] All interactive states present (hover, focus, disabled)
+- [ ] Empty states correct
+
+### Merge
+
+Only after review passes:
+
+```bash
+cd /home/mana/Documents/Default Project/sloughGPT
+git merge feat/frontend --no-ff -m "merge: frontend from feat/frontend"
+```
+
+### Rules
+- Never commit frontend changes to `main` directly
+- Visual review is mandatory before merge
+- Design system violations are merge blockers
+- If the frontend build breaks, fix it in the frontend worktree
