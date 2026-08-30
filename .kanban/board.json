@@ -6622,6 +6622,26 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_072500_feat-planner-add-effort-tracking-and-change-history",
+      "title": "feat(planner): add effort tracking and change history for cards",
+      "description": "Added effort field to Card dataclass for story point estimation. Added history field to track changes with timestamps. Updated update_card to record changes. Updated CLI add/edit with --effort flag. Updated show command to display effort and history. Updated GUI and board rendering to show effort points.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "kanban",
+        "effort",
+        "history",
+        "tracking",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T07:25:00+00:00",
+      "updated_at": "2026-08-30T07:25:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
