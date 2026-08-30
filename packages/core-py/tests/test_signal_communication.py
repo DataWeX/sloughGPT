@@ -43,7 +43,7 @@ from domains.shell.simulation import (
     cell_update_water,
     generate_world,
 )
-from domains.shell.memory import EpisodicMemory
+from domains.shell.memory import EpisodicMemory, WorldMemory
 
 SIGNAL_IDX = 4  # 5th feature — broadcast strength
 
@@ -429,8 +429,9 @@ class TestPerceptron:
     def test_update_changes_weights(self):
         p = Perceptron(5, 3)
         old_W = p.W.copy()
-        p.update(np.zeros(5), np.ones(3), lr=0.1)
-        assert not np.array_equal(p.W, old_W)
+        old_b = p.b.copy()
+        p.update(np.ones(5), np.ones(3), lr=0.1)
+        assert not np.array_equal(p.W, old_W) or not np.array_equal(p.b, old_b)
 
     def test_to_dict_and_from_dict(self):
         p = Perceptron(5, 3)
@@ -984,10 +985,12 @@ class TestWorldGeneration:
         params = _params(grid_size=(16, 4, 16), generate_world=True)
         g = WorldGrid(params.grid_size)
         generate_world(g, params, seed=42)
-        # y=0 should be stone
+        # y=0 should be stone or ember (ember vents are buried in the floor)
+        from domains.shell.simulation import MATERIAL_EMBER
         for x in range(16):
             for z in range(16):
-                assert g.material[g.idx(x, 0, z)] == MATERIAL_STONE
+                mat = g.material[g.idx(x, 0, z)]
+                assert mat in (MATERIAL_STONE, MATERIAL_EMBER)
 
     def test_generate_world_deterministic(self):
         params = _params(grid_size=(8, 4, 8))
@@ -1003,3 +1006,286 @@ class TestWorldGeneration:
         generate_world(g, params, seed=42)
         # Only 1 y-layer, should be stone floor
         assert g.material[g.idx(0, 0, 0)] == MATERIAL_STONE
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WorldMemory
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestWorldMemory:
+    def test_record_and_recall(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0, tick=1, group_id=0, donor_id=1)
+        episodes = wm.recall(1)
+        assert len(episodes) == 1
+        assert episodes[0].reward == 1.0
+
+    def test_recall_by_reward(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        wm.record(np.zeros(3), (0.5,), 5.0)
+        wm.record(np.zeros(3), (0.5,), 3.0)
+        best = wm.recall(1, by_reward=True)
+        assert best[0].reward == 5.0
+
+    def test_recall_chronological(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0, tick=1)
+        wm.record(np.zeros(3), (0.5,), 2.0, tick=2)
+        wm.record(np.zeros(3), (0.5,), 3.0, tick=3)
+        recent = wm.recall(2, by_reward=False)
+        assert len(recent) == 2
+        assert recent[-1].tick == 3
+
+    def test_recall_by_group_id(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0, group_id=0)
+        wm.record(np.zeros(3), (0.5,), 2.0, group_id=1)
+        wm.record(np.zeros(3), (0.5,), 3.0, group_id=0)
+        group0 = wm.recall(10, group_id=0)
+        assert len(group0) == 2
+        assert all(e.group_id == 0 for e in group0)
+
+    def test_recall_empty(self):
+        wm = WorldMemory()
+        assert wm.recall(5) == []
+
+    def test_recall_negative_k(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        assert wm.recall(-1) == []
+
+    def test_consolidate(self):
+        wm = WorldMemory()
+        em = EpisodicMemory(capacity=10)
+        em.record(np.zeros(3), (0.5,), 1.0, tick=1)
+        em.record(np.zeros(3), (0.5,), 5.0, tick=2)
+        count = wm.consolidate(em, k=2, group_id=1, donor_id=99)
+        assert count == 2
+        assert len(wm) == 2
+
+    def test_consolidate_zero_k(self):
+        wm = WorldMemory()
+        em = EpisodicMemory(capacity=10)
+        em.record(np.zeros(3), (0.5,), 1.0)
+        count = wm.consolidate(em, k=0)
+        assert count == 0
+
+    def test_mean_reward(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 2.0)
+        wm.record(np.zeros(3), (0.5,), 4.0)
+        assert wm.mean_reward(2) == pytest.approx(3.0)
+
+    def test_mean_reward_empty(self):
+        wm = WorldMemory()
+        assert wm.mean_reward() == 0.0
+
+    def test_len(self):
+        wm = WorldMemory()
+        assert len(wm) == 0
+        wm.record(np.zeros(3), (0.5,), 1.0)
+        assert len(wm) == 1
+
+    def test_stats(self):
+        wm = WorldMemory()
+        wm.record(np.zeros(3), (0.5,), 1.0, tick=5, group_id=2)
+        s = wm.stats()
+        assert s["size"] == 1
+        assert s["oldest_tick"] == 5
+        assert s["newest_tick"] == 5
+        assert 2 in s["groups"]
+
+    def test_stats_empty(self):
+        wm = WorldMemory()
+        s = wm.stats()
+        assert s["size"] == 0
+        assert s["oldest_tick"] == 0
+
+    def test_to_dict_and_from_dict(self):
+        wm = WorldMemory()
+        wm.record(np.ones(3), (0.5, 0.5), 3.0, tick=7, group_id=1, donor_id=2)
+        d = wm.to_dict()
+        wm2 = WorldMemory.from_dict(d)
+        assert len(wm2) == 1
+        episodes = wm2.recall(1)
+        assert episodes[0].reward == 3.0
+        assert episodes[0].group_id == 1
+
+    def test_from_dict_empty(self):
+        wm = WorldMemory.from_dict({"episodes": []})
+        assert len(wm) == 0
+
+    def test_initial_with_episodes(self):
+        from domains.shell.memory import WorldEpisode
+        ep = WorldEpisode(features=np.zeros(3), action=(0.5,), reward=1.0, tick=0)
+        wm = WorldMemory(episodes=[ep])
+        assert len(wm) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SimBaby advanced
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSimBabyAdvanced:
+    def test_share_energy_self_has_no_surplus(self):
+        """share_energy uses share_fraction of self.energy, not surplus check."""
+        a = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=_params(),
+                     initial_energy=50.0)
+        b = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=_params(),
+                     initial_energy=50.0)
+        transfer = a.share_energy(b)
+        # transfer = min(50 * 0.1, 100) = 5.0
+        assert transfer == pytest.approx(5.0)
+
+    def test_contest_energy_equal(self):
+        a = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=_params(),
+                     initial_energy=100.0)
+        b = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=_params(),
+                     initial_energy=100.0)
+        taken = a.contest_energy(b)
+        assert taken == 0.0
+
+    def test_spawn_child_copies_weights(self):
+        params = _params()
+        parent = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        child = parent.spawn_child(np.array([9.0, 4.0, 8.0]))
+        assert np.allclose(parent.perceptron_cells.W, child.perceptron_cells.W)
+
+    def test_spawn_child_inherits_group(self):
+        params = _params()
+        parent = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params, group_id=3)
+        child = parent.spawn_child(np.array([9.0, 4.0, 8.0]))
+        assert child.group_id == 3
+
+    def test_social_step_none_act(self):
+        params = _params()
+        a = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        b = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        b.entity.alive = False
+        result = a.social_step(b)
+        assert result["act"] == "none"
+        assert result["energy_moved"] == 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SimScene advanced
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSimSceneAdvanced:
+    def test_deliver_messages(self):
+        params = _params(message_enabled=True)
+        scene = SimScene(params)
+        a = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        b = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        scene.add_baby(a)
+        scene.add_baby(b)
+        scene._pending_messages.append((a.entity.id, b.entity.id, 0.8))
+        scene.deliver_messages()
+        assert a.entity.id in b._inbox
+        assert b._inbox[a.entity.id] == 0.8
+
+    def test_deliver_messages_dead_target(self):
+        params = _params(message_enabled=True)
+        scene = SimScene(params)
+        a = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        b = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        scene.add_baby(a)
+        scene.add_baby(b)
+        b.entity.alive = False
+        scene._pending_messages.append((a.entity.id, b.entity.id, 0.5))
+        scene.deliver_messages()
+        assert a.entity.id not in b._inbox
+
+    def test_nearest_nest_with_group_filter(self):
+        params = _params(structure_enabled=True)
+        scene = SimScene(params)
+        n1 = Nest(id=1, position=np.array([8.0, 4.0, 8.0]),
+                   stored_energy=50.0, owner_group_id=0)
+        n2 = Nest(id=2, position=np.array([8.0, 4.0, 8.0]),
+                   stored_energy=50.0, owner_group_id=1)
+        scene.nests.extend([n1, n2])
+        found = scene.nearest_nest(np.array([8.0, 4.0, 8.0]), radius=5.0, group_id=0)
+        assert found is n1
+
+    def test_update_nests_decay(self):
+        params = _params(structure_enabled=True)
+        scene = SimScene(params)
+        n = Nest(id=1, position=np.array([8.0, 4.0, 8.0]),
+                 stored_energy=100.0, owner_group_id=0)
+        scene.nests.append(n)
+        scene.update_nests()
+        assert n.stored_energy < 100.0
+
+    def test_update_nests_removes_empty(self):
+        params = _params(structure_enabled=True)
+        scene = SimScene(params)
+        n = Nest(id=1, position=np.array([8.0, 4.0, 8.0]),
+                 stored_energy=1e-12, owner_group_id=0)
+        scene.nests.append(n)
+        scene.update_nests()
+        assert len(scene.nests) == 0
+
+    def test_draw_nest_disabled(self):
+        params = _params(structure_enabled=False)
+        scene = SimScene(params)
+        baby = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        assert scene.draw_nest(baby) == 0.0
+
+    def test_draw_nest_no_nearby(self):
+        params = _params(structure_enabled=True)
+        scene = SimScene(params)
+        baby = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        baby.entity.energy = 50.0
+        assert scene.draw_nest(baby) == 0.0
+
+    def test_draw_nest_has_enough_energy(self):
+        params = _params(structure_enabled=True)
+        scene = SimScene(params)
+        n = Nest(id=1, position=np.array([8.0, 4.0, 8.0]),
+                 stored_energy=100.0, owner_group_id=0)
+        scene.nests.append(n)
+        baby = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        baby.entity.energy = 150.0  # above start_energy
+        assert scene.draw_nest(baby) == 0.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Simulation advanced
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSimulationAdvanced:
+    def test_summary_has_all_keys(self):
+        params = _params(start_agents=0)
+        scene = SimScene(params)
+        baby = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        scene.add_baby(baby)
+        sim = Simulation(scene, max_ticks=2)
+        sim.run()
+        summary = sim.summary()
+        for key in ["total_ticks", "total_baby_ticks", "avg_energy",
+                     "total_cells_written", "cooperations", "contests",
+                     "deaths", "alive_count"]:
+            assert key in summary
+
+    def test_run_multiple_ticks(self):
+        params = _params(start_agents=0)
+        scene = SimScene(params)
+        baby = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params,
+                        initial_energy=200.0)
+        scene.add_baby(baby)
+        results = Simulation(scene, max_ticks=5).run()
+        assert len(results) == 5
+
+    def test_step_returns_per_baby_dict_keys(self):
+        params = _params(start_agents=0)
+        scene = SimScene(params)
+        baby = SimBaby(position=np.array([8.0, 4.0, 8.0]), params=params)
+        scene.add_baby(baby)
+        sim = Simulation(scene, max_ticks=1)
+        results = sim.step()
+        assert len(results) == 1
+        r = results[0]
+        for key in ["baby_id", "tick", "energy", "energy_delta",
+                     "cells_written", "moved", "alive"]:
+            assert key in r

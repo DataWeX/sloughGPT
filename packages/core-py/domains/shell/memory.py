@@ -103,8 +103,8 @@ class EpisodicMemory:
             List of episodes in chronological order.
         """
         episodes = self._chronological()
-        if k < 0:
-            k = 0
+        if k <= 0:
+            return []
         if not by_reward:
             return episodes[-k:]
         ranked = sorted(episodes, key=lambda e: e.reward, reverse=True)

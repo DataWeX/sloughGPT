@@ -819,3 +819,174 @@ class TestPointViewProperties:
         view = PointView.from_point_and_meta(p, shape=(10,), dtype="float32")
         assert view.identity == "a"
         assert view.shape == (10,)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestPointLibraryExtraCRUD:
+    def test_remove_decrements_count(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("a"))
+        lib.add(_linear_point("b"))
+        lib.remove("a")
+        assert len(lib) == 1
+
+    def test_clear_resets_by_type(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("a"))
+        lib.add(_cluster_point("c"))
+        lib.clear()
+        assert lib.list_types() == {}
+
+    def test_list_by_type_empty(self):
+        lib = PointLibrary()
+        assert lib.list_by_type("periodic") == []
+
+    def test_get_many_all_missing(self):
+        lib = PointLibrary()
+        result = lib.get_many(["x", "y", "z"])
+        assert all(v is None for v in result.values())
+
+    def test_remove_many_partial(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("a"))
+        count = lib.remove_many(["a", "missing"])
+        assert count == 1
+
+    def test_exists_many_all_true(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("a"))
+        lib.add(_linear_point("b"))
+        result = lib.exists_many(["a", "b"])
+        assert all(result.values())
+
+
+class TestPointLibraryExtraSearch:
+    def test_search_empty_library(self):
+        lib = PointLibrary()
+        assert lib.search("anything") == []
+
+    def test_worst_points_empty(self):
+        lib = PointLibrary()
+        assert lib.worst_points() == []
+
+    def test_best_points_empty(self):
+        lib = PointLibrary()
+        assert lib.best_points() == []
+
+    def test_search_by_type_empty(self):
+        lib = PointLibrary()
+        assert lib.search_by_type("periodic") == []
+
+    def test_search_by_type_all_types(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("p1"))
+        lib.add(_linear_point("l1"))
+        assert len(lib.list_by_type("periodic")) == 1
+        assert len(lib.list_by_type("linear")) == 1
+
+
+class TestPointLibraryExtraStats:
+    def test_stats_after_remove(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("a"))
+        lib.remove("a")
+        s = lib.stats()
+        assert s["total_points"] == 0
+        assert s["ops"]["removes"] == 1
+
+    def test_hit_rate_all_misses(self):
+        lib = PointLibrary()
+        lib.get("missing")
+        assert lib.hit_rate == 0.0
+
+    def test_hit_rate_all_hits(self):
+        lib = PointLibrary()
+        lib.add(_periodic_point("a"))
+        lib.get("a")
+        assert lib.hit_rate == 1.0
+
+    def test_stats_name(self):
+        lib = PointLibrary(name="mylib")
+        s = lib.stats()
+        assert s["name"] == "mylib"
+
+
+class TestPointLibraryExtraPersistence:
+    def test_save_and_load_cluster(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib = PointLibrary(name="cluster_lib", storage_dir=Path(tmpdir))
+            lib.add(_cluster_point("c1"))
+            lib.save()
+            loaded = PointLibrary.load(Path(tmpdir) / "cluster_lib.points.json")
+            assert loaded.has("c1")
+
+    def test_load_preserves_created_at(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lib = PointLibrary(name="ts", storage_dir=Path(tmpdir))
+            lib.add(_periodic_point("a"))
+            lib.save()
+            loaded = PointLibrary.load(Path(tmpdir) / "ts.points.json")
+            assert loaded._created_at == lib._created_at
+
+    def test_context_manager_no_storage(self):
+        with PointLibrary(name="no_dir") as lib:
+            lib.add(_periodic_point("a"))
+        assert lib.has("a")
+
+
+class TestPointLibraryExtraIteration:
+    def test_iter_empty(self):
+        lib = PointLibrary()
+        assert list(lib) == []
+
+    def test_iter_by_type_empty(self):
+        lib = PointLibrary()
+        assert list(lib.iter_by_type("periodic")) == []
+
+
+class TestPointLibraryExtraValidation:
+    def test_negative_accuracy_raises(self):
+        lib = PointLibrary()
+        p = Point(identity="bad", function_type="periodic",
+                  params=_periodic_params(), accuracy=-0.1)
+        with pytest.raises(ValueError, match="Accuracy must be 0-1"):
+            lib.add(p)
+
+
+class TestPointLibraryExtraDecompress:
+    def test_decompress_function_type(self):
+        lib = PointLibrary()
+        weights = np.random.randn(128)
+        lib.compress_and_store(weights, identity="f1", method="function")
+        result = lib.decompress_to("f1")
+        assert result is not None
+
+    def test_decompress_cluster_with_shape(self):
+        lib = PointLibrary()
+        weights = np.random.randn(128)
+        lib.compress_and_store(weights, identity="c1")
+        result = lib.decompress_to("c1", shape=(128,))
+        assert result.shape == (128,)
+
+
+class TestPointLibraryExtraCompress:
+    def test_compress_and_store_returns_point(self):
+        lib = PointLibrary()
+        weights = np.random.randn(64)
+        p = lib.compress_and_store(weights, identity="test")
+        assert p.identity == "test"
+        assert lib.has("test")
+
+
+class TestPointLibraryExtraConfig:
+    def test_config_name_overrides(self):
+        cfg = LibraryConfig(name="custom")
+        lib = PointLibrary(config=cfg)
+        assert lib.name == "custom"
+
+    def test_default_name(self):
+        lib = PointLibrary()
+        assert lib.name == "default"

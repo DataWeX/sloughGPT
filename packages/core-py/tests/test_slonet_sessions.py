@@ -514,3 +514,90 @@ class TestEdgeCases:
         fp._kv_last_access["s1"] = time.monotonic() - 1
         stale = fp._evict_stale_sessions()
         assert "s1" in stale
+
+
+# ── Additional Coverage ──────────────────────────────────────────────────────
+
+class TestSessionStatsExtra:
+    def test_zero_token_kv_len(self):
+        fp = FakeProvider()
+        fp._kv_states["s1"] = SimpleNamespace(kv_len=0)
+        fp._kv_last_access["s1"] = time.monotonic()
+        stats = fp.session_stats()
+        assert stats["cached_tokens"] == 0
+
+    def test_float_kv_len(self):
+        fp = FakeProvider()
+        fp._kv_states["s1"] = SimpleNamespace(kv_len=42.5)
+        fp._kv_last_access["s1"] = time.monotonic()
+        stats = fp.session_stats()
+        # float is not list/tuple/int, goes to 'elif kv is not None' path
+        assert stats["cached_tokens"] == 42.5
+
+    def test_many_sessions_oldest_age(self):
+        fp = FakeProvider()
+        now = time.monotonic()
+        fp._kv_states["a"] = SimpleNamespace(kv_len=10)
+        fp._kv_states["b"] = SimpleNamespace(kv_len=20)
+        fp._kv_last_access["a"] = now - 5.0
+        fp._kv_last_access["b"] = now
+        stats = fp.session_stats()
+        assert stats["oldest_session_age"] == pytest.approx(5.0, abs=0.1)
+
+
+class TestClearSessionExtra:
+    def test_clear_preserves_other_access_times(self):
+        fp = FakeProvider()
+        t1 = time.monotonic()
+        t2 = time.monotonic()
+        fp._kv_states["s1"] = SimpleNamespace()
+        fp._kv_states["s2"] = SimpleNamespace()
+        fp._kv_last_access["s1"] = t1
+        fp._kv_last_access["s2"] = t2
+        fp.clear_session("s1")
+        assert fp._kv_last_access["s2"] == t2
+
+
+class TestClearAllSessionsExtra:
+    def test_clear_all_and_repopulate(self):
+        fp = FakeProvider()
+        fp._kv_states["s1"] = SimpleNamespace()
+        fp._kv_last_access["s1"] = time.monotonic()
+        fp.clear_all_sessions()
+        fp._kv_states["new"] = SimpleNamespace()
+        fp._kv_last_access["new"] = time.monotonic()
+        stats = fp.session_stats()
+        assert stats["active_sessions"] == 1
+
+
+class TestEvictStaleExtra:
+    def test_evict_mixed_age(self):
+        fp = FakeProvider(ttl=2)
+        fp._kv_states["very_old"] = SimpleNamespace()
+        fp._kv_states["old"] = SimpleNamespace()
+        fp._kv_states["fresh"] = SimpleNamespace()
+        fp._kv_last_access["very_old"] = time.monotonic() - 100
+        fp._kv_last_access["old"] = time.monotonic() - 5
+        fp._kv_last_access["fresh"] = time.monotonic()
+        stale = fp._evict_stale_sessions()
+        assert set(stale) == {"very_old", "old"}
+        assert "fresh" in fp._kv_states
+
+
+class TestEvictLRUExtra:
+    def test_evict_lru_returns_none_when_under_cap(self):
+        fp = FakeProvider(max_sessions=10)
+        fp._kv_states["s1"] = SimpleNamespace()
+        fp._kv_last_access["s1"] = time.monotonic()
+        result = fp._evict_lru_session("s1")
+        assert result is None
+
+    def test_multiple_sessions_same_oldest(self):
+        fp = FakeProvider(max_sessions=1)
+        same_time = 100.0
+        fp._kv_states["a"] = SimpleNamespace()
+        fp._kv_states["b"] = SimpleNamespace()
+        fp._kv_last_access["a"] = same_time
+        fp._kv_last_access["b"] = same_time
+        fp._evict_lru_session("c")
+        assert len(fp._kv_states) == 1

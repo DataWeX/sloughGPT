@@ -770,3 +770,298 @@ class TestDreamProcessingEngine:
         exps = [_make_experience_real(f"e{i}", float(i) / 100) for i in range(15)]
         dpe.dream(exps, npe)
         assert dpe.consolidated == 10  # capped at top 10
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — SentimentAnalyzer edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSentimentAnalyzerExtra:
+    def test_whitespace_only(self):
+        sa = SentimentAnalyzer()
+        assert sa.analyze_sentiment("   ") == 0.0
+
+    def test_punctuation_only(self):
+        sa = SentimentAnalyzer()
+        assert sa.analyze_sentiment("!@#$%^&*") == 0.0
+
+    def test_multiple_spaces_between_words(self):
+        sa = SentimentAnalyzer()
+        score = sa.analyze_sentiment("good    bad")
+        assert score == 0.0
+
+    def test_positive_weighted_heavily(self):
+        sa = SentimentAnalyzer()
+        score = sa.analyze_sentiment("good good good bad")
+        assert score == pytest.approx(0.5)
+
+    def test_negative_weighted_heavily(self):
+        sa = SentimentAnalyzer()
+        score = sa.analyze_sentiment("bad bad bad good")
+        assert score == pytest.approx(-0.5)
+
+    def test_detect_emotion_fear_keywords(self):
+        sa = SentimentAnalyzer()
+        assert sa.detect_emotion("afraid and anxious") == "fear"
+
+    def test_detect_emotion_sad_keywords(self):
+        sa = SentimentAnalyzer()
+        assert sa.detect_emotion("unhappy and depressed") == "sad"
+
+    def test_analyze_mixed_sentiment_flags(self):
+        sa = SentimentAnalyzer()
+        result = sa.analyze("terrible horrible awful")
+        assert result["is_negative"] is True
+        assert result["is_positive"] is False
+        assert result["is_neutral"] is False
+
+    def test_emotion_keywords_structure(self):
+        sa = SentimentAnalyzer()
+        for key in ["happy", "sad", "angry", "fear", "surprise", "neutral"]:
+            assert key in sa.emotion_keywords
+            assert isinstance(sa.emotion_keywords[key], list)
+            assert len(sa.emotion_keywords[key]) > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — EmotionalResponseGenerator edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestEmotionalResponseGeneratorExtra:
+    def test_empathy_responses_structure(self):
+        erg = EmotionalResponseGenerator()
+        for emotion in ["happy", "sad", "angry", "fear", "surprise", "neutral"]:
+            assert emotion in erg.empathy_responses
+            assert len(erg.empathy_responses[emotion]) > 0
+
+    def test_qualifiers_structure(self):
+        erg = EmotionalResponseGenerator()
+        for level in ["high", "medium", "low"]:
+            assert level in erg.qualifiers
+            assert len(erg.qualifiers[level]) > 0
+
+    def test_format_emotional_response_with_empathy_all_emotions(self):
+        erg = EmotionalResponseGenerator()
+        for emotion in ["happy", "sad", "angry", "fear", "surprise"]:
+            result = erg.format_emotional_response("Base", emotion, 0.5)
+            assert "Base" in result
+
+    def test_adapt_negative_moderate(self):
+        erg = EmotionalResponseGenerator()
+        result = erg.adapt_response("Hello", "sad", -0.3)
+        assert result == "Hello"
+
+    def test_adapt_positive_extreme(self):
+        erg = EmotionalResponseGenerator()
+        result = erg.adapt_response("Hello", "happy", 1.0)
+        assert result.endswith("! 😊")
+
+    def test_adapt_negative_extreme(self):
+        erg = EmotionalResponseGenerator()
+        result = erg.adapt_response("Hello", "sad", -1.0)
+        assert result.endswith(" 😔")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — RelationshipMemory edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestRelationshipMemoryExtra:
+    def test_multiple_users(self):
+        rm = RelationshipMemory()
+        rm.update_from_interaction("u1", "hello", "hi", 0.5, "happy")
+        rm.update_from_interaction("u2", "bye", "goodbye", -0.5, "sad")
+        assert len(rm.user_profiles) == 2
+
+    def test_no_feedback_stays_at_default(self):
+        rm = RelationshipMemory()
+        rm.update_from_interaction("u1", "hello", "hi", 0.5, "happy")
+        assert rm.get_user_profile("u1")["satisfaction_score"] == 0.5
+
+    def test_relationship_context_high_satisfaction_text(self):
+        rm = RelationshipMemory()
+        for _ in range(10):
+            rm.update_from_interaction("u1", "hello", "r", 0.8, "happy", feedback="good")
+        ctx = rm.get_relationship_context("u1", "neutral")
+        assert "happy" in ctx.lower()
+
+    def test_many_interactions_dominate(self):
+        rm = RelationshipMemory()
+        for _ in range(10):
+            rm.update_from_interaction("u1", "artificial intelligence programming", "r", 0.5, "happy")
+        topics = rm.get_user_profile("u1")["topics_of_interest"]
+        assert "artificial" in topics or "intelligence" in topics or "programming" in topics
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — SessionMemory edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSessionMemoryExtra:
+    def test_multiple_roles(self):
+        sm = SessionMemory()
+        sm.add("user", "hi")
+        sm.add("assistant", "hello")
+        sm.add("user", "bye")
+        assert sm.conversation[0]["role"] == "user"
+        assert sm.conversation[1]["role"] == "assistant"
+
+    def test_get_context_returns_list(self):
+        sm = SessionMemory()
+        sm.add("user", "hi")
+        ctx = sm.get_context(1)
+        assert isinstance(ctx, list)
+
+    def test_get_full_session_preserves_content(self):
+        sm = SessionMemory()
+        sm.add("user", "abc")
+        sm.add("assistant", "def")
+        full = sm.get_full_session()
+        assert full[0]["content"] == "abc"
+        assert full[1]["content"] == "def"
+
+    def test_session_start_format(self):
+        sm = SessionMemory()
+        assert "T" in sm.session_start  # ISO format
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — EpisodicMemoryStore edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestEpisodicMemoryStoreExtra:
+    def test_search_limit(self):
+        em = EpisodicMemoryStore()
+        for i in range(10):
+            em.save_episode(f"s{i}", [{"content": "python is great"}])
+        results = em.search_episodes("python", limit=3)
+        assert len(results) == 3
+
+    def test_importance_single_message(self):
+        em = EpisodicMemoryStore()
+        score = em._calculate_importance([{"content": "hello"}])
+        assert score == 0.5
+
+    def test_importance_many_important_words(self):
+        em = EpisodicMemoryStore()
+        conv = [{"content": "important remember critical key learn"}]
+        score = em._calculate_importance(conv)
+        assert score > 0.5
+
+    def test_save_preserves_conversation_copy(self):
+        em = EpisodicMemoryStore()
+        conv = [{"content": "test"}]
+        eid = em.save_episode("s1", conv)
+        conv.clear()
+        assert em.get_episode(eid) == [{"content": "test"}]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — CognitiveArchitecture edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestCognitiveArchitectureExtra:
+    def test_semantic_multiple_keys(self):
+        ca = CognitiveArchitecture()
+        ca.to_semantic("k1", "v1")
+        ca.to_semantic("k2", "v2")
+        assert ca.retrieve_semantic("k1") == "v1"
+        assert ca.retrieve_semantic("k2") == "v2"
+
+    def test_semantic_overwrite_value(self):
+        ca = CognitiveArchitecture()
+        ca.to_semantic("k", "old")
+        ca.to_semantic("k", "new")
+        # to_semantic with existing key only strengthens, does not overwrite value
+        assert ca.retrieve_semantic("k") == "old"
+        assert ca.semantic_memory["k"]["strength"] == 1.1
+
+    def test_working_memory_many_items(self):
+        ca = CognitiveArchitecture(working_capacity=3)
+        for i in range(10):
+            ca.to_working(f"item{i}")
+        assert len(ca.working_memory) == 3
+        assert ca.working_memory[-1] == "item9"
+
+    def test_session_context_after_many_messages(self):
+        ca = CognitiveArchitecture()
+        for i in range(20):
+            ca.add_to_session("user", f"msg{i}")
+        ctx = ca.get_session_context(5)
+        assert len(ctx) == 5
+        assert ctx[-1]["content"] == "msg19"
+
+    def test_sensory_buffer_data_structure(self):
+        ca = CognitiveArchitecture()
+        ca.process_sensory("data")
+        assert ca.sensory_buffer[0]["data"] == "data"
+        assert "timestamp" in ca.sensory_buffer[0]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — NeuralPlasticityEngine edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestNeuralPlasticityEngineExtra:
+    def test_multiple_connections(self):
+        npe = NeuralPlasticityEngine(learning_rate=0.1)
+        npe.activate("a", 1.0)
+        npe.activate("b", 1.0)
+        npe.activate("c", 1.0)
+        npe.hebbian_learn("a", "b")
+        npe.hebbian_learn("a", "c")
+        assert npe.get_connection_strength("a", "b") > 0
+        assert npe.get_connection_strength("a", "c") > 0
+
+    def test_prune_removes_weak(self):
+        npe = NeuralPlasticityEngine(learning_rate=0.0001)
+        npe.activate("a", 0.001)
+        npe.activate("b", 0.001)
+        npe.hebbian_learn("a", "b")
+        npe.prune_weak_connections(threshold=0.001)
+        assert npe.get_connection_strength("a", "b") == 0.0
+
+    def test_prune_keeps_strong(self):
+        npe = NeuralPlasticityEngine(learning_rate=0.5)
+        npe.activate("a", 1.0)
+        npe.activate("b", 1.0)
+        npe.hebbian_learn("a", "b")
+        npe.prune_weak_connections(threshold=0.01)
+        assert npe.get_connection_strength("a", "b") > 0
+
+    def test_activation_history_capped_at_50_after_101(self):
+        npe = NeuralPlasticityEngine()
+        for i in range(101):
+            npe.activate("n1", float(i))
+        assert len(npe.activation_history["n1"]) == 50
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Additional Coverage — MetaLearningEngine edge cases
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestMetaLearningEngineExtra:
+    def test_update_weights_all_zero_attempts(self):
+        mle = MetaLearningEngine()
+        mle.update_weights()
+        for name, data in mle.strategies.items():
+            assert data["weight"] == 1.0
+
+    def test_best_strategy_can_change(self):
+        mle = MetaLearningEngine()
+        assert mle.get_strategy() == "spaced"
+        # Lower spaced weight with failures, raise rote with successes
+        for _ in range(20):
+            mle.record_outcome("spaced", False)
+            mle.record_outcome("rote", True)
+        mle.update_weights()
+        # rote has weight 1.0, spaced has 0.7, others unchanged at 1.0
+        # max returns the first key with the highest weight = "rote"
+        assert mle.get_strategy() == "rote"
+
+    def test_record_many_outcomes(self):
+        mle = MetaLearningEngine()
+        for i in range(50):
+            mle.record_outcome("spaced", i % 2 == 0)
+        assert mle.strategies["spaced"]["attempts"] == 50
+        assert mle.strategies["spaced"]["success"] == 25

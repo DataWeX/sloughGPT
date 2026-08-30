@@ -1113,8 +1113,7 @@ class ModelsRouter:
         })
 
     @staticmethod
-    @require_auth_if_enabled
-    async def memory_cleanup():
+    async def memory_cleanup(auth_user: dict = Depends(require_auth_if_enabled)):
         """Force an immediate memory cleanup cycle.
 
         Triggers critical-level cleanup: drops KV caches, forces GC,
@@ -1131,8 +1130,7 @@ class ModelsRouter:
             classify_and_raise(exc, source="models.memory_cleanup")
 
     @staticmethod
-    @require_auth_if_enabled
-    async def memory_pressure():
+    async def memory_pressure(auth_user: dict = Depends(require_auth_if_enabled)):
         """Return current memory pressure stats (level, thresholds, counters)."""
         try:
             from domains.infrastructure.memory_pressure import get_memory_pressure_monitor

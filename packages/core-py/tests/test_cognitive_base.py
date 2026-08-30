@@ -330,3 +330,76 @@ class TestBaseDomain:
     def test_base_domain_name(self):
         cd = CognitiveDomain()
         assert cd.domain_name == "cognitive"
+
+
+class TestCognitiveDomainAdvanced:
+    async def test_process_thought_adds_to_active_list(self):
+        cd = CognitiveDomain()
+        await cd._on_initialize()
+        await cd.process_thought("q1", "analytical")
+        await cd.process_thought("q2", "creative")
+        await cd.process_thought("q3", "reasoning")
+        assert len(cd.active_thoughts) == 3
+        await cd._on_shutdown()
+
+    async def test_process_thought_result_confidence(self):
+        cd = CognitiveDomain()
+        await cd._on_initialize()
+        result = await cd.process_thought("solve x", "analytical")
+        assert isinstance(result["confidence"], float)
+        assert 0.0 <= result["confidence"] <= 1.0
+        await cd._on_shutdown()
+
+    async def test_reason_with_context(self):
+        cd = CognitiveDomain()
+        await cd._on_initialize()
+        result = await cd.reason("premise", {"key": "value", "num": 42})
+        assert isinstance(result, str)
+        await cd._on_shutdown()
+
+    async def test_get_cognitive_state_thoughts_count(self):
+        cd = CognitiveDomain()
+        await cd._on_initialize()
+        await cd.process_thought("t1", "analytical")
+        state = await cd.get_cognitive_state()
+        assert state["active_thoughts_count"] == 1
+        await cd._on_shutdown()
+
+    async def test_shutdown_component_with_non_async_shutdown(self):
+        cd = CognitiveDomain()
+        mock = type("Mock", (), {"shutdown": lambda s: None})()
+        cd.memory_manager = mock
+        # Should not crash even if shutdown is sync
+        await cd._shutdown_component("memory_manager")
+
+    async def test_get_cognitive_state_components_all_initialized(self):
+        cd = CognitiveDomain()
+        await cd._on_initialize()
+        state = await cd.get_cognitive_state()
+        for name in ["reasoning_engine", "metacognitive_monitor", "cognitive_processor"]:
+            assert state["components_status"][name] == "initialized"
+        await cd._on_shutdown()
+
+    async def test_cognitive_state_active_thoughts_empty(self):
+        cd = CognitiveDomain()
+        state = await cd.get_cognitive_state()
+        assert state["active_thoughts_count"] == 0
+
+    async def test_shutdown_cancels_background_tasks(self):
+        cd = CognitiveDomain()
+        await cd._on_initialize()
+        tasks_before = len(cd._background_tasks)
+        assert tasks_before == 3
+        await cd._on_shutdown()
+        for t in cd._background_tasks:
+            assert t.cancelled() or t.done()
+
+    async def test_store_memory_raises_before_init(self):
+        cd = CognitiveDomain()
+        with pytest.raises(CognitiveException):
+            await cd.store_memory("content", "episodic", 0.5)
+
+    async def test_retrieve_memory_raises_before_init(self):
+        cd = CognitiveDomain()
+        with pytest.raises(CognitiveException):
+            await cd.retrieve_memory("any_id")
