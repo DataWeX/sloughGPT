@@ -6486,6 +6486,26 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_063800_feat-planner-search-notes-by-author-in-core-and-gui",
+      "title": "feat(planner): search notes by author in core and GUI",
+      "description": "Updated NoteStore.search() to include author field in search. Updated GUI renderNotes() to search by author in addition to title, tags, and body.",
+      "column": "done",
+      "priority": "low",
+      "tags": [
+        "planner",
+        "search",
+        "author",
+        "notes",
+        "gui",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T06:38:00+00:00",
+      "updated_at": "2026-08-30T06:38:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
