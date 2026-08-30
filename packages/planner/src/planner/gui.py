@@ -893,14 +893,76 @@ async function renderStats() {
   const tagBox = state.tags.length
     ? state.tags.map(t => `<div class="stat"><div class="n" style="font-size:22px">${t.count}</div><div class="l">${esc(t.name)}</div></div>`).join("")
     : '<div class="empty">No tags yet.</div>';
+  const totalEffort = (state.board?.cards || []).reduce((sum, c) => sum + (c.effort || 0), 0);
+  const doneEffort = (state.board?.cards || []).filter(c => c.column === "done").reduce((sum, c) => sum + (c.effort || 0), 0);
+  const burndown = computeBurndown(state.board?.cards || []);
   $("stats").innerHTML = `
     <div class="stat"><div class="n">${s.total||0}</div><div class="l">Total notes</div></div>
     <div class="stat"><div class="n">${s.today||0}</div><div class="l">Created today</div></div>
+    <div class="stat"><div class="n">${totalEffort.toFixed(1)}</div><div class="l">Total effort (pts)</div></div>
+    <div class="stat"><div class="n">${doneEffort.toFixed(1)}</div><div class="l">Completed effort</div></div>
     ${rows}
     <div class="stat" style="grid-column:1/-1">
       <div class="l" style="margin-bottom:10px">Tags</div>
       <div class="stats-grid">${tagBox}</div>
+    </div>
+    <div class="stat" style="grid-column:1/-1">
+      <div class="l" style="margin-bottom:10px">Burndown (7 days)</div>
+      <canvas id="burndown" width="600" height="200" style="width:100%;height:200px;background:var(--card);border-radius:10px;border:1px solid var(--border)"></canvas>
     </div>`;
+  drawBurndown(burndown);
+}
+
+function computeBurndown(cards) {
+  const days = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const total = cards.reduce((s, c) => s + (c.effort || 0), 0);
+    const done = cards.filter(c => c.column === "done" && c.updated_at && c.updated_at.slice(0, 10) <= dateStr)
+      .reduce((s, c) => s + (c.effort || 0), 0);
+    days.push({ date: dateStr, remaining: total - done, total });
+  }
+  return days;
+}
+
+function drawBurndown(data) {
+  const canvas = $("burndown");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const max = Math.max(1, ...data.map(d => d.total));
+  const pad = 40;
+  const chartW = w - pad * 2;
+  const chartH = h - pad * 2;
+  ctx.strokeStyle = "#342e48";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, pad);
+  ctx.lineTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.stroke();
+  ctx.strokeStyle = "#c0aaf4";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  data.forEach((d, i) => {
+    const x = pad + (i / (data.length - 1)) * chartW;
+    const y = h - pad - (d.remaining / max) * chartH;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = "#c0aaf4";
+  data.forEach((d, i) => {
+    const x = pad + (i / (data.length - 1)) * chartW;
+    const y = h - pad - (d.remaining / max) * chartH;
+    ctx.beginPath();
+    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
 }
 
 /* ---------------- editor ---------------- */
