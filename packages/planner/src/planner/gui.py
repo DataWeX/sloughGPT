@@ -601,7 +601,14 @@ main{padding:18px;max-width:1400px;margin:0 auto}
   <section id="tab-board">
     <div class="board" id="board"></div>
   </section>
-  <section id="tab-notes" class="hidden"></section>
+  <section id="tab-notes" class="hidden">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+      <select id="authorFilter" style="background:var(--card);border:1px solid var(--border);color:var(--fg);border-radius:8px;padding:6px 10px;font-size:13px">
+        <option value="">All authors</option>
+      </select>
+    </div>
+    <div id="notes-list"></div>
+  </section>
   <section id="tab-stats" class="hidden">
     <div class="stats-grid" id="stats"></div>
   </section>
@@ -709,6 +716,15 @@ async function loadBoard() {
 async function loadNotes() {
   const data = await api("/api/notes?limit=9999");
   state.notes = data.notes;
+  const authors = [...new Set(state.notes.map(n => n.author).filter(Boolean))].sort();
+  const sel = $("authorFilter");
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">All authors</option>' +
+      authors.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join("");
+    sel.value = prev || "";
+    sel.onchange = () => render();
+  }
 }
 
 async function loadStats() {
@@ -782,10 +798,15 @@ function bindBoard() {
 }
 
 function renderNotes(q) {
-  const notes = state.notes.filter(n => !q ||
-    n.title.toLowerCase().includes(q) ||
-    n.tags.join(" ").toLowerCase().includes(q) ||
-    n.body.toLowerCase().includes(q));
+  const authorFilter = $("authorFilter")?.value || "";
+  const notes = state.notes.filter(n => {
+    const matchesQ = !q ||
+      n.title.toLowerCase().includes(q) ||
+      n.tags.join(" ").toLowerCase().includes(q) ||
+      n.body.toLowerCase().includes(q);
+    const matchesAuthor = !authorFilter || n.author === authorFilter;
+    return matchesQ && matchesAuthor;
+  });
   const box = $("tab-notes");
   if (!notes.length) { box.innerHTML = '<div class="empty">No notes found.</div>'; return; }
   box.innerHTML = notes.map(n => {
