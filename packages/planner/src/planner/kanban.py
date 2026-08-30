@@ -102,6 +102,7 @@ class Card:
     updated_at: str = ""
     due_date: str = ""
     assignee: str = ""
+    sprint: str = ""
     blocked_by: list[str] = field(default_factory=list)
     notes: list[Note] = field(default_factory=list)
     history: list[dict] = field(default_factory=list)
@@ -204,7 +205,8 @@ class KanbanStore:
         return None
 
     def add_card(self, title: str, column: str = "", priority: str = "medium",
-                 card_type: str = "task", effort: float = 0.0, description: str = "", tags: list[str] | None = None,
+                 card_type: str = "task", effort: float = 0.0, sprint: str = "",
+                 description: str = "", tags: list[str] | None = None,
                  due_date: str = "", assignee: str = "") -> Card:
         board = self.load_board()
         column = column or (board.columns[0].name if board.columns else "todo")
@@ -213,7 +215,7 @@ class KanbanStore:
             id=_make_id(title), title=title, description=description,
             column=column, priority=priority if priority in PRIORITIES else "medium",
             card_type=card_type if card_type in CARD_TYPES else "task",
-            effort=effort, tags=tags or [], created_at=now, updated_at=now,
+            effort=effort, sprint=sprint, tags=tags or [], created_at=now, updated_at=now,
             due_date=due_date, assignee=assignee,
         )
         board.cards.insert(0, card)
@@ -230,7 +232,7 @@ class KanbanStore:
         if card is None:
             return None
         changes = {}
-        for key in ("title", "description", "priority", "card_type", "effort", "tags", "due_date", "assignee", "blocked_by"):
+        for key in ("title", "description", "priority", "card_type", "effort", "sprint", "tags", "due_date", "assignee", "blocked_by"):
             if key in kwargs and kwargs[key] is not None:
                 old = getattr(card, key)
                 new = kwargs[key]
@@ -477,7 +479,8 @@ def _render_board(board: Board, width: int = 78) -> str:
                         tags += "+"
                 notes = f" ({len(c.notes)})" if c.notes else ""
                 effort = f" {c.effort}pts" if c.effort else ""
-                label = f"{c.priority_icon} {type_icon} {c.short_id} {_abbrev(c.title, col_width-17)}{due}{overdue}{blocked}{assign}{effort}{tags}{notes}"
+                sprint = f" [{c.sprint}]" if c.sprint else ""
+                label = f"{c.priority_icon} {type_icon} {c.short_id} {_abbrev(c.title, col_width-17)}{due}{overdue}{blocked}{assign}{effort}{sprint}{tags}{notes}"
                 cells.append(f" {label:<{col_width-1}}")
             else:
                 cells.append(" " * col_width)
@@ -505,6 +508,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_add.add_argument("--priority", default="medium", choices=PRIORITIES)
     p_add.add_argument("--type", default="task", choices=CARD_TYPES, help="Card type")
     p_add.add_argument("--effort", type=float, default=0.0, help="Effort estimate (story points)")
+    p_add.add_argument("--sprint", default="", help="Sprint identifier")
     p_add.add_argument("--desc", default="", help="Description")
     p_add.add_argument("--tags", default="", help="Comma-separated tags")
     p_add.add_argument("--due", default="", help="Due date (ISO)")
@@ -530,6 +534,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_edit.add_argument("--priority", default=None, choices=PRIORITIES)
     p_edit.add_argument("--type", default=None, choices=CARD_TYPES)
     p_edit.add_argument("--effort", type=float, default=None, help="Effort estimate")
+    p_edit.add_argument("--sprint", default=None, help="Sprint identifier")
     p_edit.add_argument("--tags", default=None)
     p_edit.add_argument("--due", default=None)
     p_edit.add_argument("--assignee", default=None)
@@ -605,10 +610,12 @@ def cli_main(argv: list[str] | None = None) -> int:
     if args.cmd == "add":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
         card = store.add_card(args.title, column=args.column, priority=args.priority,
-                              card_type=args.type, effort=args.effort, description=args.desc, tags=tags,
+                              card_type=args.type, effort=args.effort, sprint=args.sprint,
+                              description=args.desc, tags=tags,
                               due_date=args.due, assignee=args.assignee)
         effort_s = f"  effort={args.effort}" if args.effort else ""
-        print(f"Added: {card.short_id}  {card.title}  [{card.column}]  {card.priority_icon}{effort_s}")
+        sprint_s = f"  sprint={args.sprint}" if args.sprint else ""
+        print(f"Added: {card.short_id}  {card.title}  [{card.column}]  {card.priority_icon}{effort_s}{sprint_s}")
         return 0
 
     if args.cmd == "list":
@@ -625,8 +632,10 @@ def cli_main(argv: list[str] | None = None) -> int:
             due_s = f"  [{c.due_date}]" if c.due_date else ""
             overdue_s = "  OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
             assign_s = f"  @{c.assignee}" if c.assignee else ""
+            effort_s = f"  {c.effort}pts" if c.effort else ""
+            sprint_s = f"  [{c.sprint}]" if c.sprint else ""
             notes_s = f"  ({len(c.notes)})" if c.notes else ""
-            print(f"  {c.priority_icon} {c.short_id}  {c.title}  [{c.column}]{tags_s}{due_s}{overdue_s}{assign_s}{notes_s}")
+            print(f"  {c.priority_icon} {c.short_id}  {c.title}  [{c.column}]{tags_s}{due_s}{overdue_s}{assign_s}{effort_s}{sprint_s}{notes_s}")
         print(f"\n  {len(cards)} card(s)")
         return 0
 
@@ -639,6 +648,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         blocked_s = ", ".join(card.blocked_by) if card.blocked_by else "none"
         type_icon = CARD_TYPE_ICONS.get(card.card_type, "☐")
         effort_s = f"  effort:   {card.effort} pts" if card.effort else "  effort:   0"
+        sprint_s = f"  sprint:   {card.sprint}" if card.sprint else ""
         print(f"  {card.priority_icon} {type_icon}  {card.title}")
         print(f"  id:       {card.id}")
         print(f"  type:     {card.card_type}")
@@ -649,6 +659,8 @@ def cli_main(argv: list[str] | None = None) -> int:
         print(f"  due:      {card.due_date or 'none'}")
         print(f"  blocked:  {blocked_s}")
         print(effort_s)
+        if sprint_s:
+            print(sprint_s)
         print(f"  created:  {card.created_at}")
         print(f"  updated:  {card.updated_at}")
         if card.history:
@@ -675,6 +687,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         if args.priority is not None: kwargs["priority"] = args.priority
         if args.type is not None: kwargs["card_type"] = args.type
         if args.effort is not None: kwargs["effort"] = args.effort
+        if args.sprint is not None: kwargs["sprint"] = args.sprint
         if args.tags is not None: kwargs["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
         if args.due is not None: kwargs["due_date"] = args.due
         if args.assignee is not None: kwargs["assignee"] = args.assignee
