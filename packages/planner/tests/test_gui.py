@@ -131,6 +131,22 @@ def test_update_note(server):
         assert note["body"] == "updated"
 
 
+def test_note_author_and_assignee(server):
+    with _client() as c:
+        created = c.post(server.base_url + "/api/notes", json={
+            "title": "Task", "author": "bob", "assignee": "alice",
+        }).json()["note"]
+        assert created["author"] == "bob"
+        assert created["assignee"] == "alice"
+        r = c.put(server.base_url + "/api/notes/" + created["id"], json={
+            "author": "carol", "assignee": "dave",
+        })
+        assert r.status_code == 200
+        note = r.json()["note"]
+        assert note["author"] == "carol"
+        assert note["assignee"] == "dave"
+
+
 def test_update_unknown_note_404(server):
     with _client() as c:
         r = c.put(server.base_url + "/api/notes/does_not_exist", json={"title": "x"})

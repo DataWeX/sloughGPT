@@ -70,6 +70,18 @@ def test_sync_card_carries_tags_and_body(stores):
     assert card.description.strip() == "some body text"
 
 
+def test_sync_propagates_assignee(stores):
+    note_store, kanban_store = stores
+    note = note_store.create("Assigned", assignee="mana")
+    sync_notes_to_board(note_store, kanban_store)
+    card = kanban_store.load_board().cards[0]
+    assert card.assignee == "mana"
+    note_store.update(note.id, assignee="alice")
+    added, updated, total = sync_notes_to_board(note_store, kanban_store)
+    assert updated == 1
+    assert kanban_store.load_board().cards[0].assignee == "alice"
+
+
 def test_sync_moves_card_when_status_changes(stores):
     note_store, kanban_store = stores
     note = note_store.create("Rotating task", status="wip")
