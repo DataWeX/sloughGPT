@@ -567,6 +567,12 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_search.add_argument("--limit", type=int, default=30)
     sub.add_parser("stats", help="Board statistics")
 
+    p_export = sub.add_parser("export", help="Export board to JSON")
+    p_export.add_argument("--output", default="", help="Output file path")
+
+    p_import = sub.add_parser("import", help="Import board from JSON")
+    p_import.add_argument("input", help="Input JSON file path")
+
     args = parser.parse_args(argv)
     if args.cmd is None:
         parser.print_help()
@@ -771,6 +777,28 @@ def cli_main(argv: list[str] | None = None) -> int:
         print(f"  Priorities:")
         for pri, count in s["priorities"]:
             print(f"    {pri:10s}  {count}")
+        return 0
+
+    if args.cmd == "export":
+        board = store.load_board()
+        path = args.output or (store._dir / f"{board.name}_export.json")
+        path.write_text(json.dumps(board.to_dict(), indent=2, default=str))
+        print(f"Exported {len(board.cards)} cards to {path}")
+        return 0
+
+    if args.cmd == "import":
+        path = Path(args.input)
+        if not path.exists():
+            print(f"File not found: {path}")
+            return 1
+        try:
+            data = json.loads(path.read_text())
+            board = Board.from_dict(data)
+        except Exception as exc:
+            print(f"Import failed: {exc}")
+            return 1
+        store._bk.save(board)
+        print(f"Imported {len(board.cards)} cards from {path}")
         return 0
 
     return 0
