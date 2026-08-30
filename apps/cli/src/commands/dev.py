@@ -53,33 +53,17 @@ def _is_eaddrinuse(lines: deque) -> bool:
     return False
 
 
-def _handle_eaddrinuse(port: int, service: str = "web"):
-    """Display helpful EADDRINUSE error with remediation steps."""
-    log.blank()
-    log.error(f"{service} port {port} is already in use")
-    log.blank()
-
-    # Find what's using the port
-    import shlex
-    result = subprocess.run(
-        shlex.split(f"lsof -ti:{port}"),
-        capture_output=True, text=True,
-    )
-    pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
-
-    if pids:
-        for pid in pids:
-            try:
-                with open(f"/proc/{pid}/comm", "r") as f:
-                    proc_name = f.read().strip()
-            except (FileNotFoundError, PermissionError):
-                proc_name = "unknown"
-            log.status("pid", f"{pid} ({proc_name})", "warn")
-        log.blank()
-
-    log.info("To fix, run one of:")
-    log.command(f"lsof -ti:{port} | xargs kill -9", "kill existing process")
-    log.command(f"PORT={port + 1} slo serve --web-port {port + 1}", f"use port {port + 1} instead")
+def _auto_fix_port(port: int, service: str = "web") -> int:
+    """Find next available port when EADDRINUSE is detected. Returns the new port."""
+    from domains.shared.utils import find_available_port
+    try:
+        new_port = find_available_port(host="", start_port=port, max_attempts=20)
+    except RuntimeError:
+        log.error(f"No available port found in range {port}-{port + 20}")
+        raise
+    if new_port != port:
+        log.status(f"{service} port", f"{port} in use → using {new_port}", "warn")
+    return new_port
 
 
 def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
@@ -260,6 +244,7 @@ def cmd_dev(args):
 
     # Mutable process state — swapped on restart
     procs = {"api": None, "web": None}
+    ports = {"web": web_port}
     stop_event = threading.Event()
 
     def _start_api():
@@ -294,7 +279,8 @@ def cmd_dev(args):
 
     def _start_web():
         """Start (or restart) the Web server process."""
-        log.step(f"Starting Web on port {web_port}...")
+        wp = ports["web"]
+        log.step(f"Starting Web on port {wp}...")
         env = os.environ.copy()
         if model:
             env["SLOUGHGT_MODEL_PATH"] = model
@@ -303,10 +289,10 @@ def cmd_dev(args):
                 env[k] = os.environ[k]
         env["GIO_USE_PORTAL"] = "0"
         if "NEXTAUTH_URL" not in env:
-            env["NEXTAUTH_URL"] = f"http://localhost:{web_port}"
+            env["NEXTAUTH_URL"] = f"http://localhost:{wp}"
 
         web_cwd = root / "apps/web"
-        web_env = {**env, "PORT": str(web_port), "HOSTNAME": "0.0.0.0"}
+        web_env = {**env, "PORT": str(wp), "HOSTNAME": "0.0.0.0"}
 
         if watch_web:
             proc = subprocess.Popen(
@@ -352,7 +338,7 @@ def cmd_dev(args):
                     except Exception:
                         pass
         _kill_port(api_port)
-        _kill_port(web_port)
+        _kill_port(ports["web"])
         time.sleep(0.5)
 
         status["api"] = "starting"
@@ -371,7 +357,7 @@ def cmd_dev(args):
                 if not status["api_ready"] and _check_api_ready(api_port):
                     status["api_ready"] = True
                     status["api"] = "ready"
-                if not status["web_ready"] and _check_port(web_port):
+                if not status["web_ready"] and _check_port(ports["web"]):
                     status["web_ready"] = True
                     status["web"] = "ready"
                 time.sleep(0.5)
@@ -381,9 +367,12 @@ def cmd_dev(args):
 
     # Kill existing
     log.step("Stopping existing servers...")
-    for port in [api_port, web_port]:
+    for port in [api_port, ports["web"]]:
         _kill_port(port)
     time.sleep(0.5)
+
+    # Auto-select port if requested port is still occupied
+    ports["web"] = _auto_fix_port(ports["web"], "web")
 
     python = Path(find_server_python(root))
 
@@ -399,7 +388,7 @@ def cmd_dev(args):
             if not status["api_ready"] and _check_api_ready(api_port):
                 status["api_ready"] = True
                 status["api"] = "ready"
-            if not status["web_ready"] and _check_port(web_port):
+            if not status["web_ready"] and _check_port(ports["web"]):
                 status["web_ready"] = True
                 status["web"] = "ready"
             # Check if API process died
@@ -409,7 +398,9 @@ def cmd_dev(args):
             # Check if web process died
             if not status["web_ready"] and procs["web"].poll() is not None:
                 if _is_eaddrinuse(web_lines):
-                    status["web"] = "eaddrinuse"
+                    ports["web"] = _auto_fix_port(ports["web"], "web")
+                    _kill_port(ports["web"])
+                    _start_web()
                 else:
                     status["web"] = "error"
                 break
@@ -425,7 +416,7 @@ def cmd_dev(args):
         title="SloughGPT Dev Server",
         tabs=[
             TabConfig("api", "API", api_lines, port=api_port, url_path="/docs"),
-            TabConfig("web", "Web", web_lines, port=web_port),
+            TabConfig("web", "Web", web_lines, port=ports["web"]),
         ],
         info={
             "Repository": str(root),
@@ -436,16 +427,12 @@ def cmd_dev(args):
     )
 
     shutdown = [False]
-    eaddrinuse_port = [None]  # Track EADDRINUSE for error display
 
     def _stop_check() -> bool:
         if shutdown[0]:
             return True
         dashboard.set_status("api", status["api"])
         dashboard.set_status("web", status["web"])
-        if status["web"] == "eaddrinuse":
-            eaddrinuse_port[0] = web_port
-            return True
         if status["api"] == "error" and status["web"] == "error":
             return True
         return False
@@ -460,11 +447,8 @@ def cmd_dev(args):
         dashboard.serve(stop_check=_stop_check)
     finally:
         stop_event.set()
-        _cleanup(procs["api"], procs["web"], api_port, web_port)
-        if eaddrinuse_port[0]:
-            _handle_eaddrinuse(eaddrinuse_port[0], "web")
-        else:
-            _print_summary(api_lines, web_lines, status, api_port, web_port)
+        _cleanup(procs["api"], procs["web"], api_port, ports["web"])
+        _print_summary(api_lines, web_lines, status, api_port, ports["web"])
 
 
 def _cleanup(api_proc, web_proc, api_port, web_port):
@@ -818,6 +802,9 @@ def _cmd_api_and_web(args):
     _kill_port(web_port)
     time.sleep(0.5)
 
+    # Auto-select port if requested port is still occupied
+    web_port = _auto_fix_port(web_port, "web")
+
     log.header("Starting SloughGPT — API + Web")
     log.key_value("API", f"http://{args.host}:{api_port}")
     log.key_value("Web", f"http://localhost:{web_port}")
@@ -994,7 +981,29 @@ def _cmd_api_and_web(args):
         # Check if web process died
         if web_proc.poll() is not None:
             if _is_eaddrinuse(web_lines):
-                _handle_eaddrinuse(web_port, "web")
+                web_port = _auto_fix_port(web_port, "web")
+                _kill_port(web_port)
+                web_lines.clear()
+                web_env["PORT"] = str(web_port)
+                if server_js.is_file():
+                    web_proc = subprocess.Popen(
+                        ["node", str(server_js.name)],
+                        cwd=str(server_js.parent),
+                        env=web_env,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    )
+                else:
+                    web_proc = subprocess.Popen(
+                        ["npm", "run", "dev"],
+                        cwd=str(web_root),
+                        env=web_env,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                    )
+                threading.Thread(
+                    target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
+                    kwargs={"echo_event": api_ready_event}, daemon=True,
+                ).start()
+                continue
             else:
                 log.error(f"Web server exited (code {web_proc.returncode})")
                 log.blank()
@@ -1058,12 +1067,15 @@ def _cmd_api_and_web(args):
             if api_proc.poll() is not None:
                 log.error(f"API server exited (code {api_proc.returncode})")
                 break
-            # Web crashed — restart it (unless EADDRINUSE)
+            # Web crashed — restart it (auto-fix port on EADDRINUSE)
             if web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
-                    _handle_eaddrinuse(web_port, "web")
-                    break
-                log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
+                    web_port = _auto_fix_port(web_port, "web")
+                    _kill_port(web_port)
+                    web_lines.clear()
+                    web_env["PORT"] = str(web_port)
+                else:
+                    log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
                 web_proc = subprocess.Popen(
                     ["node", str(server_js.name)] if server_js.is_file() else ["npm", "run", "dev"],
                     cwd=str(server_js.parent if server_js.is_file() else web_root),
