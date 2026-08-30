@@ -6583,6 +6583,25 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_071500_test-planner-add-card-type-tests",
+      "title": "test(planner): add card type tests",
+      "description": "Added test_add_card_with_type and test_edit_card_type to verify card_type field is correctly set and updated.",
+      "column": "done",
+      "priority": "low",
+      "tags": [
+        "planner",
+        "tests",
+        "kanban",
+        "card-type",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T07:15:00+00:00",
+      "updated_at": "2026-08-30T07:15:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
