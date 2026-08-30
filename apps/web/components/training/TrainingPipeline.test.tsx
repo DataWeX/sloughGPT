@@ -97,6 +97,8 @@ const session: UseTrainingSessionReturn = {
   startVisualTraining: vi.fn(),
   startTurboTrain: vi.fn(),
   stopTurboTrain: vi.fn(),
+  startSSETraining: vi.fn(),
+  closeStream: vi.fn(),
   turboRunning: false,
 }
 

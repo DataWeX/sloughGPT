@@ -8,6 +8,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useTrainingPolling } from './useTrainingPolling'
+import { useTrainingStream } from './useTrainingStream'
 
 const _log = logger.child('training-session')
 
@@ -53,6 +54,8 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: TrainingToastFn, experimentId?: string) => void
   stopTurboTrain: () => void
+  startSSETraining: (body: Record<string, unknown>, addToast: TrainingToastFn, onCheckpointUpdate?: () => void) => void
+  closeStream: () => void
 }
 
 function useShellTraining(): TrainingShellState {
@@ -94,6 +97,7 @@ function useShellTraining(): TrainingShellState {
 export function useTrainingSession(): UseTrainingSessionReturn {
   const training = useShellTraining()
   const { startStandardPoll, startTurboPoll, clearAllPolls } = useTrainingPolling()
+  const { startSSETraining, closeStream } = useTrainingStream()
 
   const trainingRunning = isTrainingActive(training)
   const turboRunning = training.method === 'turbo' && trainingRunning
@@ -348,5 +352,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     startVisualTraining,
     startTurboTrain,
     stopTurboTrain,
+    startSSETraining,
+    closeStream,
   }
 }
