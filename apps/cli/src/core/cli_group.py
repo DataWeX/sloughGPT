@@ -168,6 +168,10 @@ class SmartGroup(click.Group):
                 "cmds": ["docker"],
                 "desc": "Containerized deployment",
             },
+            "Advanced": {
+                "cmds": ["agent", "session"],
+                "desc": "AI agents and chat sessions",
+            },
         }
 
         # Get all commands
