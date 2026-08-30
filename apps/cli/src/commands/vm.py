@@ -62,9 +62,9 @@ def cmd_vm_run(args):
     log.header("VM Execution")
 
     source = getattr(args, "source", "") or ""
+    file_path = getattr(args, "file", None)
     if not source:
         # Try to read from file
-        file_path = getattr(args, "file", None)
         if file_path:
             try:
                 source = Path(file_path).read_text()
@@ -74,7 +74,24 @@ def cmd_vm_run(args):
         else:
             log.info("Usage: slooughgpt vm run <assembly_code>")
             log.info("   or: slooughgpt vm run --file <assembly_file>")
+            log.info("   or: slooughgpt vm run <program_name>")
+            log.info("")
+            log.info("Built-in programs: test_hello, hello, test_syscalls, test_files,")
+            log.info("  test_exec, test_memory, test_arith, test_stack, test_privilege,")
+            log.info("  test_multiprocess, test_fork, test_pipe, test_mmap, test_signal,")
+            log.info("  test_usermode, test_ebx_ecx, test_ergonomics, test_singlestep,")
+            log.info("  test_v86_dos, empty, hello_linux")
             return
+
+    # Check if source is a built-in program name
+    if not file_path and not source.strip().startswith(('[', 'mov', 'push', 'pop', 'jmp', 'call', 'ret', 'int', 'nop')):
+        try:
+            from domains.shell.vm_programs import PROGRAMS
+            if source.strip().lower() in PROGRAMS:
+                source = PROGRAMS[source.strip().lower()]
+                log.info(f"Running built-in program: {source.strip().lower()}")
+        except ImportError:
+            pass
 
     try:
         from domains.shell.vm import X86CPU, X86Assembler

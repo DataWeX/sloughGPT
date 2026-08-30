@@ -24,6 +24,38 @@
   ],
   "cards": [
     {
+      "id": "20260830_103238_test-coverage-expansion-core-python-modules",
+      "title": "Test Coverage Expansion - Core Python Modules",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "coverage"
+      ],
+      "created_at": "2026-08-30T10:32:38.549365+00:00",
+      "updated_at": "2026-08-30T10:32:38.549365+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_103238_fix-failing-tests-in-appsweb",
+      "title": "Fix failing tests in apps/web",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "frontend"
+      ],
+      "created_at": "2026-08-30T10:32:38.535488+00:00",
+      "updated_at": "2026-08-30T10:32:38.535488+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260830_073405_consolidate-sse-fallback-into-single-module",
       "title": "Consolidate SSE fallback into single module",
       "description": "",
@@ -7720,13 +7752,16 @@
         "core"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_vm-add-program-runner",
       "title": "Add vm run <program_name> shortcut",
       "description": "Allow running built-in programs by name without writing assembly. Example: `slooughgpt vm run test_syscalls` should load and execute the TEST_SYSCALLS_ASM constant from vm_programs.py.\n\n**Files:** apps/cli/src/commands/vm.py\n\n**Implementation:**\n1. Check if source matches a known program name (case-insensitive)\n2. If match found, import the corresponding *_ASM constant from vm_programs\n3. Pass the assembly source to VMEngine\n4. Add --list flag to show available program names\n\n**Test:** Add test that verifies program name resolution.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "vm",
@@ -7734,13 +7769,16 @@
         "enhancement"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_build-add-init-command",
       "title": "Add build init command to clone Buildroot",
       "description": "The `build status` tells users to run `slooughgpt build init` but that command doesn't exist. Add it.\n\n**Files:** apps/cli/src/commands/build.py, apps/cli/src/cli.py\n\n**Implementation:**\n1. Add `cmd_build_init(args)` function in build.py\n2. Clone Buildroot repo: git clone --depth 1 --branch 2024.02.x https://github.com/buildroot/buildroot.git buildroot\n3. Register as `build init` in cli.py\n4. Handle existing directory gracefully\n5. Copy configs/ and overlays/ into the cloned repo\n\n**Test:** Add test that verifies the init function exists.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "buildroot",
@@ -7748,13 +7786,16 @@
         "enhancement"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_cli-end-to-end-tests",
       "title": "Add CLI end-to-end integration tests",
       "description": "Current CLI tests only check file structure. Add tests that actually invoke CLI commands and verify output.\n\n**Files:** packages/core-py/tests/test_cli_e2e.py (new)\n\n**Test cases:**\n1. `vm status` outputs 'x86 Virtual Machine' header\n2. `vm list` outputs 'VM Programs' and lists known programs\n3. `vm info` outputs 'Memory' and 'CPU' sections\n4. `vm run --file test.asm` with valid assembly completes\n5. `build status` outputs 'Buildroot Status'\n6. All commands exit with code 0\n\n**Implementation:** Use subprocess.run() with capture_output=True. Mark as @pytest.mark.slow.",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "cli",
@@ -7762,7 +7803,10 @@
         "integration"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_vm-run-max-steps-default",
@@ -7776,7 +7820,10 @@
         "safety"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_buildroot-docker-test",
@@ -7790,7 +7837,10 @@
         "docker"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_vm-debug-noninteractive",
@@ -7804,7 +7854,10 @@
         "enhancement"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     },
     {
       "id": "20260830T094845_module-loader-tests",
@@ -7818,7 +7871,10 @@
         "module-loader"
       ],
       "created_at": "2026-08-30T09:48:45.585185",
-      "updated_at": "2026-08-30T09:48:45.585185"
+      "updated_at": "2026-08-30T09:48:45.585185",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
     }
   ]
 }

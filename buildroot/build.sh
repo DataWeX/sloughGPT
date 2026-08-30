@@ -175,6 +175,14 @@ _format_size() {
     fi
 }
 
+# Setup: build Docker image and verify environment
+setup_build() {
+    log "Setting up Buildroot build environment..."
+    build_docker
+    success "Build environment ready"
+    build_status
+}
+
 # Main
 case "${1:-build}" in
     build)
@@ -192,8 +200,11 @@ case "${1:-build}" in
     docker)
         build_docker
         ;;
+    setup)
+        setup_build
+        ;;
     *)
-        echo "Usage: $0 {build|clean|shell|status|docker}"
+        echo "Usage: $0 {build|clean|shell|status|docker|setup}"
         exit 1
         ;;
 esac

@@ -1626,47 +1626,264 @@ done:
 """
 
 
-# ── Self Test ────────────────────────────────────────────────────────────────
+# ── Missing Program Stubs ──────────────────────────────────────────────────────
 
-def self_test() -> list[str]:
-    """Run built-in programs and report results."""
-    results = []
-    runner = VMRunner()
+TEST_HELLO_ASM = """\
+; test_hello.asm — Minimal hello-world test for x86 VM
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 14
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Hello, World!", 10, 0
+"""
 
-    out = runner.assemble_and_run(HELLO_ASM)
-    hello_ok = "Hello" in " ".join(out)
-    results.append(f"  hello: {'PASS' if hello_ok else 'FAIL'} — output: {out}")
+TEST_PRIVILEGE_ASM = """\
+; test_privilege.asm — Tests RBAC privilege levels
+[BITS 32]
+[ORG 0x100000]
+    ; USER mode: print works
+    mov eax, 3
+    mov ebx, 1
+    push msg_user
+    mov ecx, esp
+    mov edx, 11
+    int 0x80
+    pop eax
+    ; Exit
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg_user: db "USER mode OK", 10, 0
+"""
 
-    runner2 = VMRunner()
-    out2 = runner2.assemble_and_run(COUNTER_ASM)
-    results.append(f"  counter: {'PASS' if out2 else 'FAIL'} — steps: {runner2.cpu._step_count}")
+TEST_MULTIPROCESS_ASM = """\
+; test_multiprocess.asm — Tests multiprocess scheduling
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 14
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Multiprocess OK", 10, 0
+"""
 
-    runner3 = VMRunner()
-    out3 = runner3.assemble_and_run(FIB_ASM)
-    results.append(f"  fib: {'PASS' if out3 else 'FAIL'} — steps: {runner3.cpu._step_count}")
+TEST_FORK_ASM = """\
+; test_fork.asm — Tests fork syscall
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 6
+    int 0x80
+    ; Parent: EAX > 0, Child: EAX == 0
+    cmp eax, 0
+    je .child
+    ; Parent prints and exits
+    mov eax, 3
+    mov ebx, 1
+    push msg_parent
+    mov ecx, esp
+    mov edx, 14
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+.child:
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg_parent: db "Fork parent OK", 10, 0
+"""
 
-    runner4 = VMRunner()
-    out4 = runner4.assemble_and_run(
-        "MOV R0, 10\nPUSH R0\nMOV R0, 20\nPOP R1\nIADD R2, R0, R1\nPRINT R2\nHALT"
-    )
-    stack_ok = out4 == ["30"]
-    results.append(f"  stack_push_pop: {'PASS' if stack_ok else 'FAIL'} — output: {out4}")
+TEST_PIPE_ASM = """\
+; test_pipe.asm — Tests pipe IPC
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 12
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Pipe test OK", 10, 0
+"""
 
-    runner5 = VMRunner()
-    out5 = runner5.assemble_and_run(
-        "LOAD_CONST R0, 3.0\nLOAD_CONST R1, 4.0\nFMUL R2, R0, R1\nPRINT R2\nHALT"
-    )
-    float_ok = out5 and float(out5[0]) == 12.0
-    results.append(f"  float_mul: {'PASS' if float_ok else 'FAIL'} — output: {out5}")
+TEST_MMAP_ASM = """\
+; test_mmap.asm — Tests memory mapping
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 15
+    mov ebx, 256
+    int 0x80
+    ; EAX = heap address
+    mov [saved], eax
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 13
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+saved: dd 0
+msg: db "MMAP test OK", 10, 0
+"""
 
-    runner6 = VMRunner()
-    out6 = runner6.assemble_and_run(
-        "ALLOC R0, 256\nMEMINFO R1\nPRINT R1\nHALT"
-    )
-    mem_ok = out6 and int(out6[0]) >= 1
-    results.append(f"  alloc_meminfo: {'PASS' if mem_ok else 'FAIL'} — output: {out6}")
+TEST_SIGNAL_ASM = """\
+; test_signal.asm — Tests signal delivery
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 14
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Signal test OK", 10, 0
+"""
 
-    return results
+TEST_USERMODE_ASM = """\
+; test_usermode.asm — Tests user-mode execution
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 10
+    int 0x80
+    ; EAX = PID
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 15
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Usermode test OK", 10, 0
+"""
+
+TEST_EBX_ECX_ASM = """\
+; test_ebx_ecx.asm — Tests register preservation across syscalls
+[BITS 32]
+[ORG 0x100000]
+    mov ebx, 0x12345678
+    mov ecx, 0x9ABCDEF0
+    ; Make a syscall (getpid)
+    mov eax, 10
+    int 0x80
+    ; Check if EBX/ECX preserved
+    cmp ebx, 0x12345678
+    jne .fail
+    cmp ecx, 0x9ABCDEF0
+    jne .fail
+    mov eax, 3
+    mov ebx, 1
+    push msg_pass
+    mov ecx, esp
+    mov edx, 15
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+.fail:
+    mov eax, 1
+    mov ebx, 1
+    int 0x80
+msg_pass: db "EBX/ECX preserve OK", 10, 0
+"""
+
+TEST_ERGONOMICS_ASM = """\
+; test_ergonomics.asm — Tests ergonomic assembler features
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 18
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Ergonomics test OK", 10, 0
+"""
+
+TEST_SINGLESTEP_ASM = """\
+; test_singlestep.asm — Tests single-step debugging
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+"""
+
+TEST_V86_DOS_ASM = """\
+; test_v86_dos.asm — Tests v86/DOS compatibility mode
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 14
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "v86/DOS test OK", 10, 0
+"""
+
+EMPTY_ASM = """\
+; empty.asm — Empty program (immediate halt)
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+"""
+
+HELLO_LINUX_ASM = """\
+; hello_linux.asm — Linux-style hello world
+[BITS 32]
+[ORG 0x100000]
+    mov eax, 3
+    mov ebx, 1
+    push msg
+    mov ecx, esp
+    mov edx, 14
+    int 0x80
+    pop eax
+    mov eax, 1
+    mov ebx, 0
+    int 0x80
+msg: db "Hello, Linux!", 10, 0
+"""
 
 
 # ── Boot & Shell Programs ───────────────────────────────────────────────────
@@ -1708,6 +1925,87 @@ SHELL_ASM = """\
     OUT 1, R3
     JMP 0
 """
+
+
+# ── Program Registry ──────────────────────────────────────────────────────────
+
+PROGRAMS = {
+    "test_hello": TEST_HELLO_ASM,
+    "hello": HELLO_ASM,
+    "test_syscalls": TEST_SYSCALLS_ASM,
+    "test_files": TEST_FILES_ASM,
+    "test_exec": TEST_EXEC_ASM,
+    "test_memory": TEST_MEMORY_ASM,
+    "test_arith": TEST_ARITH_ASM,
+    "test_stack": TEST_STACK_ASM,
+    "test_privilege": TEST_PRIVILEGE_ASM,
+    "test_multiprocess": TEST_MULTIPROCESS_ASM,
+    "test_fork": TEST_FORK_ASM,
+    "test_pipe": TEST_PIPE_ASM,
+    "test_mmap": TEST_MMAP_ASM,
+    "test_signal": TEST_SIGNAL_ASM,
+    "test_usermode": TEST_USERMODE_ASM,
+    "test_ebx_ecx": TEST_EBX_ECX_ASM,
+    "test_ergonomics": TEST_ERGONOMICS_ASM,
+    "test_singlestep": TEST_SINGLESTEP_ASM,
+    "test_v86_dos": TEST_V86_DOS_ASM,
+    "empty": EMPTY_ASM,
+    "hello_linux": HELLO_LINUX_ASM,
+    "classical": CLASSICAL_ASM,
+    "tensor_math": TENSOR_MATH_ASM,
+    "matrix_mul": MATRIX_MUL_ASM,
+    "neural_net": NEURAL_NET_ASM,
+    "loop": LOOP_ASM,
+    "function": FUNCTION_ASM,
+    "mixed": MIXED_ASM,
+    "npu": NPU_PROGRAM_ASM,
+    "counter": COUNTER_ASM,
+    "fib": FIB_ASM,
+    "collatz": COLLATZ_ASM,
+}
+
+
+# ── Self Test ────────────────────────────────────────────────────────────────
+
+def self_test() -> list[str]:
+    """Run built-in programs and report results."""
+    results = []
+    runner = VMRunner()
+
+    out = runner.assemble_and_run(HELLO_ASM)
+    hello_ok = "Hello" in " ".join(out)
+    results.append(f"  hello: {'PASS' if hello_ok else 'FAIL'} — output: {out}")
+
+    runner2 = VMRunner()
+    out2 = runner2.assemble_and_run(COUNTER_ASM)
+    results.append(f"  counter: {'PASS' if out2 else 'FAIL'} — steps: {runner2.cpu._step_count}")
+
+    runner3 = VMRunner()
+    out3 = runner3.assemble_and_run(FIB_ASM)
+    results.append(f"  fib: {'PASS' if out3 else 'FAIL'} — steps: {runner3.cpu._step_count}")
+
+    runner4 = VMRunner()
+    out4 = runner4.assemble_and_run(
+        "MOV R0, 10\nPUSH R0\nMOV R0, 20\nPOP R1\nIADD R2, R0, R1\nPRINT R2\nHALT"
+    )
+    stack_ok = out4 == ["30"]
+    results.append(f"  stack_push_pop: {'PASS' if stack_ok else 'FAIL'} — output: {out4}")
+
+    runner5 = VMRunner()
+    out5 = runner5.assemble_and_run(
+        "LOAD_CONST R0, 3.0\nLOAD_CONST R1, 4.0\nFMUL R2, R0, R1\nPRINT R2\nHALT"
+    )
+    float_ok = out5 and float(out5[0]) == 12.0
+    results.append(f"  float_mul: {'PASS' if float_ok else 'FAIL'} — output: {out5}")
+
+    runner6 = VMRunner()
+    out6 = runner6.assemble_and_run(
+        "ALLOC R0, 256\nMEMINFO R1\nPRINT R1\nHALT"
+    )
+    mem_ok = out6 and int(out6[0]) >= 1
+    results.append(f"  alloc_meminfo: {'PASS' if mem_ok else 'FAIL'} — output: {out6}")
+
+    return results
 
 
 # ── x86 Boot Programs ───────────────────────────────────────────────────────

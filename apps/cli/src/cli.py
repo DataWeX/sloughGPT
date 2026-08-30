@@ -2215,6 +2215,13 @@ def build_run():
     cmd_build(_ns())
 
 
+@build.command("init", help="Initialize Buildroot build environment")
+@click.option("--clean", is_flag=True, help="Clean first, then set up")
+def build_init(clean):
+    from commands.build import cmd_build_init
+    cmd_build_init(_ns(clean=clean))
+
+
 @build.command("clean", help="Clean build output")
 def build_clean():
     from commands.build import cmd_build_clean

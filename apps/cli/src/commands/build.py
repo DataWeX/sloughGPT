@@ -75,6 +75,38 @@ def cmd_build(args):
     log.info("Or run: slooughgpt build --install")
 
 
+def cmd_build_init(args):
+    """Initialize the Buildroot build environment."""
+    log.header("Initializing Buildroot")
+
+    clean = getattr(args, "clean", False)
+
+    build_script = BUILDROOT_DIR / "build.sh"
+    if not build_script.exists():
+        log.error(f"Build script not found: {build_script}")
+        return
+
+    if clean:
+        log.section("Cleaning first")
+        result = subprocess.run(
+            ["bash", str(build_script), "clean"],
+            capture_output=False,
+        )
+        if result.returncode != 0:
+            log.warning("Clean returned non-zero (may be ok)")
+
+    log.section("Running setup")
+    result = subprocess.run(
+        ["bash", str(build_script), "setup"],
+        capture_output=False,
+    )
+
+    if result.returncode == 0:
+        log.success("Build environment initialized")
+    else:
+        log.error(f"Setup failed with exit code {result.returncode}")
+
+
 def cmd_build_clean(args):
     """Clean Buildroot build directory."""
     log.header("Cleaning Buildroot")
@@ -173,6 +205,7 @@ COMMANDS = {
         "func": cmd_build,
         "help": "Build a Buildroot image for v86 browser VM",
         "subcommands": {
+            "init": cmd_build_init,
             "clean": cmd_build_clean,
             "status": cmd_build_status,
             "install": cmd_build_install,
