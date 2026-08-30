@@ -53,11 +53,16 @@
     "recharts": "^2.5.0",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "v86": "^0.5.432",
     "zod": "^4.4.3",
-    "zustand": "^4.5.7"
+    "zustand": "^4.5.7",
+    "prismjs": "^1.30.0",
+    "lucide-react": "^0.468.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.9.1",
+    "@types/prismjs": "^1.26.6",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "20.19.43",
