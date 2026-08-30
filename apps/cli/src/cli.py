@@ -146,6 +146,7 @@ def _show_welcome_banner():
     _GREEN = "\033[32m"
     _YELLOW = "\033[33m"
     _RED = "\033[31m"
+    _MAGENTA = "\033[35m"
 
     _write = sys.stdout.write
     _flush = sys.stdout.flush
@@ -154,9 +155,21 @@ def _show_welcome_banner():
         _write(text + "\n")
         _flush()
 
+    # ── ASCII art header ──────────────────────────────────
     _line()
-    _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
-    _line("  " + "─" * 50)
+    _line(f"  {_c('  ┌─────────────────────────────────┐', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('                                 ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('   ████████╗██╗                  ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║                  ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ██║                  ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ██║                  ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗             ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝             ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('                                 ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  └─────────────────────────────────┘', _DIM)}")
+    _line()
+    _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    _line(f"  {_c('  ─────────────────────────────────────────', _DIM)}")
     _line()
 
     # Quick start commands
