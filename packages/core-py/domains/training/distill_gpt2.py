@@ -704,7 +704,8 @@ def distill_gpt2_to_slo(
 if __name__ == "__main__":  # pragma: no cover (requires GPT-2 download)
     import sys
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    from domains.logging.config import setup_logging
+    setup_logging()
 
     # Quick test with small text
     text = "The quick brown fox jumps over the lazy dog. " * 100

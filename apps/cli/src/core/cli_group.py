@@ -124,11 +124,16 @@ class SmartGroup(click.Group):
 
         # Global options
         _p(f"  {_c('Global Options:', _BOLD)}")
-        _p(f"    {_c('--host', _CYAN)}       API hostname (default: localhost)")
-        _p(f"    {_c('--port', _CYAN)}       API port (default: 8000)")
-        _p(f"    {_c('-c, --config', _CYAN)} Config path (default: config.yaml)")
-        _p(f"    {_c('--yes, -y', _CYAN)}    Skip all confirmations")
-        _p(f"    {_c('--help', _CYAN)}       Show this help message")
+        _p(f"    {_c('--host', _CYAN)}         API hostname (default: localhost)")
+        _p(f"    {_c('--port', _CYAN)}         API port (default: 8000)")
+        _p(f"    {_c('-c, --config', _CYAN)}   Config path (default: config.yaml)")
+        _p(f"    {_c('--json', _CYAN)}         JSON output for commands")
+        _p(f"    {_c('--no-color', _CYAN)}     Disable ANSI color output")
+        _p(f"    {_c('-q, --quiet', _CYAN)}    Suppress non-essential output")
+        _p(f"    {_c('--timeout', _CYAN)}      HTTP timeout in seconds (default: 10)")
+        _p(f"    {_c('--version', _CYAN)}      Show version")
+        _p(f"    {_c('--yes, -y', _CYAN)}      Skip all confirmations")
+        _p(f"    {_c('--help', _CYAN)}         Show this help message")
         _p()
 
     def _format_grouped_commands(self, ctx: click.Context) -> None:
@@ -152,11 +157,11 @@ class SmartGroup(click.Group):
                 "desc": "Fine-tune and evaluate models",
             },
             "Data": {
-                "cmds": ["dataset", "knowledge"],
+                "cmds": ["dataset", "knowledge", "experiment"],
                 "desc": "Import and manage training data",
             },
             "System": {
-                "cmds": ["system", "completion", "simulate"],
+                "cmds": ["system", "error", "completion", "simulate"],
                 "desc": "Environment and diagnostics",
             },
             "Docker": {

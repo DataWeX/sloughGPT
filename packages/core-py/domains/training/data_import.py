@@ -715,12 +715,12 @@ class HuggingFaceImporter:
 
             # Handle datasets with subsets/config
             try:
-                dataset = load_dataset(dataset_id, trust_remote_code=True)
+                dataset = load_dataset(dataset_id)
             except Exception as config_err:
                 # Try with default config for datasets with subsets
                 logger.warning("Full load failed, trying default config: %s", config_err,
                     extra={"tag": "TRAIN"},)
-                dataset = load_dataset(dataset_id, split="train", trust_remote_code=True)
+                dataset = load_dataset(dataset_id, split="train")
 
             # Handle both DatasetDict and Dataset
             total_chars = 0

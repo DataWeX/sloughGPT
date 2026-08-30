@@ -854,6 +854,7 @@ class DevDashboard:
         title: str = "SloughGPT Dev Server",
         tabs: list[TabConfig] | None = None,
         info: dict | None = None,
+        on_restart: Optional[Callable[[], bool]] = None,
     ):
         self._title = title
         self._tabs: list[TabConfig] = tabs or []
@@ -863,10 +864,16 @@ class DevDashboard:
         self._info: dict = info or {}
         if "Theme" not in self._info:
             self._info["Theme"] = "Default"
+        if self._restarting:
+            self._info["Status"] = "RESTARTING"
+        elif "Status" in self._info:
+            del self._info["Status"]
         self._shutdown = False
         self._start_time = time.monotonic()
         self._frame = 0
         self._startup_phase = True
+        self._on_restart = on_restart
+        self._restarting = False
 
         # scroll support: scroll offset per tab (0 = latest)
         self._scroll_offsets: dict[str, int] = {t.id: 0 for t in self._tabs}
@@ -1149,6 +1156,28 @@ class DevDashboard:
                             self._frame += 1
                             continue
 
+                        # ── restart servers ──────────────────────
+                        if key == "r" and self._on_restart and not self._restarting:
+                            self._restarting = True
+                            rendered = self._render()
+                            display.update(rendered)
+                            # Run restart in a thread so the UI stays responsive
+                            def _do_restart():
+                                try:
+                                    success = self._on_restart()
+                                except Exception:
+                                    success = False
+                                self._restarting = False
+                                if success:
+                                    # Reset states to starting
+                                    for tid in self._states:
+                                        self._states[tid] = "starting"
+                                    self._startup_phase = True
+                                    self._start_time = time.monotonic()
+                            threading.Thread(target=_do_restart, daemon=True).start()
+                            self._frame += 1
+                            continue
+
                         self.handle_arrow_key(key)
                         rendered = self._render()
                         display.update(rendered)
@@ -1187,6 +1216,7 @@ class DevDashboard:
                 ("?", "Toggle this help"),
             ]),
             ("General", [
+                ("r", "Restart servers"),
                 ("q / Ctrl+C", "Quit dashboard"),
             ]),
         ]
@@ -1438,7 +1468,7 @@ class DevDashboard:
             footer_text += f"  {sep}Docs :8000/docs"
         footer_text += (
             f"  {sep}\u2190\u2192 tabs  \u2191\u2193 scroll  "
-            f"space pause  / search  ? help  C clear  t theme  q quit"
+            f"space pause  / search  ? help  C clear  r restart  t theme  q quit"
         )
         parts.append(render_footer(footer_text, width=w, elapsed=elapsed_str))
 

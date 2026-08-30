@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import math
 import os
 import time
@@ -18,6 +19,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
+
+logger = logging.getLogger("slo.gpu.wgpu")
 
 from domains.infrastructure.compute_backend import ComputeBackend, register_backend
 from domains.infrastructure.arch_config import ArchConfig
@@ -59,7 +62,7 @@ class WgpuBE(ComputeBackend):
             self._GPU_BUF_STORAGE = GPU_BUF_STORAGE
             self._has_gpu = True
         except (FileNotFoundError, RuntimeError) as e:
-            print(f"WgpuBE: GPU not available ({e}), falling back to numpy")
+            logger.warning("GPU not available (%s), falling back to numpy", e)
             self._has_gpu = False
 
         # Transfer weights to GPU

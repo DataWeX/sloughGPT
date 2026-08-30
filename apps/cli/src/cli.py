@@ -53,6 +53,36 @@ def _ns(**kwargs) -> SimpleNamespace:
     return SimpleNamespace(**kwargs)
 
 
+def _output(ctx, data, *, plain=None):
+    """Unified output helper: --json prints data dict, otherwise prints plain text.
+
+    Usage in commands:
+        _output(ctx, {"models": [...]}, plain=f"Found {len(models)} models")
+    """
+    import json as _json
+
+    if ctx.obj.get("json"):
+        click.echo(_json.dumps(data, indent=2, default=str))
+    elif plain is not None:
+        click.echo(plain)
+    else:
+        for k, v in data.items():
+            click.echo(f"{k}: {v}")
+
+
+def _confirm(ctx, message, *, force=False):
+    """Prompt for confirmation unless --quiet or force=True."""
+    if force or ctx.obj.get("quiet"):
+        return True
+    return click.confirm(message)
+
+
+def _verbose(ctx, *args):
+    """Print only if not --quiet."""
+    if not ctx.obj.get("quiet"):
+        click.echo(" ".join(str(a) for a in args))
+
+
 # ── Docker helpers ────────────────────────────────────────────────────
 
 
@@ -109,16 +139,29 @@ def _docker_action(action: str, a):
 
 
 @click.group(cls=SmartGroup, invoke_without_command=True)
+@click.version_option(package_name="sloughgpt", prog_name="sloughgpt")
 @click.option("--host", default="localhost", help="API hostname", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("-c", "--config", default="config.yaml", help="Config path", show_default=True)
+@click.option("--json", "output_json", is_flag=True, help="JSON output for commands")
+@click.option("--no-color", is_flag=True, help="Disable ANSI color output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress non-essential output")
+@click.option("--timeout", default=10, type=int, help="HTTP timeout in seconds", show_default=True)
 @click.pass_context
-def cli(ctx, host: str, port: int, config: str):
+def cli(ctx, host: str, port: int, config: str, output_json: bool, no_color: bool, quiet: bool, timeout: int):
     """SloughGPT CLI — train, chat, serve, and manage models."""
     ctx.ensure_object(dict)
     ctx.obj["host"] = host
     ctx.obj["port"] = port
     ctx.obj["config"] = config
+    ctx.obj["json"] = output_json
+    ctx.obj["no_color"] = no_color
+    ctx.obj["quiet"] = quiet
+    ctx.obj["timeout"] = timeout
+
+    if no_color:
+        os.environ["NO_COLOR"] = "1"
+        os.environ["SLO_NO_COLOR"] = "1"
 
     if ctx.invoked_subcommand is None:
         _show_welcome_banner()
@@ -433,26 +476,29 @@ def model(ctx):
 @click.pass_context
 def model_list(ctx):
     from commands.models import cmd_models
-    cmd_models(_ns())
+    cmd_models(_ns(json_output=ctx.obj.get("json")))
 
 
 @model.command("status", help="Show cached/downloaded models with sizes")
-def model_status():
+@click.pass_context
+def model_status(ctx):
     from commands.models import _cmd_models_status
-    _cmd_models_status(_ns())
+    _cmd_models_status(_ns(json_output=ctx.obj.get("json")))
 
 
 @model.command("info", help="Show checkpoint info")
 @click.argument("checkpoint", default="models/sloughgpt.soul")
-def model_info(checkpoint):
+@click.pass_context
+def model_info(ctx, checkpoint):
     from commands.models import _cmd_models_info
-    _cmd_models_info(_ns(model=checkpoint))
+    _cmd_models_info(_ns(model=checkpoint, json_output=ctx.obj.get("json")))
 
 
 @model.command("download", help="Download model from HuggingFace")
 @click.argument("model_id", required=False, default=None)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def model_download(model_id, yes):
+@click.pass_context
+def model_download(ctx, model_id, yes):
     from commands.models import _cmd_models_download
     _cmd_models_download(_ns(model_id=model_id, yes=yes))
 
@@ -488,16 +534,19 @@ def model_export(checkpoint, output, fmt, quantize, seq_len, opset, n_ctx, soul_
 @click.option("--runs", "-r", default=10, type=int, help="Number of runs")
 @click.option("--tokens", "-k", default=50, type=int, help="Max new tokens")
 @click.option("--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt")
-def model_benchmark(checkpoint, device, test, runs, tokens, prompt):
+@click.pass_context
+def model_benchmark(ctx, checkpoint, device, test, runs, tokens, prompt):
     from commands.models import cmd_benchmark
-    args = _ns(model=checkpoint, device=device, test=test, runs=runs, tokens=tokens, prompt=prompt)
+    args = _ns(model=checkpoint, device=device, test=test, runs=runs, tokens=tokens, prompt=prompt,
+              json_output=ctx.obj.get("json"))
     cmd_benchmark(args)
 
 
 @model.command("compare", help="Compare models or benchmarks")
-def model_compare():
+@click.pass_context
+def model_compare(ctx):
     from commands.models import _cmd_models_compare
-    _cmd_models_compare(_ns())
+    _cmd_models_compare(_ns(json_output=ctx.obj.get("json")))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -512,16 +561,18 @@ def dataset(ctx):
 
 
 @dataset.command("list", help="List available datasets")
-def dataset_list():
+@click.pass_context
+def dataset_list(ctx):
     from commands.data import cmd_datasets
-    cmd_datasets(_ns())
+    cmd_datasets(_ns(json_output=ctx.obj.get("json")))
 
 
 @dataset.command("stats", help="Show dataset statistics")
 @click.argument("name")
-def dataset_stats(name):
+@click.pass_context
+def dataset_stats(ctx, name):
     from commands.data import cmd_dataset_stats
-    args = _ns(name=name)
+    args = _ns(name=name, json_output=ctx.obj.get("json"))
     cmd_dataset_stats(args)
 
 
@@ -529,9 +580,10 @@ def dataset_stats(name):
 @click.argument("query")
 @click.option("--limit", "-n", default=10, type=int, help="Max results")
 @click.option("--source", type=click.Choice(["hf", "github"]), default="hf")
-def dataset_search(query, limit, source):
+@click.pass_context
+def dataset_search(ctx, query, limit, source):
     from commands.data import cmd_dataset_search
-    args = _ns(query=query, limit=limit, source=source)
+    args = _ns(query=query, limit=limit, source=source, json_output=ctx.obj.get("json"))
     cmd_dataset_search(args)
 
 
@@ -1017,9 +1069,13 @@ def token_tree_load(ctx, name):
 
 @token_tree.command("delete", help="Delete a saved token tree by name")
 @click.argument("name")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
 @click.pass_context
-def token_tree_delete(ctx, name):
+def token_tree_delete(ctx, name, dry_run):
     from commands.token_tree import cmd_token_tree_delete
+    if dry_run:
+        log.info(f"Would delete token tree: {name}")
+        return
     cmd_token_tree_delete(_ns(name=name))
 
 
@@ -1098,18 +1154,22 @@ def checkpoint_load(ctx, name):
 @checkpoint.command("delete", help="Delete a training checkpoint")
 @click.argument("name")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
 @click.pass_context
-def checkpoint_delete(ctx, name, yes):
+def checkpoint_delete(ctx, name, yes, dry_run):
     """Delete a training checkpoint.
 
     \b
     Example:
       sloughgpt checkpoint delete my-checkpoint.soul
     """
-    if not yes:
+    if not yes and not dry_run:
         click.confirm(f"Delete checkpoint '{name}'?", abort=True)
     import requests
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+    if dry_run:
+        log.info(f"Would delete: {name}")
+        return
     resp = requests.delete(f"{base_url}/training/checkpoints/{name}", timeout=10)
     if resp.status_code == 200:
         log.success(f"Deleted: {name}")
@@ -1251,13 +1311,243 @@ def knowledge_ingest(ctx, texts, topic, file_path):
     if not items:
         log.error("No texts to ingest")
         return
+    timeout = ctx.obj.get("timeout", 10)
     r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/bulk-ingest",
-                      json={"items": items, "topic": topic})
+                      json={"items": items, "topic": topic}, timeout=timeout)
     if r.status_code != 200:
         log.error(f"Ingest failed: {r.text}")
         return
     data = r.json()
     log.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# experiment  — list, create, info, delete, metrics
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="ML experiment tracking — create, list, log metrics")
+def experiment():
+    pass
+
+
+@experiment.command("list", help="List all experiments")
+@click.pass_context
+def experiment_list(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to list experiments: {r.text}")
+        return
+    data = r.json()
+    exps = data.get("data", {}).get("experiments", [])
+    if not exps:
+        log.info("No experiments found")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"experiments": exps})
+    else:
+        log.header("Experiments")
+        for exp in exps:
+            log.info(f"  {exp}")
+
+
+@experiment.command("create", help="Create a new experiment")
+@click.argument("name")
+@click.pass_context
+def experiment_create(ctx, name):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments",
+                      json={"name": name}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to create experiment: {r.text}")
+        return
+    data = r.json().get("data", {})
+    log.success(f"Created experiment: {data.get('id', name)}")
+
+
+@experiment.command("info", help="Show experiment details")
+@click.argument("experiment_id")
+@click.pass_context
+def experiment_info(ctx, experiment_id):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Experiment not found: {r.text}")
+        return
+    data = r.json().get("data", {})
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        log.header(f"Experiment: {experiment_id}")
+        for k, v in data.items():
+            log.key_value(k, str(v))
+
+
+@experiment.command("delete", help="Delete an experiment")
+@click.argument("experiment_id")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
+@click.pass_context
+def experiment_delete(ctx, experiment_id, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info(f"Would delete experiment: {experiment_id}")
+        return
+    if not yes:
+        click.confirm(f"Delete experiment '{experiment_id}'?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}", timeout=timeout)
+    if r.status_code == 200:
+        log.success(f"Deleted experiment: {experiment_id}")
+    else:
+        log.error(f"Failed to delete: {r.text}")
+
+
+@experiment.command("metrics", help="Show experiment metrics")
+@click.argument("experiment_id")
+@click.pass_context
+def experiment_metrics(ctx, experiment_id):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}/data", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to get metrics: {r.text}")
+        return
+    data = r.json().get("data", {})
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        log.header(f"Metrics: {experiment_id}")
+        metrics = data.get("metrics", [])
+        if not metrics:
+            log.info("No metrics recorded yet")
+            return
+        for m in metrics[-20:]:
+            log.info(f"  {m.get('step', '?')}: {m.get('key', '?')}={m.get('value', '?')}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# error  — recent, grouped, trends, clear
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Error monitoring — recent, grouped, trends, clear")
+def error():
+    pass
+
+
+@error.command("recent", help="Show recent errors")
+@click.option("--limit", "-n", default=20, type=int, help="Max errors to show")
+@click.pass_context
+def error_recent(ctx, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/recent?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch errors: {r.text}")
+        return
+    data = r.json().get("data", {})
+    errors = data.get("errors", [])
+    if not errors:
+        log.info("No recent errors")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"errors": errors})
+    else:
+        log.header(f"Recent Errors ({len(errors)})")
+        for e in errors:
+            ts = e.get("timestamp", "?")[:19]
+            msg = e.get("message", "?")[:80]
+            log.info(f"  [{ts}] {msg}")
+
+
+@error.command("grouped", help="Show errors grouped by message")
+@click.pass_context
+def error_grouped(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/grouped", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch grouped errors: {r.text}")
+        return
+    data = r.json().get("data", {})
+    groups = data.get("groups", [])
+    if not groups:
+        log.info("No errors grouped")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"groups": groups})
+    else:
+        log.header(f"Error Groups ({len(groups)})")
+        for g in groups:
+            count = g.get("count", 0)
+            msg = g.get("message", "?")[:70]
+            log.info(f"  [{count}x] {msg}")
+
+
+@error.command("trends", help="Show error trends (last 24h)")
+@click.pass_context
+def error_trends(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/trends", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch trends: {r.text}")
+        return
+    data = r.json().get("data", {})
+    trends = data.get("trends", [])
+    if not trends:
+        log.info("No error trends")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"trends": trends})
+    else:
+        log.header("Error Trends (24h)")
+        for t in trends:
+            hour = t.get("hour", "?")
+            count = t.get("count", 0)
+            bar = "#" * min(count, 40)
+            log.info(f"  {hour}: {bar} ({count})")
+
+
+@error.command("clear", help="Clear all errors")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be cleared")
+@click.pass_context
+def error_clear(ctx, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info("Would clear all errors")
+        return
+    if not yes:
+        click.confirm("Clear all errors?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/clear", timeout=timeout)
+    if r.status_code == 200:
+        log.success("Errors cleared")
+    else:
+        log.error(f"Failed to clear: {r.text}")
+
+
+@error.command("unread", help="Show unread error count")
+@click.pass_context
+def error_unread(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/unread", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch unread count: {r.text}")
+        return
+    data = r.json().get("data", {})
+    count = data.get("count", 0)
+    if ctx.obj.get("json"):
+        _output(ctx, {"unread": count})
+    else:
+        log.info(f"Unread errors: {count}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1324,8 +1614,12 @@ def memory_remember(user_message, assistant_response):
 
 @memory.command("clear", help="Remove all stored memory")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-def memory_clear(yes):
+@click.option("--dry-run", is_flag=True, help="Show what would be cleared without clearing")
+def memory_clear(yes, dry_run):
     from commands.memory import cmd_memory_clear
+    if dry_run:
+        log.info("Would clear all stored memory")
+        return
     cmd_memory_clear(_ns(yes=yes))
 
 
@@ -1426,8 +1720,12 @@ def adapter_merge(users):
 
 @adapter.command("delete", help="Delete adapter")
 @click.argument("user")
-def adapter_delete(user):
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
+def adapter_delete(user, dry_run):
     from commands.train import _cmd_user_adapters
+    if dry_run:
+        log.info(f"Would delete adapter for user: {user}")
+        return
     _cmd_user_adapters(_ns(action="delete", user=user))
 
 
@@ -1473,35 +1771,41 @@ def system():
 @system.command("status", help="Show live system status")
 @click.option("--watch", is_flag=True, help="Auto-refresh")
 @click.option("--interval", default=3, type=int, help="Refresh interval")
-def system_status(watch, interval):
+@click.pass_context
+def system_status(ctx, watch, interval):
     from commands.system import cmd_status
-    cmd_status(_ns(watch=watch, interval=interval))
+    cmd_status(_ns(watch=watch, interval=interval, json_output=ctx.obj.get("json"), quiet=ctx.obj.get("quiet"),
+               timeout=ctx.obj.get("timeout", 10)))
 
 
 @system.command("info", help="Show system information")
-def system_info():
+@click.pass_context
+def system_info(ctx):
     from commands.system import cmd_system
-    cmd_system(_ns())
+    cmd_system(_ns(json_output=ctx.obj.get("json")))
 
 
 @system.command("health", help="Quick API health check")
 @click.pass_context
 def system_health(ctx):
     from commands.dev import cmd_health
-    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
+    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"], json_output=ctx.obj.get("json"),
+               timeout=ctx.obj.get("timeout", 10))
     cmd_health(args)
 
 
 @system.command("stats", help="Show models/datasets statistics")
-def system_stats():
+@click.pass_context
+def system_stats(ctx):
     from commands.system import cmd_stats
-    cmd_stats(_ns())
+    cmd_stats(_ns(json_output=ctx.obj.get("json")))
 
 
 @system.command("doctor", help="Run environment checks")
-def system_doctor():
+@click.pass_context
+def system_doctor(ctx):
     from commands.system import cmd_config_check
-    cmd_config_check(_ns())
+    cmd_config_check(_ns(json_output=ctx.obj.get("json")))
 
 
 @system.command("config", help="Show or validate configuration")

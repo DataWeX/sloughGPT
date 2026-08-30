@@ -62,7 +62,7 @@ def _auto_fix_port(port: int, service: str = "web") -> int:
         log.error(f"No available port found in range {port}-{port + 20}")
         raise
     if new_port != port:
-        log.status(f"{service} port", f"{port} in use → using {new_port}", "warn")
+        log.warning(f"{service} port {port} in use — using port {new_port} instead")
     return new_port
 
 

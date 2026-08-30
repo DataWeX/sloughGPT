@@ -19,83 +19,125 @@ from utils.formatting import format_size, format_time, format_number
 
 def cmd_system(args):
     """Show system information."""
+    import json as _json
+
     try:
         import psutil
     except ImportError:
         psutil = None
 
-    log.header("System Information")
-
-    log.section("Platform")
-    log.key_value("Platform", platform.platform())
-    log.key_value("Python", platform.python_version())
-    log.key_value("Machine", platform.machine())
+    data = {
+        "platform": platform.platform(),
+        "python": platform.python_version(),
+        "machine": platform.machine(),
+    }
 
     if psutil:
-        log.section("CPU")
         try:
             from domains.infrastructure.resource_manager import get_resource_manager
             rm = get_resource_manager()
             cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
         except Exception:
             cores = str(psutil.cpu_count())
-        log.key_value("Cores", cores)
-        log.key_value("Usage", f"{psutil.cpu_percent()}%")
-
-        log.section("Memory")
+        data["cpu"] = {"cores": cores, "usage": f"{psutil.cpu_percent()}%"}
         mem = psutil.virtual_memory()
-        log.key_value("Total", format_size(mem.total))
-        log.key_value("Used", format_size(mem.used))
-        log.key_value("Available", format_size(mem.available))
-        log.key_value("Usage", f"{mem.percent}%")
-
-        log.section("Disk")
+        data["memory"] = {
+            "total": format_size(mem.total),
+            "used": format_size(mem.used),
+            "available": format_size(mem.available),
+            "usage": f"{mem.percent}%",
+        }
         disk = psutil.disk_usage("/")
-        log.key_value("Total", format_size(disk.total))
-        log.key_value("Used", format_size(disk.used))
-        log.key_value("Free", format_size(disk.free))
-        log.key_value("Usage", f"{disk.percent}%")
+        data["disk"] = {
+            "total": format_size(disk.total),
+            "used": format_size(disk.used),
+            "free": format_size(disk.free),
+            "usage": f"{disk.percent}%",
+        }
+
+    if getattr(args, "json_output", False):
+        print(_json.dumps(data, indent=2))
+        return
+
+    log.header("System Information")
+    log.section("Platform")
+    log.key_value("Platform", data["platform"])
+    log.key_value("Python", data["python"])
+    log.key_value("Machine", data["machine"])
+
+    if psutil and "cpu" in data:
+        log.section("CPU")
+        log.key_value("Cores", data["cpu"]["cores"])
+        log.key_value("Usage", data["cpu"]["usage"])
+        log.section("Memory")
+        log.key_value("Total", data["memory"]["total"])
+        log.key_value("Used", data["memory"]["used"])
+        log.key_value("Available", data["memory"]["available"])
+        log.key_value("Usage", data["memory"]["usage"])
+        log.section("Disk")
+        log.key_value("Total", data["disk"]["total"])
+        log.key_value("Used", data["disk"]["used"])
+        log.key_value("Free", data["disk"]["free"])
+        log.key_value("Usage", data["disk"]["usage"])
 
 
 def cmd_status(args):
     """Show system status with optional watch mode."""
+    import json as _json
     import requests
 
-    def print_status():
-        print("\033[2J\033[H")
-        log.header("SloughGPT Status")
+    timeout = getattr(args, "timeout", 10)
 
+    def _get_status():
+        data = {}
         try:
-            r = requests.get("http://localhost:8000/health", timeout=2)
-            log.status("API", "Online" if r.status_code == 200 else "Offline", "ok" if r.status_code == 200 else "error")
+            r = requests.get("http://localhost:8000/health", timeout=timeout)
+            data["api"] = {"status": "online" if r.status_code == 200 else "offline", "code": r.status_code}
         except (requests.RequestException, ConnectionError):
-            log.status("API", "Not running", "error")
+            data["api"] = {"status": "not running", "code": 0}
 
         models_dir = Path("models")
         if models_dir.exists():
             models = list(models_dir.rglob("*.soul"))
-            log.status("Models", f"{len(models)} found", "ok")
+            data["models"] = {"count": len(models), "status": "ok"}
         else:
-            log.status("Models", "Directory not found", "error")
+            data["models"] = {"count": 0, "status": "not found"}
 
         datasets_dir = Path("data")
         if datasets_dir.exists():
             datasets = list(datasets_dir.iterdir())
-            log.status("Datasets", f"{len([d for d in datasets if d.is_dir()])} found", "ok")
+            data["datasets"] = {"count": len([d for d in datasets if d.is_dir()]), "status": "ok"}
         else:
-            log.status("Datasets", "Directory not found", "warn")
+            data["datasets"] = {"count": 0, "status": "not found"}
+
+        return data
 
     if args.watch:
         try:
             while True:
-                print_status()
+                data = _get_status()
+                if getattr(args, "json_output", False):
+                    print(_json.dumps(data, indent=2))
+                else:
+                    print("\033[2J\033[H")
+                    log.header("SloughGPT Status")
+                    log.status("API", data["api"]["status"], "ok" if data["api"]["code"] == 200 else "error")
+                    log.status("Models", f"{data['models']['count']} found", data["models"]["status"])
+                    log.status("Datasets", f"{data['datasets']['count']} found", data["datasets"]["status"])
                 time.sleep(args.interval)
         except KeyboardInterrupt:
             log.blank()
             log.info("Stopped watching")
     else:
-        print_status()
-        log.info("Use --watch to auto-refresh")
+        data = _get_status()
+        if getattr(args, "json_output", False):
+            print(_json.dumps(data, indent=2))
+        else:
+            log.header("SloughGPT Status")
+            log.status("API", data["api"]["status"], "ok" if data["api"]["code"] == 200 else "error")
+            log.status("Models", f"{data['models']['count']} found", data["models"]["status"])
+            log.status("Datasets", f"{data['datasets']['count']} found", data["datasets"]["status"])
+            log.info("Use --watch to auto-refresh")
 
 
 def cmd_optimize(args):
@@ -149,15 +191,35 @@ def cmd_optimize(args):
 
 def cmd_config_check(args):
     """Check environment setup."""
-    log.header("Environment Check")
+    import json as _json
 
     doctor = Doctor()
     result = doctor.run_all()
 
+    checks = []
+    for check in result.checks:
+        checks.append({
+            "name": check.name,
+            "message": check.message,
+            "passed": check.passed,
+            "suggestion": check.suggestion,
+        })
+
+    data = {
+        "checks": checks,
+        "total": len(result.checks),
+        "passed": result.passed,
+        "failed_count": result.failed_count,
+    }
+
+    if getattr(args, "json_output", False):
+        print(_json.dumps(data, indent=2))
+        return
+
+    log.header("Environment Check")
     log.blank()
     for check in result.checks:
         log.status(check.name, check.message, "ok" if check.passed else "error")
-
     log.blank()
     if result.passed:
         log.success(f"All {len(result.checks)} checks passed")
@@ -165,7 +227,7 @@ def cmd_config_check(args):
         log.error(f"{result.failed_count}/{len(result.checks)} checks failed")
         for check in result.checks:
             if not check.passed and check.suggestion:
-                log.info(f"  → {check.suggestion}")
+                log.info(f"  -> {check.suggestion}")
 
 
 def cmd_config_validate(args):
@@ -303,7 +365,7 @@ def cmd_setup(args):
 
 def cmd_stats(args):
     """Show training and model statistics."""
-    log.header("SloughGPT Statistics")
+    import json as _json
 
     models_dir = Path("models")
     model_count = 0
@@ -312,9 +374,6 @@ def cmd_stats(args):
         for f in list(models_dir.glob("*.soul")) + list(models_dir.glob("*.safetensors")):
             model_count += 1
             total_size += f.stat().st_size
-    log.section("Models")
-    log.key_value("Count", str(model_count))
-    log.key_value("Total Size", format_size(total_size))
 
     datasets_dir = Path("datasets")
     ds_count = 0
@@ -324,23 +383,42 @@ def cmd_stats(args):
             if f.is_file():
                 ds_count += 1
                 ds_size += f.stat().st_size
-    log.section("Datasets")
-    log.key_value("Files", str(ds_count))
-    log.key_value("Total Size", format_size(ds_size))
 
     ckpt_dir = Path("checkpoints")
     ckpt_count = 0
     if ckpt_dir.exists():
         ckpt_count = len(list(ckpt_dir.glob("*.soul")))
-    log.section("Checkpoints")
-    log.key_value("Saved", str(ckpt_count))
 
+    exp_count = 0
     exp_file = Path("data/experiments/experiments.json")
     if exp_file.exists():
         with open(exp_file) as f:
             experiments = json.load(f)
+        exp_count = len(experiments)
+
+    data = {
+        "models": {"count": model_count, "total_size": format_size(total_size)},
+        "datasets": {"files": ds_count, "total_size": format_size(ds_size)},
+        "checkpoints": {"saved": ckpt_count},
+        "experiments": {"total": exp_count},
+    }
+
+    if getattr(args, "json_output", False):
+        print(_json.dumps(data, indent=2))
+        return
+
+    log.header("SloughGPT Statistics")
+    log.section("Models")
+    log.key_value("Count", str(model_count))
+    log.key_value("Total Size", format_size(total_size))
+    log.section("Datasets")
+    log.key_value("Files", str(ds_count))
+    log.key_value("Total Size", format_size(ds_size))
+    log.section("Checkpoints")
+    log.key_value("Saved", str(ckpt_count))
+    if exp_count > 0:
         log.section("Experiments")
-        log.key_value("Total", str(len(experiments)))
+        log.key_value("Total", str(exp_count))
 
 
 def register(subparsers):
