@@ -50,7 +50,7 @@ from urllib.parse import parse_qs, urlparse
 import planner.core as core_module
 
 from . import config
-from .kanban import KanbanStore
+from .kanban import KanbanStore, Board
 from .sync import sync_notes_to_board
 
 logger = logging.getLogger("planner.gui")
@@ -247,6 +247,10 @@ class GuiHandler(BaseHTTPRequestHandler):
                 return self._handle_create_note(body)
             if path == "/api/board/move":
                 return self._handle_move(body)
+            if path == "/api/board/export":
+                return self._handle_export_board()
+            if path == "/api/board/import":
+                return self._handle_import_board(body)
             if path == "/api/sync":
                 return self._handle_sync()
             return self._error(404, f"not found: {path}")
@@ -358,6 +362,17 @@ class GuiHandler(BaseHTTPRequestHandler):
                         self.stores.note_store.update(note.id, status=new_status)
                         break
         self._send(200, {"card": _card_to_dict(card)})
+
+    def _handle_export_board(self) -> None:
+        board = self.stores.kanban_store.load_board()
+        self._send(200, board.to_dict())
+
+    def _handle_import_board(self, body: dict) -> None:
+        if not body:
+            return self._error(400, "empty body")
+        with self.stores.lock:
+            self.stores.kanban_store._bk.save(Board.from_dict(body))
+        self._send(200, {"total": len(Board.from_dict(body).cards)})
 
     def _handle_sync(self) -> None:
         with self.stores.lock:
@@ -596,6 +611,9 @@ main{padding:18px;max-width:1400px;margin:0 auto}
   <input type="text" id="search" placeholder="Search notes / cards..." style="flex:1;max-width:320px" />
   <div class="spacer"></div>
   <button class="btn ghost" id="syncBtn">Sync board</button>
+  <button class="btn ghost" id="exportBtn">Export</button>
+  <button class="btn ghost" id="importBtn">Import</button>
+  <input type="file" id="importFile" accept=".json" style="display:none" />
   <button class="btn" id="newBtn">+ New note</button>
 </header>
 
@@ -974,6 +992,33 @@ $("syncBtn").addEventListener("click", async () => {
     toast(parts.length ? `Synced — ${parts.join(", ")}` : "Board up to date");
   } catch (err) { toast(err.message, true); }
   finally { $("syncBtn").disabled = false; }
+});
+
+$("exportBtn").addEventListener("click", async () => {
+  try {
+    const r = await api("/api/board/export");
+    const blob = new Blob([JSON.stringify(r, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "board_export.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("Board exported");
+  } catch (err) { toast(err.message, true); }
+});
+
+$("importBtn").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const r = await api("/api/board/import", {method:"POST", body: text});
+    await refresh();
+    toast(`Imported ${r.total || 0} cards`);
+  } catch (err) { toast(err.message, true); }
+  e.target.value = "";
 });
 
 /* ---------------- boot ---------------- */
