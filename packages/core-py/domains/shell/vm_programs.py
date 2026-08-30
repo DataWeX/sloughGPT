@@ -1863,9 +1863,7 @@ EMPTY_ASM = """\
 ; empty.asm — Empty program (immediate halt)
 [BITS 32]
 [ORG 0x100000]
-    mov eax, 1
-    mov ebx, 0
-    int 0x80
+    hlt
 """
 
 HELLO_LINUX_ASM = """\
