@@ -90,6 +90,7 @@ class Card:
     updated_at: str = ""
     due_date: str = ""
     assignee: str = ""
+    blocked_by: list[str] = field(default_factory=list)
     notes: list[Note] = field(default_factory=list)
 
     @property
@@ -214,12 +215,39 @@ class KanbanStore:
         card = self._find_one(board, card_id)
         if card is None:
             return None
-        for key in ("title", "description", "priority", "tags", "due_date", "assignee"):
+        for key in ("title", "description", "priority", "tags", "due_date", "assignee", "blocked_by"):
             if key in kwargs and kwargs[key] is not None:
                 setattr(card, key, kwargs[key])
         card.updated_at = datetime.now(timezone.utc).isoformat()
         self._bk.save(board)
         return card
+
+    def block_card(self, card_id: str, blocker_id: str) -> Card | None:
+        board = self.load_board()
+        card = self._find_one(board, card_id)
+        if card is None:
+            return None
+        if blocker_id not in card.blocked_by:
+            card.blocked_by.append(blocker_id)
+            card.updated_at = datetime.now(timezone.utc).isoformat()
+            self._bk.save(board)
+        return card
+
+    def unblock_card(self, card_id: str, blocker_id: str) -> Card | None:
+        board = self.load_board()
+        card = self._find_one(board, card_id)
+        if card is None:
+            return None
+        if blocker_id in card.blocked_by:
+            card.blocked_by.remove(blocker_id)
+            card.updated_at = datetime.now(timezone.utc).isoformat()
+            self._bk.save(board)
+        return card
+
+    def is_blocked(self, card_id: str) -> bool:
+        board = self.load_board()
+        card = self._find_one(board, card_id)
+        return bool(card.blocked_by) if card else False
 
     def delete_card(self, card_id: str) -> bool:
         board = self.load_board()
@@ -415,6 +443,7 @@ def _render_board(board: Board, width: int = 78) -> str:
                 c = cards[row_idx]
                 due = f" [{c.due_date}]" if c.due_date else ""
                 overdue = " !OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
+                blocked = " BLOCKED" if c.blocked_by else ""
                 assign = f" @{c.assignee}" if c.assignee else ""
                 tags = ""
                 if c.tags:
@@ -422,7 +451,7 @@ def _render_board(board: Board, width: int = 78) -> str:
                     if len(c.tags) > 2:
                         tags += "+"
                 notes = f" ({len(c.notes)})" if c.notes else ""
-                label = f"{c.priority_icon} {c.short_id} {_abbrev(c.title, col_width-14)}{due}{overdue}{assign}{tags}{notes}"
+                label = f"{c.priority_icon} {c.short_id} {_abbrev(c.title, col_width-16)}{due}{overdue}{blocked}{assign}{tags}{notes}"
                 cells.append(f" {label:<{col_width-1}}")
             else:
                 cells.append(" " * col_width)
@@ -478,6 +507,16 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_move = sub.add_parser("move", help="Move card to another column")
     p_move.add_argument("card_id", help="Card id or prefix")
     p_move.add_argument("column", help="Target column")
+
+    p_block = sub.add_parser("block", help="Block a card by another card")
+    p_block.add_argument("card_id", help="Card id or prefix to block")
+    p_block.add_argument("blocker_id", help="Blocker card id or prefix")
+
+    p_unblock = sub.add_parser("unblock", help="Unblock a card")
+    p_unblock.add_argument("card_id", help="Card id or prefix")
+    p_unblock.add_argument("blocker_id", help="Blocker card id or prefix")
+
+    p_blocked = sub.add_parser("blocked", help="List blocked cards")
 
     p_del = sub.add_parser("delete", aliases=["rm"], help="Delete a card")
     p_del.add_argument("card_id", help="Card id or prefix")
@@ -559,6 +598,7 @@ def cli_main(argv: list[str] | None = None) -> int:
             print(f"Card not found: {args.card_id}")
             return 1
         tags_s = ", ".join(card.tags) if card.tags else "none"
+        blocked_s = ", ".join(card.blocked_by) if card.blocked_by else "none"
         print(f"  {card.priority_icon}  {card.title}")
         print(f"  id:       {card.id}")
         print(f"  column:   {card.column}")
@@ -566,6 +606,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         print(f"  tags:     {tags_s}")
         print(f"  assignee: {card.assignee or 'unassigned'}")
         print(f"  due:      {card.due_date or 'none'}")
+        print(f"  blocked:  {blocked_s}")
         print(f"  created:  {card.created_at}")
         print(f"  updated:  {card.updated_at}")
         if card.description:
@@ -603,6 +644,34 @@ def cli_main(argv: list[str] | None = None) -> int:
             print(f"Card not found: {args.card_id}")
             return 1
         print(f"Moved: {card.short_id}  {card.title}  ->  {card.column}")
+        return 0
+
+    if args.cmd == "block":
+        card = store.block_card(args.card_id, args.blocker_id)
+        if card is None:
+            print(f"Card not found: {args.card_id}")
+            return 1
+        print(f"Blocked: {card.short_id}  {card.title}  by {args.blocker_id[:8]}")
+        return 0
+
+    if args.cmd == "unblock":
+        card = store.unblock_card(args.card_id, args.blocker_id)
+        if card is None:
+            print(f"Card not found: {args.card_id}")
+            return 1
+        print(f"Unblocked: {card.short_id}  {card.title}")
+        return 0
+
+    if args.cmd == "blocked":
+        cards = store.list_cards(limit=9999)
+        blocked = [c for c in cards if c.blocked_by]
+        if not blocked:
+            print("No blocked cards.")
+            return 0
+        for c in blocked:
+            blockers = ", ".join(b[:8] for b in c.blocked_by)
+            print(f"  {c.short_id}  {c.title}  [{c.column}]  blocked by: {blockers}")
+        print(f"\n  {len(blocked)} blocked card(s)")
         return 0
 
     if args.cmd in ("delete", "rm"):
