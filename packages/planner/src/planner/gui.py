@@ -764,6 +764,7 @@ function renderBoard(q) {
 }
 
 function cardHtml(c) {
+  const typeIcon = c.card_type ? {task:"☐",bug:"🐛",feature:"✨",chore:"🔧",spike:"🔍",docs:"📝"}[c.card_type] || "☐" : "☐";
   const tags = c.tags.slice(0,3).map(t => `<span class="chip">${esc(t)}</span>`).join("");
   const due = c.due_date ? `<span class="due">&#128197; ${esc(c.due_date)}</span>` : "";
   const overdue = c.due_date && c.due_date < new Date().toISOString().slice(0,10) && c.column !== "done"
@@ -772,7 +773,7 @@ function cardHtml(c) {
     ? `<span class="blocked">&#128683; BLOCKED</span>` : "";
   const n = c.notes.length ? `<span class="chip">${c.notes.length} note${c.notes.length>1?"s":""}</span>` : "";
   return `<div class="card" draggable="true" data-id="${esc(c.id)}" title="${esc(c.description||"")}">
-    <div class="t">${esc(c.title)}</div>
+    <div class="t">${typeIcon} ${esc(c.title)}</div>
     <div class="meta">${PICO[c.priority] ? `<span class="pri">${PICO[c.priority]}</span>` : ""}${tags}${n}${due}${overdue}${blocked}</div>
   </div>`;
 }

@@ -52,6 +52,16 @@ PRIORITIES = ("low", "medium", "high", "critical")
 PRIORITY_ICONS = {"low": " ", "medium": "!", "high": "!!", "critical": "!!!"}
 PRIORITY_SORT = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 
+CARD_TYPES = ("task", "bug", "feature", "chore", "spike", "docs")
+CARD_TYPE_ICONS = {
+    "task": "☐",
+    "bug": "🐛",
+    "feature": "✨",
+    "chore": "🔧",
+    "spike": "🔍",
+    "docs": "📝",
+}
+
 
 def _make_id(title: str) -> str:
     slug = title.lower().strip()
@@ -85,6 +95,7 @@ class Card:
     description: str = ""
     column: str = "todo"
     priority: str = "medium"
+    card_type: str = "task"
     tags: list[str] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
@@ -191,7 +202,7 @@ class KanbanStore:
         return None
 
     def add_card(self, title: str, column: str = "", priority: str = "medium",
-                 description: str = "", tags: list[str] | None = None,
+                 card_type: str = "task", description: str = "", tags: list[str] | None = None,
                  due_date: str = "", assignee: str = "") -> Card:
         board = self.load_board()
         column = column or (board.columns[0].name if board.columns else "todo")
@@ -199,6 +210,7 @@ class KanbanStore:
         card = Card(
             id=_make_id(title), title=title, description=description,
             column=column, priority=priority if priority in PRIORITIES else "medium",
+            card_type=card_type if card_type in CARD_TYPES else "task",
             tags=tags or [], created_at=now, updated_at=now,
             due_date=due_date, assignee=assignee,
         )
@@ -215,7 +227,7 @@ class KanbanStore:
         card = self._find_one(board, card_id)
         if card is None:
             return None
-        for key in ("title", "description", "priority", "tags", "due_date", "assignee", "blocked_by"):
+        for key in ("title", "description", "priority", "card_type", "tags", "due_date", "assignee", "blocked_by"):
             if key in kwargs and kwargs[key] is not None:
                 setattr(card, key, kwargs[key])
         card.updated_at = datetime.now(timezone.utc).isoformat()
@@ -441,6 +453,7 @@ def _render_board(board: Board, width: int = 78) -> str:
             cards = by_col.get(col.name, [])
             if row_idx < len(cards):
                 c = cards[row_idx]
+                type_icon = CARD_TYPE_ICONS.get(c.card_type, "☐")
                 due = f" [{c.due_date}]" if c.due_date else ""
                 overdue = " !OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
                 blocked = " BLOCKED" if c.blocked_by else ""
@@ -451,7 +464,7 @@ def _render_board(board: Board, width: int = 78) -> str:
                     if len(c.tags) > 2:
                         tags += "+"
                 notes = f" ({len(c.notes)})" if c.notes else ""
-                label = f"{c.priority_icon} {c.short_id} {_abbrev(c.title, col_width-16)}{due}{overdue}{blocked}{assign}{tags}{notes}"
+                label = f"{c.priority_icon} {type_icon} {c.short_id} {_abbrev(c.title, col_width-17)}{due}{overdue}{blocked}{assign}{tags}{notes}"
                 cells.append(f" {label:<{col_width-1}}")
             else:
                 cells.append(" " * col_width)
@@ -477,6 +490,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_add.add_argument("title", help="Card title")
     p_add.add_argument("--column", default="", help="Target column")
     p_add.add_argument("--priority", default="medium", choices=PRIORITIES)
+    p_add.add_argument("--type", default="task", choices=CARD_TYPES, help="Card type")
     p_add.add_argument("--desc", default="", help="Description")
     p_add.add_argument("--tags", default="", help="Comma-separated tags")
     p_add.add_argument("--due", default="", help="Due date (ISO)")
@@ -500,6 +514,7 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_edit.add_argument("--title", default=None)
     p_edit.add_argument("--desc", default=None)
     p_edit.add_argument("--priority", default=None, choices=PRIORITIES)
+    p_edit.add_argument("--type", default=None, choices=CARD_TYPES)
     p_edit.add_argument("--tags", default=None)
     p_edit.add_argument("--due", default=None)
     p_edit.add_argument("--assignee", default=None)
@@ -569,7 +584,8 @@ def cli_main(argv: list[str] | None = None) -> int:
     if args.cmd == "add":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
         card = store.add_card(args.title, column=args.column, priority=args.priority,
-                              description=args.desc, tags=tags, due_date=args.due, assignee=args.assignee)
+                              card_type=args.type, description=args.desc, tags=tags,
+                              due_date=args.due, assignee=args.assignee)
         print(f"Added: {card.short_id}  {card.title}  [{card.column}]  {card.priority_icon}")
         return 0
 
@@ -599,8 +615,10 @@ def cli_main(argv: list[str] | None = None) -> int:
             return 1
         tags_s = ", ".join(card.tags) if card.tags else "none"
         blocked_s = ", ".join(card.blocked_by) if card.blocked_by else "none"
-        print(f"  {card.priority_icon}  {card.title}")
+        type_icon = CARD_TYPE_ICONS.get(card.card_type, "☐")
+        print(f"  {card.priority_icon} {type_icon}  {card.title}")
         print(f"  id:       {card.id}")
+        print(f"  type:     {card.card_type}")
         print(f"  column:   {card.column}")
         print(f"  priority: {card.priority}")
         print(f"  tags:     {tags_s}")
@@ -625,6 +643,7 @@ def cli_main(argv: list[str] | None = None) -> int:
         if args.title is not None: kwargs["title"] = args.title
         if args.desc is not None: kwargs["description"] = args.desc
         if args.priority is not None: kwargs["priority"] = args.priority
+        if args.type is not None: kwargs["card_type"] = args.type
         if args.tags is not None: kwargs["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
         if args.due is not None: kwargs["due_date"] = args.due
         if args.assignee is not None: kwargs["assignee"] = args.assignee
