@@ -50,6 +50,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
       '@sloughgpt/strui': path.resolve(__dirname, '../../packages/strui/src'),
+      'react': path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
     },
     dedupe: ['react', 'react-dom'],
   },

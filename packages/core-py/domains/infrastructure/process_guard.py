@@ -225,7 +225,13 @@ class ProcessGuard:
             if self._restart_count >= self.max_restarts:
                 logger.error(
                     "ProcessGuard[%s]: worker stalled and restart budget exhausted",
-                    self.worker_id, extra={"op": "infra.process_guard.error"},
+                    self.worker_id,
+                    extra={
+                        "op": "infra.process_guard.error",
+                        "ok": False,
+                        "err": {"code": "E_GUARD_EXHAUSTED", "msg": "worker restart budget exhausted"},
+                        "infra": {"component": "process_guard", "worker_id": self.worker_id},
+                    },
                 )
                 raise RuntimeError(
                     f"ProcessGuard[{self.worker_id}]: worker restart budget exhausted "
@@ -351,14 +357,23 @@ class ProcessGuard:
                 try:
                     cb(self.worker_id)
                 except Exception:
-                    logger.exception("ProcessGuard crash callback failed", extra={"op": "infra.process_guard.error"})
+                    logger.exception("ProcessGuard crash callback failed", extra={"tag": "INFRA"})
         logger.info(
             "ProcessGuard[%s]: restarting worker (%s) (%d/%d)",
             self.worker_id,
             reason,
             self._restart_count + 1,
             self.max_restarts,
-            extra={"op": "infra.process_guard.error"},
+            extra={
+                "op": "infra.process_guard.restart",
+                "infra": {
+                    "component": "process_guard",
+                    "worker_id": self.worker_id,
+                    "reason": reason,
+                    "restart_count": self._restart_count + 1,
+                    "max_restarts": self.max_restarts,
+                },
+            },
         )
         time.sleep(self.restart_delay)
         self._launch_worker()
@@ -368,7 +383,7 @@ class ProcessGuard:
                 try:
                     cb(self.worker_id)
                 except Exception:
-                    logger.exception("ProcessGuard restart callback failed", extra={"op": "infra.process_guard.error"})
+                    logger.exception("ProcessGuard restart callback failed", extra={"tag": "INFRA"})
 
     def _monitor_loop(self) -> None:
         while not self._stop_monitor.is_set():

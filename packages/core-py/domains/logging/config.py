@@ -1,25 +1,31 @@
 """
 Centralized logging configuration — stdlib only, no external dependencies.
 
-Single unified formatter (SloFormatter) handles both console and file output:
-  - Console: colored human-readable with op-based tag badges
-  - File: slo.log v1 JSON with envelope + domain payloads
-  - Legacy tag backward compatibility via _derive_op()
+Replaces the scattered logging setup across main.py, cli.py, and bridge.py
+with a single entry point that configures:
+
+  - Console output (human-readable, JSON, or slo.log JSON)
+  - File output with rotation (JSON lines)
+  - Request correlation IDs (via contextvars)
+  - Third-party logger suppression
+  - OutputBuffer integration (SSE streaming)
 
 Usage::
 
     from domains.logging.config import setup_logging
 
     # At startup (once):
-    setup_logging()  # reads SLO_LOG_LEVEL, SLO_LOG_DIR env vars
+    setup_logging()  # reads SLO_LOG_LEVEL, SLO_LOG_FORMAT, SLO_LOG_DIR env vars
 
     # In any module:
     import logging
     logger = logging.getLogger("slo.mymodule")
-    logger.info("doing work", extra={"op": "infra.startup"})
+    logger.info("doing work", extra={"tag": "INFRA", "request_id": get_request_id()})
 
 Environment variables:
     SLO_LOG_LEVEL   — root log level (default: INFO)
+    SLO_LOG_FORMAT  — "human" (colored terminal), "json" (legacy structured),
+                      or "slo" (slo.log v1 typed schema) (default: human)
     SLO_LOG_DIR     — directory for log files (default: logs/ relative to repo root)
     SLO_LOG_NO_FILE — set to "1" to disable file logging
     NO_COLOR        — set to "1" to disable ANSI colors
@@ -114,6 +120,14 @@ class _A:
 
 # ── Level formatting ──────────────────────────────────────────────────
 
+_LEVEL_ABBR = {
+    logging.DEBUG:    "DBG",
+    logging.INFO:     "INF",
+    logging.WARNING:  "WRN",
+    logging.ERROR:    "ERR",
+    logging.CRITICAL: "CRI",
+}
+
 _LEVEL_STYLE = {
     logging.DEBUG:    (_A.DIM,                            "DBG"),
     logging.INFO:     (_A.GREEN,                          "INF"),
@@ -154,14 +168,16 @@ def _enriched_record_factory(*args, **kwargs):
     """LogRecord factory that auto-injects request_id from contextvars."""
     record = _original_record_factory(*args, **kwargs)
     rid = _request_id.get()
+    # Fallback: check schemas.common contextvar if set_request_id wasn't called
     if not rid:
         try:
-            from domains.infrastructure.correlation import get_correlation_id
+            from schemas.common import get_correlation_id
             rid = get_correlation_id()
         except (ImportError, AttributeError):
             pass
     if rid and not hasattr(record, "request_id"):
         record.request_id = rid
+    # Merge structured context into record extras
     ctx = _log_context.get()
     if ctx:
         for k, v in ctx.items():
@@ -170,139 +186,16 @@ def _enriched_record_factory(*args, **kwargs):
     return record
 
 
-# ── Legacy tag -> slo.log op mapping (backward compat) ────────────────
+# ── Human-readable formatter ─────────────────────────────────────────
 
-_LEGACY_TAG_TO_OP = {
-    "REQ":      "http.request",
-    "AUTH":     "http.auth",
-    "MODEL":    "model.load",
-    "SOUL":     "model.load",
-    "TRAIN":    "train.step",
-    "INFRA":    "infra.error",
-    "START":    "sys.startup",
-    "SLOW":     "http.request",
-    "ERROR":    "infra.error",
-    "WARN":     "infra.error",
-    "OK":       "sys.info",
-    "INF":      "sys.info",
-    "COG":      "rag.query",
-    "IDLE":     "sys.info",
-    "KV":       "sys.info",
-    "GPU":      "infer.generate",
-    "LEARN":    "train.step",
-    "BENCH":    "sys.info",
-    "EVENT":    "sys.info",
-    "CHAT":     "http.request",
-    "DOWNLOAD": "download.start",
-    "WORKFLOW": "workflow.start",
-    "SYSTEM":   "sys.info",
-}
+class HumanFormatter(logging.Formatter):
+    """Colored terminal output: HH:MM:SS LVL [TAG] logger message key=val"""
 
-
-def _derive_op(record: logging.LogRecord) -> str:
-    """Derive the slo.log op field from record extras or legacy tag.
-
-    Priority:
-      1. record.op (explicit - callers that have migrated)
-      2. record.tag -> lookup in _LEGACY_TAG_TO_OP
-      3. Fallback: "sys.info"
-    """
-    explicit = getattr(record, "op", None)
-    if explicit:
-        return explicit
-    tag = getattr(record, "tag", None)
-    if tag:
-        return _LEGACY_TAG_TO_OP.get(tag, "sys.info")
-    return "sys.info"
-
-
-# ── Domain payload extraction ─────────────────────────────────────────
-
-_DOMAIN_KEYS = {
-    "http":     {"method", "path", "status", "corr", "phase"},
-    "train":    {"job_id", "epoch", "step", "total_steps", "loss", "lr"},
-    "model":    {"id", "layers", "weights_count", "file_mb", "source", "quant_bits", "quant_mode"},
-    "infer":    {"model_id", "tokens", "session_id", "prompt_len", "timeout_s"},
-    "infra":    {"component", "worker_id", "model_id", "reason", "restart_count", "max_restarts"},
-    "sys":      {"phase", "signal", "version"},
-    "web":      {"event", "path"},
-    "rag":      {"chunks", "chars", "top_k", "results", "verified", "confidence", "citations"},
-    "download": {"resource", "elapsed_s", "url", "bytes", "speed"},
-    "workflow": {"job_id", "kind", "status"},
-}
-
-
-def _collect_domain_payload(record: logging.LogRecord, domain: str) -> dict:
-    """Extract domain-specific payload from record extras."""
-    keys = _DOMAIN_KEYS.get(domain, set())
-    if not keys:
-        return {}
-    payload = {}
-    for key in keys:
-        val = getattr(record, key, None)
-        if val is not None:
-            payload[key] = val
-    return payload or {}
-
-
-# ── Non-standard extras extraction ────────────────────────────────────
-
-_KNOWN_KEYS = frozenset({
-    "name", "levelno", "levelname", "pathname", "filename", "module",
-    "lineno", "funcName", "created", "msecs", "relativeCreated",
-    "thread", "threadName", "process", "processName", "args", "msg",
-    "exc_info", "exc_text", "stack_info", "taskName", "message",
-    "asctime", "tag", "request_id", "error_code",
-    "op", "corr", "dur_ms", "ok", "err",
-})
-
-
-def _collect_extras(record: logging.LogRecord) -> dict:
-    """Extract non-standard extra fields from a LogRecord."""
-    ctx = {}
-    for key, val in record.__dict__.items():
-        if key in _KNOWN_KEYS or key.startswith("_"):
-            continue
-        if key in ("msg", "args", "levelname", "levelno", "pathname", "filename",
-                    "module", "exc_info", "exc_text", "stack_info", "lineno",
-                    "funcName", "created", "msecs", "relativeCreated", "thread",
-                    "threadName", "processName", "process", "taskName", "message",
-                    "name", "asctime"):
-            continue
-        if key in ("tag", "request_id", "error_code", "op", "corr", "dur_ms", "ok", "err"):
-            continue
-        ctx[key] = val
-    return ctx
-
-
-# ── Unified formatter ─────────────────────────────────────────────────
-
-class SloFormatter(logging.Formatter):
-    """Single unified formatter for console and file output.
-
-    Usage:
-        SloFormatter()              — human-readable with auto-detected colors
-        SloFormatter(colors=False)  — human-readable without colors
-        SloFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
-
-    Console (fmt="human"):
-        HH:MM:SS LVL [OP] logger message key=val
-
-    File (fmt="json"):
-        {"v":1,"ts":"...","lvl":"INFO","op":"model.load","corr":"abc1",...}
-    """
-
-    def __init__(self, colors: bool = True, fmt: str = "human"):
+    def __init__(self, colors: bool = True):
         super().__init__()
         self._colors = colors
-        self._fmt = fmt
 
     def format(self, record: logging.LogRecord) -> str:
-        if self._fmt == "json":
-            return self._format_json(record)
-        return self._format_human(record)
-
-    def _format_human(self, record: logging.LogRecord) -> str:
         parts = []
         c = self._colors
 
@@ -314,10 +207,11 @@ class SloFormatter(logging.Formatter):
         color, abbrev = _LEVEL_STYLE.get(record.levelno, (_A.WHITE, "???"))
         parts.append(f"{color}{_A.BOLD}{abbrev:>3}{_A.RESET}" if c else abbrev.rjust(3))
 
-        # Tag — prefer op, fall back to legacy tag
-        op = getattr(record, "op", None)
-        if op:
-            domain = op.split(".")[0].upper() if "." in op else op.upper()
+        # Tag — prefer slo.log op, fall back to legacy tag
+        tag = getattr(record, "op", None)
+        if tag:
+            # Show domain prefix as badge: "model.load" → "MODEL"
+            domain = tag.split(".")[0].upper() if "." in tag else tag.upper()
             tc, tt = _TAG_STYLE.get(domain, (_A.CYAN, domain))
             parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
         else:
@@ -334,12 +228,12 @@ class SloFormatter(logging.Formatter):
         # Message
         parts.append(record.getMessage())
 
-        # Request ID
+        # Request ID (if present and not already in tag)
         rid = getattr(record, "request_id", None)
         if rid:
             parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
 
-        # Structured context
+        # Structured context — collect non-standard fields
         ctx = _collect_extras(record)
         if ctx:
             ctx_parts = []
@@ -363,7 +257,114 @@ class SloFormatter(logging.Formatter):
 
         return " ".join(parts)
 
-    def _format_json(self, record: logging.LogRecord) -> str:
+
+# ── JSON formatter ────────────────────────────────────────────────────
+
+class JSONFormatter(logging.Formatter):
+    """Structured JSON lines: one JSON object per line."""
+
+    _KNOWN = frozenset({
+        "name", "levelno", "levelname", "pathname", "filename", "module",
+        "lineno", "funcName", "created", "msecs", "relativeCreated",
+        "thread", "threadName", "process", "processName", "args", "msg",
+        "exc_info", "exc_text", "stack_info", "taskName", "message",
+    })
+
+    def format(self, record: logging.LogRecord) -> str:
+        entry: dict[str, Any] = {
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+
+        # Correlation ID
+        rid = getattr(record, "request_id", None)
+        if rid:
+            entry["request_id"] = rid
+
+        # Tag
+        tag = getattr(record, "tag", None)
+        if tag:
+            entry["tag"] = tag
+
+        # Structured extras
+        ctx = _collect_extras(record)
+        if ctx:
+            entry["ctx"] = ctx
+
+        # Exception
+        if record.exc_info and record.exc_info[0]:
+            entry["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(entry, default=str, ensure_ascii=False)
+
+
+# ── Legacy tag → slo.log op mapping (backward compat) ────────────────
+
+_LEGACY_TAG_TO_OP = {
+    "REQ":    "http.request",
+    "AUTH":   "http.auth",
+    "MODEL":  "model.load",
+    "SOUL":   "model.load",
+    "TRAIN":  "train.step",
+    "INFRA":  "infra.error",
+    "START":  "sys.startup",
+    "SLOW":   "http.request",
+    "ERROR":  "infra.error",
+    "WARN":   "infra.error",
+    "OK":     "sys.info",
+    "INF":    "sys.info",
+    "COG":    "rag.query",
+    "IDLE":   "sys.info",
+    "KV":     "sys.info",
+    "GPU":    "infer.generate",
+    "LEARN":  "train.step",
+    "BENCH":  "sys.info",
+    "EVENT":  "sys.info",
+    "CHAT":   "http.request",
+    "DOWNLOAD": "download.start",
+    "WORKFLOW": "workflow.start",
+    "SYSTEM":   "sys.info",
+}
+
+
+def _derive_op(record: logging.LogRecord) -> str:
+    """Derive the slo.log ``op`` field from record extras or legacy tag.
+
+    Priority:
+      1. ``record.op`` (explicit — callers that have migrated)
+      2. ``record.tag`` → lookup in ``_LEGACY_TAG_TO_OP``
+      3. Fallback: ``"sys.info"``
+    """
+    explicit = getattr(record, "op", None)
+    if explicit:
+        return explicit
+    tag = getattr(record, "tag", None)
+    if tag:
+        return _LEGACY_TAG_TO_OP.get(tag, "sys.info")
+    return "sys.info"
+
+
+# ── slo.log v1 JSON formatter ─────────────────────────────────────────
+
+class SloJSONFormatter(logging.Formatter):
+    """slo.log v1 structured JSON lines.
+
+    Every log line is one JSON object with envelope + domain payload::
+
+        {"v":1,"ts":"...","lvl":"INFO","op":"model.load","corr":"abc1",
+         "dur_ms":null,"ok":true,"logger":"slo.model","model":{"id":"gpt2",...}}
+    """
+
+    _KNOWN = frozenset({
+        "name", "levelno", "levelname", "pathname", "filename", "module",
+        "lineno", "funcName", "created", "msecs", "relativeCreated",
+        "thread", "threadName", "process", "processName", "args", "msg",
+        "exc_info", "exc_text", "stack_info", "taskName", "message",
+    })
+
+    def format(self, record: logging.LogRecord) -> str:
         op = _derive_op(record)
         rid = getattr(record, "request_id", None)
         ok = getattr(record, "ok", True)
@@ -375,7 +376,6 @@ class SloFormatter(logging.Formatter):
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
             "lvl": record.levelname,
             "op": op,
-            "msg": record.getMessage(),
             "corr": rid,
             "dur_ms": dur_ms,
             "ok": ok,
@@ -385,111 +385,72 @@ class SloFormatter(logging.Formatter):
         if err:
             entry["err"] = err
 
-        # Domain payload — exactly one per line
-        domain = op.split(".")[0] if "." in op else op
+        # Domain payload — exactly one per line (looked up by op prefix)
+        domain, _, verb = op.partition(".")
         domain_payload = _collect_domain_payload(record, domain)
         if domain_payload:
             entry[domain] = domain_payload
 
-        # Legacy tag (backward compat for consumers still reading it)
-        tag = getattr(record, "tag", None)
-        if tag:
-            entry["tag"] = tag
-
-        # Non-standard extras
-        ctx = _collect_extras(record)
-        if ctx:
-            entry["ctx"] = ctx
-
         if record.exc_info and record.exc_info[0]:
             entry["exception"] = self.formatException(record.exc_info)
 
-        raw = json.dumps(entry, default=str, ensure_ascii=False)
-
-        if not self._colors:
-            return raw
-
-        return _colorize_json(raw)
+        return json.dumps(entry, default=str, ensure_ascii=False)
 
 
-def _colorize_json(raw: str) -> str:
-    """Apply ANSI syntax highlighting to a JSON string.
+def _collect_domain_payload(record: logging.LogRecord, domain: str) -> dict:
+    """Extract domain-specific payload from record extras."""
+    _DOMAIN_KEYS = {
+        "http":    {"method", "path", "status", "elapsed_s"},
+        "train":   {"job_id", "epoch", "step", "total_steps", "loss", "lr"},
+        "model":   {"id", "layers", "weights_count", "file_mb", "source"},
+        "infer":   {"model_id", "tokens", "session_id", "prompt_len", "timeout_s"},
+        "infra":   {"component", "worker_id", "model_id", "reason", "restart_count", "max_restarts"},
+        "sys":     {"phase", "signal", "version"},
+        "web":     {"event", "path"},
+        "rag":     {"chunks", "chars", "top_k", "results", "verified", "confidence", "citations"},
+        "download": {"resource", "elapsed_s", "url", "bytes", "speed"},
+        "workflow": {"job_id", "kind", "status"},
+    }
+    keys = _DOMAIN_KEYS.get(domain, set())
+    if not keys:
+        return {}
+    payload = {}
+    for key in keys:
+        val = getattr(record, key, None)
+        if val is not None:
+            payload[key] = val
+    return payload or {}
 
-    Semantic coloring:
-      - Keys: cyan
-      - Strings: green
-      - true: green (ok=true), yellow (other)
-      - false: red (ok=false), yellow (other)
-      - null: grey
-      - Numbers: yellow
-      - lvl values: green(INFO), yellow(WRN), red(ERR/CRI)
-    """
-    out = []
-    i = 0
-    n = len(raw)
-    while i < n:
-        ch = raw[i]
-        if ch == '"':
-            # Find end of string
-            j = i + 1
-            while j < n:
-                if raw[j] == '\\':
-                    j += 2
-                    continue
-                if raw[j] == '"':
-                    j += 1
-                    break
-                j += 1
-            s = raw[i:j]
-            # Check if this is a key (followed by ':')
-            k = j
-            while k < n and raw[k] == ' ':
-                k += 1
-            if k < n and raw[k] == ':':
-                out.append(f"{_A.CYAN}{s}{_A.RESET}")
-            else:
-                out.append(f"{_A.GREEN}{s}{_A.RESET}")
-            i = j
-        elif ch in ('{', '}', '[', ']'):
-            out.append(f"{_A.GREY}{ch}{_A.RESET}")
-            i += 1
-        elif ch == ':':
-            out.append(f"{_A.GREY}:{_A.RESET}")
-            i += 1
-        elif ch == ',':
-            out.append(f"{_A.GREY},{_A.RESET}")
-            i += 1
-        elif ch == ' ':
-            out.append(' ')
-            i += 1
-        elif raw[i:i+4] == 'true':
-            # Check context: is this an "ok" value?
-            preceding = raw[max(0, i-20):i]
-            if '"ok"' in preceding:
-                out.append(f"{_A.GREEN}true{_A.RESET}")
-            else:
-                out.append(f"{_A.YELLOW}true{_A.RESET}")
-            i += 4
-        elif raw[i:i+5] == 'false':
-            preceding = raw[max(0, i-20):i]
-            if '"ok"' in preceding:
-                out.append(f"{_A.RED}false{_A.RESET}")
-            else:
-                out.append(f"{_A.YELLOW}false{_A.RESET}")
-            i += 5
-        elif raw[i:i+4] == 'null':
-            out.append(f"{_A.GREY}null{_A.RESET}")
-            i += 4
-        elif ch == '-' or ch.isdigit():
-            j = i + 1
-            while j < n and (raw[j].isdigit() or raw[j] in ('.', 'e', 'E', '+', '-')):
-                j += 1
-            out.append(f"{_A.MAGENTA}{raw[i:j]}{_A.RESET}")
-            i = j
-        else:
-            out.append(ch)
-            i += 1
-    return ''.join(out)
+
+def _collect_extras(record: logging.LogRecord) -> dict:
+    """Extract non-standard extra fields from a LogRecord."""
+    ctx = {}
+    for key, val in record.__dict__.items():
+        if key in _KNOWN_KEYS or key.startswith("_"):
+            continue
+        # Skip standard attributes
+        if key in ("msg", "args", "levelname", "levelno", "pathname", "filename",
+                    "module", "exc_info", "exc_text", "stack_info", "lineno",
+                    "funcName", "created", "msecs", "relativeCreated", "thread",
+                    "threadName", "processName", "process", "taskName", "message",
+                    "name", "asctime"):
+            continue
+        # Skip already-handled fields
+        if key in ("tag", "request_id", "error_code", "op", "corr", "dur_ms", "ok", "err"):
+            continue
+        ctx[key] = val
+    return ctx
+
+
+_KNOWN_KEYS = frozenset({
+    "name", "levelno", "levelname", "pathname", "filename", "module",
+    "lineno", "funcName", "created", "msecs", "relativeCreated",
+    "thread", "threadName", "process", "processName", "args", "msg",
+    "exc_info", "exc_text", "stack_info", "taskName", "message",
+    "asctime", "tag", "request_id", "error_code",
+    # slo.log v1 envelope fields
+    "op", "corr", "dur_ms", "ok", "err",
+})
 
 
 # ── Third-party logger suppression ───────────────────────────────────
@@ -522,10 +483,11 @@ class ClientExtensionFilter(logging.Filter):
 def _create_file_handler(
     log_dir: Path,
     level: int = logging.DEBUG,
-    max_bytes: int = 10 * 1024 * 1024,
+    max_bytes: int = 10 * 1024 * 1024,  # 10 MB
     backup_count: int = 5,
+    fmt: str = "json",
 ) -> logging.handlers.RotatingFileHandler:
-    """Create a rotating file handler for slo.log v1 JSON output."""
+    """Create a rotating file handler for structured JSON log output."""
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "sloughgpt.log"
 
@@ -536,7 +498,10 @@ def _create_file_handler(
         encoding="utf-8",
     )
     handler.setLevel(level)
-    handler.setFormatter(SloFormatter(fmt="json"))
+    if fmt == "slo":
+        handler.setFormatter(SloJSONFormatter())
+    else:
+        handler.setFormatter(JSONFormatter())
     handler.addFilter(ClientExtensionFilter())
     return handler
 
@@ -559,28 +524,32 @@ def _install_output_buffer_bridge(root: logging.Logger) -> Optional[Any]:
 
 def setup_logging(
     level: Optional[str] = None,
+    format: Optional[str] = None,
     log_dir: Optional[str] = None,
     enable_file: Optional[bool] = None,
     enable_console: bool = True,
     enable_output_buffer: bool = True,
 ) -> dict[str, Any]:
-    """Configure all logging with a single unified formatter.
+    """Configure all logging in one place.
 
-    Console: colored human-readable (SloFormatter with colors).
-    File: slo.log v1 JSON (SloFormatter without colors).
+    Call once at startup (main.py or cli.py). Reads env vars for defaults.
 
     Args:
         level:            Log level (default: SLO_LOG_LEVEL env or "INFO")
+        format:           "human" or "json" (default: SLO_LOG_FORMAT env or "human")
         log_dir:          Directory for log files (default: SLO_LOG_DIR env or "logs/")
         enable_file:      Enable file logging (default: SLO_LOG_NO_FILE != "1")
-        enable_console:   Install console stderr handler (default: True)
+        enable_console:   Install console stderr handler (default: True).
+                          Set False when using BridgeHandler + CLILogger (CLI mode).
         enable_output_buffer: Install OutputBuffer bridge (default: True)
 
     Returns:
-        dict with setup info: {"level", "log_dir", "file_handler", "bridge"}
+        dict with setup info: {"level", "format", "log_dir", "file_handler", "bridge"}
     """
+    # Resolve config from env / args
     level_name = (level or os.environ.get("SLO_LOG_LEVEL", "INFO")).upper()
     log_level = getattr(logging, level_name, logging.INFO)
+    fmt = (format or os.environ.get("SLO_LOG_FORMAT", "human")).lower()
     no_file = os.environ.get("SLO_LOG_NO_FILE", "").strip() == "1"
     use_file = enable_file if enable_file is not None else not no_file
 
@@ -592,6 +561,7 @@ def setup_logging(
         if env_dir:
             log_path = Path(env_dir)
         else:
+            # Default: logs/ relative to repo root
             try:
                 from domains.shared import find_repo_root
                 repo = find_repo_root(Path(__file__).resolve())
@@ -607,25 +577,34 @@ def setup_logging(
     root = logging.getLogger()
     root.setLevel(log_level)
 
+    # Remove all existing handlers to avoid duplicates
     for h in list(root.handlers):
         root.removeHandler(h)
 
-    # Console handler — colored human-readable
+    # Console handler
     if enable_console:
         colors = _color_enabled(sys.stderr)
+        if fmt == "slo":
+            console_formatter = SloJSONFormatter()
+        elif fmt == "json":
+            console_formatter = JSONFormatter()
+        else:
+            console_formatter = HumanFormatter(colors=colors)
+
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(log_level)
-        console_handler.setFormatter(SloFormatter(colors=colors))
+        console_handler.setFormatter(console_formatter)
         console_handler.addFilter(ClientExtensionFilter())
         root.addHandler(console_handler)
 
-    # File handler — slo.log v1 JSON
+    # File handler
     file_handler = None
     if use_file:
         try:
-            file_handler = _create_file_handler(log_path, level=logging.DEBUG)
+            file_handler = _create_file_handler(log_path, level=logging.DEBUG, fmt=fmt)
             root.addHandler(file_handler)
         except Exception as e:
+            # File logging is best-effort — warn once so operators know it failed
             logging.getLogger(__name__).warning("Could not create log file handler: %s", e)
 
     # OutputBuffer bridge (for SSE streaming)
@@ -633,7 +612,7 @@ def setup_logging(
     if enable_output_buffer:
         bridge = _install_output_buffer_bridge(root)
 
-    # Dashboard event buffer filter
+    # Dashboard event buffer filter (captures tagged events for CLI monitor)
     try:
         from domains.logging.dashboard_filter import DashboardFilter
         root.addFilter(DashboardFilter())
@@ -646,6 +625,7 @@ def setup_logging(
 
     return {
         "level": level_name,
+        "format": fmt,
         "log_dir": str(log_path),
         "file_handler": file_handler,
         "bridge": bridge,

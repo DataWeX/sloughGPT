@@ -12,10 +12,11 @@ Endpoints:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 
 from infrastructure.auth import require_auth_if_enabled
+from schemas.common import raise_error
 from domains.billing.token_service import (
     get_token_billing_service,
     Tier,
@@ -25,17 +26,17 @@ router = APIRouter(prefix="/tokens", tags=["tokens"])
 
 
 class TopUpRequest(BaseModel):
-    amount: int
+    amount: int = Field(..., ge=1, le=1_000_000, description="Number of tokens to add")
 
 
 class UpgradeRequest(BaseModel):
-    tier: str
+    tier: str = Field(..., pattern=r'^(free|basic|pro|enterprise)$', description="Target tier")
 
 
 class CheckRequest(BaseModel):
-    model: str
-    input_tokens: int
-    output_tokens: int
+    model: str = Field(..., min_length=1, max_length=200, description="Model identifier")
+    input_tokens: int = Field(..., ge=0, le=10_000_000, description="Expected input tokens")
+    output_tokens: int = Field(..., ge=0, le=10_000_000, description="Expected output tokens")
 
 
 @router.get("/balance")
@@ -64,11 +65,6 @@ async def get_usage_history(
 
 @router.post("/topup")
 async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require_auth_if_enabled)):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    if request.amount > 1_000_000:
-        raise HTTPException(status_code=400, detail="Maximum top-up is 1,000,000 tokens")
-
     service = get_token_billing_service()
     account = service.add_credits(auth_user["id"], request.amount)
     return account.to_dict()
@@ -79,9 +75,10 @@ async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(requir
     try:
         tier = Tier(request.tier)
     except ValueError:
-        raise HTTPException(
+        raise_error(
+            f"Invalid tier. Must be one of: {', '.join(t.value for t in Tier)}",
+            "E_VAL_REQUEST",
             status_code=400,
-            detail=f"Invalid tier. Must be one of: {', '.join(t.value for t in Tier)}",
         )
 
     service = get_token_billing_service()

@@ -123,6 +123,11 @@ class PriorityRequestQueue:
         self._max_wait_s = 0.0
         self._metrics_lock = Lock()
 
+        # Atomic depth counters (updated under _lock, read under _metrics_lock)
+        self._depth_high = 0
+        self._depth_medium = 0
+        self._depth_low = 0
+
     # --- Public API ---
 
     async def acquire(
@@ -157,6 +162,13 @@ class PriorityRequestQueue:
             )
             self._order_counter += 1
             heapq.heappush(self._heap, item)
+            # Update atomic depth counters
+            if item.priority == 0:
+                self._depth_high += 1
+            elif item.priority == 1:
+                self._depth_medium += 1
+            elif item.priority == 2:
+                self._depth_low += 1
 
         logger.debug("Acquire enqueued", request_id=item.request_id,
                      priority=priority.name, queue_depth=len(self._heap))
@@ -209,6 +221,13 @@ class PriorityRequestQueue:
             )
             self._order_counter += 1
             heapq.heappush(self._heap, item)
+            # Update atomic depth counters
+            if item.priority == 0:
+                self._depth_high += 1
+            elif item.priority == 1:
+                self._depth_medium += 1
+            elif item.priority == 2:
+                self._depth_low += 1
 
         logger.debug("Enqueued", request_id=item.request_id, priority=priority.name,
                       queue_depth=len(self._heap))
@@ -230,6 +249,9 @@ class PriorityRequestQueue:
         """
         items = list(self._heap)
         self._heap.clear()
+        self._depth_high = 0
+        self._depth_medium = 0
+        self._depth_low = 0
         for item in items:
             if inspect.iscoroutine(item.coro):
                 item.coro.close()
@@ -239,31 +261,39 @@ class PriorityRequestQueue:
 
     def _pop(self) -> Optional[_QueueItem]:
         """Pop highest-priority item (caller must hold ``_lock``)."""
-        return heapq.heappop(self._heap) if self._heap else None
+        if not self._heap:
+            return None
+        item = heapq.heappop(self._heap)
+        # Update atomic depth counters
+        if item.priority == 0:
+            self._depth_high -= 1
+        elif item.priority == 1:
+            self._depth_medium -= 1
+        elif item.priority == 2:
+            self._depth_low -= 1
+        return item
 
     async def depth(self) -> list[int]:
+        """Return queue depth per priority level: [high, medium, low]."""
         async with self._lock:
-            d = [0, 0, 0]
-            for item in self._heap:
-                if item.priority < 3:
-                    d[item.priority] += 1
-            return d
+            return [self._depth_high, self._depth_medium, self._depth_low]
 
     @property
     def in_flight(self) -> int:
         return self._in_flight
 
     def metrics_snapshot(self) -> QueueMetrics:
+        """Return queue metrics snapshot (thread-safe, no heap iteration)."""
         with self._metrics_lock:
-            depths = [0, 0, 0]
-            for item in self._heap:
-                if item.priority < 3:
-                    depths[item.priority] += 1
             avg = (self._total_wait / max(self._served, 1)) * 1000
             return QueueMetrics(
-                depth_high=depths[0], depth_medium=depths[1], depth_low=depths[2],
-                total_depth=sum(depths), served=self._served,
-                avg_wait_ms=avg, max_wait_ms=self._max_wait_s * 1000,
+                depth_high=self._depth_high,
+                depth_medium=self._depth_medium,
+                depth_low=self._depth_low,
+                total_depth=self._depth_high + self._depth_medium + self._depth_low,
+                served=self._served,
+                avg_wait_ms=avg,
+                max_wait_ms=self._max_wait_s * 1000,
             )
 
     # --- Worker loop ---
@@ -364,13 +394,6 @@ class SessionKVCache:
     def clear(self, session_id: str) -> None:
         with self._lock:
             self._caches.pop(session_id, None)
-
-    def clear_all(self) -> int:
-        """Clear all cached sessions. Returns the number of entries removed."""
-        with self._lock:
-            count = len(self._caches)
-            self._caches.clear()
-            return count
 
     def _evict_expired(self) -> None:
         now = time.time()
@@ -565,7 +588,7 @@ class IdleManager:
                 if reload_fn:
                     self._logger.info(
                         "Auto-reloading idle model %s", model_id,
-                        extra={"op": "sys.info"},
+                        extra={"tag": "IDLE"},
                     )
                     try:
                         reload_fn()
@@ -574,7 +597,7 @@ class IdleManager:
                     except Exception as e:
                         self._logger.error(
                             "Auto-reload failed for %s: %s", model_id, e,
-                            extra={"op": "sys.info"},
+                            extra={"tag": "IDLE"},
                         )
             entry["last_touch"] = time.time()
         return reloaded
@@ -603,7 +626,7 @@ class IdleManager:
                     try:
                         self._logger.info(
                             "Auto-reloading idle model %s (background)", model_id,
-                            extra={"op": "sys.info"},
+                            extra={"tag": "IDLE"},
                         )
                         reload_fn()
                         with self._lock:
@@ -611,12 +634,12 @@ class IdleManager:
                             entry["_reloading"] = False
                         self._logger.info(
                             "Auto-reload complete for %s", model_id,
-                            extra={"op": "sys.info"},
+                            extra={"tag": "IDLE"},
                         )
                     except Exception as e:
                         self._logger.error(
                             "Auto-reload failed for %s: %s", model_id, e,
-                            extra={"op": "sys.info"},
+                            extra={"tag": "IDLE"},
                         )
                         with self._lock:
                             entry["_reloading"] = False
@@ -679,7 +702,7 @@ class IdleManager:
                         if unload_fn:
                             self._logger.info(
                                 "Idle timeout %.0fs reached for %s — unloading",
-                                age, model_id, extra={"op": "sys.info"},
+                                age, model_id, extra={"tag": "IDLE"},
                             )
                             try:
                                 unload_fn()
@@ -687,7 +710,7 @@ class IdleManager:
                             except Exception as e:
                                 self._logger.error(
                                     "Idle unload failed for %s: %s", model_id, e,
-                                    extra={"op": "sys.info"},
+                                    extra={"tag": "IDLE"},
                                 )
 
     def shutdown(self) -> None:
@@ -962,7 +985,13 @@ class _TokenStreamer:
         self.stop_signal = object()
         self._prompt_length = 0
 
-    def put(self, value):
+    def put(self, value: Any) -> None:
+        """Enqueue a token or token tensor for streaming.
+
+        Args:
+            value: String token, numpy token array, or None (signals end).
+                   If skip_prompt=True, first tensor is skipped (prompt tokens).
+        """
         if value is None:
             self.text_queue.put(self.stop_signal)
             return
@@ -977,7 +1006,8 @@ class _TokenStreamer:
                 if decoded:
                     self.text_queue.put(decoded)
 
-    def end(self):
+    def end(self) -> None:
+        """Signal that generation is complete by enqueuing stop_signal."""
         self.text_queue.put(self.stop_signal)
 
 
@@ -1368,9 +1398,6 @@ class ModelServer:
         # Register default post-generation hook for KV cache cleanup
         self.add_post_generate_hook(self._cleanup_kv_cache)
 
-        # Register memory pressure check as pre-generation hook
-        self.add_pre_generate_hook(self._check_memory_pressure)
-
         # Background warmup
         if self._enable_warmup:
             Thread(target=self._run_warmup, daemon=True).start()
@@ -1430,7 +1457,7 @@ class ModelServer:
         gc.collect()
         logger.info(
             "Model %s unloaded (idle) — memory freed", self.model_id,
-            extra={"op": "sys.info"},
+            extra={"tag": "IDLE"},
         )
 
     def _idle_reload(self) -> None:
@@ -1444,22 +1471,10 @@ class ModelServer:
         1. Direct .slnc path (if stored via set_hf_model_id)
         2. HuggingFace model ID → look up cached .slnc file
         """
-        # Skip reload if memory pressure is too high
-        try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
-            if not get_memory_pressure_monitor().allow_load():
-                logger.info(
-                    "Idle reload skipped for %s: memory pressure too high",
-                    self.model_id, extra={"op": "sys.info"},
-                )
-                return
-        except ImportError:
-            pass
-
         if not self._hf_model_id and not self._slnc_path:
             logger.warning(
                 "Cannot reload %s: no model ID or path stored", self.model_id,
-                extra={"op": "sys.info"},
+                extra={"tag": "IDLE"},
             )
             return
         try:
@@ -1475,7 +1490,7 @@ class ModelServer:
                 if not candidate.exists():
                     logger.error(
                         "Cannot reload %s: no .slnc file at %s",
-                        self.model_id, candidate, extra={"op": "sys.info"},
+                        self.model_id, candidate, extra={"tag": "IDLE"},
                     )
                     return
                 slnc_path = str(candidate)
@@ -1501,13 +1516,13 @@ class ModelServer:
                 self._status = ModelStatus.READY
             logger.info(
                 "Model %s reloaded (idle) — ready to serve", self.model_id,
-                extra={"op": "sys.info"},
+                extra={"tag": "IDLE"},
             )
         except Exception as e:
             self._status = ModelStatus.ERROR
             logger.error(
                 "Idle reload failed for %s: %s", self.model_id, e,
-                extra={"op": "sys.info"},
+                extra={"tag": "IDLE"},
             )
 
     @property
@@ -1552,7 +1567,7 @@ class ModelServer:
                 self.metrics.record_success(elapsed_ms, tokens)
             with self._warmup_lock:
                 self._warmup_completed = True
-            logger.info("ModelServer[%s]: warmup completed (%dms)", self.model_id, int(elapsed_ms), extra={"op": "model.load"})
+            logger.info("ModelServer[%s]: warmup completed (%dms)", self.model_id, int(elapsed_ms), extra={"op": "model.warmup", "model": {"id": self.model_id}})
         except Exception as e:
             with self._warmup_lock:
                 self._warmup_error = f"{type(e).__name__}: {e}"
@@ -1563,7 +1578,7 @@ class ModelServer:
             if "No module named" in str(e):
                 logger.debug("ModelServer[%s]: warmup skipped: %s", self.model_id, e)
             else:
-                logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e, extra={"op": "model.load"})
+                logger.warning("ModelServer[%s]: warmup failed: %s", self.model_id, e, extra={"tag": "MODEL"})
             return
 
     def _check_device(self) -> None:
@@ -1586,17 +1601,14 @@ class ModelServer:
         if self._local_backend is not None:
             self._local_backend._device = self._resolved_device
 
-    def _select_backend(self) -> Optional[GenerateBackend]:
+    def _select_backend(self) -> GenerateBackend:
         """Pick the best available backend for the current request.
 
         Priority: GuardBackend (crash-isolated) > LocalBackend.
-        Returns None if no backend is alive (e.g., after pressure eviction).
         """
         if self._guard_backend is not None and self._guard_backend.alive:
             return self._guard_backend
-        if self._local_backend is not None and self._local_backend.alive:
-            return self._local_backend
-        return None
+        return self._local_backend
 
     def drop_model_ref(self) -> None:
         """Release the in-memory model reference.
@@ -1607,32 +1619,10 @@ class ModelServer:
         """
         with self._lock:
             self._model_ref = None
-            self._status = ModelStatus.UNLOADED
         if self._local_backend is not None:
             self._local_backend._model_ref = None
         self._device = "guard"
-        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id, extra={"op": "model.load"})
-
-    def _check_memory_pressure(self) -> None:
-        """Pre-generation hook: check memory pressure and raise on emergency.
-
-        Raises RuntimeError when system memory is above the emergency threshold,
-        blocking the generation to prevent OOM. The error message includes the
-        current memory percentage for diagnostics.
-        """
-        try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
-            monitor = get_memory_pressure_monitor()
-            level = monitor.check()
-            if level == PressureLevel.EMERGENCY:
-                import psutil
-                mem = psutil.virtual_memory()
-                raise RuntimeError(
-                    f"System memory at {mem.percent:.0f}% — too low for safe inference. "
-                    f"Free some memory and retry."
-                )
-        except ImportError:
-            pass  # monitor not available — allow generation
+        logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id, extra={"op": "model.unload", "model": {"id": self.model_id}})
 
     def _cleanup_kv_cache(self) -> None:
         """Clear any KV cache tensors the model may have accumulated."""
@@ -1876,10 +1866,8 @@ class ModelServer:
         for hook in pre_hooks:
             try:
                 hook()
-            except RuntimeError:
-                raise  # memory pressure blocks must propagate
             except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
+                logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
         # Submit to priority queue
         async def _run() -> dict:
@@ -2011,23 +1999,7 @@ class ModelServer:
 
         Delegates to the selected backend's generate_stream().
         """
-        # Pre-generation hooks (memory pressure check)
-        with self._hooks_lock:
-            pre_hooks = list(self._pre_generate_hooks)
-        for hook in pre_hooks:
-            try:
-                hook()
-            except RuntimeError:
-                raise  # memory pressure blocks must propagate
-            except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
-
         backend = self._select_backend()
-        if backend is None:
-            raise RuntimeError(
-                f"No backend available — model '{self.model_id}' may have "
-                "been idle-unloaded. Reload the model before generating."
-            )
         is_local = isinstance(backend, LocalBackend)
         gen = backend.generate_stream(
             prompt, max_new_tokens, temperature,
@@ -2101,10 +2073,8 @@ class ModelServer:
         for hook in pre_hooks:
             try:
                 hook()
-            except RuntimeError:
-                raise  # memory pressure blocks must propagate
             except Exception as e:
-                logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
+                logger.warning("Pre-gen hook failed: %s", e, extra={"tag": "MODEL"})
 
         # EventBus generation lifecycle — started
         _gen_id = f"{self.model_id}-stream-{id(prompt[:32])}"
@@ -2133,11 +2103,6 @@ class ModelServer:
 
         # Select backend (guard if alive, else local)
         backend = self._select_backend()
-        if backend is None:
-            raise RuntimeError(
-                f"No backend available — model '{self.model_id}' may have "
-                "been idle-unloaded. Reload the model before generating."
-            )
         is_local = isinstance(backend, LocalBackend)
         logger.debug("generate_stream[%s]: backend=%s session_id=%s",
                      self.model_id, type(backend).__name__, session_id)
@@ -2221,7 +2186,7 @@ class ModelServer:
 
         except GeneratorExit:
             aborted = True
-            logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"op": "model.load"})
+            logger.info("generate_stream[%s]: client disconnected mid-stream", self.model_id, extra={"tag": "MODEL"})
             if cancel_event is not None:
                 cancel_event.set()
             _emit_gen_event("generation.cancelled", {
@@ -2235,7 +2200,7 @@ class ModelServer:
             if pump_thread is not None and pump_thread.is_alive():
                 pump_thread.join(timeout=10)
                 if pump_thread.is_alive():
-                    logger.warning("generate_stream[%s]: pump thread did not stop within 10s", self.model_id, extra={"op": "model.load"})
+                    logger.warning("generate_stream[%s]: pump thread did not stop within 10s", self.model_id, extra={"tag": "MODEL"})
             return
         except asyncio.TimeoutError:
             with self._metrics_lock:
@@ -2273,11 +2238,11 @@ class ModelServer:
                 try:
                     hook()
                 except Exception as e:
-                    logger.warning("Post-gen hook failed: %s", e, extra={"op": "model.load"})
+                    logger.warning("Post-gen hook failed: %s", e, extra={"tag": "MODEL"})
             # Release priority-queue slot
             _release()
             if aborted:
-                logger.info("generate_stream[%s]: cleaned up after abort", self.model_id, extra={"op": "model.load"})
+                logger.info("generate_stream[%s]: cleaned up after abort", self.model_id, extra={"tag": "MODEL"})
 
     @staticmethod
     def _wrap_generator_as_streamer(gen):
@@ -2297,7 +2262,7 @@ class ModelServer:
             except StopIteration:
                 pass
             except Exception as e:
-                logger.warning("Streaming pump generator failed: %s", e, extra={"op": "model.load"})
+                logger.warning("Streaming pump generator failed: %s", e, extra={"tag": "MODEL"})
                 q.put(e)  # Propagate exception to caller
             finally:
                 q.put(stop_signal)
@@ -2321,7 +2286,7 @@ class ModelServer:
             try:
                 hook(error)
             except Exception as e:
-                logger.warning("Error hook failed: %s", e, extra={"op": "model.load"})
+                logger.warning("Error hook failed: %s", e, extra={"tag": "MODEL"})
 
     # --- Model swap (hot-reload) ---
 
@@ -2348,7 +2313,7 @@ class ModelServer:
         _emit_gen_event("model.swapped", {
             "model_id": self.model_id,
         })
-        logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"op": "model.load"})
+        logger.info("ModelServer[%s]: model swapped", self.model_id, extra={"tag": "MODEL"})
         # Re-warmup with new model
         with self._warmup_lock:
             self._warmup_completed = False

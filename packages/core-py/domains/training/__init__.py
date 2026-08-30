@@ -103,7 +103,7 @@ class DatasetManager:
     def register_dataset(self, config: DatasetConfig) -> None:
         self.datasets[config.name] = config
         self.logger.info("Registered: %s (%s)", config.name, config.dataset_type.value,
-            extra={"op": "train.start"},)
+            extra={"op": "train.start", "train": {"job_id": config.name}},)
 
     def list_by_type(self, dtype: DatasetType) -> List[DatasetConfig]:
         """List all datasets of a given type."""
@@ -158,7 +158,7 @@ class DatasetManager:
         base = Path(directory)
         if not base.exists():
             self.logger.warning("Directory not found: %s", directory,
-                extra={"op": "train.start"},)
+                extra={"op": "train.start", "ok": False, "err": {"code": "E_NOT_FOUND", "msg": f"directory not found: {directory}"}},)
             return 0
 
         count = 0
@@ -188,7 +188,7 @@ class DatasetManager:
             count += 1
             dtype_label = f"{dtype.value:>12}"
             self.logger.info("  [%s] %s (%s)", dtype_label, entry.name, files[0].name,
-                extra={"op": "train.start"},)
+                extra={"op": "train.start", "train": {"job_id": entry.name}},)
 
         return count
 
@@ -289,7 +289,7 @@ class TrainingPipeline:
 
     async def run(self, train_data: Iterator[Any]) -> Dict[str, Any]:
         self.logger.info("Running pipeline: %s", self.config.name,
-            extra={"op": "train.start"},)
+            extra={"op": "train.start", "train": {"job_id": self.config.name, "epochs": self.config.epochs}},)
         results = {"epochs": 0, "stages": []}
 
         for epoch in range(self.config.epochs):
@@ -334,7 +334,7 @@ class ModelManager:
     def register_model(self, config: ModelConfig) -> None:
         self.models[config.name] = config
         self.logger.info("Registered model: %s", config.name,
-            extra={"op": "train.start"},)
+            extra={"op": "train.start", "train": {"job_id": config.name}},)
 
     def create_model(self, name: str) -> Dict[str, Any]:
         config = self.models.get(name)

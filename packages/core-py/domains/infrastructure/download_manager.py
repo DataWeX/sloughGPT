@@ -156,7 +156,7 @@ def cleanup_incomplete(model_id: str) -> bool:
     if not cache_dir.exists():
         return False
     logger.warning("Removing incomplete cache for %s: %s", model_id, cache_dir,
-        extra={"op": "download.start"})
+        extra={"op": "download.start", "download": {"resource": model_id}})
     shutil.rmtree(str(cache_dir), ignore_errors=True)
     # Also clean persistent state
     if sg_state is not None:
@@ -446,7 +446,12 @@ class DownloadManager:
             pass
 
         logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir,
-            extra={"op": "download.start"})
+            extra={
+                "op": "download.complete",
+                "dur_ms": int(elapsed * 1000),
+                "ok": True,
+                "download": {"resource": model_id, "elapsed_s": round(elapsed, 1)},
+            })
         return {
             "status": "complete",
             "model_id": model_id,

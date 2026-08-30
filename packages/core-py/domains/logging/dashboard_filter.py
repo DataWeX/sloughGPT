@@ -15,9 +15,9 @@ Watched tags (legacy fallback):
 
 The filter formats concise summaries from common log patterns:
     "Loaded gpt2 (124M params)"
-    "Train step 310/500 - loss 2.341"
+    "Train step 310/500 — loss 2.341"
     "Self-train started (pid 641618)"
-    "Downloaded 45% - 120MB/267MB"
+    "Downloaded 45% — 120MB/267MB"
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ _WATCHED_TAGS = frozenset({
     "DOWNLOAD", "SLOW", "INFERENCE", "WORKFLOW",
 })
 
-# slo.log v1: op prefix -> dashboard category
+# slo.log v1: op prefix → dashboard category
 _WATCHED_OPS = {
     "train":     "TRAIN",
     "model":     "MODEL",
@@ -49,10 +49,10 @@ _WATCHED_OPS = {
 }
 
 _PATTERNS: list[tuple[re.Pattern, str, str]] = [
-    # -- Training ----------------------------------------------------------
-    # Step with loss: "step 310/500 - loss 2.341"
+    # ── Training ───────────────────────────────────────────────────
+    # Step with loss: "step 310/500 — loss 2.341"
     (re.compile(r"step\s+(\d+)/(\d+).*?loss[:\s]+([\d.]+)", re.I),
-     "TRAIN", "Train step {1}/{2} - loss {3}"),
+     "TRAIN", "Train step {1}/{2} — loss {3}"),
     # Step without loss
     (re.compile(r"step\s+(\d+)/(\d+)", re.I),
      "TRAIN", "Train step {1}/{2}"),
@@ -90,7 +90,7 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"self.?train(?:ing)?\s+stopped", re.I),
      "TRAIN", "Self-train stopped"),
 
-    # -- Model -------------------------------------------------------------
+    # ── Model ──────────────────────────────────────────────────────
     # Model loaded with params: "loaded gpt2 (124M params)"
     (re.compile(r"(?:loaded|model loaded|loading model)[:\s]+(\S+).*?(\d+[MmKk]?\s*param)", re.I),
      "MODEL", "Loaded {1} ({2})"),
@@ -113,7 +113,7 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"soul\s+switched\s+to[:\s]+(\S+)", re.I),
      "MODEL", "Soul switched: {1}"),
 
-    # -- Inference ---------------------------------------------------------
+    # ── Inference ──────────────────────────────────────────────────
     # First token latency
     (re.compile(r"first.?token.*?(\d+)\s*ms", re.I),
      "INFERENCE", "First token: {1}ms"),
@@ -127,7 +127,7 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"client\s+disconnect", re.I),
      "INFERENCE", "Client disconnected"),
 
-    # -- System ------------------------------------------------------------
+    # ── System ─────────────────────────────────────────────────────
     # Server ready
     (re.compile(r"server\s+ready|uvicorn\s+running|startup\s+complete", re.I),
      "SYSTEM", "Server ready"),
@@ -138,10 +138,10 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"cancel(?:led|ing)?", re.I),
      "SYSTEM", "Operation cancelled"),
 
-    # -- Download ----------------------------------------------------------
-    # Download progress: "downloaded 45%" or "45% - 120MB/267MB"
+    # ── Download ───────────────────────────────────────────────────
+    # Download progress: "downloaded 45%" or "45% — 120MB/267MB"
     (re.compile(r"download.*?(\d+)%.*?(\d+\.?\d*)\s*[MmGg].*?/.*?(\d+\.?\d*)\s*[MmGg]", re.I),
-     "DOWNLOAD", "Download {1}% - {2}/{3}MB"),
+     "DOWNLOAD", "Download {1}% — {2}/{3}MB"),
     (re.compile(r"download.*?(\d+)%", re.I),
      "DOWNLOAD", "Download {1}%"),
     # Download complete
@@ -151,7 +151,7 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"download\s+(?:failed|error)", re.I),
      "DOWNLOAD", "Download failed"),
 
-    # -- Workflow ----------------------------------------------------------
+    # ── Workflow ───────────────────────────────────────────────────
     # Feedback workflow
     (re.compile(r"feedback\s+workflow\s+(?:started|stopped|complete)", re.I),
      "WORKFLOW", "Feedback workflow {1}"),
@@ -159,7 +159,7 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"webhook\s+(?:sent|failed|notification)", re.I),
      "WORKFLOW", "Webhook {1}"),
 
-    # -- Errors (last - catch-all) -----------------------------------------
+    # ── Errors (last — catch-all) ──────────────────────────────────
     # Memory pressure
     (re.compile(r"memory\s+pressure|oom|out\s+of\s+memory", re.I),
      "ERROR", "Memory pressure"),
@@ -192,13 +192,13 @@ def _summarize_from_op(record: logging.LogRecord, op: str) -> Optional[tuple[str
         if step and total:
             base = f"Train step {step}/{total}"
             if loss is not None:
-                base += f" - loss {loss}"
+                base += f" — loss {loss}"
             return category, base
 
     if domain == "model":
         model_id = getattr(record, "id", None) or getattr(record, "model_id", None)
         if model_id:
-            return category, f"Model {model_id} - {op}"
+            return category, f"Model {model_id} — {op}"
 
     if domain == "infer":
         tokens = getattr(record, "tokens", None)
@@ -225,7 +225,7 @@ def _summarize_from_op(record: logging.LogRecord, op: str) -> Optional[tuple[str
     if domain == "rag":
         results = getattr(record, "results", None)
         if results is not None:
-            return category, f"RAG query - {results} results"
+            return category, f"RAG query — {results} results"
 
     if domain == "sys":
         phase = getattr(record, "phase", None)
@@ -255,13 +255,13 @@ def _format_punchy(record: logging.LogRecord) -> Optional[tuple[str, str]]:
         m = pattern.search(msg)
         if m:
             try:
-                parts = template.split(" - ")
+                parts = template.split(" — ")
                 result_parts = []
                 for part in parts:
                     for i, group in enumerate(m.groups(), 1):
                         part = part.replace(f"{{{i}}}", group or "")
                     result_parts.append(part)
-                return default_cat, " - ".join(result_parts)
+                return default_cat, " — ".join(result_parts)
             except Exception:
                 pass
 

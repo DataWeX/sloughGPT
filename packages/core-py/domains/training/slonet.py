@@ -1310,12 +1310,21 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
     """
     if logits.ndim == 3:
         logits = logits[:, 0, :]
+
+    gen_ids = generated_ids.flatten() if generated_ids is not None else np.array([], dtype=np.int64)
+
+    # Fast path: greedy (temp≈0) with no penalties → skip copy entirely
+    is_greedy = temperature < 1e-6
+    has_penalties = (repetition_penalty != 1.0 or frequency_penalty != 0.0 or
+                     presence_penalty != 0.0 or eos_token is not None)
+    if is_greedy and not has_penalties:
+        return int(np.argmax(logits[0]))
+
+    # Copy only when mutations are needed
     logits = logits.copy()
     if temperature > 1e-6:
         logits = _apply_temperature(logits, temperature)
     logits = np.where(np.isfinite(logits), logits, -1e9)
-
-    gen_ids = generated_ids.flatten() if generated_ids is not None else np.array([], dtype=np.int64)
 
     if repetition_penalty != 1.0:
         logits = _apply_repetition_penalty(logits, gen_ids, repetition_penalty)
@@ -1334,9 +1343,6 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
         logits = _apply_top_p(logits, top_p)
 
     # Fast path: greedy (temp≈0) → argmax of the penalized/filtered logits.
-    # top_k/top_p filtering cannot change the argmax (the max token is always
-    # within the top-k and within the nucleus), so temperature 0 is
-    # deterministic greedy even when those sampling knobs are set.
     if temperature < 1e-6:
         return int(np.argmax(logits[0]))
 

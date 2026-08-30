@@ -1,7 +1,23 @@
 """Tests for domains.agents.system — AgentSystem CRUD."""
 
+import asyncio
 import pytest
+import domains.agents.system as _mod
 from domains.agents.system import AgentSystem, get_agent_system
+
+
+@pytest.fixture(autouse=True)
+def _reset_and_event_loop():
+    """Reset singleton and ensure event loop exists for each test."""
+    _mod._default_system = None
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("closed")
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    yield
+    _mod._default_system = None
 
 
 class TestAgentSystem:

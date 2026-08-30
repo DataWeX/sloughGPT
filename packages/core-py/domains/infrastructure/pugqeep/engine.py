@@ -66,18 +66,12 @@ class TreeStatus(Enum):
     STOPPED = "stopped"
 
 
-class SchedulingPolicy(Enum):
-    PRIORITY = "priority"
-    ROUND_ROBIN = "round_robin"
-    FIFO = "fifo"
-
-
 @dataclass
 class Process:
     """A unit of execution with lifecycle.
 
     A Process wraps a callable with args/kwargs and tracks its state
-    through CREATED → READY → RUNNING → COMPLETED/FAILED.
+    through CREATED -> READY -> RUNNING -> COMPLETED/FAILED.
     """
     fn: Callable[..., Any]
     args: tuple = ()
@@ -102,105 +96,28 @@ class Process:
     _pid: Optional[int] = field(default=None, repr=False)
     _last_heartbeat: Optional[float] = field(default=None, repr=False)
     _restart_policy: Optional["RestartPolicy"] = field(default=None, repr=False)
-    _progress: float = field(default=0.0, repr=False)
-    _progress_message: str = field(default="", repr=False)
-    _on_progress: List[Callable] = field(default_factory=list, repr=False)
-    _on_complete: List[Callable] = field(default_factory=list, repr=False)
-    _on_fail: List[Callable] = field(default_factory=list, repr=False)
-    _on_cancel: List[Callable] = field(default_factory=list, repr=False)
-    _stream_results: List[Any] = field(default_factory=list, repr=False)
-    _on_stream: List[Callable] = field(default_factory=list, repr=False)
 
     def ready(self) -> None:
-        """Mark process as ready to run."""
         self.status = ProcessStatus.READY
 
     def running(self) -> None:
-        """Mark process as running."""
         self.status = ProcessStatus.RUNNING
         self.started_at = time.time()
 
     def complete(self, result: Any = None) -> None:
-        """Mark process as completed."""
         self.status = ProcessStatus.COMPLETED
         self.result = result
         self.completed_at = time.time()
-        for cb in self._on_complete:
-            try:
-                cb(self)
-            except Exception:
-                pass
 
     def fail(self, error: str) -> None:
-        """Mark process as failed."""
         self.status = ProcessStatus.FAILED
         self.error = error
         self.completed_at = time.time()
-        for cb in self._on_fail:
-            try:
-                cb(self)
-            except Exception:
-                pass
 
     def cancel(self) -> None:
-        """Cancel the process."""
         self.status = ProcessStatus.CANCELLED
         self.completed_at = time.time()
         self._cancel_event.set()
-        for cb in self._on_cancel:
-            try:
-                cb(self)
-            except Exception:
-                pass
-
-    def emit(self, value: Any) -> None:
-        """Emit an intermediate result (streaming)."""
-        self._stream_results.append(value)
-        for cb in self._on_stream:
-            try:
-                cb(self, value)
-            except Exception:
-                pass
-
-    def on_complete(self, callback: Callable) -> None:
-        self._on_complete.append(callback)
-
-    def on_fail(self, callback: Callable) -> None:
-        self._on_fail.append(callback)
-
-    def on_cancel(self, callback: Callable) -> None:
-        self._on_cancel.append(callback)
-
-    def on_stream(self, callback: Callable) -> None:
-        self._on_stream.append(callback)
-
-    @property
-    def stream_results(self) -> List[Any]:
-        return list(self._stream_results)
-
-    def report_progress(self, progress: float, message: str = "") -> None:
-        """Report progress (0.0 to 1.0)."""
-        self._progress = max(0.0, min(1.0, progress))
-        self._progress_message = message
-        for cb in self._on_progress:
-            try:
-                cb(self, self._progress, message)
-            except Exception:
-                pass
-
-    def on_progress(self, callback: Callable) -> None:
-        """Register progress callback."""
-        self._on_progress.append(callback)
-
-    @property
-    def progress(self) -> float:
-        """Current progress (0.0 to 1.0)."""
-        return self._progress
-
-    @property
-    def progress_message(self) -> str:
-        """Current progress message."""
-        return self._progress_message
 
     def wait_cancel(self, timeout: float = None) -> None:
         deadline = time.time() + timeout if timeout else None
@@ -215,7 +132,6 @@ class Process:
 
     @property
     def elapsed(self) -> Optional[float]:
-        """Elapsed time in seconds, or None if not started."""
         if self.started_at is None:
             return None
         end = self.completed_at or time.time()
@@ -223,7 +139,6 @@ class Process:
 
     @property
     def is_done(self) -> bool:
-        """Whether the process is in a terminal state."""
         return self.status in (
             ProcessStatus.COMPLETED,
             ProcessStatus.FAILED,
@@ -248,19 +163,12 @@ class Process:
             "depends_on": self.depends_on,
             "is_done": self.is_done,
             "is_cancelled": self.is_cancelled,
-            "progress": self._progress,
-            "progress_message": self._progress_message,
-            "stream_count": len(self._stream_results),
         }
 
 
 @dataclass
 class Stem:
-    """A branch of parallel execution from a Tree.
-
-    A Stem groups processes that run concurrently on a Tree instance.
-    The Tree branches (creates Stems) to parallelize work.
-    """
+    """A branch of parallel execution from a Tree."""
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     tree_id: str = ""
     processes: List[Process] = field(default_factory=list)
@@ -288,15 +196,12 @@ class Stem:
 
     @property
     def all_done(self) -> bool:
-        """Whether all processes in this stem are done."""
         return all(p.is_done for p in self.processes)
 
     def results(self) -> List[Any]:
-        """Collect results from all completed processes."""
         return [p.result for p in self.processes if p.status == ProcessStatus.COMPLETED]
 
     def errors(self) -> List[str]:
-        """Collect errors from all failed processes."""
         return [p.error for p in self.processes if p.status == ProcessStatus.FAILED and p.error]
 
     def to_dict(self) -> dict:
@@ -311,11 +216,7 @@ class Stem:
 
 
 class Tree:
-    """Model instance that branches Stems of parallel tasks.
-
-    A Tree owns a PointLibrary (graph/context) and can branch
-    Stems — groups of processes that run concurrently.
-    """
+    """Model instance that branches Stems of parallel tasks."""
     def __init__(self, name: str, max_stems: int = 8,
                  pool_workers: int = 4):
         self.name = name
@@ -327,14 +228,9 @@ class Tree:
             thread_name_prefix=f"tree-{name}",
         )
         self._lock = threading.Lock()
-        self._graph: Dict[str, Any] = {}  # PointLibrary context
+        self._graph: Dict[str, Any] = {}
 
     def branch(self, processes: List[Process]) -> Stem:
-        """Branch a Stem of parallel processes.
-
-        Submits all processes to the thread pool and returns
-        the Stem that tracks their execution.
-        """
         with self._lock:
             if len(self._stems) >= self.max_stems:
                 raise RuntimeError(
@@ -355,11 +251,9 @@ class Tree:
         return stem
 
     def _execute(self, proc: Process, stem: Stem) -> Any:
-        """Execute a single process with optional timeout and update stem status."""
         proc.running()
         try:
             if proc.timeout is not None and proc.timeout > 0:
-                # Run in a separate thread to enforce timeout
                 result_container: List[Any] = []
                 error_container: List[Optional[Exception]] = [None]
 
@@ -375,12 +269,8 @@ class Tree:
 
                 if worker.is_alive():
                     proc.fail(f"timed out after {proc.timeout}s")
-                    logger.warning("Tree[%s]: process %s timed out (%.1fs)",
-                                   self.name, proc.id, proc.timeout)
                 elif error_container[0] is not None:
                     proc.fail(str(error_container[0]))
-                    logger.error("Tree[%s]: process %s failed: %s",
-                                 self.name, proc.id, error_container[0])
                 else:
                     proc.complete(result_container[0])
             else:
@@ -388,8 +278,6 @@ class Tree:
                 proc.complete(result)
         except Exception as e:
             proc.fail(str(e))
-            logger.error("Tree[%s]: process %s failed: %s",
-                         self.name, proc.id, e)
         finally:
             if stem.all_done:
                 if any(p.status == ProcessStatus.FAILED for p in stem.processes):
@@ -403,16 +291,13 @@ class Tree:
         return proc.result
 
     def wait_stem(self, stem: Stem, timeout: Optional[float] = None) -> Stem:
-        """Wait for a Stem to complete (event-driven, no polling)."""
         stem._done_event.wait(timeout=timeout)
         return stem
 
     def store(self, key: str, value: Any) -> None:
-        """Store context in the tree's graph."""
         self._graph[key] = value
 
     def recall(self, key: str) -> Optional[Any]:
-        """Recall context from the tree's graph."""
         return self._graph.get(key)
 
     @property
@@ -420,7 +305,6 @@ class Tree:
         return len(self._stems)
 
     def shutdown(self) -> None:
-        """Shutdown the tree's thread pool."""
         self.status = TreeStatus.STOPPED
         self._pool.shutdown(wait=False)
 
@@ -432,7 +316,6 @@ class Tree:
             "max_stems": self.max_stems,
             "graph_keys": list(self._graph.keys()),
         }
-
 
 
 class GuardTree(Tree):
@@ -463,6 +346,12 @@ class GuardTree(Tree):
     def subprocess_count(self) -> int:
         return len(self._subprocesses)
 
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["subprocess_enabled"] = self.subprocess_config is not None and self.subprocess_config.enabled
+        d["subprocess_count"] = self.subprocess_count
+        return d
+
     def health(self) -> dict:
         return {
             "name": self.name,
@@ -470,15 +359,7 @@ class GuardTree(Tree):
             "active_stems": self.active_stems,
             "subprocess_enabled": self.subprocess_config is not None and self.subprocess_config.enabled,
             "subprocess_count": self.subprocess_count,
-            "active_subprocesses": self.subprocess_count,
         }
-
-    def to_dict(self) -> dict:
-        d = super().to_dict()
-        d["subprocess_enabled"] = self.subprocess_config is not None and self.subprocess_config.enabled
-        d["subprocess_count"] = self.subprocess_count
-        return d
-
 
 
 class EngineMetrics:
@@ -493,8 +374,6 @@ class EngineMetrics:
         self._restarted = 0
         self._dispatched = 0
         self._total_latency = 0.0
-        self._total_memory_bytes = 0
-        self._peak_memory_bytes = 0
         self._start_time = time.monotonic()
 
     def record_spawn(self) -> None:
@@ -527,12 +406,6 @@ class EngineMetrics:
         with self._lock:
             self._dispatched += count
 
-    def record_memory(self, bytes_used: int) -> None:
-        with self._lock:
-            self._total_memory_bytes += bytes_used
-            if bytes_used > self._peak_memory_bytes:
-                self._peak_memory_bytes = bytes_used
-
     def snapshot(self) -> dict:
         with self._lock:
             elapsed = time.monotonic() - self._start_time
@@ -548,8 +421,6 @@ class EngineMetrics:
                 "avg_latency_s": self._total_latency / max(1, self._completed),
                 "throughput_per_s": self._completed / max(0.001, elapsed),
                 "error_rate": self._failed / max(1, total),
-                "total_memory_bytes": self._total_memory_bytes,
-                "peak_memory_bytes": self._peak_memory_bytes,
             }
 
     def reset(self) -> None:
@@ -562,13 +433,22 @@ class EngineMetrics:
             self._restarted = 0
             self._dispatched = 0
             self._total_latency = 0.0
-            self._total_memory_bytes = 0
-            self._peak_memory_bytes = 0
             self._start_time = time.monotonic()
 
 
 class SubprocessProcess:
-    """Wraps a Process in an isolated OS subprocess."""
+    """Wraps a Process in an isolated OS subprocess.
+
+    Runs a Process.fn in a subprocess with:
+    - Memory limits via resource.setrlimit
+    - CPU affinity
+    - Working directory (cwd)
+    - Environment variables
+    - Stdout/stderr capture
+    - Graceful SIGTERM->SIGKILL termination
+    - Timeout watchdog thread
+    """
+
     def __init__(self, proc: Process, config):
         self.proc = proc
         self.config = config
@@ -591,14 +471,18 @@ class SubprocessProcess:
         capture = self.config.capture_output
 
         def _worker():
-            import sys, io
+            import sys
+            import io
+
             stdout_capture = None
             stderr_capture = None
+
             if capture:
                 stdout_capture = io.StringIO()
                 stderr_capture = io.StringIO()
                 sys.stdout = stdout_capture
                 sys.stderr = stderr_capture
+
             try:
                 if self.config.memory_limit_mb is not None:
                     try:
@@ -607,35 +491,41 @@ class SubprocessProcess:
                         resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
                     except (ImportError, ValueError, OSError):
                         pass
+
                 if self.config.cpu_affinity is not None:
                     try:
                         os.sched_setaffinity(0, self.config.cpu_affinity)
                     except (AttributeError, OSError):
                         pass
+
                 if self.config.cwd is not None:
                     try:
                         os.chdir(self.config.cwd)
                     except (OSError, FileNotFoundError):
                         pass
+
                 if self.config.env is not None:
                     try:
                         os.environ.update(self.config.env)
                     except (TypeError, OSError):
                         pass
+
                 try:
                     child_w.send(_MSG_READY)
                 except Exception:
                     pass
+
                 result = self.proc.fn(*self.proc.args, **self.proc.kwargs)
+
                 try:
                     child_w.send(("ok", result))
                 except Exception:
-                    pass
+                    logger.debug("Failed to send result to parent", exc_info=True)
             except Exception as e:
                 try:
                     child_w.send(("error", str(e)))
                 except Exception:
-                    pass
+                    logger.debug("Failed to send error to parent", exc_info=True)
             finally:
                 if capture:
                     try:
@@ -654,11 +544,13 @@ class SubprocessProcess:
         self._process.start()
         self.proc._pid = self._process.pid
         self.proc.running()
+
         self._reader_thread = threading.Thread(
             target=self._read_result, args=(parent_r,),
             daemon=True, name=f"reader-{self.proc.name}",
         )
         self._reader_thread.start()
+
         if self.proc.timeout is not None and self.proc.timeout > 0:
             self._watchdog = threading.Thread(
                 target=self._watchdog_loop, daemon=True,
@@ -761,7 +653,11 @@ class SubprocessProcess:
         self._cancel_event.set()
 
     def health(self) -> dict:
-        return {"pid": self.proc._pid, "alive": self.is_alive, "elapsed": self.elapsed}
+        return {
+            "pid": self.proc._pid,
+            "alive": self.is_alive,
+            "elapsed": self.elapsed,
+        }
 
     def resource_usage(self) -> Optional[dict]:
         if self._process is None or self._process.pid is None:
@@ -772,8 +668,10 @@ class SubprocessProcess:
                 self._process.join(timeout=0.1)
             usage = resource.getrusage(resource.RUSAGE_CHILDREN)
             return {
-                "ru_maxrss": usage.ru_maxrss, "ru_utime": usage.ru_utime,
-                "ru_stime": usage.ru_stime, "ru_nvcsw": usage.ru_nvcsw,
+                "ru_maxrss": usage.ru_maxrss,
+                "ru_utime": usage.ru_utime,
+                "ru_stime": usage.ru_stime,
+                "ru_nvcsw": usage.ru_nvcsw,
                 "ru_nivcsw": usage.ru_nivcsw,
             }
         except (ImportError, OSError, TypeError):
@@ -795,14 +693,13 @@ class ProcessGroup:
         self.engine = engine
         self._processes: List[Process] = []
         self._done_event = threading.Event()
-        self._created_at: float = time.time()
 
     def add(self, proc: Process) -> None:
         self._processes.append(proc)
 
     def spawn(self, fn, *args, **kwargs) -> Process:
         if self.engine is None:
-            raise RuntimeError("not attached")
+            raise RuntimeError("No engine attached to ProcessGroup")
         proc = self.engine.spawn(fn, *args, **kwargs)
         self._processes.append(proc)
         return proc
@@ -820,7 +717,7 @@ class ProcessGroup:
         starts = [p.started_at for p in self._processes if p.started_at]
         ends = [p.completed_at or time.time() for p in self._processes]
         if not starts:
-            return time.time() - self._created_at
+            return None
         return max(ends) - min(starts)
 
     def results(self) -> List[Any]:
@@ -843,10 +740,6 @@ class ProcessGroup:
             if deadline and time.time() > deadline:
                 break
             time.sleep(0.05)
-
-    def gather(self, timeout: float = None) -> List[Any]:
-        self.wait(timeout=timeout)
-        return self.results()
 
     def to_dict(self) -> dict:
         return {
@@ -926,13 +819,6 @@ class ProcessMonitor:
             with self._lock:
                 for proc in list(self._processes.values()):
                     if proc.status == ProcessStatus.RUNNING:
-                        # Timeout check
-                        if proc.timeout and proc.started_at:
-                            elapsed = time.time() - proc.started_at
-                            if elapsed > proc.timeout:
-                                proc.fail(f"timeout after {elapsed:.1f}s")
-                                continue
-                        # Stall check
                         stalled = False
                         if proc._last_heartbeat is not None:
                             since_heartbeat = time.monotonic() - proc._last_heartbeat
@@ -947,7 +833,7 @@ class ProcessMonitor:
                                 try:
                                     cb(proc)
                                 except Exception:
-                                    pass
+                                    logger.debug("Non-critical pugqeep stall callback error", exc_info=True)
                     if proc.status == ProcessStatus.FAILED:
                         policy = proc._restart_policy or self.restart_policy
                         if policy and policy.max_restarts > 0:
@@ -959,7 +845,7 @@ class ProcessMonitor:
                                     try:
                                         cb(proc)
                                     except Exception:
-                                        pass
+                                        logger.debug("Non-critical pugqeep restart callback error", exc_info=True)
 
     def stats(self) -> dict:
         with self._lock:
@@ -1005,8 +891,6 @@ class ResultCache:
         self._cache: Dict[str, Any] = {}
         self._timestamps: Dict[str, float] = {}
         self._lock = threading.Lock()
-        self._hits = 0
-        self._misses = 0
 
     def _key(self, fn: Callable, args: tuple, kwargs: dict) -> str:
         return f"{fn.__name__}:{args}:{sorted(kwargs.items())}"
@@ -1018,11 +902,8 @@ class ResultCache:
                 if self.ttl and time.monotonic() - self._timestamps[key] > self.ttl:
                     del self._cache[key]
                     del self._timestamps[key]
-                    self._misses += 1
                     return False, None
-                self._hits += 1
                 return True, self._cache[key]
-            self._misses += 1
         return False, None
 
     def put(self, fn: Callable, args: tuple, kwargs: dict, result: Any) -> None:
@@ -1035,28 +916,20 @@ class ResultCache:
             self._cache[key] = result
             self._timestamps[key] = time.monotonic()
 
-    def invalidate(self, fn: Callable = None, args: tuple = None, kwargs: dict = None) -> bool:
-        if args is not None and kwargs is not None:
-            key = self._key(fn, args, kwargs)
-            with self._lock:
-                if key in self._cache:
-                    del self._cache[key]
-                    del self._timestamps[key]
-                    return True
-            return False
+    def invalidate(self, fn: Callable = None) -> int:
         with self._lock:
             if fn is None:
                 count = len(self._cache)
                 self._cache.clear()
                 self._timestamps.clear()
-                return count > 0
+                return count
             count = 0
             to_remove = [k for k in self._cache if fn.__name__ in k]
             for k in to_remove:
                 del self._cache[k]
                 del self._timestamps[k]
                 count += 1
-            return count > 0
+            return count
 
     def clear(self) -> int:
         with self._lock:
@@ -1067,14 +940,10 @@ class ResultCache:
 
     def stats(self) -> dict:
         with self._lock:
-            total = self._hits + self._misses
             return {
                 "size": len(self._cache),
                 "maxsize": self.maxsize,
                 "ttl": self.ttl,
-                "hits": self._hits,
-                "misses": self._misses,
-                "hit_rate": self._hits / max(1, total),
             }
 
     @property
@@ -1118,8 +987,6 @@ class Engine:
         self._monitor: Optional[ProcessMonitor] = None
         self._signal_handlers_installed = False
         self._old_signal_handlers: Dict = {}
-        self._scheduling_policy = SchedulingPolicy.PRIORITY
-        self._batch_size: int = 8
 
         if self._config and self._config.monitor.enabled:
             self._monitor = ProcessMonitor(
@@ -1156,25 +1023,6 @@ class Engine:
         if register_cancel and self._monitor:
             self._monitor.track(proc)
 
-        if register_cancel:
-            try:
-                from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
-                mgr = get_cancel_manager()
-                mgr.register(
-                    op_type=OpType.OTHER,
-                    label=proc.name or proc.id,
-                    cancel_fn=lambda p=proc: p.cancel(),
-                    op_id=proc.id,
-                )
-            except Exception:
-                pass
-
-        if self._cache is not None:
-            hit, val = self._cache.get(fn, args, kwargs)
-            if hit:
-                proc.complete(val)
-                return proc
-
         if self._spawn_queue is not None:
             self._spawn_queue.put(proc, priority=priority)
 
@@ -1203,32 +1051,20 @@ class Engine:
         return tree
 
     def route(self, process_name: str, tree_name: str) -> None:
-        """Route processes by name to a specific tree.
-
-        Args:
-            process_name: Process name to match (exact match).
-            tree_name: Tree to dispatch matching processes to.
-        """
         if tree_name not in self._trees:
             raise ValueError(f"Tree '{tree_name}' not found")
         self._routing[process_name] = tree_name
-        logger.debug("Engine[%s]: route '%s' → tree '%s'",
+        logger.debug("Engine[%s]: route '%s' -> tree '%s'",
                       self.name, process_name, tree_name)
 
     def on_complete(self, callback: Callable[[Process], None]) -> None:
-        """Register a callback for when a process completes.
-
-        The callback receives the completed Process instance.
-        """
         self._on_complete.append(callback)
 
     def branch(self, tree_name: str, processes: List[Process]) -> Stem:
-        """Branch a Stem of parallel processes on a Tree."""
         tree = self._trees.get(tree_name)
         if tree is None:
             raise ValueError(f"Tree '{tree_name}' not found")
         stem = tree.branch(processes)
-        # Track completion for on_complete callbacks
         for proc in processes:
             proc._tree_name = tree_name
         return stem
@@ -1279,6 +1115,7 @@ class Engine:
                 for p in procs:
                     p.fail(f"tree '{tree_name}' not found")
                 continue
+
             for i in range(0, len(procs), self._dispatch_batch_size):
                 batch = procs[i:i + self._dispatch_batch_size]
                 try:
@@ -1296,32 +1133,16 @@ class Engine:
 
     def run(self, poll_interval: float = 0.1,
             on_progress: Optional[Callable[[dict], None]] = None) -> None:
-        """Main process loop.
-
-        Dispatches pending processes to trees, monitors active trees,
-        and fires completion callbacks. Runs until stop() is called.
-
-        When workers are running (via ``start_workers()``), this loop
-        only monitors completion — dispatch is handled by workers.
-
-        Args:
-            poll_interval: Seconds between dispatch cycles.
-            on_progress: Optional callback receiving status dict each cycle:
-                {"pending": int, "active_stems": int, "completed": int,
-                 "running": int, "failed": int}
-        """
         self._running = True
         logger.info("Engine[%s]: starting main loop", self.name)
 
         while self._running:
-            # 1. Dispatch pending processes (only when workers are NOT running)
             if self._pending and self._spawn_queue is None:
                 dispatched = self.dispatch()
                 if dispatched > 0:
                     logger.info("Engine[%s]: dispatched %d processes",
                                 self.name, dispatched)
 
-            # 2. Monitor active trees and fire callbacks
             with self._lock:
                 active = sum(t.active_stems for t in self._trees.values())
 
@@ -1339,7 +1160,6 @@ class Engine:
                             logger.error("Engine[%s]: on_complete callback error: %s",
                                          self.name, e)
 
-            # 3. Fire progress callback
             if on_progress is not None:
                 try:
                     on_progress({
@@ -1355,32 +1175,16 @@ class Engine:
                     logger.error("Engine[%s]: on_progress callback error: %s",
                                  self.name, e)
 
-            if active > 0:
-                logger.debug("Engine[%s]: %d active stems across %d trees",
-                             self.name, active, len(self._trees))
-
             time.sleep(poll_interval)
 
         logger.info("Engine[%s]: main loop stopped", self.name)
 
     def run_background(self, poll_interval: float = 0.1,
                        as_future: bool = False) -> Union[threading.Thread, Future]:
-        """Start the main loop in a background thread.
-
-        Non-blocking — returns immediately. Use stop() to stop.
-
-        Args:
-            poll_interval: Seconds between dispatch cycles.
-            as_future: If True, return a concurrent.futures.Future instead of Thread.
-
-        Returns:
-            threading.Thread if as_future=False, Future if as_future=True.
-        """
         if as_future:
             executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"engine-{self.name}")
             future = executor.submit(self.run, poll_interval)
             future.add_done_callback(lambda _: executor.shutdown(wait=False))
-            logger.info("Engine[%s]: started as Future", self.name)
             return future
 
         thread = threading.Thread(
@@ -1390,15 +1194,9 @@ class Engine:
             daemon=True,
         )
         thread.start()
-        logger.info("Engine[%s]: started in background", self.name)
         return thread
 
     def wait(self, timeout: Optional[float] = None) -> None:
-        """Wait for all pending and running processes to complete.
-
-        Args:
-            timeout: Maximum seconds to wait. None = wait forever.
-        """
         deadline = time.time() + timeout if timeout else None
         while True:
             has_pending = bool(self._pending)
@@ -1413,19 +1211,10 @@ class Engine:
             time.sleep(0.05)
 
     def wait_all(self, timeout: Optional[float] = None) -> List[Process]:
-        """Wait for all processes and return completed/failed/cancelled list.
-
-        Args:
-            timeout: Maximum seconds to wait. None = wait forever.
-
-        Returns:
-            List of processes in terminal state.
-        """
         self.wait(timeout=timeout)
         return [p for p in self._processes.values() if p.is_done]
 
     def get_completed(self) -> List[Process]:
-        """Return all completed processes since last call."""
         done = list(self._completed)
         self._completed.clear()
         return done
@@ -1457,28 +1246,6 @@ class Engine:
             procs = [p for p in procs if p.status == status]
         return procs
 
-    def to_dict(self) -> dict:
-        subprocess_config = None
-        if self._config and hasattr(self._config, 'subprocess'):
-            sc = self._config.subprocess
-            subprocess_config = {
-                "enabled": sc.enabled, "max_workers": sc.max_workers,
-                "memory_limit_mb": sc.memory_limit_mb, "cpu_affinity": sc.cpu_affinity,
-                "start_method": sc.start_method, "cwd": sc.cwd,
-                "capture_output": sc.capture_output, "terminate_grace": sc.terminate_grace,
-            }
-        return {
-            "name": self.name, "running": self._running,
-            "trees": {n: t.to_dict() for n, t in self._trees.items()},
-            "processes": len(self._processes), "pending": len(self._pending),
-            "active_stems": sum(t.active_stems for t in self._trees.values()),
-            "routing": dict(self._routing),
-            "monitor": self._monitor.stats() if self._monitor else None,
-            "metrics": self._metrics.snapshot(),
-            "cache": self._cache.stats() if self._cache else None,
-            "subprocess_config": subprocess_config,
-        }
-
     def wait_for(self, proc_id: str, timeout: float = None) -> Optional[Process]:
         proc = self._processes.get(proc_id)
         if proc is None:
@@ -1486,7 +1253,7 @@ class Engine:
         deadline = time.time() + timeout if timeout else None
         while not proc.is_done:
             if deadline and time.time() > deadline:
-                break
+                return None
             time.sleep(0.05)
         return proc
 
@@ -1534,180 +1301,6 @@ class Engine:
                 count += 1
         return count
 
-    def cancel_all(self, status: Optional[ProcessStatus] = None) -> int:
-        """Cancel all non-done processes, optionally filtered by status.
-
-        Returns the number of processes cancelled.
-        """
-        count = 0
-        for proc in self._processes.values():
-            if proc.is_done:
-                continue
-            if status and proc.status != status:
-                continue
-            proc.cancel()
-            self._metrics.record_cancel()
-            count += 1
-        return count
-
-    def reset(self) -> None:
-        """Clear all processes and pending work."""
-        self._processes.clear()
-        self._pending.clear()
-        self._completed.clear()
-        self._dependents.clear()
-        self._round_robin_idx = 0
-
-    def dependency_graph(self) -> dict:
-        """Return the process dependency graph.
-
-        Returns dict with:
-          - nodes: list of {id, name, status, elapsed}
-          - edges: list of {from, to}
-        """
-        nodes = []
-        edges = []
-        for proc in self._processes.values():
-            nodes.append({
-                "id": proc.id,
-                "name": proc.name or proc.id,
-                "status": proc.status.value,
-                "elapsed": proc.elapsed,
-            })
-            for dep_id in proc.depends_on:
-                edges.append({"from": dep_id, "to": proc.id})
-        return {"nodes": nodes, "edges": edges}
-
-    def critical_path(self) -> List[str]:
-        """Find the longest dependency chain (critical path).
-
-        Returns list of process IDs forming the longest chain.
-        """
-        if not self._processes:
-            return []
-
-        memo: Dict[str, List[str]] = {}
-
-        def _longest_chain(proc_id: str) -> List[str]:
-            if proc_id in memo:
-                return memo[proc_id]
-            proc = self._processes.get(proc_id)
-            if proc is None:
-                memo[proc_id] = []
-                return []
-            deps = proc.depends_on
-            if not deps:
-                memo[proc_id] = [proc_id]
-                return [proc_id]
-            best = []
-            for dep_id in deps:
-                chain = _longest_chain(dep_id)
-                if len(chain) > len(best):
-                    best = chain
-            result = best + [proc_id]
-            memo[proc_id] = result
-            return result
-
-        longest: List[str] = []
-        for proc_id in self._processes:
-            chain = _longest_chain(proc_id)
-            if len(chain) > len(longest):
-                longest = chain
-        return longest
-
-    def orphan_processes(self) -> List[Process]:
-        """Return processes with depends_on that are not satisfied."""
-        orphans = []
-        for proc in self._processes.values():
-            if proc.depends_on and not self._deps_met(proc):
-                orphans.append(proc)
-        return orphans
-
-    def save_state(self, path: str) -> None:
-        """Save engine state to a JSON file."""
-        import json
-        state = {
-            "name": self.name,
-            "processes": {pid: p.to_dict() for pid, p in self._processes.items()},
-            "pending": [p.id for p in self._pending],
-            "completed": [p.id for p in self._completed],
-            "routing": dict(self._routing),
-            "dependents": dict(self._dependents),
-            "metrics": self._metrics.snapshot(),
-        }
-        with open(path, "w") as f:
-            json.dump(state, f, indent=2)
-
-    def summary(self) -> str:
-        """Return a human-readable summary of engine state."""
-        counts = {}
-        for proc in self._processes.values():
-            s = proc.status.value
-            counts[s] = counts.get(s, 0) + 1
-        lines = [f"Engine '{self.name}': {len(self._processes)} processes"]
-        for status, count in sorted(counts.items()):
-            lines.append(f"  {status}: {count}")
-        lines.append(f"  trees: {len(self._trees)}")
-        lines.append(f"  pending: {len(self._pending)}")
-        m = self._metrics.snapshot()
-        lines.append(f"  avg_latency: {m['avg_latency_s']:.3f}s")
-        lines.append(f"  throughput: {m['throughput_per_s']:.1f}/s")
-        lines.append(f"  error_rate: {m['error_rate']:.1%}")
-        lines.append(f"  scheduling: {self._scheduling_policy.value}")
-        return "\n".join(lines)
-
-    def set_scheduling(self, policy: SchedulingPolicy) -> None:
-        """Set the dispatch scheduling policy."""
-        self._scheduling_policy = policy
-
-    def dispatch_batch(self, max_count: int = None) -> int:
-        """Dispatch up to max_count pending processes. Returns count dispatched."""
-        limit = max_count or self._batch_size
-        dispatched = 0
-        with self._lock:
-            ready = [p for p in self._pending if self._deps_met(p)]
-
-            if self._scheduling_policy == SchedulingPolicy.PRIORITY:
-                ready.sort(key=lambda p: p._priority)
-            elif self._scheduling_policy == SchedulingPolicy.ROUND_ROBIN:
-                pass
-            else:
-                pass
-
-            for proc in ready[:limit]:
-                tree_name = proc._tree_name or self._routing.get(proc.name) or self._default_tree
-                if tree_name:
-                    self._dispatch_to_tree(proc, tree_name)
-                if proc in self._pending:
-                    self._pending.remove(proc)
-                dispatched += 1
-
-        if dispatched:
-            self._metrics.record_dispatch(dispatched)
-        return dispatched
-
-    def spawn_batch(self, items: List[tuple]) -> List[Process]:
-        """Spawn multiple processes at once.
-
-        Each item is (fn, args, kwargs) or (fn, *args).
-        """
-        procs = []
-        for item in items:
-            if not item:
-                continue
-            fn = item[0]
-            args = ()
-            kwargs = {}
-            if len(item) > 1:
-                if isinstance(item[-1], dict):
-                    args = tuple(item[1:-1])
-                    kwargs = item[-1]
-                else:
-                    args = tuple(item[1:])
-            proc = self.spawn(fn, *args, **kwargs)
-            procs.append(proc)
-        return procs
-
     def spawn_chain(self, *steps: tuple, name: str = "", tree: str = None) -> List[Process]:
         procs = []
         prev_id = None
@@ -1748,16 +1341,25 @@ class Engine:
                        capture_output: bool = False,
                        **kwargs) -> Process:
         from .config import SubprocessConfig
-        sub_config = SubprocessConfig(enabled=True, cwd=cwd, env=env,
-                                      memory_limit_mb=memory_limit_mb,
-                                      capture_output=capture_output)
-        old_config = getattr(self, '_subprocess_config', None)
+        sub_config = SubprocessConfig(
+            enabled=True,
+            cwd=cwd,
+            env=env,
+            memory_limit_mb=memory_limit_mb,
+            capture_output=capture_output,
+        )
+        old_config = None
+        if hasattr(self, '_subprocess_config'):
+            old_config = self._subprocess_config
         self._subprocess_config = sub_config
+
         proc = self.spawn(fn, *args, name=name, subprocess=True, timeout=timeout, **kwargs)
+
         if old_config is not None:
             self._subprocess_config = old_config
         elif hasattr(self, '_subprocess_config'):
             del self._subprocess_config
+
         return proc
 
     def group(self, name: str) -> ProcessGroup:
@@ -1771,10 +1373,12 @@ class Engine:
 
     def health(self) -> dict:
         return {
-            "name": self.name, "running": self._running,
-            "tree_count": len(self._trees), "process_count": len(self._processes),
-            "pending": len(self._pending), "completed": len(self._completed),
-            "trees": {n: t.to_dict() for n, t in self._trees.items()},
+            "name": self.name,
+            "running": self._running,
+            "tree_count": len(self._trees),
+            "process_count": len(self._processes),
+            "pending": len(self._pending),
+            "completed": len(self._completed),
             "status_counts": {
                 s.value: sum(1 for p in self._processes.values() if p.status == s)
                 for s in ProcessStatus
@@ -1782,6 +1386,34 @@ class Engine:
             "monitor": self._monitor.stats() if self._monitor else None,
             "metrics": self._metrics.snapshot(),
             "cache": self._cache.stats() if self._cache else None,
+        }
+
+    def to_dict(self) -> dict:
+        subprocess_config = None
+        if self._config and hasattr(self._config, 'subprocess'):
+            sc = self._config.subprocess
+            subprocess_config = {
+                "enabled": sc.enabled,
+                "max_workers": sc.max_workers,
+                "memory_limit_mb": sc.memory_limit_mb,
+                "cpu_affinity": sc.cpu_affinity,
+                "start_method": sc.start_method,
+                "cwd": sc.cwd,
+                "capture_output": sc.capture_output,
+                "terminate_grace": sc.terminate_grace,
+            }
+        return {
+            "name": self.name,
+            "running": self._running,
+            "trees": {n: t.to_dict() for n, t in self._trees.items()},
+            "processes": len(self._processes),
+            "pending": len(self._pending),
+            "active_stems": sum(t.active_stems for t in self._trees.values()),
+            "routing": dict(self._routing),
+            "monitor": self._monitor.stats() if self._monitor else None,
+            "metrics": self._metrics.snapshot(),
+            "cache": self._cache.stats() if self._cache else None,
+            "subprocess_config": subprocess_config,
         }
 
     def install_signal_handlers(self) -> None:
@@ -1814,18 +1446,7 @@ class Engine:
                 return False
         return True
 
-    # ── Worker pool (ProducerConsumerQueue-backed) ────────────────────    # ── Worker pool (ProducerConsumerQueue-backed) ────────────────────
-
     def start_workers(self, num_workers: int = 2, max_queue: int = 128) -> None:
-        """Start worker threads that auto-dispatch spawned processes.
-
-        Replaces the manual ``run()`` loop with threaded dispatch.
-        Processes are dispatched to trees automatically via the routing table.
-
-        Args:
-            num_workers: Number of dispatcher threads.
-            max_queue: Maximum pending spawns before backpressure.
-        """
         if self._spawn_queue is not None:
             return
 
@@ -1843,26 +1464,11 @@ class Engine:
                      extra={"tag": "INFRA"})
 
     def stop_workers(self, timeout: float = 5.0) -> None:
-        """Stop worker threads gracefully."""
         if self._spawn_queue is not None:
             self._spawn_queue.stop(timeout=timeout)
             self._spawn_queue = None
-            logger.info("Engine[%s]: workers stopped", self.name,
-                         extra={"tag": "INFRA"})
-
-    def _dispatch_to_tree(self, proc: Process, tree_name: str) -> None:
-        """Dispatch a process to a specific tree."""
-        tree = self._trees.get(tree_name)
-        if tree is None:
-            proc.fail(f"tree '{tree_name}' not found")
-            return
-        try:
-            tree.branch([proc])
-        except RuntimeError as e:
-            proc.fail(str(e))
 
     def _dispatch_process(self, proc: Process) -> None:
-        """Worker callback: dispatch a single process to its target tree."""
         tree_name = proc._tree_name or self._routing.get(proc.name) or self._default_tree
         if not tree_name:
             logger.warning("Engine[%s]: no tree for process '%s'", self.name, proc.name)

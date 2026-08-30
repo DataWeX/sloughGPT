@@ -37,7 +37,7 @@ vi.mock('@sloughgpt/strui', () => {
     DialogContent: passthroughWithProps,
     DialogHeader: passthroughWithProps,
     DialogTitle: ({ children }: any) => <div>{children}</div>,
-    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialog: passthroughWithProps,
     AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
     AlertDialogCancel: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
     AlertDialogContent: passthroughWithProps,
@@ -54,7 +54,8 @@ const mocks = vi.hoisted(() => ({
   session: {
     trainingRunning: false, paused: false, loss: null, progress: 0, globalStep: 0, totalSteps: 0,
     stepsPerSec: null as number | null, epoch: 0, totalEpochs: 0, eta: 0, elapsedSeconds: 0, message: '',
-    lossHistory: [] as any[], stopTraining: vi.fn(), pauseTraining: vi.fn(), resumeTraining: vi.fn(),
+    lossHistory: [] as any[],
+    startSSETraining: vi.fn(), stopTraining: vi.fn(), pauseTraining: vi.fn(), resumeTraining: vi.fn(),
   },
   datasets: {
     datasets: [] as any[], selectedDataset: '', loadingDatasets: false, importModalOpen: false, datasetPreview: null,
@@ -97,9 +98,6 @@ vi.mock('@/lib/training-controller', () => ({
 }))
 vi.mock('@/lib/controllers', () => ({
   datasetController: { list: mocks.listDatasets },
-}))
-vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback),
 }))
 vi.mock('@/components/training/LossChart', () => ({
   LossChart: ({ data }: any) => <div data-testid="loss-chart">LossChart</div>,
@@ -240,18 +238,17 @@ describe('AutoTrainPage', () => {
   })
 
   it('stops training', async () => {
-    mocks.stopAutoTrain.mockResolvedValue({})
     mocks.session.trainingRunning = true
     render(<AutoTrainPage />)
     fireEvent.click(screen.getByText('Stop'))
     await waitFor(() => {
-      expect(mocks.stopAutoTrain).toHaveBeenCalled()
+      expect(mocks.session.stopTraining).toHaveBeenCalled()
       expect(mocks.addToast).toHaveBeenCalledWith('Training stopped', 'success')
     })
   })
 
   it('shows error toast on stop failure', async () => {
-    mocks.stopAutoTrain.mockRejectedValue(new Error('fail'))
+    mocks.session.stopTraining.mockRejectedValue(new Error('fail'))
     mocks.session.trainingRunning = true
     render(<AutoTrainPage />)
     fireEvent.click(screen.getByText('Stop'))
@@ -274,8 +271,9 @@ describe('AutoTrainPage', () => {
   it('deletes checkpoint', async () => {
     mocks.checkpoints.checkpoints = [{ name: 'cp-1', loss: 0.5 }]
     render(<AutoTrainPage />)
-    await waitFor(() => { expect(screen.getByText('Delete')).toBeTruthy() })
-    fireEvent.click(screen.getByText('Delete'))
+    await waitFor(() => { expect(screen.getAllByText('Delete').length).toBeGreaterThan(0) })
+    const deleteBtn = screen.getAllByText('Delete').find(el => el.closest('[class*="text-destructive"]')) || screen.getAllByText('Delete')[0]
+    fireEvent.click(deleteBtn)
     await waitFor(() => {
       expect(mocks.deleteCheckpoint).toHaveBeenCalledWith('cp-1')
       expect(mocks.addToast).toHaveBeenCalledWith('Deleted: cp-1', 'success')
@@ -290,7 +288,7 @@ describe('AutoTrainPage', () => {
     fireEvent.click(screen.getByText('Info'))
     await waitFor(() => {
       expect(mocks.getCheckpointInfo).toHaveBeenCalledWith('cp-1')
-      expect(screen.getAllByText('cp-1').length).toBeGreaterThanOrEqual(2)
+      expect(screen.getByText('Checkpoint: cp-1')).toBeTruthy()
     })
   })
 
@@ -303,12 +301,7 @@ describe('AutoTrainPage', () => {
     render(<AutoTrainPage />)
     await waitFor(() => { expect(screen.getByText('Select all')).toBeTruthy() })
     fireEvent.click(screen.getByText('Select all'))
-    await waitFor(() => { expect(screen.getByText('Delete 2')).toBeTruthy() })
     fireEvent.click(screen.getByText('Delete 2'))
-    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
-    const dialogBtns = screen.getAllByText('Delete')
-    const confirmBtn = dialogBtns.find(el => el.closest('[data-testid="alert-dialog"]'))
-    if (confirmBtn) fireEvent.click(confirmBtn)
     await waitFor(() => {
       expect(mocks.deleteCheckpointsBatch).toHaveBeenCalledWith(['cp-1', 'cp-2'])
     })

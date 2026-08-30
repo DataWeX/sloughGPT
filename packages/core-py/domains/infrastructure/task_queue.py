@@ -148,6 +148,7 @@ class WorkerPool:
 
     @property
     def active_workers(self) -> int:
+        """Return the number of workers currently executing a task."""
         return sum(1 for w in self._workers if not w.done())
 
 

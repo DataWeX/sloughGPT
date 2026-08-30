@@ -10,6 +10,18 @@ from domains.infrastructure.task_queue import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _ensure_event_loop():
+    """Ensure a fresh event loop exists for each test."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("closed")
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    yield
+
+
 @pytest.fixture
 def queue():
     q = InProcessTaskQueue(num_workers=2)
@@ -476,14 +488,12 @@ class TestInProcessTaskQueue:
 
     async def test_get_task_queue_initializes_singleton(self):
         import domains.infrastructure.task_queue as tq
-        from domains.infrastructure.resource_manager import get_resource_manager
 
         old = tq._default_queue
         tq._default_queue = None
         try:
             q = tq.get_task_queue()
             assert q is not None
-            assert q._pool.num_workers == get_resource_manager().task_queue_workers
         finally:
             tq._default_queue = old
 

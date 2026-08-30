@@ -74,8 +74,8 @@ class _TTSBackend:
 # ── Schema ──────────────────────────────────────────────────────────────
 
 class TTSRequest(BaseModel):
-    text: str
-    voice: Optional[str] = None
+    text: str = Field(..., min_length=1, max_length=10000, description="Text to convert to speech")
+    voice: Optional[str] = Field(default=None, max_length=100, description="Voice identifier")
 
 
 class TTSResponse(BaseModel):

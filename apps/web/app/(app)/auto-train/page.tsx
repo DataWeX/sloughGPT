@@ -3,23 +3,22 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
-import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
+
 import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { LossChart, type LossPoint } from '@/components/training/LossChart'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
-import { formatDuration } from '@/lib/formatDuration'
+import { formatDuration } from '@/components/training/formatDuration'
 import { TrainingLogCard } from '@/components/training/TrainingLogCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
 import { CheckpointManager } from '@/components/training/CheckpointManager'
 import { AutoTrainKpiGrid } from '@/components/training/AutoTrainKpiGrid'
 import { useApiReady } from '@/hooks/useLiveStatus'
-import { extractErrorMessage } from '@/lib/error-utils'
 
-type InputMode = 'text' | 'dataset' | 'checkpoint' | 'sessions'
+type InputMode = 'text' | 'dataset' | 'checkpoint'
 
 export default function AutoTrainPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -36,21 +35,7 @@ export default function AutoTrainPage() {
   const [teacherModel, setTeacherModel] = useState('gpt2')
   const [temperature, setTemperature] = useState(1.0)
 
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
-  const [selectedSessionIds, setSelectedSessionIds] = useState<Set<string>>(new Set())
-  const [sessionsLoading, setSessionsLoading] = useState(false)
-  const [nEmbed, setNEmbed] = useState(128)
-  const [nLayer, setNLayer] = useState(4)
-  const [nHead, setNHead] = useState(4)
-  const [blockSize, setBlockSize] = useState(128)
-  const [dropout, setDropout] = useState(0.1)
-  const [minPairQuality, setMinPairQuality] = useState(2.0)
-  const [maxPairs, setMaxPairs] = useState(500)
-  const [fromSessionsRunning, setFromSessionsRunning] = useState(false)
-  const [fromSessionsProgress, setFromSessionsProgress] = useState<{ phase: string; loss: number | null; step: number; message: string } | null>(null)
-  const streamAbortRef = useRef<AbortController | null>(null)
-
-  const trainingRunning = session.trainingRunning || fromSessionsRunning
+  const trainingRunning = session.trainingRunning
 
   useEffect(() => {
     let active = true
@@ -63,16 +48,6 @@ export default function AutoTrainPage() {
     void load()
     return () => { active = false }
   }, [])
-
-  useEffect(() => {
-    if (inputMode !== 'sessions') return
-    setSessionsLoading(true)
-    trainingJobsController.listChatSessions().then(sessions => {
-      setChatSessions(sessions)
-    }).catch(() => {
-      setChatSessions([])
-    }).finally(() => setSessionsLoading(false))
-  }, [inputMode])
 
   const canStart = !trainingRunning && (
     (inputMode === 'text' && sourceText.trim().length > 0) ||
@@ -98,11 +73,8 @@ export default function AutoTrainPage() {
       body.checkpoint_name = selectedCheckpoint
     }
 
-    trainingJobsController.startAutoTrain(body).then(() => {
-      addToast('Training started', 'info')
+    session.startSSETraining(body, addToast, () => {
       void checkpoints.fetchCheckpoints()
-    }).catch((e: unknown) => {
-      addToast(extractErrorMessage(e, 'Could not start training'), 'error')
     })
   }, [canStart, inputMode, sourceText, datasets.selectedDataset, selectedCheckpoint, epochs, learningRate, teacherModel, temperature, session, addToast, checkpoints])
 
@@ -118,8 +90,7 @@ export default function AutoTrainPage() {
 
   const stopTraining = useCallback(async () => {
     try {
-      await trainingJobsController.stopAutoTrain()
-      session.stopTraining()
+      await session.stopTraining()
       addToast('Training stopped', 'success')
     } catch {
       addToast('Could not stop training', 'error')

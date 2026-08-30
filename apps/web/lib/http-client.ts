@@ -2,7 +2,12 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public data?: unknown,
+    public data?: {
+      raw?: string
+      code?: string
+      details?: unknown
+      correlationId?: string
+    },
     public requestId?: string,
   ) {
     super(message)
@@ -106,12 +111,22 @@ async function request<T>(
         const text = await res.text()
         const requestId = res.headers.get('X-Request-ID') || undefined
         let detail: string | undefined
-        try { const j = JSON.parse(text); detail = j.detail ?? j.message ?? j.error }
-        catch { detail = text || res.statusText }
+        let errorCode: string | undefined
+        let errorDetails: unknown | undefined
+        let correlationId: string | undefined
+        try {
+          const j = JSON.parse(text)
+          detail = j.detail ?? j.message ?? j.error ?? text
+          errorCode = j.code
+          errorDetails = j.details
+          correlationId = j.correlation_id
+        } catch {
+          detail = text || res.statusText
+        }
         const message = Array.isArray(detail) ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ') : detail || 'Could not request'
 
         if (!opts?.silent) {
-          const apiErr = new ApiError(message, status, { raw: text }, requestId)
+          const apiErr = new ApiError(message, status, { raw: text, code: errorCode, details: errorDetails, correlationId }, requestId)
           import('./error-store').then(({ useErrorStore }) => {
             useErrorStore.getState().addError(apiErr, {
               source: url,
@@ -120,7 +135,7 @@ async function request<T>(
             })
           })
         }
-        throw new ApiError(message, status, { raw: text }, requestId)
+        throw new ApiError(message, status, { raw: text, code: errorCode, details: errorDetails, correlationId }, requestId)
       }
 
       const text = await res.text()
