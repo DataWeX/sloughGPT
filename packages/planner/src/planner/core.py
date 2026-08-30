@@ -61,8 +61,10 @@ class Note:
     updated_at: str = ""
     tags: list[str] = field(default_factory=list)
     status: str = "open"
+    author: str = ""
     sprint: str = ""
     gh: str = ""
+    assignee: str = ""
     body: str = ""
 
     @property
@@ -98,10 +100,14 @@ class Note:
             f"tags: {tags_str}",
             f"status: {self.status}",
         ]
+        if self.author:
+            lines.append(f"author: {self.author}")
         if self.sprint:
             lines.append(f"sprint: {self.sprint}")
         if self.gh:
             lines.append(f"gh: {self.gh}")
+        if self.assignee:
+            lines.append(f"assignee: {self.assignee}")
         lines.extend(["---", "", self.body.rstrip(), ""])
         return "\n".join(lines)
 
@@ -128,8 +134,10 @@ class Note:
             updated_at=meta.get("updated", ""),
             tags=tags,
             status=meta.get("status", "open"),
+            author=meta.get("author", ""),
             sprint=meta.get("sprint", ""),
             gh=meta.get("gh", ""),
+            assignee=meta.get("assignee", ""),
             body=body,
         )
 
@@ -301,8 +309,8 @@ class NoteStore:
             self._bk = _FileBackend(self._dir)
 
     def create(self, title: str, tags: list[str] | None = None,
-               status: str = "open", sprint: str = "", gh: str = "",
-               body: str = "") -> Note:
+               status: str = "open", author: str = "", sprint: str = "", gh: str = "",
+               assignee: str = "", body: str = "") -> Note:
         now = datetime.now(timezone.utc)
         slug = self._title_to_slug(title)
         ts = now.strftime("%Y%m%d_%H%M%S")
@@ -314,8 +322,10 @@ class NoteStore:
             updated_at=now.isoformat(),
             tags=tags or [],
             status=status,
+            author=author,
             sprint=sprint,
             gh=gh,
+            assignee=assignee,
             body=body,
         )
         self._bk.put(note)
@@ -365,7 +375,7 @@ class NoteStore:
         if note is None:
             return None
         old_id = note.id
-        for key in ("title", "tags", "status", "sprint", "gh", "body"):
+        for key in ("title", "tags", "status", "author", "sprint", "gh", "assignee", "body"):
             if key in kwargs and kwargs[key] is not None:
                 setattr(note, key, kwargs[key])
         note.updated_at = datetime.now(timezone.utc).isoformat()
@@ -567,8 +577,10 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_new.add_argument("title", help="Note title")
     p_new.add_argument("--tags", default="", help="Comma-separated tags")
     p_new.add_argument("--status", default="open", choices=config.STATUSES)
+    p_new.add_argument("--author", default="", help="Note author/owner")
     p_new.add_argument("--sprint", default="", help="Sprint identifier (e.g. S1, 2026-Q3)")
     p_new.add_argument("--gh", default="", help="GitHub issue reference (e.g. owner/repo#123)")
+    p_new.add_argument("--assignee", default="", help="Assignee")
     p_new.add_argument("--body", default="", help="Body text")
 
     p_list = sub.add_parser("list", help="List notes")
@@ -586,8 +598,10 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_edit.add_argument("--title", default=None, help="New title")
     p_edit.add_argument("--tags", default=None, help="Comma-separated tags")
     p_edit.add_argument("--status", default=None, choices=config.STATUSES)
+    p_edit.add_argument("--author", default=None, help="Note author/owner")
     p_edit.add_argument("--sprint", default=None, help="Sprint identifier")
     p_edit.add_argument("--gh", default=None, help="GitHub issue reference")
+    p_edit.add_argument("--assignee", default=None, help="Assignee")
     p_edit.add_argument("--body", default=None, help="New body text")
 
     p_del = sub.add_parser("delete", aliases=["rm"], help="Delete a note")
@@ -627,9 +641,10 @@ def cli_main(argv: list[str] | None = None) -> int:
     if args.cmd == "new":
         tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
         note = store.create(args.title, tags=tags, status=args.status,
-                            sprint=args.sprint, gh=args.gh, body=args.body)
+                            author=args.author, sprint=args.sprint, gh=args.gh, assignee=args.assignee, body=args.body)
         sprint_tag = f" [{args.sprint}]" if args.sprint else ""
-        print(f"Created: {note.short_id}  {note.title}{sprint_tag}")
+        assign_tag = f" @{args.assignee}" if args.assignee else ""
+        print(f"Created: {note.short_id}  {note.title}{sprint_tag}{assign_tag}")
         return 0
 
     if args.cmd == "list":
@@ -669,7 +684,15 @@ def cli_main(argv: list[str] | None = None) -> int:
         print(f"  created: {note.created_at}")
         print(f"  updated: {note.updated_at}")
         print(f"  status: {note.status}")
+        print(f"  author: {note.author or 'unknown'}")
+        tags_str = ", ".join(note.tags) if note.tags else "none"
+        sprint_str = f"\n  sprint: {note.sprint}" if note.sprint else ""
+        gh_str = f"\n  gh: {note.gh}" if note.gh else ""
+        if note.gh_url:
+            gh_str += f"\n  gh_url: {note.gh_url}"
         print(f"  tags: {tags_str}{sprint_str}{gh_str}")
+        if note.assignee:
+            print(f"  assignee: {note.assignee}")
         print("")
         for line in note.body.split("\n"):
             print(f"  {line}")
@@ -683,10 +706,14 @@ def cli_main(argv: list[str] | None = None) -> int:
             kwargs["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
         if args.status is not None:
             kwargs["status"] = args.status
+        if args.author is not None:
+            kwargs["author"] = args.author
         if args.sprint is not None:
             kwargs["sprint"] = args.sprint
         if args.gh is not None:
             kwargs["gh"] = args.gh
+        if args.assignee is not None:
+            kwargs["assignee"] = args.assignee
         if args.body is not None:
             kwargs["body"] = args.body
         if not kwargs:

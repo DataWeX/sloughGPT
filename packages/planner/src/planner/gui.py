@@ -70,6 +70,8 @@ def _note_to_dict(note: Any) -> dict:
         "status": note.status,
         "sprint": note.sprint,
         "gh": note.gh,
+        "author": note.author,
+        "assignee": note.assignee,
         "body": note.body,
     }
 
@@ -302,6 +304,8 @@ class GuiHandler(BaseHTTPRequestHandler):
                 status=status,
                 sprint=body.get("sprint") or "",
                 gh=body.get("gh") or "",
+                author=body.get("author") or "",
+                assignee=body.get("assignee") or "",
                 body=body.get("body") or "",
             )
         self._send(200, {"note": _note_to_dict(note)})
@@ -324,6 +328,10 @@ class GuiHandler(BaseHTTPRequestHandler):
             kwargs["sprint"] = body.get("sprint") or ""
         if "gh" in body:
             kwargs["gh"] = body.get("gh") or ""
+        if "author" in body:
+            kwargs["author"] = body.get("author") or ""
+        if "assignee" in body:
+            kwargs["assignee"] = body.get("assignee") or ""
         if "body" in body:
             kwargs["body"] = body.get("body") or ""
         if not kwargs:
@@ -632,6 +640,14 @@ main{padding:18px;max-width:1400px;margin:0 auto}
           <label>GitHub issue</label>
           <input type="text" id="f_gh" placeholder="owner/repo#123" />
         </div>
+        <div class="field">
+          <label>Author</label>
+          <input type="text" id="f_author" placeholder="note creator" />
+        </div>
+        <div class="field">
+          <label>Assignee</label>
+          <input type="text" id="f_assignee" placeholder="username" />
+        </div>
         <div class="field full">
           <label>Body</label>
           <textarea id="f_body" placeholder="Details..."></textarea>
@@ -846,6 +862,8 @@ function openEditor(note) {
   $("f_tags").value = note ? note.tags.join(", ") : "";
   $("f_sprint").value = note ? (note.sprint||"") : "";
   $("f_gh").value = note ? (note.gh||"") : "";
+  $("f_author").value = note ? (note.author||"") : "";
+  $("f_assignee").value = note ? (note.assignee||"") : "";
   $("f_body").value = note ? (note.body||"") : "";
   $("deleteBtn").classList.toggle("hidden", !note);
   $("editor").classList.remove("hidden");
@@ -865,6 +883,8 @@ $("noteForm").addEventListener("submit", async e => {
     tags: $("f_tags").value.split(",").map(s => s.trim()).filter(Boolean),
     sprint: $("f_sprint").value.trim(),
     gh: $("f_gh").value.trim(),
+    author: $("f_author").value.trim(),
+    assignee: $("f_assignee").value.trim(),
     body: $("f_body").value,
   };
   try {

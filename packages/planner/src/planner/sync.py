@@ -54,6 +54,7 @@ def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int
                 column=col,
                 tags=list(note.tags or []),
                 description=note.body or "",
+                assignee=note.assignee or "",
             )
             existing[title] = None
             added += 1
@@ -61,6 +62,9 @@ def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int
         if card.column != col:
             kanban_store.move_card(card.id, col)
             card.column = col
+            updated += 1
+        if note.assignee and card.assignee != note.assignee:
+            kanban_store.update_card(card.id, assignee=note.assignee)
             updated += 1
     total = len(kanban_store.load_board().cards)
     return added, updated, total
