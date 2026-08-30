@@ -2,7 +2,7 @@
 
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
-import { ShellPanel } from '@/components/shell/ShellPanel'
+import { TerminalPanel } from '@/components/shell/TerminalPanel'
 
 export default function ShellPage() {
   return (
@@ -12,7 +12,7 @@ export default function ShellPage() {
           <CardTitle>Dait Shell</CardTitle>
         </CardHeader>
         <CardContent className="h-[calc(100%-3rem)]">
-          <ShellPanel className="h-full" />
+          <TerminalPanel className="h-full" />
         </CardContent>
       </Card>
     </PageContainer>

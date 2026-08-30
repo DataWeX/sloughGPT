@@ -22,6 +22,10 @@ from typing import Optional
 
 import click
 
+from domains.logging import get_global
+
+log = get_global()
+
 
 # ── ANSI helpers ────────────────────────────────────────────────────────
 
@@ -231,7 +235,8 @@ def _consume_sse(host: str, port: int, interval: float, output_json: bool, clear
             time.sleep(3)
         except KeyboardInterrupt:
             if not output_json:
-                sys.stdout.write("\033[?25h\n")
+                log.show_cursor()
+                sys.stdout.write("\n")
                 sys.stdout.flush()
             break
         except Exception as e:
@@ -297,7 +302,7 @@ def monitor(interval: float, host: str, port: int, output_json: bool, no_clear: 
     clear = not no_clear
 
     if _TTY and not output_json:
-        sys.stdout.write("\033[?25l")
+        log.hide_cursor()
 
     try:
         _consume_sse(host, port, interval, output_json, clear)
@@ -308,5 +313,4 @@ def monitor(interval: float, host: str, port: int, output_json: bool, no_clear: 
             pass
     finally:
         if _TTY and not output_json:
-            sys.stdout.write("\033[?25h")
-            sys.stdout.flush()
+            log.show_cursor()

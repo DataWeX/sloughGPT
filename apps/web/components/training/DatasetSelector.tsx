@@ -2,7 +2,7 @@
 
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { DatasetImportModal } from '@/components/DatasetImportModal'
+import { DatasetImportDialog } from '@/components/DatasetImportDialog'
 import type { Dataset } from '@/lib/dataset-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
@@ -63,7 +63,7 @@ export function DatasetSelector({
           )}
         </>
       )}
-      <DatasetImportModal
+      <DatasetImportDialog
         open={datasets.importModalOpen}
         onOpenChange={datasets.setImportModalOpen}
         onImportComplete={(datasetId: string) => {

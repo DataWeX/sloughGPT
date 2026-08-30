@@ -95,13 +95,13 @@ export const soulsController = {
   },
 
   async listCheckpoints(): Promise<CheckpointsResponse> {
-    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/training/checkpoints')
     const checkpoints = Array.isArray(data) ? data : (data?.checkpoints ?? [])
     return {checkpoints}
   },
 
   async loadCheckpoint(name: string): Promise<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }> {
-    return apiPost<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
+    return apiPost<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }>(`/training/checkpoints/${encodeURIComponent(name)}/load`)
   },
 
   // ── Trait Weights ──
@@ -157,7 +157,7 @@ export const soulsController = {
   },
 
   async deleteCheckpoint(name: string): Promise<{ status: string }> {
-    return apiDelete<{ status: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
+    return apiDelete<{ status: string }>(`/training/checkpoints/${encodeURIComponent(name)}`)
   },
 
   async getSoul(name: string): Promise<Soul | null> {
@@ -175,7 +175,7 @@ export const soulsController = {
 
   async checkpointInfo(name: string): Promise<Checkpoint | null> {
     try {
-      return await apiGet<Checkpoint>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
+      return await apiGet<Checkpoint>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
     } catch (err) {
       _log.debug('Failed to get checkpoint info', { error: err instanceof Error ? err.message : String(err) })
       return null
@@ -183,7 +183,7 @@ export const soulsController = {
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const response = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
+    const response = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download`)
     if (!response.ok) throw new Error('Could not download')
     return response.blob()
   },

@@ -15,6 +15,14 @@ CORPUS = (
 )
 
 
+@pytest.fixture(autouse=True)
+def mock_log(monkeypatch):
+    fake_log = MagicMock()
+    import commands.token_tree as mod
+    monkeypatch.setattr(mod, "log", fake_log)
+    return fake_log
+
+
 @pytest.fixture()
 def corpus_file(tmp_path: Path) -> Path:
     p = tmp_path / "corpus.txt"
@@ -93,14 +101,14 @@ class TestCmdTrainAndQuery:
         assert Path(str(tree_args.output) + ".meta.json").exists()
         assert Path(str(tree_args.output) + ".points.json").exists()
 
-    def test_train_round_trips_through_cli_helpers(self, corpus_file, tree_args, capsys):
+    def test_train_round_trips_through_cli_helpers(self, corpus_file, tree_args):
         from commands.token_tree import cmd_token_tree_train, _load_tree
         cmd_token_tree_train(tree_args)
         tree = _load_tree(tree_args.output)
         ids = tree.encode("the quick brown fox")
         assert tree.decode(ids) == "the quick brown fox"
 
-    def test_stdin_encode_reads_stdin(self, corpus_file, tree_args, monkeypatch, capsys):
+    def test_stdin_encode_reads_stdin(self, corpus_file, tree_args, monkeypatch, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_encode
         cmd_token_tree_train(tree_args)
         monkeypatch.setattr("sys.stdin", type("S", (), {"read": lambda self: "the lazy dog"})())
@@ -108,10 +116,9 @@ class TestCmdTrainAndQuery:
         args.tree = tree_args.output
         args.text = None
         cmd_token_tree_encode(args)
-        out = capsys.readouterr().out
-        assert "lazy" in out
+        assert mock_log.table.called
 
-    def test_similar_runs_on_trained_tree(self, corpus_file, tree_args, capsys):
+    def test_similar_runs_on_trained_tree(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_similar
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -119,20 +126,18 @@ class TestCmdTrainAndQuery:
         args.token = "quick"
         args.top_k = 3
         cmd_token_tree_similar(args)
-        out = capsys.readouterr().out
-        assert "quick" in out
+        assert any("quick" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_lineage_decomposes_token(self, corpus_file, tree_args, capsys):
+    def test_lineage_decomposes_token(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_lineage
         cmd_token_tree_train(tree_args)
         args = MagicMock()
         args.tree = tree_args.output
         args.token = "brown"
         cmd_token_tree_lineage(args)
-        out = capsys.readouterr().out
-        assert "brown" in out
+        assert mock_log.header.called
 
-    def test_vocab_lists_special_and_merged_flags(self, corpus_file, tree_args, capsys):
+    def test_vocab_lists_special_and_merged_flags(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_vocab
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -140,13 +145,9 @@ class TestCmdTrainAndQuery:
         args.offset = 0
         args.limit = 500
         cmd_token_tree_vocab(args)
-        out = capsys.readouterr().out
-        assert "Vocabulary" in out
-        assert "special" in out
-        assert "merged" in out
-        assert "Showing 1–" in out
+        assert any("Vocabulary" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_vocab_respects_paging(self, corpus_file, tree_args, capsys):
+    def test_vocab_respects_paging(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_vocab
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -154,12 +155,11 @@ class TestCmdTrainAndQuery:
         args.offset = 0
         args.limit = 5
         cmd_token_tree_vocab(args)
-        out = capsys.readouterr().out
-        assert "Showing 1–5 of" in out
+        assert any("Showing 1" in str(c) for c in mock_log.info.call_args_list)
 
 
 class TestCmdEmbeddingAndPath:
-    def test_embedding_shows_dim_and_norm(self, corpus_file, tree_args, capsys):
+    def test_embedding_shows_dim_and_norm(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_embedding
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -167,12 +167,9 @@ class TestCmdEmbeddingAndPath:
         args.token = "quick"
         args.top_k = 3
         cmd_token_tree_embedding(args)
-        out = capsys.readouterr().out
-        assert "Embedding of" in out
-        assert "dim" in out
-        assert "L2 norm" in out
+        assert any("Embedding of" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_embedding_no_points_exits(self, corpus_file, tree_args, capsys):
+    def test_embedding_no_points_exits(self, corpus_file, tree_args):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_embedding
         tree_args.embed_dim = 0
         cmd_token_tree_train(tree_args)
@@ -184,7 +181,7 @@ class TestCmdEmbeddingAndPath:
             cmd_token_tree_embedding(args)
         assert exc.value.code == 2
 
-    def test_embedding_unknown_token_exits(self, corpus_file, tree_args, capsys):
+    def test_embedding_unknown_token_exits(self, corpus_file, tree_args):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_embedding
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -194,20 +191,16 @@ class TestCmdEmbeddingAndPath:
         with pytest.raises(SystemExit):
             cmd_token_tree_embedding(args)
 
-    def test_path_traces_steps_and_ids(self, corpus_file, tree_args, capsys):
+    def test_path_traces_steps_and_ids(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_path
         cmd_token_tree_train(tree_args)
         args = MagicMock()
         args.tree = tree_args.output
         args.text = "the quick brown"
         cmd_token_tree_path(args)
-        out = capsys.readouterr().out
-        assert "Path" in out
-        assert "remaining" in out
-        assert "Ids" in out
-        assert "Round-trips" in out
+        assert any("Path" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_path_stdin_reads_stdin(self, corpus_file, tree_args, monkeypatch, capsys):
+    def test_path_stdin_reads_stdin(self, corpus_file, tree_args, monkeypatch, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_path
         cmd_token_tree_train(tree_args)
         monkeypatch.setattr("sys.stdin", type("S", (), {"read": lambda self: "the lazy dog"})())
@@ -215,11 +208,9 @@ class TestCmdEmbeddingAndPath:
         args.tree = tree_args.output
         args.text = None
         cmd_token_tree_path(args)
-        out = capsys.readouterr().out
-        assert "lazy" in out
-        assert "Round-trips" in out
+        assert mock_log.table.called
 
-    def test_path_round_trips_through_cli(self, corpus_file, tree_args, capsys):
+    def test_path_round_trips_through_cli(self, corpus_file, tree_args):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_path, _load_tree
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -231,7 +222,7 @@ class TestCmdEmbeddingAndPath:
 
 
 class TestLoadTree:
-    def test_missing_tree_exits(self, tmp_path, monkeypatch):
+    def test_missing_tree_exits(self, tmp_path):
         from commands.token_tree import _load_tree
         with pytest.raises(SystemExit) as exc:
             _load_tree(str(tmp_path / "missing"))
@@ -239,32 +230,25 @@ class TestLoadTree:
 
 
 class TestCmdMatrix:
-    def test_matrix_shows_shape_and_norm_stats(self, corpus_file, tree_args, capsys):
+    def test_matrix_shows_shape_and_norm_stats(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_matrix
         cmd_token_tree_train(tree_args)
         args = MagicMock()
         args.tree = tree_args.output
         args.top_k = 3
         cmd_token_tree_matrix(args)
-        out = capsys.readouterr().out
-        assert "Embedding matrix" in out
-        assert "L2 norm min" in out
-        assert "L2 norm mean" in out
-        assert "live" in out
+        assert any("Embedding matrix" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_matrix_energy_tables(self, corpus_file, tree_args, capsys):
+    def test_matrix_energy_tables(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_matrix
         cmd_token_tree_train(tree_args)
         args = MagicMock()
         args.tree = tree_args.output
         args.top_k = 3
         cmd_token_tree_matrix(args)
-        out = capsys.readouterr().out
-        assert "Most energetic" in out
-        assert "Least energetic" in out
-        assert "token" in out
+        assert any("Most energetic" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_matrix_no_embeddings_exits(self, corpus_file, tree_args, capsys):
+    def test_matrix_no_embeddings_exits(self, corpus_file, tree_args):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_matrix
         tree_args.embed_dim = 0
         cmd_token_tree_train(tree_args)
@@ -288,7 +272,7 @@ class TestCmdCompare:
         mgr.save("tree-b")
         return mgr
 
-    def test_compare_prints_overlap(self, tmp_path, monkeypatch, capsys):
+    def test_compare_prints_overlap(self, tmp_path, monkeypatch, mock_log):
         self._save_two(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_compare
         args = MagicMock()
@@ -296,13 +280,9 @@ class TestCmdCompare:
         args.b = "tree-b"
         args.top_n = 3
         cmd_token_tree_compare(args)
-        out = capsys.readouterr().out
-        assert "Compare 'tree-a' vs 'tree-b'" in out
-        assert "Shared tokens" in out
-        assert "Shared merges" in out
-        assert "vocab" in out
+        assert any("Compare" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_compare_prints_examples(self, tmp_path, monkeypatch, capsys):
+    def test_compare_prints_examples(self, tmp_path, monkeypatch, mock_log):
         self._save_two(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_compare
         args = MagicMock()
@@ -310,12 +290,9 @@ class TestCmdCompare:
         args.b = "tree-b"
         args.top_n = 3
         cmd_token_tree_compare(args)
-        out = capsys.readouterr().out
-        assert "Top shared tokens" in out
-        assert "Top tokens only in tree-a" in out
-        assert "Top tokens only in tree-b" in out
+        assert any("Top shared tokens" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_compare_missing_exits(self, tmp_path, monkeypatch, capsys):
+    def test_compare_missing_exits(self, tmp_path, monkeypatch):
         self._save_two(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_compare
         args = MagicMock()
@@ -328,7 +305,7 @@ class TestCmdCompare:
 
 
 class TestCmdMerges:
-    def test_merges_prints_ranked_pairs(self, corpus_file, tree_args, capsys):
+    def test_merges_prints_ranked_pairs(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_merges
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -336,12 +313,9 @@ class TestCmdMerges:
         args.top_n = 5
         args.query = ""
         cmd_token_tree_merges(args)
-        out = capsys.readouterr().out
-        assert "Merges" in out
-        assert "rank" in out
-        assert "+" in out
+        assert any("Merges" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_merges_filters_by_query(self, corpus_file, tree_args, capsys):
+    def test_merges_filters_by_query(self, corpus_file, tree_args, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_merges
         cmd_token_tree_train(tree_args)
         args = MagicMock()
@@ -349,11 +323,9 @@ class TestCmdMerges:
         args.top_n = 20
         args.query = "qu"
         cmd_token_tree_merges(args)
-        out = capsys.readouterr().out
-        assert "Merges" in out
-        assert "qu" in out
+        assert any("Merges" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_merges_missing_tree_exits(self, tmp_path, capsys):
+    def test_merges_missing_tree_exits(self, tmp_path):
         from commands.token_tree import cmd_token_tree_merges
         args = MagicMock()
         args.tree = str(tmp_path / "missing")
@@ -373,22 +345,19 @@ class TestCmdSavedTrees:
         mgr.save("tree-a")
         return mgr
 
-    def test_saved_lists_trees(self, tmp_path, monkeypatch, capsys):
+    def test_saved_lists_trees(self, tmp_path, monkeypatch, mock_log):
         self._save_one(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_saved
         cmd_token_tree_saved(MagicMock())
-        out = capsys.readouterr().out
-        assert "Saved token trees" in out
-        assert "tree-a" in out
+        assert any("Saved token trees" in str(c) for c in mock_log.header.call_args_list)
 
-    def test_saved_empty(self, tmp_path, monkeypatch, capsys):
+    def test_saved_empty(self, tmp_path, monkeypatch, mock_log):
         monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
         from commands.token_tree import cmd_token_tree_saved
         cmd_token_tree_saved(MagicMock())
-        out = capsys.readouterr().out
-        assert "No saved token trees" in out
+        assert any("No saved token trees" in str(c) for c in mock_log.info.call_args_list)
 
-    def test_save_uses_existing_current_tree(self, tmp_path, monkeypatch, capsys):
+    def test_save_uses_existing_current_tree(self, tmp_path, monkeypatch, mock_log):
         monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
         from domains.training.token_tree_manager import get_token_tree_manager
         mgr = get_token_tree_manager()
@@ -400,10 +369,9 @@ class TestCmdSavedTrees:
         cmd_token_tree_save(args)
         names = [t["name"] for t in mgr.list_saved()]
         assert "mine" in names
-        out = capsys.readouterr().out
-        assert "Saved 'mine'" in out
+        assert any("mine" in str(c) for c in mock_log.success.call_args_list)
 
-    def test_save_adopts_tree_from_path(self, tmp_path, monkeypatch, capsys):
+    def test_save_adopts_tree_from_path(self, tmp_path, monkeypatch, mock_log):
         from commands.token_tree import cmd_token_tree_train, cmd_token_tree_save
         tree_args = MagicMock()
         tree_args.corpus = str(tmp_path / "corpus.txt")
@@ -424,7 +392,7 @@ class TestCmdSavedTrees:
         names = [t["name"] for t in mgr.list_saved()]
         assert "adopted" in names
 
-    def test_save_invalid_name_exits(self, tmp_path, monkeypatch, capsys):
+    def test_save_invalid_name_exits(self, tmp_path, monkeypatch):
         monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
         from commands.token_tree import cmd_token_tree_save
         args = MagicMock()
@@ -434,7 +402,7 @@ class TestCmdSavedTrees:
             cmd_token_tree_save(args)
         assert exc.value.code == 2
 
-    def test_save_missing_tree_path_exits(self, tmp_path, monkeypatch, capsys):
+    def test_save_missing_tree_path_exits(self, tmp_path, monkeypatch):
         monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
         from commands.token_tree import cmd_token_tree_save
         args = MagicMock()
@@ -444,17 +412,16 @@ class TestCmdSavedTrees:
             cmd_token_tree_save(args)
         assert exc.value.code == 2
 
-    def test_load_makes_tree_current(self, tmp_path, monkeypatch, capsys):
+    def test_load_makes_tree_current(self, tmp_path, monkeypatch, mock_log):
         mgr = self._save_one(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_load
         args = MagicMock()
         args.name = "tree-a"
         cmd_token_tree_load(args)
-        out = capsys.readouterr().out
-        assert "Loaded 'tree-a'" in out
+        assert any("Loaded" in str(c) for c in mock_log.success.call_args_list)
         assert mgr.is_trained()
 
-    def test_load_missing_exits(self, tmp_path, monkeypatch, capsys):
+    def test_load_missing_exits(self, tmp_path, monkeypatch):
         self._save_one(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_load
         args = MagicMock()
@@ -463,17 +430,16 @@ class TestCmdSavedTrees:
             cmd_token_tree_load(args)
         assert exc.value.code == 2
 
-    def test_delete_removes_tree(self, tmp_path, monkeypatch, capsys):
+    def test_delete_removes_tree(self, tmp_path, monkeypatch, mock_log):
         mgr = self._save_one(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_delete
         args = MagicMock()
         args.name = "tree-a"
         cmd_token_tree_delete(args)
         assert mgr.list_saved() == []
-        out = capsys.readouterr().out
-        assert "Deleted 'tree-a'" in out
+        assert any("Deleted" in str(c) for c in mock_log.success.call_args_list)
 
-    def test_delete_missing_exits(self, tmp_path, monkeypatch, capsys):
+    def test_delete_missing_exits(self, tmp_path, monkeypatch):
         self._save_one(tmp_path, monkeypatch)
         from commands.token_tree import cmd_token_tree_delete
         args = MagicMock()

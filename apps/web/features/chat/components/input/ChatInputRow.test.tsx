@@ -27,7 +27,7 @@ vi.mock('./ChatSendButton', () => ({
 describe('ChatInputRow', () => {
   const defaultProps = {
     value: '', onChange: vi.fn(), onSend: vi.fn(), loading: false, disabled: false,
-    placeholder: 'Message...', textareaRef: { current: null },
+    placeholder: 'Message...', textareaRef: { current: null } as React.RefObject<HTMLTextAreaElement | null>,
     onImage: vi.fn(), onTranscript: vi.fn(), hasContent: false,
   }
 

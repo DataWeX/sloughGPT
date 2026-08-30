@@ -131,7 +131,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
                 {expanded?.rank === m.rank && (
                   <div className="rounded-md bg-muted/50 px-3 py-2 my-1">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Merge lineage of <span className="font-mono text-primary">"{display(m.token)}"</span>
+                      Merge lineage of <span className="font-mono text-primary">{'"' + display(m.token) + '"'}</span>
                       <span className="text-muted-foreground/70"> — {lineage?.leaves.length ?? '…'} character leaves</span>
                     </div>
                     {lineageLoading ? (

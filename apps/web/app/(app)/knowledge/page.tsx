@@ -21,6 +21,8 @@ import { getRAGStats, clearRAG, listRAGDocuments, syncKGToRAG, type RAGStats, ty
 import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
 import { MemoryCard } from '@/components/knowledge/MemoryCard'
 import { SpacedReviewCard } from '@/components/knowledge/SpacedReviewCard'
+import { KnowledgeIntelligenceCard } from '@/components/knowledge/KnowledgeIntelligenceCard'
+import { MemorySettingsCard } from '@/components/knowledge/MemorySettingsCard'
 import { LearnSection } from '@/components/learn/LearnSection'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
@@ -910,8 +912,11 @@ export default function KnowledgePage() {
         )}
 
         <MemoryCard />
+        <MemorySettingsCard />
 
         <LearnSection />
+
+        <KnowledgeIntelligenceCard />
 
         <AlertDialog open={pendingDelete !== null} onOpenChange={() => setPendingDelete(null)}>
           <AlertDialogContent>

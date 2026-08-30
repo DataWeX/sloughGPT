@@ -6,11 +6,6 @@ vi.mock('next/font/local', () => ({
   default: () => ({ variable: '--mock-font' }),
 }))
 
-vi.mock('next/font/google', () => ({
-  Rubik: () => ({ variable: '--mock-font' }),
-  Lato: () => ({ variable: '--mock-font' }),
-}))
-
 vi.mock('./Providers', () => ({
   Providers: ({ children }: any) => <div data-testid="providers">{children}</div>,
 }))
@@ -38,24 +33,24 @@ describe('RootLayout', () => {
   })
 
   it('applies the font variables to the html element', () => {
-    const { container } = render(
+    render(
       <RootLayout>
         <span>x</span>
       </RootLayout>,
     )
-    const html = container.querySelector('html')
+    const html = document.querySelector('html')
     expect(html).toBeTruthy()
     expect(html?.className).toContain('--mock-font')
     expect(html?.getAttribute('lang')).toBe('en')
   })
 
   it('injects the theme bootstrap script', () => {
-    const { container } = render(
+    render(
       <RootLayout>
         <span>x</span>
       </RootLayout>,
     )
-    const script = container.querySelector('script')
+    const script = document.querySelector('script')
     expect(script).toBeTruthy()
     expect(script?.textContent ?? '').toContain('theme-')
     expect(script?.textContent ?? '').toContain('localStorage')
@@ -71,7 +66,7 @@ describe('RootLayout', () => {
   })
 
   it('renders without crashing with no children', () => {
-    const { container } = render(<RootLayout children={null} />)
-    expect(container.querySelector('html')).toBeTruthy()
+    render(<RootLayout>{null}</RootLayout>)
+    expect(document.querySelector('html')).toBeTruthy()
   })
 })

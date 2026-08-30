@@ -11,6 +11,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 @pytest.fixture(autouse=True)
 def mock_log(monkeypatch):
+    """Patch commands.train.log with a MagicMock."""
+    fake_log = MagicMock()
+    import commands.train as mod
+    monkeypatch.setattr(mod, "log", fake_log)
+    return fake_log
+
+
+@pytest.fixture(autouse=True)
+def mock_log(monkeypatch):
     fake_log = MagicMock()
     import commands.train as mod
     monkeypatch.setattr(mod, "log", fake_log)
@@ -117,13 +126,15 @@ class TestCmdTrainNative:
         base.update(overrides)
         return MagicMock(**base)
 
-    def test_missing_dataset_exits(self):
+    @patch("commands.train._resolve_corpus_file")
+    def test_missing_dataset_exits(self, mock_resolve):
         from commands.train import cmd_train_native
         with pytest.raises(SystemExit) as exc:
             cmd_train_native(self._args(dataset=None))
         assert exc.value.code == 2
 
-    def test_resume_and_resume_latest_conflict(self):
+    @patch("commands.train._resolve_corpus_file")
+    def test_resume_and_resume_latest_conflict(self, mock_resolve):
         from commands.train import cmd_train_native
         args = self._args(resume="/x.soul", resume_latest=True)
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
@@ -132,8 +143,10 @@ class TestCmdTrainNative:
                 cmd_train_native(args)
         assert exc.value.code == 2
 
-    def test_save_format_option_is_ignored(self):
+    @patch("commands.train._resolve_corpus_file")
+    def test_save_format_option_is_ignored(self, mock_resolve):
         from commands.train import cmd_train_native
+        mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(save_format="pt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
@@ -143,8 +156,10 @@ class TestCmdTrainNative:
         save_args = instance.save.call_args
         assert "format" not in save_args.kwargs
 
-    def test_full_native_train_pipeline(self):
+    @patch("commands.train._resolve_corpus_file")
+    def test_full_native_train_pipeline(self, mock_resolve):
         from commands.train import cmd_train_native
+        mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
@@ -153,8 +168,10 @@ class TestCmdTrainNative:
             assert instance.save.called
             assert instance.save.call_args[1] == {}
 
-    def test_save_stem_overrides_soul_name(self):
+    @patch("commands.train._resolve_corpus_file")
+    def test_save_stem_overrides_soul_name(self, mock_resolve):
         from commands.train import cmd_train_native
+        mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(save_stem="my_model")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
@@ -165,8 +182,10 @@ class TestCmdTrainNative:
         assert save_path.endswith("/my_model")
         assert "/sloughgpt-native" not in save_path
 
-    def test_completed_run_leaves_single_model_file(self, tmp_path):
+    @patch("commands.train._resolve_corpus_file")
+    def test_completed_run_leaves_single_model_file(self, mock_resolve, tmp_path):
         from commands.train import cmd_train_native
+        mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         ckpt_dir = tmp_path / "ckpts"
         ckpt_dir.mkdir()
         for name in ("tinyshakespeare_1.soul", "tinyshakespeare_1.soul.meta.json",
@@ -181,8 +200,10 @@ class TestCmdTrainNative:
         remaining = sorted(p.name for p in ckpt_dir.iterdir())
         assert remaining == ["test-native.soul", "test-native.soul.meta.json"]
 
-    def test_default_tokenizer_passes_none(self, tmp_path):
+    @patch("commands.train._resolve_corpus_file")
+    def test_default_tokenizer_passes_none(self, mock_resolve):
         from commands.train import cmd_train_native
+        mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         with patch("domains.training.train_pipeline.SloughGPTTrainer") as mock_trainer:
             instance = mock_trainer.return_value
             instance.training_model.num_parameters.return_value = 1000
@@ -208,8 +229,10 @@ class TestCmdTrainNative:
         assert tree.vocab_size <= 64
         assert instance.save.called
 
-    def test_token_tree_unknown_option_is_none(self, tmp_path):
+    @patch("commands.train._resolve_corpus_file")
+    def test_token_tree_unknown_option_is_none(self, mock_resolve, tmp_path):
         from commands.train import cmd_train_native
+        mock_resolve.return_value = Path("/tmp/fake_corpus.txt")
         args = self._args(tokenizer="token-tree")
         # When the tokenizer kind is not recognized the CLI falls back to char.
         args.tokenizer = "bogus"

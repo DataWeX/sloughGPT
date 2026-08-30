@@ -113,7 +113,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
     if (headingMatch) {
       const level = headingMatch[1].length
       const text = headingMatch[2]
-      const Tag = `h${level}` as keyof JSX.IntrinsicElements
+      const Tag = `h${level}` as keyof React.JSX.IntrinsicElements
       nodes.push(
         <Tag key={key++} className={cn(
           'font-semibold mt-3 mb-1',

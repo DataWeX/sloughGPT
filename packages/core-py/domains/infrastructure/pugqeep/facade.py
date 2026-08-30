@@ -41,7 +41,7 @@ from .store import MemoryStore, JSONStore, DirectoryStore
 from .dedup import PointDeduplicator, PointLibrarySync
 from .queue import ModelQueue
 from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
-from .engine import Engine, Process, Stem, ProcessStatus, StemStatus
+from .engine import Engine, Process, Stem, ProcessStatus, StemStatus, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
 
 logger = logging.getLogger("slo.pugqeep")
 
@@ -519,6 +519,40 @@ class PGQ:
     @property
     def task_queue(self) -> TaskQueue:
         return self._task_queue
+
+    @property
+    def engine(self) -> Engine:
+        return self._engine
+
+    def run_subprocess(self, fn, *args, cwd=None, env=None,
+                       memory_limit_mb=None, capture_output=False, timeout=None):
+        return self._engine.run_subprocess(fn, *args, cwd=cwd, env=env,
+                                           memory_limit_mb=memory_limit_mb,
+                                           capture_output=capture_output, timeout=timeout)
+
+    def group(self, name: str) -> ProcessGroup:
+        return self._engine.group(name)
+
+    def cancel_process(self, proc_id: str, propagate: bool = True) -> None:
+        self._engine.cancel_process(proc_id, propagate=propagate)
+
+    def cancel_tree(self, tree_name: str) -> int:
+        return self._engine.cancel_tree(tree_name)
+
+    def cancel_all(self) -> int:
+        return self._engine.cancel_all()
+
+    def reset(self) -> None:
+        self._engine.reset()
+
+    def install_signal_handlers(self) -> None:
+        self._engine.install_signal_handlers()
+
+    def restore_signal_handlers(self) -> None:
+        self._engine.restore_signal_handlers()
+
+    def engine_health(self) -> dict:
+        return self._engine.health()
 
     # ── Batch operations ──
 

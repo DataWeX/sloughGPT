@@ -1,7 +1,18 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.mock('@/lib/db', () => {
+  const store = new Map<string, unknown>()
+  return {
+    chatDB: {
+      getKV: vi.fn((key: string) => Promise.resolve(store.get(key) as string | undefined)),
+      setKV: vi.fn((key: string, value: unknown) => { store.set(key, value); return Promise.resolve() }),
+    },
+  }
+})
+
 import { ThemeProvider, useTheme } from './ThemeProvider'
+import { chatDB } from '@/lib/db'
 
 function TestChild() {
   const { theme, mode, palette, setTheme, setMode, setPalette } = useTheme()
@@ -37,28 +48,36 @@ describe('ThemeProvider', () => {
     expect(lastMode.textContent).toBe('dark')
   })
 
-  it('reads saved theme and mode from localStorage', () => {
-    localStorage.setItem('man_theme', 'green')
-    localStorage.setItem('man_mode', 'light')
+  it('reads saved theme and mode from chatDB', async () => {
+    const store = new Map<string, unknown>([
+      ['man_theme', 'green'],
+      ['man_mode', 'light'],
+    ])
+    vi.mocked(chatDB.getKV).mockImplementation((key: string) => Promise.resolve(store.get(key) as string | undefined))
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const themes = container.querySelectorAll('[data-testid="theme"]')
-    const lastTheme = themes[themes.length - 1]
-    const modes = container.querySelectorAll('[data-testid="mode"]')
-    const lastMode = modes[modes.length - 1]
-    expect(lastTheme.textContent).toBe('green')
-    expect(lastMode.textContent).toBe('light')
+    await waitFor(() => {
+      const themes = container.querySelectorAll('[data-testid="theme"]')
+      const lastTheme = themes[themes.length - 1]
+      const modes = container.querySelectorAll('[data-testid="mode"]')
+      const lastMode = modes[modes.length - 1]
+      expect(lastTheme.textContent).toBe('green')
+      expect(lastMode.textContent).toBe('light')
+    })
   })
 
-  it('falls back to defaults for invalid localStorage values', () => {
-    localStorage.setItem('man_theme', 'invalid')
-    localStorage.setItem('man_mode', 'invalid')
+  it('falls back to defaults for invalid chatDB values', async () => {
+    vi.mocked(chatDB.getKV).mockImplementation((key: string) =>
+      Promise.resolve(key === 'man_theme' ? 'invalid' : key === 'man_mode' ? 'invalid' : undefined)
+    )
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const themes = container.querySelectorAll('[data-testid="theme"]')
-    const lastTheme = themes[themes.length - 1]
-    const modes = container.querySelectorAll('[data-testid="mode"]')
-    const lastMode = modes[modes.length - 1]
-    expect(lastTheme.textContent).toBe('purple')
-    expect(lastMode.textContent).toBe('dark')
+    await waitFor(() => {
+      const themes = container.querySelectorAll('[data-testid="theme"]')
+      const lastTheme = themes[themes.length - 1]
+      const modes = container.querySelectorAll('[data-testid="mode"]')
+      const lastMode = modes[modes.length - 1]
+      expect(lastTheme.textContent).toBe('purple')
+      expect(lastMode.textContent).toBe('dark')
+    })
   })
 
   it('throws when useTheme is used outside provider', () => {
@@ -86,20 +105,28 @@ describe('ThemeProvider — palette', () => {
     expect(last.textContent).toBe('noir-violet')
   })
 
-  it('reads saved palette from localStorage', () => {
-    localStorage.setItem('man_palette', 'neural-precision')
+  it('reads saved palette from chatDB', async () => {
+    vi.mocked(chatDB.getKV).mockImplementation((key: string) =>
+      Promise.resolve(key === 'man_palette' ? 'neural-precision' : undefined)
+    )
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const palettes = container.querySelectorAll('[data-testid="palette"]')
-    const last = palettes[palettes.length - 1]
-    expect(last.textContent).toBe('neural-precision')
+    await waitFor(() => {
+      const palettes = container.querySelectorAll('[data-testid="palette"]')
+      const last = palettes[palettes.length - 1]
+      expect(last.textContent).toBe('neural-precision')
+    })
   })
 
-  it('falls back to noir-violet for invalid localStorage value', () => {
-    localStorage.setItem('man_palette', 'solarized')
+  it('falls back to noir-violet for invalid chatDB value', async () => {
+    vi.mocked(chatDB.getKV).mockImplementation((key: string) =>
+      Promise.resolve(key === 'man_palette' ? 'solarized' : undefined)
+    )
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const palettes = container.querySelectorAll('[data-testid="palette"]')
-    const last = palettes[palettes.length - 1]
-    expect(last.textContent).toBe('noir-violet')
+    await waitFor(() => {
+      const palettes = container.querySelectorAll('[data-testid="palette"]')
+      const last = palettes[palettes.length - 1]
+      expect(last.textContent).toBe('noir-violet')
+    })
   })
 
   it('setPalette updates context value', async () => {
@@ -113,12 +140,14 @@ describe('ThemeProvider — palette', () => {
     })
   })
 
-  it('persists palette to localStorage', async () => {
+  it('persists palette to chatDB', async () => {
+    vi.mocked(chatDB.setKV).mockResolvedValue(undefined)
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     const btn = container.querySelector('[data-testid="set-palette"]') as HTMLButtonElement
     btn.click()
     await waitFor(() => {
-      expect(localStorage.getItem('man_palette')).toBe('neural-precision')
+      expect(chatDB.setKV).toHaveBeenCalledWith('man_palette', 'neural-precision')
     })
   })
 })

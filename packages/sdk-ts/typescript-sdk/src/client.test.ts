@@ -536,14 +536,14 @@ describe('SloughGPTClient', () => {
       mockFetch.mockResolvedValue(createMockResponse({ status: 'started' }));
       const client = new SloughGPTClient();
       await client.startAutoTrain({ soul: 'friendly' });
-      expect(mockFetch.mock.calls[0][0]).toContain('/auto-train/start');
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/start');
     });
 
     it('stops auto-train', async () => {
       mockFetch.mockResolvedValue(createMockResponse({ status: 'stopped' }));
       const client = new SloughGPTClient();
       await client.stopAutoTrain();
-      expect(mockFetch.mock.calls[0][0]).toContain('/auto-train/stop');
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/stop');
     });
 
     it('gets auto-train status', async () => {
@@ -551,7 +551,7 @@ describe('SloughGPTClient', () => {
       const client = new SloughGPTClient();
       const result = await client.getAutoTrainStatus();
       expect(result.phase).toBe('TRAIN');
-      expect(mockFetch.mock.calls[0][0]).toContain('/auto-train/status');
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/status');
     });
 
     it('lists checkpoints', async () => {
@@ -559,14 +559,14 @@ describe('SloughGPTClient', () => {
       const client = new SloughGPTClient();
       const result = await client.listAutoTrainCheckpoints();
       expect(result).toHaveLength(1);
-      expect(mockFetch.mock.calls[0][0]).toContain('/auto-train/checkpoints');
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/checkpoints');
     });
 
     it('deletes checkpoint', async () => {
       mockFetch.mockResolvedValue(createMockResponse({ status: 'deleted' }));
       const client = new SloughGPTClient();
       await client.deleteAutoTrainCheckpoint('ckpt-1');
-      expect(mockFetch.mock.calls[0][0]).toContain('/auto-train/checkpoints/ckpt-1');
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/checkpoints/ckpt-1');
       expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
     });
 
@@ -574,7 +574,7 @@ describe('SloughGPTClient', () => {
       mockFetch.mockResolvedValue(createMockResponse({ status: 'loaded' }));
       const client = new SloughGPTClient();
       await client.loadAutoTrainCheckpoint('ckpt-1');
-      expect(mockFetch.mock.calls[0][0]).toContain('/auto-train/checkpoints/ckpt-1/load');
+      expect(mockFetch.mock.calls[0][0]).toContain('/training/checkpoints/ckpt-1/load');
     });
   });
 

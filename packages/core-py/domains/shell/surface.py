@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import threading
+import unicodedata
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,20 +50,51 @@ def strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
 
 
-def clip(text: str, width: int) -> str:
-    """Truncate ``text`` to ``width`` columns (no ANSI handling).
+def _display_width(text: str) -> int:
+    """Return the display width of *text* in terminal columns.
 
-    If the text exceeds ``width``, it is truncated with an ellipsis marker
-    so the user can see that content was clipped rather than silently losing
-    the tail.
+    CJK/wide characters count as 2 columns; all others count as 1.
+    """
+    w = 0
+    for ch in text:
+        eaw = unicodedata.east_asian_width(ch)
+        w += 2 if eaw in ("W", "F") else 1
+    return w
+
+
+def clip(text: str, width: int) -> str:
+    """Truncate ``text`` to ``width`` display columns.
+
+    CJK/wide characters (2 columns each) are handled correctly.
+    If the text exceeds ``width``, it is truncated with an ellipsis
+    marker so the user can see that content was clipped.
     """
     if width <= 0:
         return ""
-    if len(text) <= width:
+    if _display_width(text) <= width:
         return text
     if width <= 3:
-        return text[:width]
-    return text[: width - 1] + "\u2026"
+        # Character-by-character truncation respecting display width.
+        result = []
+        used = 0
+        for ch in text:
+            cw = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+            if used + cw > width:
+                break
+            result.append(ch)
+            used += cw
+        return "".join(result)
+    # Build truncated string with ellipsis.
+    result = []
+    used = 0
+    ellipsis_w = 1  # ellipsis is 1 column
+    for ch in text:
+        cw = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+        if used + cw > width - ellipsis_w:
+            break
+        result.append(ch)
+        used += cw
+    return "".join(result) + "\u2026"
 
 
 class Surface:

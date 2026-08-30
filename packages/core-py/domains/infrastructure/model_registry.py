@@ -165,6 +165,16 @@ class ModelRegistry:
                     mid, list(self._servers.keys()))
             return server
 
+    def iter_servers(self):
+        """Yield (model_id, ModelServer) for all registered models.
+
+        Safe to call under memory pressure — takes a snapshot of the
+        server dict under the lock so callers can iterate without
+        holding the lock.
+        """
+        with self._lock:
+            return list(self._servers.items())
+
     def list_models(self) -> list[dict]:
         """List all registered models with their status and metrics."""
         with self._lock:

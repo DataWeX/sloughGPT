@@ -6,8 +6,8 @@ import { datasetLabel, DatasetSelector } from './DatasetSelector'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import { ds, makeDatasets } from './__test-helper'
 
-vi.mock('@/components/DatasetImportModal', () => ({
-  DatasetImportModal: () => <div data-testid="import-modal" />,
+vi.mock('@/components/DatasetImportDialog', () => ({
+  DatasetImportDialog: () => <div data-testid="import-modal" />,
 }))
 
 vi.mock('@sloughgpt/strui', () => ({

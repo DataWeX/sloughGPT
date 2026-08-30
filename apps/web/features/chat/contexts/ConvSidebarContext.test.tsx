@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, renderHook, act } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, renderHook, act, waitFor } from '@testing-library/react'
 import React from 'react'
 
 import { ConvSidebarProvider, useConvSidebar } from './ConvSidebarContext'
@@ -77,9 +77,12 @@ describe('ConvSidebarContext', () => {
     store.set(CONV_KEY, 'true')
     store.set(NAV_KEY, 'true')
     renderProvider()
-    expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
-    expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    expect(screen.getByTestId('open').textContent).toBe('false')
+    await screen.findByTestId('convCollapsed')
+    await waitFor(() => {
+      expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
+      expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
+      expect(screen.getByTestId('open').textContent).toBe('false')
+    })
   })
 
   it('ignores non-true storage values', async () => {
@@ -121,6 +124,9 @@ describe('ConvSidebarContext', () => {
   it('writes false back to storage when toggled off', async () => {
     store.set(CONV_KEY, 'true')
     renderProvider()
+    await waitFor(() => {
+      expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
+    })
     fireEvent.click(screen.getByText('toggle-conv'))
     expect(store.get(CONV_KEY)).toBe('false')
   })

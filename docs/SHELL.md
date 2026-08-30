@@ -412,7 +412,7 @@ terminal width; the caret always stays visible.
 | `load`, `unload`, `gen` | Model names from `/models` API |
 | `switch` | Soul names from `/souls` API |
 | `datasets` | Dataset names from `/datasets` API |
-| `checkpoints` | Checkpoint names from `/auto-train/checkpoints` API |
+| `checkpoints` | Checkpoint names from `/training/checkpoints` API |
 | `finetuned` | Subcommands (`load`, `rm`, `del`, `delete`); model names after `load`/`rm`/`del`/`delete` from `/training/finetuned-models` API |
 | `source`, `less`, `tee`, `pushd`, `sort`, `uniq` | File/directory path completion (fallback) |
 
@@ -759,9 +759,9 @@ documented in `docs/routers.md`.
 | `whoami` | `/souls/current` | GET |
 | `datasets` | `/datasets` | GET |
 | `knowledge` | `/knowledge/list` + `/knowledge/stats` | GET |
-| `checkpoints` | `/auto-train/checkpoints` | GET |
-| `load_checkpoint` | `/auto-train/checkpoints/{name}/load` | POST |
-| `delete_checkpoint` | `/auto-train/checkpoints/{name}` | DELETE |
+| `checkpoints` | `/training/checkpoints` | GET |
+| `load_checkpoint` | `/training/checkpoints/{name}/load` | POST |
+| `delete_checkpoint` | `/training/checkpoints/{name}` | DELETE |
 | `finetuned` | `/training/finetuned-models` | GET |
 | `load_finetuned` | `/training/finetuned-models/{name}/load` | POST |
 | `delete_finetuned` | `/training/finetuned-models/{name}` | DELETE |

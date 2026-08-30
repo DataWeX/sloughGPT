@@ -21,6 +21,12 @@ export interface FileEntry {
   tags?: string[]
 }
 
+export interface FileDetail extends FileEntry {
+  chars?: number
+  pages?: number
+  text?: string
+}
+
 export interface SearchResult {
   results: FileEntry[]
   count?: number
@@ -78,6 +84,21 @@ class FilesController {
     )
     if (!data) return []
     return (data.files ?? []).map(mapFileEntry)
+  }
+
+  async getDetail(id: string): Promise<FileDetail | null> {
+    try {
+      const data = await apiGet<Record<string, unknown>>(`/files/${id}`)
+      if (!data) return null
+      return {
+        ...mapFileEntry(data as unknown as BackendFileItem),
+        chars: data.chars as number | undefined,
+        pages: data.pages as number | undefined,
+        text: data.text as string | undefined,
+      }
+    } catch {
+      return null
+    }
   }
 }
 

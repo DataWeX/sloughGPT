@@ -398,6 +398,108 @@ class TestSetEnabled:
             config.set_enabled(original)
 
 
+class TestUpdate:
+    def test_update_existing_item(self, service):
+        service.store("Original fact about pandas eating bamboo", "animals", "task")
+        items = service.list_all(limit=10)
+        target = items[0]
+        assert service.update(target["id"], "Updated fact about pandas eating bamboo leaves") is True
+        refreshed = [i for i in service.list_all(limit=10) if i["id"] == target["id"]]
+        assert refreshed[0]["content"] == "Updated fact about pandas eating bamboo leaves"
+
+    def test_update_disabled_returns_false(self, provider):
+        service = MemoryService(
+            provider=provider,
+            config=MemoryConfig(enabled=False),
+        )
+        assert service.update("any_id", "some content") is False
+
+    def test_update_unknown_id_returns_false(self, service):
+        service.store("A fact about the ocean depths", "nature", "task")
+        assert service.update("fact_999_nonexistent", "replacement text") is False
+
+    def test_update_empty_content_returns_false(self, service):
+        service.store("A fact about the desert sun", "nature", "task")
+        items = service.list_all(limit=10)
+        assert service.update(items[0]["id"], "") is False
+        assert service.update(items[0]["id"], "   ") is False
+
+    def test_update_with_topic(self, service):
+        service.store("Fact about neural networks in brains", "ml", "task")
+        items = service.list_all(limit=10)
+        target = items[0]
+        assert service.update(target["id"], "Updated fact about neural networks", topic="neuroscience") is True
+        refreshed = [i for i in service.list_all(limit=10) if i["id"] == target["id"]]
+        assert refreshed[0]["topic"] == "neuroscience"
+
+    def test_update_preserves_other_items(self, service):
+        service.store("Fact one about coral reefs", "ocean", "task")
+        service.store("Fact two about tidal patterns", "ocean", "task")
+        items = service.list_all(limit=10)
+        target = items[0]
+        service.update(target["id"], "Revised fact one about coral reefs")
+        remaining = service.list_all(limit=10)
+        assert len(remaining) == 2
+
+
+class TestConfigSnapshot:
+    def test_snapshot_returns_all_keys(self, service):
+        snap = service.config_snapshot()
+        expected_keys = {
+            "enabled", "min_chars", "max_facts", "store_path",
+            "sync_remember", "consolidation_threshold",
+            "maintenance_interval_minutes", "archive_retention_days",
+        }
+        assert expected_keys.issubset(set(snap.keys()))
+
+    def test_snapshot_reflects_current_config(self, service):
+        snap = service.config_snapshot()
+        assert snap["enabled"] is True
+        assert snap["min_chars"] == 80
+        assert snap["max_facts"] == 5
+        assert snap["consolidation_threshold"] == 0.80
+
+    def test_snapshot_changes_after_set_enabled(self, service):
+        service.set_enabled(False)
+        snap = service.config_snapshot()
+        assert snap["enabled"] is False
+        service.set_enabled(True)
+
+
+class TestSetArchiveRetention:
+    def test_set_archive_retention_updates_config(self, service):
+        service.set_archive_retention(14)
+        snap = service.config_snapshot()
+        assert snap["archive_retention_days"] == 14.0
+
+    def test_set_archive_retention_zero(self, service):
+        service.set_archive_retention(0)
+        snap = service.config_snapshot()
+        assert snap["archive_retention_days"] == 0.0
+
+    def test_set_archive_retention_negative_clamped_to_zero(self, service):
+        service.set_archive_retention(-5)
+        snap = service.config_snapshot()
+        assert snap["archive_retention_days"] == 0.0
+
+
+class TestListAll:
+    def test_list_all_empty_store(self, service):
+        assert service.list_all(limit=10) == []
+
+    def test_list_all_respects_limit(self, service):
+        for i in range(8):
+            service.store(f"Fact {i} about astronomy and telescopes", "space", "task")
+        assert len(service.list_all(limit=3)) == 3
+
+    def test_list_all_disabled_returns_empty(self, provider):
+        service = MemoryService(
+            provider=provider,
+            config=MemoryConfig(enabled=False),
+        )
+        assert service.list_all(limit=50) == []
+
+
 class TestChatWiring:
     """Contract test: the chat post-gen path must call memory.remember().
 

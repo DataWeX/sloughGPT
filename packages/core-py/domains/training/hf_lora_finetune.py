@@ -336,8 +336,8 @@ class HFLoraTrainer:
 
     def stop(self):
         """Signal training to stop."""
-        if self._cancel_event:
-            self._cancel_event.set()
+        if self.config._cancel_event:
+            self.config._cancel_event.set()
         self._is_training = False
 
 

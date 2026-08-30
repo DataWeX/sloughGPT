@@ -18,28 +18,28 @@ import { trainingJobsController } from './training-controller'
 describe('trainingJobsController.startAutoTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/start with params', async () => {
+  it('POSTs to /training/start with params', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started', teacher: 'gpt2', student: 'lstm' })
 
     const result = await trainingJobsController.startAutoTrain({ teacher_model: 'gpt2' })
     expect(result.status).toBe('started')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/start', { teacher_model: 'gpt2' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/start', { teacher_model: 'gpt2' })
   })
 
   it('sends null body when no params', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started' })
     await trainingJobsController.startAutoTrain()
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/start', null)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/start', null)
   })
 })
 
 describe('trainingJobsController.stopAutoTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/stop', async () => {
+  it('POSTs to /training/stop', async () => {
     apiClient.apiPost.mockResolvedValue(undefined)
     await trainingJobsController.stopAutoTrain()
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/stop')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/stop')
   })
 })
 
@@ -57,10 +57,10 @@ describe('trainingJobsController.loadAdapter', () => {
 describe('trainingJobsController.startTurboTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/start-turbo', async () => {
+  it('POSTs to /training/turbo-start', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'done', final_loss: 0.5 })
     const result = await trainingJobsController.startTurboTrain({ epochs: 5 })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/start-turbo', { epochs: 5 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/turbo-start', { epochs: 5 })
     expect(result.status).toBe('done')
   })
 })
@@ -87,11 +87,11 @@ describe('trainingJobsController.list', () => {
 describe('trainingJobsController.listCheckpoints', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /auto-train/checkpoints', async () => {
+  it('GETs /training/checkpoints', async () => {
     apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
     const result = await trainingJobsController.listCheckpoints()
     expect(result).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/auto-train/checkpoints')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/checkpoints')
   })
 })
 
@@ -342,22 +342,22 @@ describe('trainingJobsController.exportFeedbackPairs', () => {
 describe('trainingJobsController.loadCheckpoint', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/checkpoints/{name}/load', async () => {
+  it('POSTs to /training/checkpoints/{name}/load', async () => {
     apiClient.apiPost.mockResolvedValue({ success: true })
     const result = await trainingJobsController.loadCheckpoint('my-checkpoint')
     expect(result.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/checkpoints/my-checkpoint/load')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/my-checkpoint/load')
   })
 })
 
 describe('trainingJobsController.deleteCheckpoint', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('DELETEs /auto-train/checkpoints/{name}', async () => {
+  it('DELETEs /training/checkpoints/{name}', async () => {
     apiClient.apiDelete.mockResolvedValue({ success: true })
     const result = await trainingJobsController.deleteCheckpoint('old-checkpoint')
     expect(result.success).toBe(true)
-    expect(apiClient.apiDelete).toHaveBeenCalledWith('/auto-train/checkpoints/old-checkpoint')
+    expect(apiClient.apiDelete).toHaveBeenCalledWith('/training/checkpoints/old-checkpoint')
   })
 })
 

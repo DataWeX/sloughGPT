@@ -46,7 +46,7 @@ vi.mock('@/components/multimodal/TrainingCard', () => ({ default: () => <div dat
 vi.mock('@/components/multimodal/ImageTrainingCard', () => ({ default: () => <div data-testid="image-training-card" /> }))
 vi.mock('@/components/multimodal/BatchTrainingCard', () => ({ default: () => <div data-testid="batch-training-card" /> }))
 vi.mock('@/components/multimodal/VisualDatasetCard', () => ({ default: () => <div data-testid="visual-dataset-card" /> }))
-vi.mock('@/components/multimodal/DPOCard', () => ({ default: () => <div data-testid="dpo-card" /> }))
+vi.mock('@/components/multimodal/PreferenceOptimizationCard', () => ({ default: () => <div data-testid="dpo-card" /> }))
 vi.mock('@/components/multimodal/ImageGenerationCard', () => ({ default: () => <div data-testid="image-generation-card" /> }))
 vi.mock('@/components/multimodal/AudioCard', () => ({ default: () => <div data-testid="audio-card" /> }))
 

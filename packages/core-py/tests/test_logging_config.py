@@ -223,7 +223,7 @@ class TestSloFormatterHuman:
 class TestSloFormatterJSON:
     """Tests for SloFormatter in JSON mode."""
     def test_basic_output(self):
-        fmt = SloFormatter(fmt="json")
+        fmt = SloFormatter(fmt="json", colors=False)
         record = _make_record(msg="hello")
         output = fmt.format(record)
         data = json.loads(output)
@@ -233,26 +233,26 @@ class TestSloFormatterJSON:
         assert "ts" in data
 
     def test_tag_in_output(self):
-        fmt = SloFormatter(fmt="json")
+        fmt = SloFormatter(fmt="json", colors=False)
         record = _make_record(tag="REQ")
         data = json.loads(fmt.format(record))
         assert data["tag"] == "REQ"
 
     def test_request_id_in_output(self):
-        fmt = SloFormatter(fmt="json")
+        fmt = SloFormatter(fmt="json", colors=False)
         record = _make_record(request_id="xyz-789")
         data = json.loads(fmt.format(record))
         assert data["corr"] == "xyz-789"
 
     def test_context_in_output(self):
-        fmt = SloFormatter(fmt="json")
+        fmt = SloFormatter(fmt="json", colors=False)
         record = _make_record(model="gpt2", tokens=100)
         data = json.loads(fmt.format(record))
         assert data["ctx"]["model"] == "gpt2"
         assert data["ctx"]["tokens"] == 100
 
     def test_exception_in_output(self):
-        fmt = SloFormatter(fmt="json")
+        fmt = SloFormatter(fmt="json", colors=False)
         try:
             raise RuntimeError("boom")
         except RuntimeError:
@@ -264,7 +264,7 @@ class TestSloFormatterJSON:
         assert "RuntimeError" in data["exception"]
 
     def test_no_extra_fields_in_output(self):
-        fmt = SloFormatter(fmt="json")
+        fmt = SloFormatter(fmt="json", colors=False)
         record = _make_record()
         data = json.loads(fmt.format(record))
         # Standard fields should not appear in ctx
@@ -470,7 +470,7 @@ class TestStdlibIntegration:
         setup_logging(enable_output_buffer=False, enable_file=False)
 
         test_handler = logging.StreamHandler(output)
-        test_handler.setFormatter(SloFormatter(fmt="json"))
+        test_handler.setFormatter(SloFormatter(fmt="json", colors=False))
         logging.getLogger().addHandler(test_handler)
 
         set_request_id("req-42")

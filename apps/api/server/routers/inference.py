@@ -68,9 +68,9 @@ _memory_pressure_lock = threading.Lock()
 def _check_memory_pressure() -> Optional[str]:
     """Return an error message if system memory is critically low, else None.
 
-    Blocks new inference when >95% memory used to prevent OOM kills (SIGKILL -9).
-    Allows inference to proceed (with a warning log) when 85-95% used.
-    Caches result for 2 seconds to avoid repeated psutil calls.
+    Delegates to MemoryPressureMonitor (the single source of truth for
+    pressure thresholds and cleanup). Caches the result for 2 seconds
+    to avoid repeated monitor checks during burst requests.
     """
     global _memory_pressure_cache, _memory_pressure_cache_ts
     now = time.time()
@@ -78,16 +78,19 @@ def _check_memory_pressure() -> Optional[str]:
         if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
             return _memory_pressure_cache if _memory_pressure_cache else None
     try:
-        import psutil
-        mem = psutil.virtual_memory()
-        if mem.percent > 95:
+        from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
+        monitor = get_memory_pressure_monitor()
+        level = monitor.check()
+        if level == PressureLevel.EMERGENCY:
+            import psutil
+            mem = psutil.virtual_memory()
             result = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
             with _memory_pressure_lock:
                 _memory_pressure_cache = result
                 _memory_pressure_cache_ts = now
             return result
-        if mem.percent > 85:
-            logger.warning("Memory pressure: %.0f%% used — inference may be slow", mem.percent, extra={"tag": "INF"})
+    except ImportError:
+        pass
     except Exception as exc:
         logger.warning("Memory pressure check failed: %s", exc)
     with _memory_pressure_lock:
@@ -635,7 +638,7 @@ class InferenceRouter:
 
         mem_err = _check_memory_pressure()
         if mem_err:
-            raise_error(mem_err, "E_RESOURCE", status_code=503)
+            raise_error(mem_err, "E_MEMORY_PRESSURE", status_code=503)
 
         provider = get_provider("default")
         if provider is None:
@@ -724,7 +727,7 @@ class InferenceRouter:
         mem_err = _check_memory_pressure()
         if mem_err:
             async def oom_stream() -> AsyncIterator[str]:
-                yield sse_error("generate", "IDLE", mem_err, code="MODEL_OOM", http_status=503)
+                yield sse_error("generate", "IDLE", mem_err, code="E_MEMORY_PRESSURE", http_status=503)
             return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
@@ -836,8 +839,10 @@ class InferenceRouter:
                     pass
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
+                err_code = "E_MEMORY_PRESSURE" if isinstance(e, RuntimeError) and "memory" in str(e).lower() else "E_INFRA_GENERATION"
+                http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
                 yield sse_error("generate", "ERROR", str(e),
-                    code="E_INFRA_GENERATION", http_status=500)
+                    code=err_code, http_status=http_status)
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
 
@@ -1001,7 +1006,7 @@ class InferenceRouter:
         if mem_err:
             get_server_state().record_memory_pressure_block()
             async def oom_stream() -> AsyncIterator[str]:
-                yield sse_error("chat", "IDLE", mem_err, code="MODEL_OOM", http_status=503)
+                yield sse_error("chat", "IDLE", mem_err, code="E_MEMORY_PRESSURE", http_status=503)
             return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
@@ -1457,8 +1462,10 @@ class InferenceRouter:
                                 "error_type": type(e).__name__,
                             }},
                         )
+                        err_code = "E_MEMORY_PRESSURE" if isinstance(e, RuntimeError) and "memory" in str(e).lower() else "E_INFRA_GENERATION"
+                        http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
                         yield sse_error("chat", "ERROR", str(e),
-                            code="E_INFRA_GENERATION", http_status=500)
+                            code=err_code, http_status=http_status)
                 else:
                     yield sse_error("chat", "STREAMING", "No inference provider loaded", code="E_INFRA_REGISTRY", http_status=503)
                     return
@@ -1597,8 +1604,10 @@ class InferenceRouter:
             except Exception as e:
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
+                err_code = "E_MEMORY_PRESSURE" if isinstance(e, RuntimeError) and "memory" in str(e).lower() else "E_INFRA_GENERATION"
+                http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
                 yield sse_error("chat", "ERROR", str(e),
-                    code="E_INFRA_GENERATION", http_status=500)
+                    code=err_code, http_status=http_status)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
@@ -1664,7 +1673,7 @@ class InferenceRouter:
 
         mem_err = _check_memory_pressure()
         if mem_err:
-            raise_error(mem_err, "E_RESOURCE", status_code=503)
+            raise_error(mem_err, "E_MEMORY_PRESSURE", status_code=503)
 
         try:
 

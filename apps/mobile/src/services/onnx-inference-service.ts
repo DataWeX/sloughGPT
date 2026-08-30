@@ -451,7 +451,7 @@ export async function loadCheckpoint(name: string): Promise<void> {
 
   // Download from server
   const baseUrl = await getApiUrl();
-  const res = await fetch(`${baseUrl}/auto-train/checkpoints/${encodeURIComponent(name)}/export-mobile`);
+  const res = await fetch(`${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`);
   if (!res.ok) throw new Error(`Failed to load checkpoint: ${res.status}`);
   const data: MobileExportResponse = await res.json();
 

@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within, cleanup, act } from '@testing-library/react'
+
+const kvStore = new Map<string, unknown>()
+
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    getKV: vi.fn(async (key: string) => kvStore.get(key) ?? null),
+    setKV: vi.fn(async (key: string, value: unknown) => { kvStore.set(key, value) }),
+  },
+}))
 
 vi.mock('@/lib/vm-controller', () => ({
   vmController: {
@@ -31,6 +40,7 @@ vi.mock('@/hooks/useV86', () => ({
 
 import { vmController } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
+import { chatDB } from '@/lib/db'
 import VMPage from './page'
 
 const mockedRun = vi.mocked(vmController.run)
@@ -58,9 +68,11 @@ function fakeResult(overrides: Record<string, any> = {}) {
 describe('VMPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    kvStore.clear()
+    vi.mocked(chatDB.getKV).mockImplementation(async (key: string) => kvStore.get(key) ?? null)
+    vi.mocked(chatDB.setKV).mockImplementation(async (key: string, value: unknown) => { kvStore.set(key, value) })
     mockedRun.mockResolvedValue(fakeResult())
     mockedDatasets.mockResolvedValue([])
-    localStorage.clear()
   })
 
   afterEach(() => {
@@ -306,11 +318,12 @@ describe('VMPage', () => {
     resolveRun(fakeResult())
   })
 
-  it('saves and loads source from localStorage', () => {
-    localStorage.setItem('vm-source', 'SAVED CODE')
+  it('saves and loads source from chatDB', async () => {
+    kvStore.set('vm-source', 'SAVED CODE')
     const { container } = render(<VMPage />)
-    const textarea = container.querySelector('textarea')
-    expect(textarea!.value).toBe('SAVED CODE')
+    await waitFor(() => {
+      expect(container.querySelector('textarea')!.value).toBe('SAVED CODE')
+    })
   })
 
   it('renders output card when output present', async () => {
@@ -751,26 +764,30 @@ describe('VMPage', () => {
     })
   })
 
-  it('persists the training config across reloads', () => {
+  it('persists the training config across reloads', async () => {
     const first = render(<VMPage />)
+    await act(async () => {})
     fireEvent.change(within(first.container).getAllByLabelText('Training epochs')[0], {
       target: { value: '5' },
     })
     fireEvent.change(within(first.container).getAllByLabelText('Training dataset')[0], {
       target: { value: 'tinyshakespeare' },
     })
+    await act(async () => {})
     cleanup()
 
     const second = render(<VMPage />)
-    expect(
-      (within(second.container).getAllByLabelText('Training epochs')[0] as HTMLInputElement)
-        .value,
-    ).toBe('5')
+    await waitFor(() => {
+      expect(
+        (within(second.container).getAllByLabelText('Training epochs')[0] as HTMLInputElement)
+          .value,
+      ).toBe('5')
+    })
     expect(
       (within(second.container).getAllByLabelText('Training dataset')[0] as HTMLInputElement)
         .value,
     ).toBe('tinyshakespeare')
-    const saved = JSON.parse(localStorage.getItem('vm-train-config') ?? '{}')
+    const saved = kvStore.get('vm-train-config') as Record<string, unknown>
     expect(saved.epochs).toBe(5)
     expect(saved.dataset).toBe('tinyshakespeare')
   })
@@ -807,13 +824,14 @@ describe('VMPage', () => {
     ).toBe('shakespeare')
     const datasetInputs = within(container).getAllByLabelText('Training dataset')
     expect(datasetInputs.length).toBe(1)
-    const saved = JSON.parse(localStorage.getItem('vm-train-config') ?? '{}')
+    const saved = kvStore.get('vm-train-config') as Record<string, unknown>
     expect(saved.epochs).toBe(1)
     expect(saved.dataset).toBe('shakespeare')
   })
 
-  it('warns and offers switch to admin when the role is user', () => {
+  it('warns and offers switch to admin when the role is user', async () => {
     const { container } = render(<VMPage />)
+    await act(async () => {})
     expect(
       within(container).getByText(/Training is denied for the user role/),
     ).toBeTruthy()
@@ -821,7 +839,9 @@ describe('VMPage', () => {
     expect(
       (within(container).getAllByLabelText('VM role')[0] as HTMLSelectElement).value,
     ).toBe('admin')
-    expect(localStorage.getItem('vm-role')).toBe('admin')
+    await waitFor(() => {
+      expect(kvStore.get('vm-role')).toBe('admin')
+    })
   })
 
   it('hides the user-role warning for admin and kernel roles', () => {
@@ -896,29 +916,37 @@ describe('VMPage', () => {
 
   it('persists the selected role across reloads', async () => {
     const first = render(<VMPage />)
+    await act(async () => {})
     fireEvent.change(within(first.container).getAllByLabelText('VM role')[0], {
       target: { value: 'admin' },
     })
+    await act(async () => {})
     cleanup()
 
     const second = render(<VMPage />)
-    const select = within(second.container).getAllByLabelText('VM role')[0] as HTMLSelectElement
-    expect(select.value).toBe('admin')
-    expect(localStorage.getItem('vm-role')).toBe('admin')
+    await waitFor(() => {
+      const select = within(second.container).getAllByLabelText('VM role')[0] as HTMLSelectElement
+      expect(select.value).toBe('admin')
+    })
+    expect(kvStore.get('vm-role')).toBe('admin')
   })
 
   it('persists the steps value across reloads', async () => {
     const first = render(<VMPage />)
+    await act(async () => {})
     fireEvent.change(within(first.container).getByLabelText('Steps:'), {
       target: { value: '250' },
     })
+    await act(async () => {})
     cleanup()
 
     const second = render(<VMPage />)
-    expect(
-      (within(second.container).getByLabelText('Steps:') as HTMLInputElement).value,
-    ).toBe('250')
-    expect(localStorage.getItem('vm-max-steps')).toBe('250')
+    await waitFor(() => {
+      expect(
+        (within(second.container).getByLabelText('Steps:') as HTMLInputElement).value,
+      ).toBe('250')
+    })
+    expect(kvStore.get('vm-max-steps')).toBe(250)
   })
 
   it('renders mode selector with Assembly and Linux buttons', () => {

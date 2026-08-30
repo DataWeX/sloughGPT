@@ -61,7 +61,7 @@ export function TokenTreeLineageCard() {
           <div className="space-y-3">
             <div className="text-xs text-muted-foreground">
               Merge lineage of{' '}
-              <span className="font-mono text-primary">"{displayToken(result.token)}"</span>
+              <span className="font-mono text-primary">{'"' + displayToken(result.token) + '"'}</span>
               <span className="text-muted-foreground/70"> — {result.leaves.length} character leaves</span>
             </div>
             <div className="flex flex-wrap gap-1">
@@ -76,7 +76,7 @@ export function TokenTreeLineageCard() {
         ) : null}
 
         <p className="text-xs text-muted-foreground">
-          Every BPE token is a merge of two shorter pieces. This card walks a token's merge history down to its
+          Every BPE token is a merge of two shorter pieces. This card walks a token&apos;s merge history down to its
           character leaves and renders the merge tree exactly as the core builds it.
         </p>
       </CardContent>

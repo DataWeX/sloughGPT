@@ -58,6 +58,17 @@ interface ChatScreenProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  onReact?: (messageId: string, emoji: string) => void
+  onPin?: (messageId: string) => void
+  temperature?: number
+  contextLayers?: unknown[]
+  noteMap?: Record<string, string>
+  onAddNote?: (messageId: string, note: string) => void
+  selectionMode?: boolean
+  selectedMessageIds?: Set<string>
+  onToggleSelection?: (messageId: string) => void
+  hasThread?: boolean | ((id: string) => boolean)
+  onThread?: (messageId: string) => void
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
@@ -65,10 +76,6 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
-
-    const handleRegenerate = useCallback((messageId: string) => {
-      onRegenerate?.(messageId)
-    }, [onRegenerate])
 
     const handleSuggestionClick = useCallback((text: string) => {
       onSuggestionClick?.(text)
@@ -202,7 +209,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onThumbsUp={onThumbsUp}
                 onThumbsDown={onThumbsDown}
                 onEdit={onEdit}
-                onRegenerate={showRegenerate ? handleRegenerate : undefined}
+                onRegenerate={showRegenerate ? () => onRegenerate?.(message.id) : undefined}
                 onSuggestionClick={onSuggestionClick}
                 searchQuery={searchQuery}
                 isStreaming={isStreaming}

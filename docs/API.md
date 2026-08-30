@@ -92,7 +92,7 @@ list is documented in [`docs/routers.md`](routers.md).
 | Token tree (`/token-tree/*`) | ✅ |
 | System (`/system/*`) | ✅ |
 | Datasets (`/datasets`) | ✅ |
-| Training (`/training/*`) + auto-train (`/auto-train/*`) | ✅ |
+| Training (`/training/*`) | ✅ |
 | Feedback / workflow (`/feedback/*`, `/workflow/status`) | ✅ |
 | Experiments (`/experiments`) | ✅ |
 | Rate limit (`/rate-limit/*`) | ✅ |

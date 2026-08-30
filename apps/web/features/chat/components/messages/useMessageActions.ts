@@ -57,7 +57,7 @@ export function useMessageActions(
   const [showTranslateMenu, setShowTranslateMenu] = useState(false)
   const [showRetryOptions, setShowRetryOptions] = useState(false)
   const [retryTemperature, setRetryTemperature] = useState(temperature)
-  const [localReactions, setLocalReactions] = useState<Record<string, number>>(() => getReactions(messageId))
+  const [localReactions, setLocalReactions] = useState<Record<string, number>>({})
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const addToast = useToastStore(s => s.addToast) as (message: string, type?: string) => void
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -65,6 +65,16 @@ export function useMessageActions(
   const emojiPickerRef = useRef<HTMLDivElement>(null!)
   const translateMenuRef = useRef<HTMLDivElement>(null!)
   const retryOptionsRef = useRef<HTMLDivElement>(null!)
+
+  useEffect(() => {
+    getReactions(messageId).then(reactions => {
+      const counts: Record<string, number> = {}
+      for (const [emoji, users] of Object.entries(reactions)) {
+        counts[emoji] = users.length
+      }
+      setLocalReactions(counts)
+    })
+  }, [messageId])
 
   useEffect(() => {
     return () => {
@@ -138,12 +148,14 @@ export function useMessageActions(
     setSpeaking(true)
   }, [content, speaking])
 
-  const handleToggleReaction = useCallback((emoji: string) => {
-    const newCount = toggleReaction(messageId, emoji)
-    setLocalReactions(prev => ({
-      ...prev,
-      [emoji]: newCount ?? 0,
-    }))
+  const handleToggleReaction = useCallback(async (emoji: string) => {
+    await toggleReaction(messageId, emoji)
+    const reactions = await getReactions(messageId)
+    const counts: Record<string, number> = {}
+    for (const [e, users] of Object.entries(reactions)) {
+      counts[e] = users.length
+    }
+    setLocalReactions(counts)
   }, [messageId])
 
   return {

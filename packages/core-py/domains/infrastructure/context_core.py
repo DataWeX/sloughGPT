@@ -210,6 +210,7 @@ Be concise, accurate, and helpful."""
     def store_fact(self, key: str, value: Any) -> None:
         """Store in semantic memory."""
         if key in self.semantic_memory:
+            self.semantic_memory[key]["value"] = value
             self.semantic_memory[key]["strength"] += 0.1
         else:
             self.semantic_memory[key] = {
@@ -517,6 +518,7 @@ Be concise, accurate, and helpful."""
         self.semantic_memory = {}
         self.sensory_buffer = []
         self.frame_history = []
+        self.session_id = None
 
 
 # Global instance

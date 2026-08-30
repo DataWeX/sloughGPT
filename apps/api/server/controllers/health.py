@@ -301,6 +301,15 @@ def _get_resource_allocation() -> Dict[str, Any]:
         return {}
 
 
+def _get_memory_pressure_stats() -> Dict[str, Any]:
+    """Get memory pressure monitor stats for health reporting."""
+    try:
+        from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+        return get_memory_pressure_monitor().stats()
+    except Exception:
+        return {}
+
+
 _cached_process: Optional["psutil.Process"] = None
 
 
@@ -429,6 +438,9 @@ class HealthController:
         except Exception:
             pass
 
+        # Memory pressure stats (so clients know why inference may be blocked)
+        result["memory_pressure"] = _get_memory_pressure_stats()
+
         return result
 
     def get_detailed_health(self) -> Dict[str, Any]:
@@ -545,6 +557,7 @@ class HealthController:
             "training_pool": _get_executor_stats(),
             "resource_allocation": _get_resource_allocation(),
             "process_guard": _get_process_guard_status(),
+            "memory_pressure": _get_memory_pressure_stats(),
             "status_message": _build_status_message(
                 model_loaded, model_type, model_loading, current_soul,
                 request_count, error_count, lifecycle,

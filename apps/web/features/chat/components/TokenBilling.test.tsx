@@ -1,16 +1,32 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  IconX: (props: any) => <span data-testid="icon-x" {...props} />,
+  IconRefresh: (props: any) => <span data-testid="icon-refresh" {...props} />,
+  IconCheck: (props: any) => <span data-testid="icon-check" {...props} />,
+  IconDownload: (props: any) => <span data-testid="icon-download" {...props} />,
+}))
+
+const mockApiGet = vi.fn()
+
+vi.mock('@/lib/http-client', () => ({
+  apiGet: (...a: any[]) => mockApiGet(...a),
+}))
+
 import { TokenBilling } from './TokenBilling'
 
 afterEach(cleanup)
 
-const mockFetch = vi.fn()
-
 beforeEach(() => {
-  global.fetch = mockFetch
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: vi.fn().mockResolvedValue({
+  mockApiGet.mockReset()
+})
+
+describe('TokenBilling', () => {
+  it('renders loading state initially', async () => {
+    mockApiGet.mockResolvedValueOnce({
       userId: 'u1',
       balance: 4500,
       tier: 'pro',
@@ -18,38 +34,15 @@ beforeEach(() => {
       dailyLimit: 10000,
       monthlyUsed: 15000,
       monthlyLimit: 300000,
-    }),
-  })
-})
-
-describe('TokenBilling', () => {
-  it('renders loading state initially', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        userId: 'u1',
-        balance: 4500,
-        tier: 'pro',
-        dailyUsed: 350,
-        dailyLimit: 10000,
-        monthlyUsed: 15000,
-        monthlyLimit: 300000,
-      }),
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        totalRequests: 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byModel: {},
-        byDay: {},
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      totalRequests: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      byModel: {},
+      byDay: {},
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ records: [] }),
-    })
+    mockApiGet.mockResolvedValueOnce({ records: [] })
 
     render(<TokenBilling />)
     await waitFor(() => {
@@ -58,96 +51,69 @@ describe('TokenBilling', () => {
   })
 
   it('displays balance after load', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        userId: 'u1',
-        balance: 4500,
-        tier: 'pro',
-        dailyUsed: 350,
-        dailyLimit: 10000,
-        monthlyUsed: 15000,
-        monthlyLimit: 300000,
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      userId: 'u1',
+      balance: 4500,
+      tier: 'pro',
+      dailyUsed: 350,
+      dailyLimit: 10000,
+      monthlyUsed: 15000,
+      monthlyLimit: 300000,
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        totalRequests: 42,
-        totalTokens: 125000,
-        totalCost: 1.25,
-        byModel: {},
-        byDay: {},
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      totalRequests: 42,
+      totalTokens: 125000,
+      totalCost: 1.25,
+      byModel: {},
+      byDay: {},
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ records: [] }),
-    })
+    mockApiGet.mockResolvedValueOnce({ records: [] })
 
     render(<TokenBilling />)
     expect(await screen.findByText('4.5K')).toBeInTheDocument()
   })
 
   it('shows tier badge', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        userId: 'u1',
-        balance: 4500,
-        tier: 'pro',
-        dailyUsed: 350,
-        dailyLimit: 10000,
-        monthlyUsed: 15000,
-        monthlyLimit: 300000,
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      userId: 'u1',
+      balance: 4500,
+      tier: 'pro',
+      dailyUsed: 350,
+      dailyLimit: 10000,
+      monthlyUsed: 15000,
+      monthlyLimit: 300000,
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        totalRequests: 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byModel: {},
-        byDay: {},
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      totalRequests: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      byModel: {},
+      byDay: {},
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ records: [] }),
-    })
+    mockApiGet.mockResolvedValueOnce({ records: [] })
 
     render(<TokenBilling />)
     expect(await screen.findByText('Pro')).toBeInTheDocument()
   })
 
   it('switches to history tab', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        userId: 'u1',
-        balance: 4500,
-        tier: 'free',
-        dailyUsed: 350,
-        dailyLimit: 500,
-        monthlyUsed: 15000,
-        monthlyLimit: 10000,
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      userId: 'u1',
+      balance: 4500,
+      tier: 'free',
+      dailyUsed: 350,
+      dailyLimit: 500,
+      monthlyUsed: 15000,
+      monthlyLimit: 10000,
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        totalRequests: 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byModel: {},
-        byDay: {},
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      totalRequests: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      byModel: {},
+      byDay: {},
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ records: [] }),
-    })
+    mockApiGet.mockResolvedValueOnce({ records: [] })
 
     render(<TokenBilling />)
     await waitFor(() => {
@@ -157,32 +123,23 @@ describe('TokenBilling', () => {
   })
 
   it('switches to pricing tab', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        userId: 'u1',
-        balance: 4500,
-        tier: 'free',
-        dailyUsed: 350,
-        dailyLimit: 500,
-        monthlyUsed: 15000,
-        monthlyLimit: 10000,
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      userId: 'u1',
+      balance: 4500,
+      tier: 'free',
+      dailyUsed: 350,
+      dailyLimit: 500,
+      monthlyUsed: 15000,
+      monthlyLimit: 10000,
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        totalRequests: 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byModel: {},
-        byDay: {},
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      totalRequests: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      byModel: {},
+      byDay: {},
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ records: [] }),
-    })
+    mockApiGet.mockResolvedValueOnce({ records: [] })
 
     render(<TokenBilling />)
     await waitFor(() => {
@@ -194,32 +151,23 @@ describe('TokenBilling', () => {
   })
 
   it('shows current plan highlight', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        userId: 'u1',
-        balance: 4500,
-        tier: 'pro',
-        dailyUsed: 350,
-        dailyLimit: 10000,
-        monthlyUsed: 15000,
-        monthlyLimit: 300000,
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      userId: 'u1',
+      balance: 4500,
+      tier: 'pro',
+      dailyUsed: 350,
+      dailyLimit: 10000,
+      monthlyUsed: 15000,
+      monthlyLimit: 300000,
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        totalRequests: 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byModel: {},
-        byDay: {},
-      }),
+    mockApiGet.mockResolvedValueOnce({
+      totalRequests: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      byModel: {},
+      byDay: {},
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: vi.fn().mockResolvedValue({ records: [] }),
-    })
+    mockApiGet.mockResolvedValueOnce({ records: [] })
 
     render(<TokenBilling />)
     await waitFor(() => {

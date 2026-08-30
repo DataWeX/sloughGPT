@@ -3,6 +3,35 @@ import type { NextRequest } from 'next/server'
 
 const IGNORE_PATHS = ['/_next', '/favicon', '/sw.js', '/workbox']
 
+const REDIRECTS: Record<string, string> = {
+  '/companion': '/souls',
+  '/voice': '/souls',
+  '/evaluate': '/benchmark',
+  '/compare': '/benchmark',
+  '/lora-eval': '/benchmark',
+  '/experiments': '/benchmark',
+  '/token-tree': '/tokenizer',
+  '/meta-weights': '/models',
+  '/infer': '/models',
+  '/world': '/models',
+  '/registry': '/models',
+  '/multimodal': '/models',
+  '/memory': '/knowledge',
+  '/kb': '/knowledge',
+  '/docstore': '/knowledge',
+  '/collections': '/datasets',
+  '/self-train': '/training',
+  '/learn': '/training',
+  '/rate-limit': '/monitoring',
+  '/admin': '/settings',
+  '/auth': '/settings',
+  '/export': '/settings',
+  '/images': '/files',
+  '/session': '/shell',
+  '/vm': '/shell',
+  '/workflow': '/feedback',
+}
+
 export function middleware(request: NextRequest) {
   const start = Date.now()
   const { method, nextUrl, headers } = request
@@ -10,6 +39,11 @@ export function middleware(request: NextRequest) {
   const ignorePath = IGNORE_PATHS.some(path => nextUrl.pathname.startsWith(path))
   if (ignorePath) {
     return NextResponse.next()
+  }
+
+  const redirectTarget = REDIRECTS[nextUrl.pathname]
+  if (redirectTarget) {
+    return NextResponse.redirect(new URL(redirectTarget, request.url))
   }
 
   const response = NextResponse.next()
@@ -20,9 +54,6 @@ export function middleware(request: NextRequest) {
   const methodColor = method === 'GET' ? '\x1b[36m' : method === 'POST' ? '\x1b[33m' : '\x1b[35m'
   const statusColor = status >= 500 ? '\x1b[31m' : status >= 400 ? '\x1b[33m' : '\x1b[32m'
   const reset = '\x1b[0m'
-
-  const userAgent = headers.get('user-agent') || 'unknown'
-  const clientIp = headers.get('x-forwarded-for') || headers.get('x-real-ip') || '-'
 
   const logLine = [
     `[${level}]`,

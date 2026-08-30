@@ -57,7 +57,7 @@ export default function ExportPage() {
   const fetchCheckpoints = async () => {
     setLoadingCheckpoints(true)
     try {
-      const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+      const data = await apiGet<{ checkpoints: Checkpoint[] }>('/training/checkpoints')
       setCheckpoints(data?.checkpoints ?? [])
     } catch {
       setCheckpoints([])

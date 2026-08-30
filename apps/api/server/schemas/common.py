@@ -14,31 +14,16 @@ passed explicitly — callers never need to thread it manually.
 
 from __future__ import annotations
 
-import contextvars
 import logging
 from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
 
+from domains.infrastructure.correlation import get_correlation_id, set_correlation_id
+
 _audit_logger = logging.getLogger("audit")
 
 T = TypeVar("T")
-
-# Per-request correlation ID, set by CorrelationIdMiddleware.
-# error_response() reads this automatically when correlation_id is not passed.
-_correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "_correlation_id", default=None,
-)
-
-
-def set_correlation_id(cid: str | None) -> None:
-    """Store the current request's correlation ID in context."""
-    _correlation_id.set(cid)
-
-
-def get_correlation_id() -> str | None:
-    """Return the current request's correlation ID, or ``None``."""
-    return _correlation_id.get()
 
 
 class StandardResponse(BaseModel, Generic[T]):

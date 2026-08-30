@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { cn, IconStar } from '@sloughgpt/strui'
 import { MS_PER_MINUTE } from '@/lib/format-bytes'
 import { MessageActions } from './MessageActions'

@@ -2,7 +2,7 @@
 
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
-import { METRIC_COLUMNS } from './compare-config'
+import { METRIC_COLUMNS } from '@/lib/compare-config'
 
 interface ComparisonTableCardProps {
   completedResults: [string, BenchmarkResult][]

@@ -40,7 +40,7 @@ export function useTrainingStream() {
         avgQuality: null, dataQuality: null,
       })
 
-      const es = new EventSource(`${PUBLIC_API_URL}/auto-train/stream`)
+      const es = new EventSource(`${PUBLIC_API_URL}/training/stream`)
       esRef.current = es
 
       es.onmessage = (e) => {

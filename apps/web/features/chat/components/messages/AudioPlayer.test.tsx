@@ -16,6 +16,7 @@ vi.mock('@/lib/dev-log', () => ({
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
   IconPlay: (p: any) => <svg {...p} data-testid="icon-play" />,
+  IconStop: (p: any) => <svg {...p} data-testid="icon-stop" />,
 }))
 
 import { AudioPlayer } from './AudioPlayer'
@@ -71,7 +72,7 @@ describe('AudioPlayer', () => {
 
   it('displays time labels', () => {
     render(<AudioPlayer src="/audio.mp3" durationMs={120000} />)
-    const timeLabels = screen.getAllByText(/0:\d{2}/)
+    const timeLabels = screen.getAllByText(/\d+:\d{2}/)
     expect(timeLabels.length).toBeGreaterThanOrEqual(2)
   })
 })

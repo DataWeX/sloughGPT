@@ -45,8 +45,7 @@ class JobStore:
             self._jobs = self._db.collection("jobs")
             self._events = self._db.collection("job_events")
         except Exception:
-            import logging
-            logging.getLogger("slo.training").warning(
+            logger.warning(
                 "JobStore: failed to open MogDB at %s, operating in degraded mode", self.db_path
             )
 

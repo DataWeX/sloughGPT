@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, fireEvent } from '@testing-library/react'
 
-const mockUpdateSettings = vi.fn()
-const mockAddToast = vi.fn()
-const mockSetLocale = vi.fn()
+const { mockUpdateSettings, mockAddToast, mockSetLocale, mockDeleteKV } = vi.hoisted(() => ({
+  mockUpdateSettings: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockSetLocale: vi.fn(),
+  mockDeleteKV: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/lib/store', () => ({
   useSettings: () => ({
@@ -85,6 +88,7 @@ vi.mock('@/lib/validation-schemas', () => ({
 
 vi.mock('@/lib/chat-utils', () => ({
   formatUptime: (s: number) => `${s}s`,
+  CURRENT_SESSION_KEY: 'current-session',
 }))
 
 vi.mock('@/components/ThemeProvider', () => ({
@@ -99,7 +103,38 @@ vi.mock('@/components/ThemeProvider', () => ({
   THEMES: [],
 }))
 
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div data-testid="page-container">
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
+}))
+
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    deleteKV: mockDeleteKV,
+  },
+}))
+
+vi.mock('@/lib/theme-storage', () => ({
+  PALETTE_IDS: ['noir-violet', 'ocean'],
+  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', 'ocean': 'Ocean' },
+}))
+
+vi.mock('@/lib/config', () => ({
+  PUBLIC_API_URL: 'http://localhost:8000',
+}))
+
 import SettingsPage from './page'
+
+function clickTab(name: string) {
+  const tabs = screen.getAllByRole('tab')
+  const tab = tabs.find(t => t.textContent?.trim() === name)
+  if (!tab) throw new Error(`Tab "${name}" not found`)
+  fireEvent.click(tab)
+}
 
 describe('SettingsPage', () => {
   beforeEach(() => {
@@ -116,10 +151,10 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Appearance card', () => {
+  it('renders Appearance tab and theme controls', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Appearance').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Theme preference').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Theme').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders Language card', () => {
@@ -133,51 +168,59 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('Español').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Connection card', () => {
+  it('renders Connection tab content', async () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Service connection and authentication').length).toBeGreaterThanOrEqual(1)
+    clickTab('Connection')
+    expect(screen.getAllByText('API connection').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders API URL input with default value', () => {
+  it('renders API URL input with default value', async () => {
     render(<SettingsPage />)
+    clickTab('Connection')
     const inputs = screen.getAllByLabelText('Service URL')
     expect(inputs.length).toBeGreaterThanOrEqual(1)
     expect(inputs[0]).toHaveValue('http://localhost:8000')
   })
 
-  it('renders Chat Defaults card', () => {
+  it('renders Chat defaults in AI & Chat tab', async () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Chat defaults').length).toBeGreaterThanOrEqual(1)
+    clickTab('AI & Chat')
+    expect(screen.getAllByText('Generation settings').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Danger zone card', () => {
+  it('renders Danger zone in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Danger zone').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Backup & restore card', () => {
+  it('renders Backup & restore in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Backup & restore').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Export settings button', () => {
+  it('renders Export settings button in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Export settings').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Import settings button', () => {
+  it('renders Import settings button in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Import settings').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Clear chat history button', () => {
+  it('renders Clear chat history button in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Clear').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Reset all settings button', () => {
+  it('renders Reset all settings button in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Reset all settings').length).toBeGreaterThanOrEqual(1)
   })
 
@@ -188,38 +231,45 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('System').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders streaming switch', () => {
+  it('renders streaming switch in AI & Chat tab', async () => {
     render(<SettingsPage />)
+    clickTab('AI & Chat')
     expect(screen.getAllByText('Streaming').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders custom context textarea', () => {
+  it('renders custom context textarea in AI & Chat tab', async () => {
     render(<SettingsPage />)
+    clickTab('AI & Chat')
     expect(screen.getAllByLabelText('Custom instructions').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders collapsible message length control', () => {
+  it('renders collapsible message length control in AI & Chat tab', async () => {
     render(<SettingsPage />)
+    clickTab('AI & Chat')
     expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Memory card', () => {
+  it('renders Memory card in AI & Chat tab', async () => {
     render(<SettingsPage />)
+    clickTab('AI & Chat')
     expect(screen.getAllByText('Memory').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Chat commands card', () => {
+  it('renders Chat commands card in AI & Chat tab', async () => {
     render(<SettingsPage />)
+    clickTab('AI & Chat')
     expect(screen.getAllByText('Chat commands').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Process isolation card', () => {
+  it('renders Process isolation card in System tab', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     expect(screen.getAllByText('Process isolation').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows process guard disabled status', async () => {
     render(<SettingsPage />)
+    clickTab('System')
     await screen.findAllByText('Disabled')
   })
 })

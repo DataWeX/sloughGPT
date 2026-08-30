@@ -23,7 +23,7 @@ import { trainingJobsController, type TrainingJob } from '@/lib/training-control
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
-import { formatElapsed } from '@/components/training/formatDuration'
+import { formatElapsed } from '@/lib/formatDuration'
 
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'error' }> = {
   running: { label: 'Running', variant: 'default' },

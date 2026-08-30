@@ -160,39 +160,6 @@ export default function FeedbackPage() {
             <StatCard label="Up Ratio" value={`${((stats?.db_stats?.ratio ?? 0) * 100).toFixed(1)}%`} />
           </KpiGrid>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Feedback Summary</CardTitle>
-              <Button size="sm" variant="ghost" onClick={handleRefreshStats} aria-label="Refresh stats">
-                <IconRefresh className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {stats ? (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: 'Thumbs Up', value: String(stats.db_stats?.thumbs_up ?? 0), color: 'text-success' },
-                    { label: 'Thumbs Down', value: String(stats.db_stats?.thumbs_down ?? 0), color: 'text-destructive' },
-                    { label: 'Total', value: String(stats.db_stats?.feedback_total ?? 0), color: '' },
-                    { label: 'Up Ratio', value: `${((stats.db_stats?.ratio ?? 0) * 100).toFixed(1)}%`, color: 'text-primary' },
-                  ].map(s => (
-                    <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">{s.label}</div>
-                      <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-4 text-sm text-muted-foreground space-y-2">
-                  <div>No feedback data yet.</div>
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
-                    Start Chatting
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           <FeedbackInsightsCard stats={stats} />
 
           {workflow && (

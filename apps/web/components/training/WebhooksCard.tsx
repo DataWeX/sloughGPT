@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Input, Skeleton, Chec
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import {
   useWebhooks, AVAILABLE_EVENTS, eventLabel, formatTimestamp,
-} from './useWebhooks'
+} from '@/hooks/useWebhooks'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void

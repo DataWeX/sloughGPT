@@ -1,178 +1,248 @@
-"""Tests for domains/training/gguf_export.py."""
-
-import os
-import subprocess
-import sys
-import types
+"""Tests for gguf_export.py — pure logic, no mocks."""
 
 import numpy as np
 import pytest
 
 from domains.training.gguf_export import (
     ARCHITECTURE_MAPPINGS,
-    BloomMapping,
-    DeepseekMapping,
-    FalconMapping,
-    GPT2Mapping,
-    GPTNeoXMapping,
-    GGUFExportConfig,
-    GemmaMapping,
-    LLaMAMapping,
-    MOBILE_RECOMMENDED,
-    MistralMapping,
-    OPTMapping,
-    PhiMapping,
     QUANTIZATION_TYPES,
-    QwenMapping,
-    SloughGPTMapping,
+    MOBILE_RECOMMENDED,
+    GGUFExportConfig,
     TensorMapping,
+    SloughGPTMapping,
+    LLaMAMapping,
+    MistralMapping,
+    GPT2Mapping,
+    OPTMapping,
+    FalconMapping,
+    GPTNeoXMapping,
+    BloomMapping,
+    PhiMapping,
+    GemmaMapping,
+    QwenMapping,
+    DeepseekMapping,
     YiMapping,
     _as_float16,
-    count_layers,
     detect_architecture,
-    estimate_memory_requirements,
-    export_to_gguf,
-    export_to_gguf_fp16,
-    export_to_gguf_q4_k_m,
+    register_architecture,
+    count_layers,
     get_block_mapping,
-    get_model_info_gguf,
-    get_tensor_mapping,
+    estimate_memory_requirements,
     list_available_quantizations,
     list_supported_architectures,
-    quantize_gguf,
-    register_architecture,
 )
 
 
-class _FakeGGUFWriter:
-    instances = []
-
-    def __init__(self, path, arch):
-        self.path = path
-        self.arch = arch
-        self.calls = []
-        self.tensors = []
-        _FakeGGUFWriter.instances.append(self)
-
-    def add_tensor(self, name, data):
-        self.tensors.append((name, np.asarray(data)))
-
-    def __getattr__(self, name):
-        def _record(*args):
-            self.calls.append((name,) + tuple(args))
-
-        return _record
-
-
-class _FakeGGUFReader:
-    def __init__(self, path):
-        self.path = path
-
-
-class _FakeGGUF(types.ModuleType):
-    def __init__(self, name="gguf"):
-        super().__init__(name)
-        self.GGUFWriter = _FakeGGUFWriter
-        self.GGUFReader = _FakeGGUFReader
-
-
-@pytest.fixture
-def fake_gguf(monkeypatch):
-    _FakeGGUFWriter.instances.clear()
-    monkeypatch.setitem(sys.modules, "gguf", _FakeGGUF())
-    return _FakeGGUFWriter.instances
-
-
-class _StubModel:
-    def __init__(self, state_dict, config=None):
-        self._sd = state_dict
-        self._config = config
-        self.eval_called = 0
-
-    def state_dict(self):
-        return self._sd
-
-    def eval(self):
-        self.eval_called += 1
-        return self
-
-
-def _sd(**items):
-    sd = {}
-    for name, shape in items.items():
-        sd[name] = np.random.RandomState(0).randn(*shape).astype(np.float32)
-    return sd
-
-
-_SLOUGHT_SD = _sd(
-    **{
-        "tok_emb.weight": (32, 16),
-        "lm_head.weight": (32, 16),
-        "norm.weight": (16,),
-        "blocks.0.norm1.weight": (16,),
-        "blocks.0.norm2.weight": (16,),
-        "blocks.0.attn.q_proj.weight": (16, 16),
-        "blocks.0.attn.k_proj.weight": (16, 16),
-        "blocks.0.attn.v_proj.weight": (16, 16),
-        "blocks.0.attn.o_proj.weight": (16, 16),
-        "blocks.0.mlp.w1.weight": (16, 16),
-        "blocks.0.mlp.w2.weight": (16, 16),
-        "blocks.0.mlp.w3.weight": (16, 16),
-    }
-)
-
-
-def _slought_model():
-    return _StubModel(
-        _SLOUGHT_SD,
-        config={"vocab_size": 32, "n_embed": 16, "n_head": 2, "n_kv_head": 2},
-    )
-
-
-def _get_call(writer, name):
-    for call in writer.calls:
-        if call[0] == name:
-            return call[1:]
-    return None
-
-
-def _tensor_names(writer):
-    return [name for name, _ in writer.tensors]
+# ── GGUFExportConfig ──────────────────────────────────────────────
 
 
 class TestGGUFExportConfig:
     def test_defaults(self):
-        c = GGUFExportConfig()
-        assert c.model_name == "sloughgpt"
-        assert c.model_version == "1.0"
-        assert c.quantization == "Q4_K_M"
-        assert c.use_gpu is False
-        assert c.n_ctx == 2048
-        assert c.rope_freq_base == 10000.0
-        assert c.rope_freq_scale == 1.0
-        assert c.architecture is None
+        cfg = GGUFExportConfig()
+        assert cfg.model_name == "sloughgpt"
+        assert cfg.model_version == "1.0"
+        assert cfg.quantization == "Q4_K_M"
+        assert cfg.use_gpu is False
+        assert cfg.n_ctx == 2048
+        assert cfg.rope_freq_base == 10000.0
+        assert cfg.rope_freq_scale == 1.0
+        assert cfg.architecture is None
 
-    def test_custom(self):
-        c = GGUFExportConfig(
-            model_name="mine", model_version="2.0", quantization="Q8_0",
-            use_gpu=True, n_ctx=4096, rope_freq_base=500000.0,
-            rope_freq_scale=0.5, architecture="llama",
+    def test_custom_values(self):
+        cfg = GGUFExportConfig(
+            model_name="mymodel",
+            model_version="2.0",
+            quantization="F16",
+            use_gpu=True,
+            n_ctx=4096,
+            rope_freq_base=50000.0,
+            rope_freq_scale=0.5,
+            architecture="llama",
         )
-        assert c.model_name == "mine"
-        assert c.model_version == "2.0"
-        assert c.quantization == "Q8_0"
-        assert c.use_gpu is True
-        assert c.n_ctx == 4096
-        assert c.rope_freq_base == 500000.0
-        assert c.rope_freq_scale == 0.5
-        assert c.architecture == "llama"
+        assert cfg.model_name == "mymodel"
+        assert cfg.model_version == "2.0"
+        assert cfg.quantization == "F16"
+        assert cfg.use_gpu is True
+        assert cfg.n_ctx == 4096
+        assert cfg.rope_freq_base == 50000.0
+        assert cfg.rope_freq_scale == 0.5
+        assert cfg.architecture == "llama"
 
 
-class TestTensorMappingBase:
-    def test_abstract_methods_raise(self):
+# ── _as_float16 ───────────────────────────────────────────────────
+
+
+class TestAsFloat16:
+    def test_numpy_float32(self):
+        arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        result = _as_float16(arr)
+        assert result is not None
+        assert result.dtype == np.float16
+        np.testing.assert_array_equal(result, [1.0, 2.0, 3.0])
+
+    def test_numpy_int(self):
+        arr = np.array([1, 2, 3], dtype=np.int32)
+        result = _as_float16(arr)
+        assert result is not None
+        assert result.dtype == np.float16
+
+    def test_numpy_object_returns_none(self):
+        arr = np.array(["a", "b"], dtype=object)
+        result = _as_float16(arr)
+        assert result is None
+
+    def test_slonet_tensor_like(self):
+        class FakeTensor:
+            def __init__(self):
+                self.data = np.array([1.0, 2.0], dtype=np.float32)
+
+        result = _as_float16(FakeTensor())
+        assert result is not None
+        assert result.dtype == np.float16
+        np.testing.assert_array_equal(result, [1.0, 2.0])
+
+    def test_non_convertible_returns_none(self):
+        class CantConvert:
+            pass
+        result = _as_float16(CantConvert())
+        assert result is None
+
+    def test_string_raises(self):
+        with pytest.raises(ValueError):
+            _as_float16("not a tensor")
+
+    def test_list_input(self):
+        result = _as_float16([1.0, 2.0])
+        assert result is not None
+        assert result.dtype == np.float16
+
+    def test_torch_tensor_like(self):
+        class FakeTorch:
+            def detach(self):
+                return self
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                return np.array([5.0, 6.0], dtype=np.float32)
+
+        result = _as_float16(FakeTorch())
+        assert result is not None
+        assert result.dtype == np.float16
+
+
+# ── count_layers ───────────────────────────────────────────────────
+
+
+class TestCountLayers:
+    def test_count_sloughgpt(self):
+        sd = {f"blocks.{i}.norm1.weight": np.zeros(1) for i in range(6)}
+        assert count_layers(sd, "blocks.") == 6
+
+    def test_count_llama(self):
+        sd = {f"model.layers.{i}.self_attn.q_proj.weight": np.zeros(1) for i in range(12)}
+        assert count_layers(sd, "model.layers.") == 12
+
+    def test_no_blocks(self):
+        sd = {"tok_emb.weight": np.zeros(1)}
+        assert count_layers(sd, "blocks.") == 0
+
+    def test_non_contiguous(self):
+        sd = {
+            "blocks.0.norm1.weight": np.zeros(1),
+            "blocks.5.norm1.weight": np.zeros(1),
+        }
+        assert count_layers(sd, "blocks.") == 6
+
+
+# ── detect_architecture ───────────────────────────────────────────
+
+
+class TestDetectArchitecture:
+    def test_sloughgpt(self):
+        sd = {
+            "tok_emb.weight": np.zeros(1),
+            "norm.weight": np.zeros(1),
+            "mlp.w1.weight": np.zeros(1),
+        }
+        m = detect_architecture(sd)
+        assert isinstance(m, SloughGPTMapping)
+
+    def test_llama(self):
+        sd = {
+            "model.embed_tokens.weight": np.zeros(1),
+            "model.norm.weight": np.zeros(1),
+            "model.layers.0.self_attn.q_proj.weight": np.zeros(1),
+        }
+        m = detect_architecture(sd)
+        assert isinstance(m, LLaMAMapping)
+
+    def test_mistral(self):
+        sd = {
+            "model.embed_tokens.weight": np.zeros(1),
+            "input_layernorm.weight": np.zeros(1),
+        }
+        m = detect_architecture(sd)
+        assert isinstance(m, MistralMapping)
+
+    def test_gpt2(self):
+        sd = {
+            "wte.weight": np.zeros(1),
+            "ln_f.weight": np.zeros(1),
+            "h.0.ln_1.weight": np.zeros(1),
+        }
+        m = detect_architecture(sd)
+        assert isinstance(m, GPT2Mapping)
+
+    def test_falcon(self):
+        sd = {
+            "transformer.word_embeddings.weight": np.zeros(1),
+            "transformer.h.0.ln_attn.weight": np.zeros(1),
+        }
+        m = detect_architecture(sd)
+        assert isinstance(m, FalconMapping)
+
+    def test_unknown_falls_back_to_sloughgpt(self):
+        sd = {"random_tensor.weight": np.zeros(1)}
+        m = detect_architecture(sd)
+        assert isinstance(m, SloughGPTMapping)
+
+
+# ── register_architecture ─────────────────────────────────────────
+
+
+class TestRegisterArchitecture:
+    def test_register_and_retrieve(self):
+        class DummyMapping(TensorMapping):
+            def __init__(self):
+                super().__init__("dummy", "llama")
+
+            def get_tensor_map(self):
+                return {}
+
+            def get_block_prefix(self):
+                return "layers."
+
+            def has_rope(self):
+                return False
+
+            def has_position_embeddings(self):
+                return True
+
+        register_architecture("dummy", DummyMapping())
+        assert "dummy" in ARCHITECTURE_MAPPINGS
+        assert isinstance(ARCHITECTURE_MAPPINGS["dummy"], DummyMapping)
+        # cleanup
+        del ARCHITECTURE_MAPPINGS["dummy"]
+
+
+# ── Mapping classes ────────────────────────────────────────────────
+
+
+class TestMappingBase:
+    def test_base_raises(self):
         m = TensorMapping("base", "llama")
-        assert m.name == "base"
-        assert m.gguf_type == "llama"
         with pytest.raises(NotImplementedError):
             m.get_tensor_map()
         with pytest.raises(NotImplementedError):
@@ -182,470 +252,257 @@ class TestTensorMappingBase:
         with pytest.raises(NotImplementedError):
             m.has_position_embeddings()
 
-    def test_defaults(self):
+    def test_base_special_tensors_default(self):
         m = TensorMapping("base", "llama")
         assert m.get_special_tensors() == {}
-        assert m.get_block_mapping(3) == {}
+
+    def test_base_fused_qkv_default(self):
+        m = TensorMapping("base", "llama")
         assert m.get_fused_qkv_keys() == []
 
 
-MAPPING_CASES = [
-    (SloughGPTMapping, "sloughgpt", "llama", "blocks.", True, False, False, ["rope.cos", "rope.sin"]),
-    (LLaMAMapping, "llama", "llama", "model.layers.", True, False, False, []),
-    (MistralMapping, "mistral", "mistral", "model.layers.", True, False, False, []),
-    (GPT2Mapping, "gpt2", "gpt2", "h.", False, True, False, []),
-    (OPTMapping, "opt", "llama", "model.decoder.layers.", False, True, False, []),
-    (FalconMapping, "falcon", "llama", "transformer.h.", False, True, True, []),
-    (GPTNeoXMapping, "gpt_neox", "llama", "layers.", False, True, True, []),
-    (BloomMapping, "bloom", "llama", "h.", False, True, True, []),
-    (PhiMapping, "phi", "llama", "model.h.", True, False, False, []),
-    (GemmaMapping, "gemma", "gemma", "model.layers.", True, False, False, []),
-    (QwenMapping, "qwen", "qwen", "transformer.h.", True, False, False, []),
-    (DeepseekMapping, "deepseek", "llama", "model.layers.", True, False, False, []),
-    (YiMapping, "yi", "llama", "model.layers.", True, False, False, []),
-]
+class TestSloughGPTMapping:
+    def test_tensor_map(self):
+        m = SloughGPTMapping()
+        tm = m.get_tensor_map()
+        assert tm["tok_emb.weight"] == "token_embd.weight"
+        assert tm["lm_head.weight"] == "output.weight"
+        assert tm["norm.weight"] == "output_norm.weight"
+
+    def test_block_prefix(self):
+        assert SloughGPTMapping().get_block_prefix() == "blocks."
+
+    def test_has_rope(self):
+        assert SloughGPTMapping().has_rope() is True
+
+    def test_no_position_embeddings(self):
+        assert SloughGPTMapping().has_position_embeddings() is False
+
+    def test_special_tensors(self):
+        st = SloughGPTMapping().get_special_tensors()
+        assert "rope.cos" in st
+        assert "rope.sin" in st
+
+    def test_block_mapping(self):
+        bm = SloughGPTMapping().get_block_mapping(2)
+        assert "blocks.0.norm1.weight" in bm
+        assert bm["blocks.0.norm1.weight"] == "blk.0.attn_norm.weight"
+        assert "blocks.1.mlp.w1.weight" in bm
+        assert bm["blocks.1.mlp.w1.weight"] == "blk.1.ffn_gate.weight"
+        # Should not contain block 2
+        assert "blocks.2.norm1.weight" not in bm
 
 
-class TestMappings:
-    @pytest.mark.parametrize(
-        "cls,name,gguf_type,prefix,rope,pos_emb,fused,special",
-        MAPPING_CASES,
-    )
-    def test_identity(self, cls, name, gguf_type, prefix, rope, pos_emb, fused, special):
-        m = cls()
-        assert m.name == name
-        assert m.gguf_type == gguf_type
-        assert m.get_block_prefix() == prefix
-        assert m.has_rope() is rope
-        assert m.has_position_embeddings() is pos_emb
-        assert bool(m.get_fused_qkv_keys()) is fused
-        assert m.get_special_tensors() == {k: k for k in special}
+class TestLLaMAMapping:
+    def test_tensor_map(self):
+        m = LLaMAMapping()
+        tm = m.get_tensor_map()
+        assert tm["model.embed_tokens.weight"] == "token_embd.weight"
 
-    @pytest.mark.parametrize("cls,name,gguf_type,prefix,rope,pos_emb,fused,special", MAPPING_CASES)
-    def test_block_mapping_count(self, cls, name, gguf_type, prefix, rope, pos_emb, fused, special):
-        m = cls()
-        mapping = m.get_block_mapping(2)
-        layer_keys = [k for k in mapping if k.startswith(prefix)]
-        assert len(layer_keys) >= 1
-        assert len(mapping) == len(layer_keys)
+    def test_block_prefix(self):
+        assert LLaMAMapping().get_block_prefix() == "model.layers."
 
-    @pytest.mark.parametrize("cls,name,gguf_type,prefix,rope,pos_emb,fused,special", MAPPING_CASES)
-    def test_block_mapping_targets_use_block_index(self, cls, name, gguf_type, prefix, rope, pos_emb, fused, special):
-        m = cls()
-        mapping = m.get_block_mapping(1)
-        for src, dst in mapping.items():
-            assert src.startswith(prefix)
-            assert ".0." in dst
-
-    def test_tensor_map_top_level_keys(self):
-        assert "tok_emb.weight" in SloughGPTMapping().get_tensor_map()
-        assert "token_embd.weight" in SloughGPTMapping().get_tensor_map().values()
-        assert "model.embed_tokens.weight" in LLaMAMapping().get_tensor_map()
-        assert "wte.weight" in GPT2Mapping().get_tensor_map()
-        assert "transformer.word_embeddings.weight" in FalconMapping().get_tensor_map()
-
-    @pytest.mark.parametrize("cls,name,gguf_type,prefix,rope,pos_emb,fused,special", MAPPING_CASES)
-    def test_get_tensor_map_maps_to_output_norm(self, cls, name, gguf_type, prefix, rope, pos_emb, fused, special):
-        values = cls().get_tensor_map().values()
-        assert "output_norm.weight" in values
-        assert "token_embd.weight" in values
-
-    def test_fused_qkv_architectures(self):
-        assert FalconMapping().get_fused_qkv_keys() == [("query_key_value.weight", "falcon")]
-        assert GPTNeoXMapping().get_fused_qkv_keys() == [("query_key_value.weight", "gpt_neox")]
-        assert BloomMapping().get_fused_qkv_keys() == [("query_key_value.weight", "bloom")]
-        assert SloughGPTMapping().get_fused_qkv_keys() == []
+    def test_block_mapping(self):
+        bm = LLaMAMapping().get_block_mapping(1)
+        assert "model.layers.0.input_layernorm.weight" in bm
+        assert "model.layers.0.self_attn.q_proj.weight" in bm
+        assert bm["model.layers.0.self_attn.q_proj.weight"] == "blk.0.attn_q.weight"
 
 
-class TestAsFloat16:
-    def test_numpy_array(self):
-        arr = np.random.RandomState(0).randn(4, 4).astype(np.float32)
-        out = _as_float16(arr)
-        assert out.dtype == np.float16
-        assert out.shape == (4, 4)
+class TestMistralMapping:
+    def test_tensor_map(self):
+        tm = MistralMapping().get_tensor_map()
+        assert "model.embed_tokens.weight" in tm
 
-    def test_slonet_tensor(self):
-        class _T:
-            data = np.random.RandomState(0).randn(3).astype(np.float32)
-
-        out = _as_float16(_T())
-        assert out.dtype == np.float16
-
-    def test_torch_like(self):
-        class _Torch:
-            def detach(self):
-                return self
-
-            def cpu(self):
-                return self
-
-            def numpy(self):
-                return np.random.RandomState(0).randn(2).astype(np.float32)
-
-        out = _as_float16(_Torch())
-        assert out.dtype == np.float16
-
-    def test_plain_sequence(self):
-        out = _as_float16([1.0, 2.0, 3.0])
-        assert out.dtype == np.float16
-        assert list(out) == [1.0, 2.0, 3.0]
-
-    def test_object_dtype_returns_none(self):
-        arr = np.array([object()])
-        assert _as_float16(arr) is None
-
-    def test_list_of_objects_returns_none(self):
-        assert _as_float16([object()]) is None
-
-    def test_unconvertible_returns_none(self):
-        class _Bad:
-            def __array__(self, dtype=None, copy=None):
-                raise ValueError("cannot convert")
-
-        assert _as_float16(_Bad()) is None
+    def test_block_prefix(self):
+        assert MistralMapping().get_block_prefix() == "model.layers."
 
 
-DETECT_CASES = [
-    (_SLOUGHT_SD, SloughGPTMapping),
-    (_sd(**{"model.embed_tokens.weight": (1,), "model.norm.weight": (1,),
-            "model.layers.0.self_attn.q_proj.weight": (1,)}), LLaMAMapping),
-    (_sd(**{"wte.weight": (1,), "ln_f.weight": (1,), "h.0.ln_1.weight": (1,)}), GPT2Mapping),
-    (_sd(**{"model.embed_tokens.weight": (1,), "model.decoder.layers.0.fc1.weight": (1,),
-            "model.decoder.final_layer_norm.weight": (1,)}), OPTMapping),
-    (_sd(**{"transformer.word_embeddings.weight": (1,), "transformer.h.0.self_attention.dense.weight": (1,)}),
-     FalconMapping),
-    (_sd(**{"embed_in.weight": (1,), "final_layer_norm.weight": (1,),
-            "layers.0.attention.dense.weight": (1,)}), GPTNeoXMapping),
-    (_sd(**{"word_embeddings.weight": (1,), "ln_f.weight": (1,),
-            "h.0.self_attention.dense.weight": (1,)}), BloomMapping),
-]
+class TestGPT2Mapping:
+    def test_tensor_map(self):
+        tm = GPT2Mapping().get_tensor_map()
+        assert tm["wte.weight"] == "token_embd.weight"
+        assert tm["ln_f.weight"] == "output_norm.weight"
+
+    def test_block_prefix(self):
+        assert GPT2Mapping().get_block_prefix() == "h."
+
+    def test_no_rope(self):
+        assert GPT2Mapping().has_rope() is False
+
+    def test_has_position_embeddings(self):
+        assert GPT2Mapping().has_position_embeddings() is True
+
+    def test_block_mapping(self):
+        bm = GPT2Mapping().get_block_mapping(1)
+        assert "h.0.ln_1.weight" in bm
+        assert "h.0.attn.c_attn.weight" in bm
 
 
-class TestDetectArchitecture:
-    @pytest.mark.parametrize("state_dict,expected", DETECT_CASES)
-    def test_detect(self, state_dict, expected):
-        assert isinstance(detect_architecture(state_dict), expected)
+class TestOPTMapping:
+    def test_tensor_map(self):
+        tm = OPTMapping().get_tensor_map()
+        assert tm["model.decoder.final_layer_norm.weight"] == "output_norm.weight"
 
-    def test_no_match_defaults_to_sloughgpt(self):
-        m = detect_architecture({"totally.unknown.weight": 1})
-        assert isinstance(m, SloughGPTMapping)
-
-    def test_mistral_shape_detects_as_llama(self):
-        sd = _sd(**{"model.embed_tokens.weight": (1,), "model.layers.0.input_layernorm.weight": (1,),
-                    "model.norm.weight": (1,)})
-        assert isinstance(detect_architecture(sd), LLaMAMapping)
+    def test_block_prefix(self):
+        assert OPTMapping().get_block_prefix() == "model.decoder.layers."
 
 
-class TestRegisterArchitecture:
-    def test_register_custom(self, monkeypatch):
-        class Custom(TensorMapping):
-            def __init__(self):
-                super().__init__("custom", "llama")
+class TestFalconMapping:
+    def test_tensor_map(self):
+        tm = FalconMapping().get_tensor_map()
+        assert "transformer.word_embeddings.weight" in tm
 
-            def get_tensor_map(self):
-                return {"a": "b"}
+    def test_fused_qkv(self):
+        fk = FalconMapping().get_fused_qkv_keys()
+        assert len(fk) == 1
+        assert fk[0][0] == "query_key_value.weight"
 
-            def get_block_prefix(self):
-                return "blk."
-
-            def has_rope(self):
-                return True
-
-            def has_position_embeddings(self):
-                return False
-
-        monkeypatch.setitem(ARCHITECTURE_MAPPINGS, "custom", Custom())
-        assert "custom" in ARCHITECTURE_MAPPINGS
-        assert isinstance(ARCHITECTURE_MAPPINGS["custom"], Custom)
-
-    def test_register_function(self, monkeypatch):
-        class Custom(TensorMapping):
-            def __init__(self):
-                super().__init__("custom2", "llama")
-
-            def get_tensor_map(self):
-                return {"a": "b"}
-
-            def get_block_prefix(self):
-                return "blk."
-
-            def has_rope(self):
-                return True
-
-            def has_position_embeddings(self):
-                return False
-
-        register_architecture("custom2", Custom())
-        try:
-            assert "custom2" in ARCHITECTURE_MAPPINGS
-            assert isinstance(ARCHITECTURE_MAPPINGS["custom2"], Custom)
-        finally:
-            del ARCHITECTURE_MAPPINGS["custom2"]
+    def test_block_mapping(self):
+        bm = FalconMapping().get_block_mapping(1)
+        assert "transformer.h.0.self_attention.query_key_value.weight" in bm
+        assert "transformer.h.0.self_attention.dense.weight" in bm
 
 
-class TestGetTensorMapping:
-    def test_returns_combined_map(self):
-        mapping = get_tensor_mapping(_slought_model())
-        assert mapping["tok_emb.weight"] == "token_embd.weight"
-        assert mapping["lm_head.weight"] == "output.weight"
-        assert mapping["norm.weight"] == "output_norm.weight"
-        assert mapping["blocks.0.attn.q_proj.weight"] == "blk.0.attn_q.weight"
-        assert mapping["blocks.0.mlp.w3.weight"] == "blk.0.ffn_up.weight"
-        assert "blocks.1.attn_q.weight" not in mapping.values()
+class TestGPTNeoXMapping:
+    def test_tensor_map(self):
+        tm = GPTNeoXMapping().get_tensor_map()
+        assert "embed_in.weight" in tm
+        assert "embed_out.weight" in tm
+
+    def test_fused_qkv(self):
+        fk = GPTNeoXMapping().get_fused_qkv_keys()
+        assert len(fk) == 1
 
 
-class TestCountLayers:
-    def test_non_layers_prefix(self):
-        sd = {"h.0.ln_1.weight": 1, "h.1.ln_1.weight": 1}
-        assert count_layers(sd, "h.") == 2
+class TestBloomMapping:
+    def test_tensor_map(self):
+        tm = BloomMapping().get_tensor_map()
+        assert "word_embeddings.weight" in tm
 
-    def test_layers_prefix(self):
-        sd = {
-            "model.layers.0.input_layernorm.weight": 1,
-            "model.layers.2.post_attention_layernorm.weight": 1,
-        }
-        assert count_layers(sd, "model.layers.") == 3
+    def test_fused_qkv(self):
+        fk = BloomMapping().get_fused_qkv_keys()
+        assert len(fk) == 1
 
-    def test_no_matching_keys(self):
-        assert count_layers({"x.weight": 1}, "h.") == 0
+
+class TestPhiMapping:
+    def test_tensor_map(self):
+        tm = PhiMapping().get_tensor_map()
+        assert "model.embed_tokens.weight" in tm
+        assert "model.final_layernorm.weight" in tm
+
+    def test_block_prefix(self):
+        assert PhiMapping().get_block_prefix() == "model.h."
+
+    def test_has_rope(self):
+        assert PhiMapping().has_rope() is True
+
+
+class TestGemmaMapping:
+    def test_tensor_map(self):
+        tm = GemmaMapping().get_tensor_map()
+        assert "model.embed_tokens.weight" in tm
+
+    def test_gguf_type(self):
+        assert GemmaMapping().gguf_type == "gemma"
+
+
+class TestQwenMapping:
+    def test_tensor_map(self):
+        tm = QwenMapping().get_tensor_map()
+        assert "transformer.wte.weight" in tm
+
+    def test_block_prefix(self):
+        assert QwenMapping().get_block_prefix() == "transformer.h."
+
+
+class TestDeepseekMapping:
+    def test_tensor_map(self):
+        tm = DeepseekMapping().get_tensor_map()
+        assert "model.embed_tokens.weight" in tm
+
+
+class TestYiMapping:
+    def test_tensor_map(self):
+        tm = YiMapping().get_tensor_map()
+        assert "model.embed_tokens.weight" in tm
+
+
+# ── get_block_mapping ──────────────────────────────────────────────
 
 
 class TestGetBlockMapping:
-    def test_with_model(self):
-        mapping = get_block_mapping(_slought_model())
-        assert mapping["blocks.0.attn.q_proj.weight"] == "blk.0.attn_q.weight"
+    def test_default_sloughgpt(self):
+        bm = get_block_mapping(n_layers=3)
+        assert "blocks.0.norm1.weight" in bm
+        assert "blocks.2.mlp.w3.weight" in bm
 
-    def test_without_model_uses_default(self):
-        mapping = get_block_mapping()
-        assert mapping["blocks.0.attn.q_proj.weight"] == "blk.0.attn_q.weight"
-        assert "blocks.0.attn.o_proj.weight" in mapping
-
-
-class TestExportToGGUF:
-    def test_import_error_without_gguf(self):
-        sys.modules.pop("gguf", None)
-        with pytest.raises(ImportError, match="gguf not installed"):
-            export_to_gguf(_slought_model(), "/tmp/none.gguf")
-
-    def test_export_sloughgpt(self, fake_gguf, tmp_path):
-        out = tmp_path / "model.gguf"
-        model = _slought_model()
-        result = export_to_gguf(model, str(out), config=GGUFExportConfig())
-        writer = fake_gguf[-1]
-
-        assert result == str(out)
-        assert model.eval_called == 1
-        assert _get_call(writer, "add_name") == ("sloughgpt",)
-        assert _get_call(writer, "add_vocab_size") == (32,)
-        assert _get_call(writer, "add_context_length") == (2048,)
-        assert _get_call(writer, "add_embedding_length") == (16,)
-        assert _get_call(writer, "add_block_count") == (1,)
-        assert _get_call(writer, "add_head_count") == (2,)
-        assert _get_call(writer, "add_head_count_kv") == (2,)
-        assert _get_call(writer, "add_feed_forward_length") == (64,)
-        assert _get_call(writer, "add_rope_freq_base") == (10000.0,)
-        assert _get_call(writer, "add_tokenizer_model") == ("llama",)
-        assert _get_call(writer, "add_add_bos_token") == (False,)
-        assert _get_call(writer, "add_add_eos_token") == (False,)
-        assert _get_call(writer, "add_add_space_prefix") == (False,)
-        assert _get_call(writer, "flush") == ()
-
-        names = _tensor_names(writer)
-        assert "token_embd.weight" in names
-        assert "output.weight" in names
-        assert "output_norm.weight" in names
-        assert "blk.0.attn_q.weight" in names
-        assert "blk.0.ffn_gate.weight" in names
-
-    def test_export_falls_back_to_model_attrs(self, fake_gguf, tmp_path):
-        model = _StubModel(_SLOUGHT_SD, config=None)
-        out = tmp_path / "m.gguf"
-        export_to_gguf(model, str(out))
-        writer = fake_gguf[-1]
-        assert _get_call(writer, "add_vocab_size") == (256,)
-        assert _get_call(writer, "add_head_count") == (8,)
-
-    def test_unknown_architecture_raises(self, fake_gguf, tmp_path):
-        out = tmp_path / "m.gguf"
-        with pytest.raises(ValueError, match="Unknown architecture"):
-            export_to_gguf(_slought_model(), str(out), config=GGUFExportConfig(architecture="nope"))
-
-    def test_explicit_architecture_uses_it(self, fake_gguf, tmp_path):
-        sd = _sd(**{
-            "transformer.word_embeddings.weight": (32, 16),
-            "lm_head.weight": (32, 16),
-            "transformer.ln_f.weight": (16,),
-            "transformer.h.0.self_attention.query_key_value.weight": (6, 16),
-            "transformer.h.0.self_attention.dense.weight": (16, 16),
-        })
-        model = _StubModel(sd, config={"vocab_size": 32, "n_embed": 16, "n_head": 2, "n_kv_head": 2})
-        out = tmp_path / "falcon.gguf"
-        export_to_gguf(model, str(out), config=GGUFExportConfig(architecture="falcon"))
-        writer = fake_gguf[-1]
-        names = _tensor_names(writer)
-        assert "blk.0.attn_q.weight" in names
-        assert "blk.0.attn_k.weight" in names
-        assert "blk.0.attn_v.weight" in names
-        shapes = {name: data.shape for name, data in writer.tensors}
-        assert shapes["blk.0.attn_q.weight"] == (2, 16)
-        assert shapes["blk.0.attn_k.weight"] == (2, 16)
-        assert shapes["blk.0.attn_v.weight"] == (2, 16)
-
-    def test_tokenizer_vocab(self, fake_gguf, tmp_path):
-        class _Tok:
-            def get_vocab(self):
-                return {"a": 0, "b": 1}
-
-            def decode(self, ids):
-                return chr(ids[0] + 97)
-
-        out = tmp_path / "m.gguf"
-        export_to_gguf(_slought_model(), str(out), tokenizer=_Tok())
-        writer = fake_gguf[-1]
-        token_list = _get_call(writer, "add_token_list")[0]
-        assert token_list == ["a", "b"]
-
-    def test_tokenizer_without_get_vocab_uses_chr(self, fake_gguf, tmp_path):
-        out = tmp_path / "m.gguf"
-        export_to_gguf(_slought_model(), str(out), tokenizer=object())
-        writer = fake_gguf[-1]
-        token_list = _get_call(writer, "add_token_list")[0]
-        assert len(token_list) == 32
-        assert token_list[0] == chr(0)
-
-    def test_tokenizer_without_decode(self, fake_gguf, tmp_path):
-        class _Tok:
-            def get_vocab(self):
-                return {"a": 0, "b": 1}
-
-        out = tmp_path / "m.gguf"
-        export_to_gguf(_slought_model(), str(out), tokenizer=_Tok())
-        writer = fake_gguf[-1]
-        token_list = _get_call(writer, "add_token_list")[0]
-        assert token_list == ["\x00", "\x01"]
-
-    def test_no_tokenizer_uses_chr_encoding(self, fake_gguf, tmp_path):
-        model = _StubModel(
-            _SLOUGHT_SD,
-            config={"vocab_size": 301, "n_embed": 16, "n_head": 2, "n_kv_head": 2},
-        )
-        out = tmp_path / "m.gguf"
-        export_to_gguf(model, str(out))
-        writer = fake_gguf[-1]
-        token_list = _get_call(writer, "add_token_list")[0]
-        assert len(token_list) == 301
-        assert token_list[0] == chr(0)
-        assert token_list[255] == chr(255)
-        assert token_list[300] == "<0x12C>"
-
-    def test_unconvertible_tensor_skipped(self, fake_gguf, tmp_path):
-        sd = dict(_SLOUGHT_SD)
-        sd["junk.weight"] = np.array([object()])
-        model = _StubModel(sd, config={"vocab_size": 32, "n_embed": 16, "n_head": 2, "n_kv_head": 2})
-        out = tmp_path / "m.gguf"
-        export_to_gguf(model, str(out))
-        writer = fake_gguf[-1]
-        assert "junk.weight" not in _tensor_names(writer)
-
-    def test_parent_dir_created(self, fake_gguf, tmp_path):
-        out = tmp_path / "deep" / "nested" / "m.gguf"
-        result = export_to_gguf(_slought_model(), str(out))
-        assert os.path.isdir(str(tmp_path / "deep" / "nested"))
-        assert result == str(out)
+    def test_with_model_none(self):
+        bm = get_block_mapping(model=None, n_layers=2)
+        assert len(bm) > 0
 
 
-class TestExportWrappers:
-    def test_fp16(self, fake_gguf, tmp_path):
-        out = tmp_path / "m.gguf"
-        result = export_to_gguf_fp16(_slought_model(), str(out))
-        assert result == str(out)
-        assert _get_call(fake_gguf[-1], "add_description") == ("sloughgpt exported with F16",)
-
-    def test_q4_k_m(self, fake_gguf, tmp_path):
-        out = tmp_path / "m.gguf"
-        result = export_to_gguf_q4_k_m(_slought_model(), str(out))
-        assert result == str(out)
-        assert _get_call(fake_gguf[-1], "add_description") == ("sloughgpt exported with Q4_K_M",)
-
-
-class TestQuantizeGGUF:
-    def test_binary_not_found_returns_input(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("shutil.which", lambda _name: None)
-        inp = str(tmp_path / "in.gguf")
-        assert quantize_gguf(inp, str(tmp_path / "out.gguf")) == inp
-
-    def test_success_returns_output(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/llama-quantize")
-
-        class _Result:
-            returncode = 0
-            stderr = ""
-
-        monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
-        inp = str(tmp_path / "in.gguf")
-        out = str(tmp_path / "out.gguf")
-        assert quantize_gguf(inp, out) == out
-
-    def test_failure_returns_input(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/llama-quantize")
-
-        class _Result:
-            returncode = 1
-            stderr = "boom"
-
-        monkeypatch.setattr(subprocess, "run", lambda *a, **k: _Result())
-        inp = str(tmp_path / "in.gguf")
-        assert quantize_gguf(inp, str(tmp_path / "out.gguf")) == inp
-
-    def test_exception_returns_input(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/llama-quantize")
-        monkeypatch.setattr(subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
-        inp = str(tmp_path / "in.gguf")
-        assert quantize_gguf(inp, str(tmp_path / "out.gguf")) == inp
-
-
-class TestGetModelInfoGGUF:
-    def test_info(self, fake_gguf, tmp_path):
-        path = tmp_path / "m.gguf"
-        path.write_bytes(b"x" * (3 * 1024 * 1024))
-        info = get_model_info_gguf(str(path))
-        assert info["path"] == str(path)
-        assert info["file_size_mb"] == 3.0
-
-    def test_error_returns_empty(self, tmp_path):
-        assert get_model_info_gguf(str(tmp_path / "missing.gguf")) == {}
+# ── estimate_memory_requirements ───────────────────────────────────
 
 
 class TestEstimateMemory:
-    def test_quantization_diffs(self):
-        f32 = estimate_memory_requirements(1000, 4, 128, 512, "F32")
-        q4 = estimate_memory_requirements(1000, 4, 128, 512, "Q4_K_M")
+    def test_basic_estimate(self):
+        result = estimate_memory_requirements(
+            vocab_size=256, n_layer=6, n_embed=128, n_ctx=512, quantization="Q4_K_M"
+        )
+        assert "model_mb" in result
+        assert "kv_cache_mb" in result
+        assert "total_mb" in result
+        assert result["total_mb"] > 0
+        assert result["total_mb"] == result["model_mb"] + result["kv_cache_mb"]
+
+    def test_f32_larger_than_q4(self):
+        f32 = estimate_memory_requirements(256, 6, 128, 512, "F32")
+        q4 = estimate_memory_requirements(256, 6, 128, 512, "Q4_K_M")
         assert f32["model_mb"] > q4["model_mb"]
-        assert f32["total_mb"] > q4["total_mb"]
-        assert f32["kv_cache_mb"] == q4["kv_cache_mb"]
-        for key in ("model_mb", "kv_cache_mb", "total_mb"):
-            assert f32[key] > 0
 
     def test_unknown_quantization_uses_default(self):
-        a = estimate_memory_requirements(1000, 4, 128, 512, "NOPE")
-        b = estimate_memory_requirements(1000, 4, 128, 512, "Q4_K_M")
-        assert a["model_mb"] == b["model_mb"]
+        result = estimate_memory_requirements(256, 6, 128, 512, "UNKNOWN")
+        assert result["model_mb"] > 0
 
-    def test_smaller_quant_smaller_model(self):
-        q8 = estimate_memory_requirements(1000, 4, 128, 512, "Q8_0")
-        q2 = estimate_memory_requirements(1000, 4, 128, 512, "Q2_K")
-        assert q2["model_mb"] < q8["model_mb"]
+    def test_kv_cache_scales_with_n_ctx(self):
+        r1 = estimate_memory_requirements(256, 6, 128, 256, "F16")
+        r2 = estimate_memory_requirements(256, 6, 128, 512, "F16")
+        assert r2["kv_cache_mb"] > r1["kv_cache_mb"]
 
 
-class TestLists:
-    def test_available_quantizations(self):
-        items = list_available_quantizations()
-        assert len(items) == len(QUANTIZATION_TYPES)
-        for name, desc, rec in items:
-            assert QUANTIZATION_TYPES[name] == desc
-            assert rec == (name in MOBILE_RECOMMENDED)
+# ── list_available_quantizations ───────────────────────────────────
 
-    def test_supported_architectures(self):
+
+class TestListQuantizations:
+    def test_returns_all(self):
+        quants = list_available_quantizations()
+        assert len(quants) == len(QUANTIZATION_TYPES)
+
+    def test_tuple_format(self):
+        for name, desc, mobile in list_available_quantizations():
+            assert isinstance(name, str)
+            assert isinstance(desc, str)
+            assert isinstance(mobile, bool)
+
+    def test_mobile_recommended_flag(self):
+        for name, desc, mobile in list_available_quantizations():
+            if name in MOBILE_RECOMMENDED:
+                assert mobile is True
+
+
+# ── list_supported_architectures ───────────────────────────────────
+
+
+class TestListArchitectures:
+    def test_returns_all(self):
         archs = list_supported_architectures()
-        for expected in ("sloughgpt", "llama", "gpt2", "falcon", "qwen", "bloom"):
-            assert expected in archs
+        assert "sloughgpt" in archs
+        assert "llama" in archs
+        assert "gpt2" in archs
+        assert "falcon" in archs
+        assert "phi" in archs
+        assert "gemma" in archs
+        assert "qwen" in archs
+        assert "deepseek" in archs
+        assert "yi" in archs

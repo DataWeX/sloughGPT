@@ -44,6 +44,41 @@ def _check_port(port: int) -> bool:
         return False
 
 
+def _is_eaddrinuse(lines: deque) -> bool:
+    """Check if output contains EADDRINUSE error."""
+    for line in lines:
+        if "EADDRINUSE" in line or "address already in use" in line.lower():
+            return True
+    return False
+
+
+def _handle_eaddrinuse(port: int, service: str = "web"):
+    """Display helpful EADDRINUSE error with remediation steps."""
+    log.blank()
+    log.key_value(service, f"port {port} in use")
+
+    # Find what's using the port
+    import shlex
+    result = subprocess.run(
+        shlex.split(f"lsof -ti:{port}"),
+        capture_output=True, text=True,
+    )
+    pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
+
+    if pids:
+        for pid in pids:
+            try:
+                with open(f"/proc/{pid}/comm", "r") as f:
+                    proc_name = f.read().strip()
+            except (FileNotFoundError, PermissionError):
+                proc_name = "unknown"
+            log.key_value("pid", f"{pid} ({proc_name})")
+        log.blank()
+
+    log.command(f"lsof -ti:{port} | xargs kill -9", "kill")
+    log.command(f"PORT=3001 slo dev --web-port 3001", "or use another port")
+
+
 def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
     """Extract the most useful error lines from captured output.
 
@@ -277,6 +312,13 @@ def cmd_dev(args):
             if not status["web_ready"] and _check_port(web_port):
                 status["web_ready"] = True
                 status["web"] = "ready"
+            # Check if web process died
+            if not status["web_ready"] and web_proc.poll() is not None:
+                if _is_eaddrinuse(web_lines):
+                    status["web"] = "eaddrinuse"
+                else:
+                    status["web"] = "error"
+                break
             time.sleep(0.5)
 
     poll_thread = threading.Thread(target=_poll_services, daemon=True)
@@ -299,12 +341,16 @@ def cmd_dev(args):
     )
 
     shutdown = [False]
+    eaddrinuse_port = [None]  # Track EADDRINUSE for error display
 
     def _stop_check() -> bool:
         if shutdown[0]:
             return True
         dashboard.set_status("api", status["api"])
         dashboard.set_status("web", status["web"])
+        if status["web"] == "eaddrinuse":
+            eaddrinuse_port[0] = web_port
+            return True
         if status["api"] == "error" and status["web"] == "error":
             return True
         return False
@@ -320,7 +366,10 @@ def cmd_dev(args):
     finally:
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
-        _print_summary(api_lines, web_lines, status, api_port, web_port)
+        if eaddrinuse_port[0]:
+            _handle_eaddrinuse(eaddrinuse_port[0], "web")
+        else:
+            _print_summary(api_lines, web_lines, status, api_port, web_port)
 
 
 def _cleanup(api_proc, web_proc, api_port, web_port):
@@ -841,10 +890,13 @@ def _cmd_api_and_web(args):
             break
         # Check if web process died
         if web_proc.poll() is not None:
-            log.error(f"Web server exited with code {web_proc.returncode}")
-            log.info("Relevant web output:")
-            for line in _extract_error_lines(web_lines):
-                log.info(f"  | {line}")
+            if _is_eaddrinuse(web_lines):
+                _handle_eaddrinuse(web_port, "web")
+            else:
+                log.error(f"Web server exited with code {web_proc.returncode}")
+                log.info("Relevant web output:")
+                for line in _extract_error_lines(web_lines):
+                    log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, web_proc, api_port, web_port)
             return
@@ -902,8 +954,11 @@ def _cmd_api_and_web(args):
             if api_proc.poll() is not None:
                 log.error(f"API server exited (code {api_proc.returncode})")
                 break
-            # Web crashed — restart it
+            # Web crashed — restart it (unless EADDRINUSE)
             if web_proc.poll() is not None:
+                if _is_eaddrinuse(web_lines):
+                    _handle_eaddrinuse(web_port, "web")
+                    break
                 log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
                 web_proc = subprocess.Popen(
                     ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],

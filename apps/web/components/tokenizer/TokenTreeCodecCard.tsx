@@ -129,7 +129,7 @@ export function TokenTreeCodecCard() {
         {decodeText && (
           <div className="rounded-md bg-success/10 border border-success/20 px-3 py-2 text-sm">
             <span className="text-muted-foreground">Decoded: </span>
-            <span className="font-mono">"{decodeText}"</span>
+            <span className="font-mono">{'"' + decodeText + '"'}</span>
           </div>
         )}
 

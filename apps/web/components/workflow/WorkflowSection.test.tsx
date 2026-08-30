@@ -41,6 +41,7 @@ vi.mock('@sloughgpt/strui', () => {
   )
   const KpiGrid = ({ children }: any) => <div>{children}</div>
   return {
+    cn: (...args: any[]) => args.filter(Boolean).join(' '),
     Card: ({ children }: any) => <div>{children}</div>,
     CardHeader: ({ children }: any) => <div>{children}</div>,
     CardTitle: ({ children }: any) => <div>{children}</div>,

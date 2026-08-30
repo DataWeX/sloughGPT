@@ -5,8 +5,21 @@ vi.mock('@/lib/multimodal-controller', () => ({
   multimodalController: {
     transcribeAudio: vi.fn(),
     getCapabilities: vi.fn().mockResolvedValue({ speech_to_text: true }),
+    getTrainingReport: vi.fn().mockResolvedValue({ caption_history: [], vocab_size: 0 }),
     resetModel: vi.fn(),
   },
+}))
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  IconUpload: (props: any) => <span data-testid="icon-upload" {...props} />,
+  IconImage: (props: any) => <span data-testid="icon-image" {...props} />,
+  IconX: (props: any) => <span data-testid="icon-x" {...props} />,
+  IconMic: (props: any) => <span data-testid="icon-mic" {...props} />,
+  AudioWaveform: (props: any) => <span data-testid="audio-waveform" {...props} />,
+  IconDocument: (props: any) => <span data-testid="icon-document" {...props} />,
+  IconMicFilled: (props: any) => <span data-testid="icon-mic-filled" {...props} />,
 }))
 
 import { ChatInputAccessories } from './ChatInputAccessories'

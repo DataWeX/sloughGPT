@@ -38,10 +38,10 @@ const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
       >
         {React.Children.map(children, (child) => {
           if (!React.isValidElement(child)) return child
-          const childValue = (child.props as { value?: string }).value
+          const childValue = (child.props as Record<string, unknown>).value
           return (
             <child.type
-              {...child.props}
+              {...(child.props as Record<string, unknown>)}
               name={name ?? groupName}
               checked={value !== undefined ? childValue === value : undefined}
               onCheckedChange={onValueChange

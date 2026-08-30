@@ -17,6 +17,21 @@ const WASM_PATH = '/v86/v86.wasm'
 const MEMORY_MB = 256
 const AUTO_SAVE_INTERVAL_MS = 30_000
 
+export interface UseV86Options {
+  /** Custom image URL (overrides default Buildroot image) */
+  imageUrl?: string
+  /** Custom image size in bytes (required if imageUrl is provided) */
+  imageSize?: number
+  /** Custom BIOS URL */
+  biosUrl?: string
+  /** Custom VGA BIOS URL */
+  vgaBiosUrl?: string
+  /** Custom WASM path */
+  wasmPath?: string
+  /** Memory in MB */
+  memoryMb?: number
+}
+
 export interface UseV86Result {
   isBooted: boolean
   stateSaved: boolean
@@ -27,7 +42,7 @@ export interface UseV86Result {
   init: (container: HTMLElement) => Promise<void>
 }
 
-export function useV86(): UseV86Result {
+export function useV86(options: UseV86Options = {}): UseV86Result {
   const [isBooted, setIsBooted] = useState(false)
   const [stateSaved, setStateSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -49,12 +64,12 @@ export function useV86(): UseV86Result {
     try {
       const ctrl = new V86Controller()
       await ctrl.init(container, {
-        biosUrl: BIOS_URL,
-        vgaBiosUrl: VGA_BIOS_URL,
-        imageUrl: LINUX_IMAGE_URL,
-        imageSize: LINUX_IMAGE_SIZE,
-        memoryMb: MEMORY_MB,
-        wasmPath: WASM_PATH,
+        biosUrl: options.biosUrl || BIOS_URL,
+        vgaBiosUrl: options.vgaBiosUrl || VGA_BIOS_URL,
+        imageUrl: options.imageUrl || LINUX_IMAGE_URL,
+        imageSize: options.imageSize || LINUX_IMAGE_SIZE,
+        memoryMb: options.memoryMb || MEMORY_MB,
+        wasmPath: options.wasmPath || WASM_PATH,
       })
       controllerRef.current = ctrl
       setIsBooted(true)
@@ -73,7 +88,7 @@ export function useV86(): UseV86Result {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not start Linux VM')
     }
-  }, [])
+  }, [options.biosUrl, options.vgaBiosUrl, options.imageUrl, options.imageSize, options.memoryMb, options.wasmPath])
 
   const save = useCallback(async () => {
     const ctrl = controllerRef.current

@@ -23,7 +23,7 @@ export function useChatLocalEngine(
     setLocalEngineLoading(true)
     try {
       if (!localModelUrl) throw new Error('No .soul file URL configured')
-      const url = localModelUrl.startsWith('/auto-train/') || localModelUrl.startsWith('/sou/')
+      const url = localModelUrl.startsWith('/auto-train/') || localModelUrl.startsWith('/training/checkpoints/') || localModelUrl.startsWith('/sou/')
         ? `${PUBLIC_API_URL}${localModelUrl}`
         : localModelUrl
       logger.debug('Fetching model for local engine', { url })

@@ -20,7 +20,7 @@ def mock_log(monkeypatch):
 class TestCmdDatasets:
     def test_header_called(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
         args = MagicMock()
@@ -29,7 +29,7 @@ class TestCmdDatasets:
 
     def test_lists_datasets_as_rows(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         (ds_dir / "shakespeare").mkdir()
         (ds_dir / "shakespeare" / "input.txt").write_text("hello\nworld\n")
@@ -47,7 +47,7 @@ class TestCmdDatasets:
 
     def test_total_size_accumulated(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         (ds_dir / "ds1").mkdir()
         (ds_dir / "ds1" / "file.txt").write_text("x" * 1000)
@@ -61,7 +61,7 @@ class TestCmdDatasets:
 
     def test_with_registry_vocab_info(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_datasets
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         (ds_dir / "test").mkdir()
         (ds_dir / "test" / "data.txt").write_text("x")
@@ -81,7 +81,7 @@ class TestCmdDatasets:
 class TestCmdDatasetImportUrl:
     def test_import_url_creates_file(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
 
@@ -103,7 +103,7 @@ class TestCmdDatasetImportUrl:
 
     def test_import_jsonl_writes_corpus(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
 
@@ -124,7 +124,7 @@ class TestCmdDatasetImportUrl:
 
     def test_import_url_success_logged(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
 
@@ -145,7 +145,7 @@ class TestCmdDatasetImportUrl:
 
     def test_import_url_error_logged(self, mock_log, tmp_path, monkeypatch):
         from commands.data import cmd_dataset_import
-        ds_dir = tmp_path / "datasets"
+        ds_dir = tmp_path / "data"
         ds_dir.mkdir()
         monkeypatch.chdir(tmp_path)
 

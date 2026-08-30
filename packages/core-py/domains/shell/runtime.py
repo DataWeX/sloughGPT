@@ -355,10 +355,11 @@ class DaitRuntime:
         Returns:
             Shutdown log from the init system.
         """
-        from .init import get_init_system
+        from .device_system import reset_device_system
         self._boot_complete = False
-        shutdown_log = get_init_system().shutdown()
+        shutdown_log = self._init.shutdown()
         self.kernel.shutdown()
+        reset_device_system()
         return shutdown_log
 
     # ── API Server ──────────────────────────────────────────────────────

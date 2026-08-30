@@ -7,7 +7,7 @@ import type { AudioAttachment } from '@/lib/chat-utils'
 export interface MessageBubbleState {
   isVisible: boolean
   isEditing: boolean
-  bubbleRef: React.RefObject<HTMLDivElement>
+  bubbleRef: React.RefObject<HTMLDivElement | null>
   hasContent: boolean
   showActions: boolean
   id: string

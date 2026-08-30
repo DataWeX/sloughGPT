@@ -9,9 +9,10 @@ import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse
 import { modelController } from '@/lib/model-controller'
 import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
+import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import { useToastStore } from '@/lib/toast-store'
 
-type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity'
+type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity' | 'compare'
 
 export default function BenchmarkPage() {
   const router = useRouter()
@@ -28,6 +29,10 @@ export default function BenchmarkPage() {
   const [pplxText, setPplxText] = useState('')
   const [pplxResult, setPplxResult] = useState<{ perplexity: number; loss: number; tokens: number } | null>(null)
   const [pplxLoading, setPplxLoading] = useState(false)
+  const [compareModels, setCompareModels] = useState<string[]>([])
+  const [compareResults, setCompareResults] = useState<[string, BenchmarkResult][]>([])
+  const [compareLoading, setCompareLoading] = useState(false)
+  const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
@@ -38,6 +43,11 @@ export default function BenchmarkPage() {
         model = h?.model_type ?? 'gpt2'
         setCurrentModel(model)
       } catch { /* use default */ }
+
+      try {
+        const models = await modelController.list()
+        setAvailableModels(models.map(m => ({ id: m.id, name: m.name ?? m.id })))
+      } catch { /* ignore */ }
 
       try {
         const [m, q, s] = await Promise.all([
@@ -105,6 +115,36 @@ export default function BenchmarkPage() {
     }
   }
 
+  const handleRunCompare = async () => {
+    if (compareModels.length === 0) return
+    setCompareLoading(true)
+    setCompareResults([])
+    try {
+      const results: [string, BenchmarkResult][] = []
+      for (const model of compareModels) {
+        try {
+          const r = await benchmarkController.run({ model })
+          results.push([model, r])
+        } catch {
+          addToast(`Benchmark failed for ${model}`, 'error')
+        }
+      }
+      setCompareResults(results)
+    } finally {
+      setCompareLoading(false)
+    }
+  }
+
+  const bestMetrics: Record<string, number> = {}
+  for (const [model, result] of compareResults) {
+    for (const key of ['throughput_tokens_per_sec', 'memory_mb', 'inference_time_ms'] as const) {
+      const val = Number(result[key] ?? 0)
+      if (!bestMetrics[key] || (key === 'memory_mb' || key === 'inference_time_ms' ? val < bestMetrics[key] : val > bestMetrics[key])) {
+        bestMetrics[key] = val
+      }
+    }
+  }
+
   return (
     <PageContainer
       title="Benchmark"
@@ -114,7 +154,7 @@ export default function BenchmarkPage() {
       onRetry={() => window.location.reload()}
     >
       <div className="flex gap-1 border-b border-border/30 pb-0">
-        {(['metrics', 'quality', 'responses', 'perplexity'] as Tab[]).map(t => (
+        {(['metrics', 'quality', 'responses', 'perplexity', 'compare'] as Tab[]).map(t => (
           <button
             key={t}
             type="button"
@@ -282,6 +322,47 @@ export default function BenchmarkPage() {
                   <div className="text-xs text-muted-foreground">Tokens</div>
                   <div className="text-base font-mono font-medium">{pplxResult.tokens}</div>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'compare' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Compare Models</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {availableModels.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setCompareModels(prev =>
+                    prev.includes(m.id) ? prev.filter(x => x !== m.id) : [...prev, m.id]
+                  )}
+                  className={cn(
+                    'px-3 py-1.5 text-xs rounded-md border transition-colors',
+                    compareModels.includes(m.id)
+                      ? 'bg-primary/10 text-primary border-primary'
+                      : 'text-muted-foreground border-border hover:text-foreground',
+                  )}
+                >
+                  {m.name}
+                </button>
+              ))}
+              {availableModels.length === 0 && (
+                <span className="text-xs text-muted-foreground">No models available</span>
+              )}
+            </div>
+            <Button size="sm" onClick={handleRunCompare} disabled={compareLoading || compareModels.length === 0}>
+              {compareLoading ? 'Running benchmarks...' : `Run on ${compareModels.length} model${compareModels.length !== 1 ? 's' : ''}`}
+            </Button>
+            <ComparisonTableCard completedResults={compareResults} models={availableModels.filter(m => compareModels.includes(m.id))} bestMetrics={bestMetrics} />
+            {compareResults.length === 0 && !compareLoading && (
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                Select models above and click Run to compare them side by side.
               </div>
             )}
           </CardContent>

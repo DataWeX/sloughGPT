@@ -60,7 +60,7 @@ class TrainingRuntime:
     def _get_store(self):
         """Resolve the JobStore lazily (injectable for tests)."""
         if self._store is None:
-            from training.job_store import get_job_store
+            from .job_store import get_job_store
 
             self._store = get_job_store()
         return self._store
@@ -343,3 +343,12 @@ def get_training_runtime() -> TrainingRuntime:
             if _runtime is None:
                 _runtime = TrainingRuntime()
     return _runtime
+
+
+def _register_runtime_with_core() -> None:
+    """Register this runtime as the implementation for the core protocol."""
+    try:
+        from domains.training.runtime_protocol import set_training_runtime
+        set_training_runtime(_runtime or get_training_runtime())
+    except ImportError:
+        pass

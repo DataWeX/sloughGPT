@@ -71,6 +71,27 @@ class GenerateResult:
             return self.token_ids[:, m.prompt_tokens:]
         return self.token_ids
 
+    @property
+    def shape(self):
+        return self.token_ids.shape
+
+    @property
+    def dtype(self):
+        return self.token_ids.dtype
+
+    def __getitem__(self, key):
+        return self.token_ids[key]
+
+    def __array__(self):
+        return np.asarray(self.token_ids)
+
+    def __eq__(self, other):
+        if isinstance(other, GenerateResult):
+            return np.array_equal(self.token_ids, other.token_ids)
+        if isinstance(other, np.ndarray):
+            return np.array_equal(self.token_ids, other)
+        return NotImplemented
+
 # Lazy GPU acceleration — import on demand, never at module load
 _ACCELERATOR = None
 

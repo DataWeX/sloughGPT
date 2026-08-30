@@ -84,7 +84,8 @@ class FeedbackController:
     def _wire_model(self):
         """Set the current auto-train model on the workflow for background training."""
         try:
-            from routers.auto_train import state as at_state
+            from domains.training.service import get_state
+            at_state = get_state()
             if self._workflow and at_state.student_net is not None:
                 self._workflow.set_model(at_state.student_net, at_state.student_tokenizer)
                 return

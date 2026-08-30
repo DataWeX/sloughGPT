@@ -250,3 +250,31 @@ class TestSingleton:
         r1 = get_model_registry()
         r2 = get_model_registry()
         assert r1 is r2
+
+
+class TestIterServers:
+    def test_iter_servers_returns_all(self):
+        reg = ModelRegistry()
+        srv1 = _mock_server("m1")
+        srv2 = _mock_server("m2")
+        reg._servers["m1"] = srv1
+        reg._servers["m2"] = srv2
+        result = reg.iter_servers()
+        assert len(result) == 2
+        ids = {mid for mid, _ in result}
+        assert ids == {"m1", "m2"}
+
+    def test_iter_servers_empty(self):
+        reg = ModelRegistry()
+        result = reg.iter_servers()
+        assert result == []
+
+    def test_iter_servers_returns_snapshot(self):
+        reg = ModelRegistry()
+        srv1 = _mock_server("m1")
+        reg._servers["m1"] = srv1
+        result1 = reg.iter_servers()
+        reg._servers["m2"] = _mock_server("m2")
+        result2 = reg.iter_servers()
+        assert len(result1) == 1
+        assert len(result2) == 2

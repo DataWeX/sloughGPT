@@ -71,7 +71,7 @@ class PointCompressor:
         centroids = np.percentile(flat, quantiles)
         centroids.sort()
         # Fill largest gaps for smaller weights only
-        if n < self.gap_fill_max_elements:
+        if n < self.gap_fill_max_elements and len(centroids) > 1:
             for _ in range(self.gap_fill_iterations):
                 gaps = np.diff(centroids)
                 biggest = np.argmax(gaps)

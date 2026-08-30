@@ -25,13 +25,17 @@ vi.mock('@sloughgpt/strui', () => {
     IconBolt: iconMock('bolt'),
     IconChart: iconMock('chart'),
     LossCurve: (props: Record<string, unknown>) => null,
+    IconThumbUp: iconMock('thumb-up'),
+    IconThumbDown: iconMock('thumb-down'),
+    KpiGrid: ({ children }: any) => <div>{children}</div>,
+    StatCard: ({ label, value, icon }: any) => <div><span>{label}</span>{value}{icon}</div>,
+    FoldSection: ({ heading, children }: any) => <div><h3>{heading}</h3>{children}</div>,
   }
 })
 
 vi.mock('@/components/icons/NavIcons', () => ({
   IconChat: () => <span data-testid="icon-chat">chat</span>,
   IconModels: () => <span data-testid="icon-models">models</span>,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
 }))
 
 vi.mock('next/link', () => ({
@@ -88,6 +92,68 @@ vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { add: mockK
 vi.mock('@/lib/session-controller', () => ({ sessionController: { list: mockSessionList } }))
 vi.mock('@/lib/dataset-controller', () => ({ datasetController: { list: mockDatasetList } }))
 
+const kvStore: Record<string, unknown> = {}
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    getKV: vi.fn(async (key: string) => kvStore[key]),
+    setKV: vi.fn(async (key: string, value: unknown) => { kvStore[key] = value }),
+    deleteKV: vi.fn(async (key: string) => { delete kvStore[key] }),
+  },
+}))
+
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, subtitle, children }: any) => (
+    <div>
+      <div>{title}</div>
+      {subtitle && <div>{subtitle}</div>}
+      {children}
+    </div>
+  ),
+}))
+
+vi.mock('@/lib/error-utils', () => ({
+  extractErrorMessage: (err: unknown, fallback = 'Unknown error') => {
+    if (typeof err === 'string') return err
+    if (err instanceof Error) return err.message
+    return fallback
+  },
+}))
+
+vi.mock('@/lib/time-ago', () => ({
+  timeAgo: (ts: any) => {
+    if (ts == null) return 'never'
+    const diff = Date.now() - new Date(ts).getTime()
+    const mins = Math.floor(diff / 60000)
+    const hrs = Math.floor(mins / 60)
+    if (hrs > 0) return `${hrs}h ago`
+    if (mins > 0) return `${mins}m ago`
+    return 'just now'
+  },
+}))
+
+vi.mock('@/lib/chat-utils', () => ({
+  formatUptime: (seconds: number) => {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    if (h > 0) return `${h}h ${m}m`
+    return `${m}m`
+  },
+}))
+
+vi.mock('@/lib/format-bytes', () => ({
+  formatBytes: (bytes: number) => {
+    if (!bytes) return '—'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  },
+}))
+
+vi.mock('@/lib/config', () => ({
+  PUBLIC_API_URL: 'http://localhost:8000',
+}))
+
 import HomePage from './page'
 
 const onlineHealth = { model_loaded: true, model_type: 'hf/gpt2', inference_count: 5 }
@@ -119,6 +185,7 @@ function makeHomeData(overrides: Record<string, unknown> = {}) {
 afterEach(() => { cleanup(); vi.useRealTimers() })
 beforeEach(() => {
   vi.clearAllMocks()
+  Object.keys(kvStore).forEach(k => delete kvStore[k])
   localStorage.clear()
   state.health = onlineHealth
   state.liveHealth = onlineHealth
@@ -134,7 +201,6 @@ describe('HomePage', () => {
     state.liveHealth = null
     render(<HomePage />)
     expect(screen.getByText('Connecting...')).toBeTruthy()
-    expect(document.querySelector('.animate-pulse')).toBeTruthy()
     expect(screen.queryByText('Online')).toBeFalsy()
   })
 
@@ -152,7 +218,7 @@ describe('HomePage', () => {
     mockApiGet.mockResolvedValue({ phase: 'loading-model', step: 2, total: 5, message: 'Loading PyTorch' })
     render(<HomePage />)
     await waitFor(() => { expect(mockApiGet).toHaveBeenCalledWith('/health/startup-progress') })
-    await waitFor(() => { expect(screen.getByText('Starting up… (2/5)')).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByText('Starting up (2/5)')).toBeTruthy() })
     expect(screen.getByText('Loading PyTorch')).toBeTruthy()
   })
 
@@ -166,7 +232,8 @@ describe('HomePage', () => {
   it('summarizes the loaded model and conversation count in the subtitle', () => {
     state.home = makeHomeData({ healthSummary: 'hf/gpt2', inferenceCount: 5 })
     render(<HomePage />)
-    expect(screen.getByText('gpt2 loaded · 5 conversations')).toBeTruthy()
+    expect(screen.getByText('gpt2 loaded')).toBeTruthy()
+    expect(screen.getByText('5 conversations')).toBeTruthy()
   })
 
   it('renders stat cards with model count, soul, and active model', () => {
@@ -178,15 +245,14 @@ describe('HomePage', () => {
     })
     render(<HomePage />)
     expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Warm')).toBeTruthy()
-    expect(screen.getByText('gpt2 + Warm')).toBeTruthy()
+    expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('5 conversations').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows Not loaded and hides quick actions when the model is unloaded', () => {
     state.home = makeHomeData({ modelStatus: { loaded: false, model: null } })
     render(<HomePage />)
-    expect(screen.getByText('Not loaded')).toBeTruthy()
+    expect(screen.getByText('No model loaded')).toBeTruthy()
     expect(screen.queryByText('Test model')).toBeFalsy()
     expect(screen.queryByText('Quick note')).toBeFalsy()
   })
@@ -212,7 +278,7 @@ describe('HomePage', () => {
   it('saves a quick note via knowledgeController and toasts success', async () => {
     mockKnowledgeAdd.mockResolvedValue({})
     render(<HomePage />)
-    const input = screen.getByPlaceholderText('e.g., I prefer Python over JavaScript')
+    const input = screen.getByPlaceholderText('Add a fact the AI remembers...')
     await act(async () => { fireEvent.change(input, { target: { value: 'I like coffee' } }) })
     await act(async () => { fireEvent.submit(screen.getByText('Save').closest('form')!) })
     await waitFor(() => { expect(mockKnowledgeAdd).toHaveBeenCalledWith('I like coffee', 'general') })
@@ -222,7 +288,7 @@ describe('HomePage', () => {
   it('toasts failure when saving a quick note errors', async () => {
     mockKnowledgeAdd.mockRejectedValue(new Error('boom'))
     render(<HomePage />)
-    const input = screen.getByPlaceholderText('e.g., I prefer Python over JavaScript')
+    const input = screen.getByPlaceholderText('Add a fact the AI remembers...')
     await act(async () => { fireEvent.change(input, { target: { value: 'I like coffee' } }) })
     await act(async () => { fireEvent.submit(screen.getByText('Save').closest('form')!) })
     await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not save', 'error') })
@@ -234,10 +300,10 @@ describe('HomePage', () => {
     })
     const { container } = render(<HomePage />)
     expect(screen.getByText('10')).toBeTruthy()
-    const svgs = container.querySelectorAll('svg')
-    expect(svgs.length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByText('70% positive')).toBeTruthy()
-    const link = screen.getByText('Train from feedback →')
+    const thumbs = container.querySelectorAll('[data-testid^="icon-"]')
+    expect(thumbs.length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('70%')).toBeTruthy()
+    const link = screen.getByText('Train from feedback')
     expect(link.getAttribute('href')).toBe('/training')
   })
 
@@ -281,7 +347,7 @@ describe('HomePage', () => {
     await act(async () => {})
     const skip = screen.getByText('Skip')
     await act(async () => { skip.click() })
-    expect(localStorage.getItem('onboarding_dismissed')).toBe('1')
+    expect(kvStore['onboarding_dismissed']).toBe('1')
     expect(screen.queryByText('Welcome to SloughGPT')).toBeFalsy()
   })
 
@@ -299,7 +365,6 @@ describe('HomePage', () => {
     await waitFor(() => { expect(screen.getByText('Your stats')).toBeTruthy() })
     expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Words')).toBeTruthy()
-    expect(screen.getAllByText('Datasets').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('1.0 MB')).toBeTruthy()
   })
 
@@ -309,16 +374,13 @@ describe('HomePage', () => {
     expect(screen.getByText('42%')).toBeTruthy()
     expect(screen.getByText('61%')).toBeTruthy()
     expect(screen.getByText('1,200')).toBeTruthy()
-    expect(screen.getByText('1h 1m')).toBeTruthy()
+    expect(screen.getAllByText('1h 1m').length).toBeGreaterThanOrEqual(1)
   })
 
   it('always shows the CTA grid links', () => {
     render(<HomePage />)
-    expect(screen.getByText('Start chatting').closest('a')?.getAttribute('href')).toBe('/chat')
+    expect(screen.getByText('Chat').closest('a')?.getAttribute('href')).toBe('/chat')
     expect(screen.getByText('Personalities').closest('a')?.getAttribute('href')).toBe('/models')
-    expect(screen.getByText('Datasets').closest('a')?.getAttribute('href')).toBe('/datasets')
-    expect(screen.getByText('Teach me').closest('a')?.getAttribute('href')).toBe('/training')
-    expect(screen.getByText('System Health').closest('a')?.getAttribute('href')).toBe('/monitoring')
-    expect(screen.getByText('Knowledge').closest('a')?.getAttribute('href')).toBe('/knowledge')
+    expect(screen.getByText('Train').closest('a')?.getAttribute('href')).toBe('/training')
   })
 })

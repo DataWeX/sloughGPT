@@ -85,13 +85,15 @@ const DialogTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonEle
     }
 
     if (asChild && children && typeof children === 'object' && 'props' in children) {
-      const child = children as ReactElement
+      const child = children as ReactElement<Record<string, unknown>>
+      const childProps = child.props as Record<string, unknown>
+      const childOnClick = childProps.onClick as ((e: ReactMouseEvent<HTMLButtonElement>) => void) | undefined
       return cloneElement(child, {
         ...triggerProps,
-        ...child.props,
+        ...childProps,
         ref,
         onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
-          child.props.onClick?.(e)
+          childOnClick?.(e)
           onClick?.(e)
           onOpenChange(true)
         },

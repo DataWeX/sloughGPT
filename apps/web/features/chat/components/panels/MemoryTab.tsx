@@ -8,7 +8,7 @@ import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
 import { useToastStore } from '@/lib/toast-store'
 import { useChatMemory } from './useChatMemory'
-import { useMemoryData } from '@/components/knowledge/useMemoryData'
+import { useMemoryData } from '@/hooks/useMemoryData'
 
 const MAX_VISIBLE = 8
 

@@ -11,7 +11,7 @@ import { memoryController, type MemoryArchiveStats, type MemoryArchiveRecord } f
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson } from '@/lib/download-utils'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
-import { archiveTypeLabel, archiveBadgeClass, archiveSummary } from './memory-card-utils'
+import { archiveTypeLabel, archiveBadgeClass, archiveSummary } from '@/lib/memory-card-utils'
 
 interface ArchiveDialogProps {
   open: boolean

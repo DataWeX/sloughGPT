@@ -76,7 +76,12 @@ _MODULE_NAMES: dict[str, list[str]] = {
     "health": ["health"],
     "models_cmd": ["models", "unload", "precision", "quantize", "dequantize"],
     "souls_cmd": ["souls", "switch", "whoami"],
+    "status": ["status"],
 }
+
+
+# Modules that are NOT command modules (mixins, helpers, etc.) — excluded from discover().
+_NON_CMD_MODULES: set[str] = {"linux"}
 
 
 def discover() -> dict[str, CmdModule]:
@@ -89,6 +94,8 @@ def discover() -> dict[str, CmdModule]:
     cmd_map: dict[str, CmdModule] = {}
     pkg_path = __path__[0]
     for _, mod_name, _ in pkgutil.iter_modules([pkg_path]):
+        if mod_name in _NON_CMD_MODULES:
+            continue
         mod = CmdModule(mod_name)
         names = _MODULE_NAMES.get(mod_name, [mod_name])
         for n in names:

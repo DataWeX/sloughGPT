@@ -5,6 +5,12 @@ import React from 'react'
 vi.mock('./../messages/MessageBubble', () => ({ MessageBubble: ({ content, role }: any) => <div data-testid="msg-bubble" data-role={role}>{content}</div> }))
 vi.mock('./../messages/EmptyState', () => ({ EmptyState: ({ hasModel, onSuggestionClick }: any) => <div data-testid="empty-state" data-has-model={hasModel} /> }))
 vi.mock('./../messages/SystemBanner', () => ({ SystemBanner: ({ type, title }: any) => <div data-testid="sys-banner" data-type={type}>{title}</div> }))
+vi.mock('./../messages/ReasoningPanel', () => ({ ReasoningPanel: ({ isThinking }: any) => isThinking ? <div>Reasoning</div> : null }))
+vi.mock('./../messages/ToolCallPanel', () => ({ ToolCallPanel: () => <div data-testid="tool-call-panel" /> }))
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+}))
 
 import { ChatScreen } from './ChatScreen'
 
@@ -31,7 +37,7 @@ describe('ChatScreen', () => {
   it('renders system banner when offline', () => {
     render(<ChatScreen messages={[]} loading={false} health={'offline' as any} onRefreshHealth={vi.fn()} onCopy={vi.fn()} />)
     expect(screen.getByTestId('sys-banner')).toBeDefined()
-    expect(screen.getByText('Service Unavailable')).toBeDefined()
+    expect(screen.getByText('API Server Offline')).toBeDefined()
   })
 
   it('does not show empty state when offline', () => {

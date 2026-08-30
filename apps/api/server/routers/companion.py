@@ -177,6 +177,15 @@ class CompanionRouter:
 
     async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Chat with companion — generates a response using the active model."""
+        # Block inference under memory pressure
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
+            if get_memory_pressure_monitor().check() == PressureLevel.EMERGENCY:
+                raise_error("System memory too low for inference — try again later",
+                            "E_MEMORY_PRESSURE", status_code=503)
+        except ImportError:
+            pass
+
         comp = self._get_companion()
 
         # Adjust for mood

@@ -50,7 +50,7 @@ class CollectorBuilder:
         return self
 
     def sse_source(self, url: str, event: str = "message") -> CollectorBuilder:
-        self._source = SseSource(url, event=event)
+        self._source = SseSource(url)
         return self
 
     def watch_source(self, path: str, patterns: list[str] | None = None) -> CollectorBuilder:
@@ -66,7 +66,7 @@ class CollectorBuilder:
         return self
 
     def file_store(self, path: str, append: bool = True) -> CollectorBuilder:
-        self._store = FileStore(path, append=append)
+        self._store = FileStore(path)
         return self
 
     def memory_store(self, max_size: int = 10000) -> CollectorBuilder:
@@ -204,7 +204,7 @@ class DataSink:
         return self
 
     def add_file(self, path: str, append: bool = True) -> DataSink:
-        self._stores.append(FileStore(path, append=append))
+        self._stores.append(FileStore(path))
         return self
 
     def add_memory(self, max_size: int = 10000) -> DataSink:

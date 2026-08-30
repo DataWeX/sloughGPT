@@ -102,7 +102,14 @@ class RenderNeuralDevice(Device):
 
         depth = tensors.get("depth")
         if depth is not None:
-            chans.append(depth if depth.ndim == 2 else depth[..., 0])
+            if depth.ndim == 2:
+                chans.append(depth)
+            else:
+                # For 3D+, reduce to (H, W) by taking first element along trailing dims
+                result = depth
+                while result.ndim > 2:
+                    result = result[..., 0]
+                chans.append(result)
         else:
             chans.append(np.zeros((H, W)))
 

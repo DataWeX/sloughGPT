@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  IconX: (props: any) => <span data-testid="icon-x" {...props} />,
+  IconCheck: (props: any) => <span data-testid="icon-check" {...props} />,
+  IconDownload: (props: any) => <span data-testid="icon-download" {...props} />,
+}))
+
 import { CodeExecutionResults } from './CodeExecutionResults'
 
 afterEach(cleanup)
@@ -58,12 +67,12 @@ describe('CodeExecutionResults', () => {
 
   it('shows success icon for exit code 0', () => {
     render(<CodeExecutionResults executions={[mockExecutions[0]]} />)
-    expect(screen.getByText('✓')).toBeInTheDocument()
+    expect(screen.getByTestId('icon-check')).toBeInTheDocument()
   })
 
   it('shows error icon for non-zero exit code', () => {
     render(<CodeExecutionResults executions={[mockExecutions[2]]} />)
-    expect(screen.getByText('✗')).toBeInTheDocument()
+    expect(screen.getByTestId('icon-x')).toBeInTheDocument()
   })
 
   it('expands execution on click', () => {

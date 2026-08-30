@@ -113,6 +113,62 @@ Related knobs: `SLO_GUARD_MAX_RESTARTS` (default `3`), `SLO_GUARD_RESTART_DELAY`
 
 ---
 
+## Memory Pressure (System)
+
+The `MemoryPressureMonitor` proactively detects high system memory usage and
+triggers graduated cleanup actions: cache clearing, garbage collection, idle
+model weight release, and inference/load blocking.
+
+### SLO_MEMORY_PRESSURE_WARNING
+**Optional** — Default: `80`
+
+System memory percent at which the monitor logs a warning and clears caches
+(KV cache, process state).
+
+```bash
+SLO_MEMORY_PRESSURE_WARNING=80
+```
+
+### SLO_MEMORY_PRESSURE_CRITICAL
+**Optional** — Default: `90`
+
+System memory percent at which the monitor forces garbage collection, drops
+KV caches, releases idle model weights, runs `malloc_trim`, and stops guard
+subprocesses.
+
+```bash
+SLO_MEMORY_PRESSURE_CRITICAL=90
+```
+
+### SLO_MEMORY_PRESSURE_EMERGENCY
+**Optional** — Default: `95`
+
+System memory percent at which the monitor blocks new model loads and returns
+an error from inference requests. Use when you want to prevent OOM kills
+entirely.
+
+```bash
+SLO_MEMORY_PRESSURE_EMERGENCY=95
+```
+
+### SLO_IDLE_TIMEOUT
+**Optional** — Default: `300`
+
+Seconds of inactivity before a loaded model is automatically unloaded to free
+memory. Set to `0` to disable idle unloading. Models are transparently
+reloaded on the next inference request.
+
+```bash
+SLO_IDLE_TIMEOUT=300  # 5 minutes
+```
+
+### API Endpoints
+- `GET /models/memory-pressure` — current pressure stats (level, percent, thresholds, counters)
+- `POST /models/memory-cleanup` — force an immediate cleanup cycle
+- `GET /health/detailed` — includes `memory_pressure` block
+
+---
+
 ## Memory (Auto-Memory)
 
 ### Behavior

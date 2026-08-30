@@ -28,7 +28,7 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
-  onRegenerate?: (messageId: string) => void
+  onRegenerate?: (fromMessageId?: string) => void
   onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
@@ -189,7 +189,6 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
             onRefreshHealth={onRefreshHealth}
             onCopy={onCopy}
             onRegenerate={onRegenerate}
-            onRegenerateWithOptions={onRegenerateWithOptions}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
             onEdit={onEdit}

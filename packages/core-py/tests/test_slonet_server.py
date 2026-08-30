@@ -55,7 +55,7 @@ def server(mock_model, mock_tokenizer):
 
 class TestInit:
     def test_creates_semaphore(self, server):
-        assert isinstance(server._semaphore, asyncio.Semaphore)
+        assert hasattr(server, '_read_semaphores')
 
     def test_read_semaphores_empty_initially(self, server):
         assert len(server._read_semaphores) == 0

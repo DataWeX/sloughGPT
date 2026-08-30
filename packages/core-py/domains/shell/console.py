@@ -148,9 +148,12 @@ class Console:
     # ── Input-safe output ────────────────────────────────────────────
 
     def write(self, text: str, end: str = "\n") -> None:
-        """Write text via the underlying IO, preserving the input line."""
+        """Write text via the underlying IO, preserving the input line.
+
+        In TUI mode, writes directly (curses manages its own cursor).
+        """
         self._emit("write", {"text": text, "end": end})
-        if not self._has_readline or not text.strip():
+        if self._tui_repl is not None or not self._has_readline or not text.strip():
             self._io.write(text, end=end)
             return
 
@@ -309,20 +312,33 @@ class Console:
 
     def progress(self, label: str, current: int, total: int,
                  bar_width: int = 20) -> None:
-        """Print an overwritable progress bar line."""
+        """Print an overwritable progress bar line.
+
+        In TUI mode, writes a static line (``\\r`` is stripped by
+        ``TextSurface``).  In CLI mode, overwrites the current line.
+        """
         self._emit("progress", {"label": label, "current": current, "total": total, "bar_width": bar_width})
         frac = current / max(total, 1)
         filled = int(frac * bar_width)
-        bar = "█" * filled + "░" * (bar_width - filled)
+        bar = "\u2588" * filled + "\u2591" * (bar_width - filled)
         pct = f"{frac * 100:5.1f}%"
-        self._io.write(f"\r  {label}: [{bar}] {pct} ({current}/{total})", end="")
-        if current >= total:
-            self._io.write("")
+        line = f"  {label}: [{bar}] {pct} ({current}/{total})"
+        if self._tui_repl is not None:
+            # TUI mode: write static line (no \r).
+            self._io.write(line)
+        else:
+            self._io.write(f"\r{line}", end="")
+            if current >= total:
+                self._io.write("")
 
     # ── Spinner context manager ───────────────────────────────────────
 
-    def spinner(self, message: str = "", rate: float = 0.1) -> _Spinner:
+    def spinner(self, message: str = "", rate: float = 0.1) -> _Spinner | _TuiSpinner:
         """Return a context manager that shows a spinner while a task runs.
+
+        In TUI mode, returns a ``_TuiSpinner`` that writes a static line
+        (animation is stripped by ``TextSurface``).  In CLI mode, returns
+        an animated ``_Spinner``.
 
         Usage::
 
@@ -331,6 +347,8 @@ class Console:
             s.ok("done")          # overwrites spinner with ✓ done
             s.fail("error msg")   # overwrites spinner with ✗ error msg
         """
+        if self._tui_repl is not None:
+            return _TuiSpinner(self, message)
         return _Spinner(self, message, rate)
 
     # ── Confirm ──────────────────────────────────────────────────────
@@ -365,8 +383,16 @@ class Console:
     # ── Pager (paginate long output) ──────────────────────────────────
 
     def paginate(self, lines: list[str], page_size: int | None = None) -> None:
-        """Print lines page-by-page, prompting for Enter to continue."""
+        """Print lines page-by-page, prompting for Enter to continue.
+
+        In TUI mode, writes all lines at once (scrolling is handled by the
+        curses pane, not interactive prompts).
+        """
         self._emit("paginate", {"line_count": len(lines), "page_size": page_size})
+        if self._tui_repl is not None:
+            for line in lines:
+                self._io.write(line)
+            return
         if page_size is None:
             _, page_size = shutil.get_terminal_size()
             page_size = max(5, page_size - 2)
@@ -1387,23 +1413,39 @@ class Console:
     # ── Cursor control ───────────────────────────────────────────────
 
     def hide_cursor(self) -> None:
-        """Hide the terminal cursor."""
+        """Hide the terminal cursor.
+
+        In TUI mode, no-op (curses manages cursor visibility).
+        """
         self._emit("hide_cursor", {})
+        if self._tui_repl is not None:
+            return
         self._io.write("\033[?25l", end="")
         self._io.flush()
 
     def show_cursor(self) -> None:
-        """Show the terminal cursor."""
+        """Show the terminal cursor.
+
+        In TUI mode, no-op (curses manages cursor visibility).
+        """
         self._emit("show_cursor", {})
+        if self._tui_repl is not None:
+            return
         self._io.write("\033[?25h", end="")
         self._io.flush()
 
     # ── Clear screen ─────────────────────────────────────────────────
 
     def clear(self) -> None:
-        """Clear the terminal screen and reset cursor position."""
+        """Clear the terminal screen and reset cursor position.
+
+        In TUI mode, writes a separator line (curses manages its own screen).
+        """
         self._emit("clear", {})
-        self._io.write("\033[2J\033[H", end="")
+        if self._tui_repl is not None:
+            self._io.write("\u2500" * 60)
+        else:
+            self._io.write("\033[2J\033[H", end="")
 
     # ── Style utility ────────────────────────────────────────────────
 
@@ -1443,16 +1485,20 @@ class Console:
                 eta = f"{eta_sec:.0f}s"
             elif eta_sec < 3600:
                 eta = f"{eta_sec / 60:.0f}m {eta_sec % 60:.0f}s"
-        parts = [f"\r  {label[:20]:<20} [{bar}] {pct}"]
+        parts = [f"  {label[:20]:<20} [{bar}] {pct}"]
         if size_str:
             parts.append(size_str)
         if speed_str:
             parts.append(speed_str)
         if eta:
             parts.append(_color(eta, _C_DIM))
-        self._io.write(" ".join(parts), end="")
-        if current >= total:
-            self._io.write("")
+        line = " ".join(parts)
+        if self._tui_repl is not None:
+            self._io.write(line)
+        else:
+            self._io.write(f"\r{line}", end="")
+            if current >= total:
+                self._io.write("")
 
 
 # ── Spinner helper ────────────────────────────────────────────────────────────
@@ -1508,6 +1554,34 @@ class _Spinner:
         self._console.error(message or self._message)
 
 
+class _TuiSpinner:
+    """TUI-aware spinner: writes a static line instead of animating.
+
+    In TUI mode, ``\r`` and ``\\033[K`` are stripped by ``TextSurface``,
+    so animation doesn't work.  This writes a single line on enter and
+    replaces it on exit.
+    """
+
+    def __init__(self, console: Console, message: str) -> None:
+        self._console = console
+        self._message = message
+
+    def __enter__(self) -> _TuiSpinner:
+        self._console._io.write(f"  \u2026 {self._message}")
+        return self
+
+    def __exit__(self, *exc) -> None:
+        pass
+
+    def ok(self, message: str = "") -> None:
+        """Replace with success line."""
+        self._console.success(message or self._message)
+
+    def fail(self, message: str = "") -> None:
+        """Replace with error line."""
+        self._console.error(message or self._message)
+
+
 # ── Live helper ───────────────────────────────────────────────────────────────
 
 
@@ -1529,13 +1603,24 @@ class _Live:
         pass
 
     def update(self, text: str) -> None:
-        """Replace the live region with *text*."""
+        """Replace the live region with *text*.
+
+        In CLI mode, uses cursor-up to overwrite previous lines.
+        In TUI mode, writes a separator + new content (no cursor control).
+        """
         lines = text.split("\n")
         n = len(lines)
-        if self._line_count > 0:
-            self._console._io.write(f"\033[{self._line_count}A", end="")
-        for i, line in enumerate(lines):
-            self._console._io.write(f"\r\033[K{line}", end="\n" if i < n - 1 else "")
+        if self._console._tui_repl is not None:
+            # TUI mode: no cursor-up available; write a separator and new content.
+            if self._line_count > 0:
+                self._console._io.write("\u2500" * 40)
+            for line in lines:
+                self._console._io.write(f"  {line}")
+        else:
+            if self._line_count > 0:
+                self._console._io.write(f"\033[{self._line_count}A", end="")
+            for i, line in enumerate(lines):
+                self._console._io.write(f"\r\033[K{line}", end="\n" if i < n - 1 else "")
         self._line_count = n
         self._console._io.flush()
 

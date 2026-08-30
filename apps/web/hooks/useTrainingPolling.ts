@@ -29,7 +29,7 @@ export interface TrainingPolling {
  * via readTraining() — no stale closures, no React state.
  *
  * - Standard poll: GET /training/jobs/{id} every 3s.
- * - Turbo poll: GET /auto-train/status every 3s.
+ * - Turbo poll: GET /training/turbo/status every 3s.
  *
  * Resilient: retries on transient network errors, warns user after
  * MAX_POLL_RETRIES consecutive failures, only kills poll after threshold.

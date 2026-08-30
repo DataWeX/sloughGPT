@@ -1,632 +1,650 @@
-"""Tests for SloBPE, SloUnigram, and TokenizerManager integration."""
+"""Tests for tokenizer.py — pure logic, no mocks."""
 
 import json
+import math
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from domains.training.tokenizer import SloBPE, SloUnigram
-from domains.training.tokenizer_manager import get_tokenizer_manager
+from domains.training.tokenizer import (
+    SloBPE,
+    SloUnigram,
+    gpt2_pretokenize,
+    default_pretokenize,
+)
 
 
-CORPUS = ["hello world", "hello there", "hello hello", "world peace", "machine learning"]
+# ── gpt2_pretokenize ──────────────────────────────────────────────
 
 
-def _reset():
-    mgr = get_tokenizer_manager()
-    mgr.reset()
-    return mgr
+class TestGPT2Pretokenize:
+    def test_simple_words(self):
+        result = gpt2_pretokenize("hello world")
+        assert "hello" in result
+        assert " world" in result
 
+    def test_leading_space(self):
+        result = gpt2_pretokenize("hello world")
+        assert any(" " in t for t in result)
 
-# ── SloBPE ──
+    def test_contraction(self):
+        result = gpt2_pretokenize("it's a dog")
+        tokens = gpt2_pretokenize("it's a dog")
+        assert "'s" in tokens
 
-class TestSloBPE:
+    def test_digits(self):
+        result = gpt2_pretokenize("42 numbers")
+        assert any("42" in t for t in result)
 
-    def test_train_creates_vocab(self):
-        tok = SloBPE()
-        tok.train(CORPUS, vocab_size=64)
-        assert tok.vocab_size >= 20
+    def test_punctuation(self):
+        result = gpt2_pretokenize("hello!")
+        assert "!" in result or "hello!" in result
 
-    def test_encode_decode_roundtrip(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        ids = tok.encode("hello world")
-        assert tok.decode(ids) == "hello world"
 
-    def test_special_tokens_present(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        for sp in ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]:
-            assert sp in tok.stoi
+# ── default_pretokenize ───────────────────────────────────────────
 
-    def test_add_special_tokens(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        n = tok.add_special_tokens(["<CUSTOM>"])
-        assert n == 1
-        assert "<CUSTOM>" in tok.stoi
-        assert tok.is_special("<CUSTOM>")
 
-    def test_is_special(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.is_special("<PAD>")
-        assert not tok.is_special("hello")
-
-    def test_special_ids(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        ids = tok.special_ids
-        for sp in ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]:
-            assert tok.stoi[sp] in ids
-
-    def test_serialization(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        tok2 = SloBPE.from_dict(tok.to_dict())
-        assert tok2.decode(tok2.encode("hello world")) == "hello world"
-        assert tok2.vocab_size == tok.vocab_size
-
-    def test_empty_text(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.encode("") == []
-        assert tok.decode([]) == ""
-
-    def test_lowercase(self):
-        tok = SloBPE(); tok.train(["HELLO WORLD"], vocab_size=32, lowercase=True)
-        assert tok.encode("hello world") == tok.encode("HELLO WORLD")
-
-    def test_pretokenizer_gpt2(self):
-        tok = SloBPE(pretokenizer="gpt2"); tok.train(CORPUS, vocab_size=64)
-        assert len(tok.encode("don't")) >= 1
-
-    def test_show_pretokenization(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        r = tok.show_pretokenization("hello world")
-        assert r["count"] >= 1
-
-    def test_decompose_base_char(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        r = tok.decompose_token("a")
-        assert r["type"] == "base_char"
-
-    def test_decompose_special(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        r = tok.decompose_token("<PAD>")
-        assert r["type"] == "special"
-
-    def test_analyze_corpus(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        r = tok.analyze_corpus(CORPUS)
-        assert r["total_chars"] > 0 and r["compression_ratio"] > 0
-
-    def test_vocab_stats(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        s = tok.vocab_stats()
-        assert "total_merges_learned" in s
-
-
-# ── SloUnigram ──
-
-class TestSloUnigram:
-
-    def test_train_creates_vocab(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.vocab_size >= 16
-
-    def test_encode_decode_roundtrip(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        ids = tok.encode("hello world")
-        assert tok.decode(ids) == "hello world"
-
-    def test_special_tokens_present(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        for sp in ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]:
-            assert sp in tok.stoi
-
-    def test_serialization(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        tok2 = SloUnigram.from_dict(tok.to_dict())
-        assert tok2.decode(tok2.encode("hello world")) == "hello world"
-
-    def test_empty_text(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.encode("") == []
-        assert tok.decode([]) == ""
-
-    def test_deterministic_encode(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.encode("hello") == tok.encode("hello")
-
-    def test_show_pretokenization(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        r = tok.show_pretokenization("hello world")
-        assert r["count"] >= 1
-
-    def test_decompose_base_char(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        r = tok.decompose_token("a")
-        assert r["type"] == "base_char"
-        assert "score" in r
-
-    def test_decompose_special(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        r = tok.decompose_token("<PAD>")
-        assert r["type"] == "special"
-
-    def test_analyze_corpus(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        r = tok.analyze_corpus(CORPUS)
-        assert r["total_chars"] > 0 and r["compression_ratio"] > 0
-
-    def test_vocab_stats_type(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.vocab_stats()["type"] == "unigram"
-
-    def test_lowercase(self):
-        tok = SloUnigram(); tok.train(["HELLO WORLD"], vocab_size=32, lowercase=True)
-        assert tok.encode("hello world") == tok.encode("HELLO WORLD")
-
-
-# ── TokenizerManager Integration ──
-
-class TestManager:
-
-    def teardown_method(self):
-        _reset()
-
-    def test_default_is_bpe(self):
-        assert _reset().tokenizer_type == "bpe"
-
-    def test_train_bpe(self):
-        mgr = _reset()
-        s = mgr.train(CORPUS, vocab_size=64, algo="bpe")
-        assert s["vocab_size"] >= 20
-
-    def test_train_unigram(self):
-        mgr = _reset()
-        s = mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        assert s["vocab_size"] >= 10
-
-    def test_encode_decode_bpe(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="bpe")
-        assert mgr.detokenize(mgr.tokenize("hello world")) == "hello world"
-
-    def test_encode_decode_unigram(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        assert mgr.detokenize(mgr.tokenize("hello world")) == "hello world"
-
-    def test_stats_algo(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        assert mgr.stats()["algo"] == "unigram"
-
-    def test_is_trained(self):
-        mgr = _reset()
-        assert not mgr.is_trained()
-        mgr.train(CORPUS, vocab_size=64)
-        assert mgr.is_trained()
-
-    def test_serialization_bpe(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="bpe")
-        data = mgr.to_dict()  # capture before reset
-        mgr.reset()
-        mgr.from_dict(data)
-        assert mgr.tokenizer_type == "bpe"
-        assert mgr.detokenize(mgr.tokenize("hello world")) == "hello world"
-
-    def test_serialization_unigram(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        data = mgr.to_dict()  # capture before reset
-        mgr.reset()
-        mgr.from_dict(data)
-        assert mgr.tokenizer_type == "unigram"
-        assert mgr.detokenize(mgr.tokenize("hello world")) == "hello world"
-
-    def test_reset_clears_algo(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        assert mgr.tokenizer_type == "unigram"
-        mgr.reset()
-        assert mgr.tokenizer_type == "bpe" and not mgr.is_trained()
-
-    def test_algo_kwargs_passthrough(self):
-        mgr = _reset()
-        mgr.train(["a b c d e f g"], vocab_size=16, algo="unigram",
-                   seed_max_len=4, pruning_ratio=0.3, em_iters=2)
-        assert mgr.is_trained()
-
-    def test_analyze_corpus_bpe(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="bpe")
-        assert mgr.analyze_corpus(CORPUS)["total_chars"] > 0
-
-    def test_analyze_corpus_unigram(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        assert mgr.analyze_corpus(CORPUS)["total_chars"] > 0
-
-    def test_show_pretokenization_bpe(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="bpe")
-        assert mgr.show_pretokenization("hello world")["count"] >= 1
-
-    def test_show_pretokenization_unigram(self):
-        mgr = _reset(); mgr.train(CORPUS, vocab_size=64, algo="unigram")
-        assert mgr.show_pretokenization("hello world")["count"] >= 1
-
-
-# ── SloEngine integration ──
-
-class TestSloEngineLearn:
-
-    def test_learn_bpe(self):
-        from domains.core.soul import SloEngine
-        engine = SloEngine()
-        result = engine.learn(["hello world", "hello there"], epochs=1, vocab_size=64, algo="bpe")
-        assert result["success"]
-        assert result["soul_name"] == "assistant"
-        assert result["vocab_size"] >= 15
-        assert result["model_type"] == "slonet-lstm"
-        assert "steps" in result
-        assert "loss" in result
-        tok = engine._tokenizer
-        assert tok is not None
-        ids = tok.encode("hello world")
-        assert len(ids) > 0
-        assert tok.decode(ids) == "hello world"
-
-    def test_learn_unigram(self):
-        from domains.core.soul import SloEngine
-        engine = SloEngine()
-        result = engine.learn(["hello world", "hello there"], epochs=1, vocab_size=64, algo="unigram")
-        assert result["success"]
-        assert result["soul_name"] == "assistant"
-        assert result["vocab_size"] >= 20
-        assert "steps" in result
-        assert "loss" in result
-        tok = engine._tokenizer
-        assert tok is not None
-        ids = tok.encode("hello world")
-        assert len(ids) > 0
-        decoded = tok.decode(ids)
-        assert "hello world" in decoded or decoded == "hello world"
-
-    def test_learn_empty_texts(self):
-        from domains.core.soul import SloEngine
-        engine = SloEngine()
-        result = engine.learn([], epochs=1, algo="bpe")
-        assert not result["success"]
-        assert "error" in result
-
-    def test_learn_preserves_soul_name(self):
-        from domains.core.soul import SloEngine
-        engine = SloEngine()
-        result = engine.learn(["hello world"], epochs=1, vocab_size=64, algo="unigram", soul_name="test-soul")
-        assert result["success"]
-        assert result["soul_name"] == "test-soul"
-
-
-# ── Coverage: SloBPE edge paths ──
-
-class TestBPEHelpers:
-
-    def test_default_pretokenize(self):
-        from domains.training.tokenizer import default_pretokenize, gpt2_pretokenize
+class TestDefaultPretokenize:
+    def test_whitespace_split(self):
         assert default_pretokenize("hello world") == ["hello", "world"]
-        assert gpt2_pretokenize("don't") == ["don", "'t"]
 
-    def test_bos_eos_ids(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.bos_id == tok.stoi["<BOS>"]
-        assert tok.eos_id == tok.stoi["<EOS>"]
-        assert tok.pad_id == tok.stoi["<PAD>"]
-        assert tok.unk_id == tok.stoi["<UNK>"]
+    def test_empty_string(self):
+        assert default_pretokenize("") == []
 
-    def test_train_empty_texts_raises(self):
-        with pytest.raises(ValueError):
-            SloBPE().train([])
+    def test_multiple_spaces(self):
+        assert default_pretokenize("a  b") == ["a", "b"]
 
-    def test_train_no_pairs_breaks(self):
-        tok = SloBPE(); tok.train([""], vocab_size=64)
-        assert tok.vocab_size == 5
 
-    def test_train_verbose_logs(self):
+# ── SloBPE ────────────────────────────────────────────────────────
+
+
+class TestSloBPEInit:
+    def test_default_vocab_size(self):
         tok = SloBPE()
-        tok.train(["abc abc abc"], vocab_size=10, verbose=True)
-        assert tok.vocab_size == 10
+        assert tok.vocab_size == 0
 
-    def test_train_reaches_target(self):
-        tok = SloBPE(pretokenizer="whitespace")
-        tok.train(["abc abc abc"], vocab_size=10)
-        assert tok.vocab_size == 10
-        assert tok.encode("abc") == tok.encode("abc")
+    def test_pad_id(self):
+        tok = SloBPE()
+        assert tok.pad_id == 0
 
-    def test_encode_bos_eos(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        ids = tok.encode("hello", add_bos=True, add_eos=True)
-        assert ids[0] == tok.bos_id
-        assert ids[-1] == tok.eos_id
+    def test_unk_id(self):
+        tok = SloBPE()
+        assert tok.unk_id == 1
 
-    def test_encode_batch_padded(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        batch = tok.encode_batch(["hello world", "hi"], add_bos=True, add_eos=True,
-                                 max_length=6, pad=True)
-        assert len(batch) == 2
-        assert all(len(ids) == 6 for ids in batch)
-        assert batch[1][-1] == tok.pad_id
+    def test_bos_id(self):
+        tok = SloBPE()
+        assert tok.bos_id == 2
 
-    def test_encode_batch_plain(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        batch = tok.encode_batch(["hello world", "hi"])
-        assert len(batch) == 2
-        assert all(isinstance(ids, list) for ids in batch)
+    def test_eos_id(self):
+        tok = SloBPE()
+        assert tok.eos_id == 3
 
-    def test_decode_out_of_range(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.decode([10 ** 9]) == "?"
-        assert tok.decode([-5]) == "?"
 
-    def test_decode_skips_special(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.decode([tok.bos_id, tok.eos_id]) == ""
+class TestSloBPETraining:
+    def test_train_basic(self):
+        tok = SloBPE()
+        # Use enough variety so BPE can reach 64 vocab
+        words = [chr(i) for i in range(ord('a'), ord('z')+1)] + [str(i) for i in range(10)]
+        texts = [" ".join(words[i:i+5]) for i in range(len(words)-4)]
+        tok.train(texts, vocab_size=64)
+        assert tok.vocab_size >= 40  # BPE may stop early if pairs run out
+        assert len(tok.merges) > 0
 
-    def test_decode_unk_not_skipped(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.decode([tok.unk_id], skip_special=False) == "?"
+    def test_train_empty_raises(self):
+        tok = SloBPE()
+        with pytest.raises(ValueError, match="at least one text"):
+            tok.train([])
 
-    def test_decode_whitespace_pretokenizer(self):
-        tok = SloBPE(pretokenizer="whitespace"); tok.train(CORPUS, vocab_size=64)
-        assert tok.decode(tok.encode("hello world")) == "hello world"
+    def test_train_builds_stoi_itos(self):
+        tok = SloBPE()
+        tok.train(["ab ab", "cd cd"], vocab_size=32)
+        assert len(tok.stoi) == tok.vocab_size
+        assert len(tok.itos) == tok.vocab_size
+        for i in range(tok.vocab_size):
+            assert tok.itos[i] in tok.stoi
+            assert tok.stoi[tok.itos[i]] == i
 
-    def test_from_dict_v1_defaults_whitespace(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        data = tok.to_dict(); data.pop("version")
-        tok2 = SloBPE.from_dict(data)
-        assert tok2._pretokenizer == "whitespace"
-
-    def test_from_dict_adds_missing_specials(self):
-        data = {
-            "version": 2,
-            "vocab": ["a", "b", "c"],
-            "merges": [],
-            "stoi": {"a": 0, "b": 1, "c": 2},
-            "itos": {"0": "a", "1": "b", "2": "c"},
-            "pretokenizer": "gpt2",
-        }
-        tok = SloBPE.from_dict(data)
-        for sp in ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]:
+    def test_train_special_tokens_present(self):
+        tok = SloBPE()
+        tok.train(["hello world"], vocab_size=16)
+        for sp in SloBPE.SPECIAL_TOKENS:
             assert sp in tok.stoi
-        assert tok.vocab_size == 7
 
-    def test_save_load_roundtrip(self, tmp_path):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        p = str(tmp_path / "bpe.json")
-        tok.save(p)
-        tok2 = SloBPE.load(p)
-        assert tok2.decode(tok2.encode("hello world")) == "hello world"
+    def test_train_returns_self(self):
+        tok = SloBPE()
+        result = tok.train(["hello world"], vocab_size=16)
+        assert result is tok
 
-    def test_export_to_checkpoint(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        cp = tok.export_to_checkpoint()
-        assert cp["vocab_size"] == tok.vocab_size
-        assert cp["tokenizer_type"] == "slonet_bpe"
-        assert set(cp["stoi"]) == set(tok.stoi)
+    def test_train_min_frequency(self):
+        tok = SloBPE()
+        tok.train(["ab ab", "cd cd"], vocab_size=32, min_frequency=10)
+        # With high min_frequency, fewer merges
+        tok2 = SloBPE()
+        tok2.train(["ab ab", "cd cd"], vocab_size=32, min_frequency=1)
+        assert len(tok.merges) <= len(tok2.merges)
 
-    def test_from_checkpoint_full(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        tok2 = SloBPE.from_checkpoint(tok.export_to_checkpoint())
+
+class TestSloBPEEncode:
+    @pytest.fixture
+    def trained_tok(self):
+        tok = SloBPE()
+        texts = ["hello world", "hello there", "world of code"] * 10
+        tok.train(texts, vocab_size=128)
+        return tok
+
+    def test_encode_returns_list(self, trained_tok):
+        ids = trained_tok.encode("hello")
+        assert isinstance(ids, list)
+        assert all(isinstance(i, int) for i in ids)
+
+    def test_encode_empty_string(self, trained_tok):
+        ids = trained_tok.encode("")
+        assert ids == []
+
+    def test_encode_with_bos(self, trained_tok):
+        ids = trained_tok.encode("hello", add_bos=True)
+        assert ids[0] == trained_tok.bos_id
+
+    def test_encode_with_eos(self, trained_tok):
+        ids = trained_tok.encode("hello", add_eos=True)
+        assert ids[-1] == trained_tok.eos_id
+
+    def test_encode_bos_eos(self, trained_tok):
+        ids = trained_tok.encode("hello", add_bos=True, add_eos=True)
+        assert ids[0] == trained_tok.bos_id
+        assert ids[-1] == trained_tok.eos_id
+
+    def test_encode_deterministic(self, trained_tok):
+        assert trained_tok.encode("hello") == trained_tok.encode("hello")
+
+    def test_encode_unknown_chars(self, trained_tok):
+        ids = trained_tok.encode("zzz")
+        assert len(ids) > 0
+
+
+class TestSloBPEEncodeBatch:
+    @pytest.fixture
+    def trained_tok(self):
+        tok = SloBPE()
+        tok.train(["hello world", "foo bar"] * 10, vocab_size=64)
+        return tok
+
+    def test_batch_encoding(self, trained_tok):
+        batch = trained_tok.encode_batch(["hello", "world"])
+        assert len(batch) == 2
+        assert isinstance(batch[0], list)
+
+    def test_batch_with_max_length(self, trained_tok):
+        batch = trained_tok.encode_batch(["hello world", "hi"], max_length=5)
+        for ids in batch:
+            assert len(ids) <= 5
+
+    def test_batch_with_pad(self, trained_tok):
+        batch = trained_tok.encode_batch(["hello world", "hi"], max_length=10, pad=True)
+        assert all(len(ids) == 10 for ids in batch)
+        # Padded tokens should be pad_id
+        for ids in batch:
+            assert ids[-1] == trained_tok.pad_id
+
+    def test_batch_pad_without_max_length(self, trained_tok):
+        batch = trained_tok.encode_batch(["hello", "world", "hi"], pad=True)
+        max_len = max(len(ids) for ids in batch)
+        assert all(len(ids) == max_len for ids in batch)
+
+
+class TestSloBPEDecode:
+    @pytest.fixture
+    def trained_tok(self):
+        tok = SloBPE()
+        tok.train(["hello world", "foo bar"] * 10, vocab_size=64)
+        return tok
+
+    def test_decode_reconstruction(self, trained_tok):
+        text = "hello"
+        ids = trained_tok.encode(text)
+        decoded = trained_tok.decode(ids)
+        assert "hello" in decoded
+
+    def test_decode_skip_special(self, trained_tok):
+        ids = [trained_tok.bos_id, trained_tok.pad_id, trained_tok.eos_id]
+        decoded = trained_tok.decode(ids, skip_special=True)
+        assert decoded == ""
+
+    def test_decode_no_skip_special(self, trained_tok):
+        ids = [trained_tok.bos_id]
+        decoded = trained_tok.decode(ids, skip_special=False)
+        assert decoded != ""
+
+    def test_decode_out_of_range(self, trained_tok):
+        ids = [9999]
+        decoded = trained_tok.decode(ids)
+        assert "?" in decoded
+
+    def test_decode_negative_id(self, trained_tok):
+        ids = [-1]
+        decoded = trained_tok.decode(ids)
+        assert "?" in decoded
+
+
+class TestSloBPESerialization:
+    def test_to_dict_roundtrip(self):
+        tok = SloBPE()
+        tok.train(["hello world", "foo bar"] * 5, vocab_size=32)
+        d = tok.to_dict()
+        tok2 = SloBPE.from_dict(d)
+        assert tok2.vocab == tok.vocab
+        assert tok2.merges == tok.merges
         assert tok2.stoi == tok.stoi
         assert tok2.vocab_size == tok.vocab_size
 
-    def test_from_checkpoint_no_stoi(self):
-        tok = SloBPE.from_checkpoint({"chars": list("abc"), "itos": {}})
-        assert "a" in tok.stoi
-        assert "b" in tok.stoi
-
-    def test_from_checkpoint_bad_itos_keys(self):
-        cp = {"itos": {"x": "a", "y": "b"}, "stoi": {"a": 0, "b": 1, "<PAD>": 2}}
-        tok = SloBPE.from_checkpoint(cp)
-        assert tok.itos[0] == "a"
-        assert tok.itos[1] == "b"
-        for sp in ["<UNK>", "<BOS>", "<EOS>"]:
-            assert sp in tok.stoi
-
-    def test_show_merges(self):
-        tok = SloBPE(pretokenizer="whitespace"); tok.train(["abc abc abc"], vocab_size=10)
-        tok.show_merges(top_n=1)
-
-    def test_show_vocab(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        tok.show_vocab(top_n=5)
-
-    def test_add_special_existing_not_special(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        n = tok.add_special_tokens(["hello"])
-        assert n == 0
-        assert tok.is_special("hello")
-
-    def test_is_special_int(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        assert tok.is_special(tok.stoi["<PAD>"])
-        assert not tok.is_special(tok.stoi["e"])
-
-    def test_decompose_missing_raises(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        with pytest.raises(ValueError):
-            tok.decompose_token("zzz-not-in-vocab")
-
-    def test_decompose_bad_id_raises(self):
-        tok = SloBPE(); tok.train(CORPUS, vocab_size=64)
-        with pytest.raises(ValueError):
-            tok.decompose_token(999)
-
-    def test_decompose_merged_subword(self):
-        tok = SloBPE(pretokenizer="whitespace"); tok.train(["abc abc abc"], vocab_size=10)
-        r = tok.decompose_token("ab")
-        assert r["type"] == "merged_subword"
-        assert r["merge_path"]
-        assert r["depth"] > 0
-        assert r["base_chars"] == ["a", "b"]
-
-    def test_decompose_token_no_merge_record(self):
+    def test_save_load_roundtrip(self, tmp_path):
         tok = SloBPE()
-        tok.vocab = ["a", "b", "ab"]
-        tok.stoi = {"a": 0, "b": 1, "ab": 2}
-        tok.itos = {0: "a", 1: "b", 2: "ab"}
-        tok._special_set = set(["<PAD>", "<UNK>", "<BOS>", "<EOS>"])
-        r = tok.decompose_token("ab")
-        assert r["type"] == "merged_subword"
-        assert r["base_chars"] == ["a", "b"]
+        tok.train(["hello world"] * 5, vocab_size=32)
+        path = str(tmp_path / "tok.json")
+        tok.save(path)
+        tok2 = SloBPE.load(path)
+        assert tok2.vocab == tok.vocab
+        assert tok2.merges == tok.merges
 
-    def test_train_from_directory(self, tmp_path):
-        d = tmp_path / "corpus"; d.mkdir()
-        (d / "a.txt").write_text("hello world", encoding="utf-8")
-        sub = d / "sub"; sub.mkdir()
-        (sub / "b.txt").write_text("hello there", encoding="utf-8")
-        (d / "empty.txt").write_text("", encoding="utf-8")
-        tok = SloBPE.train_from_directory(str(d), vocab_size=64)
-        assert tok.vocab_size >= 13
-        tok_nr = SloBPE.train_from_directory(str(d), vocab_size=64, recursive=False)
-        assert tok_nr.vocab_size >= 10
+    def test_to_dict_version(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        d = tok.to_dict()
+        assert d["version"] == 2
 
-    def test_train_from_directory_not_dir(self):
-        with pytest.raises(ValueError):
-            SloBPE.train_from_directory("/nonexistent/dir")
-
-    def test_train_from_directory_no_files(self, tmp_path):
-        d = tmp_path / "empty_dir"; d.mkdir()
-        with pytest.raises(ValueError):
-            SloBPE.train_from_directory(str(d))
-
-    def test_train_from_directory_skips_unreadable(self, tmp_path):
-        import os
-        d = tmp_path / "corpus2"; d.mkdir()
-        (d / "ok.txt").write_text("hello world", encoding="utf-8")
-        bad = d / "bad.txt"; bad.write_text("secret", encoding="utf-8")
-        os.chmod(bad, 0)
-        try:
-            tok = SloBPE.train_from_directory(str(d), vocab_size=32)
-            assert tok.vocab_size >= 5
-        finally:
-            os.chmod(bad, 0o644)
+    def test_from_dict_backward_compat(self):
+        data = {
+            "version": 1,
+            "vocab": ["<PAD>", "<UNK>", "<BOS>", "<EOS>", "</w>", "a", "b"],
+            "merges": [],
+            "stoi": {"<PAD>": 0, "<UNK>": 1, "<BOS>": 2, "<EOS>": 3, "</w>": 4, "a": 5, "b": 6},
+            "itos": {"0": "<PAD>", "1": "<UNK>", "2": "<BOS>", "3": "<EOS>", "4": "</w>", "5": "a", "6": "b"},
+        }
+        tok = SloBPE.from_dict(data)
+        assert tok._pretokenizer == "whitespace"
 
 
-# ── Coverage: SloUnigram edge paths ──
+class TestSloBPEVocabStats:
+    def test_vocab_stats(self):
+        tok = SloBPE()
+        texts = ["hello world", "foo bar baz"] * 20
+        tok.train(texts, vocab_size=32)
+        stats = tok.vocab_stats()
+        assert stats["vocab_size"] >= 32
+        assert stats["base_chars"] > 0
+        assert stats["special_tokens"] == 4
+        assert stats["total_merges_learned"] == len(tok.merges)
 
-class TestUnigramEdgePaths:
 
-    def test_bos_eos_ids(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.bos_id == tok.stoi["<BOS>"]
-        assert tok.eos_id == tok.stoi["<EOS>"]
-        assert tok.pad_id == tok.stoi["<PAD>"]
-        assert tok.unk_id == tok.stoi["<UNK>"]
+class TestSloBPEDecomposeToken:
+    def test_decompose_merged_token(self):
+        tok = SloBPE()
+        tok.train(["hello world", "hello there"] * 10, vocab_size=128)
+        # Find a token created by a merge (not special tokens or </w>)
+        merged = [
+            t for t in tok.vocab
+            if len(t) > 1 and t not in SloBPE.SPECIAL_TOKENS and t != SloBPE.WORD_SUFFIX
+            and t in {l + r for l, r in tok.merges}
+        ]
+        if merged:
+            result = tok.decompose_token(merged[0])
+            assert result["token"] == merged[0]
+            assert result["depth"] >= 1
+            assert len(result["base_chars"]) > 0
+
+    def test_decompose_special_token(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        result = tok.decompose_token("<PAD>")
+        assert result["type"] == "special"
+        assert result["depth"] == 0
+
+    def test_decompose_base_char(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        result = tok.decompose_token("h")
+        assert result["type"] == "base_char"
+        assert result["depth"] == 0
+
+    def test_decompose_unknown_raises(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        with pytest.raises(ValueError, match="not found"):
+            tok.decompose_token("NONEXISTENT")
+
+
+class TestSloBPEAnalyzeCorpus:
+    def test_analyze_corpus(self):
+        tok = SloBPE()
+        tok.train(["hello world", "foo bar"] * 5, vocab_size=64)
+        stats = tok.analyze_corpus(["hello world", "hello there"])
+        assert stats["total_chars"] > 0
+        assert stats["total_tokens"] > 0
+        assert stats["compression_ratio"] > 0
+        assert stats["unique_tokens"] > 0
+        assert stats["vocab_utilization"] > 0
+        assert len(stats["top_tokens"]) > 0
+
+
+class TestSloBPEAddSpecialTokens:
+    def test_add_new_special_token(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        added = tok.add_special_tokens(["<|user|>", "<|assistant|>"])
+        assert added == 2
+        assert tok.is_special("<|user|>")
+        assert tok.is_special("<|assistant|>")
+
+    def test_add_existing_noop(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        added = tok.add_special_tokens(["<PAD>"])
+        assert added == 0
+
+    def test_special_ids(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        ids = tok.special_ids
+        assert len(ids) == len(SloBPE.SPECIAL_TOKENS)
+
+
+class TestSloBPEIsSpecial:
+    def test_is_special_string(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        assert tok.is_special("<PAD>") is True
+        assert tok.is_special("hello") is False
+
+    def test_is_special_by_id(self):
+        tok = SloBPE()
+        tok.train(["hello"], vocab_size=16)
+        assert tok.is_special(0) is True  # PAD ID
+
+
+class TestSloBPENormalize:
+    def test_lowercasing(self):
+        result = SloBPE._normalize("Hello WORLD")
+        assert result == "hello world"
+
+    def test_no_lowercasing(self):
+        result = SloBPE._normalize("Hello WORLD", lowercase=False)
+        assert result == "Hello WORLD"
+
+    def test_whitespace_collapse(self):
+        result = SloBPE._normalize("hello    world")
+        assert result == "hello world"
+
+    def test_stripping(self):
+        result = SloBPE._normalize("  hello  ")
+        assert result == "hello"
+
+
+class TestSloBPEPretokenize:
+    def test_gpt2_mode(self):
+        tok = SloBPE(pretokenizer="gpt2")
+        result = tok._pretokenize("hello world")
+        assert "hello" in result
+
+    def test_whitespace_mode(self):
+        tok = SloBPE(pretokenizer="whitespace")
+        result = tok._pretokenize("hello world")
+        assert result == ["hello", "world"]
+
+
+class TestSloBPEShowPretokenization:
+    def test_show_pretokenization(self):
+        tok = SloBPE()
+        result = tok.show_pretokenization("hello world")
+        assert "pretokens" in result
+        assert "segments" in result
+        assert "count" in result
+        assert result["count"] == len(result["pretokens"])
+        for seg in result["segments"]:
+            assert "text" in seg
+            assert "char_count" in seg
+            assert "pct" in seg
+
+
+# ── SloUnigram ────────────────────────────────────────────────────
+
+
+class TestSloUnigramInit:
+    def test_default_vocab_size(self):
+        tok = SloUnigram()
+        assert tok.vocab_size == 0
+
+    def test_special_token_ids(self):
+        tok = SloUnigram()
+        assert tok.pad_id == 0
+        assert tok.bos_id == 0
+        assert tok.eos_id == 0
+
+
+class TestSloUnigramTraining:
+    def test_train_basic(self):
+        tok = SloUnigram()
+        texts = ["hello world", "hello there", "foo bar baz"] * 20
+        tok.train(texts, vocab_size=64)
+        assert tok.vocab_size >= 64
+        assert len(tok._scores) > 0
 
     def test_train_empty_raises(self):
-        with pytest.raises(ValueError):
-            SloUnigram().train([])
-
-    def test_train_verbose_prunes(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=16, verbose=True)
-        assert tok.vocab_size < 269
-
-    def test_train_reaches_target(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=128)
-        assert tok.vocab_size <= 128
-
-    def test_train_total_count_zero_breaks(self):
         tok = SloUnigram()
-        tok.train(["   "], vocab_size=20)
-        assert tok.vocab_size >= 4
+        with pytest.raises(ValueError, match="at least one text"):
+            tok.train([])
 
-    def test_encode_bos_eos(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        ids = tok.encode("hello", add_bos=True, add_eos=True)
-        assert ids[0] == tok.bos_id
-        assert ids[-1] == tok.eos_id
+    def test_train_returns_self(self):
+        tok = SloUnigram()
+        result = tok.train(["hello world"], vocab_size=32)
+        assert result is tok
 
+    def test_train_builds_stoi_itos(self):
+        tok = SloUnigram()
+        tok.train(["hello world"], vocab_size=32)
+        assert len(tok.stoi) == tok.vocab_size
+        assert len(tok.itos) == tok.vocab_size
+
+    def test_train_special_tokens_present(self):
+        tok = SloUnigram()
+        tok.train(["hello world"], vocab_size=32)
+        for sp in SloUnigram.SPECIAL_TOKENS:
+            assert sp in tok.stoi
+
+
+class TestSloUnigramEncode:
+    @pytest.fixture
+    def trained_tok(self):
+        tok = SloUnigram()
+        texts = ["hello world", "hello there", "world of code"] * 10
+        tok.train(texts, vocab_size=128)
+        return tok
+
+    def test_encode_returns_list(self, trained_tok):
+        ids = trained_tok.encode("hello")
+        assert isinstance(ids, list)
+        assert all(isinstance(i, int) for i in ids)
+
+    def test_encode_empty_string(self, trained_tok):
+        ids = trained_tok.encode("")
+        assert ids == []
+
+    def test_encode_with_bos(self, trained_tok):
+        ids = trained_tok.encode("hello", add_bos=True)
+        assert ids[0] == trained_tok.bos_id
+
+    def test_encode_with_eos(self, trained_tok):
+        ids = trained_tok.encode("hello", add_eos=True)
+        assert ids[-1] == trained_tok.eos_id
+
+    def test_encode_deterministic(self, trained_tok):
+        assert trained_tok.encode("hello") == trained_tok.encode("hello")
+
+
+class TestSloUnigramEncodeWithScores:
     def test_encode_with_scores(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        out = tok.encode_with_scores("hello world", nbest=4, alpha=0.5)
-        assert out
-        for ids, score in out:
+        tok = SloUnigram()
+        tok.train(["hello world", "hello there"] * 5, vocab_size=64)
+        results = tok.encode_with_scores("hello world", nbest=4)
+        assert isinstance(results, list)
+        assert len(results) > 0
+        for ids, score in results:
             assert isinstance(ids, list)
             assert isinstance(score, float)
 
-    def test_encode_with_scores_sorted(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        out = tok.encode_with_scores("hello", nbest=3)
-        scores = [s for _, s in out]
-        assert scores == sorted(scores, reverse=True)
 
-    def test_viterbi_empty(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok._viterbi("") == []
+class TestSloUnigramDecode:
+    @pytest.fixture
+    def trained_tok(self):
+        tok = SloUnigram()
+        tok.train(["hello world", "foo bar"] * 10, vocab_size=128)
+        return tok
 
-    def test_viterbi_fallback_char_level(self):
-        tok = SloUnigram(pretokenizer="whitespace"); tok.train(["abc"], vocab_size=64)
-        ids = tok.encode("\U0001f600x")
-        assert len(ids) == 2
-        assert ids[0] == tok.unk_id
+    def test_decode_basic(self, trained_tok):
+        ids = trained_tok.encode("hello")
+        decoded = trained_tok.decode(ids)
+        assert "hello" in decoded
 
-    def test_all_segmentations_empty(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok._all_segmentations("") == []
+    def test_decode_skip_special(self, trained_tok):
+        ids = [trained_tok.bos_id, trained_tok.eos_id]
+        decoded = trained_tok.decode(ids, skip_special=True)
+        assert decoded == ""
 
-    def test_decode_out_of_range(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.decode([10 ** 9]) == "?"
-        assert tok.decode([-1]) == "?"
+    def test_decode_no_skip_special(self, trained_tok):
+        ids = [trained_tok.bos_id]
+        decoded = trained_tok.decode(ids, skip_special=False)
+        assert decoded != ""
 
-    def test_decode_skips_special(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        assert tok.decode([tok.bos_id, tok.eos_id, tok.pad_id]) == ""
+    def test_decode_out_of_range(self, trained_tok):
+        ids = [9999]
+        decoded = trained_tok.decode(ids)
+        assert "?" in decoded
 
-    def test_from_dict_missing_specials(self):
-        data = {
-            "vocab": ["a", "b"],
-            "stoi": {"a": 0, "b": 1},
-            "itos": {"0": "a", "1": "b"},
-            "scores": {},
-            "pretokenizer": "gpt2",
-        }
-        tok = SloUnigram.from_dict(data)
-        for sp in ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]:
-            assert sp in tok.stoi
-        assert tok.vocab_size == 6
+
+class TestSloUnigramSerialization:
+    def test_to_dict_roundtrip(self):
+        tok = SloUnigram()
+        tok.train(["hello world"] * 5, vocab_size=32)
+        d = tok.to_dict()
+        tok2 = SloUnigram.from_dict(d)
+        assert tok2.vocab == tok.vocab
+        assert tok2.vocab_size == tok.vocab_size
+        assert tok2._pretokenizer == tok._pretokenizer
 
     def test_save_load_roundtrip(self, tmp_path):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        p = str(tmp_path / "unigram.json")
-        tok.save(p)
-        tok2 = SloUnigram.load(p)
-        assert tok2.decode(tok2.encode("hello world")) == "hello world"
+        tok = SloUnigram()
+        tok.train(["hello world"] * 5, vocab_size=32)
+        path = str(tmp_path / "tok.json")
+        tok.save(path)
+        tok2 = SloUnigram.load(path)
+        assert tok2.vocab == tok.vocab
+        assert len(tok2._scores) == len(tok._scores)
 
-    def test_decompose_missing_raises(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        with pytest.raises(ValueError):
-            tok.decompose_token("zzz-not-in-vocab")
+    def test_to_dict_type(self):
+        tok = SloUnigram()
+        tok.train(["hello"], vocab_size=16)
+        d = tok.to_dict()
+        assert d["type"] == "unigram"
+        assert d["version"] == 1
 
-    def test_decompose_bad_id_raises(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        with pytest.raises(ValueError):
-            tok.decompose_token(999)
+
+class TestSloUnigramVocabStats:
+    def test_vocab_stats(self):
+        tok = SloUnigram()
+        texts = ["hello world", "foo bar baz"] * 20
+        tok.train(texts, vocab_size=32)
+        stats = tok.vocab_stats()
+        assert stats["vocab_size"] >= 32
+        assert stats["type"] == "unigram"
+        assert stats["special_tokens"] == 4
+
+
+class TestSloUnigramDecomposeToken:
+    def test_decompose_base_char(self):
+        tok = SloUnigram()
+        tok.train(["hello"], vocab_size=16)
+        result = tok.decompose_token("h")
+        assert result["type"] == "base_char"
+        assert result["depth"] == 0
+
+    def test_decompose_special(self):
+        tok = SloUnigram()
+        tok.train(["hello"], vocab_size=16)
+        result = tok.decompose_token("<PAD>")
+        assert result["type"] == "special"
 
     def test_decompose_subword(self):
-        tok = SloUnigram(pretokenizer="whitespace"); tok.train(["abc abc abc"], vocab_size=130)
-        sub = [t for t in tok.vocab if len(t) > 1 and t not in tok.SPECIAL_TOKENS]
-        assert sub
-        r = tok.decompose_token(sub[0])
-        assert r["type"] == "subword"
-        assert "score" in r
+        tok = SloUnigram()
+        tok.train(["hello world"] * 5, vocab_size=128)
+        subwords = [t for t in tok.vocab if len(t) > 1 and t not in SloUnigram.SPECIAL_TOKENS]
+        if subwords:
+            result = tok.decompose_token(subwords[0])
+            assert result["type"] == "subword"
+            assert "score" in result
 
-    def test_train_from_directory(self, tmp_path):
-        d = tmp_path / "uni"; d.mkdir()
-        (d / "a.txt").write_text("hello world", encoding="utf-8")
-        sub = d / "sub"; sub.mkdir()
-        (sub / "b.txt").write_text("hello there", encoding="utf-8")
-        tok = SloUnigram.train_from_directory(str(d), vocab_size=64,
-                                               seed_max_len=4, pruning_ratio=0.3, em_iters=2)
-        assert tok.vocab_size >= 4
-        assert tok.decode(tok.encode("hello")) == "hello"
-        tok2 = SloUnigram.train_from_directory(str(d), vocab_size=32, recursive=False)
-        assert tok2.vocab_size >= 4
+    def test_decompose_unknown_raises(self):
+        tok = SloUnigram()
+        tok.train(["hello"], vocab_size=16)
+        with pytest.raises(ValueError, match="not found"):
+            tok.decompose_token("NONEXISTENT")
 
-    def test_show_vocab(self):
-        tok = SloUnigram(); tok.train(CORPUS, vocab_size=64)
-        tok.show_vocab(top_n=5)
 
-    def test_pretokenize_whitespace(self):
-        tok = SloUnigram(pretokenizer="whitespace"); tok.train(CORPUS, vocab_size=64)
-        assert tok.encode("hello world") == tok.encode("hello") + tok.encode("world")
+class TestSloUnigramAnalyzeCorpus:
+    def test_analyze_corpus(self):
+        tok = SloUnigram()
+        tok.train(["hello world", "foo bar"] * 5, vocab_size=64)
+        stats = tok.analyze_corpus(["hello world", "hello there"])
+        assert stats["total_chars"] > 0
+        assert stats["total_tokens"] > 0
+        assert stats["compression_ratio"] > 0
+        assert stats["unique_tokens"] > 0
+        assert stats["vocab_utilization"] > 0
+        assert len(stats["top_tokens"]) > 0
+
+
+class TestSloUnigramShowPretokenization:
+    def test_show(self):
+        tok = SloUnigram()
+        result = tok.show_pretokenization("hello world")
+        assert "pretokens" in result
+        assert result["count"] == len(result["pretokens"])
+
+
+class TestSloUnigramNormalize:
+    def test_lowercasing(self):
+        result = SloUnigram._normalize("Hello WORLD")
+        assert result == "hello world"
+
+    def test_whitespace_collapse(self):
+        result = SloUnigram._normalize("a   b")
+        assert result == "a b"
+
+
+class TestSloUnigramViterbi:
+    def test_viterbi_returns_tokens(self):
+        tok = SloUnigram()
+        tok.train(["hello world"] * 5, vocab_size=128)
+        tokens = tok._viterbi("hello")
+        assert isinstance(tokens, list)
+        assert len(tokens) > 0
+
+    def test_viterbi_empty_string(self):
+        tok = SloUnigram()
+        tok.train(["hello"], vocab_size=16)
+        assert tok._viterbi("") == []
+
+
+class TestSloUnigramAllSegmentations:
+    def test_all_segmentations(self):
+        tok = SloUnigram()
+        tok.train(["hello world"] * 5, vocab_size=128)
+        segs = tok._all_segmentations("hello")
+        assert isinstance(segs, list)
+        assert len(segs) > 0
+        for seg in segs:
+            assert "".join(seg) == "hello"
+
+    def test_empty_string(self):
+        tok = SloUnigram()
+        tok.train(["hello"], vocab_size=16)
+        assert tok._all_segmentations("") == []

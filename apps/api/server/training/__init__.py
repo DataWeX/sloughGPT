@@ -17,6 +17,14 @@ from .schemas import (
     TrainingRequest,
     TrainRequest,
     TrainResolveRequest,
+    DistillStartRequest,
+    LoraFinetuneRequest,
+    VisualTrainRequest,
+    LoadAdapterRequest,
+    FromSessionsRequest,
+    TurboStartRequest,
+    ExportTextRequest,
+    TestWebhookRequest,
 )
 
 __all__ = [
@@ -28,4 +36,12 @@ __all__ = [
     "TrainRequest",
     "TrainResolveRequest",
     "TrainingRequest",
+    "DistillStartRequest",
+    "LoraFinetuneRequest",
+    "VisualTrainRequest",
+    "LoadAdapterRequest",
+    "FromSessionsRequest",
+    "TurboStartRequest",
+    "ExportTextRequest",
+    "TestWebhookRequest",
 ]

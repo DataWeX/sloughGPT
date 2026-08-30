@@ -9,7 +9,7 @@ import { memoryController, type MemoryArchiveStats } from '@/lib/memory-controll
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { todayDateString } from '@/lib/format-bytes'
 import { downloadJson, importFile } from '@/lib/download-utils'
-import { parseMemoryImport } from './memory-card-utils'
+import { parseMemoryImport } from '@/lib/memory-card-utils'
 
 interface MemoryMaintenancePanelProps {
   itemCount: number

@@ -20,7 +20,7 @@ import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingSummaryCard } from '@/components/training/TrainingSummaryCard'
 import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
-import { TurboCard } from '@/components/training/TurboCard'
+import { QuickTrainCard } from '@/components/training/QuickTrainCard'
 import { APILogsCard } from '@/components/training/APILogsCard'
 import { FeedbackTrainCard } from '@/components/training/FeedbackTrainCard'
 import { RecoveryCard } from '@/components/training/RecoveryCard'
@@ -259,20 +259,30 @@ export default function TrainingPage() {
         <TrainingLogCard trainingRunning={session.trainingRunning} />
 
         {/* Manual sub-tabs */}
-        <div className="flex flex-wrap gap-1.5">
-          {MANUAL_TABS.map(t => (
-            <button
-              type="button"
-              role="tab"
-              key={t.id}
-              aria-selected={manualTab === t.id}
-              aria-label={`${t.label} tab`}
-              onClick={() => setManualTab(t.id)}
-              className={cn('px-3 py-1.5 text-xs font-medium rounded-md transition-colors', manualTab === t.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
-            >
-              {t.label}
-            </button>
-          ))}
+        <div className="border-b border-border/50" role="tablist">
+          <div className="flex gap-0">
+            {MANUAL_TABS.map(t => (
+              <button
+                type="button"
+                role="tab"
+                key={t.id}
+                aria-selected={manualTab === t.id}
+                aria-label={`${t.label} tab`}
+                onClick={() => setManualTab(t.id)}
+                className={cn(
+                  'relative px-4 py-2.5 text-xs font-medium transition-colors',
+                  manualTab === t.id
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t.label}
+                {manualTab === t.id && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
             {/* Train tab */}
@@ -289,7 +299,7 @@ export default function TrainingPage() {
                 />
 
                 {/* Fast train (turbo) */}
-                <TurboCard datasets={datasets} session={session} addToast={addToast} />
+                <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
 
                 {/* Train from feedback */}
                 <FeedbackTrainCard addToast={addToast} />

@@ -37,8 +37,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       chatDB.getKV<string>(MODE_STORAGE_KEY),
       chatDB.getKV<string>(PALETTE_STORAGE_KEY),
     ]).then(([savedTheme, savedMode, savedPalette]) => {
-      const t = isStoredThemeId(savedTheme) ? savedTheme : 'purple'
-      const p = isStoredPaletteId(savedPalette) ? savedPalette : 'noir-violet'
+      const t = isStoredThemeId(savedTheme ?? null) ? savedTheme as StoredThemeId : 'purple'
+      const p = isStoredPaletteId(savedPalette ?? null) ? savedPalette as StoredPaletteId : 'noir-violet'
       let m: ThemeMode
       if (savedMode === 'light' || savedMode === 'dark') {
         m = savedMode

@@ -17,7 +17,7 @@ import dynamicNext from 'next/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
-import { StatusCard } from '@/components/monitoring/StatusCard'
+import { SystemStatusCard } from '@/components/monitoring/SystemStatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
 import { TrafficCard } from '@/components/monitoring/TrafficCard'
 import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
@@ -27,6 +27,7 @@ import { ModelEventsCard } from '@/components/monitoring/ModelEventsCard'
 import { RateViolationsCard } from '@/components/monitoring/RateViolationsCard'
 import { ResourceCard } from '@/components/monitoring/ResourceCard'
 import { LatencyCard } from '@/components/monitoring/LatencyCard'
+import { InferencePoolCard } from '@/components/monitoring/InferencePoolCard'
 import { AlertPanel } from '@/components/monitoring/AlertPanel'
 import { KnowledgeCard } from '@/components/monitoring/KnowledgeCard'
 import { AutoTrainCard } from '@/components/monitoring/AutoTrainCard'
@@ -35,7 +36,7 @@ import { FeedbackCard } from '@/components/monitoring/FeedbackCard'
 import { TrainingHistory } from '@/components/monitoring/TrainingHistory'
 import { ExecutorPool } from '@/components/monitoring/ExecutorPool'
 import { ProcessCard } from '@/components/monitoring/ProcessCard'
-import { KvCacheCard } from '@/components/monitoring/KvCacheCard'
+import { KVCacheCard } from '@/components/monitoring/KVCacheCard'
 import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
 import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
@@ -338,7 +339,7 @@ export default function SystemHealthPage() {
       {/* Row 1: Status + Resources + Alerts — essential overview */}
       {loaded && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <StatusCard
+          <SystemStatusCard
             liveHealth={liveHealth}
             detailed={detailed}
             connectionStatus={connectionStatus}
@@ -389,7 +390,7 @@ export default function SystemHealthPage() {
             <ModelEventsCard liveHealth={liveHealth} />
             <RateViolationsCard liveHealth={liveHealth} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <LatencyCard chartHistory={chartHistory} />
+              <LatencyCard liveHealth={liveHealth} />
               <ProcessCard detailed={detailed} />
             </div>
           </div>
@@ -434,7 +435,8 @@ export default function SystemHealthPage() {
               <DiskCard disk={disk ?? undefined} />
               <ServerInfoCard info={info ?? undefined} />
             </div>
-            {detailed?.kv_sessions?.enabled && <KvCacheCard kvSessions={detailed.kv_sessions} />}
+            {detailed?.kv_sessions?.enabled && <KVCacheCard kvSessions={detailed.kv_sessions} />}
+            <InferencePoolCard onRefresh={fetchAll} />
             {chartHistory.length > 1 && (
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-2">

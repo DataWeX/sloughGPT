@@ -100,7 +100,7 @@ def _quantize(args, out, api):
         out.write(f"Invalid scheme: {scheme!r}. Must be one of: {', '.join(sorted(_VALID_SCHEME))}")
         return 1
     try:
-        result = api.quantize_model(bits=bits, scheme=scheme)
+        result = api.quantize_model(bits=bits, mode=scheme)
     except Exception as e:
         out.write(_format_error(e, "quantize"))
         return 1

@@ -21,6 +21,9 @@ export {
   IconBrain,
   IconVision,
   IconClock,
+  IconTokenizer,
+  IconDocument,
+  IconCode,
 } from '@sloughgpt/strui'
 
 import { IconX } from '@sloughgpt/strui'

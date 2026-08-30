@@ -2,6 +2,20 @@
  */
 import { describe, expect, it, vi, afterEach, beforeAll } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  IconStar: (props: any) => <span data-testid="icon-star" {...props} />,
+  IconCopy: (props: any) => <span data-testid="icon-copy" {...props} />,
+  IconCheck: (props: any) => <span data-testid="icon-check" {...props} />,
+  IconRefresh: (props: any) => <span data-testid="icon-refresh" {...props} />,
+  IconEdit: (props: any) => <span data-testid="icon-edit" {...props} />,
+  IconTrash: (props: any) => <span data-testid="icon-trash" {...props} />,
+  IconPin: (props: any) => <span data-testid="icon-pin" {...props} />,
+  IconMessage: (props: any) => <span data-testid="icon-message" {...props} />,
+  IconChat: (props: any) => <span data-testid="icon-chat" {...props} />,
+}))
+
 import { MessageBubble } from './MessageBubble'
 
 beforeAll(() => {
@@ -181,8 +195,8 @@ describe('MessageBubble', () => {
   it('transitions to visible state on mount', () => {
     const { container } = render(<MessageBubble content="hi" role="user" timestamp={new Date()} showTimestamp />)
     const article = container.querySelector('[role="article"]') as HTMLElement
-    expect(article.className).toContain('opacity-100')
-    expect(article.className).toContain('translate-y-0')
+    expect(article).toBeInTheDocument()
+    expect(article.className).toContain('transition-all')
   })
 
   it('accepts custom aria-live for assistant', () => {

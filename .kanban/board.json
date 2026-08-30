@@ -43,7 +43,7 @@
       "id": "20260830_103238_fix-failing-tests-in-appsweb",
       "title": "Fix failing tests in apps/web",
       "description": "",
-      "column": "in_progress",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "testing",
@@ -7846,7 +7846,7 @@
       "id": "20260830T094845_vm-debug-noninteractive",
       "title": "Add non-interactive vm debug mode",
       "description": "Add non-interactive mode for scripted debugging.\n\n**Files:** apps/cli/src/commands/vm.py, apps/cli/src/cli.py\n\n**Implementation:**\n1. --steps N flag to execute N instructions and print state\n2. --breakpoint ADDR flag to set breakpoint before execution\n3. --output flag to print register state after execution\n4. When any flag present, run non-interactively\n\n**Example:** `slooughgpt vm debug --file prog.asm --steps 10 --output`\n\n**Test:** Add test that runs debug with --steps flag.",
-      "column": "todo",
+      "column": "done",
       "priority": "low",
       "tags": [
         "vm",

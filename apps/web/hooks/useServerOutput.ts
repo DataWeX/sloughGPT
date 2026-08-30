@@ -19,7 +19,7 @@ interface UseServerOutputReturn {
   lines: OutputLine[]
   streaming: boolean
   clear: () => void
-  scrollRef: React.RefObject<HTMLDivElement>
+  scrollRef: React.RefObject<HTMLDivElement | null>
   paused: boolean
   togglePause: () => void
   exportLines: (format?: 'text' | 'json') => void

@@ -93,7 +93,7 @@ class TestResolveDatasetPath:
         ds_dir.mkdir(parents=True)
         (ds_dir / "corpus.jsonl").write_text('{"text":"hello"}')
         with pytest.MonkeyPatch.context() as m:
-            m.setattr("routers.auto_train.REPO_ROOT", tmp_path)
+            m.setattr("domains.training.service.REPO_ROOT", tmp_path)
             result = _resolve_dataset_path("test_ds")
         assert result.endswith("corpus.jsonl")
 
@@ -102,7 +102,7 @@ class TestResolveDatasetPath:
         ds_dir.mkdir(parents=True)
         (ds_dir / "input.txt").write_text("hello world")
         with pytest.MonkeyPatch.context() as m:
-            m.setattr("routers.auto_train.REPO_ROOT", tmp_path)
+            m.setattr("domains.training.service.REPO_ROOT", tmp_path)
             result = _resolve_dataset_path("test_ds2")
         assert result.endswith("input.txt")
 
@@ -111,7 +111,7 @@ class TestResolveDatasetPath:
         ds_dir.mkdir(parents=True)
         (ds_dir / "custom.txt").write_text("data")
         with pytest.MonkeyPatch.context() as m:
-            m.setattr("routers.auto_train.REPO_ROOT", tmp_path)
+            m.setattr("domains.training.service.REPO_ROOT", tmp_path)
             result = _resolve_dataset_path("test_ds3")
         assert result.endswith("custom.txt")
 
@@ -119,7 +119,7 @@ class TestResolveDatasetPath:
         ds_dir = tmp_path / "datasets" / "empty_ds"
         ds_dir.mkdir(parents=True)
         with pytest.MonkeyPatch.context() as m:
-            m.setattr("routers.auto_train.REPO_ROOT", tmp_path)
+            m.setattr("domains.training.service.REPO_ROOT", tmp_path)
             result = _resolve_dataset_path("empty_ds")
         assert result == ""
 

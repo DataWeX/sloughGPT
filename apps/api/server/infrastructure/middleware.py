@@ -380,7 +380,7 @@ def register_all_middleware(app: FastAPI, request_timeout: float = REQUEST_TIMEO
 
     # Wire rate limiter middleware
     try:
-        from domains.infrastructure.rate_limiter import RateLimitMiddleware
+        from infrastructure.rate_limit_middleware import RateLimitMiddleware
         app.add_middleware(RateLimitMiddleware)
         logger.info("RateLimitMiddleware registered", extra={"op": "infra.startup"})
     except Exception as exc:

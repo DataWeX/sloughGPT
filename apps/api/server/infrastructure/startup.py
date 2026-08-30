@@ -539,10 +539,10 @@ class StartupOrchestrator:
                 def _warm_checkpoints():
                     try:
                         import asyncio as _aio
-                        from routers.auto_train import _auto_train_instance as _inst
+                        from domains.training.service import list_checkpoints
                         _loop = _aio.new_event_loop()
                         try:
-                            _loop.run_until_complete(_inst.list_checkpoints())
+                            _loop.run_until_complete(list_checkpoints())
                         finally:
                             _loop.close()
                     except Exception as e:
@@ -635,6 +635,27 @@ class StartupOrchestrator:
                 extra={"op": "sys.startup"})
         except Exception as e:
             logger.warning("ResourceManager init: %s", e, extra={"op": "sys.startup"})
+        # Init MemoryPressureMonitor from config thresholds
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            from config import ServerConfig
+            sc = ServerConfig.from_env()
+            monitor = get_memory_pressure_monitor()
+            monitor.configure(
+                warning=sc.memory_pressure_warning,
+                critical=sc.memory_pressure_critical,
+                emergency=sc.memory_pressure_emergency,
+            )
+            # Register cleanup callback globally so it works for all load paths
+            # (eager autoload, lazy guard, manual API load)
+            monitor.register_cleanup(_memory_pressure_cleanup)
+            logger.info(
+                "MemoryPressureMonitor init: warning=%.0f%% critical=%.0f%% emergency=%.0f%%",
+                sc.memory_pressure_warning, sc.memory_pressure_critical,
+                sc.memory_pressure_emergency, extra={"op": "sys.startup"},
+            )
+        except Exception as e:
+            logger.warning("MemoryPressureMonitor init: %s", e, extra={"op": "sys.startup"})
 
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""
@@ -766,7 +787,8 @@ class StartupOrchestrator:
 async def _restore_training_runtime():
     """Restore persisted training jobs into the runtime + job registry."""
     try:
-        from training.runtime import get_training_runtime
+        from training.runtime import get_training_runtime, _register_runtime_with_core
+        _register_runtime_with_core()
         get_training_runtime().restore()
     except Exception as e:
         logger.warning("Training runtime restore failed: %s", e, extra={"op": "sys.startup"})
@@ -999,6 +1021,41 @@ def _build_guard_for_model(cfg, model_type: str):
     except Exception as e:
         logger.warning("ProcessGuard creation failed: %s", e, extra={"op": "sys.startup"})
         return None
+
+
+def _memory_pressure_cleanup() -> None:
+    """Release idle model weights under memory pressure.
+
+    Registered as a cleanup callback with MemoryPressureMonitor. Drops the
+    in-process model reference (via ModelServer.drop_model_ref) and stops
+    the ProcessGuard subprocess so memory is freed immediately. The idle
+    manager auto-reloads on next request.
+    """
+    try:
+        from domains.infrastructure.model_registry import get_model_registry
+        registry = get_model_registry()
+        for mid, server in registry.iter_servers():
+            if server is None:
+                continue
+            # Drop in-memory model reference (guard mode keeps inference alive)
+            if hasattr(server, "drop_model_ref"):
+                try:
+                    server.drop_model_ref()
+                except Exception as exc:
+                    logger.debug("drop_model_ref failed for %s: %s", mid, exc)
+            # Stop the process guard subprocess to free its memory
+            guard = getattr(server, "_process_guard", None)
+            if guard is not None and getattr(guard, "alive", False):
+                try:
+                    guard.stop()
+                    logger.info(
+                        "Memory pressure: stopped guard for %s (release subprocess)",
+                        mid,
+                    )
+                except Exception as exc:
+                    logger.debug("guard stop failed for %s: %s", mid, exc)
+    except Exception as e:
+        logger.debug("Memory pressure cleanup failed: %s", e)
 
 
 def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:

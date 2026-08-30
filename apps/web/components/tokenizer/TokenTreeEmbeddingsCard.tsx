@@ -87,7 +87,7 @@ export function TokenTreeEmbeddingsCard() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Each token's embedding is generated from a compressed pugqeep point, not stored as a full vector — the
+              Each token&apos;s embedding is generated from a compressed pugqeep point, not stored as a full vector — the
               same substrate that powers the semantic query card. The vector below is what feeds cosine similarity.
             </p>
           </div>

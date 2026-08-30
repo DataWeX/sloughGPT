@@ -5,6 +5,7 @@ import { act } from 'react'
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
+  const passthroughWithProps = (props: any) => <div {...props}>{props.children}</div>
   return {
     cn: (...args: any[]) => args.join(' '),
     Button: ({ children, onClick, disabled, variant, size, className }: any) => (
@@ -29,6 +30,22 @@ vi.mock('@sloughgpt/strui', () => {
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     IconTrash: () => <span data-testid="icon-trash">trash</span>,
     FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
+    Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
+      <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    ),
+    Dialog: passthroughWithProps,
+    DialogContent: passthroughWithProps,
+    DialogHeader: passthroughWithProps,
+    DialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    AlertDialogCancel: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    AlertDialogContent: passthroughWithProps,
+    AlertDialogDescription: passthroughWithProps,
+    AlertDialogFooter: passthroughWithProps,
+    AlertDialogHeader: passthroughWithProps,
+    AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
+    AlertDialogTrigger: ({ children, ...props }: any) => <span {...props}>{children}</span>,
   }
 })
 
@@ -37,8 +54,7 @@ const mocks = vi.hoisted(() => ({
   session: {
     trainingRunning: false, paused: false, loss: null, progress: 0, globalStep: 0, totalSteps: 0,
     stepsPerSec: null as number | null, epoch: 0, totalEpochs: 0, eta: 0, elapsedSeconds: 0, message: '',
-    lossHistory: [] as any[],
-    startSSETraining: vi.fn(), stopTraining: vi.fn(), pauseTraining: vi.fn(), resumeTraining: vi.fn(),
+    lossHistory: [] as any[], stopTraining: vi.fn(), pauseTraining: vi.fn(), resumeTraining: vi.fn(),
   },
   datasets: {
     datasets: [] as any[], selectedDataset: '', loadingDatasets: false, importModalOpen: false, datasetPreview: null,
@@ -81,6 +97,9 @@ vi.mock('@/lib/training-controller', () => ({
 }))
 vi.mock('@/lib/controllers', () => ({
   datasetController: { list: mocks.listDatasets },
+}))
+vi.mock('@/lib/error-utils', () => ({
+  extractErrorMessage: (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback),
 }))
 vi.mock('@/components/training/LossChart', () => ({
   LossChart: ({ data }: any) => <div data-testid="loss-chart">LossChart</div>,
@@ -248,7 +267,7 @@ describe('AutoTrainPage', () => {
     fireEvent.click(screen.getByText('Load'))
     await waitFor(() => {
       expect(mocks.loadCheckpoint).toHaveBeenCalledWith('cp-1')
-      expect(mocks.addToast).toHaveBeenCalledWith('Loaded checkpoint: cp-1', 'success')
+      expect(mocks.addToast).toHaveBeenCalledWith('Loaded: cp-1', 'success')
     })
   })
 
@@ -259,7 +278,7 @@ describe('AutoTrainPage', () => {
     fireEvent.click(screen.getByText('Delete'))
     await waitFor(() => {
       expect(mocks.deleteCheckpoint).toHaveBeenCalledWith('cp-1')
-      expect(mocks.addToast).toHaveBeenCalledWith('Deleted checkpoint: cp-1', 'success')
+      expect(mocks.addToast).toHaveBeenCalledWith('Deleted: cp-1', 'success')
     })
   })
 
@@ -271,7 +290,7 @@ describe('AutoTrainPage', () => {
     fireEvent.click(screen.getByText('Info'))
     await waitFor(() => {
       expect(mocks.getCheckpointInfo).toHaveBeenCalledWith('cp-1')
-      expect(screen.getByText('Checkpoint: cp-1')).toBeTruthy()
+      expect(screen.getAllByText('cp-1').length).toBeGreaterThanOrEqual(2)
     })
   })
 
@@ -284,7 +303,12 @@ describe('AutoTrainPage', () => {
     render(<AutoTrainPage />)
     await waitFor(() => { expect(screen.getByText('Select all')).toBeTruthy() })
     fireEvent.click(screen.getByText('Select all'))
+    await waitFor(() => { expect(screen.getByText('Delete 2')).toBeTruthy() })
     fireEvent.click(screen.getByText('Delete 2'))
+    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    const dialogBtns = screen.getAllByText('Delete')
+    const confirmBtn = dialogBtns.find(el => el.closest('[data-testid="alert-dialog"]'))
+    if (confirmBtn) fireEvent.click(confirmBtn)
     await waitFor(() => {
       expect(mocks.deleteCheckpointsBatch).toHaveBeenCalledWith(['cp-1', 'cp-2'])
     })

@@ -5,7 +5,16 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from unittest.mock import MagicMock  # noqa: E402
+from unittest.mock import MagicMock, call  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def mock_log(monkeypatch):
+    """Patch commands.memory.log with a MagicMock."""
+    fake_log = MagicMock()
+    import commands.memory as mod
+    monkeypatch.setattr(mod, "log", fake_log)
+    return fake_log
 
 
 @pytest.fixture(autouse=True)
@@ -36,43 +45,39 @@ def _ns(**kwargs):
 
 
 class TestStats:
-    def test_prints_enabled_and_facts(self, fake_service, capsys):
+    def test_prints_enabled_and_facts(self, fake_service, mock_log):
         from commands.memory import cmd_memory_stats
         cmd_memory_stats(_ns())
-        out = capsys.readouterr().out
-        assert "Facts" in out
-        assert "2" in out
+        mock_log.key_value.assert_any_call("Facts", "2")
         fake_service.stats.assert_called_once()
 
 
 class TestEnable:
-    def test_enable_turns_memory_on(self, fake_service, capsys):
+    def test_enable_turns_memory_on(self, fake_service, mock_log):
         from commands.memory import cmd_memory_enable
         cmd_memory_enable(_ns(enabled=True))
         fake_service.set_enabled.assert_called_once_with(True)
-        assert "enabled" in capsys.readouterr().out
+        assert any("enabled" in str(c) for c in mock_log.success.call_args_list)
 
-    def test_disable_turns_memory_off(self, fake_service, capsys):
+    def test_disable_turns_memory_off(self, fake_service, mock_log):
         from commands.memory import cmd_memory_enable
         cmd_memory_enable(_ns(enabled=False))
         fake_service.set_enabled.assert_called_once_with(False)
-        assert "disabled" in capsys.readouterr().out
+        assert any("disabled" in str(c) for c in mock_log.success.call_args_list)
 
 
 class TestList:
-    def test_lists_items(self, fake_service, capsys):
+    def test_lists_items(self, fake_service, mock_log):
         from commands.memory import cmd_memory_list
         cmd_memory_list(_ns(limit=10))
-        out = capsys.readouterr().out
-        assert "Paris" in out
+        assert mock_log.table.called
         fake_service.list_all.assert_called_with(limit=10)
 
-    def test_empty_list_prints_hint(self, fake_service, capsys):
+    def test_empty_list_prints_hint(self, fake_service, mock_log):
         fake_service.list_all.return_value = []
         from commands.memory import cmd_memory_list
         cmd_memory_list(_ns(limit=10))
-        out = capsys.readouterr().out
-        assert "No memory stored" in out
+        assert any("No memory" in str(c) for c in mock_log.info.call_args_list)
 
 
 class TestSearch:
@@ -82,18 +87,17 @@ class TestSearch:
             cmd_memory_search(_ns(query="", limit=5))
         assert exc.value.code == 2
 
-    def test_prints_matches(self, fake_service, capsys):
+    def test_prints_matches(self, fake_service, mock_log):
         from commands.memory import cmd_memory_search
         cmd_memory_search(_ns(query="france", limit=3))
-        out = capsys.readouterr().out
-        assert "Paris" in out
+        assert mock_log.table.called
         fake_service.retrieve.assert_called_with("france", limit=3)
 
-    def test_no_matches_prints_hint(self, fake_service, capsys):
+    def test_no_matches_prints_hint(self, fake_service, mock_log):
         fake_service.retrieve.return_value = []
         from commands.memory import cmd_memory_search
         cmd_memory_search(_ns(query="xyz", limit=3))
-        assert "No memory matches" in capsys.readouterr().out
+        assert any("No memory matches" in str(c) for c in mock_log.info.call_args_list)
 
 
 class TestStore:
@@ -103,17 +107,17 @@ class TestStore:
             cmd_memory_store(_ns(content="", topic="t", source="cli"))
         assert exc.value.code == 2
 
-    def test_stores_fact(self, fake_service, capsys):
+    def test_stores_fact(self, fake_service, mock_log):
         from commands.memory import cmd_memory_store
         cmd_memory_store(_ns(content="a fact", topic="t", source="cli"))
         fake_service.store.assert_called_with("a fact", "t", "cli")
-        assert "Stored" in capsys.readouterr().out
+        assert any("Stored" in str(c) for c in mock_log.success.call_args_list)
 
-    def test_failed_store_warns(self, fake_service, capsys):
+    def test_failed_store_warns(self, fake_service, mock_log):
         fake_service.store.return_value = False
         from commands.memory import cmd_memory_store
         cmd_memory_store(_ns(content="dup", topic="t", source="cli"))
-        assert "Not stored" in capsys.readouterr().out
+        assert any("Not stored" in str(c) for c in mock_log.warning.call_args_list)
 
 
 class TestRemember:
@@ -124,15 +128,15 @@ class TestRemember:
         with pytest.raises(SystemExit):
             cmd_memory_remember(_ns(user_message="hi", assistant_response=""))
 
-    def test_remember_stores_turn(self, fake_service, capsys):
+    def test_remember_stores_turn(self, fake_service, mock_log):
         from commands.memory import cmd_memory_remember
         cmd_memory_remember(_ns(user_message="q", assistant_response="a"))
         fake_service.remember.assert_called_with("q", "a")
-        assert "stored" in capsys.readouterr().out
+        assert any("stored" in str(c).lower() for c in mock_log.success.call_args_list)
 
 
 class TestClear:
-    def test_clear_requires_confirmation(self, fake_service, capsys, monkeypatch):
+    def test_clear_requires_confirmation(self, fake_service, mock_log, monkeypatch):
         import click
         monkeypatch.setattr(click, "confirm", lambda *a, **k: True)
         from commands.memory import cmd_memory_clear
@@ -146,11 +150,11 @@ class TestClear:
         cmd_memory_clear(_ns(yes=False))
         fake_service.clear.assert_not_called()
 
-    def test_clear_yes_flag(self, fake_service, capsys):
+    def test_clear_yes_flag(self, fake_service, mock_log):
         from commands.memory import cmd_memory_clear
         cmd_memory_clear(_ns(yes=True))
         fake_service.clear.assert_called_once()
-        assert "Cleared 2" in capsys.readouterr().out
+        assert any("Cleared 2" in str(c) for c in mock_log.success.call_args_list)
 
 
 class TestConsolidate:
@@ -158,7 +162,7 @@ class TestConsolidate:
     LONG = "Machine learning learns patterns from data very effectively."
     DISTINCT = "Neural networks recognize images well."
 
-    def test_merges_near_duplicates(self, fake_service, capsys):
+    def test_merges_near_duplicates(self, fake_service, mock_log):
         fake_service.list_all.return_value = [
             {"id": "fact_1", "content": self.SHORT, "topic": "ml"},
             {"id": "fact_2", "content": self.LONG, "topic": "ml"},
@@ -166,10 +170,10 @@ class TestConsolidate:
         fake_service.delete.return_value = 1
         from commands.memory import cmd_memory_consolidate
         cmd_memory_consolidate(_ns(threshold=0.80))
-        assert "Consolidated 1" in capsys.readouterr().out
+        assert any("Consolidated 1" in str(c) for c in mock_log.success.call_args_list)
         fake_service.delete.assert_called_with(["fact_1"])
 
-    def test_merges_near_duplicates_at_default_threshold(self, fake_service, capsys):
+    def test_merges_near_duplicates_at_default_threshold(self, fake_service, mock_log):
         """Default threshold (0.80) collapses near-verbatim copies (~0.845)."""
         fake_service.list_all.return_value = [
             {"id": "fact_1", "content": self.SHORT, "topic": "ml"},
@@ -178,10 +182,10 @@ class TestConsolidate:
         fake_service.delete.return_value = 1
         from commands.memory import cmd_memory_consolidate
         cmd_memory_consolidate(_ns(threshold=None))
-        assert "Consolidated 1" in capsys.readouterr().out
+        assert any("Consolidated 1" in str(c) for c in mock_log.success.call_args_list)
         fake_service.delete.assert_called_with(["fact_1"])
 
-    def test_no_duplicates_at_default_threshold(self, fake_service, capsys):
+    def test_no_duplicates_at_default_threshold(self, fake_service, mock_log):
         """Default threshold keeps distinct facts about the same topic."""
         fake_service.list_all.return_value = [
             {"id": "fact_1", "content": self.SHORT, "topic": "ml"},
@@ -189,15 +193,14 @@ class TestConsolidate:
         ]
         from commands.memory import cmd_memory_consolidate
         cmd_memory_consolidate(_ns(threshold=None))
-        out = capsys.readouterr().out
-        assert "No near-duplicates" in out
+        assert any("No near-duplicates" in str(c) for c in mock_log.info.call_args_list)
         fake_service.delete.assert_not_called()
 
-    def test_empty_store_prints_hint(self, fake_service, capsys):
+    def test_empty_store_prints_hint(self, fake_service, mock_log):
         fake_service.list_all.return_value = []
         from commands.memory import cmd_memory_consolidate
         cmd_memory_consolidate(_ns(threshold=0.80))
-        assert "No memory to consolidate" in capsys.readouterr().out
+        assert any("No memory to consolidate" in str(c) for c in mock_log.info.call_args_list)
 
 
 class TestArchive:
@@ -218,23 +221,20 @@ class TestArchive:
                             [{"ts": 200.0, "task_type": "memory.store", "task_id": "t1",
                               "content": "Redwoods can live over 2000 years"}])
 
-    def test_archive_shows_stats_and_records(self, monkeypatch, capsys):
+    def test_archive_shows_stats_and_records(self, monkeypatch, mock_log):
         self._patch(monkeypatch)
         from commands.memory import cmd_memory_archive
         cmd_memory_archive(_ns(limit=10, prune_days=None))
-        out = capsys.readouterr().out
-        assert "Records" in out
-        assert "2" in out
-        assert "Redwoods" in out
+        assert any("Records" in str(c) for c in mock_log.key_value.call_args_list)
 
-    def test_archive_empty_stats(self, monkeypatch, capsys):
+    def test_archive_empty_stats(self, monkeypatch, mock_log):
         self._patch(monkeypatch, stats={"path": "/x", "records": 0, "bytes": 0,
                                         "task_types": {}, "oldest_ts": None, "newest_ts": None})
         from commands.memory import cmd_memory_archive
         cmd_memory_archive(_ns(limit=10, prune_days=None))
-        assert "Records" in capsys.readouterr().out
+        assert any("Records" in str(c) for c in mock_log.key_value.call_args_list)
 
-    def test_archive_prune_confirmed(self, monkeypatch, capsys):
+    def test_archive_prune_confirmed(self, monkeypatch, mock_log):
         from domains.memory import task_memory as tm
         calls = []
         monkeypatch.setattr(tm, "prune_archive", lambda retain_days: calls.append(retain_days) or 3)
@@ -243,7 +243,7 @@ class TestArchive:
         from commands.memory import cmd_memory_archive
         cmd_memory_archive(_ns(limit=10, prune_days=30))
         assert calls == [30.0]
-        assert "Pruned 3" in capsys.readouterr().out
+        assert any("Pruned 3" in str(c) for c in mock_log.success.call_args_list)
 
     def test_archive_prune_declined(self, monkeypatch):
         from domains.memory import task_memory as tm

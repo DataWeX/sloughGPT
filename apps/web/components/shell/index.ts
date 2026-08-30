@@ -1,2 +1,2 @@
-export { ShellPanel } from './ShellPanel'
-export type { ShellPanelProps } from './ShellPanel'
+export { TerminalPanel } from './TerminalPanel'
+export type { TerminalPanelProps } from './TerminalPanel'

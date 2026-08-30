@@ -246,7 +246,8 @@ class TokenizerManager:
         if self._tokenizer is not None and self._tokenizer.vocab_size > 0:
             return True
         try:
-            from routers.auto_train import state as at_state
+            from domains.training.service import get_state
+            at_state = get_state()
             at_tok = at_state.student_tokenizer
             if at_tok is not None and hasattr(at_tok, "vocab_size") and at_tok.vocab_size > 10:
                 self._tokenizer = at_tok

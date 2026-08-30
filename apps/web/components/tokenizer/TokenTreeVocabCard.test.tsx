@@ -17,6 +17,7 @@ vi.mock('@/lib/token-tree-controller', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CardHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CardTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -54,12 +55,13 @@ describe('TokenTreeVocabCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.mockGetStats.mockResolvedValue(STATS)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
   })
 
   afterEach(cleanup)
 
   it('fetches stats and renders a paged vocabulary with badges', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     render(<TokenTreeVocabCard />)
 
     await waitFor(() => expect(mocks.mockGetStats).toHaveBeenCalledTimes(1))
@@ -74,7 +76,7 @@ describe('TokenTreeVocabCard', () => {
   })
 
   it('renders stat chips from stats', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     render(<TokenTreeVocabCard />)
     await waitFor(() => expect(screen.getByText('Vocab 53')).toBeDefined())
     expect(screen.getByText('Merged 20')).toBeDefined()
@@ -102,11 +104,11 @@ describe('TokenTreeVocabCard', () => {
   })
 
   it('paginates forward and backward', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce({ total: 103, entries: PAGE.entries })
+    mocks.mockGetVocab.mockResolvedValue({ total: 103, entries: PAGE.entries })
     render(<TokenTreeVocabCard />)
     await waitFor(() => expect(screen.getByText('<pad>')).toBeDefined())
 
-    mocks.mockGetVocab.mockResolvedValueOnce({
+    mocks.mockGetVocab.mockResolvedValue({
       total: 103,
       entries: [{ id: 50, token: 'brown</w>', freq: 2, is_special: false, is_merged: true }],
     })
@@ -114,20 +116,20 @@ describe('TokenTreeVocabCard', () => {
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenLastCalledWith(50, 50))
     expect(screen.getByText('brown')).toBeDefined()
 
-    mocks.mockGetVocab.mockResolvedValueOnce({ total: 103, entries: PAGE.entries })
+    mocks.mockGetVocab.mockResolvedValue({ total: 103, entries: PAGE.entries })
     fireEvent.click(screen.getByRole('button', { name: /Prev/i }))
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenLastCalledWith(50, 0))
   })
 
   it('disables Prev on the first page', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     render(<TokenTreeVocabCard />)
     await waitFor(() => expect(screen.getByText('<pad>')).toBeDefined())
     expect((screen.getByRole('button', { name: /Prev/i }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('expands an entry to show its lineage and toggles closed', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     mocks.mockLineage.mockResolvedValueOnce({
       token: 'the</w>',
       leaves: ['t', 'h', 'e'],
@@ -146,21 +148,21 @@ describe('TokenTreeVocabCard', () => {
   })
 
   it('refreshes via the button', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     render(<TokenTreeVocabCard />)
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenCalledTimes(1))
 
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     fireEvent.click(screen.getByLabelText('Refresh vocabulary'))
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenCalledTimes(2))
   })
 
   it('refetches when refreshKey changes', async () => {
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     const { rerender } = render(<TokenTreeVocabCard refreshKey={0} />)
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenCalledTimes(1))
 
-    mocks.mockGetVocab.mockResolvedValueOnce(PAGE)
+    mocks.mockGetVocab.mockResolvedValue(PAGE)
     rerender(<TokenTreeVocabCard refreshKey={1} />)
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenCalledTimes(2))
   })

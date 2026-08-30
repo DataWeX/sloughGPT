@@ -1,12 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { modelController } from '@/lib/controllers'
+import { modelController, trainingJobsController } from '@/lib/controllers'
 import type { TrainingJob } from '@/lib/training-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 import { chatDB } from '@/lib/db'
+import { extractErrorMessage } from '@/lib/error-utils'
 
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
@@ -56,6 +57,7 @@ export interface TrainingFormState {
   nativeHeads: number
   nativeBlockSize: number
   loadingFinetunedModel: boolean
+  resumeCheckpoint: string
   allJobs: TrainingJob[]
   setMethod: (m: Method) => void
   setInputMode: (m: InputMode) => void
@@ -78,6 +80,7 @@ export interface TrainingFormState {
   setNativeHeads: (n: number) => void
   setNativeBlockSize: (n: number) => void
   setLoadingFinetunedModel: (v: boolean) => void
+  setResumeCheckpoint: (s: string) => void
   applyPreset: (preset: TrainingPreset) => void
   customPresets: TrainingPreset[]
   saveCustomPreset: (preset: TrainingPreset) => void
@@ -151,6 +154,7 @@ export function useTrainingForm(
   const [nativeBlockSize, setNativeBlockSize] = useState(128)
 
   const [loadingFinetunedModel, setLoadingFinetunedModel] = useState(false)
+  const [resumeCheckpoint, setResumeCheckpoint] = useState('')
 
   const [customPresets, setCustomPresets] = useState<TrainingPreset[]>([])
 
@@ -288,8 +292,11 @@ export function useTrainingForm(
         useLoRA,
       }, addToast, () => { checkpoints.fetchJobs() })
     } else {
-      session.startSSETraining(body, addToast, () => {
+      trainingJobsController.startAutoTrain(body).then(() => {
+        addToast('Training started', 'info')
         checkpoints.fetchCheckpoints()
+      }).catch((e: unknown) => {
+        addToast(extractErrorMessage(e, 'Could not start training'), 'error')
       })
     }
   }, [method, inputMode, textInput, algo, trainingEpochs, trainingLR, trainingBatchSize,
@@ -303,6 +310,7 @@ export function useTrainingForm(
     visualVisionEncoder, visualLLM, visualStage1Epochs, visualStage2Epochs,
     nativeEmbed, nativeLayers, nativeHeads, nativeBlockSize,
     loadingFinetunedModel,
+    resumeCheckpoint,
     allJobs,
     setMethod, setInputMode, setTextInput, setShowAdvanced, setAlgo,
     setTrainingEpochs, setTrainingLR, setTrainingBatchSize, setSelectedModel, setUseLoRA,
@@ -310,6 +318,7 @@ export function useTrainingForm(
     setVlmVisionEncoder, setVlmLLM, setVlmStage1Epochs, setVlmStage2Epochs,
     setNativeEmbed, setNativeLayers, setNativeHeads, setNativeBlockSize,
     setLoadingFinetunedModel,
+    setResumeCheckpoint,
     applyPreset,
     customPresets, saveCustomPreset, deleteCustomPreset,
     canStart, startTraining,

@@ -6,7 +6,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useRouter } from 'next/navigation'
 import type { ModelEntry } from '@/lib/types/models'
 import { PageContainer } from '@/components/PageContainer'
-import { Button, Card, CardHeader, CardTitle, CardContent, cn } from '@sloughgpt/strui'
+import { Button, Card, CardContent, cn, FoldSection } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useToastStore } from '@/lib/toast-store'
@@ -192,7 +192,7 @@ export default function ModelsPage() {
       loading={modelsLoading && soulsLoading}
       headerRight={
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => router.push('/compare')}>
+           <Button type="button" variant="outline" size="sm" onClick={() => router.push('/benchmark')}>
             Compare
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => {
@@ -232,6 +232,8 @@ export default function ModelsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* ── Primary: Status + Personalities + Catalog ─────── */}
         <ModelStatusCard
           isOnline={isOnline}
           health={health}
@@ -244,17 +246,6 @@ export default function ModelsPage() {
           soulsLoading={soulsLoading}
           checkpointsLoading={checkpointsLoading}
         />
-        <ModelUsageCard
-          inferenceCount={liveHealth?.inference_count ?? 0}
-          requestCount={liveHealth?.request_count ?? 0}
-          modelType={health && health !== 'offline' ? health.model_type : null}
-          isOnline={isOnline}
-        />
-        <ComposableLayersCard
-          modelsCount={models.length}
-          soulsCount={souls.length}
-          checkpoints={checkpoints}
-        />
         <PersonalitiesCard
           souls={souls}
           soulsLoading={soulsLoading}
@@ -265,64 +256,86 @@ export default function ModelsPage() {
           switchingSoul={switchingSoul}
           onSwitch={handleSwitchSoul}
         />
-        <PersonalityProfileCard
-          traitWeights={traitWeights}
-          currentSoulName={currentSoul}
-          onTraitsSaved={handleSaveTraits}
-          onTraitsChanged={fetchTraitWeights}
-        />
         <ModelCatalogCard
           models={models}
           modelsLoading={modelsLoading}
           activeRuntimeId={activeRuntimeId}
           onModelLoaded={async () => { await refreshHealth(); await refetchModels() }}
         />
-        <FineTunedModelsCard
-          activeModelId={activeRuntimeId}
-          onLoaded={async () => { await refreshHealth(); await refetchModels() }}
-        />
-        <ModelPlaygroundCard activeRuntimeId={activeRuntimeId} />
-        <QuantizationCard isOnline={isOnline} />
-        <ModelCacheCard
-          cacheUsage={cacheUsage}
-          health={health && health !== 'offline' ? health : null}
-          onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
-        />
-        <DownloadsCard />
-        <EngineStatusCard />
-        <ProviderDiagnosticsCard />
 
-        {/* Comparison section */}
-        <Card>
-          <CardHeader>
+        {/* ── Secondary: Usage, Layers, Traits, Fine-tuned ─── */}
+        <FoldSection heading="Usage & Layers">
+          <div className="space-y-3">
+            <ModelUsageCard
+              inferenceCount={liveHealth?.inference_count ?? 0}
+              requestCount={liveHealth?.request_count ?? 0}
+              modelType={health && health !== 'offline' ? health.model_type : null}
+              isOnline={isOnline}
+            />
+            <ComposableLayersCard
+              modelsCount={models.length}
+              soulsCount={souls.length}
+              checkpoints={checkpoints}
+            />
+            <PersonalityProfileCard
+              traitWeights={traitWeights}
+              currentSoulName={currentSoul}
+              onTraitsSaved={handleSaveTraits}
+              onTraitsChanged={fetchTraitWeights}
+            />
+            <FineTunedModelsCard
+              activeModelId={activeRuntimeId}
+              onLoaded={async () => { await refreshHealth(); await refetchModels() }}
+            />
+          </div>
+        </FoldSection>
+
+        {/* ── Secondary: Playground, Quantization, Cache ────── */}
+        <FoldSection heading="Playground & Cache">
+          <div className="space-y-3">
+            <ModelPlaygroundCard activeRuntimeId={activeRuntimeId} />
+            <QuantizationCard isOnline={isOnline} />
+            <ModelCacheCard
+              cacheUsage={cacheUsage}
+              health={health && health !== 'offline' ? health : null}
+              onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
+            />
+          </div>
+        </FoldSection>
+
+        {/* ── Secondary: Downloads, Engine, Diagnostics ─────── */}
+        <FoldSection heading="Engine & Diagnostics">
+          <div className="space-y-3">
+            <DownloadsCard />
+            <EngineStatusCard />
+            <ProviderDiagnosticsCard />
+          </div>
+        </FoldSection>
+
+        {/* ── Comparison (folded) ───────────────────────────── */}
+        <FoldSection heading="Model Comparison">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Model Comparison</CardTitle>
-                <p className="text-sm text-muted-foreground">Side-by-side benchmark results across models</p>
-              </div>
+              <p className="text-sm text-muted-foreground">Side-by-side benchmark results across models</p>
               <Button variant="outline" size="sm" onClick={runAllBenchmarks} disabled={compareLoading || compareRunning.size > 0}>
                 <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
             {completedCompareResults.length === 0 && compareRunning.size === 0 && !compareLoading ? (
               <div className="text-center py-8 text-sm text-muted-foreground">
                 Run a benchmark on one or more models to see comparison results here.
               </div>
             ) : (
               <>
-            <ModelsCard models={compareModels} loading={compareLoading} results={compareResults} running={compareRunning} onBenchmark={runBenchmark} onClear={clearCompareResult} />
-            <ComparisonTableCard completedResults={completedCompareResults} models={compareModels} bestMetrics={bestMetrics} />
-            <SummaryCard completedResults={completedCompareResults} models={compareModels} />
-            <OutputComparisonCard models={compareModels} />
-            <VisualComparisonCard chartData={chartData} />
+                <ModelsCard models={compareModels} loading={compareLoading} results={compareResults} running={compareRunning} onBenchmark={runBenchmark} onClear={clearCompareResult} />
+                <ComparisonTableCard completedResults={completedCompareResults} models={compareModels} bestMetrics={bestMetrics} />
+                <SummaryCard completedResults={completedCompareResults} models={compareModels} />
+                <OutputComparisonCard models={compareModels} />
+                <VisualComparisonCard chartData={chartData} />
               </>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </FoldSection>
       </PageContainer>
   )
 }

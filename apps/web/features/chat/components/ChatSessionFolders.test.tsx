@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  IconX: (props: any) => <span data-testid="icon-x" {...props} />,
+  IconPlus: (props: any) => <span data-testid="icon-plus" {...props} />,
+  IconCheck: (props: any) => <span data-testid="icon-check" {...props} />,
+}))
+
 import { ChatSessionFolders } from './ChatSessionFolders'
 
 afterEach(cleanup)
@@ -29,7 +38,7 @@ describe('ChatSessionFolders', () => {
     fireEvent.click(screen.getByRole('button'))
     fireEvent.change(screen.getByPlaceholderText('Folder name...'), { target: { value: 'My Folder' } })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /save/i }))
+      fireEvent.click(screen.getByTestId('icon-check').closest('button')!)
     })
     expect(screen.getByText('My Folder')).toBeInTheDocument()
   })
@@ -50,7 +59,7 @@ describe('ChatSessionFolders', () => {
     fireEvent.click(screen.getByRole('button'))
     fireEvent.change(screen.getByPlaceholderText('Folder name...'), { target: { value: 'Saved' } })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /save/i }))
+      fireEvent.click(screen.getByTestId('icon-check').closest('button')!)
     })
     const stored = JSON.parse(localStorage.getItem('chat-folders') || '[]')
     expect(stored).toHaveLength(1)
@@ -81,7 +90,8 @@ describe('ChatSessionFolders', () => {
   it('disables save when name empty', () => {
     render(<ChatSessionFolders sessions={[]} onMoveSession={vi.fn()} />)
     fireEvent.click(screen.getByRole('button'))
-    const saveBtn = screen.getAllByRole('button').find(b => b.querySelector('svg'))
+    const saveBtn = screen.getByTestId('icon-check').closest('button')
     expect(saveBtn).toBeDefined()
+    expect(saveBtn).toBeDisabled()
   })
 })

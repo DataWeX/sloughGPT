@@ -5,6 +5,7 @@ import React from 'react'
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
+    cn: (...a: any[]) => a.filter(Boolean).join(' '),
     Button: ({ children, onClick, disabled, className }: any) => (
       <button onClick={onClick} disabled={disabled} className={className}>{children}</button>
     ),
@@ -138,7 +139,7 @@ describe('WebhooksCard', () => {
     fireEvent.click(getAllButtons('Add webhook')[0])
 
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith('Could not add webhook', 'error')
+      expect(mockToast).toHaveBeenCalledWith('fail', 'error')
     })
   })
 
@@ -154,7 +155,7 @@ describe('WebhooksCard', () => {
     await waitFor(() => {
       expect(mocks.testWebhook).toHaveBeenCalledWith('https://example.com/hook')
     })
-    expect(mockToast).toHaveBeenCalledWith('Webhook test sent', 'success')
+    expect(mockToast).toHaveBeenCalledWith('Test sent', 'success')
   })
 
   it('shows error toast on test failure', async () => {
@@ -167,7 +168,7 @@ describe('WebhooksCard', () => {
 
     fireEvent.click(getAllButtons('Test')[0])
     await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith('Could not webhook test', 'error')
+      expect(mockToast).toHaveBeenCalledWith('fail', 'error')
     })
   })
 

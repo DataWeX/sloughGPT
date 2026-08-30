@@ -16,14 +16,20 @@ vi.mock('@sloughgpt/strui', () => {
     IconSettings: () => <span data-testid="icon-settings">settings</span>,
     IconSpeaker: () => <span data-testid="icon-speaker">speaker</span>,
     IconMicFilled: () => <span data-testid="icon-mic-filled">mic-filled</span>,
-    Slider: ({ value, onValueChange, min, max, step }: any) => (
-      <input type="range" value={value?.[0]} onChange={(e) => onValueChange?.([Number(e.target.value)])} min={min} max={max} step={step} data-testid="slider" />
+    Slider: ({ value, onValueChange, min, max, step, label }: any) => (
+      <div>
+        {label && <label>{label}</label>}
+        <input type="range" value={value?.[0]} onChange={(e) => onValueChange?.([Number(e.target.value)])} min={min} max={max} step={step} data-testid="slider" />
+      </div>
     ),
     Select: ({ children }: any) => <div data-testid="select">{children}</div>,
     SelectTrigger,
     SelectValue: ({ placeholder }: any) => <span data-testid="select-value">{placeholder}</span>,
     SelectContent: ({ children }: any) => <div data-testid="select-content">{children}</div>,
     SelectItem: ({ children, value }: any) => <button data-testid="select-item" data-value={value}>{children}</button>,
+    Switch: ({ checked, onCheckedChange, disabled, 'aria-label': label, ...rest }: any) => (
+      <button role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onCheckedChange?.(!checked)} {...rest} />
+    ),
   }
 })
 

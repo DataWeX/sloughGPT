@@ -19,7 +19,7 @@ interface ChatInputRowProps {
   loading: boolean
   disabled: boolean
   placeholder: string
-  textareaRef: RefObject<HTMLTextAreaElement>
+  textareaRef: RefObject<HTMLTextAreaElement | null>
   onImage: (dataUrl: string) => void
   onTranscript: (text: string) => void
   onAudioRecorded?: (blob: Blob) => void
@@ -116,7 +116,6 @@ export const ChatInputRow = memo(function ChatInputRow({
       <ChatInputAccessories
         onImage={onImage}
         onTranscript={onTranscript}
-        onAudioRecorded={onAudioRecorded}
         disabled={disabled}
         onAudioTranscript={onAudioTranscript}
         onGeneratedImage={onGeneratedImage}

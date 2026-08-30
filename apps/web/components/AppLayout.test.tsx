@@ -30,7 +30,7 @@ vi.mock('@sloughgpt/strui', () => ({
 vi.mock('@/components/OutputPanel', () => ({ OutputPanel: () => <div data-testid="output-panel" /> }))
 vi.mock('@/features/chat/components/feedback/Toast', () => ({ ToastContainer: () => <div data-testid="toast-container" />, RadixToastContainer: () => <div data-testid="toast-container" /> }))
 vi.mock('@/components/CommandPalette', () => ({ CommandPalette: () => <div data-testid="command-palette" /> }))
-vi.mock('@/components/KeyboardShortcutsModal', () => ({ KeyboardShortcutsModal: ({ open }: any) => open ? <div data-testid="shortcuts-modal" /> : null }))
+vi.mock('@/components/KeyboardShortcutsDialog', () => ({ KeyboardShortcutsDialog: ({ open }: any) => open ? <div data-testid="shortcuts-modal" /> : null }))
 vi.mock('@/components/DebugOverlay', () => ({ DebugOverlay: ({ open }: any) => open ? <div data-testid="debug-overlay" /> : null }))
 vi.mock('@/components/WhatsNewDialog', () => ({ WhatsNewDialog: ({ open }: any) => open ? <div data-testid="whatsnew-dialog" /> : null, getUnseenCount: () => 0 }))
 

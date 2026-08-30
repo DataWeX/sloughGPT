@@ -97,10 +97,22 @@ export {
 } from './components/ui/popover'
 
 // Display components
-export { StatCard, KpiGrid, ListRow, ListSection, EmptyCard, Skeleton, LoadingDots } from './components/ui/display'
+export { StatCard } from './components/ui/stat-card'
+export { KpiGrid } from './components/ui/kpi-grid'
+export { ListRow } from './components/ui/list-row'
+export { ListSection } from './components/ui/list-section'
+export { EmptyCard } from './components/ui/empty-card'
+export { Skeleton } from './components/ui/skeleton'
+export { LoadingDots } from './components/ui/loading-dots'
 
 // Specialized components
-export { Avatar, AvatarGroup, Spinner, Divider, CardDeck, Pagination, SearchField, EmptyState } from './components/ui/specialized'
+export { Avatar, AvatarGroup } from './components/ui/avatar'
+export { Spinner } from './components/ui/spinner'
+export { Divider } from './components/ui/divider'
+export { CardDeck } from './components/ui/card-deck'
+export { Pagination } from './components/ui/pagination'
+export { SearchField } from './components/ui/search-field'
+export { EmptyState } from './components/ui/empty-state'
 
 // Tags
 export { Chip, Chips, TagInput } from './components/ui/tags'

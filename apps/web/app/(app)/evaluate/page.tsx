@@ -46,7 +46,7 @@ interface SavedSnapshot {
 
 const COMPARE_STORAGE_KEY = 'compare-snapshots'
 
-function loadSnapshots(): SavedSnapshot[] {
+async function loadSnapshots(): Promise<SavedSnapshot[]> {
   return getJsonItem<SavedSnapshot[]>(COMPARE_STORAGE_KEY, [])
 }
 
@@ -112,7 +112,7 @@ export default function EvaluatePage() {
   useEffect(() => { loadBenchmark() }, [])
 
   // ── Comparison effects ──
-  useEffect(() => { setSnapshots(loadSnapshots()) }, [])
+  useEffect(() => { void loadSnapshots().then(setSnapshots) }, [])
 
   useEffect(() => {
     (async () => {

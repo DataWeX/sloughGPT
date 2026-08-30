@@ -84,35 +84,35 @@ export interface TrainingJob {
 
 export async function startTraining(config: TrainConfig) {
   return api.post<{status: string; data_path: string; epochs: number}>(
-    '/auto-train/start',
+    '/training/start',
     config,
   );
 }
 
 export async function stopTraining() {
-  return api.post<{status: string}>('/auto-train/stop');
+  return api.post<{status: string}>('/training/stop');
 }
 
 export async function getTrainingStatus() {
-  return api.get<TrainingStatus>('/auto-train/status');
+  return api.get<TrainingStatus>('/training/status');
 }
 
 export async function listCheckpoints() {
-  return api.get<Checkpoint[]>('/auto-train/checkpoints');
+  return api.get<Checkpoint[]>('/training/checkpoints');
 }
 
 export async function deleteCheckpoint(name: string) {
-  return api.delete(`/auto-train/checkpoints/${name}`);
+  return api.delete(`/training/checkpoints/${name}`);
 }
 
 export async function loadCheckpoint(name: string) {
-  return api.post(`/auto-train/checkpoints/${name}/load`);
+  return api.post(`/training/checkpoints/${name}/load`);
 }
 
 export async function* streamTraining(
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent> {
-  yield* streamSSE('/auto-train/stream', {}, signal);
+  yield* streamSSE('/training/stream', {}, signal);
 }
 
 // ── Datasets ───────────────────────────────────────────────────────────────

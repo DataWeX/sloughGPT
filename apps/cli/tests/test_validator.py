@@ -42,19 +42,19 @@ class TestDoctorChecks:
 
     def test_required_dirs_exist_pass(self, tmp_path):
         from core.validator import Doctor
-        for name in ["models", "datasets", "data"]:
+        for name in ["models", "data"]:
             (tmp_path / name).mkdir()
         d = Doctor(root_dir=tmp_path)
         d._check_required_dirs()
         assert d.result.passed is True
-        assert len(d.result.checks) == 3
+        assert len(d.result.checks) == 2
 
     def test_required_dirs_missing_fail(self, tmp_path):
         from core.validator import Doctor
         d = Doctor(root_dir=tmp_path)
         d._check_required_dirs()
         assert d.result.passed is False
-        assert d.result.failed_count == 3
+        assert d.result.failed_count == 2
 
     def test_env_file_missing_warns(self, tmp_path):
         from core.validator import Doctor
@@ -84,4 +84,4 @@ class TestDoctorChecks:
         d = Doctor(root_dir=tmp_path)
         result = d.run_all()
         names = {c.name for c in result.checks}
-        assert {"Python", "models", "datasets", "data", "API Server", ".env"} <= names
+        assert {"Python", "models", "data", "API Server", ".env"} <= names

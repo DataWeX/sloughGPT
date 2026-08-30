@@ -23,6 +23,13 @@ vi.mock('@/lib/controllers', () => ({
   modelController: {
     list: vi.fn().mockResolvedValue([{ id: 'gpt2' }, { id: 'qwen' }]),
   },
+  trainingJobsController: {
+    startAutoTrain: vi.fn().mockResolvedValue({ status: 'started' }),
+  },
+}))
+
+vi.mock('@/lib/error-utils', () => ({
+  extractErrorMessage: (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback),
 }))
 
 function makeDatasets(selectedDataset: string | null = null) {
@@ -42,7 +49,6 @@ function makeSession(phase = 'idle') {
   return {
     phase,
     trainingRunning: phase !== 'idle' && phase !== 'complete' && phase !== 'error',
-    startSSETraining: vi.fn(),
     startFineTune: vi.fn(),
     startVisualTraining: vi.fn(),
     startTurboTrain: vi.fn(),
@@ -142,7 +148,7 @@ describe('useTrainingForm', () => {
         useTrainingForm(makeDatasets(null), makeSession(), makeCheckpoints(), addToast)
       )
       await act(async () => { await result.current.startTraining() })
-      expect(addToast).toHaveBeenCalledWith('Select a dataset, paste text, or choose a checkpoint to resume', 'error')
+      expect(addToast).toHaveBeenCalledWith('Select a dataset or paste text to train on', 'error')
     })
 
     it('shows error for VLM without dataset (even with text)', async () => {
@@ -158,13 +164,14 @@ describe('useTrainingForm', () => {
       )
     })
 
-    it('calls startSSETraining for distill method', async () => {
+    it('calls trainingJobsController.startAutoTrain for distill method', async () => {
       const session = makeSession()
       const { result } = renderHook(() =>
         useTrainingForm(makeDatasets('ds1'), session, makeCheckpoints(), addToast)
       )
       await act(async () => { await result.current.startTraining() })
-      expect(session.startSSETraining).toHaveBeenCalled()
+      const { trainingJobsController } = await import('@/lib/controllers')
+      expect(trainingJobsController.startAutoTrain).toHaveBeenCalled()
     })
 
     it('calls startFineTune for finetune method', async () => {

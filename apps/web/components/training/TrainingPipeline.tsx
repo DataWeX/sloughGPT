@@ -14,7 +14,7 @@ import { DataStep } from '@/components/training/DataStep'
 import { ConfigureStep } from '@/components/training/ConfigureStep'
 import { TrainStep } from '@/components/training/TrainStep'
 import { ResultsStep } from '@/components/training/ResultsStep'
-import { formatDuration } from '@/components/training/formatDuration'
+import { formatDuration } from '@/lib/formatDuration'
 
 const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
 

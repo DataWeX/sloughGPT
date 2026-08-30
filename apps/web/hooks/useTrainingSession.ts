@@ -8,7 +8,6 @@ import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useTrainingPolling } from './useTrainingPolling'
-import { useTrainingStream } from './useTrainingStream'
 
 const _log = logger.child('training-session')
 
@@ -50,7 +49,6 @@ export interface UseTrainingSessionReturn extends TrainingShellState {
   stopTraining: () => void
   pauseTraining: (addToast?: TrainingToastFn) => Promise<void>
   resumeTraining: (addToast?: TrainingToastFn) => Promise<void>
-  startSSETraining: (body: Record<string, unknown>, addToast: TrainingToastFn, onCheckpointUpdate?: () => void) => void
   startFineTune: (params: { model: string; dataset: string; epochs: number; batchSize: number; lr: number; useLoRA: boolean; loraRank?: number; loraAlpha?: number }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startVisualTraining: (params: { dataset: string; visionEncoder: string; llm: string; stage1Epochs: number; stage2Epochs: number; useLoRA: boolean }, addToast: TrainingToastFn, onComplete?: () => void) => void
   startTurboTrain: (datasetId: string, config: { epochs: number; lr: number; embed: number; heads: number; layers: number }, addToast: TrainingToastFn, experimentId?: string) => void
@@ -90,13 +88,12 @@ function useShellTraining(): TrainingShellState {
 }
 
 /**
- * Orchestrator hook for training. Composes useTrainingPolling + useTrainingStream.
+ * Orchestrator hook for training. Composes useTrainingPolling.
  * Owns: shell subscription, reconciliation, control functions, backward-compat aliases.
  */
 export function useTrainingSession(): UseTrainingSessionReturn {
   const training = useShellTraining()
   const { startStandardPoll, startTurboPoll, clearAllPolls } = useTrainingPolling()
-  const { startSSETraining, closeStream } = useTrainingStream()
 
   const trainingRunning = isTrainingActive(training)
   const turboRunning = training.method === 'turbo' && trainingRunning
@@ -200,9 +197,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
 
   const resetTraining = useCallback(() => {
     appShellStore.getState().resetTraining()
-    closeStream()
     clearAllPolls()
-  }, [closeStream, clearAllPolls])
+  }, [clearAllPolls])
 
   const stopTraining = useCallback(() => {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Could not stop training', e))
@@ -348,7 +344,6 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     stopTraining,
     pauseTraining,
     resumeTraining,
-    startSSETraining,
     startFineTune,
     startVisualTraining,
     startTurboTrain,

@@ -33,7 +33,7 @@ const defaultProps = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.useFakeTimers()
+  vi.useFakeTimers({ shouldAdvanceTime: true })
 })
 
 afterEach(() => {
@@ -64,44 +64,32 @@ describe('NoteSearchPanel', () => {
     render(<NoteSearchPanel {...defaultProps} />)
 
     const input = screen.getByPlaceholderText(/Search notes/)
-    await act(async () => {
-      fireEvent.change(input, { target: { value: 'note' } })
-      vi.advanceTimersByTime(300)
-    })
+    fireEvent.change(input, { target: { value: 'note' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
 
-    await waitFor(() => {
-      expect(mockSearchMessageNotes).toHaveBeenCalledWith('note')
-    })
-    expect(screen.getByText('Important note')).toBeDefined()
+    expect(mockSearchMessageNotes).toHaveBeenCalledWith('note')
     expect(screen.getByText(/1 note found/)).toBeDefined()
+    expect(screen.getByText(/Important/)).toBeDefined()
   })
 
   it('shows no results message', async () => {
     mockSearchMessageNotes.mockResolvedValue([])
     render(<NoteSearchPanel {...defaultProps} />)
 
-    await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'nothing' } })
-      vi.advanceTimersByTime(300)
-    })
+    fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'nothing' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
 
-    await waitFor(() => {
-      expect(screen.getByText(/No notes found for/)).toBeDefined()
-    })
+    expect(screen.getByText(/No notes found for/)).toBeDefined()
   })
 
   it('handles search error gracefully', async () => {
     mockSearchMessageNotes.mockRejectedValue(new Error('fail'))
     render(<NoteSearchPanel {...defaultProps} />)
 
-    await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'err' } })
-      vi.advanceTimersByTime(300)
-    })
+    fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'err' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
 
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /err/ })).toBeNull()
-    })
+    expect(screen.queryByRole('button', { name: /err/ })).toBeNull()
   })
 
   it('clears results when query is cleared', async () => {
@@ -114,7 +102,7 @@ describe('NoteSearchPanel', () => {
       fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'note' } })
       vi.advanceTimersByTime(300)
     })
-    await waitFor(() => expect(screen.getByText('Note')).toBeDefined())
+    expect(screen.getByText('Note')).toBeDefined()
 
     fireEvent.click(screen.getByLabelText('Clear search'))
     expect(screen.getByText('Type to search notes across all conversations')).toBeDefined()
@@ -128,14 +116,11 @@ describe('NoteSearchPanel', () => {
     ])
     render(<NoteSearchPanel {...defaultProps} onNavigateToNote={onNavigate} onClose={onClose} />)
 
-    await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'click' } })
-      vi.advanceTimersByTime(300)
-    })
+    fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'click' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
 
-    await waitFor(() => {
-      fireEvent.click(screen.getByText('Click me'))
-    })
+    const text = screen.getByText(/Click/)
+    fireEvent.click(text)
     expect(onNavigate).toHaveBeenCalledWith('sess-abc', 'msg-123')
     expect(onClose).toHaveBeenCalled()
   })
@@ -175,8 +160,6 @@ describe('NoteSearchPanel', () => {
       vi.advanceTimersByTime(300)
     })
 
-    await waitFor(() => {
-      expect(screen.getByText(/2 notes found/)).toBeDefined()
-    })
+    expect(screen.getByText(/2 notes found/)).toBeDefined()
   })
 })

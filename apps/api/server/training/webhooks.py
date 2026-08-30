@@ -232,7 +232,7 @@ class WebhookStore:
             "data": payload,
         }
 
-        payload_str = str(full_payload)
+        payload_str = json.dumps(full_payload, default=str)
         signature = self.sign_payload(webhook_id, payload_str)
 
         headers = {

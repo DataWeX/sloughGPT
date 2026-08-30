@@ -67,24 +67,24 @@ describe('soulsController.switch', () => {
 describe('soulsController.listCheckpoints', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /auto-train/checkpoints', async () => {
+  it('GETs /training/checkpoints', async () => {
     apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
 
     const result = await soulsController.listCheckpoints()
     expect(result.checkpoints).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/auto-train/checkpoints')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/checkpoints')
   })
 })
 
 describe('soulsController.loadCheckpoint', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/checkpoints/{name}/load', async () => {
+  it('POSTs to /training/checkpoints/{name}/load', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'v1', soul: 'friendly' })
 
     const result = await soulsController.loadCheckpoint('v1')
     expect(result.status).toBe('loaded')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/checkpoints/v1/load')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/v1/load')
   })
 })
 

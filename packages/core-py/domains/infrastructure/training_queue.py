@@ -92,8 +92,8 @@ async def training_handler(task) -> dict:
                 cancel_event.set()
                 return
             try:
-                import routers.auto_train as _at
-                at_cancel = getattr(_at, "_auto_train_cancel_event", None)
+                import domains.training.service as _svc
+                at_cancel = _svc.get_cancel_event()
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
                     return
@@ -106,8 +106,8 @@ async def training_handler(task) -> dict:
         while True:
             paused = task.pause_event.is_set()
             try:
-                import routers.auto_train as _at
-                at_pause = getattr(_at, "_auto_train_pause_event", None)
+                import domains.training.service as _svc
+                at_pause = _svc.get_pause_event()
                 if at_pause is not None and at_pause.is_set():
                     paused = True
             except Exception as exc:
@@ -262,8 +262,8 @@ async def training_sessions_handler(task) -> dict:
                 cancel_event.set()
                 return
             try:
-                import routers.auto_train as _at
-                at_cancel = getattr(_at, "_auto_train_cancel_event", None)
+                import domains.training.service as _svc
+                at_cancel = _svc.get_cancel_event()
                 if at_cancel is not None and at_cancel.is_set():
                     cancel_event.set()
                     return
@@ -293,13 +293,22 @@ async def training_sessions_handler(task) -> dict:
         ),
     )
 
+    _step_start = __import__("time").monotonic()
+
     def _on_step(step: int, loss: float, epoch: int, total_steps: int = 0) -> None:
         if cancel_event.is_set():
             raise InterruptedError("Training cancelled by user")
         from domains.api.sse_envelope import sse_event
+        elapsed = __import__("time").monotonic() - _step_start
+        steps_per_sec = step / elapsed if elapsed > 0 else 0
+        progress_pct = (step / total_steps * 100) if total_steps > 0 else 0
+        eta_s = (total_steps - step) / steps_per_sec if steps_per_sec > 0 else 0
         enqueue(sse_event(
             "auto-train", "TRAIN", "working",
-            data={"step": step, "loss": loss, "done": False},
+            data={"step": step, "loss": loss, "done": False,
+                  "progress_percent": round(progress_pct, 1),
+                  "steps_per_sec": round(steps_per_sec, 2),
+                  "eta_s": round(eta_s, 1), "elapsed_s": round(elapsed, 1)},
             meta={"epoch": epoch, "total_epochs": config.epochs, "total_steps": total_steps},
         ))
 

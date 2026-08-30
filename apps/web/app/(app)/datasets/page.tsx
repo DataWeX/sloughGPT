@@ -17,7 +17,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
 import { formatDate } from '@/lib/conversations-utils'
-import { DatasetImportModal } from '@/components/DatasetImportModal'
+import { DatasetImportDialog } from '@/components/DatasetImportDialog'
 
 export default function DatasetsPage() {
   const router = useRouter()
@@ -486,7 +486,7 @@ export default function DatasetsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <DatasetImportModal open={importOpen} onOpenChange={setImportOpen} onImportComplete={fetchDatasets} />
+      <DatasetImportDialog open={importOpen} onOpenChange={setImportOpen} onImportComplete={fetchDatasets} />
     </PageContainer>
   )
 }

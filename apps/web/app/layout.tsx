@@ -1,6 +1,5 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
-import { Rubik, Lato } from 'next/font/google'
 import localFont from 'next/font/local'
 
 import { Providers } from './Providers'
@@ -9,17 +8,16 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import WebVitals from '@/components/WebVitals'
 
-const rubik = Rubik({
+const rubik = localFont({
+  src: '../public/fonts/outfit-latin.woff2',
   variable: '--font-rubik',
   display: 'swap',
-  subsets: ['latin'],
 })
 
-const lato = Lato({
-  weight: ['300', '400', '700', '900'],
+const lato = localFont({
+  src: '../public/fonts/outfit-latin.woff2',
   variable: '--font-lato',
   display: 'swap',
-  subsets: ['latin'],
 })
 
 const jetbrainsMono = localFont({

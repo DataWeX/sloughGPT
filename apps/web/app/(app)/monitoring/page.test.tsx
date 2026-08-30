@@ -55,6 +55,7 @@ vi.mock('@/lib/controllers', () => ({
     getDPOStatus: vi.fn().mockResolvedValue(null),
     getStatus: vi.fn().mockResolvedValue(null),
     getCapabilities: vi.fn().mockResolvedValue(null),
+    getTrainingReport: vi.fn().mockResolvedValue({ caption_history: [], vocab_size: 0 }),
   },
 }))
 
@@ -78,14 +79,15 @@ vi.mock('@/lib/download-utils', () => ({
 
 vi.mock('@/lib/format-bytes', () => ({
   todayDateString: () => '2026-08-07',
-  getJsonItem: vi.fn().mockReturnValue([]),
+  getJsonItem: vi.fn().mockResolvedValue({}),
+  setJsonItem: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@/lib/error-utils', () => ({
   extractErrorMessage: vi.fn().mockReturnValue('Error'),
 }))
 
-vi.mock('@/components/monitoring/StatusCard', () => ({ StatusCard: () => <div data-testid="status-card" /> }))
+vi.mock('@/components/monitoring/SystemStatusCard', () => ({ SystemStatusCard: () => <div data-testid="status-card" /> }))
 vi.mock('@/components/monitoring/ResourceCard', () => ({ ResourceCard: () => <div data-testid="resource-card" /> }))
 vi.mock('@/components/monitoring/InferencePoolCard', () => ({ InferencePoolCard: () => <div data-testid="inference-pool-card" /> }))
 vi.mock('@/components/monitoring/ProcessCard', () => ({ ProcessCard: () => <div data-testid="process-card" /> }))
@@ -103,7 +105,7 @@ vi.mock('@/components/monitoring/KnowledgeCard', () => ({ KnowledgeCard: () => <
 vi.mock('@/components/monitoring/AutoTrainCard', () => ({ AutoTrainCard: () => <div data-testid="autotrain-card" /> }))
 vi.mock('@/components/monitoring/FeedbackCard', () => ({ FeedbackCard: () => <div data-testid="feedback-card" /> }))
 vi.mock('@/components/monitoring/ExecutorPool', () => ({ ExecutorPool: () => <div data-testid="executor-pool" /> }))
-vi.mock('@/components/monitoring/KvCacheCard', () => ({ KvCacheCard: () => <div data-testid="kv-cache-card" /> }))
+vi.mock('@/components/monitoring/KVCacheCard', () => ({ KVCacheCard: () => <div data-testid="kv-cache-card" /> }))
 vi.mock('@/components/monitoring/SystemInfoCards', () => ({
   GpuCard: () => <div data-testid="gpu-card" />,
   DiskCard: () => <div data-testid="disk-card" />,
@@ -253,7 +255,7 @@ describe('MonitoringPage — collapsed sections exist', () => {
   it('has Server Output section header', async () => {
     render(<MonitoringPage />)
     await waitFor(() => {
-      expect(screen.getAllByText(/service output/i).length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText(/server output/i).length).toBeGreaterThanOrEqual(1)
     })
     await act(async () => {})
   })

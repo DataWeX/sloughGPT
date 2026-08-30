@@ -88,7 +88,7 @@ describe('useTrainingStream', () => {
     })
 
     const es = (globalThis as Record<string, unknown>).__lastES as MockEventSource
-    expect(es.url).toBe('http://localhost:8000/auto-train/stream')
+    expect(es.url).toBe('http://localhost:8000/training/stream')
   })
 
   it('parses progress events and writes training state', async () => {

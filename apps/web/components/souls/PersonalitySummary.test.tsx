@@ -1,6 +1,13 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  IconHeart: (props: any) => <svg data-testid="icon" />,
+  IconBrain: (props: any) => <svg data-testid="icon" />,
+}))
+
 import PersonalitySummary, { deriveArchetype } from './PersonalitySummary'
 
 const baseWeights = {
@@ -59,7 +66,7 @@ describe('PersonalitySummary', () => {
 
   it('renders overall score when soul name is provided', () => {
     const { container } = render(<PersonalitySummary traitWeights={baseWeights} currentSoulName="alice" />)
-    const overall = container.querySelector('.text-2xl.font-bold.text-destructive')
+    const overall = container.querySelector('.text-base.font-bold')
     expect(overall?.textContent).toBe('50')
   })
 
@@ -91,7 +98,7 @@ describe('PersonalitySummary', () => {
 
   it('renders overall score 0 when no traits', () => {
     const { container } = render(<PersonalitySummary traitWeights={{ personality: {}, cognition: {}, emotion: {} }} currentSoulName="test" />)
-    const overalls = container.querySelectorAll('.text-2xl')
+    const overalls = container.querySelectorAll('.text-base.font-bold')
     const overall = Array.from(overalls).find(el => el.textContent === '0')
     expect(overall).toBeDefined()
   })

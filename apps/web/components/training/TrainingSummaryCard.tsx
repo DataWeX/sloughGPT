@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
-import { formatDuration } from './formatDuration'
+import { formatDuration } from '@/lib/formatDuration'
 
 interface TrainingSummaryCardProps {
   checkpoints: Checkpoint[]

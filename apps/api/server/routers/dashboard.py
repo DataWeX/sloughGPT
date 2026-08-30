@@ -82,9 +82,9 @@ def _get_active_processes() -> dict:
 
     # Auto-train turbo
     try:
-        from routers.auto_train import _turbo_state, _turbo_lock
-        with _turbo_lock:
-            turbo = dict(_turbo_state)
+        from domains.training.service import get_turbo_state, get_turbo_lock
+        with get_turbo_lock():
+            turbo = dict(get_turbo_state())
         turbo_status = turbo.get("status", "idle")
         if turbo_status not in ("idle", "stopped"):
             epoch = turbo.get("epoch", "")

@@ -22,6 +22,10 @@ from typing import Optional
 
 import click
 
+from domains.logging import get_global
+
+log = get_global()
+
 
 # ── ANSI helpers ───────────────────────────────────────────────────────
 
@@ -358,7 +362,8 @@ def _consume_sse_dashboard(host: str, port: int, interval: float, output_json: b
             time.sleep(3)
         except KeyboardInterrupt:
             if not output_json:
-                sys.stdout.write("\033[?25h\n")
+                log.show_cursor()
+                sys.stdout.write("\n")
                 sys.stdout.flush()
             break
         except Exception as e:
@@ -547,7 +552,7 @@ def logs(tail, request_id, level, since, tag, path, search, errors_only, output_
     if dashboard:
         clear = not no_clear
         if _TTY and not output_json:
-            sys.stdout.write("\033[?25l")
+            log.hide_cursor()
         try:
             _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
         except Exception:
@@ -557,8 +562,7 @@ def logs(tail, request_id, level, since, tag, path, search, errors_only, output_
                 pass
         finally:
             if _TTY and not output_json:
-                sys.stdout.write("\033[?25h")
-                sys.stdout.flush()
+                log.show_cursor()
         return
 
     # Resolve log file

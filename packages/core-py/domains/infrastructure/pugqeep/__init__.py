@@ -36,7 +36,7 @@ from .dedup import PointDeduplicator, PointLibrarySync
 from .store import MemoryStore as FunctionMemoryStore, JSONStore, DirectoryStore
 from .config import PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig
 from .facade import PGQ
-from .engine import Engine, Process, Stem, Tree as EngineTree, ProcessStatus, StemStatus
+from .engine import Engine, Process, Stem, Tree as EngineTree, ProcessStatus, StemStatus, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
 from .generic import (
     PGQGeneric,
     CompressionStrategy,
@@ -125,6 +125,14 @@ __all__ = [
     # Producer-consumer
     "ProducerConsumerQueue",
     "ShutdownMode",
+
+    # Engine classes
+    "ProcessGroup",
+    "SubprocessProcess",
+    "ProcessMonitor",
+    "GuardTree",
+    "EngineMetrics",
+    "ResultCache",
 ]
 
 __version__ = "0.1.0"

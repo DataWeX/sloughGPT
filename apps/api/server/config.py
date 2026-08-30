@@ -68,7 +68,7 @@ class ServerConfig:
     startup_total_timeout: float = 120.0  # timeout for entire startup sequence (env: SLO_STARTUP_TOTAL_TIMEOUT)
     startup_register_generate_timeout: float = 120.0  # timeout for register_generate() calls (env: SLO_REGISTER_GENERATE_TIMEOUT)
     streaming_skip_paths: tuple[str, ...] = (
-        "/chat/stream", "/auto-train/stream", "/session/",
+        "/chat/stream", "/training/stream", "/session/",
         "/generate/stream", "/models/load", "/inference/generate", "/chat",
     )
 
@@ -91,7 +91,11 @@ class ServerConfig:
     process_guard_memory_limit_mb: float = 0.0  # 0 = auto-size from model file
     enable_web: bool = False
 
-    idle_timeout_seconds: float = 0.0  # 0 = disabled; 300 = unload model after 5 min idle
+    idle_timeout_seconds: float = 300.0  # unload model after 5 min idle (0 = disabled)
+
+    memory_pressure_warning: float = 80.0  # percent — log warning, clear caches
+    memory_pressure_critical: float = 90.0  # percent — force GC, drop KV caches, release weights
+    memory_pressure_emergency: float = 95.0  # percent — block new model loads + inference
 
     jwt_secret: str = ""  # auto-generated if empty
     jwt_algorithm: str = "HS256"
@@ -132,7 +136,10 @@ class ServerConfig:
             enable_health_monitor=os.getenv("SLO_HEALTH_MONITOR", "true").lower() == "true",
             health_monitor_interval=int(os.getenv("SLO_HEALTH_INTERVAL", "300")),
             enable_web=os.getenv("SLO_WEB", "").lower() in ("1", "true", "yes"),
-            idle_timeout_seconds=float(os.getenv("SLO_IDLE_TIMEOUT", "0")),
+            idle_timeout_seconds=float(os.getenv("SLO_IDLE_TIMEOUT", "300")),
+            memory_pressure_warning=float(os.getenv("SLO_MEMORY_PRESSURE_WARNING", "80")),
+            memory_pressure_critical=float(os.getenv("SLO_MEMORY_PRESSURE_CRITICAL", "90")),
+            memory_pressure_emergency=float(os.getenv("SLO_MEMORY_PRESSURE_EMERGENCY", "95")),
             jwt_secret=os.getenv("SLO_JWT_SECRET") or os.getenv("JWT_SECRET") or secrets.token_urlsafe(64),
             jwt_algorithm=os.getenv("SLO_JWT_ALGORITHM", os.getenv("JWT_ALGORITHM", "HS256")),
             jwt_expiration_hours=int(os.getenv("SLO_JWT_EXPIRATION_HOURS", os.getenv("JWT_EXPIRATION_HOURS", "24"))),

@@ -46,7 +46,10 @@ class Point(PointProtocol):
         if self.function_type == "cluster":
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
-            return centroids[assignments[:n]]
+            values = centroids[assignments[:n]]
+            if self.residual is not None:
+                values = values + self.residual[:n]
+            return values
 
         i = np.arange(n, dtype=np.float32)
 

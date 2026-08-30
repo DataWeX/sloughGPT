@@ -1,6 +1,12 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  IconHeart: (props: any) => <span />,
+  IconBrain: (props: any) => <span />,
+}))
+
 afterEach(cleanup)
 
 import { deriveArchetype } from './PersonalitySummary'
@@ -8,7 +14,7 @@ import PersonalitySummary from './PersonalitySummary'
 import SoulVisualizer from './SoulVisualizer'
 
 // ── Mock recharts ────────────────────────────────────────────────────
-vi.mock('@/lib/recharts-lazy', () => {
+vi.mock('recharts', () => {
   const MockResponsiveContainer = ({ children }: any) => <div data-testid="responsive-container">{children}</div>
   const MockRadarChart = ({ children }: any) => <div data-testid="radar-chart">{children}</div>
   const MockRadar = () => <div data-testid="radar" />

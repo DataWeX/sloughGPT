@@ -476,6 +476,15 @@ html {
     animation: none;
     opacity: 0;
   }
+  .sl-interactive {
+    transition: none;
+  }
+  .sl-interactive:hover {
+    transform: none;
+  }
+  .sl-interactive:active {
+    transform: none;
+  }
 }
 
 /*
@@ -516,6 +525,20 @@ html {
   .str-chat-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+  }
+
+  /* Interactive hover lift — apply to clickable cards/links */
+  .sl-interactive {
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .sl-interactive:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+  }
+  .sl-interactive:active {
+    transform: scale(0.985);
   }
 }
 

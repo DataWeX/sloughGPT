@@ -58,7 +58,7 @@ export default function ExportContent() {
   const fetchCheckpoints = useCallback(async () => {
     setLoadingCheckpoints(true)
     try {
-      const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+      const data = await apiGet<{ checkpoints: Checkpoint[] }>('/training/checkpoints')
       setCheckpoints(data?.checkpoints ?? [])
     } catch {
       setCheckpoints([])
@@ -72,7 +72,7 @@ export default function ExportContent() {
     const load = async () => {
       setLoadingCheckpoints(true)
       try {
-        const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+        const data = await apiGet<{ checkpoints: Checkpoint[] }>('/training/checkpoints')
         if (active) setCheckpoints(data?.checkpoints ?? [])
       } catch {
         if (active) setCheckpoints([])

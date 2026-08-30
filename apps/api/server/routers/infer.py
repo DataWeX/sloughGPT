@@ -156,6 +156,15 @@ class InferRouter:
 
         Single non-streaming generation endpoint. Delegates to the active provider.
         """
+        # Block inference under memory pressure
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
+            if get_memory_pressure_monitor().check() == PressureLevel.EMERGENCY:
+                raise_error("System memory too low for inference — try again later",
+                            "E_MEMORY_PRESSURE", status_code=503)
+        except ImportError:
+            pass
+
         from domains.models.provider import get_provider
 
         if self._get_model() is None:
@@ -194,6 +203,18 @@ class InferRouter:
             classify_and_raise(e, source="infer")
 
     async def infer_stream(self, req: InferRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> AsyncGenerator[str, None]:
+        # Block streaming inference under memory pressure
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
+            if get_memory_pressure_monitor().check() == PressureLevel.EMERGENCY:
+                async def error_stream() -> AsyncIterator[str]:
+                    """error_stream."""
+                    yield self._sse_error("infer", "IDLE", "System memory too low for inference — try again later",
+                                          code="E_MEMORY_PRESSURE", http_status=503)
+                return StreamingResponse(error_stream(), media_type="text/event-stream")
+        except ImportError:
+            pass
+
         try:
             """Stream generated tokens as SSE.
 

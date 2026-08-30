@@ -3,7 +3,7 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
-vi.mock('@sloughgpt/strui', () => ({ cn: vi.fn((...args: any[]) => args.join(' ')) }))
+vi.mock('@sloughgpt/strui', () => ({ cn: vi.fn((...args: any[]) => args.join(' ')), Button: ({ children, ...props }: any) => React.createElement('button', props, children) }))
 
 vi.mock('next/dynamic', () => ({
   __esModule: true,
@@ -41,7 +41,7 @@ const state = vi.hoisted(() => ({
 }))
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }), useSearchParams: () => ({ get: mockSearchParamsGet }) }))
-vi.mock('@/hooks/useLiveStatus', () => ({ useLiveStatus: () => ({ healthLegacy: state.health }) }))
+vi.mock('@/hooks/useLiveStatus', () => ({ liveStatusStore: { setState: vi.fn(), getState: () => ({ health: state.health, healthLegacy: state.health }) }, useLiveStatus: () => ({ healthLegacy: state.health }) }))
 vi.mock('@/lib/controllers', () => ({ soulsController: { switch: vi.fn() }, multimodalController: { uploadPDF: vi.fn() }, modelController: { list: mockModelList, getHealth: mockGetHealth } }))
 vi.mock('@/lib/chat-controller', () => ({ chatController: { getSuggestions: mockGetSuggestions } }))
 vi.mock('@/lib/generation-config-controller', () => ({ generationConfigController: { update: vi.fn() } }))
@@ -49,7 +49,8 @@ vi.mock('@/lib/feedback-store', () => ({ useFeedbackStore: () => ({ recordFeedba
 vi.mock('@/lib/images-controller', () => ({ imagesController: { generate: mockImageGenerate } }))
 vi.mock('@/lib/files-controller', () => ({ filesController: { extract: vi.fn() } }))
 vi.mock('@/lib/knowledge-controller', () => ({ knowledgeController: { add: mockKnowledgeAdd } }))
-vi.mock('@/lib/store', () => ({ useSettings: () => ({ collapsibleMessageLength: 500 }) }))
+vi.mock('@/lib/store', () => ({ useSettings: () => ({ collapsibleMessageLength: 500 }), useAppStore: Object.assign(vi.fn((selector: any) => selector({ settings: { autoApproveTools: false }, updateSettings: vi.fn() })), { getState: () => ({ settings: { autoApproveTools: false }, updateSettings: vi.fn(), injectedKnowledge: [] }) }) }))
+vi.mock('@/lib/db', () => ({ chatDB: { getKV: vi.fn().mockResolvedValue(undefined), setKV: vi.fn().mockResolvedValue(undefined), deleteKV: vi.fn().mockResolvedValue(undefined), addError: vi.fn().mockResolvedValue(undefined), saveMessageNote: vi.fn().mockResolvedValue(undefined), getMessageNotes: vi.fn().mockResolvedValue([]), removeMessageNote: vi.fn().mockResolvedValue(undefined), searchMessageNotes: vi.fn().mockResolvedValue([]) } }))
 vi.mock('@/features/chat/contexts/ConvSidebarContext', () => ({ useConvSidebar: () => ({ setOpen: mockSetConvSidebarOpen, convCollapsed: false, toggleConv: vi.fn() }) }))
 vi.mock('@/features/chat/contexts/ChatContext', () => ({ ChatProvider: ({ children }: any) => <div data-testid="chat-provider">{children}</div> }))
 vi.mock('@/features/chat/contexts/ChatToolbarContext', () => ({ ChatToolbarProvider: ({ children }: any) => <div>{children}</div> }))
@@ -121,7 +122,18 @@ vi.mock('@/features/chat/hooks/useChatMode', async () => {
         brainstormTopic: 'Ideas', setBrainstormTopic: vi.fn(),
         wellnessType: 'Meditation', setWellnessType: vi.fn(),
         createStyle: 'Watercolor', setCreateStyle: vi.fn(),
-        placeholder: 'Type...', handleSend: vi.fn(),
+        placeholder: 'Type...', handleSend: async (readFileData?: { text: string; filename: string } | null) => {
+          if (chatMode === 'read' && !readFileData) {
+            mockAddToast('Upload a file first, then ask your question', 'info')
+            return
+          }
+          if (chatMode === 'create') {
+            const input = (document.querySelector('[aria-label="Chat input"]') as HTMLTextAreaElement)?.value || ''
+            if (input) await mockImageGenerate(input, 'watercolor')
+            return
+          }
+          mockSendMessage()
+        },
       }
     },
   }
@@ -216,7 +228,7 @@ describe('ChatPage', () => {
     expect(screen.getByLabelText('Chat')).toBeTruthy()
     expect(screen.getByTestId('chat-toolbar')).toBeTruthy()
     expect(screen.getByTestId('chat-provider')).toBeTruthy()
-    expect(screen.getAllByTestId('dynamic').length).toBe(3)
+    expect(screen.getAllByTestId('dynamic').length).toBe(6)
   })
 
   it('opens the sidebar and fetches initial data on mount', async () => {
@@ -259,19 +271,19 @@ describe('ChatPage', () => {
   it('renders ChatSettings when showSettings is enabled', async () => {
     state.ui.showSettings = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(4)
+    expect(screen.getAllByTestId('dynamic').length).toBe(7)
   })
 
   it('renders the tool panel when toolPanelOpen is enabled', async () => {
     state.ui.toolPanelOpen = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(4)
+    expect(screen.getAllByTestId('dynamic').length).toBe(7)
   })
 
   it('opens the conversation search panel on the search-conversations window event', async () => {
     await renderChat()
     await act(async () => { window.dispatchEvent(new Event('search-conversations')) })
-    expect(screen.getAllByTestId('dynamic').length).toBe(3)
+    expect(screen.getAllByTestId('dynamic').length).toBe(6)
   })
 
   it('starts a new chat on the new-chat window event', async () => {
@@ -341,6 +353,6 @@ describe('ChatPage', () => {
   it('enables the voice overlay in talk mode', async () => {
     state.mode.chatMode = 'talk'
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(4)
+    expect(screen.getAllByTestId('dynamic').length).toBe(7)
   })
 })

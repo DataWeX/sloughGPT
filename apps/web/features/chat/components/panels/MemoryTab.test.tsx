@@ -18,6 +18,19 @@ vi.mock('@sloughgpt/strui', () => ({
       {...rest}
     />
   ),
+  Slider: ({ value, onValueChange, min, max, showValue, formatValue, ...rest }: any) => (
+    <div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value?.[0] ?? 0}
+        onChange={(e) => onValueChange?.([Number(e.target.value)])}
+        {...rest}
+      />
+      {showValue && <span>{formatValue ? formatValue(value?.[0] ?? 0) : value?.[0]}</span>}
+    </div>
+  ),
   IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
   IconTrash: () => <span data-testid="icon-trash">trash</span>,
   IconSearch: () => <span data-testid="icon-search">search</span>,

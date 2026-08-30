@@ -16,7 +16,7 @@ import { RadixToastContainer } from '@/features/chat/components/feedback/Toast'
 import { CommandPalette } from '@/components/CommandPalette'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useToastStore } from '@/lib/toast-store'
-import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
+import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
@@ -214,7 +214,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Overlays */}
       <ErrorPanel />
       <RadixToastContainer toasts={toasts} onDismiss={dismissToast} onClearAll={clearToasts} />
-      <KeyboardShortcutsModal open={showShortcuts} onOpenChange={setShowShortcuts} />
+      <KeyboardShortcutsDialog open={showShortcuts} onOpenChange={setShowShortcuts} />
       <DebugOverlay open={showDebug} onOpenChange={setShowDebug} />
       <CommandPalette />
       <WhatsNewDialog open={showWhatsNew} onOpenChange={setShowWhatsNew} />

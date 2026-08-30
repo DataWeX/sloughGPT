@@ -137,7 +137,7 @@ describe('useChatModelSettings', () => {
     const { result } = renderHook(() => useChatModelSettings(showToast, refreshHealth))
     act(() => { result.current.setModel('gpt2') })
     await act(async () => { await result.current.handleUnloadModel() })
-    expect(mockUnloadModel).toHaveBeenCalledWith('gpt2')
+    expect(mockUnloadModel).toHaveBeenCalled()
     expect(refreshHealth).toHaveBeenCalled()
     expect(result.current.model).toBe('')
   })

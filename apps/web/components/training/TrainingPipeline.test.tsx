@@ -93,7 +93,6 @@ const session: UseTrainingSessionReturn = {
   pauseTraining: vi.fn(),
   resumeTraining: vi.fn(),
   paused: false,
-  startSSETraining: vi.fn(),
   startFineTune: vi.fn(),
   startVisualTraining: vi.fn(),
   startTurboTrain: vi.fn(),

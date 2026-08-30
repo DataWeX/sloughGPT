@@ -631,33 +631,33 @@ class SloughGPTClient:
 
     def start_auto_train(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """Start auto-training."""
-        response = self._request("POST", "/auto-train/start", json=config)
+        response = self._request("POST", "/training/start", json=config)
         return response.json()
 
     def stop_auto_train(self) -> Dict[str, Any]:
         """Stop auto-training."""
-        response = self._request("POST", "/auto-train/stop")
+        response = self._request("POST", "/training/stop")
         return response.json()
 
     def get_auto_train_status(self) -> Dict[str, Any]:
         """Get auto-training status."""
-        response = self._request("GET", "/auto-train/status")
+        response = self._request("GET", "/training/status")
         return response.json()
 
     def list_auto_train_checkpoints(self) -> List[Dict[str, Any]]:
         """List auto-training checkpoints."""
-        response = self._request("GET", "/auto-train/checkpoints")
+        response = self._request("GET", "/training/checkpoints")
         data = response.json()
         return data.get("checkpoints", data) if isinstance(data, dict) else data
 
     def delete_auto_train_checkpoint(self, name: str) -> Dict[str, Any]:
         """Delete an auto-training checkpoint."""
-        response = self._request("DELETE", f"/auto-train/checkpoints/{name}")
+        response = self._request("DELETE", f"/training/checkpoints/{name}")
         return response.json()
 
     def load_auto_train_checkpoint(self, name: str) -> Dict[str, Any]:
         """Load an auto-training checkpoint."""
-        response = self._request("POST", f"/auto-train/checkpoints/{name}/load")
+        response = self._request("POST", f"/training/checkpoints/{name}/load")
         return response.json()
 
     # ============ Feedback ============
@@ -985,7 +985,7 @@ class AsyncSloughGPTClient:
         return await self._request("GET", "/tokenizer/stats")
 
     async def list_auto_train_checkpoints(self) -> List[Dict[str, Any]]:
-        data = await self._request("GET", "/auto-train/checkpoints")
+        data = await self._request("GET", "/training/checkpoints")
         return data.get("checkpoints", data) if isinstance(data, dict) else data
 
     async def get_security_keys(self) -> List[Dict[str, Any]]:

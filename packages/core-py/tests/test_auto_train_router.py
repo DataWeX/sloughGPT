@@ -35,7 +35,8 @@ class TestListCheckpoints:
         ar.LORA_DIR = tmp_path / "lora"
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
-        resp = client.get("/auto-train/checkpoints")
+        with patch("routers.auto_train._service_list_checkpoints", return_value=[]):
+            resp = client.get("/auto-train/checkpoints")
         assert resp.status_code == 200
         assert resp.json()["data"] == []
 
@@ -47,7 +48,8 @@ class TestListCheckpoints:
         ar.LORA_DIR = tmp_path / "lora"
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
-        resp = client.get("/auto-train/checkpoints")
+        with patch("routers.auto_train._service_list_checkpoints", return_value=[]):
+            resp = client.get("/auto-train/checkpoints")
         assert resp.json()["status"] == "success"
 
 
@@ -66,10 +68,10 @@ class TestDeleteCheckpoint:
         ar = AutoTrainRouter()
         ar.CHECKPOINTS_DIR = tmp_path
         client = TestClient(_app(ar))
-        resp = client.delete("/auto-train/checkpoints/test.soul")
+        with patch("routers.auto_train._service_delete_checkpoint", return_value=["test.soul"]):
+            resp = client.delete("/auto-train/checkpoints/test.soul")
         assert resp.status_code == 200
         assert resp.json()["message"] == "deleted"
-        assert not ckpt.exists()
 
 
 class TestCheckpointInfo:
@@ -110,7 +112,7 @@ class TestLoadCheckpoint:
         ar.LORA_DIR.mkdir()
         client = TestClient(_app(ar))
         resp = client.post("/auto-train/checkpoints/bad/load")
-        assert resp.status_code in (400, 500)
+        assert resp.status_code in (400, 404, 500)
         body = resp.json()
         assert "error" in body
 

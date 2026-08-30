@@ -160,3 +160,75 @@ class LoraFinetuneRequest(BaseModel):
     log_interval: int = Field(default=10, ge=1)
     output_dir: str = Field(default="models", description="Directory to save adapter")
     adapter_name: Optional[str] = Field(default=None, description="Custom adapter name (auto-generated if None)")
+
+
+class VisualTrainRequest(BaseModel):
+    """VLM fine-tune on an image-caption dataset."""
+    dataset: str
+    vision_encoder: str = "slonet"
+    llm: str = "gpt2"
+    connector_hidden_dim: int = 512
+    max_seq_length: int = 128
+    stage1_epochs: int = 5
+    stage2_epochs: int = 10
+    stage1_lr: float = 5e-4
+    stage2_lr: float = 2e-4
+    batch_size: int = 4
+    use_lora: bool = False
+    lora_rank: int = 8
+    freeze_vision: bool = True
+    name: str | None = None
+
+
+class LoadAdapterRequest(BaseModel):
+    """Request to load a LoRA adapter into the running model."""
+    adapter_path: str = Field(description="Path to .npz adapter file")
+    merge: bool = Field(default=False, description="Merge LoRA into base weights for faster inference")
+
+
+class FromSessionsRequest(BaseModel):
+    """Request body for from-sessions training."""
+    epochs: int = 5
+    learning_rate: float = 3e-4
+    batch_size: int = 8
+    n_embed: int = 128
+    n_layer: int = 4
+    n_head: int = 4
+    block_size: int = 128
+    dropout: float = 0.1
+    soul_name: str | None = None
+    min_pair_quality: float = 2.0
+    max_pairs: int = 500
+    checkpoint_name: str | None = None
+    session_ids: list[str] | None = None
+    experiment_id: str | None = None
+
+
+class TurboStartRequest(BaseModel):
+    """Request body for turbo training."""
+    dataset_id: str | None = None
+    checkpoint_name: str | None = None
+    soul_name: str | None = None
+    source_text: str | None = None
+    epochs: int = 3
+    learning_rate: float = 3e-4
+    batch_size: int = 8
+    n_embed: int = 128
+    n_layer: int = 4
+    n_head: int = 4
+    block_size: int = 128
+    use_lora: bool = False
+    lora_rank: int = 8
+    experiment_id: str | None = None
+
+
+class ExportTextRequest(BaseModel):
+    """Request body for exporting checkpoint as text."""
+    checkpoint: str = Field(description="Checkpoint name")
+    max_tokens: int = Field(default=1000, ge=1, le=100000)
+
+
+class TestWebhookRequest(BaseModel):
+    """Request body for testing a webhook."""
+    url: str = Field(description="Webhook URL to test")
+    secret: str | None = Field(default=None, description="Optional HMAC secret")

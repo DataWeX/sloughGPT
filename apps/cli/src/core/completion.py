@@ -127,7 +127,7 @@ def _fetch_checkpoints(host: str = "localhost", port: int = 8000) -> List[str]:
     import requests
     base = f"http://{host}:{port}"
     try:
-        r = requests.get(f"{base}/auto-train/checkpoints", timeout=3)
+        r = requests.get(f"{base}/training/checkpoints", timeout=3)
         if r.status_code == 200:
             data = r.json()
             cps = data if isinstance(data, list) else data.get("checkpoints", [])

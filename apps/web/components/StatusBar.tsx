@@ -10,7 +10,7 @@ import { cn, IconMenu, IconGrid } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
-import { formatDuration } from '@/components/training/formatDuration'
+import { formatDuration } from '@/lib/formatDuration'
 
 function getFailureSummary(failures: { kind: string; timeoutMs: number; error: string; timestamp: number }[]): string {
   if (failures.length === 0) return ''

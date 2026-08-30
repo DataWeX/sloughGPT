@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .log_buffer import LogBuffer
+    from .log_buffer import LogBuffer, LogEntry
 
 # ── ANSI color constants (disabled via NO_COLOR env var) ─────────────
 

@@ -53,7 +53,7 @@ export const useModelStore = create<ModelState>((set, get) => ({
           api.get<ModelInfo[]>('/models').catch(() => []),
           api.get<{souls: SoulInfo[]; current_soul: string | null}>('/souls').catch(() => ({souls: [], current_soul: null})),
           api.get<SoulInfo>('/souls/current').catch(() => null),
-          api.get<CheckpointInfo[]>('/auto-train/checkpoints').catch(() => []),
+          api.get<CheckpointInfo[]>('/training/checkpoints').catch(() => []),
           api.get<HealthStatus>('/health').catch(() => null),
         ]);
 

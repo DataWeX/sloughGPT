@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
-import { IconScan } from '@sloughgpt/strui'
+import { IconEye } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -52,7 +52,7 @@ export function ObjectDetectionCard() {
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">Object Detection</CardTitle>
         <Button size="sm" variant="ghost" onClick={() => inputRef.current?.click()} disabled={detecting}>
-          <IconScan className="h-4 w-4 mr-1" /> Scan
+          <IconEye className="h-4 w-4 mr-1" /> Scan
         </Button>
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
       </CardHeader>

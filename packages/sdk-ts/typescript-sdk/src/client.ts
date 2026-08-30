@@ -645,27 +645,27 @@ export class SloughGPTClient {
   // ============ Auto-Train ============
 
   async startAutoTrain(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.request('POST', '/auto-train/start', config);
+    return this.request('POST', '/training/start', config);
   }
 
   async stopAutoTrain(): Promise<Record<string, unknown>> {
-    return this.request('POST', '/auto-train/stop');
+    return this.request('POST', '/training/stop');
   }
 
   async getAutoTrainStatus(): Promise<Record<string, unknown>> {
-    return this.request('GET', '/auto-train/status');
+    return this.request('GET', '/training/status');
   }
 
   async listAutoTrainCheckpoints(): Promise<Record<string, unknown>[]> {
-    return this.request<Record<string, unknown>[]>('GET', '/auto-train/checkpoints');
+    return this.request<Record<string, unknown>[]>('GET', '/training/checkpoints');
   }
 
   async deleteAutoTrainCheckpoint(name: string): Promise<Record<string, unknown>> {
-    return this.request('DELETE', `/auto-train/checkpoints/${name}`);
+    return this.request('DELETE', `/training/checkpoints/${name}`);
   }
 
   async loadAutoTrainCheckpoint(name: string): Promise<Record<string, unknown>> {
-    return this.request('POST', `/auto-train/checkpoints/${name}/load`);
+    return this.request('POST', `/training/checkpoints/${name}/load`);
   }
 
   // ============ Feedback ============

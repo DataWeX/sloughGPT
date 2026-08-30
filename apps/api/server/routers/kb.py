@@ -18,23 +18,9 @@ logger = logging.getLogger(__name__)
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+from infrastructure.ssrf import is_private_ip as _is_private_ip
 
 import urllib.parse
-import ipaddress
-import socket
-
-
-def _is_private_ip(hostname: str) -> bool:
-    """Check if hostname resolves to a private/loopback IP (SSRF protection)."""
-    try:
-        addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
-        for family, _, _, _, sockaddr in addrinfos:
-            ip = ipaddress.ip_address(sockaddr[0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                return True
-    except (socket.gaierror, ValueError):
-        pass
-    return False
 
 
 class KnowledgeItemOut(BaseModel):

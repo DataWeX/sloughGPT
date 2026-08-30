@@ -18,7 +18,7 @@ import { agentsController, type Agent, type OrchestrateTask, type AgentRun } fro
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
-import { formatElapsed } from '@/components/training/formatDuration'
+import { formatElapsed } from '@/lib/formatDuration'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
 

@@ -294,7 +294,7 @@ export default function DocstorePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete all documents?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete all documents in "{selected}". This cannot be undone.
+              This will permanently delete all documents in &quot;{selected}&quot;. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

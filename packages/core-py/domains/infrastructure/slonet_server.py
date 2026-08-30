@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import time
 import threading
 import queue
@@ -308,7 +309,7 @@ class SloNetServer:
             tokens = self._tokenizer.encode(prompt)
             input_ids = np.array([tokens], dtype=np.int64)
             kv_state = self._resolve_kv_state(session_id)
-            with self._model_lock:
+            with getattr(self, '_model_lock', contextlib.nullcontext()):
                 result = model.generate_numpy(
                     input_ids,
                     max_new_tokens=max_new_tokens,
@@ -384,7 +385,7 @@ class SloNetServer:
 
             _t_gen = _time.monotonic()
             _first_token = True
-            with self._model_lock:
+            with getattr(self, '_model_lock', contextlib.nullcontext()):
                 for tok_id in model.generate_numpy_stream(
                     input_ids,
                     max_new_tokens=max_new_tokens,

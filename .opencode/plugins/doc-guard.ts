@@ -21,6 +21,7 @@ const AREAS: AreaDoc[] = [
   { area: "config", docs: ["docs/ENVIRONMENT.md"], paths: ["config/"] },
   { area: "cli", docs: ["docs/integration/CLI_README.md"], paths: ["apps/cli/"] },
   { area: "testing", docs: ["docs/DEVELOPER_GUIDE.md"], paths: ["tests/", "apps/web/cypress/"] },
+  { area: "systems", docs: ["docs/SHELL.md", "docs/VM_CONSOLE.md", "docs/DEVELOPER_GUIDE.md"], paths: ["packages/core-py/domains/shell/"] },
   { area: "docs", docs: [], paths: ["docs/"] },
 ]
 

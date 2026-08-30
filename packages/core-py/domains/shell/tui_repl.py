@@ -33,7 +33,7 @@ try:
 except (ImportError, AttributeError):
     _SET_ASYNC_EXC = None
 
-from .pane import Pane, PaneLayout
+from .pane import Border, Pane, PaneLayout, Rect
 from .surface import LogSurface, RenderLine, STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL, TextSurface
 
 if TYPE_CHECKING:
@@ -198,6 +198,7 @@ class TuiRepl:
 
         self._repl_lock = threading.Lock()
         self._output_surface = TextSurface()
+        self._input_surface = TextSurface()
         self._tui_io = TuiIo(self._output_surface)
 
         # Wire interactive prompts into Console
@@ -359,21 +360,78 @@ class TuiRepl:
 
     # ── Rendering ─────────────────────────────────────────────────────────
 
-    def _blit(self, win: curses._CursesWindow, lines: list[RenderLine]) -> None:
+    def _draw_borders(self, stdscr: curses._CursesWindow, regions: dict[str, Rect]) -> None:
+        """Draw border characters for all panes that have borders configured.
+
+        Borders are drawn directly on the stdscr (the full terminal), not on
+        the pane's curses window.  This avoids overlapping content areas.
+        """
+        attr = curses.color_pair(_P_BORDER) if curses.has_colors() else 0
+        for pane in self._layout.panes:
+            if not pane.visible or pane.border.is_empty:
+                continue
+            r = regions.get(pane.name)
+            if not r:
+                continue
+            h_attr = attr
+            if pane.border.ch:
+                # Use custom character if provided.
+                pass
+            # Horizontal borders (top / bottom edges).
+            if pane.border.top and r.rows > 0:
+                ch = pane.border.ch or "\u2500"
+                try:
+                    stdscr.addnstr(r.top, r.left, ch * r.cols, r.cols, h_attr)
+                except curses.error:
+                    pass
+            if pane.border.bottom and r.rows > 1:
+                ch = pane.border.ch or "\u2500"
+                try:
+                    stdscr.addnstr(r.top + r.rows - 1, r.left, ch * r.cols, r.cols, h_attr)
+                except curses.error:
+                    pass
+            # Vertical borders (left / right edges).
+            if pane.border.left and r.cols > 0:
+                ch = pane.border.ch or "\u2502"
+                for y in range(r.top, r.top + r.rows):
+                    try:
+                        stdscr.addch(y, r.left, ch, attr)
+                    except curses.error:
+                        pass
+            if pane.border.right and r.cols > 1:
+                ch = pane.border.ch or "\u2502"
+                for y in range(r.top, r.top + r.rows):
+                    try:
+                        stdscr.addch(y, r.left + r.cols - 1, ch, attr)
+                    except curses.error:
+                        pass
+        try:
+            stdscr.refresh()
+        except curses.error:
+            pass
+
+    def _blit(self, win: curses._CursesWindow, lines: list[RenderLine],
+              offset_y: int = 0, offset_x: int = 0) -> None:
+        """Write *lines* into *win*, starting at (offset_y, offset_x).
+
+        Offsets are used when the pane has borders or padding so content
+        is drawn inside the border/padding area, not on top of it.
+        """
         try:
             win.erase()
         except curses.error:
             return
         h, w = win.getmaxyx()
         for y, ln in enumerate(lines):
-            if y >= h:
+            wy = offset_y + y
+            if wy >= h:
                 break
             pair = _STYLE_PAIRS.get(ln.style)
             attr = curses.color_pair(pair) if pair else 0
-            text = ln.text[: w - 1]
+            text = ln.text[: w - offset_x - 1] if offset_x < w else ""
             try:
                 if text:
-                    win.addstr(y, 0, text, attr)
+                    win.addstr(wy, offset_x, text, attr)
             except curses.error:
                 pass
         try:
@@ -381,9 +439,18 @@ class TuiRepl:
         except curses.error:
             pass
 
-    def _render_all(self, regions, win_console, win_output, win_status, win_input) -> None:
-        self._blit(win_console, self._log_surface.render(regions["console"].rows, self._log_scroll))
-        self._blit(win_output, self._output_surface.render(regions["output"].rows, self._out_scroll))
+    def _render_all(self, stdscr, regions, win_console, win_output, win_status, win_input) -> None:
+        self._draw_borders(stdscr, regions)
+        # Compute content offsets from borders.
+        for pane in self._layout.panes:
+            if pane.name == "console":
+                oy = pane.border_top + pane.pad_top
+                ox = pane.border_left + pane.pad_left
+                self._blit(win_console, self._log_surface.render(regions["console"].rows - pane.border_top - pane.border_bottom, self._log_scroll), oy, ox)
+            elif pane.name == "output":
+                oy = pane.border_top + pane.pad_top
+                ox = pane.border_left + pane.pad_left
+                self._blit(win_output, self._output_surface.render(regions["output"].rows - pane.border_top - pane.border_bottom, self._out_scroll), oy, ox)
         self._render_status(win_status, regions["status"].cols)
         self._render_input(win_input, regions["input"].cols)
 
@@ -913,7 +980,7 @@ class TuiRepl:
         win_input = curses.newwin(regions["input"].rows, regions["input"].cols, regions["input"].top, regions["input"].left)
 
         def _redraw() -> None:
-            self._render_all(regions, win_console, win_output, win_status, win_input)
+            self._render_all(stdscr, regions, win_console, win_output, win_status, win_input)
 
         def _resize(nrows: int, ncols: int) -> None:
             """Rebuild the layout and windows at ``nrows`` x ``ncols``.

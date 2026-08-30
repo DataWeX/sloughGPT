@@ -18,7 +18,7 @@ interface MessageContentProps {
   onEditCancel?: () => void
 }
 
-function highlightText(text: string, query: string): (string | JSX.Element)[] {
+function highlightText(text: string, query: string): (string | React.JSX.Element)[] {
   if (!query) return [text]
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'))

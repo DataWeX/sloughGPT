@@ -36,7 +36,7 @@ export default function ModelDetailPage() {
   const [modelLogs, setModelLogs] = useState<string[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [uptime, setUptime] = useState<string | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval>>()
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [genConfig, setGenConfig] = useState<GenerationConfig>({
     temperature: 0.7,
     max_new_tokens: 256,

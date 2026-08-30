@@ -174,7 +174,7 @@ export default function AuthPage() {
                 onClick={async () => {
                   try {
                     const data = await authController.verify(token!)
-                    alert(data?.data?.valid ? 'Token valid' : 'Token invalid')
+                    alert(data?.valid ? 'Token valid' : 'Token invalid')
                   } catch { alert('Verification failed') }
                 }}
               >

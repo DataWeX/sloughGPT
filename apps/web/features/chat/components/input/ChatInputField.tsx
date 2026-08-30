@@ -9,7 +9,7 @@ interface ChatInputFieldProps {
   onSend: () => void
   placeholder: string
   disabled: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
   suppressEnter?: boolean
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }

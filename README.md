@@ -107,7 +107,7 @@ Core endpoints:
 | `POST` | `/chat/stream` | Streaming chat (SSE) |
 | `POST` | `/inference/generate` | Text generation |
 | `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
-| `POST` | `/auto-train/start` | Start training (SSE progress) |
+| `POST` | `/training/start` | Start training (SSE progress) |
 | `POST` | `/training/start` | HuggingFace fine-tuning |
 | `GET` | `/health` | Server and model health |
 | `GET` | `/models` | List available models |

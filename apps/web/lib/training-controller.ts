@@ -198,11 +198,11 @@ export interface TrainFromSessionsParams {
 
 export const trainingJobsController = {
   async startAutoTrain(params?: AutoTrainStartRequest): Promise<AutoTrainStartResponse> {
-    return apiPost<AutoTrainStartResponse>('/auto-train/start', params ?? null)
+    return apiPost<AutoTrainStartResponse>('/training/start', params ?? null)
   },
 
   async stopAutoTrain(): Promise<void> {
-    await apiPost('/auto-train/stop')
+    await apiPost('/training/stop')
   },
 
   async loadAdapter(adapterPath: string, merge: boolean = false): Promise<{
@@ -221,24 +221,24 @@ export const trainingJobsController = {
   },
 
   async pauseTraining(): Promise<{ success: boolean }> {
-    return apiPost('/auto-train/pause')
+    return apiPost('/training/control/pause')
   },
 
   async getTrainingLog(): Promise<string[]> {
-    const data = await apiGet<{ lines: string[] }>('/auto-train/log')
+    const data = await apiGet<{ lines: string[] }>('/training/log')
     return data.lines ?? []
   },
 
   async resumeTraining(): Promise<{ success: boolean }> {
-    return apiPost('/auto-train/resume')
+    return apiPost('/training/control/resume')
   },
 
   async startTurboTrain(params?: TurboTrainStartRequest): Promise<TurboTrainResponse> {
-    return apiPost<TurboTrainResponse>('/auto-train/start-turbo', params ?? null)
+    return apiPost<TurboTrainResponse>('/training/turbo-start', params ?? null)
   },
 
   async getTurboStatus(): Promise<TurboJobStatus> {
-    return apiGet<TurboJobStatus>('/auto-train/turbo/status')
+    return apiGet<TurboJobStatus>('/training/turbo/status')
   },
 
   async list(): Promise<TrainingJob[]> {
@@ -247,7 +247,7 @@ export const trainingJobsController = {
   },
 
   async listCheckpoints(): Promise<Checkpoint[]> {
-    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/training/checkpoints')
     return Array.isArray(data) ? data : (data?.checkpoints ?? [])
   },
 
@@ -447,11 +447,11 @@ export const trainingJobsController = {
   },
 
   async loadCheckpoint(name: string): Promise<{ success: boolean }> {
-    return apiPost(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
+    return apiPost(`/training/checkpoints/${encodeURIComponent(name)}/load`)
   },
 
   async deleteCheckpoint(name: string): Promise<{ success: boolean }> {
-    return apiDelete(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
+    return apiDelete(`/training/checkpoints/${encodeURIComponent(name)}`)
   },
 
   async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {
@@ -460,19 +460,19 @@ export const trainingJobsController = {
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const res = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
+    const res = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download`)
     if (!res.ok) throw new Error(`Download failed (${res.status})`)
     return res.blob()
   },
 
   async exportMetrics(): Promise<Blob> {
-    const res = await authFetch('/auto-train/metrics/export')
+    const res = await authFetch('/training/metrics/export')
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
 
   async getCheckpointInfo(name: string): Promise<Record<string, unknown>> {
-    return apiGet<Record<string, unknown>>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
+    return apiGet<Record<string, unknown>>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
   },
 
   async downloadTrainingJob(jobId: string): Promise<Blob> {
@@ -550,7 +550,7 @@ export const trainingJobsController = {
   // ---------------------------------------------------------------------------
 
   async startFromSessionsSloNet(params: TrainFromSessionsParams): Promise<void> {
-    await apiPost('/auto-train/from-sessions/start', params)
+    await apiPost('/training/from-sessions-start', params)
   },
 
   async *streamFromSessionsSloNet(): AsyncGenerator<{
@@ -562,7 +562,7 @@ export const trainingJobsController = {
     message: string
   }> {
     try {
-      for await (const event of streamSSE('/auto-train/from-sessions/stream', { method: 'GET' })) {
+      for await (const event of streamSSE('/training/from-sessions-stream', { method: 'GET' })) {
         yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
         if (event.status === 'complete' || event.status === 'error') return
       }
@@ -572,7 +572,7 @@ export const trainingJobsController = {
   },
 
   async cancelFromSessionsSloNet(): Promise<void> {
-    await apiGet('/auto-train/from-sessions/cancel')
+    await apiGet('/training/from-sessions/cancel')
   },
 
   async getAutoTrainStatus(): Promise<AutoTrainStatus> {

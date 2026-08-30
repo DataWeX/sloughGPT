@@ -365,6 +365,13 @@ class SessionKVCache:
         with self._lock:
             self._caches.pop(session_id, None)
 
+    def clear_all(self) -> int:
+        """Clear all cached sessions. Returns the number of entries removed."""
+        with self._lock:
+            count = len(self._caches)
+            self._caches.clear()
+            return count
+
     def _evict_expired(self) -> None:
         now = time.time()
         stale = [k for k, v in self._caches.items() if now - v[2] > self._ttl]
@@ -1361,6 +1368,9 @@ class ModelServer:
         # Register default post-generation hook for KV cache cleanup
         self.add_post_generate_hook(self._cleanup_kv_cache)
 
+        # Register memory pressure check as pre-generation hook
+        self.add_pre_generate_hook(self._check_memory_pressure)
+
         # Background warmup
         if self._enable_warmup:
             Thread(target=self._run_warmup, daemon=True).start()
@@ -1434,6 +1444,18 @@ class ModelServer:
         1. Direct .slnc path (if stored via set_hf_model_id)
         2. HuggingFace model ID → look up cached .slnc file
         """
+        # Skip reload if memory pressure is too high
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            if not get_memory_pressure_monitor().allow_load():
+                logger.info(
+                    "Idle reload skipped for %s: memory pressure too high",
+                    self.model_id, extra={"op": "sys.info"},
+                )
+                return
+        except ImportError:
+            pass
+
         if not self._hf_model_id and not self._slnc_path:
             logger.warning(
                 "Cannot reload %s: no model ID or path stored", self.model_id,
@@ -1564,14 +1586,17 @@ class ModelServer:
         if self._local_backend is not None:
             self._local_backend._device = self._resolved_device
 
-    def _select_backend(self) -> GenerateBackend:
+    def _select_backend(self) -> Optional[GenerateBackend]:
         """Pick the best available backend for the current request.
 
         Priority: GuardBackend (crash-isolated) > LocalBackend.
+        Returns None if no backend is alive (e.g., after pressure eviction).
         """
         if self._guard_backend is not None and self._guard_backend.alive:
             return self._guard_backend
-        return self._local_backend
+        if self._local_backend is not None and self._local_backend.alive:
+            return self._local_backend
+        return None
 
     def drop_model_ref(self) -> None:
         """Release the in-memory model reference.
@@ -1582,10 +1607,32 @@ class ModelServer:
         """
         with self._lock:
             self._model_ref = None
+            self._status = ModelStatus.UNLOADED
         if self._local_backend is not None:
             self._local_backend._model_ref = None
         self._device = "guard"
         logger.info("ModelServer[%s]: dropped in-memory model ref (guard mode)", self.model_id, extra={"op": "model.load"})
+
+    def _check_memory_pressure(self) -> None:
+        """Pre-generation hook: check memory pressure and raise on emergency.
+
+        Raises RuntimeError when system memory is above the emergency threshold,
+        blocking the generation to prevent OOM. The error message includes the
+        current memory percentage for diagnostics.
+        """
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
+            monitor = get_memory_pressure_monitor()
+            level = monitor.check()
+            if level == PressureLevel.EMERGENCY:
+                import psutil
+                mem = psutil.virtual_memory()
+                raise RuntimeError(
+                    f"System memory at {mem.percent:.0f}% — too low for safe inference. "
+                    f"Free some memory and retry."
+                )
+        except ImportError:
+            pass  # monitor not available — allow generation
 
     def _cleanup_kv_cache(self) -> None:
         """Clear any KV cache tensors the model may have accumulated."""
@@ -1829,6 +1876,8 @@ class ModelServer:
         for hook in pre_hooks:
             try:
                 hook()
+            except RuntimeError:
+                raise  # memory pressure blocks must propagate
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
 
@@ -1962,7 +2011,23 @@ class ModelServer:
 
         Delegates to the selected backend's generate_stream().
         """
+        # Pre-generation hooks (memory pressure check)
+        with self._hooks_lock:
+            pre_hooks = list(self._pre_generate_hooks)
+        for hook in pre_hooks:
+            try:
+                hook()
+            except RuntimeError:
+                raise  # memory pressure blocks must propagate
+            except Exception as e:
+                logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
+
         backend = self._select_backend()
+        if backend is None:
+            raise RuntimeError(
+                f"No backend available — model '{self.model_id}' may have "
+                "been idle-unloaded. Reload the model before generating."
+            )
         is_local = isinstance(backend, LocalBackend)
         gen = backend.generate_stream(
             prompt, max_new_tokens, temperature,
@@ -2036,6 +2101,8 @@ class ModelServer:
         for hook in pre_hooks:
             try:
                 hook()
+            except RuntimeError:
+                raise  # memory pressure blocks must propagate
             except Exception as e:
                 logger.warning("Pre-gen hook failed: %s", e, extra={"op": "model.load"})
 
@@ -2066,6 +2133,11 @@ class ModelServer:
 
         # Select backend (guard if alive, else local)
         backend = self._select_backend()
+        if backend is None:
+            raise RuntimeError(
+                f"No backend available — model '{self.model_id}' may have "
+                "been idle-unloaded. Reload the model before generating."
+            )
         is_local = isinstance(backend, LocalBackend)
         logger.debug("generate_stream[%s]: backend=%s session_id=%s",
                      self.model_id, type(backend).__name__, session_id)

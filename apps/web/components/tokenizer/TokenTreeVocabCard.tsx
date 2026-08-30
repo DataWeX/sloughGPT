@@ -140,7 +140,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
                 {expanded?.id === entry.id && (
                   <div className="rounded-md bg-muted/50 px-3 py-2 my-1">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Merge lineage of <span className="font-mono text-primary">"{display(entry.token)}"</span>
+                      Merge lineage of <span className="font-mono text-primary">{'"' + display(entry.token) + '"'}</span>
                       <span className="text-muted-foreground/70"> — {lineage?.leaves.length ?? '…'} character leaves</span>
                     </div>
                     {lineageLoading ? (
@@ -193,7 +193,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
         )}
 
         <p className="text-xs text-muted-foreground">
-          Browse the tree's vocabulary in id order — special tokens and base characters first, then merge tokens in
+          Browse the tree&apos;s vocabulary in id order — special tokens and base characters first, then merge tokens in
           the order they were learned. Click a token to expand its lineage down to character leaves.
         </p>
       </CardContent>

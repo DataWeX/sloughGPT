@@ -123,6 +123,14 @@ class ModelsController:
                 "error": "Another model is currently loading. Please wait.",
             }
 
+        # Memory pressure check — try to free idle resources before loading
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            monitor = get_memory_pressure_monitor()
+            monitor.force_cleanup()
+        except ImportError:
+            pass
+
         import state as server_state
 
         logger.info("Loading %s into SloTransformer (pure NumPy)...", model_id, extra={"tag": "MODEL"})
@@ -335,6 +343,18 @@ class ModelsController:
 
         Converts safetensors → .slnc on first load, then loads via mmap.
         """
+        # Block model loading under memory pressure to prevent OOM
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            if not get_memory_pressure_monitor().allow_load():
+                return {
+                    "status": "error",
+                    "error": "System memory too low for safe model loading. "
+                             "Wait for idle timeout to free memory, or free memory manually.",
+                }
+        except ImportError:
+            pass  # monitor not available — allow load
+
         resolved_device = self._resolve_device(device)
 
         try:
@@ -523,6 +543,18 @@ class ModelsController:
             Dict with status/type/device/loaded_at (status ``"loaded"``) or
             status ``"error"`` with a message on failure
         """
+        # Block model loading under memory pressure to prevent OOM
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            if not get_memory_pressure_monitor().allow_load():
+                return {
+                    "status": "error",
+                    "error": "System memory too low for safe model loading. "
+                             "Wait for idle timeout to free memory, or free memory manually.",
+                }
+        except ImportError:
+            pass  # monitor not available — allow load
+
         target = Path(model_path)
         if not target.is_dir():
             return {"status": "error", "error": f"Not a directory: {model_path}"}

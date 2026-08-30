@@ -1,505 +1,512 @@
-"""
-Tests for domains.shared: feature_flags, utils, test_framework.
-"""
+"""Tests for domains.shared — utils, feature_flags, test_framework."""
+
 import json
 import time
-
 import pytest
+from pathlib import Path
 
+from domains.shared.utils import (
+    generate_id,
+    hash_string,
+    format_size,
+    format_time,
+    load_json,
+    save_json,
+    merge_dicts,
+    clamp,
+    retry,
+    Timer,
+    Cache,
+    RateLimiter,
+    validate_config,
+    get_timestamp,
+    find_available_port,
+    find_server_python,
+)
 from domains.shared.feature_flags import (
+    FlagStatus,
     FeatureFlag,
     FeatureFlags,
-    FlagStatus,
     is_enabled,
 )
 from domains.shared.test_framework import (
-    BenchmarkRunner,
-    TestFramework,
     TestResult,
     TestSuite,
+    TestFramework,
+    BenchmarkRunner,
     mark_test,
 )
-from domains.shared.utils import (
-    Cache,
-    RateLimiter,
-    Timer,
-    clamp,
-    find_available_port,
-    format_size,
-    format_time,
-    generate_id,
-    get_timestamp,
-    hash_string,
-    load_json,
-    merge_dicts,
-    retry,
-    save_json,
-    validate_config,
-)
 
 
-# ── feature_flags: FeatureFlag ───────────────────────────────────────────
+# ===================================================================
+# utils.py
+# ===================================================================
+
+class TestGenerateId:
+    def test_length(self):
+        assert len(generate_id()) == 8
+
+    def test_prefix(self):
+        result = generate_id("usr_")
+        assert result.startswith("usr_")
+        assert len(result) == 12
+
+    def test_no_prefix(self):
+        result = generate_id()
+        assert result.isalnum()
+        assert result.isascii()
+
+    def test_uniqueness(self):
+        ids = {generate_id() for _ in range(100)}
+        assert len(ids) == 100
+
+
+class TestHashString:
+    def test_sha256(self):
+        h = hash_string("hello")
+        assert len(h) == 64
+        assert h == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+    def test_md5(self):
+        h = hash_string("hello", "md5")
+        assert len(h) == 32
+
+    def test_sha1(self):
+        h = hash_string("hello", "sha1")
+        assert len(h) == 40
+
+    def test_unknown_returns_input(self):
+        assert hash_string("abc", "unknown") == "abc"
+
+    def test_empty_string(self):
+        h = hash_string("")
+        assert len(h) == 64
+
+
+class TestFormatSize:
+    @pytest.mark.parametrize("size,expected", [
+        (0, "0.0 B"),
+        (512, "512.0 B"),
+        (1024, "1.0 KB"),
+        (1024 * 1024, "1.0 MB"),
+        (1024 ** 3, "1.0 GB"),
+        (1024 ** 4, "1.0 TB"),
+        (1024 ** 5, "1.0 PB"),
+    ])
+    def test_units(self, size, expected):
+        assert format_size(size) == expected
+
+    def test_partial(self):
+        assert format_size(1536) == "1.5 KB"
+
+
+class TestFormatTime:
+    @pytest.mark.parametrize("seconds,expected", [
+        (5.0, "5.0s"),
+        (65.0, "1.1m"),
+        (3700.0, "1.0h"),
+        (90000.0, "1.0d"),
+    ])
+    def test_units(self, seconds, expected):
+        assert format_time(seconds) == expected
+
+
+class TestJsonIO:
+    def test_save_and_load(self, tmp_path):
+        path = str(tmp_path / "test.json")
+        data = {"key": [1, 2, 3]}
+        save_json(data, path)
+        loaded = load_json(path)
+        assert loaded == data
+
+    def test_custom_indent(self, tmp_path):
+        path = str(tmp_path / "indented.json")
+        save_json({"a": 1}, path, indent=4)
+        with open(path) as f:
+            content = f.read()
+        assert "    " in content
+
+
+class TestMergeDicts:
+    def test_empty(self):
+        assert merge_dicts() == {}
+
+    def test_single(self):
+        assert merge_dicts({"a": 1}) == {"a": 1}
+
+    def test_overwrite(self):
+        result = merge_dicts({"a": 1}, {"a": 2})
+        assert result == {"a": 2}
+
+    def test_multiple(self):
+        result = merge_dicts({"a": 1}, {"b": 2}, {"c": 3})
+        assert result == {"a": 1, "b": 2, "c": 3}
+
+
+class TestClamp:
+    @pytest.mark.parametrize("value,min_val,max_val,expected", [
+        (5, 0, 10, 5),
+        (-1, 0, 10, 0),
+        (11, 0, 10, 10),
+        (5, 5, 5, 5),
+        (0, 0, 0, 0),
+    ])
+    def test_clamp(self, value, min_val, max_val, expected):
+        assert clamp(value, min_val, max_val) == expected
+
+
+class TestRetry:
+    def test_succeeds_first_try(self):
+        call_count = 0
+
+        @retry(max_attempts=3, delay=0)
+        def func():
+            nonlocal call_count
+            call_count += 1
+            return "ok"
+
+        assert func() == "ok"
+        assert call_count == 1
+
+    def test_retries_then_succeeds(self):
+        call_count = 0
+
+        @retry(max_attempts=3, delay=0)
+        def func():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ValueError("not yet")
+            return "done"
+
+        assert func() == "done"
+        assert call_count == 3
+
+    def test_raises_after_max_attempts(self):
+        @retry(max_attempts=2, delay=0)
+        def func():
+            raise RuntimeError("always fails")
+
+        with pytest.raises(RuntimeError, match="always fails"):
+            func()
+
+
+class TestTimer:
+    def test_context_manager(self):
+        with Timer() as t:
+            time.sleep(0.01)
+        assert t.elapsed is not None
+        assert t.elapsed > 0
+
+    def test_start_end_set(self):
+        with Timer() as t:
+            pass
+        assert t.start is not None
+        assert t.end is not None
+        assert t.end >= t.start
+
+
+class TestCache:
+    def test_get_set(self):
+        c = Cache()
+        c.set("k", "v")
+        assert c.get("k") == "v"
+
+    def test_get_missing(self):
+        c = Cache()
+        assert c.get("missing") is None
+
+    def test_len(self):
+        c = Cache()
+        assert len(c) == 0
+        c.set("a", 1)
+        c.set("b", 2)
+        assert len(c) == 2
+
+    def test_eviction(self):
+        c = Cache(max_size=3)
+        for i in range(5):
+            c.set(str(i), i)
+        assert len(c) == 3
+        assert c.get("0") is None
+        assert c.get("1") is None
+        assert c.get("4") == 4
+
+    def test_clear(self):
+        c = Cache()
+        c.set("k", "v")
+        c.clear()
+        assert len(c) == 0
+
+    def test_overwrite(self):
+        c = Cache()
+        c.set("k", 1)
+        c.set("k", 2)
+        assert c.get("k") == 2
+        assert len(c) == 1
 
-def test_flag_env_var_autogenerated():
-    flag = FeatureFlag(name="my_feature", description="d")
-    assert flag.env_var == "SLO_FF_MY_FEATURE"
+
+class TestRateLimiter:
+    def test_allows_within_limit(self):
+        rl = RateLimiter(max_calls=3, period=1.0)
+
+        @rl
+        def fn():
+            return "ok"
+
+        assert fn() == "ok"
+        assert fn() == "ok"
+        assert fn() == "ok"
+
+    def test_raises_on_exceed(self):
+        rl = RateLimiter(max_calls=2, period=1.0)
 
+        @rl
+        def fn():
+            return "ok"
 
-def test_flag_env_var_explicit():
-    flag = FeatureFlag(name="my_feature", description="d", env_var="CUSTOM_VAR")
-    assert flag.env_var == "CUSTOM_VAR"
+        fn()
+        fn()
+        with pytest.raises(Exception, match="Rate limit exceeded"):
+            fn()
+
+
+class TestValidateConfig:
+    def test_valid(self):
+        assert validate_config({"a": 1, "b": 2}, ["a", "b"]) is True
+
+    def test_missing_key(self):
+        assert validate_config({"a": 1}, ["a", "b"]) is False
+
+    def test_empty(self):
+        assert validate_config({}, []) is True
+
+
+class TestGetTimestamp:
+    def test_returns_string(self):
+        assert isinstance(get_timestamp(), str)
+
+    def test_contains_t(self):
+        ts = get_timestamp()
+        assert "T" in ts
+
+
+class TestFindAvailablePort:
+    def test_finds_port(self):
+        port = find_available_port(start_port=20000, max_attempts=100)
+        assert isinstance(port, int)
+        assert 20000 <= port < 20100
+
+
+class TestFindServerPython:
+    def test_returns_string(self):
+        result = find_server_python()
+        assert isinstance(result, str)
+        assert "python" in result.lower()
+
+
+# ===================================================================
+# feature_flags.py
+# ===================================================================
 
-
-def test_flag_disabled_by_default():
-    flag = FeatureFlag(name="f", description="d")
-    assert flag.is_enabled is False
-
-
-def test_flag_enabled_status():
-    flag = FeatureFlag(name="f", description="d", status=FlagStatus.ENABLED)
-    assert flag.is_enabled is True
-
-
-def test_flag_experimental_counts_as_enabled():
-    flag = FeatureFlag(name="f", description="d", status=FlagStatus.EXPERIMENTAL)
-    assert flag.is_enabled is True
-
-
-@pytest.mark.parametrize("value,expected", [("1", True), ("true", True), ("YES", True), ("on", True), ("0", False), ("false", False), ("no", False), ("off", False)])
-def test_flag_env_override(monkeypatch, value, expected):
-    flag = FeatureFlag(name="f", description="d", status=FlagStatus.DISABLED)
-    monkeypatch.setenv("SLO_FF_F", value)
-    assert flag.is_enabled is expected
-
-
-def test_flag_env_override_beats_enabled_status(monkeypatch):
-    flag = FeatureFlag(name="f", description="d", status=FlagStatus.ENABLED)
-    monkeypatch.setenv("SLO_FF_F", "0")
-    assert flag.is_enabled is False
-
-
-# ── feature_flags: registry ──────────────────────────────────────────────
-
-@pytest.fixture(autouse=True)
-def _clean_flags():
-    """Snapshot and restore the global flag registry around each test."""
-    saved = dict(FeatureFlags._flags)
-    saved_status = {k: v.status for k, v in saved.items()}
-    yield
-    for k, v in saved_status.items():
-        FeatureFlags._flags[k].status = v
-
-
-def test_register_new_flag():
-    flag = FeatureFlags.register("test_register_new", description="hello")
-    assert flag.name == "test_register_new"
-    assert flag in FeatureFlags._flags.values()
-
-
-def test_register_existing_is_idempotent():
-    first = FeatureFlags.register("test_idempotent", description="a")
-    second = FeatureFlags.register("test_idempotent", description="b")
-    assert first is second
-
-
-def test_is_enabled_unknown_flag_warns_and_disabled(caplog):
-    assert FeatureFlags.is_enabled("no_such_flag") is False
-    assert any("Unknown feature flag" in r.message for r in caplog.records)
-
-
-def test_set_status_updates_flag():
-    FeatureFlags.register("test_set_status")
-    FeatureFlags.set_status("test_set_status", FlagStatus.ENABLED)
-    assert FeatureFlags.is_enabled("test_set_status") is True
-
-
-def test_set_status_unknown_raises():
-    with pytest.raises(KeyError):
-        FeatureFlags.set_status("test_missing_status", FlagStatus.ENABLED)
-
-
-def test_list_all_shape():
-    FeatureFlags.register("test_list_all", description="d")
-    listing = FeatureFlags.list_all()
-    assert "test_list_all" in listing
-    item = listing["test_list_all"]
-    assert set(item) == {"description", "status", "enabled", "env_var"}
-    assert item["env_var"] == "SLO_FF_TEST_LIST_ALL"
-
-
-def test_defaults_registered():
-    assert "slonet_provider" in FeatureFlags._flags
-    assert "kv_cache" in FeatureFlags._flags
-    assert FeatureFlags.is_enabled("slonet_provider") is True
-
-
-def test_load_config_nonexistent_keeps_defaults(tmp_path):
-    FeatureFlags.load_config(tmp_path / "missing.json")
-    assert FeatureFlags._config_path == tmp_path / "missing.json"
-    assert FeatureFlags.is_enabled("slonet_provider") is True
-
-
-def test_load_config_updates_statuses(tmp_path):
-    FeatureFlags.register("test_load_config", description="d", status=FlagStatus.DISABLED)
-    cfg = tmp_path / "flags.json"
-    cfg.write_text(json.dumps({"test_load_config": "enabled"}))
-    FeatureFlags.load_config(cfg)
-    assert FeatureFlags.is_enabled("test_load_config") is True
-
-
-def test_load_config_invalid_status_ignored(tmp_path):
-    FeatureFlags.register("test_invalid_status", description="d", status=FlagStatus.DISABLED)
-    cfg = tmp_path / "flags.json"
-    cfg.write_text(json.dumps({"test_invalid_status": "bogus"}))
-    FeatureFlags.load_config(cfg)
-    assert FeatureFlags.is_enabled("test_invalid_status") is False
-
-
-def test_load_config_corrupt_json_warns(tmp_path, caplog):
-    cfg = tmp_path / "flags.json"
-    cfg.write_text("{not json")
-    FeatureFlags.load_config(cfg)
-    assert any("Failed to load feature flags" in r.message for r in caplog.records)
-
-
-def test_save_config_roundtrip(tmp_path):
-    FeatureFlags.register("test_save_config", description="d", status=FlagStatus.ENABLED)
-    cfg = tmp_path / "flags.json"
-    FeatureFlags.save_config(cfg)
-    data = json.loads(cfg.read_text())
-    assert data["test_save_config"] == "enabled"
-
-
-def test_is_enabled_shortcut():
-    assert is_enabled("slonet_provider") is True
-    assert is_enabled("definitely_missing_flag") is False
-
-
-# ── utils ────────────────────────────────────────────────────────────────
-
-def test_generate_id_length_and_prefix():
-    rid = generate_id()
-    assert len(rid) == 8
-    prefixed = generate_id("sess_")
-    assert prefixed.startswith("sess_")
-    assert len(prefixed) == len("sess_") + 8
-
-
-def test_hash_string_algorithms():
-    assert hash_string("hello") == hashlib_sha256("hello")
-    assert hash_string("hello", "md5") == hashlib_md5("hello")
-    assert hash_string("hello", "sha1") == hashlib_sha1("hello")
-
-
-def test_hash_string_unknown_returns_input():
-    assert hash_string("hello", "bogus") == "hello"
-
-
-def test_format_size_units():
-    assert format_size(512) == "512.0 B"
-    assert format_size(1024) == "1.0 KB"
-    assert format_size(1024 * 1024) == "1.0 MB"
-    assert format_size(1024 ** 3) == "1.0 GB"
-    assert format_size(1024 ** 4) == "1.0 TB"
-
-
-def test_format_time_units():
-    assert format_time(5) == "5.0s"
-    assert format_time(90) == "1.5m"
-    assert format_time(7200) == "2.0h"
-    assert format_time(172800) == "2.0d"
-
-
-def test_load_save_json_roundtrip(tmp_path):
-    path = tmp_path / "data.json"
-    payload = {"a": [1, 2, 3], "b": None}
-    save_json(payload, str(path))
-    assert load_json(str(path)) == payload
-
-
-def test_load_json_missing_raises(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        load_json(str(tmp_path / "nope.json"))
-
-
-def test_merge_dicts_later_wins():
-    assert merge_dicts({"a": 1, "b": 2}, {"b": 3, "c": 4}) == {"a": 1, "b": 3, "c": 4}
-
-
-def test_clamp_values():
-    assert clamp(5, 0, 10) == 5
-    assert clamp(-1, 0, 10) == 0
-    assert clamp(11, 0, 10) == 10
-
-
-def test_retry_success_first_try():
-    calls = []
-
-    @retry(max_attempts=3, delay=0)
-    def work():
-        calls.append(1)
-        return "ok"
-
-    assert work() == "ok"
-    assert len(calls) == 1
-
-
-def test_retry_retries_then_succeeds():
-    calls = []
-
-    @retry(max_attempts=3, delay=0)
-    def work():
-        calls.append(1)
-        if len(calls) < 3:
-            raise ValueError("boom")
-        return "recovered"
-
-    assert work() == "recovered"
-    assert len(calls) == 3
-
-
-def test_retry_gives_up():
-    calls = []
-
-    @retry(max_attempts=2, delay=0)
-    def work():
-        calls.append(1)
-        raise ValueError("always")
-
-    with pytest.raises(ValueError, match="always"):
-        work()
-    assert len(calls) == 2
-
-
-def test_timer_context_manager():
-    with Timer() as t:
-        time.sleep(0.01)
-    assert t.start is not None
-    assert t.end is not None
-    assert t.elapsed >= 0.01
-
-
-def test_cache_set_get():
-    cache = Cache(max_size=2)
-    cache.set("a", 1)
-    cache.set("b", 2)
-    assert cache.get("a") == 1
-    assert cache.get("missing") is None
-    assert len(cache) == 2
-
-
-def test_cache_evicts_oldest():
-    cache = Cache(max_size=2)
-    cache.set("a", 1)
-    cache.set("b", 2)
-    cache.set("c", 3)
-    assert cache.get("a") is None
-    assert cache.get("b") == 2
-    assert cache.get("c") == 3
-
-
-def test_cache_clear():
-    cache = Cache()
-    cache.set("a", 1)
-    cache.clear()
-    assert len(cache) == 0
-    assert cache.get("a") is None
-
-
-def test_rate_limiter_allows_under_limit():
-    calls = []
-
-    @RateLimiter(max_calls=3, period=10)
-    def work():
-        calls.append(1)
-
-    work()
-    work()
-    work()
-    assert len(calls) == 3
-
-
-def test_rate_limiter_blocks_over_limit():
-    @RateLimiter(max_calls=2, period=10)
-    def work():
-        pass
-
-    work()
-    work()
-    with pytest.raises(Exception, match="Rate limit exceeded"):
-        work()
-
-
-def test_rate_limiter_window_expiry():
-    rl = RateLimiter(max_calls=2, period=0.05)
-    for _ in range(2):
-        rl(lambda: None)()
-    time.sleep(0.06)
-    rl(lambda: None)()  # window has passed, allowed again
-
-
-def test_validate_config():
-    assert validate_config({"a": 1, "b": 2}, ["a", "b"]) is True
-    assert validate_config({"a": 1}, ["a", "b"]) is False
-
-
-def test_get_timestamp_iso():
-    ts = get_timestamp()
-    assert "+00:00" in ts or ts.endswith("Z")
-
-
-def test_find_available_port_binds():
-    port = find_available_port(start_port=39000)
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(("", port))
-    sock.close()
-
-
-def test_find_available_port_skips_occupied():
-    import socket
-    blocker = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    blocker.bind(("", 0))
-    blocker.listen(1)
-    blocked_port = blocker.getsockname()[1]
-    port = find_available_port(start_port=blocked_port, max_attempts=5)
-    assert port != blocked_port
-    blocker.close()
-
-
-def test_find_available_port_none_available():
-    import socket
-    socks = []
-    try:
-        for i in range(3):
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.bind(("", 0))
-            s.listen(1)
-            socks.append(s)
-        with pytest.raises(RuntimeError):
-            find_available_port(start_port=1, max_attempts=0)
-    finally:
-        for s in socks:
-            s.close()
-
-
-# ── test_framework ───────────────────────────────────────────────────────
-
-def test_testresult_dataclass():
-    r = TestResult(name="t", status="passed", execution_time=0.1)
-    assert r.name == "t"
-    assert r.status == "passed"
-    assert r.error_message is None
-
-
-def test_testframework_runs_passing_tests():
-    fw = TestFramework(name="demo")
-
-    def ok_test():
-        assert True
-
-    fw.register(ok_test)
-    suite = fw.run()
-    assert isinstance(suite, TestSuite)
-    assert suite.total_tests == 1
-    assert suite.passed_tests == 1
-    assert suite.failed_tests == 0
-
-
-def test_testframework_captures_failures():
-    fw = TestFramework()
-
-    def bad_test():
-        raise AssertionError("nope")
-
-    fw.register(bad_test)
-    suite = fw.run()
-    assert suite.failed_tests == 1
-    assert suite.passed_tests == 0
-    assert suite.tests[0].status == "failed"
-    assert "nope" in suite.tests[0].error_message
-
-
-def test_testframework_mixed_results():
-    fw = TestFramework()
-
-    def ok():
-        assert True
-
-    def bad():
-        raise ValueError("x")
-
-    fw.register(ok)
-    fw.register(bad)
-    suite = fw.run()
-    assert suite.total_tests == 2
-    assert suite.passed_tests == 1
-    assert suite.failed_tests == 1
-
-
-def test_get_summary():
-    fw = TestFramework()
-
-    def ok():
-        assert True
-
-    fw.register(ok)
-    suite = fw.run()
-    summary = fw.get_summary(suite)
-    assert summary["total"] == 1
-    assert summary["passed"] == 1
-    assert summary["pass_rate"] == 100.0
-
-
-def test_get_summary_zero_tests():
-    fw = TestFramework()
-    suite = fw.run()
-    summary = fw.get_summary(suite)
-    assert summary["total"] == 0
-    assert summary["pass_rate"] == 0.0
-
-
-def test_mark_test_decorator():
-    @mark_test
-    def tagged():
-        pass
-
-    assert getattr(tagged, "_is_test", False) is True
-
-
-def test_benchmark_runner():
-    runner = BenchmarkRunner()
-
-    def fast():
-        pass
-
-    result = runner.run_benchmark("fast", fast, iterations=5)
-    assert result["name"] == "fast"
-    assert result["iterations"] == 5
-    assert result["mean_time"] >= 0
-    assert result["min_time"] <= result["max_time"]
-    assert result["total_time"] == pytest.approx(result["mean_time"] * 5)
-    assert len(runner.results) == 1
-
-
-def test_benchmark_runner_accumulates():
-    runner = BenchmarkRunner()
-    runner.run_benchmark("a", lambda: None, iterations=2)
-    runner.run_benchmark("b", lambda: None, iterations=2)
-    assert len(runner.results) == 2
-
-
-# helpers for hash tests
-def hashlib_sha256(s):
-    import hashlib
-    return hashlib.sha256(s.encode()).hexdigest()
-
-
-def hashlib_md5(s):
-    import hashlib
-    return hashlib.md5(s.encode()).hexdigest()
-
-
-def hashlib_sha1(s):
-    import hashlib
-    return hashlib.sha1(s.encode()).hexdigest()
+class TestFlagStatus:
+    def test_values(self):
+        assert FlagStatus.ENABLED.value == "enabled"
+        assert FlagStatus.DISABLED.value == "disabled"
+        assert FlagStatus.EXPERIMENTAL.value == "experimental"
+
+
+class TestFeatureFlag:
+    def test_auto_env_var(self):
+        f = FeatureFlag(name="my_flag", description="test")
+        assert f.env_var == "SLO_FF_MY_FLAG"
+
+    def test_custom_env_var(self):
+        f = FeatureFlag(name="x", description="", env_var="CUSTOM")
+        assert f.env_var == "CUSTOM"
+
+    def test_is_enabled_status_enabled(self):
+        f = FeatureFlag(name="t", description="", status=FlagStatus.ENABLED)
+        assert f.is_enabled is True
+
+    def test_is_enabled_status_disabled(self):
+        f = FeatureFlag(name="t", description="", status=FlagStatus.DISABLED)
+        assert f.is_enabled is False
+
+    def test_is_enabled_status_experimental(self):
+        f = FeatureFlag(name="t", description="", status=FlagStatus.EXPERIMENTAL)
+        assert f.is_enabled is True
+
+
+class TestFeatureFlagsRegistry:
+    def setup_method(self):
+        FeatureFlags._flags.clear()
+
+    def teardown_method(self):
+        FeatureFlags._flags.clear()
+        _register_defaults_for_tests()
+
+    def test_register(self):
+        FeatureFlags.register("test_flag", description="desc")
+        assert "test_flag" in FeatureFlags._flags
+
+    def test_register_duplicate_returns_existing(self):
+        f1 = FeatureFlags.register("dup", description="a")
+        f2 = FeatureFlags.register("dup", description="b")
+        assert f1 is f2
+
+    def test_is_enabled_unknown(self):
+        assert FeatureFlags.is_enabled("nonexistent") is False
+
+    def test_set_status(self):
+        FeatureFlags.register("s", status=FlagStatus.DISABLED)
+        FeatureFlags.set_status("s", FlagStatus.ENABLED)
+        assert FeatureFlags.is_enabled("s") is True
+
+    def test_set_status_unknown_raises(self):
+        with pytest.raises(KeyError):
+            FeatureFlags.set_status("nope", FlagStatus.ENABLED)
+
+    def test_list_all(self):
+        FeatureFlags.register("a", description="A", status=FlagStatus.ENABLED)
+        listing = FeatureFlags.list_all()
+        assert "a" in listing
+        assert listing["a"]["description"] == "A"
+        assert listing["a"]["status"] == "enabled"
+
+    def test_save_and_load_config(self, tmp_path):
+        FeatureFlags.register("save_test", description="", status=FlagStatus.ENABLED)
+        config_path = tmp_path / "flags.json"
+        FeatureFlags.save_config(config_path)
+
+        FeatureFlags.set_status("save_test", FlagStatus.DISABLED)
+        assert FeatureFlags._flags["save_test"].status == FlagStatus.DISABLED
+
+        FeatureFlags.load_config(config_path)
+        assert FeatureFlags._flags["save_test"].status == FlagStatus.ENABLED
+
+    def test_load_nonexistent_config(self, tmp_path):
+        FeatureFlags.register("x", status=FlagStatus.ENABLED)
+        FeatureFlags.load_config(tmp_path / "nope.json")
+        assert FeatureFlags._flags["x"].status == FlagStatus.ENABLED
+
+
+class TestConvenienceIsEnabled:
+    def test_calls_registry(self):
+        FeatureFlags._flags.clear()
+        FeatureFlags.register("conv", status=FlagStatus.ENABLED)
+        assert is_enabled("conv") is True
+
+
+class TestRegisterDefaults:
+    def test_defaults_registered(self):
+        _register_defaults_for_tests()
+        assert FeatureFlags.is_enabled("slonet_provider") is True
+        assert FeatureFlags.is_enabled("native_c_inference") is False
+        assert FeatureFlags.is_enabled("multimodal") is True
+        assert FeatureFlags.is_enabled("soul_format") is True
+        assert FeatureFlags.is_enabled("feature_flags") is True
+
+
+def _register_defaults_for_tests():
+    """Re-register defaults after test teardown clears _flags."""
+    FeatureFlags._flags.clear()
+    FeatureFlags.register("slonet_provider", status=FlagStatus.ENABLED)
+    FeatureFlags.register("native_c_inference", status=FlagStatus.DISABLED)
+    FeatureFlags.register("cloud_vector_store", status=FlagStatus.DISABLED)
+    FeatureFlags.register("soul_format", status=FlagStatus.ENABLED)
+    FeatureFlags.register("soul_manager", status=FlagStatus.ENABLED)
+    FeatureFlags.register("slonet_kernels", status=FlagStatus.EXPERIMENTAL)
+    FeatureFlags.register("multimodal", status=FlagStatus.ENABLED)
+    FeatureFlags.register("cross_attention", status=FlagStatus.ENABLED)
+    FeatureFlags.register("kv_cache", status=FlagStatus.ENABLED)
+    FeatureFlags.register("session_kv_cache", status=FlagStatus.ENABLED)
+    FeatureFlags.register("model_server", status=FlagStatus.ENABLED)
+    FeatureFlags.register("model_registry", status=FlagStatus.ENABLED)
+    FeatureFlags.register("process_isolation", status=FlagStatus.ENABLED)
+    FeatureFlags.register("on_device_training", status=FlagStatus.EXPERIMENTAL)
+    FeatureFlags.register("quantization", status=FlagStatus.ENABLED)
+    FeatureFlags.register("hf_finetune", status=FlagStatus.DISABLED)
+    FeatureFlags.register("vlm", status=FlagStatus.EXPERIMENTAL)
+    FeatureFlags.register("dpo", status=FlagStatus.EXPERIMENTAL)
+    FeatureFlags.register("context_managers", status=FlagStatus.ENABLED)
+    FeatureFlags.register("knowledge_memory", status=FlagStatus.ENABLED)
+    FeatureFlags.register("semantic_cache", status=FlagStatus.ENABLED)
+    FeatureFlags.register("llm_nlp", status=FlagStatus.EXPERIMENTAL)
+    FeatureFlags.register("feature_flags", status=FlagStatus.ENABLED)
+    FeatureFlags.register("slonet_provider_tests", status=FlagStatus.ENABLED)
+    FeatureFlags.register("slonet_provider_wave_i", status=FlagStatus.ENABLED)
+    FeatureFlags.register("slonet_wave_f", status=FlagStatus.ENABLED)
+
+
+# ===================================================================
+# test_framework.py
+# ===================================================================
+
+class TestTestResult:
+    def test_creation(self):
+        r = TestResult(name="t1", status="passed", execution_time=0.1)
+        assert r.name == "t1"
+        assert r.status == "passed"
+        assert r.error_message is None
+        assert r.metrics == {}
+
+    def test_with_error(self):
+        r = TestResult(name="t2", status="failed", execution_time=0.01, error_message="boom")
+        assert r.error_message == "boom"
+
+
+class TestTestSuite:
+    def test_creation(self):
+        s = TestSuite(
+            name="suite", tests=[], total_tests=0,
+            passed_tests=0, failed_tests=0, skipped_tests=0,
+            total_execution_time=0.0,
+        )
+        assert s.name == "suite"
+        assert s.coverage_percentage == 0.0
+
+
+class TestTestFramework:
+    def test_register_and_run(self):
+        fw = TestFramework("unit")
+        fw.register(lambda: None)
+        suite = fw.run()
+        assert suite.total_tests == 1
+        assert suite.passed_tests == 1
+        assert suite.failed_tests == 0
+
+    def test_captures_failure(self):
+        fw = TestFramework()
+        fw.register(lambda: 1 / 0)
+        suite = fw.run()
+        assert suite.failed_tests == 1
+        assert "zero" in suite.tests[0].error_message.lower()
+
+    def test_get_summary(self):
+        fw = TestFramework()
+        fw.register(lambda: None)
+        fw.register(lambda: None)
+        suite = fw.run()
+        summary = fw.get_summary(suite)
+        assert summary["total"] == 2
+        assert summary["passed"] == 2
+        assert summary["pass_rate"] == 100.0
+
+
+class TestMarkTest:
+    def test_sets_attribute(self):
+        @mark_test
+        def my_test():
+            pass
+        assert getattr(my_test, "_is_test", False) is True
+
+
+class TestBenchmarkRunner:
+    def test_run_benchmark(self):
+        br = BenchmarkRunner()
+        result = br.run_benchmark("fast", lambda: None, iterations=10)
+        assert result["iterations"] == 10
+        assert result["mean_time"] >= 0
+        assert result["min_time"] <= result["max_time"]
+        assert len(br.results) == 1

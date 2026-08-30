@@ -35,6 +35,11 @@
       "template": "Load relevant docs for the given task area (frontend, backend, core, sdk, infra, cli). Read the doc map in .opencode/agents/doc-aware-engineer.md, then load the docs.",
       "description": "Load relevant project docs before making changes",
       "agent": "doc-aware-engineer"
+    },
+    "systems": {
+      "template": "Run systems engineering on the specified target: kernel, init, vm, buildroot, driver <name>, syscall <name>, addon <name>, pane, surface, tui, v86. Design and implement OS-level components for the Dait operating system.",
+      "description": "Design and implement OS components, kernel modules, drivers, Buildroot configs, or VM extensions",
+      "agent": "systems-engineer"
     }
   },
   "agent": {
@@ -60,6 +65,11 @@
     },
     "qa-developer": {
       "description": "QA developer agent for core backend infrastructure. Finds regressions, fixes backend logic bugs, and improves test coverage in packages/core-py/domains/.",
+      "mode": "subagent",
+      "hidden": false
+    },
+    "systems-engineer": {
+      "description": "Systems engineering agent for OS design and code. Writes kernel modules, device drivers, init system services, Buildroot configurations, and VM infrastructure.",
       "mode": "subagent",
       "hidden": false
     }

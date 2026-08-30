@@ -311,7 +311,7 @@ describe('MemoryCard', () => {
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('m1', 'User prefers a cappuccino after noon', 'drinks', 0.8))
     expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', 'success')
-    expect(screen.queryByLabelText('Edit memory fact text')).toBeNull()
+    await waitFor(() => expect(screen.queryByLabelText('Edit memory fact text')).toBeNull())
   })
 
   it('edits a memory fact importance via the slider and saves via the API', async () => {

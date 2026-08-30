@@ -218,7 +218,7 @@ export const api = {
   pullWeights: async (checkpoint: string) => {
     const baseUrl = await getApiUrl();
     return fetch(
-      `${baseUrl}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
+      `${baseUrl}/training/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
     ).then(r => r.json());
   },
 };

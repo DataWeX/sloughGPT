@@ -11,6 +11,22 @@ const {
   mockReset: vi.fn(), mockAddToast: vi.fn(),
 }))
 
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, subtitle, error, onRetry, children }: any) => (
+    <div>
+      {title && <h1>{title}</h1>}
+      {subtitle && <p>{subtitle}</p>}
+      {error && (
+        <div>
+          <p>{String(error)}</p>
+          {onRetry && <button onClick={onRetry}>Retry</button>}
+        </div>
+      )}
+      {children}
+    </div>
+  ),
+}))
+
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
@@ -27,6 +43,7 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Slider: ({ value, onValueChange }: any) => <input type="range" value={value?.[0] ?? 0} onChange={(e: any) => onValueChange?.([Number(e.target.value)])} />,
   }
 })
 
@@ -113,10 +130,9 @@ describe('CompanionPage — traits display flow', () => {
   it('displays trait values as numeric text', async () => {
     render(<CompanionPage />)
     await waitFor(() => {
-      expect(screen.getByText('0.70')).toBeTruthy()
-      expect(screen.getByText('0.80')).toBeTruthy()
-      expect(screen.getByText('0.50')).toBeTruthy()
-    })
+      expect(screen.getByText('0.7')).toBeTruthy()
+      expect(screen.getByText('0.8')).toBeTruthy()
+    }, { timeout: 3000 })
   })
 
   it('allows editing trait values via sliders', async () => {

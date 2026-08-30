@@ -387,7 +387,7 @@ class PointLibrary:
 
         if ft == "cluster":
             params = point.params
-            if params:  # only validate if params is non-empty
+            if params is not None:
                 if "centroids" not in params or "assignments" not in params:
                     raise ValueError("Cluster points must have 'centroids' and 'assignments' params")
                 if not isinstance(params["centroids"], np.ndarray):

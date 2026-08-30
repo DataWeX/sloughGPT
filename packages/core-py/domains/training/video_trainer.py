@@ -362,7 +362,7 @@ class VideoCaptionTrainer:
         if not path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {path}")
 
-        ckpt = np.load(str(path), allow_pickle=False)
+        ckpt = np.load(str(path), allow_pickle=True)
 
         vocab_keys = ckpt["vocab_keys"].tolist()
         vocab_vals = ckpt["vocab_vals"].tolist()

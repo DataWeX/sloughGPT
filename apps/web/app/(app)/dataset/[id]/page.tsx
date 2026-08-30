@@ -24,7 +24,7 @@ import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
 
-const DatasetImportModal = dynamicNext(() => import('@/components/DatasetImportModal').then(m => m.DatasetImportModal), { ssr: false })
+const DatasetImportDialog = dynamicNext(() => import('@/components/DatasetImportDialog').then(m => m.DatasetImportDialog), { ssr: false })
 
 export default function DatasetDetailPage() {
   const params = useParams()
@@ -515,8 +515,8 @@ export default function DatasetDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {importOpen && DatasetImportModal && (
-        <DatasetImportModal
+      {importOpen && DatasetImportDialog && (
+        <DatasetImportDialog
           open={importOpen}
           onOpenChange={setImportOpen}
           onImportComplete={() => { setImportOpen(false); fetchDataset() }}

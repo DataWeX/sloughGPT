@@ -20,7 +20,7 @@ os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
 # Disable rate limiting for tests to avoid 429s when running the full suite.
 try:
-    from domains.infrastructure.rate_limiter import RateLimitMiddleware as _RLM
+    from infrastructure.rate_limit_middleware import RateLimitMiddleware as _RLM
     if _RLM is not None:
         _orig_dispatch = _RLM.dispatch
 

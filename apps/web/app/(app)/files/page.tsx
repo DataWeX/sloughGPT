@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { filesController, type FileEntry } from '@/lib/files-controller'
+import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -18,6 +18,8 @@ export default function FilesPage() {
   const [ingesting, setIngesting] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
+  const [previewFile, setPreviewFile] = useState<FileDetail | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -119,6 +121,19 @@ export default function FilesPage() {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const handlePreview = async (file: FileEntry) => {
+    if (previewFile?.id === file.id) { setPreviewFile(null); return }
+    setPreviewLoading(true)
+    try {
+      const detail = await filesController.getDetail(file.id)
+      setPreviewFile(detail)
+    } catch {
+      addToast('Could not load file preview', 'error')
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   const filtered = searchQuery.trim()
@@ -228,6 +243,9 @@ export default function FilesPage() {
                         </div>
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <Button size="sm" variant="ghost" onClick={() => void handlePreview(f)} disabled={previewLoading && previewFile?.id !== f.id}>
+                          {previewFile?.id === f.id ? 'Close' : 'Preview'}
+                        </Button>
                         {!f.ingested && (
                           <Button size="sm" variant="ghost" onClick={() => handleIngest(f.id)} disabled={ingesting === f.id}>
                             {ingesting === f.id ? 'Indexing...' : 'Index'}
@@ -244,6 +262,30 @@ export default function FilesPage() {
             )}
           </CardContent>
         </Card>
+
+        {previewFile && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base truncate">{previewFile.filename}</CardTitle>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                {previewFile.chars != null && <span>{previewFile.chars.toLocaleString()} chars</span>}
+                {previewFile.pages != null && <span>{previewFile.pages} pages</span>}
+                <Button size="sm" variant="ghost" onClick={() => setPreviewFile(null)}>Close</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {previewLoading ? (
+                <div className="h-48 animate-pulse bg-muted/50 rounded" />
+              ) : previewFile.text ? (
+                <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted/30 p-3 font-mono text-xs leading-relaxed">
+                  {previewFile.text}
+                </pre>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">No text content extracted</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
     </PageContainer>
   )
 }

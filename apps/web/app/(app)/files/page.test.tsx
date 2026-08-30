@@ -286,8 +286,10 @@ describe('FilesPage — upload flow', () => {
   it('upload button triggers file input', async () => {
     render(<FilesPage />)
     await waitFor(() => { expect(screen.getAllByText(/upload/i).length).toBeGreaterThanOrEqual(1) })
-    const inputs = document.querySelectorAll('input[type="file"]')
-    expect(inputs.length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      const inputs = document.querySelectorAll('input[type="file"]')
+      expect(inputs.length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('file input accepts correct extensions', async () => {

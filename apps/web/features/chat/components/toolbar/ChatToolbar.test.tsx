@@ -8,6 +8,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconSearch: iconMock('search'),
     IconMenu: iconMock('menu'),
     IconPlus: iconMock('plus'),
+    IconChat: iconMock('chat'),
     cn: (...args: unknown[]) => args.filter(Boolean).join(' '),
   }
 })

@@ -258,40 +258,105 @@ Fail-closed when `SLO_MEMORY_ENABLED=false`.
 | `POST` | `/datasets/from-chat` | Create dataset from chat messages. |
 | `POST` | `/datasets/convert-to-messages` | Convert dataset to message format. |
 
-## Auto-Train Router (`/auto-train`)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/auto-train/start` | Start auto-training. |
-| `POST` | `/auto-train/start-turbo` | Start turbo training. |
-| `GET` | `/auto-train/turbo/status` | Turbo training status. |
-| `POST` | `/auto-train/stop` | Stop auto-training. |
-| `POST` | `/auto-train/pause` | Pause auto-training. |
-| `POST` | `/auto-train/resume` | Resume auto-training. |
-| `GET` | `/auto-train/status` | Auto-training status. |
-| `GET` | `/auto-train/stream` | SSE training stream. |
-| `GET` | `/auto-train/checkpoints` | List checkpoints. |
-| `DELETE` | `/auto-train/checkpoints/{name}` | Delete a checkpoint. |
-| `POST` | `/auto-train/checkpoints/{name}/load` | Load a checkpoint. |
-| `GET` | `/auto-train/checkpoints/{name}/download` | Download a checkpoint. |
-| `GET` | `/auto-train/checkpoints/{name}/info` | Checkpoint info. |
-| `GET` | `/auto-train/checkpoints/{name}/export-mobile` | Export for mobile. |
-| `GET` | `/auto-train/log` | Training log. |
-| `GET` | `/auto-train/metrics/export` | Export training metrics. |
-| `POST` | `/auto-train/from-sessions/start` | Start training from sessions. |
-| `GET` | `/auto-train/from-sessions/stream` | SSE stream from sessions. |
-| `GET` | `/auto-train/from-sessions/cancel` | Cancel session-based training. |
-
 ## Training Router (`/training`)
 
+Unified training control plane. All training operations go through `/training/*`.
+
+Routes are split across focused sub-modules:
+
+| Module | Lines | Responsibility |
+|--------|-------|----------------|
+| `training/router.py` | ~640 | Recovery, finetuned models, checkpoints, stream, stop |
+| `training/execution.py` | ~330 | Core start_training + includes (lora, distill, visual, feedback, builds) |
+| `training/lora.py` | ~336 | lora-finetune, load-adapter, unload-adapter |
+| `training/distill.py` | ~261 | Knowledge distillation |
+| `training/from_feedback.py` | ~189 | Feedback-based training |
+| `training/visual.py` | ~164 | VLM fine-tune |
+| `training/builds.py` | ~86 | Build listing |
+| `training/legacy.py` | ~142 | /train, /train/resolve (backward compat) |
+| `training/jobs_api.py` | ~295 | Job CRUD, export, purge |
+| `training/control.py` | ~156 | Status, start/pause/resume/stop/reset |
+| `training/helpers.py` | ~111 | Shared `_finish_job`, `_sloughgpt_trainer_kwds`, `_run_async` |
+| `training/turbo_endpoints.py` | ~122 | Turbo start + from-sessions start + turbo status |
+| `training/sse_stream.py` | ~282 | Shared SSE stream helper, stop_all_training, cancel_from_sessions |
+
+### Execution Routes (`execution.py`, `legacy.py`)
+
+| Method | Path | Module | Description |
+|--------|------|--------|-------------|
+| `POST` | `/train` | legacy.py | Start a training job (legacy). |
+| `POST` | `/train/resolve` | legacy.py | Resolve data path (dry run). |
+| `POST` | `/training/start` | execution.py | Start a tracked training job (web UI). |
+| `POST` | `/training/visual-start` | execution.py | Start a VLM fine-tune. |
+| `POST` | `/training/distill` | execution.py | Knowledge distillation (teacher→student). |
+| `POST` | `/training/lora-finetune` | execution.py | LoRA fine-tuning on .slnc models. |
+| `POST` | `/training/load-adapter` | execution.py | Load a LoRA adapter for inference. |
+| `POST` | `/training/unload-adapter` | Unload the active LoRA adapter. |
+| `POST` | `/training/from-feedback` | Train from collected feedback data. |
+| `GET` | `/training/builds` | List all training builds. |
+
+### Control Routes (`control.py`)
+
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/training/start` | Start a training job. |
+| `GET` | `/training/status` | Training status. |
+| `POST` | `/training/control/start` | Start training (control plane). |
+| `POST` | `/training/control/pause` | Pause the active job. |
+| `POST` | `/training/control/resume` | Resume the paused job. |
+| `POST` | `/training/control/stop` | Stop the active job. |
+| `POST` | `/training/control/reset` | Reset training controller. |
+| `GET` | `/training/is-running` | Check if training is running. |
+
+### Job Routes (`jobs_api.py`)
+
+| Method | Path | Description |
+|--------|------|-------------|
 | `GET` | `/training/jobs` | List all training jobs. |
 | `GET` | `/training/jobs/{job_id}` | Get a specific job. |
-| `POST` | `/training/pause` | Pause the active job. |
-| `POST` | `/training/resume` | Resume the paused job. |
+| `POST` | `/training/jobs/{job_id}/stop` | Stop a specific job. |
+| `GET` | `/training/jobs/{job_id}/summary` | Get job summary. |
+| `DELETE` | `/training/jobs/{job_id}` | Delete a job. |
+| `POST` | `/training/jobs/purge` | Purge old jobs. |
+| `GET` | `/training/export/{job_id}` | Export job data (JSON). |
+| `POST` | `/training/export-text` | Export job data (text). |
+
+### Stream & Utility Routes (`router.py`)
+
+| Method | Path | Description |
+|--------|------|-------------|
 | `POST` | `/training/stop` | Stop the active job. |
+| `POST` | `/training/turbo-start` | Start turbo training. |
+| `GET` | `/training/turbo/status` | Turbo training status. |
+| `GET` | `/training/log` | Training log. |
+| `GET` | `/training/stream` | SSE training stream. |
+| `GET` | `/training/from-sessions/cancel` | Cancel session-based training. |
+| `GET` | `/training/from-sessions-stream` | SSE stream from sessions. |
+| `GET` | `/training/checkpoints` | List checkpoints. |
+| `DELETE` | `/training/checkpoints/{name}` | Delete a checkpoint. |
+| `POST` | `/training/checkpoints/{name}/load` | Load a checkpoint. |
+| `GET` | `/training/checkpoints/{name}/download` | Download a checkpoint. |
+| `GET` | `/training/checkpoints/{name}/info` | Checkpoint info. |
+| `GET` | `/training/metrics/export` | Export training metrics. |
+
+### Recovery Routes (`router.py`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/recovery/check` | Check for crashed jobs. |
+| `GET` | `/recovery/recoverable` | Get recoverable jobs. |
+| `POST` | `/recovery/recover/{job_id}` | Recover an interrupted job. |
+| `DELETE` | `/recovery/abandon/{job_id}` | Abandon a crashed job. |
+| `GET` | `/recovery/stats` | Recovery statistics. |
+
+### Finetuned Model Routes (`router.py`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/training/finetuned-models` | List HF fine-tuned models. |
+| `POST` | `/training/finetuned-models/{name}/load` | Load a fine-tuned model. |
+| `DELETE` | `/training/finetuned-models/{name}` | Delete a fine-tuned model. |
+
+> **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domains.training.service` (core layer).
 
 ## Self-Train Router (`/self-train`)
 

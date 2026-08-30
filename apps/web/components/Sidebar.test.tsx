@@ -31,7 +31,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('nav.datasets')).toBeDefined()
     expect(screen.getByText('nav.models')).toBeDefined()
     expect(screen.getByText('nav.agents')).toBeDefined()
-    expect(screen.getByText('nav.multimodal')).toBeDefined()
+    expect(screen.getByText('nav.knowledge')).toBeDefined()
     expect(screen.getByText('nav.settings')).toBeDefined()
   })
 

@@ -17,7 +17,7 @@ import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
 import ImageTrainingCard from '@/components/multimodal/ImageTrainingCard'
 import BatchTrainingCard from '@/components/multimodal/BatchTrainingCard'
 import VisualDatasetCard from '@/components/multimodal/VisualDatasetCard'
-import DPOCard from '@/components/multimodal/DPOCard'
+import PreferenceOptimizationCard from '@/components/multimodal/PreferenceOptimizationCard'
 import ImageGenerationCard from '@/components/multimodal/ImageGenerationCard'
 import AudioCard from '@/components/multimodal/AudioCard'
 import { VoiceSection } from '@/components/multimodal/VoiceSection'
@@ -225,7 +225,7 @@ export default function MultimodalPage() {
       <ImageTrainingCard uploading={uploading} onUpload={handleUploadImage} />
       <BatchTrainingCard batchUploading={batchUploading} trainStatus={trainStatus} onFileUpload={handleBatchUpload} onDirUpload={handleBatchDir} />
       <VisualDatasetCard creatingDataset={creatingDataset} onCreate={handleCreateVisualDataset} />
-      <DPOCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
+      <PreferenceOptimizationCard dpoRunning={dpoRunning} dpoStatus={dpoStatus} dpoResult={dpoResult} dpoError={dpoError} dpoAccepted={dpoAccepted} dpoRejected={dpoRejected} onTrigger={handleTriggerDPO} />
       <ImageGenerationCard generating={generating} onGenerate={handleGenerateImage} generatedImage={generatedImage} />
       <ObjectDetectionCard />
       <AudioCard transcribing={transcribing} transcript={transcript} synthesizing={synthesizing} synthAudio={synthAudio} onTranscribe={handleTranscribe} onSynthesize={handleSynthesize} />

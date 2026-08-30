@@ -155,13 +155,15 @@ const DropdownMenuTrigger = forwardRef<HTMLButtonElement, DropdownMenuTriggerPro
     }
 
     if (asChild && children && typeof children === 'object' && 'props' in children) {
-      const child = children as React.ReactElement
+      const child = children as React.ReactElement<Record<string, unknown>>
+      const childProps = child.props as Record<string, unknown>
+      const childOnClick = childProps.onClick as ((e: React.MouseEvent) => void) | undefined
       return React.cloneElement(child, {
         ...triggerProps,
-        ...child.props,
+        ...childProps,
         ref: mergedRef,
         onClick: (e: React.MouseEvent) => {
-          child.props.onClick?.(e)
+          childOnClick?.(e)
           onClick?.(e as any)
           onOpenChange(!open)
         },

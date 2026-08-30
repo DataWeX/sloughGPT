@@ -72,7 +72,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
   const { health } = useLiveStatus()
   const [gpuBackend, setGpuBackend] = useState<string | null>(null)
   const [recentReqs, setRecentReqs] = useState<BackendDebug['recent_requests']>([])
-  const timerRef = useRef<ReturnType<typeof setInterval>>()
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Only poll /health/debug for the 2 fields not in the SSE stream (gpu_backend, recent_requests).
   // 10s interval instead of 3s since this is a debug overlay.

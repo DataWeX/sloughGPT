@@ -90,6 +90,8 @@ class ModelsRouter:
         self.router.add_api_route(path="/engine/status", endpoint=self.get_engine_status, methods=["GET"])
         self.router.add_api_route(path="/engine/reload", endpoint=self.reload_engine, methods=["POST"])
         self.router.add_api_route(path="/debug/providers", endpoint=self.debug_providers, methods=["GET"])
+        self.router.add_api_route(path="/memory-cleanup", endpoint=self.memory_cleanup, methods=["POST"])
+        self.router.add_api_route(path="/memory-pressure", endpoint=self.memory_pressure, methods=["GET"])
 
     @staticmethod
     def _audit_model_id(provider) -> str:
@@ -1109,4 +1111,34 @@ class ModelsRouter:
             "model_state": model_state,
             "startup_phase": STARTUP_PHASE.get("phase", "unknown"),
         })
+
+    @staticmethod
+    @require_auth_if_enabled
+    async def memory_cleanup():
+        """Force an immediate memory cleanup cycle.
+
+        Triggers critical-level cleanup: drops KV caches, forces GC,
+        releases idle model weights, runs malloc_trim, and stops guard
+        subprocesses. Returns the cleanup result and current memory stats.
+        """
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            monitor = get_memory_pressure_monitor()
+            result = monitor.force_cleanup()
+            stats = monitor.stats()
+            return success_response(data={"cleanup": result, "stats": stats})
+        except Exception as exc:
+            classify_and_raise(exc, source="models.memory_cleanup")
+
+    @staticmethod
+    @require_auth_if_enabled
+    async def memory_pressure():
+        """Return current memory pressure stats (level, thresholds, counters)."""
+        try:
+            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+            monitor = get_memory_pressure_monitor()
+            return success_response(data=monitor.stats())
+        except Exception as exc:
+            classify_and_raise(exc, source="models.memory_pressure")
+
 router = ModelsRouter().router

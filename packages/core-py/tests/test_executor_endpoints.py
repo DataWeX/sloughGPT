@@ -1,25 +1,23 @@
-"""Tests for /system/executor and /system/inference-pool API endpoints."""
+"""Tests for domains.training.executor — TrainingExecutor, JobInfo, JobStatus, get_training_executor."""
 
 import sys
 import time
 import threading
 from pathlib import Path
 
-# Ensure repo root AND apps/api/server are on sys.path
 _repo_root = str(Path(__file__).resolve().parents[3])
-_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
-for _p in (_repo_root, _server_dir):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
 
+import numpy as np
 import pytest
 
-pytest.importorskip("fastapi")
-
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
-from apps.api.server.routers.system import router
+from domains.training.executor import (
+    TrainingExecutor,
+    JobInfo,
+    JobStatus,
+    get_training_executor,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -34,199 +32,475 @@ def reset_executor():
     exec_mod._instance = None
 
 
-@pytest.fixture()
-def client():
-    app = FastAPI()
-    app.include_router(router)
-    from infrastructure.exception_handlers import register_all_handlers
-    register_all_handlers(app)
-    return TestClient(app, raise_server_exceptions=False)
+# ── JobStatus ────────────────────────────────────────────────────────────────
+
+class TestJobStatus:
+    def test_queued_value(self):
+        assert JobStatus.QUEUED.value == "queued"
+
+    def test_running_value(self):
+        assert JobStatus.RUNNING.value == "running"
+
+    def test_completed_value(self):
+        assert JobStatus.COMPLETED.value == "completed"
+
+    def test_failed_value(self):
+        assert JobStatus.FAILED.value == "failed"
+
+    def test_cancelled_value(self):
+        assert JobStatus.CANCELLED.value == "cancelled"
+
+    def test_is_string_enum(self):
+        assert isinstance(JobStatus.QUEUED, str)
 
 
-class TestExecutorEndpoints:
-    """GET /system/executor, /system/executor/{id}, purge, cancel."""
+# ── JobInfo ──────────────────────────────────────────────────────────────────
 
-    def test_get_executor_empty(self, client):
-        resp = client.get("/system/executor")
-        assert resp.status_code == 200
-        body = resp.json()
-        data = body["data"]
-        assert data["initialized"] is False
-        assert data["total_tracked"] == 0
-        assert data["jobs"] == []
+class TestJobInfo:
+    def test_defaults(self):
+        info = JobInfo(job_id="j1")
+        assert info.job_id == "j1"
+        assert info.tree_id is None
+        assert info.status == JobStatus.QUEUED
+        assert info.submitted_at > 0
+        assert info.started_at is None
+        assert info.completed_at is None
+        assert info.error is None
+        assert info.cancel_requested is False
+        assert info.result is None
 
-    def test_get_executor_with_jobs(self, client):
-        from domains.training.executor import get_training_executor
+    def test_elapsed_running(self):
+        info = JobInfo(job_id="j1")
+        time.sleep(0.01)
+        elapsed = info.elapsed()
+        assert elapsed > 0
 
-        ex = get_training_executor()
+    def test_elapsed_completed(self):
+        info = JobInfo(job_id="j1")
+        info.completed_at = info.submitted_at + 5.0
+        assert info.elapsed() == 5.0
 
+    def test_to_dict_basic(self):
+        info = JobInfo(job_id="j1")
+        d = info.to_dict()
+        assert d["job_id"] == "j1"
+        assert d["status"] == "queued"
+        assert "elapsed_s" in d
+        assert "submitted_at" in d
+
+    def test_to_dict_completed_with_dict_result(self):
+        info = JobInfo(job_id="j1", status=JobStatus.COMPLETED)
+        info.result = {"w1": np.zeros(8, dtype=np.float32)}
+        d = info.to_dict()
+        assert "result_keys" in d
+        assert "w1" in d["result_keys"]
+        assert "result_size_bytes" in d
+        assert d["result_size_bytes"] > 0
+
+    def test_to_dict_completed_with_non_dict_result(self):
+        info = JobInfo(job_id="j1", status=JobStatus.COMPLETED)
+        info.result = 42
+        d = info.to_dict()
+        assert d["result_type"] == "int"
+
+    def test_to_dict_tree_id(self):
+        info = JobInfo(job_id="j1", tree_id="tree_a")
+        d = info.to_dict()
+        assert d["tree_id"] == "tree_a"
+
+
+# ── TrainingExecutor construction ───────────────────────────────────────────
+
+class TestTrainingExecutorConstruction:
+    def test_default_max_workers(self):
+        ex = TrainingExecutor()
+        assert ex._max_workers == 2
+        ex.shutdown(wait=False)
+
+    def test_custom_max_workers(self):
+        ex = TrainingExecutor(max_workers=4)
+        assert ex._max_workers == 4
+        ex.shutdown(wait=False)
+
+    def test_jobs_starts_empty(self):
+        ex = TrainingExecutor()
+        assert len(ex._jobs) == 0
+        ex.shutdown(wait=False)
+
+    def test_singleton(self):
+        ex1 = get_training_executor()
+        ex2 = get_training_executor()
+        assert ex1 is ex2
+
+
+# ── Submit ───────────────────────────────────────────────────────────────────
+
+class TestSubmit:
+    def test_submit_returns_job_id(self):
+        ex = TrainingExecutor(max_workers=2)
         def noop(job_id):
             pass
+        result = ex.submit(noop, "job1")
+        assert result == "job1"
+        ex.shutdown(wait=False)
 
-        ex.submit(noop, "ep_a")
-        ex.submit(noop, "ep_b")
-        time.sleep(0.15)
-
-        resp = client.get("/system/executor")
-        data = resp.json()["data"]
-        assert data["initialized"] is True
-        assert data["total_tracked"] == 2
-        assert data["max_workers"] >= 1
-        ids = {j["job_id"] for j in data["jobs"]}
-        assert ids == {"ep_a", "ep_b"}
-
-    def test_get_single_job(self, client):
-        from domains.training.executor import get_training_executor
-
-        ex = get_training_executor()
-
+    def test_submit_creates_job_info(self):
+        ex = TrainingExecutor(max_workers=2)
         def noop(job_id):
             pass
-
-        ex.submit(noop, "single_1")
-        time.sleep(0.1)
-
-        resp = client.get("/system/executor/single_1")
-        data = resp.json()["data"]
-        assert data["job_id"] == "single_1"
-        assert data["status"] == "completed"
-        assert data["cancel_requested"] is False
-
-    def test_get_single_job_not_found(self, client):
-        from domains.training.executor import get_training_executor
-        get_training_executor()  # ensure initialized
-        resp = client.get("/system/executor/nonexistent")
-        assert resp.status_code == 404
-        assert "not found" in resp.json()["error"]
-
-    def test_get_result_completed_job(self, client):
-        import numpy as np
-        from domains.training.executor import get_training_executor
-
-        ex = get_training_executor()
-
-        def train_fn(job_id):
-            return {"w1": np.zeros(16, dtype=np.float32)}
-
-        ex.submit(train_fn, "res_1")
-        time.sleep(0.1)
-
-        resp = client.get("/system/executor/res_1/result")
-        data = resp.json()["data"]
-        assert data["job_id"] == "res_1"
-        assert "w1" in data["weights"]
-        assert data["weights"]["w1"]["shape"] == [16]
-        assert data["weights"]["w1"]["dtype"] == "float32"
-        assert data["total_bytes"] > 0
-
-    def test_get_result_running_job(self, client):
-        from domains.training.executor import get_training_executor
-
-        ex = get_training_executor()
-        evt = threading.Event()
-
-        def slow(job_id):
-            evt.wait(timeout=2)
-
-        ex.submit(slow, "run_res")
+        ex.submit(noop, "job1")
         time.sleep(0.05)
+        assert "job1" in ex._jobs
+        ex.shutdown(wait=False)
 
-        resp = client.get("/system/executor/run_res/result")
-        assert resp.status_code == 400
-        assert "error" in resp.json()
-        evt.set()
+    def test_submit_runs_function(self):
+        ex = TrainingExecutor(max_workers=2)
+        results = []
+        def worker(job_id):
+            results.append("done")
+        ex.submit(worker, "w1")
+        time.sleep(0.1)
+        assert "done" in results
+        ex.shutdown(wait=False)
 
-    def test_purge_old_jobs(self, client):
-        from domains.training.executor import get_training_executor
+    def test_submit_with_args(self):
+        ex = TrainingExecutor(max_workers=2)
+        received = []
+        def worker(job_id, x, y):
+            received.append((x, y))
+        ex.submit(worker, "args_job", 10, 20)
+        time.sleep(0.1)
+        assert received == [(10, 20)]
+        ex.shutdown(wait=False)
 
-        ex = get_training_executor()
+    def test_submit_with_call_args(self):
+        ex = TrainingExecutor(max_workers=2)
+        received = {}
+        def worker(job_id, alpha=1, beta=2):
+            received["alpha"] = alpha
+            received["beta"] = beta
+        ex.submit(worker, "kw_job", _call_args={"alpha": 5, "beta": 6})
+        time.sleep(0.1)
+        assert received["alpha"] == 5
+        assert received["beta"] == 6
+        ex.shutdown(wait=False)
 
+    def test_submit_with_tree_id(self):
+        ex = TrainingExecutor(max_workers=2)
         def noop(job_id):
             pass
+        ex.submit(noop, "tree_job", tree_id="my_tree")
+        time.sleep(0.05)
+        assert ex._jobs["tree_job"].tree_id == "my_tree"
+        ex.shutdown(wait=False)
 
-        ex.submit(noop, "old_purge")
+    def test_submit_multiple(self):
+        ex = TrainingExecutor(max_workers=4)
+        done = []
+        def worker(job_id):
+            done.append(job_id)
+        for i in range(5):
+            ex.submit(worker, f"m{i}")
+        time.sleep(0.2)
+        assert len(done) == 5
+        ex.shutdown(wait=False)
+
+    def test_submit_exception_marks_failed(self):
+        ex = TrainingExecutor(max_workers=2)
+        def bad(job_id):
+            raise ValueError("boom")
+        ex.submit(bad, "fail1")
         time.sleep(0.1)
-        ex._jobs["old_purge"].completed_at = time.time() - 7200
+        info = ex._jobs["fail1"]
+        assert info.status == JobStatus.FAILED
+        assert "boom" in info.error
+        ex.shutdown(wait=False)
 
-        resp = client.post("/system/executor/purge?max_age_s=3600")
-        data = resp.json()["data"]
-        assert data["purged"] == 1
-        assert ex.status("old_purge") is None
+    def test_submit_sets_started_at(self):
+        ex = TrainingExecutor(max_workers=2)
+        def slow(job_id):
+            time.sleep(0.05)
+        ex.submit(slow, "started")
+        time.sleep(0.05)
+        assert ex._jobs["started"].started_at is not None
+        ex.shutdown(wait=False)
 
-    def test_cancel_queued_job(self, client):
-        from domains.training.executor import get_training_executor
+    def test_submit_sets_completed_at(self):
+        ex = TrainingExecutor(max_workers=2)
+        def noop(job_id):
+            pass
+        ex.submit(noop, "comp")
+        time.sleep(0.1)
+        assert ex._jobs["comp"].completed_at is not None
+        ex.shutdown(wait=False)
 
-        ex = get_training_executor()
+
+# ── Status ───────────────────────────────────────────────────────────────────
+
+class TestStatus:
+    def test_status_unknown_returns_none(self):
+        ex = TrainingExecutor(max_workers=2)
+        assert ex.status("unknown") is None
+        ex.shutdown(wait=False)
+
+    def test_status_returns_dict(self):
+        ex = TrainingExecutor(max_workers=2)
+        def noop(job_id):
+            pass
+        ex.submit(noop, "s1")
+        time.sleep(0.1)
+        s = ex.status("s1")
+        assert isinstance(s, dict)
+        assert s["job_id"] == "s1"
+        ex.shutdown(wait=False)
+
+    def test_status_running(self):
+        ex = TrainingExecutor(max_workers=2)
         evt = threading.Event()
-
         def blocker(job_id):
             evt.wait(timeout=2)
+        ex.submit(blocker, "run_s")
+        time.sleep(0.05)
+        s = ex.status("run_s")
+        assert s["status"] == "running"
+        evt.set()
+        ex.shutdown(wait=False)
 
-        ex.submit(blocker, "block")
+
+# ── Result Summary ───────────────────────────────────────────────────────────
+
+class TestResultSummary:
+    def test_result_summary_unknown(self):
+        ex = TrainingExecutor(max_workers=2)
+        assert ex.result_summary("unknown") is None
+        ex.shutdown(wait=False)
+
+    def test_result_summary_not_completed(self):
+        ex = TrainingExecutor(max_workers=2)
+        evt = threading.Event()
+        def blocker(job_id):
+            evt.wait(timeout=2)
+        ex.submit(blocker, "running_res")
+        time.sleep(0.05)
+        assert ex.result_summary("running_res") is None
+        evt.set()
+        ex.shutdown(wait=False)
+
+    def test_result_summary_completed_with_weights(self):
+        ex = TrainingExecutor(max_workers=2)
+        def train(job_id):
+            return {"w1": np.zeros(16, dtype=np.float32), "w2": np.ones(8, dtype=np.float64)}
+        ex.submit(train, "res_w")
+        time.sleep(0.1)
+        summary = ex.result_summary("res_w")
+        assert summary is not None
+        assert summary["job_id"] == "res_w"
+        assert "w1" in summary["weights"]
+        assert summary["weights"]["w1"]["shape"] == [16]
+        assert summary["weights"]["w1"]["dtype"] == "float32"
+        assert summary["weights"]["w2"]["shape"] == [8]
+        assert summary["total_bytes"] > 0
+        ex.shutdown(wait=False)
+
+    def test_result_summary_non_dict_result(self):
+        ex = TrainingExecutor(max_workers=2)
+        def train(job_id):
+            return "not a dict"
+        ex.submit(train, "res_nd")
+        time.sleep(0.1)
+        assert ex.result_summary("res_nd") is None
+        ex.shutdown(wait=False)
+
+    def test_result_summary_none_result(self):
+        ex = TrainingExecutor(max_workers=2)
+        def train(job_id):
+            return None
+        ex.submit(train, "res_none")
+        time.sleep(0.1)
+        assert ex.result_summary("res_none") is None
+        ex.shutdown(wait=False)
+
+    def test_result_summary_with_tree_id(self):
+        ex = TrainingExecutor(max_workers=2)
+        def train(job_id):
+            return {"w": np.zeros(4)}
+        ex.submit(train, "res_tree", tree_id="my_tree")
+        time.sleep(0.1)
+        summary = ex.result_summary("res_tree")
+        assert summary["tree_id"] == "my_tree"
+        ex.shutdown(wait=False)
+
+
+# ── List Jobs ────────────────────────────────────────────────────────────────
+
+class TestListJobs:
+    def test_list_empty(self):
+        ex = TrainingExecutor(max_workers=2)
+        assert ex.list_jobs() == []
+        ex.shutdown(wait=False)
+
+    def test_list_returns_dicts(self):
+        ex = TrainingExecutor(max_workers=2)
+        def noop(job_id):
+            pass
+        ex.submit(noop, "l1")
+        ex.submit(noop, "l2")
+        time.sleep(0.1)
+        jobs = ex.list_jobs()
+        assert len(jobs) == 2
+        assert all(isinstance(j, dict) for j in jobs)
+        ex.shutdown(wait=False)
+
+    def test_list_newest_first(self):
+        ex = TrainingExecutor(max_workers=2)
+        def noop(job_id):
+            pass
+        ex.submit(noop, "first")
+        time.sleep(0.01)
+        ex.submit(noop, "second")
+        time.sleep(0.1)
+        jobs = ex.list_jobs()
+        assert jobs[0]["job_id"] == "second"
+        assert jobs[1]["job_id"] == "first"
+        ex.shutdown(wait=False)
+
+
+# ── Cancel ───────────────────────────────────────────────────────────────────
+
+class TestCancel:
+    def test_cancel_unknown_returns_false(self):
+        ex = TrainingExecutor(max_workers=2)
+        assert ex.cancel("unknown") is False
+        ex.shutdown(wait=False)
+
+    def test_cancel_queued_job(self):
+        ex = TrainingExecutor(max_workers=1)
+        evt = threading.Event()
+        def blocker(job_id):
+            evt.wait(timeout=2)
+        ex.submit(blocker, "blocker")
         time.sleep(0.05)
         job_id = ex.submit(blocker, "to_cancel")
         time.sleep(0.01)
-
-        resp = client.post(f"/system/executor/{job_id}/cancel")
-        data = resp.json()["data"]
-        assert data["cancelled"] is True
+        result = ex.cancel(job_id)
+        assert result is True
         evt.set()
-        time.sleep(0.1)
+        ex.shutdown(wait=False)
 
-    def test_cancel_nonexistent_job(self, client):
-        resp = client.post("/system/executor/no_such_job/cancel")
-        data = resp.json()["data"]
-        assert data["cancelled"] is False
-
-    def test_cancel_running_job_sets_flag(self, client):
-        from domains.training.executor import get_training_executor
-
-        ex = get_training_executor()
+    def test_cancel_running_sets_flag(self):
+        ex = TrainingExecutor(max_workers=2)
         evt = threading.Event()
-
         def blocker(job_id):
             evt.wait(timeout=2)
-
         job_id = ex.submit(blocker, "run_cancel")
         time.sleep(0.05)
-
-        resp = client.post(f"/system/executor/{job_id}/cancel")
-        data = resp.json()["data"]
-        assert data["cancelled"] is True
-
-        # Job status should still be running but cancel_requested should be True
-        resp = client.get(f"/system/executor/{job_id}")
-        job_data = resp.json()["data"]
-        assert job_data["status"] == "running"
-        assert job_data["cancel_requested"] is True
-
+        result = ex.cancel(job_id)
+        assert result is True
+        assert ex._jobs[job_id].cancel_requested is True
         evt.set()
+        ex.shutdown(wait=False)
+
+    def test_is_cancelled(self):
+        ex = TrainingExecutor(max_workers=2)
+        evt = threading.Event()
+        def blocker(job_id):
+            evt.wait(timeout=2)
+        job_id = ex.submit(blocker, "chk")
+        time.sleep(0.05)
+        assert ex.is_cancelled(job_id) is False
+        ex.cancel(job_id)
+        assert ex.is_cancelled(job_id) is True
+        evt.set()
+        ex.shutdown(wait=False)
+
+    def test_is_cancelled_unknown_returns_false(self):
+        ex = TrainingExecutor(max_workers=2)
+        assert ex.is_cancelled("nope") is False
+        ex.shutdown(wait=False)
+
+
+# ── Purge ────────────────────────────────────────────────────────────────────
+
+class TestPurge:
+    def test_purge_removes_old_completed(self):
+        ex = TrainingExecutor(max_workers=2)
+        def noop(job_id):
+            pass
+        ex.submit(noop, "old")
         time.sleep(0.1)
+        ex._jobs["old"].completed_at = time.time() - 7200
+        purged = ex.purge_completed(max_age_s=3600)
+        assert purged == 1
+        assert ex.status("old") is None
+        ex.shutdown(wait=False)
 
-    def test_executor_not_initialized(self, client):
-        """Endpoints return gracefully when executor hasn't been created."""
-        # _instance is None due to reset_executor fixture
-        resp = client.get("/system/executor")
-        data = resp.json()["data"]
-        assert data["initialized"] is False
+    def test_purge_keeps_recent(self):
+        ex = TrainingExecutor(max_workers=2)
+        def noop(job_id):
+            pass
+        ex.submit(noop, "new")
+        time.sleep(0.1)
+        purged = ex.purge_completed(max_age_s=3600)
+        assert purged == 0
+        assert ex.status("new") is not None
+        ex.shutdown(wait=False)
 
-        resp = client.get("/system/executor/any_id")
-        assert resp.status_code == 503
+    def test_purge_empty(self):
+        ex = TrainingExecutor(max_workers=2)
+        purged = ex.purge_completed(max_age_s=1)
+        assert purged == 0
+        ex.shutdown(wait=False)
 
-        resp = client.post("/system/executor/purge?max_age_s=1")
-        data = resp.json()["data"]
-        assert data["purged"] == 0
+    def test_purge_keeps_failed(self):
+        ex = TrainingExecutor(max_workers=2)
+        def bad(job_id):
+            raise RuntimeError("fail")
+        ex.submit(bad, "fail_purge")
+        time.sleep(0.1)
+        ex._jobs["fail_purge"].completed_at = time.time() - 7200
+        purged = ex.purge_completed(max_age_s=3600)
+        assert purged == 1
+        ex.shutdown(wait=False)
 
-        resp = client.post("/system/executor/any_id/cancel")
-        data = resp.json()["data"]
-        assert data["cancelled"] is False
+    def test_purge_keeps_running(self):
+        ex = TrainingExecutor(max_workers=2)
+        evt = threading.Event()
+        def blocker(job_id):
+            evt.wait(timeout=2)
+        ex.submit(blocker, "running")
+        time.sleep(0.05)
+        purged = ex.purge_completed(max_age_s=0)
+        assert purged == 0
+        evt.set()
+        ex.shutdown(wait=False)
 
 
-class TestInferencePoolEndpoint:
-    """GET /system/inference-pool."""
+# ── Active Count ─────────────────────────────────────────────────────────────
 
-    def test_inference_pool_status(self, client):
-        resp = client.get("/system/inference-pool")
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert "initialized" in data
+class TestActiveCount:
+    def test_active_count_zero(self):
+        ex = TrainingExecutor(max_workers=2)
+        assert ex.active_count() == 0
+        ex.shutdown(wait=False)
+
+    def test_active_count_running(self):
+        ex = TrainingExecutor(max_workers=2)
+        evt = threading.Event()
+        def blocker(job_id):
+            evt.wait(timeout=2)
+        ex.submit(blocker, "a1")
+        time.sleep(0.05)
+        assert ex.active_count() >= 1
+        evt.set()
+        ex.shutdown(wait=False)
+
+
+# ── Shutdown ─────────────────────────────────────────────────────────────────
+
+class TestShutdown:
+    def test_shutdown_clears_singleton(self):
+        ex = get_training_executor()
+        assert ex is not None
+        ex.shutdown(wait=False)
+        import domains.training.executor as exec_mod
+        assert exec_mod._instance is None

@@ -152,8 +152,10 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps,
         warm_ms = np.array(warm_ms)
         cold_ms = np.array(cold_ms)
 
-        min_len = min(len(out_warm), len(out_cold))
-        match = float(np.mean(out_warm[:min_len] == out_cold[:min_len])) * 100
+        w_ids = out_warm.token_ids[0]
+        c_ids = out_cold.token_ids[0]
+        min_len = min(len(w_ids), len(c_ids))
+        match = float(np.mean(w_ids[:min_len] == c_ids[:min_len])) * 100
 
         rows.append({
             "turn": i,
@@ -166,8 +168,8 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps,
             "consistency_pct": match,
         })
 
-        history = out_warm.tolist()[0]
-        prev_warm_output = out_warm.tolist()[0]
+        history = w_ids.tolist()
+        prev_warm_output = w_ids.tolist()
 
     total_warm = sum(r["warm_ms"] for r in rows)
     total_cold = sum(r["cold_ms"] for r in rows)
@@ -371,7 +373,7 @@ def compare_kv_quality(model, base_ids, step, turns, max_tokens):
         out_q = model.generate_numpy(
             ids, max_new_tokens=max_tokens, temperature=0.0,
             kv_state=model.new_kv_state(), quantize_kv=True)
-        fl, ql = out_f.tolist()[0], out_q.tolist()[0]
+        fl, ql = out_f.token_ids[0].tolist(), out_q.token_ids[0].tolist()
         n = min(len(fl), len(ql))
         pre = 0
         for j in range(n):

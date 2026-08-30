@@ -23,6 +23,9 @@ from domains.shell.tui_repl import TuiIo, TuiRepl, _complete_path, _read_escape_
 class _FakeRepl:
     COMMANDS = ["ai", "alias", "about", "bg", "cd", "echo", "exit"]
 
+    def __init__(self):
+        self.console = types.SimpleNamespace(_io="fake-console")
+
 
 @pytest.fixture()
 def repl():
@@ -1000,6 +1003,7 @@ def _drive(tui, scr, term=None, escdelay_raise=False, term_error=False, resize_e
     )
     with patch.object(curses, "curs_set"), patch.object(curses, "raw"), esc, \
          patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True), \
          patch.object(curses, "newwin", side_effect=_newwin), \
          resize, getsize, \
          patch.object(tui_mod, "_init_pairs"):
@@ -1479,3 +1483,338 @@ def test_module_async_exc_import_fallback():
     assert tui_mod._SET_ASYNC_EXC is None
     importlib.reload(tui_mod)
     assert tui_mod._SET_ASYNC_EXC is not None
+
+
+# ── _draw_borders ───────────────────────────────────────────────────────
+
+class _FakeStdscr:
+    def __init__(self, rows=24, cols=80):
+        self._rows = rows
+        self._cols = cols
+        self.addnstr_calls = []
+        self.addch_calls = []
+        self.refreshed = False
+
+    def addnstr(self, y, x, text, n, attr=0):
+        self.addnstr_calls.append((y, x, text, n, attr))
+
+    def addch(self, y, x, ch, attr=0):
+        self.addch_calls.append((y, x, ch, attr))
+
+    def refresh(self):
+        self.refreshed = True
+
+    def getmaxyx(self):
+        return (self._rows, self._cols)
+
+
+def test_draw_borders_horizontal():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 0.5, border=Border("all")))
+    layout.panes.append(Pane("output", 0.5, border=Border("all")))
+    tui._layout = layout
+    regions = layout.compute(24, 80)
+    scr = _FakeStdscr()
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._draw_borders(scr, regions)
+    horiz = [c for c in scr.addnstr_calls if c[2] and "\u2500" in c[2]]
+    assert len(horiz) >= 2
+
+
+def test_draw_borders_vertical():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 1.0, border=Border("all")))
+    tui._layout = layout
+    regions = layout.compute(24, 80)
+    scr = _FakeStdscr()
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._draw_borders(scr, regions)
+    vert = [c for c in scr.addch_calls if c[2] == "\u2502"]
+    assert len(vert) >= 2
+
+
+def test_draw_borders_skips_empty_border():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 1.0, border=Border("none")))
+    tui._layout = layout
+    regions = layout.compute(24, 80)
+    scr = _FakeStdscr()
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._draw_borders(scr, regions)
+    assert scr.addnstr_calls == []
+    assert scr.addch_calls == []
+
+
+def test_draw_borders_skips_invisible_pane():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 1.0, border=Border("all"), visible=False))
+    tui._layout = layout
+    regions = layout.compute(24, 80)
+    scr = _FakeStdscr()
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._draw_borders(scr, regions)
+    assert scr.addnstr_calls == []
+
+
+def test_draw_borders_custom_char():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 1.0, border=Border("horizontal", ch="#")))
+    tui._layout = layout
+    regions = layout.compute(24, 80)
+    scr = _FakeStdscr()
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._draw_borders(scr, regions)
+    top_row = [c for c in scr.addnstr_calls if "#" in (c[2] or "")]
+    assert len(top_row) >= 1
+
+
+def test_draw_borders_handles_curses_error():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 1.0, border=Border("all")))
+    tui._layout = layout
+    regions = layout.compute(24, 80)
+
+    class _ErrorStdscr(_FakeStdscr):
+        def addnstr(self, y, x, text, n, attr=0):
+            raise curses.error("fail")
+
+        def addch(self, y, x, ch, attr=0):
+            raise curses.error("fail")
+
+    scr = _ErrorStdscr()
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._draw_borders(scr, regions)
+
+
+# ── _render_confirm ────────────────────────────────────────────────────
+
+def test_render_confirm_yes_default():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._confirm_message = "Delete file?"
+    tui._confirm_default = True
+    regions = {"input": Rect(22, 0, 2, 80)}
+    scr = _FakeWin(2, 80)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_confirm(regions, scr)
+    content = "".join(tui._input_surface.capture)
+    assert "Delete file?" in content
+    assert "Y/n" in content
+
+
+def test_render_confirm_no_default():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._confirm_message = "Proceed?"
+    tui._confirm_default = False
+    regions = {"input": Rect(22, 0, 2, 80)}
+    scr = _FakeWin(2, 80)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_confirm(regions, scr)
+    content = "".join(tui._input_surface.capture)
+    assert "y/N" in content
+
+
+# ── _render_ask ─────────────────────────────────────────────────────────
+
+def test_render_ask_with_default():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._ask_message = "Enter name"
+    tui._ask_default = "anon"
+    tui._ask_buf = list("anon")
+    tui._ask_cursor = 4
+    regions = {"input": Rect(22, 0, 2, 80)}
+    scr = _FakeWin(2, 80)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_ask(regions, scr)
+    content = "".join(tui._input_surface.capture)
+    assert "Enter name" in content
+    assert "[anon]" in content
+
+
+def test_render_ask_without_default():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._ask_message = "Type something"
+    tui._ask_default = ""
+    tui._ask_buf = list("hi")
+    tui._ask_cursor = 2
+    regions = {"input": Rect(22, 0, 2, 80)}
+    scr = _FakeWin(2, 80)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_ask(regions, scr)
+    content = "".join(tui._input_surface.capture)
+    assert "Type something" in content
+    assert "hi_" in content
+
+
+# ── _render_select ──────────────────────────────────────────────────────
+
+def test_render_select_basic():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._select_title = "Pick one"
+    tui._select_options = ["alpha", "bravo", "charlie"]
+    tui._select_idx = 1
+    tui._select_scroll = 0
+    tui._select_filter = ""
+    regions = {"output": Rect(0, 0, 10, 40)}
+    scr = _FakeWin(10, 40)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_select(regions, scr)
+    content = "".join(tui._output_surface.capture)
+    assert "Pick one" in content
+    assert "> bravo" in content
+    assert "alpha" in content
+
+
+def test_render_select_with_filter():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._select_title = "Pick"
+    tui._select_options = ["alpha", "bravo", "alpine"]
+    tui._select_idx = 0
+    tui._select_scroll = 0
+    tui._select_filter = "alp"
+    regions = {"output": Rect(0, 0, 10, 40)}
+    scr = _FakeWin(10, 40)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_select(regions, scr)
+    content = "".join(tui._output_surface.capture)
+    assert "alpha" in content
+    assert "alpine" in content
+    assert "bravo" not in content
+
+
+def test_render_select_overflow_shows_count():
+    from domains.shell.pane import Rect
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), None))
+    tui._select_title = "Big list"
+    tui._select_options = [f"item-{i}" for i in range(20)]
+    tui._select_idx = 5
+    tui._select_scroll = 0
+    tui._select_filter = ""
+    regions = {"output": Rect(0, 0, 6, 40)}
+    scr = _FakeWin(6, 40)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n):
+        tui._render_select(regions, scr)
+    content = "".join(tui._output_surface.capture)
+    assert "20 items" in content
+    assert "6/20" in content
+
+
+# ── prompt_select / prompt_confirm / prompt_ask ────────────────────────
+
+def test_prompt_select_empty_returns_empty():
+    tui = TuiRepl(_MainFakeRepl(), None)
+    assert tui.prompt_select("Pick", []) == ""
+
+
+def test_prompt_select_returns_result():
+    import threading
+    tui = TuiRepl(_MainFakeRepl(), None)
+    def set_result():
+        time.sleep(0.05)
+        tui._select_result = "bravo"
+        tui._select_event.set()
+    t = threading.Thread(target=set_result)
+    t.start()
+    result = tui.prompt_select("Pick", ["alpha", "bravo", "charlie"])
+    t.join(timeout=1)
+    assert result == "bravo"
+
+
+def test_prompt_confirm_returns_result():
+    import threading
+    tui = TuiRepl(_MainFakeRepl(), None)
+    def set_result():
+        time.sleep(0.05)
+        tui._confirm_result = True
+        tui._confirm_event.set()
+    t = threading.Thread(target=set_result)
+    t.start()
+    result = tui.prompt_confirm("OK?")
+    t.join(timeout=1)
+    assert result is True
+
+
+def test_prompt_confirm_timeout_returns_default():
+    import threading
+    tui = TuiRepl(_MainFakeRepl(), None)
+    def release():
+        time.sleep(0.05)
+        tui._confirm_event.set()
+    threading.Thread(target=release, daemon=True).start()
+    result = tui.prompt_confirm("OK?", default=False)
+    assert result is False
+
+
+def test_prompt_ask_returns_result():
+    import threading
+    tui = TuiRepl(_MainFakeRepl(), None)
+    def set_result():
+        time.sleep(0.05)
+        tui._ask_result = "hello"
+        tui._ask_event.set()
+    t = threading.Thread(target=set_result)
+    t.start()
+    result = tui.prompt_ask("Enter text")
+    t.join(timeout=1)
+    assert result == "hello"
+
+
+def test_prompt_ask_timeout_returns_default():
+    import threading
+    tui = TuiRepl(_MainFakeRepl(), None)
+    def release():
+        time.sleep(0.05)
+        tui._ask_event.set()
+    threading.Thread(target=release, daemon=True).start()
+    result = tui.prompt_ask("Enter text", default="fallback")
+    assert result == "fallback"
+
+
+# ── _render_all ─────────────────────────────────────────────────────────
+
+def test_render_all_draws_borders_and_content():
+    from domains.shell.pane import Pane, Border, PaneLayout, Rect
+    from domains.shell.log_buffer import LogBuffer, LogEntry
+    tui = _init_render_state(TuiRepl(_MainFakeRepl(), LogBuffer()))
+    tui._log_surface._buffer.append(LogEntry(time.time(), "INFO", "test", "log line"))
+    layout = PaneLayout()
+    layout.panes.append(Pane("console", 0.3, border=Border("all")))
+    layout.panes.append(Pane("output", 0.3, border=Border("all")))
+    layout.panes.append(Pane("status", fixed=1))
+    layout.panes.append(Pane("input", fixed=1))
+    tui._layout = layout
+    tui._output_surface.write("output line")
+    regions = layout.compute(24, 80)
+
+    scr = _FakeStdscr()
+    win_console = _FakeWin(10, 40)
+    win_output = _FakeWin(10, 40)
+    win_status = _FakeWin(1, 80)
+    win_input = _FakeWin(1, 80)
+    with patch.object(curses, "color_pair", side_effect=lambda n: n), \
+         patch.object(curses, "has_colors", return_value=True):
+        tui._render_all(scr, regions, win_console, win_output, win_status, win_input)
+    assert scr.refreshed
