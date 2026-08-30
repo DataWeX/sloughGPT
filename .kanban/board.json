@@ -6545,6 +6545,25 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_070000_test-planner-add-block-tests-and-fix-date-import",
+      "title": "test(planner): add block tests and fix date import",
+      "description": "Added tests for block_card, unblock_card, is_blocked, and duplicate block prevention. Fixed missing date import in kanban.py that broke _render_board overdue detection.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "tests",
+        "kanban",
+        "blocking",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T07:00:00+00:00",
+      "updated_at": "2026-08-30T07:00:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
