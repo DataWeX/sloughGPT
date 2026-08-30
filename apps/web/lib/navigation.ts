@@ -86,7 +86,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     labelKey: 'nav.section.tools',
     routes: [
       { path: '/feedback', labelKey: 'nav.feedback', icon: 'activity', description: 'Feedback analytics' },
-      { path: '/kanban', labelKey: 'nav.kanban', icon: 'kanban', description: 'Project kanban board' },
+      { path: '/kanban', labelKey: 'nav.planner', icon: 'kanban', description: 'Planner — board, notes, sync' },
       { path: '/adapters', labelKey: 'nav.adapters', icon: 'settings', description: 'LoRA adapter management' },
     ],
   },
