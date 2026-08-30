@@ -6642,6 +6642,24 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_073000_feat-planner-add-sprint-support-to-kanban-cards",
+      "title": "feat(planner): add sprint support to kanban cards",
+      "description": "Added sprint field to Card dataclass. Updated CLI add/edit with --sprint flag. Updated show, list, and board rendering to display sprint. Updated GUI cardHtml to show sprint badge.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "kanban",
+        "sprint",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T07:30:00+00:00",
+      "updated_at": "2026-08-30T07:30:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
