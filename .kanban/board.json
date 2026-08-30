@@ -6466,6 +6466,26 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_063500_feat-planner-add-author-filter-to-gui-notes-tab",
+      "title": "feat(planner): add author filter to GUI notes tab",
+      "description": "Added author dropdown filter to GUI notes tab. Populated from existing note authors. Filtering works together with search. Updated renderNotes to filter by selected author.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "gui",
+        "notes",
+        "filter",
+        "author",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T06:35:00+00:00",
+      "updated_at": "2026-08-30T06:35:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
