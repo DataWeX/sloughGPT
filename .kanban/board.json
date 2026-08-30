@@ -6446,6 +6446,26 @@
       "due_date": "",
       "assignee": "agent",
       "notes": []
+    },
+    {
+      "id": "20260830_063100_feat-planner-add-author-filter-to-notes-list-cli",
+      "title": "feat(planner): add author filter to notes list CLI",
+      "description": "Added --author flag to notes list command. Updated NoteStore.list_notes() to accept author parameter and filter notes by author. Updated CLI to display @author in list output.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "planner",
+        "notes",
+        "cli",
+        "filter",
+        "author",
+        "status:done"
+      ],
+      "created_at": "2026-08-30T06:31:00+00:00",
+      "updated_at": "2026-08-30T06:31:00+00:00",
+      "due_date": "",
+      "assignee": "agent",
+      "notes": []
     }
   ]
 }
