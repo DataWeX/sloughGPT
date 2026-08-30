@@ -246,9 +246,11 @@ class KanbanStore:
 
     def list_cards(self, column: str | None = None, priority: str | None = None,
                    tag: str | None = None, assignee: str | None = None,
+                   due_before: str = "", due_after: str = "", overdue: bool = False,
                    limit: int = 100) -> list[Card]:
         board = self.load_board()
         results: list[Card] = []
+        today = date.today().isoformat()
         for card in board.cards:
             if column and card.column != column:
                 continue
@@ -257,6 +259,12 @@ class KanbanStore:
             if tag and tag not in card.tags:
                 continue
             if assignee and card.assignee != assignee:
+                continue
+            if due_before and (not card.due_date or card.due_date > due_before):
+                continue
+            if due_after and (not card.due_date or card.due_date < due_after):
+                continue
+            if overdue and (not card.due_date or card.due_date >= today):
                 continue
             results.append(card)
             if len(results) >= limit:
@@ -397,6 +405,7 @@ def _render_board(board: Board, width: int = 78) -> str:
     lines.append(f"│{'│'.join(f'{h:^{col_width}}' for h, cw in zip(headers, [col_width]*len(cols_sorted)))}│")
     lines.append(f"├{sep}┤")
 
+    today = date.today().isoformat()
     max_rows = max((len(cards) for cards in by_col.values()), default=1)
     for row_idx in range(max_rows):
         cells = []
@@ -405,6 +414,7 @@ def _render_board(board: Board, width: int = 78) -> str:
             if row_idx < len(cards):
                 c = cards[row_idx]
                 due = f" [{c.due_date}]" if c.due_date else ""
+                overdue = " !OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
                 assign = f" @{c.assignee}" if c.assignee else ""
                 tags = ""
                 if c.tags:
@@ -412,7 +422,7 @@ def _render_board(board: Board, width: int = 78) -> str:
                     if len(c.tags) > 2:
                         tags += "+"
                 notes = f" ({len(c.notes)})" if c.notes else ""
-                label = f"{c.priority_icon} {c.short_id} {_abbrev(c.title, col_width-13)}{due}{assign}{tags}{notes}"
+                label = f"{c.priority_icon} {c.short_id} {_abbrev(c.title, col_width-14)}{due}{overdue}{assign}{tags}{notes}"
                 cells.append(f" {label:<{col_width-1}}")
             else:
                 cells.append(" " * col_width)
@@ -448,6 +458,9 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_list.add_argument("--priority", default=None, choices=PRIORITIES)
     p_list.add_argument("--tag", default=None, help="Filter by tag")
     p_list.add_argument("--assignee", default=None, help="Filter by assignee")
+    p_list.add_argument("--due-before", default="", help="Due before YYYY-MM-DD")
+    p_list.add_argument("--due-after", default="", help="Due after YYYY-MM-DD")
+    p_list.add_argument("--overdue", action="store_true", help="Only overdue cards")
     p_list.add_argument("--limit", type=int, default=50)
 
     p_show = sub.add_parser("show", help="Show card details")
@@ -523,16 +536,20 @@ def cli_main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "list":
         cards = store.list_cards(column=args.column, priority=args.priority,
-                                 tag=args.tag, assignee=args.assignee, limit=args.limit)
+                                 tag=args.tag, assignee=args.assignee,
+                                 due_before=args.due_before, due_after=args.due_after,
+                                 overdue=args.overdue, limit=args.limit)
         if not cards:
             print("No cards found.")
             return 0
+        today = date.today().isoformat()
         for c in cards:
             tags_s = f"  [{', '.join(c.tags)}]" if c.tags else ""
             due_s = f"  [{c.due_date}]" if c.due_date else ""
+            overdue_s = "  OVERDUE" if c.due_date and c.due_date < today and c.column != "done" else ""
             assign_s = f"  @{c.assignee}" if c.assignee else ""
             notes_s = f"  ({len(c.notes)})" if c.notes else ""
-            print(f"  {c.priority_icon} {c.short_id}  {c.title}  [{c.column}]{tags_s}{due_s}{assign_s}{notes_s}")
+            print(f"  {c.priority_icon} {c.short_id}  {c.title}  [{c.column}]{tags_s}{due_s}{overdue_s}{assign_s}{notes_s}")
         print(f"\n  {len(cards)} card(s)")
         return 0
 
