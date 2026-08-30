@@ -75,6 +75,22 @@ quant-core:
 		2>/dev/null && echo "  ✓ matmul_int4.dylib" \
 		|| echo "  ⚠  matmul_int4.c — gcc/AVX2 unavailable"
 
+# ── Buildroot (Linux Image for v86) ─────────────────────
+buildroot:
+	bash buildroot/build.sh build
+
+buildroot-docker:
+	bash buildroot/build.sh docker
+
+buildroot-clean:
+	bash buildroot/build.sh clean
+
+buildroot-shell:
+	bash buildroot/build.sh shell
+
+buildroot-status:
+	bash buildroot/build.sh status
+
 # ── Install ──────────────────────────────────────────────
 install: build setup-git
 	cd apps/web && npm ci

@@ -794,7 +794,7 @@ def _cmd_autotrain(args):
 
     if action == "start":
         resp = requests.post(
-            f"{api_url}/auto-train/start",
+            f"{api_url}/training/start",
             json={
                 "teacher": getattr(args, "auto_teacher", None) or getattr(args, "teacher", "gpt2"),
                 "temperature": getattr(args, "temperature", 0.8),
@@ -806,13 +806,13 @@ def _cmd_autotrain(args):
         else:
             log.error(f"Failed: {resp.json()}")
     elif action == "stop":
-        resp = requests.post(f"{api_url}/auto-train/stop")
+        resp = requests.post(f"{api_url}/training/stop")
         if resp.ok:
             log.success(f"Stopped: {resp.json()}")
         else:
             log.error(f"Failed: {resp.json()}")
     elif action == "status":
-        resp = requests.get(f"{api_url}/auto-train/status")
+        resp = requests.get(f"{api_url}/training/status")
         if resp.ok:
             data = resp.json()
             for k, v in data.items():
@@ -832,7 +832,7 @@ def _cmd_monitor(args):
 
     while True:
         try:
-            response = requests.get(f"{base_url}/training", timeout=5)
+            response = requests.get(f"{base_url}/training/jobs", timeout=5)
             if response.status_code == 200:
                 jobs = response.json()
                 if isinstance(jobs, dict) and "jobs" in jobs:
@@ -1734,8 +1734,8 @@ def _stream_api_progress(base_url, job_id):
 def cmd_train_from_sessions(args):
     """Train a SloNet model on API chat logs via the server.
 
-    Posts to /auto-train/from-sessions/start, then streams SSE from
-    /auto-train/from-sessions/stream for live progress.
+    Posts to /training/from-sessions-start, then streams SSE from
+    /training/from-sessions-stream for live progress.
     """
     import json as _json
     import requests
@@ -1793,7 +1793,7 @@ def cmd_train_from_sessions(args):
     }
 
     try:
-        resp = requests.post(f"{base_url}/auto-train/from-sessions/start", json=payload, timeout=10)
+        resp = requests.post(f"{base_url}/training/from-sessions-start", json=payload, timeout=10)
         if not resp.ok:
             log.error(f"Failed to start: {resp.status_code} {resp.text}")
             return
@@ -1812,7 +1812,7 @@ def cmd_train_from_sessions(args):
     try:
         import requests as _req
         with _req.get(
-            f"{base_url}/auto-train/from-sessions/stream",
+            f"{base_url}/training/from-sessions-stream",
             stream=True,
             timeout=300,
         ) as stream:
@@ -1889,7 +1889,7 @@ def cmd_train_from_sessions(args):
         log.info(f"Loading checkpoint into chat: {checkpoint_name}")
         try:
             load_resp = requests.post(
-                f"{base_url}/auto-train/checkpoints/{checkpoint_name}/load",
+                f"{base_url}/training/checkpoints/{checkpoint_name}/load",
                 timeout=30,
             )
             if load_resp.ok:

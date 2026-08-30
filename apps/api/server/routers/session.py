@@ -13,6 +13,7 @@ from typing import Optional, List, Dict, Any, AsyncIterator
 
 from schemas.common import success_response, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.sse_fallback import sse_event as _sse_event, sse_token, sse_error
 from config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -33,36 +34,9 @@ class SessionRouter:
         self._register_routes()
 
     def _init_sse_helpers(self):
-        try:
-            from domains.api.sse_envelope import sse_event as _sse_event, sse_token, sse_error
-            self._sse_event = _sse_event
-            self._sse_token = sse_token
-            self._sse_error = sse_error
-        except ImportError:
-            def _sse_event(stream, phase, status, data=None, meta=None, message=""):
-                return "data: " + json.dumps({
-                    "stream": stream, "phase": phase, "status": status,
-                    "data": data or {}, "meta": meta or {}, "message": message,
-                }) + "\n\n"
-            def sse_token(stream, token, done=False, meta=None, elapsed_ms=None) -> dict:
-                """sse_token."""
-                phase = "STREAMING"
-                status = "complete" if done else "working"
-                m = dict(meta) if meta else {}
-                if done and elapsed_ms is not None:
-                    m["elapsed_ms"] = round(elapsed_ms, 1)
-                return _sse_event(stream, phase, status, {"token": token}, m, "")
-            def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
-                """sse_error."""
-                data = {"error": error}
-                if code is not None:
-                    data["code"] = code
-                if http_status is not None:
-                    data["http_status"] = http_status
-                return _sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
-            self._sse_event = _sse_event
-            self._sse_token = sse_token
-            self._sse_error = sse_error
+        self._sse_event = _sse_event
+        self._sse_token = sse_token
+        self._sse_error = sse_error
 
     def _register_routes(self):
         self.router.add_api_route("/{session_id}/context", self.set_session_context, methods=["POST"])

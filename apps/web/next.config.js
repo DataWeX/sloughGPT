@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
+const isProd = process.env.NODE_ENV === 'production'
+const isExport = process.env.NEXT_EXPORT === '1'
+
 const nextConfig = {
   reactStrictMode: true,
-  ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
+  ...(isProd && !isExport && { output: 'standalone' }),
+  ...(isExport && { output: 'export', images: { unoptimized: true }, trailingSlash: true }),
   onDemandEntries: {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,

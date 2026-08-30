@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.shell_sandbox import validate_command, ShellSecurityError
 
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
@@ -88,6 +89,11 @@ async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_
     Runs the command in a Dait ``ShellREPL`` instance with captured I/O.
     State persists across calls (same singleton REPL).
     """
+    try:
+        validate_command(req.command)
+    except ShellSecurityError as e:
+        raise_error(str(e), "E_SHELL_SECURITY", status_code=403)
+
     repl = _get_repl()
     t0 = _time.monotonic()
 
@@ -115,6 +121,11 @@ async def exec_command_stream(req: ShellExecRequest, request: Request, auth_user
     Yields lines as they are produced, then a completion event.
     Supports cancellation via AbortController disconnect.
     """
+    try:
+        validate_command(req.command)
+    except ShellSecurityError as e:
+        raise_error(str(e), "E_SHELL_SECURITY", status_code=403)
+
     repl = _get_repl()
     t0 = _time.monotonic()
 

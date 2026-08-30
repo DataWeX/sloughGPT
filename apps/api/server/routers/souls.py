@@ -17,35 +17,12 @@ import time
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
+from infrastructure.sse_fallback import sse_event, sse_token, sse_error, sse_complete
 
 # Response cache for list_souls: avoids FS glob + per-soul metadata parse.
 _list_souls_cache: tuple[float, dict] | None = None
 _LIST_SOULS_CACHE_TTL = 30.0
 _list_souls_lock = threading.Lock()
-
-try:
-    from domains.api.sse_envelope import sse_event, sse_token, sse_error, sse_complete
-except ImportError:
-    def sse_event(stream, phase, status, data=None, meta=None, message="") -> dict:
-        """sse_event."""
-        return "data: " + json.dumps({
-            "stream": stream, "phase": phase, "status": status,
-            "data": data or {}, "meta": meta or {}, "message": message
-        }) + "\n\n"
-    def sse_token(stream, token, meta=None) -> dict:
-        """sse_token."""
-        return sse_event(stream, "STREAMING", "working", {"token": token}, meta or {})
-    def sse_error(stream, phase, error, meta=None, code=None, http_status=None) -> dict:
-        """sse_error."""
-        data = {"error": error}
-        if code is not None:
-            data["code"] = code
-        if http_status is not None:
-            data["http_status"] = http_status
-        return sse_event(stream, phase, "error", data, meta or {}, f"Error: {error}")
-    def sse_complete(stream, phase="COMPLETE", data=None, meta=None, message="Done") -> dict:
-        """sse_complete."""
-        return sse_event(stream, phase, "complete", data or {}, meta or {}, message)
 
 try:
     from domains.models import SloughGPTModel

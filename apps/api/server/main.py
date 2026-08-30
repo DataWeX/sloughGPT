@@ -60,8 +60,8 @@ from domains.logging.config import setup_logging  # noqa: E402
 _log_setup = setup_logging()
 logger = logging.getLogger("slo")
 logger.info(
-    "Logging: level=%s format=%s log_dir=%s",
-    _log_setup["level"], _log_setup["format"], _log_setup["log_dir"],
+    "Logging: level=%s log_dir=%s",
+    _log_setup["level"], _log_setup["log_dir"],
     extra={"tag": "START"},
 )
 
