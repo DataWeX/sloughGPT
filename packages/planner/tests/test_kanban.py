@@ -341,3 +341,16 @@ def test_block_duplicate_ignored(board_dir):
     store.block_card(blocked.id, blocker.id)
     store.block_card(blocked.id, blocker.id)
     assert len(store.get_card(blocked.id).blocked_by) == 1
+
+
+def test_add_card_with_type(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    card = store.add_card("Bug fix", card_type="bug")
+    assert card.card_type == "bug"
+
+
+def test_edit_card_type(board_dir):
+    store = KanbanStore(board_dir=board_dir)
+    card = store.add_card("Task")
+    updated = store.update_card(card.id, card_type="feature")
+    assert updated.card_type == "feature"
