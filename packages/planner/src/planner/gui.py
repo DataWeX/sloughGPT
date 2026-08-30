@@ -553,6 +553,7 @@ main{padding:18px;max-width:1400px;margin:0 auto}
 .due{font-size:11px;color:var(--warning)}
 .overdue{font-size:11px;color:var(--destructive);font-weight:700;margin-left:6px}
 .blocked{font-size:11px;color:var(--warning);font-weight:700;margin-left:6px}
+.effort{font-size:11px;color:var(--primary);font-weight:600;margin-left:6px}
 
 /* notes list */
 .note-row{display:flex;gap:12px;align-items:flex-start;background:var(--card);
@@ -789,10 +790,11 @@ function cardHtml(c) {
     ? `<span class="overdue">OVERDUE</span>` : "";
   const blocked = c.blocked_by && c.blocked_by.length
     ? `<span class="blocked">&#128683; BLOCKED</span>` : "";
+  const effort = c.effort ? `<span class="effort">${c.effort}pts</span>` : "";
   const n = c.notes.length ? `<span class="chip">${c.notes.length} note${c.notes.length>1?"s":""}</span>` : "";
   return `<div class="card" draggable="true" data-id="${esc(c.id)}" title="${esc(c.description||"")}">
     <div class="t">${typeIcon} ${esc(c.title)}</div>
-    <div class="meta">${PICO[c.priority] ? `<span class="pri">${PICO[c.priority]}</span>` : ""}${tags}${n}${due}${overdue}${blocked}</div>
+    <div class="meta">${PICO[c.priority] ? `<span class="pri">${PICO[c.priority]}</span>` : ""}${effort}${tags}${n}${due}${overdue}${blocked}</div>
   </div>`;
 }
 
