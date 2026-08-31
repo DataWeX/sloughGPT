@@ -169,8 +169,8 @@ class SmartGroup(click.Group):
                 "desc": "Images, vision, and AI companion",
             },
             "System": {
-                "cmds": ["system", "error", "completion", "simulate"],
-                "desc": "Environment and diagnostics",
+                "cmds": ["system", "error", "completion", "simulate", "security", "docstore", "feeds"],
+                "desc": "Environment, diagnostics, and storage",
             },
             "Docker": {
                 "cmds": ["docker"],

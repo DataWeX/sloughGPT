@@ -3371,6 +3371,222 @@ def build_install():
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# security  — audit, keys
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Security audit logs and API key management")
+def security():
+    pass
+
+
+@security.command("audit", help="Show audit logs")
+@click.option("--limit", "-n", default=20, type=int, help="Max entries")
+@click.option("--type", "event_type", default="", help="Filter by event type")
+@click.option("--history", is_flag=True, help="Read from persisted audit.log")
+@click.pass_context
+def security_audit(ctx, limit, event_type, history):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {"limit": limit}
+    if event_type:
+        params["event_type"] = event_type
+    if history:
+        params["history"] = True
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/security/audit",
+                     params=params, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Audit failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    logs = data.get("data", data).get("logs", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"logs": logs})
+    else:
+        log.header(f"Audit Logs ({len(logs)} entries)")
+        for entry in logs:
+            event = entry.get("event_type", "?")
+            ts = entry.get("timestamp", "")[:19]
+            detail = entry.get("detail", "")[:60]
+            log.info(f"  [{ts}] {event} — {detail}")
+
+
+@security.command("keys", help="Show API key info")
+@click.pass_context
+def security_keys(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/security/keys", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Keys failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    info = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, info)
+    else:
+        count = info.get("count", 0)
+        configured = info.get("configured", False)
+        log.info(f"API keys configured: {configured} ({count} keys)")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# docstore  — list, get, put, delete, collections
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Server-side document store (browser chat DB)")
+def docstore():
+    pass
+
+
+@docstore.command("collections", help="List document collections")
+@click.pass_context
+def docstore_collections(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/collections", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    cols = data.get("data", data).get("collections", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"collections": cols})
+    else:
+        log.header("Collections")
+        for c in cols:
+            log.info(f"  {c}")
+
+
+@docstore.command("list", help="List documents in a collection")
+@click.argument("collection")
+@click.option("--limit", "-n", default=20, type=int)
+@click.pass_context
+def docstore_list(ctx, collection, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/{collection}?limit={limit}",
+                     timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    docs = data.get("data", data).get("documents", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"documents": docs})
+    else:
+        log.header(f"{collection} ({len(docs)} docs)")
+        for d in docs:
+            doc_id = d.get("_id", d.get("id", "?"))
+            log.info(f"  {doc_id}")
+
+
+@docstore.command("get", help="Get a document")
+@click.argument("collection")
+@click.argument("doc_id")
+@click.pass_context
+def docstore_get(ctx, collection, doc_id):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/{collection}/{doc_id}",
+                     timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    doc = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, doc)
+    else:
+        for k, v in doc.items():
+            log.info(f"  {k}: {v}")
+
+
+@docstore.command("delete", help="Delete a document")
+@click.argument("collection")
+@click.argument("doc_id")
+@click.option("--yes", "-y", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.pass_context
+def docstore_delete(ctx, collection, doc_id, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info(f"Would delete {collection}/{doc_id}")
+        return
+    if not yes:
+        click.confirm(f"Delete {collection}/{doc_id}?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/{collection}/{doc_id}",
+                        timeout=timeout)
+    if r.status_code == 200:
+        log.success(f"Deleted {collection}/{doc_id}")
+    else:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# feeds  — rss, json
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="RSS and JSON feed generation from dev notes")
+def feeds():
+    pass
+
+
+@feeds.command("rss", help="Generate RSS feed")
+@click.option("--tag", default="", help="Filter by tag")
+@click.option("--limit", "-n", default=20, type=int)
+@click.option("--output", "-o", help="Save to file")
+@click.pass_context
+def feeds_rss(ctx, tag, limit, output):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {"limit": limit}
+    if tag:
+        params["tag"] = tag
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/feeds/rss.xml",
+                     params=params, timeout=timeout, headers={"Accept": "application/xml"})
+    if r.status_code != 200:
+        log.error(f"RSS failed: {r.status_code}")
+        sys.exit(1)
+    content = r.text
+    if output:
+        with open(output, "w") as f:
+            f.write(content)
+        log.success(f"Saved to: {output}")
+    else:
+        print(content)
+
+
+@feeds.command("json", help="Generate JSON feed")
+@click.option("--tag", default="", help="Filter by tag")
+@click.option("--limit", "-n", default=20, type=int)
+@click.option("--output", "-o", help="Save to file")
+@click.pass_context
+def feeds_json(ctx, tag, limit, output):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {"limit": limit}
+    if tag:
+        params["tag"] = tag
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/feeds/feed.json",
+                     params=params, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"JSON feed failed: {r.status_code}")
+        sys.exit(1)
+    content = r.text
+    if output:
+        with open(output, "w") as f:
+            f.write(content)
+        log.success(f"Saved to: {output}")
+    else:
+        print(content)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════
 
