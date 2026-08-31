@@ -168,9 +168,9 @@ Only if specifically needed.
 | x86 VM | `vm run/list/debug` | `/vm` | `/vm` | `shell/vm_engine.py` |
 | Shell/TUI | `shell`, `tui` | `/shell` | `/shell` | `shell/` |
 | Build | `build run/init/clean` | — | — | `Makefile` |
-| Security | — | `/security` | `/security` | (audit logs) |
-| Docstore | — | `/docstore` | `/docstore` | `mogdb/` |
-| Feeds | — | `/feeds` | — | (RSS output) |
+| Security | `security audit/keys` | `/security` | `/security` | (audit logs) |
+| Docstore | `docstore collections/list/get/delete` | `/docstore` | `/docstore` | `mogdb/` |
+| Feeds | `feeds rss/json` | `/feeds` | — | (RSS output) |
 
 ## Downcraft — Model Downloader
 
