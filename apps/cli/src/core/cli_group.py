@@ -157,11 +157,11 @@ class SmartGroup(click.Group):
                 "desc": "Fine-tune and evaluate models",
             },
             "Data": {
-                "cmds": ["dataset", "knowledge", "experiment"],
+                "cmds": ["dataset", "knowledge", "experiment", "collect"],
                 "desc": "Import and manage training data",
             },
             "Intelligence": {
-                "cmds": ["knowledge", "experiment", "personality", "tokenizer", "vector", "meta-weights", "learn"],
+                "cmds": ["tokenizer", "vector", "meta-weights", "learn", "memory", "token-tree"],
                 "desc": "AI features and tokenization",
             },
             "Media": {
@@ -169,16 +169,16 @@ class SmartGroup(click.Group):
                 "desc": "Images, vision, and AI companion",
             },
             "System": {
-                "cmds": ["system", "error", "completion", "simulate", "security", "docstore", "feeds"],
+                "cmds": ["system", "error", "completion", "simulate", "security", "docstore", "feeds", "logs", "monitor"],
                 "desc": "Environment, diagnostics, and storage",
             },
             "Docker": {
-                "cmds": ["docker"],
-                "desc": "Containerized deployment",
+                "cmds": ["docker", "build", "vm", "world"],
+                "desc": "Containerized deployment and infrastructure",
             },
             "Advanced": {
-                "cmds": ["agent", "session"],
-                "desc": "AI agents and chat sessions",
+                "cmds": ["agent", "session", "generate"],
+                "desc": "AI agents, chat sessions, and generation",
             },
         }
 
