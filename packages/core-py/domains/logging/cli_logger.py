@@ -22,7 +22,7 @@ import time
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, List, Optional, TextIO
 
-from .base import Logger, LogLevel, LogRecord, ChildLogger
+from .base import Logger, LogLevel, LogRecord
 
 
 # ── TTY gate ────────────────────────────────────────────────────────────
@@ -169,38 +169,6 @@ class CLILogger(Logger):
             _write(self._stream, self._SHOW_CURSOR)
             self._cursor_hidden = False
 
-    def cursor_up(self, n: int = 1) -> None:
-        """Move cursor up n lines."""
-        if _is_tty(self._stream) and n > 0:
-            _write(self._stream, f"\033[{n}A")
-
-    def cursor_down(self, n: int = 1) -> None:
-        """Move cursor down n lines."""
-        if _is_tty(self._stream) and n > 0:
-            _write(self._stream, f"\033[{n}B")
-
-    def clear_line(self) -> None:
-        """Clear the current line."""
-        if _is_tty(self._stream):
-            _write(self._stream, "\033[2K")
-
-    def clear_lines(self, n: int = 1) -> None:
-        """Clear n lines starting from cursor position up."""
-        if _is_tty(self._stream):
-            for _ in range(n):
-                self.cursor_up(1)
-                self.clear_line()
-
-    def save_position(self) -> None:
-        """Save cursor position."""
-        if _is_tty(self._stream):
-            _write(self._stream, "\033[s")
-
-    def restore_position(self) -> None:
-        """Restore cursor position."""
-        if _is_tty(self._stream):
-            _write(self._stream, "\033[u")
-
     # ── Core emit ───────────────────────────────────────────────────────
 
     def emit(self, record: LogRecord) -> None:
@@ -238,11 +206,11 @@ class CLILogger(Logger):
     # ── CLI-specific helpers ────────────────────────────────────────────
 
     def success(self, msg: str, **ctx: Any) -> None:
-        """Log a success."""
+        """Log a success (green checkmark)."""
         if not _TERMINAL_ENABLED:
             return
         c = self._colors
-        primary = f"  {_c('ok', _A.GREEN, c)} {msg}"
+        primary = f"  {_c('✓', _A.GREEN, c)} {msg}"
         meta = " ".join(f"{k}={v}" for k, v in ctx.items()) if ctx else ""
         with self._lock:
             _write(self._stream, primary + "\n")
@@ -250,11 +218,11 @@ class CLILogger(Logger):
                 _write(self._stream, f"    {_c(meta, _A.DIM, c)}\n")
 
     def step(self, msg: str, **ctx: Any) -> None:
-        """Log a step/action."""
+        """Log a step/action (cyan arrow)."""
         if not _TERMINAL_ENABLED:
             return
         c = self._colors
-        primary = f"  {_c('>', _A.CYAN, c)} {msg}"
+        primary = f"  {_c('→', _A.CYAN, c)} {msg}"
         meta = " ".join(f"{k}={v}" for k, v in ctx.items()) if ctx else ""
         with self._lock:
             _write(self._stream, primary + "\n")
@@ -351,9 +319,9 @@ class CLILogger(Logger):
             return
         c = self._colors
         colors = {"ok": _A.GREEN, "warn": _A.YELLOW, "error": _A.RED, "info": _A.BLUE}
-        icons = {"ok": "ok", "warn": "warn", "error": "err", "info": "info"}
+        icons = {"ok": "✓", "warn": "!", "error": "✗", "info": "ℹ"}
         color = colors.get(status, _A.WHITE)
-        icon = icons.get(status, "...")
+        icon = icons.get(status, "•")
         with self._lock:
             _write(self._stream, f"  {_c(icon, color, c)} {label}: {value}\n")
 
@@ -414,34 +382,3 @@ class CLILogger(Logger):
         finally:
             elapsed_ms = (time.monotonic() - start) * 1000
             self.info(label, elapsed_ms=f"{elapsed_ms:.0f}ms")
-
-    def child(self, suffix: str, **ctx: Any) -> ChildLogger:
-        """Create a child logger with the parent's CLI methods."""
-        from .base import ChildLogger
-        return ChildLogger(
-            name=f"{self._name}.{suffix}",
-            parent=self,
-            context={**self._context, **ctx},
-        )
-
-    def update_block(self, lines: list[str], saved_lines: list[str]) -> None:
-        """Update a block of output in-place.
-
-        Args:
-            lines: New lines to print
-            saved_lines: Lines that were previously printed (to clear)
-        """
-        if not _is_tty(self._stream):
-            # Non-TTY: just print normally
-            for line in lines:
-                self.info(line)
-            return
-
-        # Clear previous lines
-        if saved_lines:
-            self.clear_lines(len(saved_lines))
-
-        # Print new lines
-        for line in lines:
-            _write(self._stream, line + "\n")
-            saved_lines.append(line)

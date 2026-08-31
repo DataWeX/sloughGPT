@@ -18,39 +18,8 @@ from utils.formatting import format_time
 
 log = get_global()
 
-# Component loggers — each gets its own dock in output
-api_log = log.child("api")
-web_log = log.child("web")
-build_log = log.child("build")
-mobile_log = log.child("mobile")
-
 
 _LOG_BUF = 500  # max lines kept per panel
-
-
-class StatusBlock:
-    """Manages in-place updating of a block of status lines."""
-
-    def __init__(self, logger):
-        self._log = logger
-        self._lines: list[str] = []
-        self._is_tty = hasattr(logger._stream, 'isatty') and logger._stream.isatty()
-
-    def update(self, *lines: str) -> None:
-        """Update the block with new lines, clearing previous output if TTY."""
-        if self._is_tty and self._lines:
-            # Clear previous lines
-            self._log.clear_lines(len(self._lines))
-
-        self._lines = list(lines)
-
-        if self._is_tty:
-            for line in lines:
-                self._log._stream.write(line + "\n")
-            self._log._stream.flush()
-        else:
-            for line in lines:
-                self._log.info(line)
 
 
 def _kill_port(port: int):
@@ -73,42 +42,6 @@ def _check_port(port: int) -> bool:
         return True
     except Exception:
         return False
-
-
-def _check_web_ready(port: int) -> bool:
-    """Check if web frontend is already healthy and responding."""
-    try:
-        import urllib.request
-        urllib.request.urlopen(f"http://localhost:{port}/", timeout=3)
-        return True
-    except Exception:
-        return False
-
-
-def _find_free_port(start: int) -> int:
-    """Find next available port without killing anything."""
-    import socket
-    for port in range(start, start + 100):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind(("", port))
-                return port
-        except OSError:
-            continue
-    return start
-
-
-def _is_port_bound(port: int) -> bool:
-    """Check if a port is bound (in use) by any process."""
-    import socket
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(("", port))
-            return False  # port is free
-    except OSError:
-        return True  # port is bound
 
 
 def _is_eaddrinuse(lines: deque) -> bool:
@@ -307,100 +240,66 @@ def cmd_dev(args):
     web_port = getattr(args, "web_port", 3000)
     watch_web = getattr(args, "watch_web", False)
 
-    # ── Reuse existing healthy services or find free ports ────────
-    api_reused = False
-    web_reused = False
-    if _check_api_ready(api_port):
-        api_reused = True
-    elif _is_port_bound(api_port):
-        api_port = _find_free_port(api_port + 1)
-
-    if _check_web_ready(web_port):
-        web_reused = True
-    elif _is_port_bound(web_port):
-        web_port = _find_free_port(web_port + 1)
-
-    # ── In-place status block (shown before TUI takes over) ────
-    from domains.logging.cli_logger import _c as ansi_c, _A
-    status_block = StatusBlock(log)
-    api_status = "ok (reusing)" if api_reused else "starting"
-    web_status = "ok (reusing)" if web_reused else "starting"
-
-    def _update_status():
-        api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
-        web_color = _A.GREEN if "ok" in web_status else _A.YELLOW
-        status_block.update(
-            ansi_c("  SloughGPT Dev", _A.BOLD, log._colors),
-            f"  API: http://localhost:{api_port}  {ansi_c(api_status, api_color, log._colors)}",
-            f"  Web: http://localhost:{web_port}  {ansi_c(web_status, web_color, log._colors)}",
-        )
-
-    _update_status()
-
-    status = {"api": "starting", "web": "starting", "api_ready": api_reused, "web_ready": web_reused}
+    status = {"api": "starting", "web": "starting", "api_ready": False, "web_ready": False}
     api_lines: deque = deque(maxlen=_LOG_BUF)
     web_lines: deque = deque(maxlen=_LOG_BUF)
 
+    # Kill existing
+    log.step("Stopping existing servers...")
+    for port in [api_port, web_port]:
+        _kill_port(port)
+    time.sleep(0.5)
+
     # ── Start API ────────────────────────────────────────
-    api_log.step(f"Starting on port {api_port}...")
+    log.step(f"Starting API on port {api_port}...")
     env = os.environ.copy()
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
 
     python = Path(find_server_python(root))
-    api_proc = None
-    if not api_reused:
-        api_proc = subprocess.Popen(
-            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-             "--host", "0.0.0.0", "--port", str(api_port), "--reload"],
-            cwd=str(root),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+    api_proc = subprocess.Popen(
+        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+         "--host", "0.0.0.0", "--port", str(api_port), "--reload"],
+        cwd=str(root),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+    stop_event = threading.Event()
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
+
+    # ── Start Web ────────────────────────────────────────
+    log.step(f"Starting Web on port {web_port}...")
+    web_cwd = root / "apps/web"
+
+    if watch_web:
+        web_proc = subprocess.Popen(
+            ["npx", "nodemon", "--watch", "app", "--watch", "components",
+             "--watch", "lib", "--watch", "hooks", "-e", "ts,tsx,js,jsx",
+             "npm", "run", "dev"],
+            cwd=str(web_cwd),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    else:
+        web_proc = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=str(web_cwd),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             text=True,
         )
 
-    stop_event = threading.Event()
-    if api_proc is not None:
-        api_thread = threading.Thread(
-            target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
-        )
-        api_thread.start()
-
-    # ── Start Web ────────────────────────────────────────
-    web_proc = None
-    if web_reused:
-        web_log.success(f"Already running on :{web_port} (reusing)")
-    else:
-        web_log.step(f"Starting on port {web_port}...")
-        web_cwd = root / "apps/web"
-        web_env = {**env, "PORT": str(web_port), "HOSTNAME": "0.0.0.0"}
-
-        if watch_web:
-            web_proc = subprocess.Popen(
-                ["npx", "nodemon", "--watch", "app", "--watch", "components",
-                 "--watch", "lib", "--watch", "hooks", "-e", "ts,tsx,js,jsx",
-                 "npm", "run", "dev"],
-                cwd=str(web_cwd),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-        else:
-            web_proc = subprocess.Popen(
-                ["npm", "run", "dev"],
-                cwd=str(web_cwd),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-
-        web_thread = threading.Thread(
-            target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
-        )
-        web_thread.start()
+    web_thread = threading.Thread(
+        target=_read_stream, args=(web_proc.stderr, web_lines, stop_event), daemon=True
+    )
+    web_thread.start()
 
     # ── Wait for readiness (async poll) ──────────────────
     def _poll_services():
@@ -414,46 +313,11 @@ def cmd_dev(args):
                 status["web_ready"] = True
                 status["web"] = "ready"
             # Check if web process died
-            if not status["web_ready"] and web_proc is not None and web_proc.poll() is not None:
+            if not status["web_ready"] and web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
-                    # Auto-recover: find free port and restart
-                    new_port = _find_free_port(web_port + 1)
-                    web_log.warning(f"Port {web_port} in use, using {new_port}")
-                    web_port = new_port
-                    web_env["PORT"] = str(web_port)
-                    # Restart web on new port
-                    if watch_web:
-                        web_proc = subprocess.Popen(
-                            ["npx", "nodemon", "--watch", "app", "--watch", "components",
-                             "--watch", "lib", "--watch", "hooks", "-e", "ts,tsx,js,jsx",
-                             "npm", "run", "dev"],
-                            cwd=str(root / "apps/web"),
-                            env=web_env,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT,
-                            text=True,
-                        )
-                    else:
-                        web_proc = subprocess.Popen(
-                            ["npm", "run", "dev"],
-                            cwd=str(root / "apps/web"),
-                            env=web_env,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT,
-                            text=True,
-                        )
-                    web_thread = threading.Thread(
-                        target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
-                    )
-                    web_thread.start()
-                    continue
+                    status["web"] = "eaddrinuse"
                 else:
                     status["web"] = "error"
-                    web_log.error(f"Exited with code {web_proc.returncode}")
-                    if web_lines:
-                        web_log.info("Error output:")
-                        for line in _extract_error_lines(web_lines):
-                            web_log.info(f"  | {line}")
                 break
             time.sleep(0.5)
 
@@ -477,12 +341,16 @@ def cmd_dev(args):
     )
 
     shutdown = [False]
+    eaddrinuse_port = [None]  # Track EADDRINUSE for error display
 
     def _stop_check() -> bool:
         if shutdown[0]:
             return True
         dashboard.set_status("api", status["api"])
         dashboard.set_status("web", status["web"])
+        if status["web"] == "eaddrinuse":
+            eaddrinuse_port[0] = web_port
+            return True
         if status["api"] == "error" and status["web"] == "error":
             return True
         return False
@@ -498,11 +366,14 @@ def cmd_dev(args):
     finally:
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
-        _print_summary(api_lines, web_lines, status, api_port, web_port)
+        if eaddrinuse_port[0]:
+            _handle_eaddrinuse(eaddrinuse_port[0], "web")
+        else:
+            _print_summary(api_lines, web_lines, status, api_port, web_port)
 
 
 def _cleanup(api_proc, web_proc, api_port, web_port):
-    """Terminate subprocesses we started (don't kill ports — preserve state)."""
+    """Terminate both subprocesses and free ports."""
     for proc in [api_proc, web_proc]:
         if proc and proc.poll() is None:
             try:
@@ -514,6 +385,8 @@ def _cleanup(api_proc, web_proc, api_port, web_port):
                     proc.wait(timeout=2)
                 except Exception:
                     pass
+    _kill_port(api_port)
+    _kill_port(web_port)
 
 
 def _print_summary(api_lines, web_lines, status, api_port=8000, web_port=3000):
@@ -522,28 +395,17 @@ def _print_summary(api_lines, web_lines, status, api_port=8000, web_port=3000):
     log.header("Dev Server Stopped")
 
     st = status.get("api", "error")
-    color = "green" if st == "ready" else "error"
-    log.status("API Server", f"http://localhost:{api_port}", color)
+    color = "green" if st == "ready" else "red"
+    log.status("API Server", f"http://localhost:{api_port}", color if color == "green" else "error")
 
     st = status.get("web", "error")
-    color = "green" if st == "ready" else "error"
-    log.status("Web Server", f"http://localhost:{web_port}", color)
-
-    # Show actual error output if service failed
-    if status.get("web") == "error" and web_lines:
-        log.blank()
-        log.info("Web server error output:")
-        for line in _extract_error_lines(web_lines):
-            log.info(f"  | {line}")
-    if status.get("api") == "error" and api_lines:
-        log.blank()
-        log.info("API server error output:")
-        for line in _extract_error_lines(api_lines):
-            log.info(f"  | {line}")
+    color = "green" if st == "ready" else "red"
+    log.status("Web Server", f"http://localhost:{web_port}", color if color == "green" else "error")
 
     log.blank()
     log.info(f"API logs: {len(api_lines)} lines")
     log.info(f"Web logs: {len(web_lines)} lines")
+    log.success("Done")
 
 
 def cmd_serve(args):
@@ -606,26 +468,12 @@ def _cmd_api_only(args):
     root = _repo_root()
     api_port = getattr(args, "port", 8000)
 
-    # ── Reuse existing healthy API or find free port ─────────────
-    api_reused = False
-    if _check_api_ready(api_port):
-        api_reused = True
-    elif _is_port_bound(api_port):
-        api_port = _find_free_port(api_port + 1)
+    _kill_port(api_port)
+    time.sleep(0.3)
 
-    # ── In-place status block ───────────────────────────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
-    status = StatusBlock(log)
-    api_status = "ok (reusing)" if api_reused else "starting"
-
-    def _update_status():
-        api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
-        status.update(
-            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-            f"  API: http://{args.host}:{api_port}  {ansi_c(api_status, api_color, log._colors)}",
-        )
-
-    _update_status()
+    log.header("Starting SloughGPT API Server")
+    log.key_value("API", f"http://{args.host}:{api_port}")
+    log.key_value("Docs", f"http://{args.host}:{api_port}/docs")
 
     env = os.environ.copy()
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
@@ -638,44 +486,32 @@ def _cmd_api_only(args):
     api_lines: deque = deque(maxlen=_LOG_BUF)
     stop_event = threading.Event()
 
-    api_proc = None
-    if not api_reused:
-        python = Path(find_server_python(root))
-        api_proc = subprocess.Popen(
-            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-             "--host", args.host, "--port", str(api_port)],
-            cwd=str(root),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        api_thread = threading.Thread(
-            target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
-        )
-        api_thread.start()
-
-    if not api_reused:
-        api_status = "waiting..."
-        _update_status()
-        if not _wait_for_api_with_progress(api_port):
-            api_status = "error"
-            _update_status()
-            api_log.info("Relevant output:")
-            for line in _extract_error_lines(api_lines):
-                api_log.info(f"  | {line}")
-            stop_event.set()
-            return
-
-    api_status = "ok"
-    status.update(
-        ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-        f"  API: http://{args.host}:{api_port}",
-        "",
-        f"  {ansi_c('ok', _A.GREEN, log._colors)} Ready",
-        "",
-        f"  Press Ctrl+C to stop",
+    python = Path(find_server_python(root))
+    api_proc = subprocess.Popen(
+        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+         "--host", args.host, "--port", str(api_port)],
+        cwd=str(root),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
+
+    if not _wait_for_api_with_progress(api_port):
+        log.error("API failed to start within 90s")
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
+            log.info(f"  | {line}")
+        stop_event.set()
+        _kill_port(api_port)
+        return
+
+    log.success(f"API ready at http://{args.host}:{api_port}")
+    log.info("Press Ctrl+C to stop")
 
     shutdown = [False]
 
@@ -683,51 +519,34 @@ def _cmd_api_only(args):
         if shutdown[0]:
             return
         shutdown[0] = True
-        status.update(
-            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-            f"  API: http://{args.host}:{api_port}",
-            "",
-            f"  Shutting down...",
-        )
+        log.blank()
+        log.info("Shutting down...")
         stop_event.set()
-        if api_proc is not None and api_proc.poll() is None:
+        if api_proc.poll() is None:
             try:
                 api_proc.terminate()
                 api_proc.wait(timeout=5)
             except Exception:
                 api_proc.kill()
-        status.update(
-            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-            f"  API: http://{args.host}:{api_port}",
-            "",
-            f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
-        )
+        _kill_port(api_port)
+        log.success("Stopped")
 
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
 
     try:
-        if api_proc is not None:
-            api_proc.wait()
-        else:
-            while not shutdown[0]:
-                time.sleep(1)
+        api_proc.wait()
     except KeyboardInterrupt:
         if not shutdown[0]:
             shutdown[0] = True
             stop_event.set()
-            if api_proc is not None:
-                try:
-                    api_proc.terminate()
-                    api_proc.wait(timeout=5)
-                except Exception:
-                    api_proc.kill()
-            status.update(
-                ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-                f"  API: http://{args.host}:{api_port}",
-                "",
-                f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
-            )
+            try:
+                api_proc.terminate()
+                api_proc.wait(timeout=5)
+            except Exception:
+                api_proc.kill()
+            _kill_port(api_port)
+            log.success("Stopped")
 
 
 def _cmd_api_and_mobile(args):
@@ -737,32 +556,15 @@ def _cmd_api_and_mobile(args):
     mobile_root = root / "apps" / "mobile"
 
     if not (mobile_root / "package.json").is_file():
-        mobile_log.error(f"App not found at {mobile_root}")
+        log.error(f"Mobile app not found at {mobile_root}")
         return
 
-    # ── Reuse existing healthy API or find free port ─────────────
-    api_reused = False
-    if _check_api_ready(api_port):
-        api_reused = True
-    elif _is_port_bound(api_port):
-        api_port = _find_free_port(api_port + 1)
+    _kill_port(api_port)
+    time.sleep(0.3)
 
-    # ── In-place status block ───────────────────────────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
-    status = StatusBlock(log)
-    api_status = "ok (reusing)" if api_reused else "starting"
-    mobile_status = "starting"
-
-    def _update_status():
-        api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
-        mobile_color = _A.GREEN if "ok" in mobile_status else _A.YELLOW
-        status.update(
-            ansi_c("  SloughGPT", _A.BOLD, log._colors),
-            f"  API:    http://{args.host}:{api_port}  {ansi_c(api_status, api_color, log._colors)}",
-            f"  Mobile: metro bundler (8081)  {ansi_c(mobile_status, mobile_color, log._colors)}",
-        )
-
-    _update_status()
+    log.header("Starting SloughGPT — API + Mobile")
+    log.key_value("API", f"http://{args.host}:{api_port}")
+    log.key_value("Mobile", "React Native (metro bundler)")
 
     # ── Build env ─────────────────────────────────────────
     env = os.environ.copy()
@@ -790,89 +592,79 @@ def _cmd_api_and_mobile(args):
     mobile_lines: deque = deque(maxlen=_LOG_BUF)
     stop_event = threading.Event()
 
-    api_proc = None
-    if not api_reused:
-        python = Path(find_server_python(root))
-        api_proc = subprocess.Popen(
-            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-             "--host", args.host, "--port", str(api_port)],
-            cwd=str(root),
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-        )
-        api_thread = threading.Thread(
-            target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
-        )
-        api_thread.start()
+    python = Path(find_server_python(root))
+    api_proc = subprocess.Popen(
+        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+         "--host", args.host, "--port", str(api_port)],
+        cwd=str(root),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    api_thread = threading.Thread(
+        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event), daemon=True
+    )
+    api_thread.start()
 
     # ── Start React Native metro bundler ──────────────────
+    log.step("Starting React Native metro bundler...")
     mobile_env = {**env, "PORT": "8081"}
     mobile_proc = subprocess.Popen(
         ["npx", "react-native", "start"],
         cwd=str(mobile_root),
         env=mobile_env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         text=True,
     )
     mobile_thread = threading.Thread(
-        target=_read_stream, args=(mobile_proc.stdout, mobile_lines, stop_event), daemon=True
+        target=_read_stream, args=(mobile_proc.stderr, mobile_lines, stop_event), daemon=True
     )
     mobile_thread.start()
 
     # ── Wait for API readiness ────────────────────────────
-    if not api_reused:
-        api_status = "waiting..."
-        _update_status()
-        if not _wait_for_api_with_progress(api_port):
-            api_status = "error"
-            _update_status()
-            api_log.info("Relevant output:")
-            for line in _extract_error_lines(api_lines):
-                api_log.info(f"  | {line}")
-            stop_event.set()
-            _cleanup(api_proc, mobile_proc, api_port, 8081)
-            return
+    if not _wait_for_api_with_progress(api_port):
+        log.error("API failed to start within 90s")
+        log.info("Relevant output:")
+        for line in _extract_error_lines(api_lines):
+            log.info(f"  | {line}")
+        stop_event.set()
+        _cleanup(api_proc, mobile_proc, api_port, 8081)
+        return
 
-    api_status = "ok"
-    _update_status()
+    log.success("API ready")
 
     # ── Wait for metro bundler ────────────────────────────
-    mobile_status = "waiting..."
-    _update_status()
+    log.step("Waiting for metro bundler...")
     for _ in range(30):
         if _check_port(8081):
-            mobile_status = "ok"
-            _update_status()
             break
         if mobile_proc.poll() is not None:
-            mobile_status = "error"
-            _update_status()
-            mobile_log.info("Relevant metro output:")
+            log.error(f"Metro bundler exited with code {mobile_proc.returncode}")
+            log.info("Relevant metro output:")
             for line in _extract_error_lines(mobile_lines):
-                mobile_log.info(f"  | {line}")
+                log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, mobile_proc, api_port, 8081)
             return
         time.sleep(1)
     else:
-        mobile_status = "timeout"
-        _update_status()
+        log.warning("Metro bundler did not respond within 30s")
+        log.info("API is still running — run 'npx react-native start' manually in apps/mobile/")
 
     # ── Ready ─────────────────────────────────────────────
     api_url = f"http://{args.host}:{api_port}"
 
-    status.update(
-        ansi_c("  SloughGPT", _A.BOLD, log._colors),
-        f"  API:    {api_url}",
-        f"  Mobile: metro bundler (8081)",
-        "",
-        f"  {ansi_c('ok', _A.GREEN, log._colors)} All services ready",
-        "",
-        f"  Press Ctrl+C to stop",
-    )
+    log.blank()
+    log.success("All services ready!")
+    log.blank()
+    log.key_value("API", api_url)
+    log.key_value("API Docs", f"{api_url}/docs")
+    log.key_value("Mobile", "react-native start (port 8081)")
+    log.blank()
+    log.key_value("", "Press Ctrl+C to stop")
+    log.blank()
 
     # ── Signal handlers ───────────────────────────────────
     shutdown = [False]
@@ -881,22 +673,11 @@ def _cmd_api_and_mobile(args):
         if shutdown[0]:
             return
         shutdown[0] = True
-        status.update(
-            ansi_c("  SloughGPT", _A.BOLD, log._colors),
-            f"  API:    {api_url}",
-            f"  Mobile: metro bundler (8081)",
-            "",
-            f"  Shutting down...",
-        )
+        log.blank()
+        log.info("Shutting down...")
         stop_event.set()
         _cleanup(api_proc, mobile_proc, api_port, 8081)
-        status.update(
-            ansi_c("  SloughGPT", _A.BOLD, log._colors),
-            f"  API:    {api_url}",
-            f"  Mobile: metro bundler (8081)",
-            "",
-            f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
-        )
+        log.success("Stopped")
 
     signal.signal(signal.SIGINT, _sig_handler)
     signal.signal(signal.SIGTERM, _sig_handler)
@@ -905,27 +686,23 @@ def _cmd_api_and_mobile(args):
     try:
         while not shutdown[0]:
             time.sleep(2)
-            if api_proc is not None and api_proc.poll() is not None:
-                api_status = "error"
-                _update_status()
+            if api_proc.poll() is not None:
+                log.error(f"API server exited (code {api_proc.returncode})")
                 break
             if mobile_proc.poll() is not None:
-                mobile_status = "restarting..."
-                _update_status()
+                log.warning(f"Metro bundler exited (code {mobile_proc.returncode}), restarting...")
                 mobile_proc = subprocess.Popen(
                     ["npx", "react-native", "start"],
                     cwd=str(mobile_root),
                     env=mobile_env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                     text=True,
                 )
                 mobile_thread = threading.Thread(
-                    target=_read_stream, args=(mobile_proc.stdout, mobile_lines, stop_event), daemon=True
+                    target=_read_stream, args=(mobile_proc.stderr, mobile_lines, stop_event), daemon=True
                 )
                 mobile_thread.start()
-                mobile_status = "ok"
-                _update_status()
     except KeyboardInterrupt:
         pass
     finally:
@@ -940,38 +717,20 @@ def _cmd_api_and_web(args):
     api_port = getattr(args, "port", 8000)
     web_port = getattr(args, "web_port", 3000)
 
-    # ── Reuse existing healthy services or find free ports ────────
+    # Kill existing processes on these ports
+    _kill_port(api_port)
+    _kill_port(web_port)
+    time.sleep(0.5)
+
+    log.header("Starting SloughGPT — API + Web")
+    log.key_value("API", f"http://{args.host}:{api_port}")
+    log.key_value("Web", f"http://localhost:{web_port}")
+
+    # ── Reuse existing healthy API if running ────────────────────
     api_reused = False
-    web_reused = False
-
-    # Check API
     if _check_api_ready(api_port):
+        log.success(f"API already healthy on :{api_port} (reusing)")
         api_reused = True
-    elif _is_port_bound(api_port):
-        api_port = _find_free_port(api_port + 1)
-
-    # Check Web
-    if _check_web_ready(web_port):
-        web_reused = True
-    elif _is_port_bound(web_port):
-        web_port = _find_free_port(web_port + 1)
-
-    # ── In-place status block ───────────────────────────────────
-    from domains.logging.cli_logger import _c as ansi_c, _A
-    status = StatusBlock(log)
-    api_status = "ok (reusing)" if api_reused else "starting"
-    web_status = "ok (reusing)" if web_reused else "starting"
-
-    def _update_status():
-        api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
-        web_color = _A.GREEN if "ok" in web_status else _A.YELLOW
-        status.update(
-            ansi_c("  SloughGPT", _A.BOLD, log._colors),
-            f"  API: http://{args.host}:{api_port}  {ansi_c(api_status, api_color, log._colors)}",
-            f"  Web: http://localhost:{web_port}  {ansi_c(web_status, web_color, log._colors)}",
-        )
-
-    _update_status()
 
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
@@ -1035,7 +794,7 @@ def _cmd_api_and_web(args):
     server_js = next((p for p in server_js_candidates if p.is_file()), server_js_candidates[0])
 
     if not server_js.is_file():
-        build_log.step("Building Next.js standalone (first time)...")
+        log.step("Building Next.js standalone (first time)...")
         # Force-clean .next to avoid stale/locked artifacts on macOS
         next_cache = web_root / ".next"
         if next_cache.is_dir():
@@ -1056,13 +815,14 @@ def _cmd_api_and_web(args):
         build_thread.start()
         build_proc.wait()
         if build_proc.returncode != 0:
-            build_log.error("Next.js build failed")
-            build_log.info("Relevant build output:")
+            log.error("Next.js build failed")
+            log.info("Relevant build output:")
             for line in _extract_error_lines(build_lines):
-                build_log.info(f"  | {line}")
+                log.info(f"  | {line}")
             stop_event.set()
+            _kill_port(api_port)
             return
-        build_log.success("Build complete")
+        log.success("Build complete")
 
     # ── Copy static assets for standalone ───────────────────────
     standalone_root = server_js.parent
@@ -1095,117 +855,82 @@ def _cmd_api_and_web(args):
         "NEXT_PUBLIC_API_URL": os.environ.get("NEXT_PUBLIC_API_URL", f"http://{args.host}:{api_port}"),
     }
 
-    web_proc = None
-    if not web_reused:
-        if server_js.is_file():
-            web_proc = subprocess.Popen(
-                ["node", "server.js"],
-                cwd=str(server_js.parent),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-        else:
-            web_proc = subprocess.Popen(
-                ["npm", "run", "dev"],
-                cwd=str(web_root),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-            )
-
-        web_thread = threading.Thread(
-            target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
-            kwargs={"echo_event": api_ready_event}, daemon=True,
+    if server_js.is_file():
+        log.step(f"Starting Web (standalone) on port {web_port}...")
+        web_proc = subprocess.Popen(
+            ["node", "server.js"],
+            cwd=str(server_js.parent),
+            env=web_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-        web_thread.start()
+    else:
+        log.step(f"Starting Web (dev) on port {web_port}...")
+        web_proc = subprocess.Popen(
+            ["npm", "run", "dev"],
+            cwd=str(web_root),
+            env=web_env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    web_thread = threading.Thread(
+        target=_read_stream, args=(web_proc.stderr, web_lines, stop_event),
+        kwargs={"echo_event": api_ready_event}, daemon=True,
+    )
+    web_thread.start()
 
     # ── Wait for API readiness ────────────────────────────────────
     if not _wait_for_api_with_progress(api_port):
-        api_log.error("Failed to start within 90s")
-        api_log.info("Relevant output:")
+        log.error("API failed to start within 90s")
+        log.info("Relevant output:")
         for line in _extract_error_lines(api_lines):
-            api_log.info(f"  | {line}")
+            log.info(f"  | {line}")
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
         return
 
     # API ready — enable echo on stream threads
     api_ready_event.set()
-    api_status = "ok"
-    _update_status()
+    log.success("API ready")
 
     # ── Wait for web readiness ────────────────────────────────────
-    web_status = "waiting..."
-    _update_status()
+    log.step("Waiting for web frontend...")
     for _ in range(60):
         if _check_port(web_port):
-            web_status = "ok"
-            _update_status()
             break
         # Check if web process died
-        if web_proc is not None and web_proc.poll() is not None:
+        if web_proc.poll() is not None:
             if _is_eaddrinuse(web_lines):
-                # Auto-recover: find free port and restart
-                new_port = _find_free_port(web_port + 1)
-                web_log.warning(f"Port {web_port} in use, using {new_port}")
-                web_port = new_port
-                web_env["PORT"] = str(web_port)
-                env["NEXTAUTH_URL"] = f"http://localhost:{web_port}"
-                # Restart web on new port
-                if server_js.is_file():
-                    web_proc = subprocess.Popen(
-                        ["node", "server.js"],
-                        cwd=str(server_js.parent),
-                        env=web_env,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                    )
-                else:
-                    web_proc = subprocess.Popen(
-                        ["npm", "run", "dev"],
-                        cwd=str(web_root),
-                        env=web_env,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                    )
-                web_thread = threading.Thread(
-                    target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
-                    kwargs={"echo_event": api_ready_event}, daemon=True,
-                )
-                web_thread.start()
-                continue
+                _handle_eaddrinuse(web_port, "web")
             else:
-                web_log.error(f"Exited with code {web_proc.returncode}")
-                web_log.info("Relevant web output:")
+                log.error(f"Web server exited with code {web_proc.returncode}")
+                log.info("Relevant web output:")
                 for line in _extract_error_lines(web_lines):
-                    web_log.info(f"  | {line}")
+                    log.info(f"  | {line}")
             stop_event.set()
             _cleanup(api_proc, web_proc, api_port, web_port)
             return
         time.sleep(1)
     else:
-        web_log.warning("Did not respond within 60s")
-        web_log.info("API is still running — web may need manual start")
+        log.warning("Web frontend did not respond within 60s")
+        log.info("API is still running — web may need manual start")
 
     # ── Ready ────────────────────────────────────────────────────
     web_url = f"http://localhost:{web_port}"
     api_url = f"http://{args.host}:{api_port}"
 
-    # Final in-place update
-    status.update(
-        ansi_c("  SloughGPT", _A.BOLD, log._colors),
-        f"  API: {api_url}",
-        f"  Web: {web_url}",
-        "",
-        f"  {ansi_c('ok', _A.GREEN, log._colors)} All services ready",
-        "",
-        f"  Press Ctrl+C to stop",
-    )
+    log.blank()
+    log.success("All services ready!")
+    log.blank()
+    log.key_value("API", api_url)
+    log.key_value("API Docs", f"{api_url}/docs")
+    log.key_value("Web UI", web_url)
+    log.blank()
+    log.key_value("", "Press Ctrl+C to stop")
+    log.blank()
 
     # ── Auto-open browser ────────────────────────────────────────
     def _open_browser():
@@ -1240,27 +965,24 @@ def _cmd_api_and_web(args):
             time.sleep(2)
             # API crashed (only if we own the process)
             if api_proc is not None and api_proc.poll() is not None:
-                api_log.error(f"Exited (code {api_proc.returncode})")
+                log.error(f"API server exited (code {api_proc.returncode})")
                 break
-            # Web crashed — restart it
-            if web_proc is not None and web_proc.poll() is not None:
+            # Web crashed — restart it (unless EADDRINUSE)
+            if web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
-                    # Auto-recover: find free port and restart
-                    new_port = _find_free_port(web_port + 1)
-                    web_log.warning(f"Port {web_port} in use, using {new_port}")
-                    web_port = new_port
-                    web_env["PORT"] = str(web_port)
-                web_log.warning(f"Exited (code {web_proc.returncode}), restarting...")
+                    _handle_eaddrinuse(web_port, "web")
+                    break
+                log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
                 web_proc = subprocess.Popen(
                     ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
                     cwd=str(server_js.parent if server_js.is_file() else web_root),
                     env=web_env,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                     text=True,
                 )
                 web_thread = threading.Thread(
-                    target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+                    target=_read_stream, args=(web_proc.stderr, web_lines, stop_event), daemon=True
                 )
                 web_thread.start()
     except KeyboardInterrupt:
