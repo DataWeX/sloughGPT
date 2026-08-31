@@ -761,12 +761,12 @@ def _colourise(line: str) -> str:
         return f"{_fg(FG.ERROR)}{line}{_RESET}"
     if "WARNING" in line or "WARN" in line:
         return f"{_fg(FG.WARNING)}{line}{_RESET}"
-    if "INFO" in line:
-        return f"{_fg(FG.INFO)}{line}{_RESET}"
     if "200" in line or "3xx" in line.lower() or "success" in line.lower():
         return f"{_fg(FG.SUCCESS)}{line}{_RESET}"
     if any(kw in line.lower() for kw in ("ready", "started", "listening", "running on", "complete", "compiled")):
         return f"{_fg(FG.SUCCESS)}{line}{_RESET}"
+    if "INFO" in line:
+        return f"{_fg(FG.INFO)}{line}{_RESET}"
     return f"{_fg(FG.WHITE)}{line}{_RESET}"
 
 

@@ -12,6 +12,7 @@ import threading
 import webbrowser
 from pathlib import Path
 from collections import deque
+from typing import Optional
 
 from domains.logging import get_global
 from domains.shared import find_server_python
@@ -181,12 +182,134 @@ def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
 _NOISE_PATTERNS = re.compile(
     r"(Network service crashed|ERROR:content/browser|DevTools listening on|"
     r"WARNING: GPU process|Browser cnx|佶息|ContentSecurityPolicy|"
-    r"Failed to load resource|favicon\.ico|net::ERR_)",
+    r"Failed to load resource|favicon\.ico|net::ERR_|"
+    r"Waiting for the debugger to disconnect|"
+    r"Debugger listening on|"
+    r"HTTPS_?|NODE_?)",
     re.IGNORECASE,
 )
 
+# ── Web log parsing ────────────────────────────────────────────────────
+# Next.js output is raw text.  These patterns extract structured data so
+# the web panel shows the same HH:MM:SS INF [TAG] format as the API.
 
-def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True, echo_event: threading.Event = None):
+_WEB_PATTERNS = [
+    # HTTP request: "GET /path 200 in 123ms" or "GET / 200 1ms"
+    ("http",
+     re.compile(
+         r"^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(\S+)\s+(\d{3})\s+(?:in\s+)?(\d+)\s*ms",
+         re.IGNORECASE,
+     )),
+    # Compilation: "✓ Compiled in 1567ms (496 modules)"
+    ("build",
+     re.compile(
+         r"^[✓✔]\s+Compiled\s+in\s+(\d+)ms\s+\((\d+)\s+modules?\)",
+         re.IGNORECASE,
+     )),
+    # Compilation (newer Next.js): "Compiled /path in 123ms (456 modules)"
+    ("build",
+     re.compile(
+         r"^Compiled\s+(\S+)\s+in\s+(\d+)ms\s+\((\d+)\s+modules?\)",
+     )),
+    # Compile error: "Failed to compile"
+    ("error",
+     re.compile(
+         r"^Failed to compile",
+         re.IGNORECASE,
+     )),
+    # Warning: "⚠ Warning: ..."
+    ("warn",
+     re.compile(
+         r"^[⚠!]\s*(Warning|WARN):\s*(.*)",
+         re.IGNORECASE,
+     )),
+    # Error lines starting with "Error" or "×"
+    ("error",
+     re.compile(
+         r"^[×x]\s*(Error|ERROR):\s*(.*)",
+         re.IGNORECASE,
+     )),
+    # Ready message: "Ready in 1234ms"
+    ("start",
+     re.compile(
+         r"^Ready\s+in\s+(\d+)\s*ms",
+         re.IGNORECASE,
+     )),
+    # Next.js info: "- Environments: ..."
+    ("info",
+     re.compile(
+         r"^-\s+Environments?:\s*(.*)",
+     )),
+    # Route info: "○ /path" or "● /path" or "ƒ /path"
+    ("info",
+     re.compile(
+         r"^[○●ƒ▸ሎ]\s+(/\S*)",
+     )),
+]
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
+
+def _emit_web_line(raw: str) -> Optional[str]:
+    """Parse a raw web server line and emit it as a structured log entry.
+
+    Returns the formatted log string if the line was parsed and emitted,
+    or None if it should be logged as-is (fallback to raw log.info).
+    """
+    clean = _strip_ansi(raw).strip()
+    if not clean:
+        return None
+
+    for tag, pattern in _WEB_PATTERNS:
+        m = pattern.search(clean)
+        if not m:
+            continue
+
+        groups = m.groups()
+
+        if tag == "http":
+            method, path, status, ms = groups
+            msg = f"{method} {path} {status}"
+            log.tag("HTTP").info(
+                msg,
+                method=method, path=path, status=int(status), time_ms=int(ms),
+            )
+            return msg
+        elif tag == "build":
+            if len(groups) == 2:
+                ms, modules = groups
+                msg = f"compiled in {ms}ms ({modules} modules)"
+                log.tag("BUILD").info(msg, time_ms=int(ms), modules=int(modules))
+            else:
+                route, ms, modules = groups
+                msg = f"compiled {route} in {ms}ms ({modules} modules)"
+                log.tag("BUILD").info(msg, route=route, time_ms=int(ms), modules=int(modules))
+            return msg
+        elif tag == "start":
+            ms = groups[0]
+            msg = f"web ready in {ms}ms"
+            log.tag("START").info(msg, time_ms=int(ms))
+            return msg
+        elif tag == "warn":
+            msg = groups[-1]
+            log.tag("WARN").info(msg)
+            return msg
+        elif tag == "error":
+            msg = groups[-1]
+            log.tag("ERROR").info(msg)
+            return msg
+        elif tag == "info":
+            msg = groups[0]
+            log.tag("INFRA").info(msg)
+            return msg
+
+    return None
+
+
+def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True, echo_event: threading.Event = None, web: bool = False):
     """Read lines from a subprocess stream into a deque until stop is set.
 
     Routes all output through the unified logger (log.info) instead of raw
@@ -212,7 +335,15 @@ def _read_stream(stream, lines: deque, stop: threading.Event, echo: bool = True,
                 if waiting and echo_event and echo_event.is_set():
                     waiting = False
                 if echo and not waiting and not _NOISE_PATTERNS.search(clean):
-                    log.info(clean)
+                    if web:
+                        formatted = _emit_web_line(clean)
+                        if formatted is not None:
+                            # Replace raw line in deque with formatted version
+                            lines[-1] = formatted
+                        else:
+                            log.info(clean)
+                    else:
+                        log.info(clean)
             else:
                 break
     except ValueError:
@@ -315,7 +446,8 @@ def cmd_dev(args):
                 text=True,
             )
         t = threading.Thread(
-            target=_read_stream, args=(proc.stdout, web_lines, stop_event), daemon=True
+            target=_read_stream, args=(proc.stdout, web_lines, stop_event),
+            kwargs={"web": True}, daemon=True,
         )
         t.start()
         procs["web"] = proc
@@ -954,7 +1086,7 @@ def _cmd_api_and_web(args):
 
     web_thread = threading.Thread(
         target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
-        kwargs={"echo_event": api_ready_event}, daemon=True,
+        kwargs={"echo_event": api_ready_event, "web": True}, daemon=True,
     )
     web_thread.start()
 
@@ -1001,7 +1133,7 @@ def _cmd_api_and_web(args):
                     )
                 threading.Thread(
                     target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
-                    kwargs={"echo_event": api_ready_event}, daemon=True,
+                    kwargs={"echo_event": api_ready_event, "web": True}, daemon=True,
                 ).start()
                 continue
             else:
@@ -1085,7 +1217,8 @@ def _cmd_api_and_web(args):
                     text=True,
                 )
                 web_thread = threading.Thread(
-                    target=_read_stream, args=(web_proc.stdout, web_lines, stop_event), daemon=True
+                    target=_read_stream, args=(web_proc.stdout, web_lines, stop_event),
+                    kwargs={"web": True}, daemon=True,
                 )
                 web_thread.start()
     except KeyboardInterrupt:
