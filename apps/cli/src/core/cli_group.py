@@ -1,13 +1,19 @@
 """
-SmartGroup — Click Group with fuzzy matching and polished error output.
+SmartGroup — Click Group with fuzzy matching, auto-correct, and polished error output.
 
-Provides better "did you mean?" suggestions, color-coded help, and
-a welcome banner for the CLI.
+Provides:
+- Fuzzy command matching with auto-correct prompt
+- Post-command suggestions for next steps
+- Frequency-ranked completion (learning from usage)
+- Color-coded help with grouped categories
 """
 
+import json
+import os
 import sys
 import click
 from difflib import get_close_matches
+from pathlib import Path
 from typing import List, Optional
 
 
@@ -30,44 +36,131 @@ def _p(text: str = "") -> None:
     sys.stdout.flush()
 
 
+# ── Usage tracker ───────────────────────────────────────────────────────
+
+_USAGE_PATH = Path.home() / ".config" / "sloughgpt" / "usage_stats.json"
+
+def _load_usage() -> dict:
+    try:
+        if _USAGE_PATH.exists():
+            return json.loads(_USAGE_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+def _save_usage(data: dict) -> None:
+    try:
+        _USAGE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _USAGE_PATH.write_text(json.dumps(data, indent=2))
+    except Exception:
+        pass
+
+def _record_usage(cmd_name: str) -> None:
+    usage = _load_usage()
+    usage[cmd_name] = usage.get(cmd_name, 0) + 1
+    _save_usage(usage)
+
+def _ranked_commands(commands: List[str]) -> List[str]:
+    usage = _load_usage()
+    return sorted(commands, key=lambda c: (-usage.get(c, 0), c))
+
+
+# ── Post-command suggestions ───────────────────────────────────────────
+
+_SUGGESTIONS = {
+    "model": ["model list", "model status", "model download"],
+    "train": ["train monitor", "train eval", "checkpoint list"],
+    "dataset": ["dataset list", "dataset stats", "dataset import"],
+    "knowledge": ["knowledge search", "knowledge gaps", "knowledge categorize"],
+    "memory": ["memory stats", "memory search", "memory list"],
+    "adapter": ["adapter list", "adapter info"],
+    "checkpoint": ["checkpoint list", "checkpoint load"],
+    "system": ["system status", "system health", "system doctor"],
+    "error": ["error recent", "error grouped", "error trends"],
+    "experiment": ["experiment list", "experiment create"],
+    "personality": ["personality list", "personality load"],
+    "agent": ["agent list", "agent create", "agent execute"],
+    "session": ["session list", "session messages"],
+    "feedback": ["feedback export", "feedback prepare"],
+    "images": ["images generate", "images gallery", "images styles"],
+    "companion": ["companion status", "companion chat"],
+    "learn": ["learn search", "learn status", "learn knowledge"],
+    "tokenizer": ["tokenizer tokenize", "tokenizer vocab", "tokenizer stats"],
+    "vector": ["vector init", "vector search", "vector stats"],
+    "collect": ["collect file", "collect url", "collect rss"],
+    "security": ["security audit", "security keys"],
+    "docstore": ["docstore collections", "docstore list"],
+    "feeds": ["feeds rss", "feeds json"],
+    "meta-weights": ["meta-weights get", "meta-weights stats"],
+    "multimodal": ["multimodal status", "multimodal dpo"],
+}
+
+def _suggest_next(cmd_name: str) -> Optional[str]:
+    suggestions = _SUGGESTIONS.get(cmd_name)
+    if suggestions:
+        return f"Tip: try `{'`, `'.join(suggestions[:2])}` next"
+    return None
+
+
 class SmartGroup(click.Group):
-    """Click Group with fuzzy command matching and polished error output.
+    """Click Group with fuzzy command matching, auto-correct, and polished error output.
 
     When a user types a command that doesn't exist, this group:
     1. Checks for exact substring matches first
     2. Falls back to fuzzy matching (difflib)
-    3. Shows a helpful error with suggestions
-    4. Displays available commands grouped by category
+    3. Prompts "Did you mean X? [Y/n]" for auto-correction
+    4. Shows a helpful error with suggestions if declined
+    5. Tracks usage frequency for ranked completion
     """
 
     def get_command(self, ctx: click.Context, cmd_name: str) -> Optional[click.Command]:
-        """Get command with fuzzy matching fallback."""
+        """Get command with fuzzy matching and auto-correct prompt."""
         # Try exact match first
         cmd = super().get_command(ctx, cmd_name)
         if cmd is not None:
+            _record_usage(cmd_name)
             return cmd
 
         # Try fuzzy matching
         matches = self._fuzzy_match(cmd_name)
         if matches:
-            # Return the best match
-            return super().get_command(ctx, matches[0])
+            best = matches[0]
+            # Prompt for auto-correction if TTY
+            if _TTY and sys.stdin.isatty():
+                _p()
+                _p(f"  {_c('?', _YELLOW)} {_c(f'Unknown command: ', _DIM)}{_c(cmd_name, _RED)}")
+                _p(f"  {_c('→', _GREEN)} {_c(f'Did you mean ', _DIM)}{_c(best, _CYAN + _BOLD)}{_c('?', _DIM)}")
+                try:
+                    answer = input("    [Y/n] ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = "n"
+                if answer in ("", "y", "yes"):
+                    _record_usage(best)
+                    return super().get_command(ctx, best)
+                # User declined — show full error
+                self._show_command_error(ctx, cmd_name)
+                ctx.exit(1)
+                return None
+            else:
+                # Non-interactive: auto-resolve silently
+                _record_usage(best)
+                return super().get_command(ctx, best)
 
         return None
 
     def _fuzzy_match(self, cmd_name: str) -> List[str]:
-        """Find close matches for a command name."""
+        """Find close matches for a command name, ranked by usage frequency."""
         # Get all available commands
         commands = list(self.commands.keys())
 
         # First: try substring matching
         substring_matches = [c for c in commands if cmd_name.lower() in c.lower()]
         if substring_matches:
-            return substring_matches
+            return _ranked_commands(substring_matches)
 
         # Second: try fuzzy matching with difflib
         close = get_close_matches(cmd_name, commands, n=3, cutoff=0.6)
-        return close
+        return _ranked_commands(close)
 
     def _show_command_error(self, ctx: click.Context, cmd_name: str) -> None:
         """Show a helpful error message when command is not found."""
@@ -88,6 +181,16 @@ class SmartGroup(click.Group):
             # Show tip
             _p(f"  {_c('Tip: Use \'sloughgpt --help\' to see all commands', _DIM)}")
             _p()
+
+    def invoke(self, ctx: click.Context) -> None:
+        """Invoke command and show post-command suggestions."""
+        super().invoke(ctx)
+        # Show next-step suggestion after successful command
+        cmd_name = ctx.protected_args[0] if ctx.protected_args else None
+        if cmd_name and _TTY:
+            suggestion = _suggest_next(cmd_name)
+            if suggestion:
+                _p(f"\n  {_c(suggestion, _DIM)}")
 
     def format_usage(self, ctx: click.Context, formatter: click.HelpFormatter) -> None:
         """Custom usage format with version info."""
