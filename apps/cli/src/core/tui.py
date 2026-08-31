@@ -737,17 +737,19 @@ class LiveDisplay:
         sys.stdout.flush()
 
     def update(self, renderable: str):
-        """Replace screen content with new renderable."""
-        sys.stdout.write(_MOVE_HOME)
+        """Replace screen content without causing terminal scroll."""
+        _refresh_size()
+        max_rows = _ROWS - 1
         lines = renderable.split("\n")
         prev_count = len(self._prev.split("\n")) if self._prev else 0
-        for line in lines:
-            sys.stdout.write(line + "\n")
-        # Clear leftover lines from previous render
-        remaining = max(0, prev_count - len(lines))
-        for _ in range(remaining + 2):
-            sys.stdout.write(_CLEAR_LINE + "\n")
-        sys.stdout.write(_MOVE_HOME)
+        visible = lines[:max_rows]
+        buf = []
+        for i, line in enumerate(visible, 1):
+            buf.append(f"\033[{i};1H{line}\033[K")
+        for i in range(len(visible) + 1, min(prev_count, max_rows) + 1):
+            buf.append(f"\033[{i};1H\033[K")
+        buf.append(f"\033[{len(visible) + 1};1H\033[K")
+        sys.stdout.write("".join(buf))
         self._prev = renderable
         sys.stdout.flush()
 
@@ -916,54 +918,97 @@ class DevDashboard:
 
         m: dict[str, float] = {"cpu": 0.0, "memory": 0.0, "disk": 0.0}
 
-        # CPU via top (macOS) — fast single sample
-        try:
-            out = subprocess.check_output(
-                ["top", "-l", "1", "-n", "0"],
-                timeout=3, stderr=subprocess.DEVNULL, text=True,
-            )
-            for line in out.split("\n"):
-                if "CPU usage" in line:
-                    # "CPU usage: 12.23% user, 15.45% sys, 72.32% idle"
-                    parts = line.replace(",", "").split()
-                    for i, p in enumerate(parts):
-                        if p == "user" and i > 0:
-                            user = float(parts[i - 1].rstrip("%"))
-                        elif p == "sys" and i > 0:
-                            sys_v = float(parts[i - 1].rstrip("%"))
-                    m["cpu"] = min(100, user + sys_v)
-                    break
-        except Exception:
-            pass
+        import platform
+        is_linux = platform.system() == "Linux"
 
-        # Memory via vm_stat (macOS)
-        try:
-            out = subprocess.check_output(
-                ["vm_stat"],
-                timeout=3, stderr=subprocess.DEVNULL, text=True,
-            )
-            pages = {}
-            for line in out.split("\n"):
-                if ":" in line:
-                    key, val = line.split(":", 1)
-                    val = val.strip().rstrip(".")
-                    try:
-                        pages[key.strip()] = int(val)
-                    except ValueError:
-                        pass
-            active = pages.get("Pages active", 0)
-            wired = pages.get("Pages wired down", 0)
-            compressed = pages.get("Pages stored in compressor", 0)
-            free = pages.get("Pages free", 0)
-            # also "Pages occupied by compressor" sometimes
-            total = active + wired + compressed + free
-            if total > 0:
-                used = active + wired + compressed
-                m["memory"] = min(100, used / total * 100)
-        except Exception:
-            pass
+        if is_linux:
+            # CPU via /proc/stat (two samples 0.1s apart)
+            try:
+                with open("/proc/stat") as f:
+                    line = f.readline()
+                parts = line.split()
+                # user, nice, system, idle, iowait, irq, softirq, steal
+                vals = [int(x) for x in parts[1:9]]
+                idle1 = vals[3] + vals[4]
+                total1 = sum(vals)
+                time.sleep(0.1)
+                with open("/proc/stat") as f:
+                    line = f.readline()
+                parts = line.split()
+                vals = [int(x) for x in parts[1:9]]
+                idle2 = vals[3] + vals[4]
+                total2 = sum(vals)
+                d_idle = idle2 - idle1
+                d_total = total2 - total1
+                if d_total > 0:
+                    m["cpu"] = min(100, max(0, (1 - d_idle / d_total) * 100))
+            except Exception:
+                pass
 
-        # Disk via df (current directory)
+            # Memory via /proc/meminfo
+            try:
+                info = {}
+                with open("/proc/meminfo") as f:
+                    for line in f:
+                        if ":" in line:
+                            key, val = line.split(":", 1)
+                            # values are in kB, strip " kB"
+                            info[key.strip()] = int(val.split()[0])
+                total = info.get("MemTotal", 0)
+                available = info.get("MemAvailable", info.get("MemFree", 0))
+                if total > 0:
+                    used = total - available
+                    m["memory"] = min(100, used / total * 100)
+            except Exception:
+                pass
+        else:
+            # macOS — CPU via top
+            try:
+                out = subprocess.check_output(
+                    ["top", "-l", "1", "-n", "0"],
+                    timeout=3, stderr=subprocess.DEVNULL, text=True,
+                )
+                user = sys_v = 0.0
+                for line in out.split("\n"):
+                    if "CPU usage" in line:
+                        parts = line.replace(",", "").split()
+                        for i, p in enumerate(parts):
+                            if p == "user" and i > 0:
+                                user = float(parts[i - 1].rstrip("%"))
+                            elif p == "sys" and i > 0:
+                                sys_v = float(parts[i - 1].rstrip("%"))
+                        m["cpu"] = min(100, user + sys_v)
+                        break
+            except Exception:
+                pass
+
+            # Memory via vm_stat
+            try:
+                out = subprocess.check_output(
+                    ["vm_stat"],
+                    timeout=3, stderr=subprocess.DEVNULL, text=True,
+                )
+                pages = {}
+                for line in out.split("\n"):
+                    if ":" in line:
+                        key, val = line.split(":", 1)
+                        val = val.strip().rstrip(".")
+                        try:
+                            pages[key.strip()] = int(val)
+                        except ValueError:
+                            pass
+                active = pages.get("Pages active", 0)
+                wired = pages.get("Pages wired down", 0)
+                compressed = pages.get("Pages stored in compressor", 0)
+                free = pages.get("Pages free", 0)
+                total = active + wired + compressed + free
+                if total > 0:
+                    used = active + wired + compressed
+                    m["memory"] = min(100, used / total * 100)
+            except Exception:
+                pass
+
+        # Disk via df (works on both Linux and macOS)
         try:
             out = subprocess.check_output(
                 ["df", "-k", "."],

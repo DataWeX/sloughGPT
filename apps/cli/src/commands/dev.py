@@ -726,6 +726,12 @@ def _cmd_api_and_web(args):
     log.key_value("API", f"http://{args.host}:{api_port}")
     log.key_value("Web", f"http://localhost:{web_port}")
 
+    # ── Reuse existing healthy API if running ────────────────────
+    api_reused = False
+    if _check_api_ready(api_port):
+        log.success(f"API already healthy on :{api_port} (reusing)")
+        api_reused = True
+
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
 
@@ -761,25 +767,31 @@ def _cmd_api_and_web(args):
 
     # ── Start FastAPI server ─────────────────────────────────────
     python = Path(find_server_python(root))
-    api_proc = subprocess.Popen(
-        [str(python), "-m", "uvicorn", "apps.api.server.main:app",
-         "--host", args.host, "--port", str(api_port)],
-        cwd=str(root),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    api_thread = threading.Thread(
-        target=_read_stream, args=(api_proc.stdout, api_lines, stop_event),
-        kwargs={"echo_event": api_ready_event}, daemon=True,
-    )
-    api_thread.start()
+    api_proc = None
+    if not api_reused:
+        api_proc = subprocess.Popen(
+            [str(python), "-m", "uvicorn", "apps.api.server.main:app",
+             "--host", args.host, "--port", str(api_port)],
+            cwd=str(root),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        api_thread = threading.Thread(
+            target=_read_stream, args=(api_proc.stdout, api_lines, stop_event),
+            kwargs={"echo_event": api_ready_event}, daemon=True,
+        )
+        api_thread.start()
 
     # ── Build standalone if needed ──────────────────────────────
     web_root = root / "apps" / "web"
     standalone_dir = web_root / ".next" / "standalone"
-    server_js = standalone_dir / "server.js"
+    server_js_candidates = [
+        standalone_dir / "server.js",
+        standalone_dir / "apps" / "web" / "server.js",
+    ]
+    server_js = next((p for p in server_js_candidates if p.is_file()), server_js_candidates[0])
 
     if not server_js.is_file():
         log.step("Building Next.js standalone (first time)...")
@@ -813,15 +825,16 @@ def _cmd_api_and_web(args):
         log.success("Build complete")
 
     # ── Copy static assets for standalone ───────────────────────
+    standalone_root = server_js.parent
     static_src = web_root / ".next" / "static"
-    static_dst = standalone_dir / ".next" / "static"
+    static_dst = standalone_root / ".next" / "static"
     if static_src.is_dir() and not static_dst.is_dir():
         import shutil
         static_dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(static_src, static_dst)
 
     public_src = web_root / "public"
-    public_dst = standalone_dir / "public"
+    public_dst = standalone_root / "public"
     if public_src.is_dir() and not public_dst.is_dir():
         import shutil
         for dirpath, dirnames, filenames in os.walk(public_src, followlinks=False):
@@ -846,7 +859,7 @@ def _cmd_api_and_web(args):
         log.step(f"Starting Web (standalone) on port {web_port}...")
         web_proc = subprocess.Popen(
             ["node", "server.js"],
-            cwd=str(standalone_dir),
+            cwd=str(server_js.parent),
             env=web_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -950,8 +963,8 @@ def _cmd_api_and_web(args):
     try:
         while not shutdown[0]:
             time.sleep(2)
-            # API crashed
-            if api_proc.poll() is not None:
+            # API crashed (only if we own the process)
+            if api_proc is not None and api_proc.poll() is not None:
                 log.error(f"API server exited (code {api_proc.returncode})")
                 break
             # Web crashed — restart it (unless EADDRINUSE)
@@ -962,7 +975,7 @@ def _cmd_api_and_web(args):
                 log.warning(f"Web server exited (code {web_proc.returncode}), restarting...")
                 web_proc = subprocess.Popen(
                     ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
-                    cwd=str(standalone_dir if server_js.is_file() else web_root),
+                    cwd=str(server_js.parent if server_js.is_file() else web_root),
                     env=web_env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
