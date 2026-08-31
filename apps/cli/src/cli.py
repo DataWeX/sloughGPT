@@ -1,5 +1,5 @@
 """
-SloughGPT CLI — Click-powered entry point with ANSI output.
+SloughGPT CLI — pure Python entry point with ANSI output.
 
 Commands organized into logical groups. All delegate to existing
 cmd_* functions in commands/ modules.
@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-import click
+from core import slo_cli as click
 
 # Ensure both CLI core and core-py domains are on the path
 _CLI_DIR = Path(__file__).resolve().parent
@@ -41,7 +41,6 @@ from core.version import format_version_display  # noqa: E402
 from domains.logging import get_global  # noqa: E402
 
 log = get_global()
-from core.cli_group import SmartGroup  # noqa: E402
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -51,6 +50,36 @@ from utils.helpers import chat_repository_root as _chat_repository_root
 def _ns(**kwargs) -> SimpleNamespace:
     """Build a SimpleNamespace from keyword arguments."""
     return SimpleNamespace(**kwargs)
+
+
+def _output(ctx, data, *, plain=None):
+    """Unified output helper: --json prints data dict, otherwise prints plain text.
+
+    Usage in commands:
+        _output(ctx, {"models": [...]}, plain=f"Found {len(models)} models")
+    """
+    import json as _json
+
+    if ctx.obj.get("json"):
+        click.echo(_json.dumps(data, indent=2, default=str))
+    elif plain is not None:
+        click.echo(plain)
+    else:
+        for k, v in data.items():
+            click.echo(f"{k}: {v}")
+
+
+def _confirm(ctx, message, *, force=False):
+    """Prompt for confirmation unless --quiet or force=True."""
+    if force or ctx.obj.get("quiet"):
+        return True
+    return click.confirm(message)
+
+
+def _verbose(ctx, *args):
+    """Print only if not --quiet."""
+    if not ctx.obj.get("quiet"):
+        click.echo(" ".join(str(a) for a in args))
 
 
 # ── Docker helpers ────────────────────────────────────────────────────
@@ -108,17 +137,30 @@ def _docker_action(action: str, a):
 # ── Top-level CLI ─────────────────────────────────────────────────────
 
 
-@click.group(cls=SmartGroup, invoke_without_command=True)
+@click.group(invoke_without_command=True)
+@click.version_option(package_name="sloughgpt", prog_name="sloughgpt")
 @click.option("--host", default="localhost", help="API hostname", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
 @click.option("-c", "--config", default="config.yaml", help="Config path", show_default=True)
+@click.option("--json", "output_json", is_flag=True, help="JSON output for commands")
+@click.option("--no-color", is_flag=True, help="Disable ANSI color output")
+@click.option("--quiet", "-q", is_flag=True, help="Suppress non-essential output")
+@click.option("--timeout", default=10, type=int, help="HTTP timeout in seconds", show_default=True)
 @click.pass_context
-def cli(ctx, host: str, port: int, config: str):
+def cli(ctx, host: str, port: int, config: str, output_json: bool, no_color: bool, quiet: bool, timeout: int):
     """SloughGPT CLI — train, chat, serve, and manage models."""
     ctx.ensure_object(dict)
     ctx.obj["host"] = host
     ctx.obj["port"] = port
     ctx.obj["config"] = config
+    ctx.obj["json"] = output_json
+    ctx.obj["no_color"] = no_color
+    ctx.obj["quiet"] = quiet
+    ctx.obj["timeout"] = timeout
+
+    if no_color:
+        os.environ["NO_COLOR"] = "1"
+        os.environ["SLO_NO_COLOR"] = "1"
 
     if ctx.invoked_subcommand is None:
         _show_welcome_banner()
@@ -146,6 +188,7 @@ def _show_welcome_banner():
     _GREEN = "\033[32m"
     _YELLOW = "\033[33m"
     _RED = "\033[31m"
+    _MAGENTA = "\033[35m"
 
     _write = sys.stdout.write
     _flush = sys.stdout.flush
@@ -154,9 +197,21 @@ def _show_welcome_banner():
         _write(text + "\n")
         _flush()
 
+    # ── ASCII art header ──────────────────────────────────
     _line()
-    _line(f"  {_c('SloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
-    _line("  " + "─" * 50)
+    _line(f"  {_c('  ┌──────────────────────────────────────┐', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('   ████████╗██╗     ██████╗            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('   ╚══██╔══╝██║     ██╔═══██╗           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ██║     ██║   ██║           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ██║   ███████╗╚██████╔╝           ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('      ╚═╝   ╚══════╝ ╚═════╝            ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  │', _DIM)}{_c('                                      ', _MAGENTA + _BOLD)}{_c('│', _DIM)}")
+    _line(f"  {_c('  └──────────────────────────────────────┘', _DIM)}")
+    _line()
+    _line(f"  {_c('  sloughGPT', _BOLD + _CYAN)}  {_c(version, _DIM)}")
+    _line(f"  {_c('  ─────────────────────────────────────────', _DIM)}")
     _line()
 
     # Quick start commands
@@ -420,26 +475,29 @@ def model(ctx):
 @click.pass_context
 def model_list(ctx):
     from commands.models import cmd_models
-    cmd_models(_ns())
+    cmd_models(_ns(json_output=ctx.obj.get("json")))
 
 
 @model.command("status", help="Show cached/downloaded models with sizes")
-def model_status():
+@click.pass_context
+def model_status(ctx):
     from commands.models import _cmd_models_status
-    _cmd_models_status(_ns())
+    _cmd_models_status(_ns(json_output=ctx.obj.get("json")))
 
 
 @model.command("info", help="Show checkpoint info")
 @click.argument("checkpoint", default="models/sloughgpt.soul")
-def model_info(checkpoint):
+@click.pass_context
+def model_info(ctx, checkpoint):
     from commands.models import _cmd_models_info
-    _cmd_models_info(_ns(model=checkpoint))
+    _cmd_models_info(_ns(model=checkpoint, json_output=ctx.obj.get("json")))
 
 
 @model.command("download", help="Download model from HuggingFace")
 @click.argument("model_id", required=False, default=None)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def model_download(model_id, yes):
+@click.pass_context
+def model_download(ctx, model_id, yes):
     from commands.models import _cmd_models_download
     _cmd_models_download(_ns(model_id=model_id, yes=yes))
 
@@ -475,16 +533,19 @@ def model_export(checkpoint, output, fmt, quantize, seq_len, opset, n_ctx, soul_
 @click.option("--runs", "-r", default=10, type=int, help="Number of runs")
 @click.option("--tokens", "-k", default=50, type=int, help="Max new tokens")
 @click.option("--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt")
-def model_benchmark(checkpoint, device, test, runs, tokens, prompt):
+@click.pass_context
+def model_benchmark(ctx, checkpoint, device, test, runs, tokens, prompt):
     from commands.models import cmd_benchmark
-    args = _ns(model=checkpoint, device=device, test=test, runs=runs, tokens=tokens, prompt=prompt)
+    args = _ns(model=checkpoint, device=device, test=test, runs=runs, tokens=tokens, prompt=prompt,
+              json_output=ctx.obj.get("json"))
     cmd_benchmark(args)
 
 
 @model.command("compare", help="Compare models or benchmarks")
-def model_compare():
+@click.pass_context
+def model_compare(ctx):
     from commands.models import _cmd_models_compare
-    _cmd_models_compare(_ns())
+    _cmd_models_compare(_ns(json_output=ctx.obj.get("json")))
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -499,16 +560,18 @@ def dataset(ctx):
 
 
 @dataset.command("list", help="List available datasets")
-def dataset_list():
+@click.pass_context
+def dataset_list(ctx):
     from commands.data import cmd_datasets
-    cmd_datasets(_ns())
+    cmd_datasets(_ns(json_output=ctx.obj.get("json")))
 
 
 @dataset.command("stats", help="Show dataset statistics")
 @click.argument("name")
-def dataset_stats(name):
+@click.pass_context
+def dataset_stats(ctx, name):
     from commands.data import cmd_dataset_stats
-    args = _ns(name=name)
+    args = _ns(name=name, json_output=ctx.obj.get("json"))
     cmd_dataset_stats(args)
 
 
@@ -516,9 +579,10 @@ def dataset_stats(name):
 @click.argument("query")
 @click.option("--limit", "-n", default=10, type=int, help="Max results")
 @click.option("--source", type=click.Choice(["hf", "github"]), default="hf")
-def dataset_search(query, limit, source):
+@click.pass_context
+def dataset_search(ctx, query, limit, source):
     from commands.data import cmd_dataset_search
-    args = _ns(query=query, limit=limit, source=source)
+    args = _ns(query=query, limit=limit, source=source, json_output=ctx.obj.get("json"))
     cmd_dataset_search(args)
 
 
@@ -1004,9 +1068,13 @@ def token_tree_load(ctx, name):
 
 @token_tree.command("delete", help="Delete a saved token tree by name")
 @click.argument("name")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
 @click.pass_context
-def token_tree_delete(ctx, name):
+def token_tree_delete(ctx, name, dry_run):
     from commands.token_tree import cmd_token_tree_delete
+    if dry_run:
+        log.info(f"Would delete token tree: {name}")
+        return
     cmd_token_tree_delete(_ns(name=name))
 
 
@@ -1038,7 +1106,7 @@ def checkpoint_list(ctx, sort, json_output):
     resp = requests.get(f"{base_url}/training/checkpoints", timeout=10)
     if resp.status_code != 200:
         log.error(f"Failed to list checkpoints: {resp.text}")
-        return
+        sys.exit(1)
     checkpoints = resp.json()
     if not checkpoints:
         log.info("No checkpoints found")
@@ -1080,33 +1148,34 @@ def checkpoint_load(ctx, name):
                 log.key_value(k, str(v))
     else:
         log.error(f"Failed to load: {resp.text}")
+        sys.exit(1)
 
 
 @checkpoint.command("delete", help="Delete a training checkpoint")
 @click.argument("name")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
 @click.pass_context
-def checkpoint_delete(ctx, name, yes):
+def checkpoint_delete(ctx, name, yes, dry_run):
     """Delete a training checkpoint.
 
     \b
     Example:
       sloughgpt checkpoint delete my-checkpoint.soul
     """
-    if not yes:
+    if not yes and not dry_run:
         click.confirm(f"Delete checkpoint '{name}'?", abort=True)
     import requests
     base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+    if dry_run:
+        log.info(f"Would delete: {name}")
+        return
     resp = requests.delete(f"{base_url}/training/checkpoints/{name}", timeout=10)
     if resp.status_code == 200:
         log.success(f"Deleted: {name}")
     else:
         log.error(f"Failed to delete: {resp.text}")
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# personality  — list, load, info, create, export
-# ═══════════════════════════════════════════════════════════════════════
+        sys.exit(1)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1238,13 +1307,243 @@ def knowledge_ingest(ctx, texts, topic, file_path):
     if not items:
         log.error("No texts to ingest")
         return
+    timeout = ctx.obj.get("timeout", 10)
     r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/bulk-ingest",
-                      json={"items": items, "topic": topic})
+                      json={"items": items, "topic": topic}, timeout=timeout)
     if r.status_code != 200:
         log.error(f"Ingest failed: {r.text}")
         return
     data = r.json()
     log.success(f"Bulk ingest: {data['added']} added, {data['skipped']} skipped, {data['errors']} errors")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# experiment  — list, create, info, delete, metrics
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="ML experiment tracking — create, list, log metrics")
+def experiment():
+    pass
+
+
+@experiment.command("list", help="List all experiments")
+@click.pass_context
+def experiment_list(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to list experiments: {r.text}")
+        return
+    data = r.json()
+    exps = data.get("data", {}).get("experiments", [])
+    if not exps:
+        log.info("No experiments found")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"experiments": exps})
+    else:
+        log.header("Experiments")
+        for exp in exps:
+            log.info(f"  {exp}")
+
+
+@experiment.command("create", help="Create a new experiment")
+@click.argument("name")
+@click.pass_context
+def experiment_create(ctx, name):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments",
+                      json={"name": name}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to create experiment: {r.text}")
+        return
+    data = r.json().get("data", {})
+    log.success(f"Created experiment: {data.get('id', name)}")
+
+
+@experiment.command("info", help="Show experiment details")
+@click.argument("experiment_id")
+@click.pass_context
+def experiment_info(ctx, experiment_id):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Experiment not found: {r.text}")
+        return
+    data = r.json().get("data", {})
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        log.header(f"Experiment: {experiment_id}")
+        for k, v in data.items():
+            log.key_value(k, str(v))
+
+
+@experiment.command("delete", help="Delete an experiment")
+@click.argument("experiment_id")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
+@click.pass_context
+def experiment_delete(ctx, experiment_id, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info(f"Would delete experiment: {experiment_id}")
+        return
+    if not yes:
+        click.confirm(f"Delete experiment '{experiment_id}'?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}", timeout=timeout)
+    if r.status_code == 200:
+        log.success(f"Deleted experiment: {experiment_id}")
+    else:
+        log.error(f"Failed to delete: {r.text}")
+
+
+@experiment.command("metrics", help="Show experiment metrics")
+@click.argument("experiment_id")
+@click.pass_context
+def experiment_metrics(ctx, experiment_id):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}/data", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to get metrics: {r.text}")
+        return
+    data = r.json().get("data", {})
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        log.header(f"Metrics: {experiment_id}")
+        metrics = data.get("metrics", [])
+        if not metrics:
+            log.info("No metrics recorded yet")
+            return
+        for m in metrics[-20:]:
+            log.info(f"  {m.get('step', '?')}: {m.get('key', '?')}={m.get('value', '?')}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# error  — recent, grouped, trends, clear
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Error monitoring — recent, grouped, trends, clear")
+def error():
+    pass
+
+
+@error.command("recent", help="Show recent errors")
+@click.option("--limit", "-n", default=20, type=int, help="Max errors to show")
+@click.pass_context
+def error_recent(ctx, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/recent?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch errors: {r.text}")
+        return
+    data = r.json().get("data", {})
+    errors = data.get("errors", [])
+    if not errors:
+        log.info("No recent errors")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"errors": errors})
+    else:
+        log.header(f"Recent Errors ({len(errors)})")
+        for e in errors:
+            ts = e.get("timestamp", "?")[:19]
+            msg = e.get("message", "?")[:80]
+            log.info(f"  [{ts}] {msg}")
+
+
+@error.command("grouped", help="Show errors grouped by message")
+@click.pass_context
+def error_grouped(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/grouped", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch grouped errors: {r.text}")
+        return
+    data = r.json().get("data", {})
+    groups = data.get("groups", [])
+    if not groups:
+        log.info("No errors grouped")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"groups": groups})
+    else:
+        log.header(f"Error Groups ({len(groups)})")
+        for g in groups:
+            count = g.get("count", 0)
+            msg = g.get("message", "?")[:70]
+            log.info(f"  [{count}x] {msg}")
+
+
+@error.command("trends", help="Show error trends (last 24h)")
+@click.pass_context
+def error_trends(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/trends", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch trends: {r.text}")
+        return
+    data = r.json().get("data", {})
+    trends = data.get("trends", [])
+    if not trends:
+        log.info("No error trends")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"trends": trends})
+    else:
+        log.header("Error Trends (24h)")
+        for t in trends:
+            hour = t.get("hour", "?")
+            count = t.get("count", 0)
+            bar = "#" * min(count, 40)
+            log.info(f"  {hour}: {bar} ({count})")
+
+
+@error.command("clear", help="Clear all errors")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be cleared")
+@click.pass_context
+def error_clear(ctx, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info("Would clear all errors")
+        return
+    if not yes:
+        click.confirm("Clear all errors?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/clear", timeout=timeout)
+    if r.status_code == 200:
+        log.success("Errors cleared")
+    else:
+        log.error(f"Failed to clear: {r.text}")
+
+
+@error.command("unread", help="Show unread error count")
+@click.pass_context
+def error_unread(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/errors/unread", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to fetch unread count: {r.text}")
+        return
+    data = r.json().get("data", {})
+    count = data.get("count", 0)
+    if ctx.obj.get("json"):
+        _output(ctx, {"unread": count})
+    else:
+        log.info(f"Unread errors: {count}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1311,8 +1610,12 @@ def memory_remember(user_message, assistant_response):
 
 @memory.command("clear", help="Remove all stored memory")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-def memory_clear(yes):
+@click.option("--dry-run", is_flag=True, help="Show what would be cleared without clearing")
+def memory_clear(yes, dry_run):
     from commands.memory import cmd_memory_clear
+    if dry_run:
+        log.info("Would clear all stored memory")
+        return
     cmd_memory_clear(_ns(yes=yes))
 
 
@@ -1413,8 +1716,12 @@ def adapter_merge(users):
 
 @adapter.command("delete", help="Delete adapter")
 @click.argument("user")
-def adapter_delete(user):
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
+def adapter_delete(user, dry_run):
     from commands.train import _cmd_user_adapters
+    if dry_run:
+        log.info(f"Would delete adapter for user: {user}")
+        return
     _cmd_user_adapters(_ns(action="delete", user=user))
 
 
@@ -1448,6 +1755,435 @@ def feedback_prepare(fmt, output, stats_only):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# agent  — list, create, execute, orchestrate
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Manage and execute AI agents")
+def agent():
+    pass
+
+
+@agent.command("list", help="List all agents")
+@click.pass_context
+def agent_list(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/agents", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to list agents: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    agents = data.get("data", data) if isinstance(data, dict) else data
+    if isinstance(agents, dict):
+        agents = agents.get("agents", [])
+    if not agents:
+        log.info("No agents found")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"agents": agents})
+    else:
+        log.header("Agents")
+        for a in agents:
+            name = a.get("name", a.get("id", "?"))
+            desc = a.get("description", "")[:60]
+            log.info(f"  {name} — {desc}")
+
+
+@agent.command("create", help="Create a new agent")
+@click.argument("name")
+@click.option("--description", "-d", default="", help="Agent description")
+@click.option("--instructions", "-i", default="", help="System instructions")
+@click.pass_context
+def agent_create(ctx, name, description, instructions):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/agents",
+                      json={"name": name, "description": description, "instructions": instructions},
+                      timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to create agent: {r.text}")
+        sys.exit(1)
+    log.success(f"Created agent: {name}")
+
+
+@agent.command("execute", help="Execute a task with an agent")
+@click.argument("agent_id")
+@click.argument("request")
+@click.pass_context
+def agent_execute(ctx, agent_id, request):
+    import requests
+    timeout = ctx.obj.get("timeout", 30)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/agents/{agent_id}/execute",
+                      json={"request": request}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Execution failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        result = data.get("data", data).get("result", str(data))
+        log.info(result)
+
+
+@agent.command("orchestrate", help="Multi-agent orchestration")
+@click.argument("goal")
+@click.option("--context", "-c", default="", help="Additional context")
+@click.option("--agents", default="", help="Comma-separated agent IDs")
+@click.pass_context
+def agent_orchestrate(ctx, goal, context, agents):
+    import requests
+    agent_ids = [a.strip() for a in agents.split(",") if a.strip()] if agents else []
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/agents/orchestrate",
+                      json={"goal": goal, "context": context, "agent_ids": agent_ids},
+                      timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Orchestration failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        result = data.get("data", data).get("result", str(data))
+        log.info(result)
+
+
+@agent.command("delete", help="Delete an agent")
+@click.argument("agent_id")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
+@click.pass_context
+def agent_delete(ctx, agent_id, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info(f"Would delete agent: {agent_id}")
+        return
+    if not yes:
+        click.confirm(f"Delete agent '{agent_id}'?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/agents/{agent_id}", timeout=timeout)
+    if r.status_code == 200:
+        log.success(f"Deleted agent: {agent_id}")
+    else:
+        log.error(f"Failed to delete: {r.text}")
+        sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# session  — list, messages, search, inspector
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Chat session management")
+def session():
+    pass
+
+
+@session.command("list", help="List chat sessions")
+@click.pass_context
+def session_list(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/chat/sessions", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to list sessions: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    sessions = data if isinstance(data, list) else data.get("sessions", [])
+    if not sessions:
+        log.info("No sessions found")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"sessions": sessions})
+    else:
+        log.header("Chat Sessions")
+        for s in sessions:
+            name = s.get("name", s.get("id", "?"))
+            log.info(f"  {name}")
+
+
+@session.command("messages", help="Show messages in a session")
+@click.argument("session_id")
+@click.option("--limit", "-n", default=20, type=int, help="Max messages")
+@click.pass_context
+def session_messages(ctx, session_id, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/session/{session_id}/messages?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed to get messages: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    messages = data.get("messages", [])
+    if not messages:
+        log.info("No messages in session")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"messages": messages})
+    else:
+        log.header(f"Session: {session_id}")
+        for m in messages:
+            role = m.get("role", "?")
+            content = m.get("content", "")[:100]
+            log.info(f"  [{role}] {content}")
+
+
+@session.command("search", help="Search chat sessions")
+@click.argument("query")
+@click.option("--limit", "-n", default=10, type=int, help="Max results")
+@click.pass_context
+def session_search(ctx, query, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/chat/sessions/search?q={query}&limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Search failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    results = data if isinstance(data, list) else data.get("results", [])
+    if not results:
+        log.info("No matching sessions")
+        return
+    if ctx.obj.get("json"):
+        _output(ctx, {"results": results})
+    else:
+        log.header(f"Search: {query}")
+        for s in results:
+            name = s.get("name", s.get("id", "?"))
+            log.info(f"  {name}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# tokenizer  — tokenize, detokenize, analyze, vocab, merges, train, stats
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Tokenizer management and text analysis")
+def tokenizer():
+    pass
+
+
+@tokenizer.command("tokenize", help="Tokenize text")
+@click.argument("text")
+@click.pass_context
+def tokenizer_tokenize(ctx, text):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/tokenize",
+                      json={"text": text}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Tokenize failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        tokens = data.get("data", data).get("tokens", [])
+        log.info(f"Tokens: {tokens}")
+        log.info(f"Count: {len(tokens)}")
+
+
+@tokenizer.command("detokenize", help="Convert token IDs back to text")
+@click.argument("ids")
+@click.pass_context
+def tokenizer_detokenize(ctx, ids):
+    import requests
+    id_list = [int(x.strip()) for x in ids.split(",")]
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/detokenize",
+                      json={"ids": id_list}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Detokenize failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    text = data.get("data", data).get("text", "")
+    log.info(f"Text: {text}")
+
+
+@tokenizer.command("analyze", help="Analyze token distribution in text")
+@click.argument("text")
+@click.pass_context
+def tokenizer_analyze(ctx, text):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/analyze",
+                      json={"texts": [text]}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Analyze failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        info = data.get("data", data)
+        for k, v in info.items():
+            if k != "texts":
+                log.info(f"  {k}: {v}")
+
+
+@tokenizer.command("vocab", help="Show vocabulary")
+@click.option("--limit", "-n", default=20, type=int, help="Max entries")
+@click.pass_context
+def tokenizer_vocab(ctx, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/vocab?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Vocab failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    vocab = data.get("data", data).get("vocab", {})
+    if ctx.obj.get("json"):
+        _output(ctx, {"vocab": vocab})
+    else:
+        log.header("Vocabulary")
+        for token_id, token_str in vocab.items():
+            log.info(f"  {token_id}: {token_str}")
+
+
+@tokenizer.command("merges", help="Show BPE merge rules")
+@click.option("--limit", "-n", default=20, type=int, help="Max merges")
+@click.pass_context
+def tokenizer_merges(ctx, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/merges?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Merges failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    merges = data.get("data", data).get("merges", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"merges": merges})
+    else:
+        log.header("BPE Merges")
+        for m in merges:
+            log.info(f"  {m}")
+
+
+@tokenizer.command("train", help="Train tokenizer on texts")
+@click.option("--vocab-size", type=int, default=512, help="Vocabulary size")
+@click.option("--texts", default="", help="Comma-separated training texts")
+@click.pass_context
+def tokenizer_train(ctx, vocab_size, texts):
+    import requests
+    text_list = [t.strip() for t in texts.split(",") if t.strip()] if texts else []
+    timeout = ctx.obj.get("timeout", 30)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/train",
+                      json={"vocab_size": vocab_size, "texts": text_list}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Train failed: {r.text}")
+        sys.exit(1)
+    log.success("Tokenizer trained")
+
+
+@tokenizer.command("stats", help="Show tokenizer statistics")
+@click.pass_context
+def tokenizer_stats(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/tokenizer/stats", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Stats failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Tokenizer Stats")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# vector  — init, upsert, search, stats
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Vector store for semantic search")
+def vector():
+    pass
+
+
+@vector.command("init", help="Initialize vector store")
+@click.option("--provider", default="in_memory", help="Provider: in_memory, chromadb")
+@click.option("--dimension", type=int, default=384, help="Embedding dimension")
+@click.pass_context
+def vector_init(ctx, provider, dimension):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/vector/init",
+                      json={"provider": provider, "dimension": dimension}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Init failed: {r.text}")
+        sys.exit(1)
+    log.success(f"Vector store initialized: {provider} (dim={dimension})")
+
+
+@vector.command("upsert", help="Insert or update vectors")
+@click.argument("texts")
+@click.option("--ids", default="", help="Comma-separated IDs")
+@click.pass_context
+def vector_upsert(ctx, texts, ids):
+    import requests
+    text_list = [t.strip() for t in texts.split(",") if t.strip()]
+    id_list = [i.strip() for i in ids.split(",") if i.strip()] if ids else None
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/vector/upsert",
+                      json={"texts": text_list, "ids": id_list}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Upsert failed: {r.text}")
+        sys.exit(1)
+    log.success(f"Upserted {len(text_list)} vectors")
+
+
+@vector.command("search", help="Semantic search")
+@click.argument("query")
+@click.option("--top-k", type=int, default=5, help="Number of results")
+@click.pass_context
+def vector_search(ctx, query, top_k):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/vector/search",
+                      json={"query": query, "top_k": top_k}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Search failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    results = data.get("data", data).get("results", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"results": results})
+    else:
+        log.header(f"Search: {query}")
+        for i, res in enumerate(results):
+            text = res.get("text", res.get("content", ""))[:80]
+            score = res.get("score", 0)
+            log.info(f"  {i+1}. [{score:.3f}] {text}")
+
+
+@vector.command("stats", help="Show vector store stats")
+@click.pass_context
+def vector_stats(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/vector/stats", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Stats failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Vector Store Stats")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # system  — status, info, health, stats, doctor, optimize, setup
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -1460,35 +2196,41 @@ def system():
 @system.command("status", help="Show live system status")
 @click.option("--watch", is_flag=True, help="Auto-refresh")
 @click.option("--interval", default=3, type=int, help="Refresh interval")
-def system_status(watch, interval):
+@click.pass_context
+def system_status(ctx, watch, interval):
     from commands.system import cmd_status
-    cmd_status(_ns(watch=watch, interval=interval))
+    cmd_status(_ns(watch=watch, interval=interval, json_output=ctx.obj.get("json"), quiet=ctx.obj.get("quiet"),
+               timeout=ctx.obj.get("timeout", 10)))
 
 
 @system.command("info", help="Show system information")
-def system_info():
+@click.pass_context
+def system_info(ctx):
     from commands.system import cmd_system
-    cmd_system(_ns())
+    cmd_system(_ns(json_output=ctx.obj.get("json")))
 
 
 @system.command("health", help="Quick API health check")
 @click.pass_context
 def system_health(ctx):
     from commands.dev import cmd_health
-    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"])
+    args = _ns(host=ctx.obj["host"], port=ctx.obj["port"], json_output=ctx.obj.get("json"),
+               timeout=ctx.obj.get("timeout", 10))
     cmd_health(args)
 
 
 @system.command("stats", help="Show models/datasets statistics")
-def system_stats():
+@click.pass_context
+def system_stats(ctx):
     from commands.system import cmd_stats
-    cmd_stats(_ns())
+    cmd_stats(_ns(json_output=ctx.obj.get("json")))
 
 
 @system.command("doctor", help="Run environment checks")
-def system_doctor():
+@click.pass_context
+def system_doctor(ctx):
     from commands.system import cmd_config_check
-    cmd_config_check(_ns())
+    cmd_config_check(_ns(json_output=ctx.obj.get("json")))
 
 
 @system.command("config", help="Show or validate configuration")
@@ -1939,6 +2681,392 @@ def collect_stats(path):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# companion  — status, chat, personality, preset
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="AI companion management and chat")
+def companion():
+    pass
+
+
+@companion.command("status", help="Show companion status")
+@click.pass_context
+def companion_status(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/status", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Status failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Companion Status")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+@companion.command("chat", help="Chat with companion")
+@click.argument("message")
+@click.option("--user-name", default="", help="Your name")
+@click.option("--mood", default="", help="Your current mood")
+@click.pass_context
+def companion_chat(ctx, message, user_name, mood):
+    import requests
+    timeout = ctx.obj.get("timeout", 30)
+    payload = {"message": message}
+    if user_name:
+        payload["user_name"] = user_name
+    if mood:
+        payload["user_mood"] = mood
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/chat",
+                      json=payload, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Chat failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        resp = data.get("data", data).get("response", str(data))
+        log.info(resp)
+
+
+@companion.command("personality", help="Show companion personality")
+@click.pass_context
+def companion_personality(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/personality", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        p = data.get("data", data)
+        log.header("Companion Personality")
+        for k, v in p.items():
+            log.info(f"  {k}: {v}")
+
+
+@companion.command("preset", help="Use a preset personality")
+@click.argument("name")
+@click.pass_context
+def companion_preset(ctx, name):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/preset",
+                      json={"preset": name}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Preset failed: {r.text}")
+        sys.exit(1)
+    log.success(f"Applied preset: {name}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# images  — generate, gallery, styles
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Image generation and gallery")
+def images():
+    pass
+
+
+@images.command("generate", help="Generate an image from text")
+@click.argument("prompt")
+@click.option("--style", type=click.Choice(["realistic", "cartoon", "watercolor", "sketch", "fantasy"]),
+              default="realistic", help="Image style")
+@click.option("--output", "-o", help="Save to file path")
+@click.pass_context
+def images_generate(ctx, prompt, style, output):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/generate",
+                      json={"prompt": prompt, "style": style}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Generate failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        img_data = data.get("data", data)
+        img_id = img_data.get("id", "?")
+        log.success(f"Generated image: {img_id} (style={style})")
+        if output:
+            import base64
+            b64 = img_data.get("image", "")
+            if b64 and "," in b64:
+                b64 = b64.split(",", 1)[1]
+            with open(output, "wb") as f:
+                f.write(base64.b64decode(b64))
+            log.info(f"Saved to: {output}")
+
+
+@images.command("gallery", help="List generated images")
+@click.option("--limit", "-n", default=10, type=int)
+@click.pass_context
+def images_gallery(ctx, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/gallery?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Gallery failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    images_list = data.get("data", data).get("images", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"images": images_list})
+    else:
+        log.header("Image Gallery")
+        for img in images_list:
+            log.info(f"  {img.get('id', '?')} — {img.get('prompt', '')[:60]}")
+
+
+@images.command("styles", help="List available styles")
+@click.pass_context
+def images_styles(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/styles", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Styles failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    styles = data.get("data", data).get("styles", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"styles": styles})
+    else:
+        log.header("Available Styles")
+        for s in styles:
+            log.info(f"  {s}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# multimodal  — status, vision, speech, dpo, video
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Multimodal capabilities (vision, speech, video)")
+def multimodal():
+    pass
+
+
+@multimodal.command("status", help="Show multimodal engine status")
+@click.pass_context
+def multimodal_status(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/status", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Status failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Multimodal Status")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+@multimodal.command("dpo", help="Trigger DPO training")
+@click.option("--max-pairs", type=int, default=6, help="Max preference pairs")
+@click.option("--lr", type=float, default=5e-6, help="Learning rate")
+@click.pass_context
+def multimodal_dpo(ctx, max_pairs, lr):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/dpo/trigger",
+                      json={"max_pairs": max_pairs, "learning_rate": lr}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"DPO failed: {r.text}")
+        sys.exit(1)
+    log.success("DPO training triggered")
+
+
+@multimodal.command("video-train", help="Train video model")
+@click.argument("data_path")
+@click.option("--epochs", type=int, default=5)
+@click.option("--batch-size", type=int, default=2)
+@click.pass_context
+def multimodal_video_train(ctx, data_path, epochs, batch_size):
+    import requests
+    timeout = ctx.obj.get("timeout", 120)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/video/train",
+                      json={"data_path": data_path, "epochs": epochs, "batch_size": batch_size},
+                      timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Video train failed: {r.text}")
+        sys.exit(1)
+    log.success("Video training started")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# meta-weights  — get, stats
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Feedback-driven meta-weight adaptation")
+def meta_weights():
+    pass
+
+
+@meta_weights.command("get", help="Get meta-weight adjustments")
+@click.argument("message")
+@click.option("--k", type=int, default=5, help="Number of similar samples")
+@click.pass_context
+def meta_weights_get(ctx, message, k):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/meta-weights/get",
+                      json={"user_message": message, "k": k}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        w = data.get("data", data)
+        log.header("Meta-Weights")
+        for k, v in w.items():
+            log.info(f"  {k}: {v}")
+
+
+@meta_weights.command("stats", help="Show meta-weight statistics")
+@click.pass_context
+def meta_weights_stats(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/meta-weights/stats", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Stats failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Meta-Weight Stats")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# learn  — search, feed, status, train, knowledge
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Continual learning from web, feeds, and knowledge")
+def learn():
+    pass
+
+
+@learn.command("search", help="Search web and learn from results")
+@click.argument("query")
+@click.option("--max-results", type=int, default=5, help="Max results")
+@click.pass_context
+def learn_search(ctx, query, max_results):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/search",
+                      json={"query": query, "max_results": max_results}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Search failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        info = data.get("data", data)
+        log.info(f"Tokens ingested: {info.get('tokens_ingested', 0)}")
+        log.info(f"New facts: {info.get('new_facts', 0)}")
+        log.info(f"Rejected: {info.get('rejected', 0)}")
+
+
+@learn.command("status", help="Show learner status")
+@click.pass_context
+def learn_status(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/status", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Status failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Learner Status")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+@learn.command("knowledge", help="Query learned knowledge")
+@click.argument("query", required=False)
+@click.option("--topic", default="", help="Filter by topic")
+@click.pass_context
+def learn_knowledge(ctx, query, topic):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {}
+    if query:
+        params["q"] = query
+    if topic:
+        params["topic"] = topic
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/knowledge",
+                     params=params, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Knowledge query failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    facts = data.get("data", data).get("facts", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"facts": facts})
+    else:
+        log.header("Learned Knowledge")
+        for f in facts[:20]:
+            topic = f.get("topic", "?")
+            text = f.get("text", "")[:80]
+            log.info(f"  [{topic}] {text}")
+
+
+@learn.command("train", help="Force a training step")
+@click.pass_context
+def learn_train(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/train", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Train failed: {r.text}")
+        sys.exit(1)
+    log.success("Training step completed")
+
+
+@learn.command("ingest", help="Ingest raw text")
+@click.argument("text")
+@click.pass_context
+def learn_ingest(ctx, text):
+    import requests
+    timeout = ctx.obj.get("timeout", 30)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/ingest",
+                      json={"text": text}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Ingest failed: {r.text}")
+        sys.exit(1)
+    log.success("Text ingested")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # World rendering
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -2242,12 +3370,249 @@ def build_install():
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# security  — audit, keys
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Security audit logs and API key management")
+def security():
+    pass
+
+
+@security.command("audit", help="Show audit logs")
+@click.option("--limit", "-n", default=20, type=int, help="Max entries")
+@click.option("--type", "event_type", default="", help="Filter by event type")
+@click.option("--history", is_flag=True, help="Read from persisted audit.log")
+@click.pass_context
+def security_audit(ctx, limit, event_type, history):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {"limit": limit}
+    if event_type:
+        params["event_type"] = event_type
+    if history:
+        params["history"] = True
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/security/audit",
+                     params=params, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Audit failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    logs = data.get("data", data).get("logs", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"logs": logs})
+    else:
+        log.header(f"Audit Logs ({len(logs)} entries)")
+        for entry in logs:
+            event = entry.get("event_type", "?")
+            ts = entry.get("timestamp", "")[:19]
+            detail = entry.get("detail", "")[:60]
+            log.info(f"  [{ts}] {event} — {detail}")
+
+
+@security.command("keys", help="Show API key info")
+@click.pass_context
+def security_keys(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/security/keys", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Keys failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    info = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, info)
+    else:
+        count = info.get("count", 0)
+        configured = info.get("configured", False)
+        log.info(f"API keys configured: {configured} ({count} keys)")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# docstore  — list, get, put, delete, collections
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Server-side document store (browser chat DB)")
+def docstore():
+    pass
+
+
+@docstore.command("collections", help="List document collections")
+@click.pass_context
+def docstore_collections(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/collections", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    cols = data.get("data", data).get("collections", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"collections": cols})
+    else:
+        log.header("Collections")
+        for c in cols:
+            log.info(f"  {c}")
+
+
+@docstore.command("list", help="List documents in a collection")
+@click.argument("collection")
+@click.option("--limit", "-n", default=20, type=int)
+@click.pass_context
+def docstore_list(ctx, collection, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/{collection}?limit={limit}",
+                     timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    docs = data.get("data", data).get("documents", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"documents": docs})
+    else:
+        log.header(f"{collection} ({len(docs)} docs)")
+        for d in docs:
+            doc_id = d.get("_id", d.get("id", "?"))
+            log.info(f"  {doc_id}")
+
+
+@docstore.command("get", help="Get a document")
+@click.argument("collection")
+@click.argument("doc_id")
+@click.pass_context
+def docstore_get(ctx, collection, doc_id):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/{collection}/{doc_id}",
+                     timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    doc = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, doc)
+    else:
+        for k, v in doc.items():
+            log.info(f"  {k}: {v}")
+
+
+@docstore.command("delete", help="Delete a document")
+@click.argument("collection")
+@click.argument("doc_id")
+@click.option("--yes", "-y", is_flag=True)
+@click.option("--dry-run", is_flag=True)
+@click.pass_context
+def docstore_delete(ctx, collection, doc_id, yes, dry_run):
+    import requests
+    if dry_run:
+        log.info(f"Would delete {collection}/{doc_id}")
+        return
+    if not yes:
+        click.confirm(f"Delete {collection}/{doc_id}?", abort=True)
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/docstore/{collection}/{doc_id}",
+                        timeout=timeout)
+    if r.status_code == 200:
+        log.success(f"Deleted {collection}/{doc_id}")
+    else:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# feeds  — rss, json
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="RSS and JSON feed generation from dev notes")
+def feeds():
+    pass
+
+
+@feeds.command("rss", help="Generate RSS feed")
+@click.option("--tag", default="", help="Filter by tag")
+@click.option("--limit", "-n", default=20, type=int)
+@click.option("--output", "-o", help="Save to file")
+@click.pass_context
+def feeds_rss(ctx, tag, limit, output):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {"limit": limit}
+    if tag:
+        params["tag"] = tag
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/feeds/rss.xml",
+                     params=params, timeout=timeout, headers={"Accept": "application/xml"})
+    if r.status_code != 200:
+        log.error(f"RSS failed: {r.status_code}")
+        sys.exit(1)
+    content = r.text
+    if output:
+        with open(output, "w") as f:
+            f.write(content)
+        log.success(f"Saved to: {output}")
+    else:
+        print(content)
+
+
+@feeds.command("json", help="Generate JSON feed")
+@click.option("--tag", default="", help="Filter by tag")
+@click.option("--limit", "-n", default=20, type=int)
+@click.option("--output", "-o", help="Save to file")
+@click.pass_context
+def feeds_json(ctx, tag, limit, output):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {"limit": limit}
+    if tag:
+        params["tag"] = tag
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/feeds/feed.json",
+                     params=params, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"JSON feed failed: {r.status_code}")
+        sys.exit(1)
+    content = r.text
+    if output:
+        with open(output, "w") as f:
+            f.write(content)
+        log.success(f"Saved to: {output}")
+    else:
+        print(content)
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════
 
 
 def main():
-    cli(obj={})
+    # Parse command path for post-execution suggestions
+    _argv = sys.argv[1:]
+    _cmd_parts = []
+    for _a in _argv:
+        if _a.startswith("-"):
+            break
+        _cmd_parts.append(_a)
+    _cmd_path = " ".join(_cmd_parts[:2])
+
+    try:
+        cli(obj={})
+    except SystemExit:
+        pass
+
+    # Show post-command suggestions (TTY only)
+    if _cmd_path and sys.stdout.isatty():
+        from core.slo_cli import _SUGGESTIONS, _c, _p, _DIM, _BOLD, _CYAN
+        _tip = _SUGGESTIONS.get(_cmd_path)
+        if _tip:
+            _p()
+            _p(f"  {_c('💡', _DIM)} {_c('Tip:', _BOLD)} {_c(f'sloughgpt {_tip}', _CYAN)}")
+            _p()
 
 
 if __name__ == "__main__":
