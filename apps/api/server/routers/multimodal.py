@@ -160,7 +160,7 @@ class MultimodalRouter:
                     "learning": {"images_learned": 0},
                     "batch": {"running": False, "job_id": None, "total": 0, "completed": 0, "errors": 0},
                     "video_training": {},
-                    "dpo": {"status": "idle"},
+                    "dpo": {"status": "idle", "accepted_count": 0, "rejected_count": 0, "last_run": None, "result": None},
                 })
             caps = mgr.capabilities
             engine = getattr(mgr, "_multimodal_engine", None)
