@@ -3592,7 +3592,28 @@ def feeds_json(ctx, tag, limit, output):
 
 
 def main():
-    cli(obj={})
+    # Parse command path for post-execution suggestions
+    _argv = sys.argv[1:]
+    _cmd_parts = []
+    for _a in _argv:
+        if _a.startswith("-"):
+            break
+        _cmd_parts.append(_a)
+    _cmd_path = " ".join(_cmd_parts[:2])
+
+    try:
+        cli(obj={})
+    except SystemExit:
+        pass
+
+    # Show post-command suggestions (TTY only)
+    if _cmd_path and sys.stdout.isatty():
+        from core.cli_group import _SUGGESTIONS, _c, _p, _DIM, _BOLD, _CYAN
+        _tip = _SUGGESTIONS.get(_cmd_path)
+        if _tip:
+            _p()
+            _p(f"  {_c('💡', _DIM)} {_c('Tip:', _BOLD)} {_c(f'sloughgpt {_tip}', _CYAN)}")
+            _p()
 
 
 if __name__ == "__main__":
