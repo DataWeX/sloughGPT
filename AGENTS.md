@@ -153,7 +153,7 @@ Requires Stage 1+2 to be stable.
 | Multimodal | — | `/multimodal` | `/multimodal` | `multimodal/` |
 | Images | — | `/images` | `/images` | `multimodal/diffusion.py` |
 | Voice | — | `/voice` | `/voice` | `multimodal/tts.py` |
-| Vector store | — | `/vector` | `/vector` | `inference/vector_store.py` |
+| Vector store | `vector init/upsert/search/stats` | `/vector` | `/vector` | `inference/vector_store.py` |
 | Meta-weights | — | `/meta-weights` | `/meta-weights` | `feedback/meta_weights.py` |
 | Learner | — | `/learn` | `/learn` | `learner/continual.py` |
 | Planner | `notes`, `board` | `/api/planner/*` | `/kanban` (planner) | `packages/planner/` |

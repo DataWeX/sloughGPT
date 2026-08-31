@@ -161,8 +161,12 @@ class SmartGroup(click.Group):
                 "desc": "Import and manage training data",
             },
             "Intelligence": {
-                "cmds": ["knowledge", "experiment", "personality", "tokenizer", "vector"],
+                "cmds": ["knowledge", "experiment", "personality", "tokenizer", "vector", "meta-weights", "learn"],
                 "desc": "AI features and tokenization",
+            },
+            "Media": {
+                "cmds": ["images", "multimodal", "companion"],
+                "desc": "Images, vision, and AI companion",
             },
             "System": {
                 "cmds": ["system", "error", "completion", "simulate"],

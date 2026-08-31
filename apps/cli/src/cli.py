@@ -2682,6 +2682,392 @@ def collect_stats(path):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# companion  — status, chat, personality, preset
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="AI companion management and chat")
+def companion():
+    pass
+
+
+@companion.command("status", help="Show companion status")
+@click.pass_context
+def companion_status(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/status", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Status failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Companion Status")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+@companion.command("chat", help="Chat with companion")
+@click.argument("message")
+@click.option("--user-name", default="", help="Your name")
+@click.option("--mood", default="", help="Your current mood")
+@click.pass_context
+def companion_chat(ctx, message, user_name, mood):
+    import requests
+    timeout = ctx.obj.get("timeout", 30)
+    payload = {"message": message}
+    if user_name:
+        payload["user_name"] = user_name
+    if mood:
+        payload["user_mood"] = mood
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/chat",
+                      json=payload, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Chat failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        resp = data.get("data", data).get("response", str(data))
+        log.info(resp)
+
+
+@companion.command("personality", help="Show companion personality")
+@click.pass_context
+def companion_personality(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/personality", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        p = data.get("data", data)
+        log.header("Companion Personality")
+        for k, v in p.items():
+            log.info(f"  {k}: {v}")
+
+
+@companion.command("preset", help="Use a preset personality")
+@click.argument("name")
+@click.pass_context
+def companion_preset(ctx, name):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/preset",
+                      json={"preset": name}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Preset failed: {r.text}")
+        sys.exit(1)
+    log.success(f"Applied preset: {name}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# images  — generate, gallery, styles
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Image generation and gallery")
+def images():
+    pass
+
+
+@images.command("generate", help="Generate an image from text")
+@click.argument("prompt")
+@click.option("--style", type=click.Choice(["realistic", "cartoon", "watercolor", "sketch", "fantasy"]),
+              default="realistic", help="Image style")
+@click.option("--output", "-o", help="Save to file path")
+@click.pass_context
+def images_generate(ctx, prompt, style, output):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/generate",
+                      json={"prompt": prompt, "style": style}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Generate failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        img_data = data.get("data", data)
+        img_id = img_data.get("id", "?")
+        log.success(f"Generated image: {img_id} (style={style})")
+        if output:
+            import base64
+            b64 = img_data.get("image", "")
+            if b64 and "," in b64:
+                b64 = b64.split(",", 1)[1]
+            with open(output, "wb") as f:
+                f.write(base64.b64decode(b64))
+            log.info(f"Saved to: {output}")
+
+
+@images.command("gallery", help="List generated images")
+@click.option("--limit", "-n", default=10, type=int)
+@click.pass_context
+def images_gallery(ctx, limit):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/gallery?limit={limit}", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Gallery failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    images_list = data.get("data", data).get("images", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"images": images_list})
+    else:
+        log.header("Image Gallery")
+        for img in images_list:
+            log.info(f"  {img.get('id', '?')} — {img.get('prompt', '')[:60]}")
+
+
+@images.command("styles", help="List available styles")
+@click.pass_context
+def images_styles(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/styles", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Styles failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    styles = data.get("data", data).get("styles", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"styles": styles})
+    else:
+        log.header("Available Styles")
+        for s in styles:
+            log.info(f"  {s}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# multimodal  — status, vision, speech, dpo, video
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Multimodal capabilities (vision, speech, video)")
+def multimodal():
+    pass
+
+
+@multimodal.command("status", help="Show multimodal engine status")
+@click.pass_context
+def multimodal_status(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/status", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Status failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Multimodal Status")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+@multimodal.command("dpo", help="Trigger DPO training")
+@click.option("--max-pairs", type=int, default=6, help="Max preference pairs")
+@click.option("--lr", type=float, default=5e-6, help="Learning rate")
+@click.pass_context
+def multimodal_dpo(ctx, max_pairs, lr):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/dpo/trigger",
+                      json={"max_pairs": max_pairs, "learning_rate": lr}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"DPO failed: {r.text}")
+        sys.exit(1)
+    log.success("DPO training triggered")
+
+
+@multimodal.command("video-train", help="Train video model")
+@click.argument("data_path")
+@click.option("--epochs", type=int, default=5)
+@click.option("--batch-size", type=int, default=2)
+@click.pass_context
+def multimodal_video_train(ctx, data_path, epochs, batch_size):
+    import requests
+    timeout = ctx.obj.get("timeout", 120)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/video/train",
+                      json={"data_path": data_path, "epochs": epochs, "batch_size": batch_size},
+                      timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Video train failed: {r.text}")
+        sys.exit(1)
+    log.success("Video training started")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# meta-weights  — get, stats
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Feedback-driven meta-weight adaptation")
+def meta_weights():
+    pass
+
+
+@meta_weights.command("get", help="Get meta-weight adjustments")
+@click.argument("message")
+@click.option("--k", type=int, default=5, help="Number of similar samples")
+@click.pass_context
+def meta_weights_get(ctx, message, k):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/meta-weights/get",
+                      json={"user_message": message, "k": k}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        w = data.get("data", data)
+        log.header("Meta-Weights")
+        for k, v in w.items():
+            log.info(f"  {k}: {v}")
+
+
+@meta_weights.command("stats", help="Show meta-weight statistics")
+@click.pass_context
+def meta_weights_stats(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/meta-weights/stats", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Stats failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Meta-Weight Stats")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# learn  — search, feed, status, train, knowledge
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@cli.group(help="Continual learning from web, feeds, and knowledge")
+def learn():
+    pass
+
+
+@learn.command("search", help="Search web and learn from results")
+@click.argument("query")
+@click.option("--max-results", type=int, default=5, help="Max results")
+@click.pass_context
+def learn_search(ctx, query, max_results):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/search",
+                      json={"query": query, "max_results": max_results}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Search failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    if ctx.obj.get("json"):
+        _output(ctx, data)
+    else:
+        info = data.get("data", data)
+        log.info(f"Tokens ingested: {info.get('tokens_ingested', 0)}")
+        log.info(f"New facts: {info.get('new_facts', 0)}")
+        log.info(f"Rejected: {info.get('rejected', 0)}")
+
+
+@learn.command("status", help="Show learner status")
+@click.pass_context
+def learn_status(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/status", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Status failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    stats = data.get("data", data)
+    if ctx.obj.get("json"):
+        _output(ctx, stats)
+    else:
+        log.header("Learner Status")
+        for k, v in stats.items():
+            log.info(f"  {k}: {v}")
+
+
+@learn.command("knowledge", help="Query learned knowledge")
+@click.argument("query", required=False)
+@click.option("--topic", default="", help="Filter by topic")
+@click.pass_context
+def learn_knowledge(ctx, query, topic):
+    import requests
+    timeout = ctx.obj.get("timeout", 10)
+    params = {}
+    if query:
+        params["q"] = query
+    if topic:
+        params["topic"] = topic
+    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/knowledge",
+                     params=params, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Knowledge query failed: {r.text}")
+        sys.exit(1)
+    data = r.json()
+    facts = data.get("data", data).get("facts", [])
+    if ctx.obj.get("json"):
+        _output(ctx, {"facts": facts})
+    else:
+        log.header("Learned Knowledge")
+        for f in facts[:20]:
+            topic = f.get("topic", "?")
+            text = f.get("text", "")[:80]
+            log.info(f"  [{topic}] {text}")
+
+
+@learn.command("train", help="Force a training step")
+@click.pass_context
+def learn_train(ctx):
+    import requests
+    timeout = ctx.obj.get("timeout", 60)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/train", timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Train failed: {r.text}")
+        sys.exit(1)
+    log.success("Training step completed")
+
+
+@learn.command("ingest", help="Ingest raw text")
+@click.argument("text")
+@click.pass_context
+def learn_ingest(ctx, text):
+    import requests
+    timeout = ctx.obj.get("timeout", 30)
+    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/ingest",
+                      json={"text": text}, timeout=timeout)
+    if r.status_code != 200:
+        log.error(f"Ingest failed: {r.text}")
+        sys.exit(1)
+    log.success("Text ingested")
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # World rendering
 # ═══════════════════════════════════════════════════════════════════════
 
