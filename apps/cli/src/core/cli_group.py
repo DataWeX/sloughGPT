@@ -160,6 +160,10 @@ class SmartGroup(click.Group):
                 "cmds": ["dataset", "knowledge", "experiment"],
                 "desc": "Import and manage training data",
             },
+            "Intelligence": {
+                "cmds": ["knowledge", "experiment", "personality", "tokenizer", "vector"],
+                "desc": "AI features and tokenization",
+            },
             "System": {
                 "cmds": ["system", "error", "completion", "simulate"],
                 "desc": "Environment and diagnostics",
