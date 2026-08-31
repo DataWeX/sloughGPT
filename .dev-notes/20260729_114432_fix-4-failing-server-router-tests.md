@@ -1,10 +1,13 @@
 ---
+id: 20260729_114432_fix-4-failing-server-router-tests
 title: Fix 4 failing server router tests
-created: 2026-07-29T11:44:32.109979+00:00
-updated: 2026-07-29T11:44:46.072983+00:00
-tags: server, tests, fix
 status: done
+tags: server,tests,fix
+created: 2026-07-29T11:44:32.109979+00:00
 ---
+
+Fix 4 failing server router tests
+
 
 Fixed 4 failing server router test files:
 
