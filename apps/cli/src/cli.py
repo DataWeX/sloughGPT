@@ -1,5 +1,5 @@
 """
-SloughGPT CLI — Click-powered entry point with ANSI output.
+SloughGPT CLI — slo_cli-powered entry point with ANSI output.
 
 Commands organized into logical groups. All delegate to existing
 cmd_* functions in commands/ modules.
@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-import click
+from core import slo_cli as click
 
 # Ensure both CLI core and core-py domains are on the path
 _CLI_DIR = Path(__file__).resolve().parent
@@ -41,7 +41,6 @@ from core.version import format_version_display  # noqa: E402
 from domains.logging import get_global  # noqa: E402
 
 log = get_global()
-from core.cli_group import SmartGroup  # noqa: E402
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -138,7 +137,7 @@ def _docker_action(action: str, a):
 # ── Top-level CLI ─────────────────────────────────────────────────────
 
 
-@click.group(cls=SmartGroup, invoke_without_command=True)
+@click.group(invoke_without_command=True)
 @click.version_option(package_name="sloughgpt", prog_name="sloughgpt")
 @click.option("--host", default="localhost", help="API hostname", show_default=True)
 @click.option("--port", default=8000, type=int, help="API port", show_default=True)
