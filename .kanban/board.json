@@ -24,17 +24,33 @@
   ],
   "cards": [
     {
-      "id": "20260830_103238_test-coverage-expansion-core-python-modules",
-      "title": "Test Coverage Expansion - Core Python Modules",
-      "description": "",
+      "id": "20260831_092619_expand-test-files-to-50-tests-each",
+      "title": "Expand test files to 50+ tests each",
+      "description": "All 5 test files already have 50+ tests (total 520): test_ops(85), test_vae(92), test_agents_types(170), test_chromadb_store(70), test_civilization(103). All pass. User's counts (16-17) were from an earlier version.",
       "column": "done",
       "priority": "medium",
       "tags": [
         "testing",
         "coverage"
       ],
+      "created_at": "2026-08-31T09:26:19.168304+00:00",
+      "updated_at": "2026-08-31T09:26:19.168304+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
+      "id": "20260830_103238_test-coverage-expansion-core-python-modules",
+      "title": "Test Coverage Expansion - Core Python Modules",
+      "description": "",
+      "column": "in_progress",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "coverage"
+      ],
       "created_at": "2026-08-30T10:32:38.549365+00:00",
-      "updated_at": "2026-08-30T10:32:38.549365+00:00",
+      "updated_at": "2026-08-31T09:26:19.241248+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -43,14 +59,14 @@
       "id": "20260830_103238_fix-failing-tests-in-appsweb",
       "title": "Fix failing tests in apps/web",
       "description": "",
-      "column": "done",
+      "column": "in_progress",
       "priority": "medium",
       "tags": [
         "testing",
         "frontend"
       ],
       "created_at": "2026-08-30T10:32:38.535488+00:00",
-      "updated_at": "2026-08-30T10:32:38.535488+00:00",
+      "updated_at": "2026-08-31T09:26:19.209315+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -188,7 +204,7 @@
       "id": "20260829_121936_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
       "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
       "description": "",
-      "column": "done",
+      "column": "todo",
       "priority": "medium",
       "tags": [
         "world-realm",
@@ -196,7 +212,7 @@
         "done"
       ],
       "created_at": "2026-08-29T12:19:36.469394+00:00",
-      "updated_at": "2026-08-29T12:19:36.469394+00:00",
+      "updated_at": "2026-08-31T09:26:19.259808+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
