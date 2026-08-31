@@ -78,8 +78,8 @@ class SmartGroup(click.Group):
         matches = self._fuzzy_match(cmd_name)
         if matches:
             best = matches[0]
-            # Prompt for auto-correction if TTY
             if _TTY and sys.stdin.isatty():
+                # Interactive: prompt for auto-correction
                 _p()
                 _p(f"  {_c('?', _YELLOW)} {_c('Unknown command: ', _DIM)}{_c(cmd_name, _RED)}")
                 _p(f"  {_c('→', _GREEN)} {_c('Did you mean ', _DIM)}{_c(best, _CYAN + _BOLD)}{_c('?', _DIM)}")
@@ -89,7 +89,7 @@ class SmartGroup(click.Group):
                     answer = "n"
                 if answer in ("", "y", "yes"):
                     return super().get_command(ctx, best)
-                # User declined — show full error
+                # User declined
                 self._show_command_error(ctx, cmd_name)
                 ctx.exit(1)
                 return None
@@ -100,34 +100,8 @@ class SmartGroup(click.Group):
         return None
 
     def resolve_command(self, ctx: click.Context, args: List[str]) -> tuple:
-        """Override to add auto-correct prompt for mistyped commands."""
-        # Let Click try to resolve normally
-        try:
-            return super().resolve_command(ctx, args)
-        except click.UsageError:
-            # Command not found — try fuzzy matching
-            if args:
-                cmd_name = args[0]
-                matches = self._fuzzy_match(cmd_name)
-                if matches:
-                    best = matches[0]
-                    # Prompt for auto-correction if TTY
-                    if _TTY and sys.stdin.isatty():
-                        _p()
-                        _p(f"  {_c('?', _YELLOW)} {_c('Unknown command: ', _DIM)}{_c(cmd_name, _RED)}")
-                        _p(f"  {_c('→', _GREEN)} {_c('Did you mean ', _DIM)}{_c(best, _CYAN + _BOLD)}{_c('?', _DIM)}")
-                        try:
-                            answer = input("    [Y/n] ").strip().lower()
-                        except (EOFError, KeyboardInterrupt):
-                            answer = "n"
-                        if answer in ("", "y", "yes"):
-                            # Replace the bad command with the good one
-                            return super().resolve_command(ctx, [best] + args[1:])
-                    else:
-                        # Non-interactive: auto-resolve silently
-                        return super().resolve_command(ctx, [best] + args[1:])
-            # Re-raise if no match or user declined
-            raise
+        """Resolve command — fuzzy matching handled by get_command."""
+        return super().resolve_command(ctx, args)
 
     def _fuzzy_match(self, cmd_name: str) -> List[str]:
         """Find close matches for a command name."""
