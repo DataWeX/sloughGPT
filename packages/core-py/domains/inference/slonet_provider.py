@@ -21,10 +21,13 @@ Features:
 - Seed control for reproducible generation
 - Per-request metadata (timing, token count, model info)
 """
+
+from __future__ import annotations
+
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Union, Any
+from typing import Optional, Dict, List, Tuple, Union, Any, AsyncIterator
 import numpy as np
 
 from domains.infrastructure.structured_log import StructuredLogger
@@ -905,7 +908,6 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
-        from domains.inference.slo_format import load_soul
         from domains.infrastructure.weight_loader import SoulWeightLoader, build_model_from_config
 
         loader = SoulWeightLoader(soul_path)
@@ -1075,7 +1077,6 @@ class SloNetChatProvider:
         Returns:
             Dict with active session count, TTL, and memory estimate.
         """
-        import time as _time
         with self._kv_lock:
             n_sessions = len(self._kv_states)
             total_tokens = 0
@@ -1520,7 +1521,6 @@ class SloNetChatProvider:
         """
         import asyncio
         import numpy as _np
-        import math
         import time
 
         server = getattr(self, '_server', None)
@@ -1561,20 +1561,27 @@ class SloNetChatProvider:
             m = self._get_model()
             input_ids = _np.array([token_ids], dtype=_np.int64)
 
-            for tok_id in m.generate_numpy_stream(
-                input_ids,
-                max_new_tokens=max_tokens,
-                eos_token=eos_id,
-                extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-                temperature=temperature if temperature is not None else 0.8,
-                top_k=top_k,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                kv_state=kv_state,
-            ):
-                decoded = self._tokenizer.decode([tok_id])
-                if decoded:
-                    yield decoded
+            try:
+                for tok_id in m.generate_numpy_stream(
+                    input_ids,
+                    max_new_tokens=max_tokens,
+                    eos_token=eos_id,
+                    extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
+                    temperature=temperature if temperature is not None else 0.8,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    kv_state=kv_state,
+                ):
+                    decoded = self._tokenizer.decode([tok_id])
+                    if decoded:
+                        yield decoded
+            except StopIteration:
+                return
+            except RuntimeError as e:
+                if "generator raised StopIteration" in str(e):
+                    return
+                raise
 
         # ── Robust streaming pipeline ──
         # Producer thread feeds tokens into queue; consumer yields from queue.
@@ -1632,6 +1639,11 @@ class SloNetChatProvider:
                 continue
 
             if token is sentinel:
+                while not q.empty():
+                    t = q.get_nowait()
+                    if t is sentinel:
+                        break
+                    yield t
                 if not err_q.empty():
                     exc = err_q.get_nowait()
                     yield "\n\n[Generation error: {}]".format(exc)
@@ -1674,8 +1686,6 @@ class SloNetChatProvider:
             Tuple of (generated_text, logprobs_list) where each logprob entry is:
             {"token_id": int, "token": str, "logprob": float, "top_tokens": [{token, logprob}]}
         """
-        import math
-
         if seed is not None:
             np.random.seed(seed)
 

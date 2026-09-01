@@ -10,6 +10,8 @@ Priority (always live data, never hardcoded):
 3. Returns ``None`` when size cannot be determined
 """
 
+from __future__ import annotations
+
 import logging
 import time
 import threading

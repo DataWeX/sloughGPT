@@ -9,6 +9,8 @@ Manages data across three storage tiers:
 Automatically promotes/demotes data based on access patterns.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading

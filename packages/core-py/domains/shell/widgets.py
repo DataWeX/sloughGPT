@@ -24,10 +24,9 @@ Reactive state:
 
 from __future__ import annotations
 
-import os
 import threading
-from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from dataclasses import dataclass
+from typing import Callable
 
 
 # ── Box-drawing characters (text placeholders, swap for real later) ────

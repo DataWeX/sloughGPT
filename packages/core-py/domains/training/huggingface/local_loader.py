@@ -5,6 +5,8 @@ The underlying ``transformers`` model still needs torch at runtime,
 but this module itself imports neither torch nor slonet_compat.
 """
 
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from typing import Optional, Dict, List

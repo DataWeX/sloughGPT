@@ -11,6 +11,8 @@ Checkpoint persistence and resume live in the canonical
 ``domains.training.slonet``); this module no longer ships a checkpoint manager.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from dataclasses import dataclass, field, asdict

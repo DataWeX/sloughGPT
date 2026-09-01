@@ -10,6 +10,8 @@ SloNet Transformer (RoPE, RMSNorm, SwiGLU, KV-cache).
 External architectures plug in via **ModelLoader.register** or loaders.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING, Callable
 import logging

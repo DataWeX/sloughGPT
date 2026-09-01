@@ -4,6 +4,8 @@ FEATURE: soul-manager — Runtime soul/personality switching without restart.
 DO NOT DELETE. Core infrastructure for soul loading, trait weights, snapshots.
 """
 
+from __future__ import annotations
+
 import os
 import glob
 import json

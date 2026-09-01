@@ -10,8 +10,10 @@ Implements proper EWC with:
 Runs entirely on the SloNet autograd stack (pure NumPy).
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 import numpy as np
 import logging
 

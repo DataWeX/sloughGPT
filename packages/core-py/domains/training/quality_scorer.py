@@ -13,6 +13,8 @@ Usage:
     scores = score_batch([pair1, pair2, ...])
 """
 
+from __future__ import annotations
+
 import re
 from collections import Counter
 from typing import Dict, List

@@ -1,9 +1,8 @@
 """PDFVLMProcessor — analyze PDF documents using VLM."""
 
+from __future__ import annotations
+
 import logging
-import tempfile
-from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("slo.pdf_vlm")
 

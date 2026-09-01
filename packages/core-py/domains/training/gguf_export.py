@@ -5,6 +5,8 @@ Handles GGUF export for multiple model architectures, optimized for llama.rn.
 Auto-detects model architecture from tensor names.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple

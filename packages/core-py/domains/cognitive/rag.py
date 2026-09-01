@@ -10,12 +10,18 @@ Fixed version of RAGGrounder with:
 - Hallucination detection
 """
 
+from __future__ import annotations
+
 import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from collections import Counter
+import logging
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -61,6 +67,7 @@ class BM25Indexer:
     def index(self, chunks: List[TextChunk]):
         """Build BM25 index."""
         self.num_docs = len(chunks)
+        logger.debug("BM25 indexing started: %d documents", self.num_docs)
 
         for doc_id, chunk in enumerate(chunks):
             tokens = self._tokenize(chunk.content)
@@ -77,6 +84,11 @@ class BM25Indexer:
                 self.inverted_index[token].append((doc_id, pos))
 
         self.avg_doc_length = sum(self.doc_lengths) / max(len(self.doc_lengths), 1)
+        logger.debug(
+            "BM25 indexing complete: avg_doc_length=%.1f, unique_terms=%d",
+            self.avg_doc_length,
+            len(self.doc_freq),
+        )
 
     def _tokenize(self, text: str) -> List[str]:
         """Tokenize text."""
@@ -131,6 +143,7 @@ class HybridRetriever:
         dense_weight: float = 0.7,
         sparse_weight: float = 0.3,
         use_rerank: bool = True,
+        embedding_fn: Optional[Any] = None,
     ):
         self.dense_weight = dense_weight
         self.sparse_weight = sparse_weight
@@ -139,6 +152,7 @@ class HybridRetriever:
         self.chunks: List[TextChunk] = []
         self.bm25 = BM25Indexer()
         self.embedding_cache: Dict[str, np.ndarray] = {}
+        self._embedding_fn = embedding_fn or self._default_embedding
 
     def add_chunk(self, chunk: TextChunk):
         """Add a chunk to the retriever."""
@@ -149,6 +163,10 @@ class HybridRetriever:
         self.bm25.index(self.chunks)
 
     def _get_embedding(self, text: str) -> np.ndarray:
+        """Public entry point — delegates to the configured embedding function."""
+        return self._embedding_fn(text)
+
+    def _default_embedding(self, text: str) -> np.ndarray:
         """
         Get embedding for text.
         In production, use: OpenAI, Cohere, sentence-transformers, etc.
@@ -201,9 +219,17 @@ class HybridRetriever:
         """
         Hybrid retrieval with optional reranking.
         """
+        logger.debug("Retrieving for query (len=%d), top_k=%d", len(query), top_k)
+
         # Get results from both methods
         dense_results = self._dense_search(query, top_k * 2)
         sparse_results = self._sparse_search(query, top_k * 2)
+
+        logger.debug(
+            "Retrieval raw results: dense=%d, sparse=%d",
+            len(dense_results),
+            len(sparse_results),
+        )
 
         # Normalize scores
         max_dense = max(s for _, s in dense_results) if dense_results else 1
@@ -253,6 +279,11 @@ class HybridRetriever:
         if self.use_rerank and final_results:
             final_results = self._rerank(query, final_results)
 
+        logger.debug(
+            "Retrieval complete: query_len=%d, final_results=%d",
+            len(query),
+            len(final_results),
+        )
         return final_results
 
     def _rerank(
@@ -378,6 +409,7 @@ class HallucinationDetector:
         - overall_confidence: Confidence score for the text
         """
         claims = self.citation_tracker.extract_claims(text)
+        logger.debug("Hallucination check: %d claims extracted", len(claims))
 
         hallucinations = []
         grounded = []
@@ -430,6 +462,14 @@ class HallucinationDetector:
             avg_grounded = sum(c["confidence"] for c in grounded) / max(grounded_count, 1)
             overall_confidence = (grounded_count / total_claims) * avg_grounded
 
+        logger.info(
+            "Hallucination detection complete: total=%d, grounded=%d, hallucinations=%d, confidence=%.3f",
+            total_claims,
+            len(grounded),
+            len(hallucinations),
+            overall_confidence,
+        )
+
         return {
             "text": text,
             "total_claims": total_claims,
@@ -467,6 +507,12 @@ class ProductionRAG:
         metadata = metadata or {"source": "user"}
         chunk_ids = []
 
+        logger.debug(
+            "Document ingestion started: chunk_size=%d, overlap=%d",
+            chunk_size,
+            overlap,
+        )
+
         # Tokenize and chunk with overlap
         tokens = content.split()
         stride = max(1, chunk_size - overlap)
@@ -487,6 +533,11 @@ class ProductionRAG:
         # Rebuild index
         self.retriever.build_index()
 
+        logger.debug(
+            "Document ingestion complete: chunks=%d, total_tokens=%d",
+            len(chunk_ids),
+            len(tokens),
+        )
         return chunk_ids
 
     def query(
@@ -498,7 +549,9 @@ class ProductionRAG:
         """
         Query the RAG system.
         """
+        logger.debug("RAG query: top_k=%d, question_len=%d", top_k, len(question))
         results = self.retriever.retrieve(question, top_k=top_k)
+        logger.debug("RAG query returned %d results", len(results))
 
         context = ""
         if return_context:

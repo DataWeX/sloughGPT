@@ -8,10 +8,12 @@ Wraps the C forward pass with:
   - Token-by-token generation with KV cache
 """
 
+from __future__ import annotations
+
 import ctypes
 import logging
 import time
-from typing import Optional, List, Dict, Tuple, Generator
+from typing import Optional, List, Dict, Generator
 
 import numpy as np
 

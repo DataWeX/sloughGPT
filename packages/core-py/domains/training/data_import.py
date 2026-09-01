@@ -3,6 +3,8 @@ Data Import Tools
 Import datasets from various sources: GitHub, HuggingFace, URLs, local files.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re

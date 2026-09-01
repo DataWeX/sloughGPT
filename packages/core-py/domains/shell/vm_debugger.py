@@ -14,12 +14,11 @@ from __future__ import annotations
 
 import re
 import logging
-from dataclasses import dataclass, field
-from typing import Callable, Any
+from dataclasses import dataclass
+from typing import Callable
 
 from .vm_engine import (
-    VMEngine, Breakpoint, StepEvent, BreakpointEvent,
-    FaultEvent, SyscallEvent, ExecutionTrace,
+    VMEngine, ExecutionTrace,
 )
 
 logger = logging.getLogger("slo.vm.debugger")
@@ -126,7 +125,7 @@ class Debugger:
         if self._output_callback:
             self._output_callback(text)
         else:
-            print(text)
+            logger.debug(text)
 
     # ── Symbol Loading ────────────────────────────────────────────────────
 

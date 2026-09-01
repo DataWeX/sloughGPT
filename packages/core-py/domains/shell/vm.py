@@ -16,9 +16,13 @@ from __future__ import annotations
 
 import re
 import struct
+import zlib
 import logging
-from dataclasses import dataclass, field
-from typing import Any, Optional, Callable
+from dataclasses import dataclass
+from enum import IntEnum
+from pathlib import Path
+from typing import Optional
+
 
 import numpy as np
 
@@ -666,50 +670,630 @@ class PS2KeyboardDevice(Device):
         return 0
 
 
-class BlockDevice(Device):
-    """Sector-based block storage — 512-byte sectors.
+# ── Block device constants ────────────────────────────────────────
+MAGIC = b"DCBD"
+_VERSION = 1
+_HEADER_SIZE = 512
+_DEFAULT_BLOCK_SIZE = 4096
+_SECTOR_SIZE = 512
+_BLOCK_MAP_ENTRY_SIZE = 8  # offset(4) + compressed_size(2) + flags(1) + crc8(1)
 
-    Provides read_sector/write_sector for raw I/O and read_block/write_block
-    for higher-level access. Tracks I/O statistics.
+
+# ── CRC8 Table ───────────────────────────────────────────────────────────────
+
+_CRC8_TABLE: list[int] = []
+
+
+def _build_crc8_table() -> list[int]:
+    """Build CRC8 lookup table (polynomial 0x07)."""
+    table = []
+    for i in range(256):
+        crc = i
+        for _ in range(8):
+            if crc & 0x80:
+                crc = ((crc << 1) ^ 0x07) & 0xFF
+            else:
+                crc = (crc << 1) & 0xFF
+        table.append(crc)
+    return table
+
+
+CRC8_TABLE = _build_crc8_table()
+
+
+def crc8(data: bytes) -> int:
+    """Compute CRC8 checksum."""
+    crc = 0x00
+    for byte in data:
+        crc = CRC8_TABLE[crc ^ byte]
+    return crc
+
+
+class BlockFlags(IntEnum):
+    """Block status flags."""
+    COMPRESSED = 0x01
+    DIRTY = 0x02
+    CORRUPTED = 0x04
+
+
+class CompressionAlgo(IntEnum):
+    """Supported compression algorithms."""
+    NONE = 0
+    LZ4 = 1
+    ZSTD = 2
+    GZIP = 3
+    SNAPPY = 4
+
+
+@dataclass
+class BlockMapEntry:
+    """Per-block metadata in the block map."""
+    offset: int = 0
+    compressed_size: int = 0
+    flags: int = 0
+    crc: int = 0
+
+    def pack(self) -> bytes:
+        return struct.pack("<IHBB", self.offset, self.compressed_size, self.flags, self.crc)
+
+    @classmethod
+    def unpack(cls, data: bytes) -> "BlockMapEntry":
+        offset, cs, flags, crc = struct.unpack("<IHBB", data)
+        return cls(offset=offset, compressed_size=cs, flags=flags, crc=crc)
+
+
+class BlockCompressor:
+    """Compress and decompress individual blocks.
+
+    Supports multiple algorithms with automatic fallback if a library
+    is not available.
     """
 
-    SECTOR_SIZE = 512
+    def __init__(self, algo: CompressionAlgo = CompressionAlgo.LZ4):
+        self._algo = algo
+        self._available = self._check_availability(algo)
 
-    def __init__(self, num_sectors: int = 256):
-        self._sectors = [bytearray(self.SECTOR_SIZE) for _ in range(num_sectors)]
-        self._num_sectors = num_sectors
+    def _check_availability(self, algo: CompressionAlgo) -> bool:
+        """Check if the compression library is available."""
+        if algo == CompressionAlgo.NONE:
+            return True
+        elif algo == CompressionAlgo.LZ4:
+            try:
+                import lz4.frame
+                return True
+            except ImportError:
+                return False
+        elif algo == CompressionAlgo.ZSTD:
+            try:
+                import zstandard
+                return True
+            except ImportError:
+                return False
+        elif algo == CompressionAlgo.GZIP:
+            return True  # Always available in Python stdlib
+        elif algo == CompressionAlgo.SNAPPY:
+            try:
+                import snappy
+                return True
+            except ImportError:
+                return False
+        return False
+
+    @property
+    def algo(self) -> CompressionAlgo:
+        return self._algo
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    def compress(self, data: bytes) -> bytes:
+        """Compress a block of data."""
+        if self._algo == CompressionAlgo.NONE:
+            return data
+
+        if not self._available:
+            logger.warning("Compression algo %s unavailable, falling back to gzip", self._algo)
+            return zlib.compress(data)
+
+        if self._algo == CompressionAlgo.LZ4:
+            import lz4.frame
+            return lz4.frame.compress(data)
+        elif self._algo == CompressionAlgo.ZSTD:
+            import zstandard
+            cctx = zstandard.ZstdCompressor()
+            return cctx.compress(data)
+        elif self._algo == CompressionAlgo.GZIP:
+            return zlib.compress(data, level=6)
+        elif self._algo == CompressionAlgo.SNAPPY:
+            import snappy
+            return snappy.compress(data)
+
+        return data
+
+    def decompress(self, data: bytes) -> bytes:
+        """Decompress a block of data."""
+        if self._algo == CompressionAlgo.NONE:
+            return data
+
+        if not self._available:
+            return zlib.decompress(data)
+
+        if self._algo == CompressionAlgo.LZ4:
+            import lz4.frame
+            return lz4.frame.decompress(data)
+        elif self._algo == CompressionAlgo.ZSTD:
+            import zstandard
+            dctx = zstandard.ZstdDecompressor()
+            return dctx.decompress(data)
+        elif self._algo == CompressionAlgo.GZIP:
+            return zlib.decompress(data)
+        elif self._algo == CompressionAlgo.SNAPPY:
+            import snappy
+            return snappy.decompress(data)
+
+        return data
+
+    def estimate_ratio(self, data: bytes) -> float:
+        """Estimate compression ratio (compressed_size / original_size)."""
+        compressed = self.compress(data)
+        return len(compressed) / len(data) if data else 1.0
+
+
+class BlockDevice(Device):
+    """Unified block device with Linux-compatible sector interface.
+
+    Two modes:
+        - In-memory (no path): fast temporary storage for VM runtime
+        - Persistent (path given): compressed storage on disk with CRC integrity
+
+    Provides:
+        - read_sector / write_sector (512-byte sectors, Linux-compatible)
+        - read_block / write_block (4KB blocks)
+        - ioctl (BLKGETSIZE, BLKSSZGET, BLKFLSBUF)
+        - Compression: LZ4, ZSTD, GZIP, SNAPPY (persistent mode only)
+        - I/O stats and compression ratio monitoring
+
+    Layout (persistent mode):
+        ┌─────────────────────────────────────────────────┐
+        │ Header (512 bytes)                              │
+        │  magic: "DCBD" | version: 1 | block_size: 4096 │
+        │  total_blocks | algo | map_offset | map_size    │
+        ├─────────────────────────────────────────────────┤
+        │ Block Map (8 bytes × total_blocks)              │
+        │  [offset:4][compressed_size:2][flags:1][crc8:1]│
+        ├─────────────────────────────────────────────────┤
+        │ Data Blocks (compressed)                        │
+        │  block_0 | block_1 | ... | block_N              │
+        └─────────────────────────────────────────────────┘
+    """
+
+    SECTOR_SIZE = _SECTOR_SIZE
+
+    def __init__(self, path: str | Path | None = None, *,
+                 num_sectors: int = 256,
+                 block_size: int = _DEFAULT_BLOCK_SIZE,
+                 algo: CompressionAlgo = CompressionAlgo.LZ4,
+                 create: bool = False):
+        """Create a block device.
+
+        Args:
+            path: Path to device file. None = in-memory mode.
+            num_sectors: Number of sectors (in-memory mode only)
+            block_size: Block size in bytes (persistent mode only)
+            algo: Compression algorithm (persistent mode only)
+            create: Create new device, overwriting existing (persistent mode only)
+        """
+        self._path = Path(path) if path else None
+        self._block_size = block_size
+        self._is_persistent = self._path is not None
+
+        # In-memory mode
+        self._sectors: list[bytearray] = []
+        self._num_sectors_value = num_sectors
+
+        # Persistent mode
+        self._compressor: BlockCompressor | None = None
+        self._file = None
+        self._total_blocks = 0
+        self._block_map: list[BlockMapEntry] = []
+        self._data_start = 0
+
+        # Stats
         self._reads = 0
         self._writes = 0
+        self._bytes_read = 0
+        self._bytes_written = 0
+        self._compressed_bytes_read = 0
+        self._compressed_bytes_written = 0
 
-    def info(self):
-        return {
-            "type": "block",
-            "sectors": self._num_sectors,
-            "sector_size": self.SECTOR_SIZE,
-            "reads": self._reads,
-            "writes": self._writes,
-        }
+        if self._is_persistent:
+            if create:
+                self._create_new()
+            else:
+                self._open_existing()
+        else:
+            self._sectors = [bytearray(self.SECTOR_SIZE) for _ in range(num_sectors)]
 
-    def read_sector(self, sector_idx: int) -> bytearray:
-        if not (0 <= sector_idx < self._num_sectors):
+    def _create_new(self) -> None:
+        """Create a new persistent device."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = open(self._path, "w+b")
+
+        header = self._build_header()
+        self._file.write(header)
+
+        self._total_blocks = 0
+        self._block_map = []
+        self._data_start = _HEADER_SIZE
+        self._compressor = BlockCompressor(CompressionAlgo.LZ4)
+
+        logger.info("Created new block device: %s", self._path)
+
+    def _open_existing(self) -> None:
+        """Open an existing persistent device."""
+        if not self._path.exists():
+            raise DeviceFault(f"Block device not found: {self._path}")
+
+        self._file = open(self._path, "r+b")
+        self._read_header()
+
+        logger.info("Opened block device: %s (%d blocks, %d bytes each)",
+                     self._path, self._total_blocks, self._block_size)
+
+    def _build_header(self) -> bytes:
+        """Build the 512-byte header."""
+        header = bytearray(_HEADER_SIZE)
+
+        header[0:4] = MAGIC
+        header[4] = _VERSION
+        struct.pack_into("<I", header, 8, self._block_size)
+        struct.pack_into("<I", header, 12, self._total_blocks)
+        header[16] = self._compressor.algo if self._compressor else 0
+        struct.pack_into("<I", header, 20, self._data_start)
+
+        map_size = len(self._block_map) * _BLOCK_MAP_ENTRY_SIZE
+        struct.pack_into("<I", header, 24, map_size)
+
+        header[511] = crc8(bytes(header[:511]))
+
+        return bytes(header)
+
+    def _read_header(self) -> None:
+        """Read and validate the header."""
+        self._file.seek(0)
+        header_data = self._file.read(_HEADER_SIZE)
+
+        if len(header_data) < _HEADER_SIZE:
+            raise DeviceFault("Invalid header: too short")
+
+        if header_data[:4] != MAGIC:
+            raise DeviceFault(f"Invalid magic: expected {MAGIC}, got {header_data[:4]}")
+
+        expected_crc = header_data[511]
+        actual_crc = crc8(header_data[:511])
+        if expected_crc != actual_crc:
+            raise DeviceFault(f"Header CRC mismatch: expected 0x{expected_crc:02x}, got 0x{actual_crc:02x}")
+
+        version = header_data[4]
+        if version != _VERSION:
+            raise DeviceFault(f"Unsupported version: {version}")
+
+        self._block_size = struct.unpack_from("<I", header_data, 8)[0]
+        self._total_blocks = struct.unpack_from("<I", header_data, 12)[0]
+        algo = CompressionAlgo(header_data[16])
+        self._data_start = struct.unpack_from("<I", header_data, 20)[0]
+        map_size = struct.unpack_from("<I", header_data, 24)[0]
+
+        self._compressor = BlockCompressor(algo)
+
+        self._block_map = []
+        if map_size > 0:
+            self._file.seek(_HEADER_SIZE)
+            map_data = self._file.read(map_size)
+            for i in range(0, len(map_data), _BLOCK_MAP_ENTRY_SIZE):
+                entry = BlockMapEntry.unpack(map_data[i:i + _BLOCK_MAP_ENTRY_SIZE])
+                self._block_map.append(entry)
+
+    def _sync_header(self) -> None:
+        """Sync header and block map to persistent storage."""
+        map_size = len(self._block_map) * _BLOCK_MAP_ENTRY_SIZE
+        self._data_start = _HEADER_SIZE + map_size
+
+        header = self._build_header()
+        self._file.seek(0)
+        self._file.write(header)
+
+        self._file.seek(_HEADER_SIZE)
+        for entry in self._block_map:
+            self._file.write(entry.pack())
+
+        self._file.flush()
+
+    # ── Sector Interface (Linux-compatible) ──────────────────────────────────
+
+    def read_sector(self, sector_idx: int) -> bytearray | bytes:
+        """Read a sector (512 bytes) by sector number."""
+        if self._is_persistent:
+            byte_offset = sector_idx * self.SECTOR_SIZE
+            block_num = byte_offset // self._block_size
+            block_offset = byte_offset % self._block_size
+            block_data = self.read_block(block_num)
+            self._reads += 1
+            self._bytes_read += self.SECTOR_SIZE
+            return block_data[block_offset:block_offset + self.SECTOR_SIZE]
+
+        if not (0 <= sector_idx < self._num_sectors_value):
             raise DeviceFault(f"sector out of range: {sector_idx}")
         self._reads += 1
+        self._bytes_read += self.SECTOR_SIZE
         return self._sectors[sector_idx]
 
     def write_sector(self, sector_idx: int, data: bytes) -> None:
-        if not (0 <= sector_idx < self._num_sectors):
-            raise DeviceFault(f"sector out of range: {sector_idx}")
-        self._writes += 1
+        """Write a sector (512 bytes) by sector number."""
         if isinstance(data, str):
             data = data.encode('utf-8')
+
+        if self._is_persistent:
+            if len(data) > self.SECTOR_SIZE:
+                raise DeviceFault(f"Sector data must be {self.SECTOR_SIZE} bytes or less")
+            if len(data) < self.SECTOR_SIZE:
+                data = data + b"\x00" * (self.SECTOR_SIZE - len(data))
+
+            byte_offset = sector_idx * self.SECTOR_SIZE
+            block_num = byte_offset // self._block_size
+            block_offset = byte_offset % self._block_size
+
+            try:
+                block_data = bytearray(self.read_block(block_num))
+            except DeviceFault:
+                block_data = bytearray(self._block_size)
+
+            block_data[block_offset:block_offset + self.SECTOR_SIZE] = data
+            self.write_block(block_num, bytes(block_data))
+            self._writes += 1
+            self._bytes_written += self.SECTOR_SIZE
+            return
+
+        if not (0 <= sector_idx < self._num_sectors_value):
+            raise DeviceFault(f"sector out of range: {sector_idx}")
+        self._writes += 1
+        self._bytes_written += self.SECTOR_SIZE
         self._sectors[sector_idx][:len(data)] = data[:self.SECTOR_SIZE]
 
-    def read_block(self, sector_idx: int, size: int) -> bytes:
-        data = self.read_sector(sector_idx)
-        return bytes(data[:size])
+    def read_sectors(self, sector: int, count: int) -> bytes:
+        """Read multiple contiguous sectors."""
+        result = bytearray()
+        for i in range(count):
+            result.extend(self.read_sector(sector + i))
+        return bytes(result)
 
-    def write_block(self, sector_idx: int, data: bytes) -> None:
-        self.write_sector(sector_idx, data)
+    def write_sectors(self, sector: int, data: bytes) -> None:
+        """Write multiple contiguous sectors."""
+        if len(data) % self.SECTOR_SIZE != 0:
+            raise DeviceFault("Data must be sector-aligned")
+        count = len(data) // self.SECTOR_SIZE
+        for i in range(count):
+            start = i * self.SECTOR_SIZE
+            self.write_sector(sector + i, data[start:start + self.SECTOR_SIZE])
+
+    # ── Block Interface ──────────────────────────────────────────────────────
+
+    def read_block(self, block_num: int, size: int = 0) -> bytes:
+        """Read a block by logical number."""
+        if self._is_persistent:
+            return self._read_persistent_block(block_num)
+
+        # In-memory: read_block reads a single sector
+        data = self.read_sector(block_num)
+        return bytes(data[:size]) if size else bytes(data)
+
+    def _read_persistent_block(self, block_num: int) -> bytes:
+        """Read a block from persistent storage."""
+        if block_num < 0 or block_num >= self._total_blocks:
+            raise DeviceFault(f"Block {block_num} out of range (0-{self._total_blocks - 1})")
+
+        entry = self._block_map[block_num]
+
+        if entry.compressed_size == 0:
+            return b"\x00" * self._block_size
+
+        self._file.seek(entry.offset)
+        compressed_data = self._file.read(entry.compressed_size)
+
+        if len(compressed_data) != entry.compressed_size:
+            raise DeviceFault(f"Block {block_num}: read {len(compressed_data)} bytes, expected {entry.compressed_size}")
+
+        actual_crc = crc8(compressed_data)
+        if actual_crc != entry.crc:
+            raise DeviceFault(f"Block {block_num}: CRC mismatch (expected 0x{entry.crc:02x}, got 0x{actual_crc:02x})")
+
+        self._compressed_bytes_read += len(compressed_data)
+
+        if entry.flags & BlockFlags.COMPRESSED:
+            data = self._compressor.decompress(compressed_data)
+        else:
+            data = compressed_data
+
+        if len(data) < self._block_size:
+            data = data + b"\x00" * (self._block_size - len(data))
+
+        return data[:self._block_size]
+
+    def write_block(self, block_num: int, data: bytes) -> None:
+        """Write a block by logical number."""
+        if self._is_persistent:
+            self._write_persistent_block(block_num, data)
+            return
+
+        # In-memory: write_block writes a single sector
+        self.write_sector(block_num, data)
+
+    def _write_persistent_block(self, block_num: int, data: bytes) -> None:
+        """Write a block to persistent storage."""
+        if block_num < 0:
+            raise DeviceFault(f"Block number must be non-negative: {block_num}")
+
+        while block_num >= len(self._block_map):
+            self._block_map.append(BlockMapEntry())
+            self._total_blocks = len(self._block_map)
+
+        data = data[:self._block_size]
+        if len(data) < self._block_size:
+            data = data + b"\x00" * (self._block_size - len(data))
+
+        compressed = self._compressor.compress(data)
+        is_compressed = len(compressed) < len(data)
+
+        if not is_compressed:
+            compressed = data
+
+        block_crc = crc8(compressed)
+
+        self._sync_header()
+
+        self._file.seek(0, 2)
+        physical_offset = self._file.tell()
+
+        self._file.write(compressed)
+
+        self._compressed_bytes_written += len(compressed)
+
+        flags = BlockFlags.COMPRESSED if is_compressed else 0
+        self._block_map[block_num] = BlockMapEntry(
+            offset=physical_offset,
+            compressed_size=len(compressed),
+            flags=flags,
+            crc=block_crc
+        )
+
+        self._sync_header()
+
+        logger.debug("Wrote block %d: %d bytes -> %d bytes (ratio=%.2f)",
+                     block_num, len(data), len(compressed),
+                     len(compressed) / len(data) if data else 1.0)
+
+    # ── ioctl (Linux-compatible) ─────────────────────────────────────────────
+
+    def ioctl(self, request: int, *args) -> int:
+        """Handle ioctl requests.
+
+        Supported:
+            0x1200 - BLKGETSIZE: Device size in sectors
+            0x1201 - BLKSSZGET: Sector size (512)
+            0x1202 - BLKFLSBUF: Flush buffers
+        """
+        if request == 0x1200:  # BLKGETSIZE
+            return self.get_sectors()
+        elif request == 0x1201:  # BLKSSZGET
+            return self.SECTOR_SIZE
+        elif request == 0x1202:  # BLKFLSBUF
+            self.flush()
+            return 0
+        else:
+            raise DeviceFault(f"Unsupported ioctl: 0x{request:x}")
+
+    # ── Stats & Monitoring ───────────────────────────────────────────────────
+
+    def get_stats(self) -> dict:
+        """Return I/O statistics and compression metrics."""
+        stats = {
+            "reads": self._reads,
+            "writes": self._writes,
+            "bytes_read": self._bytes_read,
+            "bytes_written": self._bytes_written,
+        }
+        if self._is_persistent:
+            stats.update({
+                "type": "persistent",
+                "path": str(self._path),
+                "block_size": self._block_size,
+                "sector_size": self.SECTOR_SIZE,
+                "total_blocks": self._total_blocks,
+                "total_sectors": self.get_sectors(),
+                "algo": self._compressor.algo.name,
+                "compressed_bytes_read": self._compressed_bytes_read,
+                "compressed_bytes_written": self._compressed_bytes_written,
+                "compression_ratio": (
+                    self._compressed_bytes_written / self._bytes_written
+                    if self._bytes_written > 0 else 1.0
+                ),
+                "disk_usage_bytes": self._get_disk_usage(),
+            })
+        else:
+            stats.update({
+                "type": "in_memory",
+                "sectors": self._num_sectors_value,
+                "sector_size": self.SECTOR_SIZE,
+            })
+        return stats
+
+    def _get_disk_usage(self) -> int:
+        """Get physical disk usage in bytes."""
+        if not self._is_persistent:
+            return 0
+        self._file.seek(0, 2)
+        return self._file.tell()
+
+    def get_compression_ratio(self) -> float:
+        """Get current compression ratio (compressed/original)."""
+        if self._bytes_written == 0:
+            return 1.0
+        return self._compressed_bytes_written / self._bytes_written
+
+    def get_sector_usage(self) -> dict:
+        """Get sector allocation info."""
+        if self._is_persistent:
+            total = self.get_sectors()
+            used = self._total_blocks * (self._block_size // self.SECTOR_SIZE)
+            return {
+                "total": total,
+                "used": min(used, total),
+                "free": max(0, total - used),
+                "usage_pct": (used / total * 100) if total > 0 else 0,
+            }
+        return {
+            "total": self._num_sectors_value,
+            "used": self._num_sectors_value,  # All allocated in memory mode
+            "free": 0,
+            "usage_pct": 100.0,
+        }
+
+    # ── Device Interface ─────────────────────────────────────────────────────
+
+    def get_sectors(self) -> int:
+        """Total number of sectors."""
+        if self._is_persistent:
+            return self._total_blocks * (self._block_size // self.SECTOR_SIZE)
+        return self._num_sectors_value
+
+    def flush(self):
+        """Flush buffers to disk."""
+        if self._is_persistent and self._file:
+            self._file.flush()
+
+    def close(self):
+        """Close the device."""
+        if self._is_persistent and self._file:
+            self._file.close()
+            self._file = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def __repr__(self) -> str:
+        if self._is_persistent:
+            return (f"BlockDevice(path={self._path}, "
+                    f"blocks={self._total_blocks}, "
+                    f"block_size={self._block_size}, "
+                    f"algo={self._compressor.algo.name})")
+        return f"BlockDevice(sectors={self._num_sectors_value}, sector_size={self.SECTOR_SIZE})"
+
+    def info(self):
+        return self.get_stats()
 
     def call(self, method, *args):
         if method == "read_sector":
@@ -720,7 +1304,34 @@ class BlockDevice(Device):
             return self.read_block(*args)
         if method == "write_block":
             return self.write_block(*args)
+        if method == "ioctl":
+            return self.ioctl(*args)
+        if method == "get_stats":
+            return self.get_stats()
+        if method == "get_compression_ratio":
+            return self.get_compression_ratio()
+        if method == "get_sector_usage":
+            return self.get_sector_usage()
         return super().call(method, *args)
+
+    @property
+    def _num_sectors(self) -> int:
+        """Total number of sectors (for FlatFS compatibility)."""
+        return self.get_sectors()
+
+    def allocate_blocks(self, count: int) -> int:
+        """Allocate contiguous blocks (persistent mode). Returns starting block."""
+        if not self._is_persistent:
+            raise DeviceFault("allocate_blocks only supported in persistent mode")
+        start = self._total_blocks
+        for _ in range(count):
+            self._block_map.append(BlockMapEntry())
+        self._total_blocks = len(self._block_map)
+        self._sync_header()
+        return start
+
+
+# ── Compressed Block Device ──────────────────────────────────────────────────
 
 
 class SerialDevice(Device):
@@ -7557,7 +8168,7 @@ class X86SyscallHandler:
         if fd == 1 or fd == 2:
             # stdout/stderr — write to console
             text = data.decode('ascii', errors='replace')
-            print(text, end='', flush=True)
+            logger.debug(text, end='', flush=True)
             return count
         elif self._fs and fd in self._fd_table:
             filename = self._fd_table[fd]

@@ -28,10 +28,12 @@ from typing import Optional
 
 from domains.infrastructure.event_buffer import get_event_buffer
 
+logger = logging.getLogger(__name__)
+
 
 _WATCHED_TAGS = frozenset({
     "TRAIN", "MODEL", "INFRA", "ERROR", "CHAT", "SOUL", "START", "IDLE",
-    "DOWNLOAD", "SLOW", "INFERENCE", "WORKFLOW",
+    "DOWNLOAD", "SLOW", "INFERENCE", "WORKFLOW", "UI",
 })
 
 # slo.log v1: op prefix → dashboard category
@@ -46,6 +48,7 @@ _WATCHED_OPS = {
     "sys":       "SYSTEM",
     "infra":     "INFRA",
     "web":       "CHAT",
+    "ui":        "UI",
 }
 
 _PATTERNS: list[tuple[re.Pattern, str, str]] = [
@@ -262,8 +265,8 @@ def _format_punchy(record: logging.LogRecord) -> Optional[tuple[str, str]]:
                         part = part.replace(f"{{{i}}}", group or "")
                     result_parts.append(part)
                 return default_cat, " — ".join(result_parts)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("_format_punchy failed: %s", exc)
 
     # Fallback: use tag as category, truncate message
     if tag and tag in _WATCHED_TAGS:
@@ -303,6 +306,6 @@ class DashboardFilter(logging.Filter):
                 if result:
                     category, message = result
                     get_event_buffer().record(category, message)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("DashboardFilter.filter() failed: %s", exc)
         return True

@@ -6,6 +6,8 @@ SloughGPT Inference Module
 All exports are lightweight.
 """
 
+from __future__ import annotations
+
 from .slo_format import (
     SloProfile,
     PersonalityCore,

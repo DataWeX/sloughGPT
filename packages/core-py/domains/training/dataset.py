@@ -8,11 +8,11 @@ with live access to the data.
 Both models read from the same TrainingDataset instance during training.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np
+from typing import Any, Dict, List
 
 logger = logging.getLogger("slo.training.dataset")
 

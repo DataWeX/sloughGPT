@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any as _Any
-
 from ..console import Console
 from ..commands import ShellCommands
 

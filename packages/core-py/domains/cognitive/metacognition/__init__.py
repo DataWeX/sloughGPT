@@ -5,6 +5,8 @@ This module provides metacognitive monitoring capabilities including
 self-awareness, reflection, and cognitive process optimization.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time

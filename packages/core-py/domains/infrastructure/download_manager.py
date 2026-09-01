@@ -7,6 +7,8 @@ with Range-header resume).  This module exists only to integrate with the
 existing server API (``DownloadManager`` singleton, progress callbacks, etc.).
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import shutil

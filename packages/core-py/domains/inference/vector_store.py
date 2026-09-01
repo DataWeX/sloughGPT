@@ -4,6 +4,8 @@ Base ``VectorStore`` ABC, InMemoryVectorStore, embedders, and factory.
 External providers (Pinecone, ChromaDB) live in the ``vector_stores/`` package.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging

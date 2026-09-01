@@ -23,3 +23,5 @@ Key properties:
   - Integrity: per-tensor CRC32 checksums
   - Extensible: version field for format evolution
 """
+
+from __future__ import annotations

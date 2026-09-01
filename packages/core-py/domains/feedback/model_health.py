@@ -12,6 +12,8 @@ Usage:
     drift = monitor.detect_drift()  # check for significant changes
 """
 
+from __future__ import annotations
+
 import json
 import time
 import logging

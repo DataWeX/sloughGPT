@@ -14,6 +14,8 @@ Functions:
     - get_token_tree_manager(): returns the shared singleton.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import threading

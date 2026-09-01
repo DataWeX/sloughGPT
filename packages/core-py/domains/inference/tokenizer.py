@@ -7,6 +7,8 @@ BPE/Unigram lifecycle in ``domains.training.tokenizer_manager`` so all
 backends share one tokenizer instance.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 

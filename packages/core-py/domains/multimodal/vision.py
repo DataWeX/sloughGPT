@@ -5,6 +5,8 @@ Custom CNN for image captioning and visual understanding.
 No external model downloads — uses the own-trained SloNet.
 """
 
+from __future__ import annotations
+
 from typing import List
 from dataclasses import dataclass
 import logging
@@ -12,8 +14,8 @@ import logging
 logger = logging.getLogger("slo.vision")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloConv2D, SloBatchNorm2D, SloMaxPool2D,
-    SloLinear, SloAdam, softmax as _softmax, relu as _relu,
+    Tensor, SloNet, SloConv2D, SloMaxPool2D,
+    SloLinear, SloAdam, relu as _relu,
     flatten as _flatten, tensor as _tensor, mse_loss,
 )
 import numpy as np

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Neural Kernel — re-export shim.
 

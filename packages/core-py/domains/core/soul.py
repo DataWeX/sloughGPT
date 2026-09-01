@@ -14,11 +14,13 @@ The reasoning chain works as STRUCTURED TEXT injected into the LLM context:
 This is how chain-of-thought prompting works - text-based, not binary.
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 import logging
 from typing import TYPE_CHECKING
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, field
 
 if TYPE_CHECKING:
@@ -28,10 +30,6 @@ import numpy as np
 
 from domains.inference import (
     SloProfile,
-    GenerationParams,
-    PersonalityCore,
-    CognitiveSignature,
-    BehavioralTraits,
     load_soul,
     save_soul,
 )

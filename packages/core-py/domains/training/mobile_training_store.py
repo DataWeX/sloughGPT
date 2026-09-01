@@ -14,6 +14,8 @@ Usage::
     store.mark_synced([pair["_id"] for pair in pending])
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from pathlib import Path

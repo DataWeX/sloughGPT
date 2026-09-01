@@ -18,6 +18,8 @@ restart it.
 
 Architecture::
 
+from __future__ import annotations
+
     API Process                Worker Process
     ┌──────────────┐           ┌──────────────────────┐
     │ ProcessGuard │───req_q──▶│ ModelWorkerProcess   │

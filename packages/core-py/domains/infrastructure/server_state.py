@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import deque
 from threading import Lock
-from typing import Any, Optional, Callable, TypeVar
+from typing import Optional, Callable, TypeVar
 import time
 import logging
 

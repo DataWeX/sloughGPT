@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Callable
 
-from .sources import Record, Source, GeneratorSource
+
+from .sources import Record, Source
 from .stores import Store, MemoryStore
-from .filters import FilterChain, LengthFilter, DedupFilter
+
 from .collector import Collector
-from .config import SourceConfig, FilterConfig
+
 
 
 @dataclass
@@ -124,7 +126,7 @@ class WorldPerception:
         collector.collect()
 
         events = []
-        for record in store.list():
+        for record in store.read_all():
             event = self.process_record(record)
             if event:
                 events.append(event)

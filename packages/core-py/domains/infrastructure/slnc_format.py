@@ -18,6 +18,8 @@ File layout:
   [block N-1]
   [non-block: wte, wpe, ln_f, lm_head]
 
+from __future__ import annotations
+
 Usage:
     # Convert
     from domains.infrastructure.slnc_format import convert_to_slnc
@@ -34,7 +36,7 @@ import logging
 import os
 import struct
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from domains.shared import find_repo_root

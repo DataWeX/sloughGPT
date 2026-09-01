@@ -13,10 +13,11 @@ Patterns matched:
 - Repeated nouns across messages → significant entities
 """
 
+from __future__ import annotations
+
 import re
 import logging
 from typing import List, Set, Tuple
-from collections import defaultdict
 
 logger = logging.getLogger("slo.learner.entity_extractor")
 

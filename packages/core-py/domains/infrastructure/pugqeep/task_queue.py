@@ -9,6 +9,7 @@ Provides:
   - Event callbacks
   - Worker pool via ProducerConsumerQueue (optional threaded execution)
 """
+from __future__ import annotations
 
 import json
 import logging

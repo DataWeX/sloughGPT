@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Generic API Provider for External AI Services
 
@@ -28,7 +30,7 @@ Usage:
 
 import json
 import logging
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List
 
 import httpx
 

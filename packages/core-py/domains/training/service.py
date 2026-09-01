@@ -356,7 +356,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
                     "metadata": dict(profile.metadata),
                 }
             except Exception:
-                pass
+                logger.debug("Failed to serialize profile for %s", fp, exc_info=True)
 
         if meta:
             m = meta.get("metadata", {})
@@ -1084,7 +1084,7 @@ def process_training_completion(
         if soul_files:
             job["checkpoint"] = str(soul_files[-1])
     except Exception:
-        pass
+        logger.debug("Failed to discover checkpoints in %s", checkpoints_dir, exc_info=True)
 
     get_training_runtime().sync(task_id)
 

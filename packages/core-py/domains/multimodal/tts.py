@@ -9,6 +9,8 @@ Generates speech waveforms from text using:
 All implemented in pure NumPy - no external dependencies.
 """
 
+from __future__ import annotations
+
 from typing import Tuple
 import numpy as np
 import logging
@@ -16,9 +18,8 @@ import logging
 logger = logging.getLogger("slo.multimodal.tts")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm,
-    SloAdam, relu as _relu, sigmoid as _sigmoid,
-    tensor as _tensor,
+    Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm,
+    SloAdam,
 )
 
 

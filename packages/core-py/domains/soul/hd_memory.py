@@ -7,6 +7,8 @@ Integrates HD computing into SloEngine for fast semantic memory:
 - Fast retrieval without expensive embedding models
 """
 
+from __future__ import annotations
+
 import time
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass

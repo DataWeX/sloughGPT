@@ -11,8 +11,10 @@ Includes:
 Runs entirely on numpy/SloNet.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict
+from typing import Optional
 import logging
 from enum import Enum
 

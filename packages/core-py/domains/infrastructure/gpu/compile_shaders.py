@@ -14,6 +14,8 @@ Usage:
     python3 compile_shaders.py [--naga PATH]
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import subprocess

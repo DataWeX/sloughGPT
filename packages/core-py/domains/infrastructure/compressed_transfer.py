@@ -32,11 +32,10 @@ import io
 import logging
 import os
 import struct
-import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Generator, Optional
+from typing import Any, BinaryIO, Callable, Generator
 
 logger = logging.getLogger("slo.compressed_transfer")
 

@@ -6,6 +6,8 @@ Supports: Standard LoRA, IA3.
 All operations use SloNet Tensor / SloLayer.
 """
 
+from __future__ import annotations
+
 import math
 import logging
 from dataclasses import dataclass
@@ -15,8 +17,8 @@ from enum import Enum
 import numpy as np
 
 from domains.training.slonet import (
-    Tensor, SloLayer, SloLinear, SloEmbedding, SloDropout,
-    zeros, randn, _matmul, SloAdam,
+    Tensor, SloLayer, SloEmbedding, SloDropout,
+    randn, _matmul,
 )
 
 logger = logging.getLogger("slo.lora")
@@ -281,7 +283,7 @@ def _walk_slo_tree(node, path_parts):
         (dotted_path, module) for every leaf module
     """
     from domains.training.slonet import (
-        SloTransformer, SloTransformerBlock, SloMultiHeadAttention,
+        SloTransformerBlock, SloMultiHeadAttention,
         SloFeedForward, SloLinear, SloEmbedding,
     )
 

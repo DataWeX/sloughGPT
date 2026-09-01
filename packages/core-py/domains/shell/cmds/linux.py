@@ -2880,7 +2880,8 @@ class LinuxCommandsMixin:
         quiet = False
         script = ""
         target = None
-        raw_parts = args.strip().split()
+        args = args.strip().strip("'\"")
+        raw_parts = args.split()
         i = 0
         while i < len(raw_parts):
             p = raw_parts[i]

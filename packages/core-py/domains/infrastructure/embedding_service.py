@@ -15,8 +15,9 @@ Usage:
     label = svc.classify("the sky is blue")
     verdict = svc.truth_verdict("the sky is blue")
 """
+from __future__ import annotations
+
 import hashlib
-import json
 import threading
 import numpy as np
 from pathlib import Path

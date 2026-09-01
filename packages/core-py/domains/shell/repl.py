@@ -23,12 +23,10 @@ import re
 import sys
 import json
 import time
-import stat
 import shutil
 import logging
 import glob
 import threading
-import subprocess
 import logging.handlers
 from datetime import datetime
 from pathlib import Path
@@ -1505,6 +1503,36 @@ class ShellREPL(LinuxCommandsMixin):
                 self._print(f"  {args.strip()}={value}")
             else:
                 self._print(f"  {args.strip()} not set")
+
+    def _cmd_unset(self, args: str = "") -> None:
+        """Unset environment variables."""
+        if not args:
+            self._print("  Usage: unset VAR [VAR ...]")
+            self._last_exit_code = 1
+            return
+        for name in args.split():
+            name = name.strip()
+            if name in self._env:
+                del self._env[name]
+                self.state.unset_env(name)
+                self.state.save()
+            else:
+                self._print(f"  {name} not set")
+        self._last_exit_code = 0
+
+    def _cmd_setenv(self, args: str = "") -> None:
+        """Set an environment variable (setenv NAME VALUE)."""
+        parts = args.split()
+        if len(parts) < 2:
+            self._print("  Usage: setenv NAME VALUE")
+            self._last_exit_code = 1
+            return
+        name = parts[0]
+        value = parts[1]
+        self._env[name] = value
+        self.state.set_env(name, value)
+        self.state.save()
+        self._last_exit_code = 0
 
     def _cmd_source(self, args: str = "") -> None:
         """Execute commands from a file (like bash source/.)."""
@@ -3285,7 +3313,6 @@ Examples:
 
     def _apply_render_preset(self, name: str) -> None:
         """Load a preset scene configuration."""
-        import numpy as _np
         dev = self._render_device
 
         if name == "demo":

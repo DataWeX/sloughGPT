@@ -20,7 +20,7 @@ import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class LogLevel(Enum):
@@ -34,14 +34,12 @@ class LogLevel(Enum):
     def __ge__(self, other: object) -> bool:
         if not isinstance(other, LogLevel):
             return NotImplemented
-        _order = {self.DEBUG: 0, self.INFO: 1, self.WARNING: 2, self.ERROR: 3, self.CRITICAL: 4}
-        return _order[self] >= _order[other]
+        return _ORDER[self] >= _ORDER[other]
 
     def __gt__(self, other: object) -> bool:
         if not isinstance(other, LogLevel):
             return NotImplemented
-        _order = {self.DEBUG: 0, self.INFO: 1, self.WARNING: 2, self.ERROR: 3, self.CRITICAL: 4}
-        return _order[self] > _order[other]
+        return _ORDER[self] > _ORDER[other]
 
     def __le__(self, other: object) -> bool:
         if not isinstance(other, LogLevel):
@@ -52,6 +50,9 @@ class LogLevel(Enum):
         if not isinstance(other, LogLevel):
             return NotImplemented
         return not self.__ge__(other)
+
+
+_ORDER = {LogLevel.DEBUG: 0, LogLevel.INFO: 1, LogLevel.WARNING: 2, LogLevel.ERROR: 3, LogLevel.CRITICAL: 4}
 
 
 # ── Error Code Taxonomy ─────────────────────────────────────────────────
@@ -114,17 +115,24 @@ class ErrorCode(str, Enum):
 
 class LogTag(str, Enum):
     """Type tags for structured log output — shows WHAT kind of event."""
-    REQ    = "REQ"     # HTTP request
-    AUTH   = "AUTH"    # Authentication
-    MODEL  = "MODEL"   # Model loading/inference
-    SOUL   = "SOUL"    # Soul/personality
-    TRAIN  = "TRAIN"   # Training
-    INFRA  = "INFRA"   # Infrastructure
-    START  = "START"   # Server startup
-    SLOW   = "SLOW"    # Slow request
-    ERROR  = "ERROR"   # Error event
-    WARN   = "WARN"    # Warning event
-    OK     = "OK"      # Success confirmation
+    REQ        = "REQ"        # HTTP request
+    AUTH       = "AUTH"       # Authentication
+    MODEL      = "MODEL"      # Model loading/inference
+    SOUL       = "SOUL"       # Soul/personality
+    TRAIN      = "TRAIN"      # Training
+    INFRA      = "INFRA"      # Infrastructure
+    START      = "START"      # Server startup
+    SLOW       = "SLOW"       # Slow request
+    ERROR      = "ERROR"      # Error event
+    WARN       = "WARN"       # Warning event
+    OK         = "OK"         # Success confirmation
+    CHAT       = "CHAT"       # Chat / session events
+    IDLE       = "IDLE"       # Idle manager
+    DOWNLOAD   = "DOWNLOAD"   # Download progress
+    INFERENCE  = "INFERENCE"  # Inference / generation
+    WORKFLOW   = "WORKFLOW"   # Workflow / webhook events
+    UI         = "UI"         # UI events
+    SYSTEM     = "SYSTEM"     # System-level events
 
 
 @dataclass(frozen=True)
@@ -148,7 +156,10 @@ class LogRecord:
     context: Dict[str, Any] = field(default_factory=dict)
     exception: Optional[str] = None
     error_code: Optional[str] = None
-    tag: Optional[str] = None
+    tag: Optional[LogTag] = None
+
+
+from .config import get_request_id, get_log_context
 
 
 class Logger(ABC):
@@ -166,6 +177,8 @@ class Logger(ABC):
         level:    Minimum level to emit (below this is silently dropped).
         context:  Default context attached to every record.
     """
+
+    __slots__ = ('_name', '_level', '_context', '_lock')
 
     def __init__(
         self,
@@ -225,8 +238,6 @@ class Logger(ABC):
         tag: Optional[str] = None,
     ) -> LogRecord:
         # Merge: logger defaults → thread-local context → call-site context
-        from .config import get_request_id, get_log_context
-
         merged = {}
         merged.update(get_log_context())
         rid = get_request_id()
@@ -321,17 +332,10 @@ class Logger(ABC):
         return f"<{type(self).__name__} name={self._name!r} level={self._level.value}>"
 
 
-class TaggedLogger(Logger):
-    """A logger that attaches a type tag to every record.
+class _DelegatedLevel(Logger):
+    """Mixin: level property that delegates to a parent logger."""
 
-    Created via ``Logger.tag()``.  The tag appears in colored output
-    as ``[TAG]`` to identify the event type.
-    """
-
-    def __init__(self, parent: Logger, tag: str) -> None:
-        super().__init__(name=parent.name, level=parent.level, context=dict(parent.context))
-        self._parent = parent
-        self._tag = tag
+    __slots__ = ('_parent',)
 
     @property
     def level(self) -> LogLevel:
@@ -340,6 +344,24 @@ class TaggedLogger(Logger):
     @level.setter
     def level(self, value: LogLevel) -> None:
         self._parent.level = value
+
+    def emit(self, record: LogRecord) -> None:
+        self._parent.emit(record)
+
+
+class TaggedLogger(_DelegatedLevel):
+    """A logger that attaches a type tag to every record.
+
+    Created via ``Logger.tag()``.  The tag appears in colored output
+    as ``[TAG]`` to identify the event type.
+    """
+
+    __slots__ = ('_tag',)
+
+    def __init__(self, parent: Logger, tag: str) -> None:
+        super().__init__(name=parent.name, level=parent.level, context=dict(parent.context))
+        self._parent = parent
+        self._tag = tag
 
     def _make_record(
         self,
@@ -350,67 +372,44 @@ class TaggedLogger(Logger):
         error_code: Optional[str] = None,
         tag: Optional[str] = None,
     ) -> LogRecord:
-        merged = {**self._context, **(context or {})}
-        return LogRecord(
+        ctx = dict(context) if context else {}
+        resolved_tag = self._tag or tag or ctx.pop("tag", None)
+        return self._parent._make_record(
             level=level,
             message=message,
-            logger=self._parent.name,
-            context=merged,
+            context=ctx,
             exception=exception,
             error_code=error_code,
-            tag=tag or self._tag,
+            tag=resolved_tag,
         )
 
-    def debug(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
-        if self._should_emit(LogLevel.DEBUG):
-            self.emit(self._make_record(LogLevel.DEBUG, msg, ctx, error_code=error_code))
 
-    def info(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
-        if self._should_emit(LogLevel.INFO):
-            self.emit(self._make_record(LogLevel.INFO, msg, ctx, error_code=error_code))
+class ChildLogger(_DelegatedLevel):
+    """A child logger that delegates everything to its parent.
 
-    def warning(self, msg: str, error_code: Optional[str] = None, **ctx: Any) -> None:
-        if self._should_emit(LogLevel.WARNING):
-            self.emit(self._make_record(LogLevel.WARNING, msg, ctx, error_code=error_code))
-
-    def error(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
-        if self._should_emit(LogLevel.ERROR):
-            self.emit(self._make_record(LogLevel.ERROR, msg, ctx, exception=exception, error_code=error_code))
-
-    def critical(self, msg: str, exception: Optional[str] = None, error_code: Optional[str] = None, **ctx: Any) -> None:
-        if self._should_emit(LogLevel.CRITICAL):
-            self.emit(self._make_record(LogLevel.CRITICAL, msg, ctx, exception=exception, error_code=error_code))
-
-    def emit(self, record: LogRecord) -> None:
-        self._parent.emit(record)
-
-
-class ChildLogger(Logger):
-    """A child logger that delegates ``emit()`` to its parent.
-
-    Created via ``Logger.child()``.  Shares the parent's ``emit()``
-    method so output formatting is consistent.
+    Created via ``Logger.child()``.  Delegates ``emit()`` and all
+    other method calls to the parent, so formatting is consistent
+    regardless of parent type (CLILogger, ConsoleLogger, etc.).
     """
+
+    __slots__ = ()
 
     def __init__(
         self,
         name: str,
-        parent: Logger,
+        parent: "Logger",
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(name=name, level=parent.level, context=context)
         self._parent = parent
 
-    @property
-    def level(self) -> LogLevel:
-        return self._parent.level
+    def __getattr__(self, name: str):
+        """Delegate all attribute access to parent.
 
-    @level.setter
-    def level(self, value: LogLevel) -> None:
-        self._parent.level = value
-
-    def emit(self, record: LogRecord) -> None:
-        self._parent.emit(record)
+        This allows ChildLogger to inherit CLI methods (success, step, etc.)
+        from any parent type without explicit delegation.
+        """
+        return getattr(self._parent, name)
 
 
 class CompositeLogger(Logger):
@@ -426,6 +425,8 @@ class CompositeLogger(Logger):
         multi = CompositeLogger("slo", children=[console, file_log])
         multi.info("this goes to both outputs")
     """
+
+    __slots__ = ('_children',)
 
     def __init__(
         self,

@@ -13,7 +13,7 @@ import os
 import platform
 import re
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger("slo.infrastructure.cpu_topology")
 from functools import lru_cache

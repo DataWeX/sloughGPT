@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
 import hashlib
 import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Iterator
 
 from .sources import Record, Source
-from .stores import Store, MemoryStore
 from .collector import Collector
 
 

@@ -12,6 +12,8 @@ Implements state-of-the-art reasoning techniques:
 - Counterfactual Reasoning - What-if scenarios
 """
 
+from __future__ import annotations
+
 import asyncio
 import re
 import time

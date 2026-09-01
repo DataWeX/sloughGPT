@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 SloNet Model Loader — model loading via .slnc format.
 

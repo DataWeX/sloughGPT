@@ -13,6 +13,8 @@ Adds:
 - DreamProcessingEngine: Sleep consolidation
 """
 
+from __future__ import annotations
+
 import random
 import hashlib
 import time

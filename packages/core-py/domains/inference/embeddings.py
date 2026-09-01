@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Production-Grade Embedding Models
 
@@ -17,11 +19,10 @@ Usage:
     vectors = embedder.embed("Hello world")
 """
 
-import os
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 from enum import Enum
 
 import logging

@@ -1,6 +1,6 @@
-import numpy as np
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any
 from enum import IntEnum
 
 

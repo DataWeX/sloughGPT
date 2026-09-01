@@ -23,9 +23,10 @@ Usage:
     tokenizer = SloBPE.from_dict(checkpoint["tokenizer"])  # Load
 """
 
+from __future__ import annotations
+
 import json
 import re
-import os
 import math
 from collections import Counter
 from pathlib import Path

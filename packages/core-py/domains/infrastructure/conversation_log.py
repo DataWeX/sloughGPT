@@ -12,6 +12,8 @@ manager (``GET /datasets``) lists it and the training pipelines
 Capture is opt-out via ``MAN_CAPTURE_CONVERSATIONS=0``.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os

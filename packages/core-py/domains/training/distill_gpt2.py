@@ -10,6 +10,8 @@ Includes DistillEvaluator for post-training quality metrics:
 - Sample generation quality comparison
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time
@@ -702,8 +704,6 @@ def distill_gpt2_to_slo(
 
 
 if __name__ == "__main__":  # pragma: no cover (requires GPT-2 download)
-    import sys
-
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
     # Quick test with small text

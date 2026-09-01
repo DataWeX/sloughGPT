@@ -4,3 +4,5 @@ FEATURE: native-c-inference — C transformer forward pass using Apple Accelerat
 Supports Qwen, GPT-2, LLaMA, Mistral, Phi via SLNC weights. Not yet wired into
 server provider chain — under development. DO NOT DELETE.
 """
+
+from __future__ import annotations

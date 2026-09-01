@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .sources import (
     Record, Source, FileSource, UrlSource, RssSource, ApiSource,
     SseSource, WatchSource, GeneratorSource,

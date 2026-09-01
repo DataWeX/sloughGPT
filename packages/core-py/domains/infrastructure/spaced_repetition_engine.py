@@ -1,5 +1,7 @@
 """Spaced Repetition Learning System as a modular engine."""
 
+from __future__ import annotations
+
 import time as time_module
 from typing import Dict, List, Optional
 from collections import defaultdict

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Dait — interactive shell for SloughGPT.
 

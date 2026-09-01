@@ -4,6 +4,8 @@ Point compressor — stores weights as functions, not raw values.
 Backward-compatible shim — all code lives in pugqeep/ package.
 """
 
+from __future__ import annotations
+
 from domains.infrastructure.pugqeep import (
     Point,
     PointCompressor,

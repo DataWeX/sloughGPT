@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 import logging
 from enum import IntEnum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from .kernel_process import Process, ProcessState

@@ -6,6 +6,8 @@ task-queue-backed persistence layer for option 3 - means implementing
 ``MemoryProvider``, never touching the producers.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any, Dict, List, Optional, Protocol
 

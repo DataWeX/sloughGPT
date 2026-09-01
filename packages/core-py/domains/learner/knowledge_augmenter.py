@@ -12,9 +12,7 @@ Uses the VectorStore-backed KnowledgeMemory for all retrieval — no keyword ext
 from __future__ import annotations
 
 import re
-import math
 import logging
-from typing import Optional
 
 from domains.learner.knowledge import (
     get_knowledge_memory,

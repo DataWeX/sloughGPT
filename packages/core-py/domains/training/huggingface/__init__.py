@@ -14,6 +14,8 @@ Quick Start:
     client = HFClient("meta-llama/Llama-2-7b-chat-hf", mode="api")
 """
 
+from __future__ import annotations
+
 from .local_loader import (
     HFLocalConfig,
     HuggingFaceLocalLoader,

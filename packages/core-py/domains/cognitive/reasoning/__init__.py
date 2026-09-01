@@ -5,6 +5,8 @@ This module contains the reasoning engine and related components
 for advanced logical and creative reasoning.
 """
 
+from __future__ import annotations
+
 from .advanced import (
     advanced_reasoning,
     ChainOfThought,

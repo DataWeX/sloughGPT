@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Morphologically-aware tokenizer — pure Python, no external dependencies.
 

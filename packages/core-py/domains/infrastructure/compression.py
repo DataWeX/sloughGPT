@@ -6,6 +6,8 @@ Hierarchical: if centroids follow linear pattern, store as function.
 LRUCache: cache decompressed weights.
 """
 
+from __future__ import annotations
+
 import threading
 from collections import OrderedDict
 from typing import Optional

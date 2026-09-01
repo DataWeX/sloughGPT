@@ -5,8 +5,9 @@ C base layer for matrix operations. Falls back to numpy when
 Accelerate is unavailable (Linux, non-macOS).
 """
 
+from __future__ import annotations
+
 import ctypes
-import sys
 import numpy as np
 
 _accelerate = None

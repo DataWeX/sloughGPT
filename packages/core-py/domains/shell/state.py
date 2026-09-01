@@ -8,7 +8,6 @@ entries.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -115,6 +114,9 @@ class ShellState:
 
     def set_env(self, name: str, value: str) -> None:
         self.env[name] = value
+
+    def unset_env(self, name: str) -> None:
+        self.env.pop(name, None)
 
     def to_dict(self) -> dict[str, Any]:
         return {

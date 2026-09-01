@@ -7,6 +7,9 @@ the DPO preference loss to a SloNet model when a trainable model is provided.
 Preference gradients run through SloNet's numpy autograd. When the supplied model is not SloNet-trainable the
 trainer reports an honest ``rejected`` result instead of fabricating metrics.
 """
+
+from __future__ import annotations
+
 from typing import Dict, List, Optional
 import logging
 import time

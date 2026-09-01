@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import time
 import logging
-import threading
 from dataclasses import dataclass, field
-from typing import Callable, Any
+from typing import Callable
 
 from .vm import (
-    X86CPU, X86Assembler, InsFault, Halt, MemFault,
+    X86CPU, X86Assembler, InsFault, MemFault,
     ProcessTable, ProcessControlBlock, ProcessState, Scheduler,
 )
 

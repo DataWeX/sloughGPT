@@ -15,10 +15,9 @@ The protocol enables:
 
 from __future__ import annotations
 
-import base64
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 

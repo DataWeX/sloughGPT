@@ -6,6 +6,8 @@ Functions:
   - to_float32 (bfloat16/float16 handling)
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 

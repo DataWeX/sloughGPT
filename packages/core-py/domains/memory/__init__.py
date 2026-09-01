@@ -9,6 +9,8 @@ Layers (kept modular so the future task-execution layer can plug in):
 Nothing in this package knows about HTTP, chat schemas, or tasks.
 """
 
+from __future__ import annotations
+
 from domains.memory.memory_config import MemoryConfig
 from domains.memory.memory_provider import KnowledgeMemoryProvider, MemoryProvider
 from domains.memory.memory_service import MemoryService, get_memory_service

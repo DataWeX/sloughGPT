@@ -2966,8 +2966,6 @@ def export_x86_binary(source: str) -> bytes:
     Strips [BITS], [ORG], labels, and directives.
     Returns raw machine code.
     """
-    import re
-
     lines = source.split('\n')
     code_lines = []
 

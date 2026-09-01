@@ -3,6 +3,8 @@ SloughGPT Utilities
 Common utility functions for the SloughGPT AI Framework
 """
 
+from __future__ import annotations
+
 import json
 import hashlib
 import random

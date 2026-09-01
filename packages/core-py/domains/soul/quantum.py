@@ -8,6 +8,8 @@ Adds:
 - TemporalReasoningEngine: Multi-timeline processing
 """
 
+from __future__ import annotations
+
 import cmath
 import math
 import random

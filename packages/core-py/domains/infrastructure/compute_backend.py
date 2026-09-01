@@ -15,7 +15,7 @@ Usage:
 from __future__ import annotations
 
 import abc
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
 
 import numpy as np
 

@@ -17,7 +17,7 @@ import warnings
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Awaitable, Callable, Optional, Union
+from typing import Any, Awaitable, Callable, Union
 
 logger = logging.getLogger("slo.event_bus")
 

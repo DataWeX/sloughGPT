@@ -21,22 +21,19 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import asyncio
-import collections
+
 import json
 import logging
 import os
-import selectors
+
 import socket
 from .constants import DEFAULT_GENERATE_TIMEOUT
-import struct
-import sys
+
 import threading
 import time
 from typing import Any, Dict, Optional
 
 from domains.infrastructure.inference_protocol import (
-    HEADER_FMT,
     HEADER_SIZE,
     decode_header,
     encode_message,

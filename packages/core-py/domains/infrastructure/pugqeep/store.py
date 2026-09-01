@@ -7,14 +7,13 @@ Provides different storage backends:
   - DirectoryStore: one file per point
 """
 
-import base64
+from __future__ import annotations
+
 import json
 import logging
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Protocol
-
-import numpy as np
 
 from .point import Point
 

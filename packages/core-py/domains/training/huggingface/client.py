@@ -19,6 +19,8 @@ Environment Variables:
     HF_CACHE_DIR  - Cache directory for models (default: ~/.cache/huggingface)
 """
 
+from __future__ import annotations
+
 import logging
 
 from .api_loader import HuggingFaceAPILoader as _APILoader

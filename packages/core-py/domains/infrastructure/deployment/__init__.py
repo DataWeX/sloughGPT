@@ -5,6 +5,8 @@ This module provides deployment management capabilities for
 different environments and deployment strategies.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time

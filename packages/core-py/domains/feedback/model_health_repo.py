@@ -12,7 +12,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Optional
 
-from domains.infrastructure.repository import FileRepository, JsonSerializer
+from domains.infrastructure.repository import FileRepository
 
 logger = logging.getLogger("slo.model_health_repo")
 

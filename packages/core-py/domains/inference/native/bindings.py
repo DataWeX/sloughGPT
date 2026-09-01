@@ -7,10 +7,11 @@ Loads the compiled C library and exposes:
   - transformer_kv_cache_init/reset/free()
 """
 
+from __future__ import annotations
+
 import ctypes
 import os
 from pathlib import Path
-import numpy as np
 
 _LIB = None
 

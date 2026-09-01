@@ -5,6 +5,8 @@ Knowledge distillation — SloNet/numpy is the native runtime.
 Torch tensors are converted to numpy at the API boundary.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union

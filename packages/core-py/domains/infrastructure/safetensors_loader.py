@@ -9,10 +9,12 @@ Usage:
     weights = load_model_weights("gpt2")
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
 from domains.shared import find_repo_root

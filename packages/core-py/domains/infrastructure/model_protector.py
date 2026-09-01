@@ -18,6 +18,8 @@ Usage:
         print(f"Model files deleted: {missing}")
 
     # To allow deletion:
+
+from __future__ import annotations
     unprotect_model("gpt2")
 """
 

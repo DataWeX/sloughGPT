@@ -203,7 +203,7 @@ class ModuleLoader:
             if hasattr(module, "__author__"):
                 info.author = module.__author__
 
-            logger.info(f"Loaded addon: {name} ({elapsed:.1f}ms)")
+            logger.info("Loaded addon: %s (%.1fms)", name, elapsed)
 
             # Fire post_load hooks
             for hook in self._hooks["post_load"]:
@@ -214,7 +214,7 @@ class ModuleLoader:
         except Exception as e:
             info.state = "error"
             info.error = str(e)
-            logger.error(f"Failed to load addon {name}: {e}")
+            logger.error("Failed to load addon %s: %s", name, e)
             raise RuntimeError(f"Failed to load addon {name}: {e}") from e
 
     def unload(self, name: str) -> bool:
@@ -239,7 +239,7 @@ class ModuleLoader:
             try:
                 info.instance.cleanup()
             except Exception as e:
-                logger.warning(f"Addon {name} cleanup failed: {e}")
+                logger.warning("Addon %s cleanup failed: %s", name, e)
 
         # Remove from sys.modules
         module_key = f"slo_addon_{name}"
@@ -248,7 +248,7 @@ class ModuleLoader:
 
         info.state = "unloaded"
         info.instance = None
-        logger.info(f"Unloaded addon: {name}")
+        logger.info("Unloaded addon: %s", name)
 
         # Fire post_unload hooks
         for hook in self._hooks["post_unload"]:

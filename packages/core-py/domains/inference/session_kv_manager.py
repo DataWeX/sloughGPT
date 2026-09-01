@@ -4,6 +4,9 @@ SessionKVManager — Manages per-session KV cache state for inference providers.
 Extracted from SloNetChatProvider to centralize KV cache logic and reduce
 code duplication across construction paths.
 """
+
+from __future__ import annotations
+
 import threading
 import time as _time
 from typing import Dict, Any, Optional

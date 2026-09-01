@@ -8,6 +8,8 @@ Each user gets their own lightweight LoRA adapter that:
 - Allows personalization without retraining base model
 """
 
+from __future__ import annotations
+
 import numpy as np
 import threading
 import time

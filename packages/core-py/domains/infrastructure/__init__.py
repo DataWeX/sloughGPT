@@ -12,6 +12,9 @@ Provides:
   - TaskQueue, InProcessTaskQueue — async priority queue
   - LifecycleManager — ordered startup/shutdown with health gates
 """
+
+from __future__ import annotations
+
 from .anchor_store import MeaningTags, get_default_meaning_tags
 from .embedding_service import EmbeddingService, get_embedding_service, reset_embedding_service
 from .truth_labeler import TruthLabeler, get_truth_labeler

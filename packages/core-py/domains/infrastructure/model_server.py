@@ -20,14 +20,15 @@ Backends:
     LocalBackend  — direct model.generate().
 """
 
+from __future__ import annotations
+
 import asyncio
 import heapq
 import inspect
-import logging
+
 import queue
 import time
 import gc
-import os
 from threading import Lock, Thread
 from typing import Generator as GeneratorType
 
@@ -1046,7 +1047,7 @@ class LocalBackend(GenerateBackend):
         _skip_lock: bool = False,
         **kwargs: Any,
     ) -> dict:
-        from domains.infrastructure.ml_types import no_grad as ml_no_grad
+
 
         inputs = self._tokenizer(prompt, return_tensors="pt")
         input_ids = inputs["input_ids"].to(self._device)
@@ -1484,7 +1485,7 @@ class ModelServer:
             if not slnc_path:
                 # Resolve .slnc from HF model ID via cache directory
                 from domains.infrastructure.safetensors_loader import _get_model_dir
-                from pathlib import Path
+
                 cache_dir = _get_model_dir(self._hf_model_id)
                 candidate = cache_dir / "model.slnc"
                 if not candidate.exists():

@@ -5,16 +5,17 @@ Extracts frames from video, encodes them with the VisionEncoder,
 and uses a temporal transformer to understand video content.
 """
 
-from typing import List, Optional, Tuple
+from __future__ import annotations
+
+from typing import List
 import numpy as np
 import logging
-from pathlib import Path
 
 logger = logging.getLogger("slo.multimodal.video")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloLinear, SloLayerNorm, SloTransformerBlock,
-    SloAdam, tensor as _tensor,
+    Tensor, SloLayerNorm, SloTransformerBlock,
+    SloAdam,
 )
 
 

@@ -12,6 +12,8 @@ Available ops:
   - rmsnorm(x, w)          → numpy (C future)
 """
 
+from __future__ import annotations
+
 from .matmul import matmul
 from .layernorm import layernorm
 from .rmsnorm import rmsnorm

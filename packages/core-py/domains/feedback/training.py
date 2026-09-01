@@ -7,6 +7,8 @@ Uses collected feedback data to fine-tune the model using:
 3. RLHF-style reward modeling
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path

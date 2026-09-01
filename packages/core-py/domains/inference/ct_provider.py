@@ -5,9 +5,11 @@ The NPU calls provider.generate(), provider.tokenize(), provider._model.forward_
 Both SlonetChatProvider (numpy) and CTransformProvider (C/NativeEngine) satisfy this interface.
 """
 
+from __future__ import annotations
+
 import logging
 import numpy as np
-from typing import Optional, Dict, List
+from typing import Dict, List
 
 logger = logging.getLogger("slo.inference.ct_transform")
 

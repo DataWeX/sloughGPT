@@ -1,5 +1,5 @@
 """
-ModelQueue — manages multiple ModelTrees.
+TreeQueue — manages multiple Trees.
 
 The Queue is the top-level entry point:
   - Queue = Tree (model instance)
@@ -7,16 +7,15 @@ The Queue is the top-level entry point:
           └── Point (meaning — generator function)
 
 The Queue:
-  - Registers multiple ModelTrees (one per loaded model)
+  - Registers multiple Trees (one per loaded model)
   - Manages shared PointLibraries (dedup across trees)
   - Provides model switching and weight sharing
 """
+from __future__ import annotations
 
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
-
-import numpy as np
 
 from .config import QueueConfig, TreeConfig
 from .library import PointLibrary
@@ -27,7 +26,7 @@ logger = logging.getLogger("slo.pdqeep")
 
 
 class ModelQueue:
-    """Top-level manager for multiple ModelTrees."""
+    """Top-level manager for multiple Trees."""
 
     def __init__(self, config: Optional[QueueConfig] = None):
         self.config = config or QueueConfig()
@@ -73,7 +72,7 @@ class ModelQueue:
     def load_model(self, model_id: str, n_clusters: int = 16,
                    method: str = "cluster") -> ModelTree:
         """Load a HuggingFace model into a new tree."""
-        from .model_tree import load_model_to_points
+        from .tree import load_model_to_points
 
         tree = load_model_to_points(
             model_id,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Generic NumPy transformer inference engine.
 
@@ -33,7 +35,7 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Tup
 import numpy as np
 
 from domains.infrastructure.arch_config import ArchConfig, build_arch
-from domains.infrastructure.numpy_ops import softmax, to_float32
+from domains.infrastructure.numpy_ops import softmax
 from domains.infrastructure.numpy_forward import forward, forward_cached
 from domains.infrastructure.compression import CompressedWeight, LRUCache
 

@@ -8,6 +8,8 @@ The ONLY thing that changes per model type:
 New arch = new ArchConfig instance. Zero math changes.
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from typing import Dict

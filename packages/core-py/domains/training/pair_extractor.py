@@ -8,6 +8,8 @@ Used by the /mobile/train/from-sessions endpoint and AutoTrainer
 to avoid the mobile→server round-trip for training data.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging

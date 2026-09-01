@@ -10,6 +10,8 @@ joins in MogDB, so feedback↔message relations are resolved with two-step
 Python lookups that preserve the original JOIN semantics.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import uuid

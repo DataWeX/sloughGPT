@@ -6,17 +6,18 @@ Used as the foundation for text-to-image generation (diffusion operates
 in the latent space, not pixel space).
 """
 
-from typing import Tuple, Optional
+from __future__ import annotations
+
+from typing import Tuple
 import numpy as np
 import logging
 
 logger = logging.getLogger("slo.multimodal.vae")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloConv2D, SloLinear,
+    Tensor, SloNet, SloConv2D,
     SloAdam, relu as _relu, sigmoid as _sigmoid,
-    tensor as _tensor, zeros, ones,
-    _get_accelerator,
+    tensor as _tensor,
 )
 
 

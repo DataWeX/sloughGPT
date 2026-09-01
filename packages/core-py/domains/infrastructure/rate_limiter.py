@@ -4,6 +4,8 @@ Pure rate-limiter logic — sliding window counter, no HTTP dependencies.
 HTTP middleware lives in apps/api/server/infrastructure/rate_limit_middleware.py.
 """
 
+from __future__ import annotations
+
 import time
 import threading
 from collections import defaultdict

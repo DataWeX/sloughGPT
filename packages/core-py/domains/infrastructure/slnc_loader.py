@@ -12,13 +12,15 @@ Usage:
     block0 = loader.get_block(0)  # all weights for block 0
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import mmap
 import os
 import struct
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -26,7 +28,6 @@ from domains.infrastructure.slnc_format import (
     GPT2_BLOCK_TENSORS,
     SLNC_MAGIC,
     SLNC_VERSION,
-    HEADER_FIXED_SIZE,
 )
 
 logger = logging.getLogger("slo.infrastructure.slnc_loader")

@@ -5,6 +5,8 @@ Operates in the VAE latent space (64x7x7) rather than pixel space.
 Text conditioning via cross-attention with text embeddings.
 """
 
+from __future__ import annotations
+
 from typing import Optional, Tuple
 import numpy as np
 import logging
@@ -13,10 +15,9 @@ import math
 logger = logging.getLogger("slo.multimodal.diffusion")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloConv2D, SloLinear, SloCrossAttention,
-    SloAdam, relu as _relu, silu as _silu,
-    tensor as _tensor, zeros, ones,
-    sigmoid as _sigmoid,
+    Tensor, SloConv2D, SloLinear, SloCrossAttention,
+    SloAdam, silu as _silu,
+    tensor as _tensor,
 )
 
 

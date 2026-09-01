@@ -15,12 +15,11 @@ keyed by ``_id: "config"``).
 from __future__ import annotations
 
 import re
-import math
-import json
+
+
 import logging
 from typing import Optional
 from pathlib import Path
-from dataclasses import dataclass, asdict
 
 logger = logging.getLogger("slo.learner.filter")
 

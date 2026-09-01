@@ -4,6 +4,8 @@ Speech Recognition Module
 Speech-to-text using Web Speech API (browser) with server fallback.
 """
 
+from __future__ import annotations
+
 from typing import Optional, Protocol
 from dataclasses import dataclass
 import logging

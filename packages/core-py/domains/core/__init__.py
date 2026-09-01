@@ -5,6 +5,8 @@ SloEngine is THE core model wrapper. All inference flows through here.
 Cognitive and reasoning engines are first-class citizens, built INTO the soul.
 """
 
+from __future__ import annotations
+
 from .soul import SloEngine, GenerationContext
 
 __all__ = ["SloEngine", "GenerationContext"]

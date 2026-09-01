@@ -11,13 +11,14 @@ This is the "Graph" in the Point-Graph-Queue architecture:
   - Statistics and introspection
   - Persistence to disk as JSON with base64-encoded numpy arrays
 """
+from __future__ import annotations
 
 import json
 import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -324,8 +325,13 @@ class PointLibrary:
             assignments = point.params["assignments"]
             result = centroids[assignments]
         else:
-            # Use stored shape if available, else fallback to point.shape
-            n = int(np.prod(point.shape)) if point.shape else 1000
+            # Prefer explicit shape, then stored point.shape, else fallback
+            if shape is not None:
+                n = int(np.prod(shape))
+            elif point.shape:
+                n = int(np.prod(point.shape))
+            else:
+                n = 1000
             result = point.generate(n)
         if shape is not None:
             result = result.reshape(shape)
@@ -420,8 +426,6 @@ class PointLibrary:
             for p in points:
                 total_raw += p._estimate_raw_bytes()
                 total_compressed += p.nbytes()
-                if p.residual is not None:
-                    total_compressed += p.residual.nbytes
 
             return {
                 "name": self.name,
@@ -445,7 +449,7 @@ class PointLibrary:
     # ── Persistence ──────────────────────────────────────────────────
 
     def save(self, path: Optional[Path] = None) -> Path:
-        """Save library to disk (thread-safe)."""
+        """Save library to disk (thread-safe, atomic write)."""
         if path is None:
             if self._storage_dir is None:
                 raise ValueError("No storage_dir set and no path provided")
@@ -459,20 +463,32 @@ class PointLibrary:
                 "saved_at": time.time(),
                 "points": [p.to_dict() for p in self._points.values()],
             }
-        path.write_text(json.dumps(data, indent=2))
+        # Atomic write: write to temp file then rename
+        tmp_path = path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(data, indent=2))
+        tmp_path.rename(path)
         return path
 
     @classmethod
     def load(cls, path: Path, validate: bool = True) -> "PointLibrary":
-        """Load library from disk."""
-        data = json.loads(path.read_text())
+        """Load library from disk. Handles corrupted JSON gracefully."""
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logger.warning("Corrupted library file %s: %s", path, e)
+            return cls(name=path.stem, storage_dir=path.parent, validate=validate)
         lib = cls(
             name=data.get("name", path.stem),
             storage_dir=path.parent,
             validate=validate,
         )
         lib._created_at = data.get("created_at", 0)
-        points = [Point.from_dict(pd) for pd in data.get("points", [])]
+        points = []
+        for pd in data.get("points", []):
+            try:
+                points.append(Point.from_dict(pd))
+            except (KeyError, ValueError, TypeError) as e:
+                logger.warning("Skipping corrupted point in %s: %s", path, e)
         lib.add_many(points)
         return lib
 

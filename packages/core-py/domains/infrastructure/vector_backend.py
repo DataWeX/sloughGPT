@@ -10,9 +10,8 @@ from __future__ import annotations
 import logging
 import multiprocessing as mp
 import multiprocessing.shared_memory as shm
-import os
 import time
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 

@@ -7,6 +7,8 @@ WARNING: This calls external HuggingFace API endpoints.
 Set HF_API_KEY or HF_TOKEN environment variable to use.
 """
 
+from __future__ import annotations
+
 import os
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List

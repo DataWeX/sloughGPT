@@ -3,6 +3,8 @@ SloughGPT Personality System
 Defines personalities that can be applied to model outputs
 """
 
+from __future__ import annotations
+
 from typing import Dict, List
 from dataclasses import dataclass
 from enum import Enum

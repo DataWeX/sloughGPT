@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Iterator
-
 from .filters import Filter
 from .pipeline import CollectionPipeline
-from .sources import Record, Source
+from .sources import Source
 from .stores import Store
 
 

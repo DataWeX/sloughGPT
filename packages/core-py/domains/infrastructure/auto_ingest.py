@@ -2,14 +2,14 @@
 Auto-Ingestion Pipeline - Scans the repo and ingests all code/docs into vector store.
 Run: python3 -m domains.infrastructure.auto_ingest --path . --provider chromadb
 """
-import os
-import json
+
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable
+from typing import List, Dict, Any
 from dataclasses import dataclass
 import hashlib
 import logging
-import mimetypes
 
 logger = logging.getLogger("slo.auto_ingest")
 

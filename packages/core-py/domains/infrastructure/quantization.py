@@ -25,13 +25,14 @@ Usage:
     weight = info.as_float()  # dequantized on the fly
 """
 
+from __future__ import annotations
+
 import json
 import logging
-import math
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 

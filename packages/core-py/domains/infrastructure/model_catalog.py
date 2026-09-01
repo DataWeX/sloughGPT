@@ -6,11 +6,13 @@ Stores metadata (format, path, parameters, quantization, source)
 so the server knows what's available without re-scanning on every request.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.infrastructure.model_catalog")
 
@@ -233,7 +235,7 @@ class ModelCatalog:
 
         Returns the number of new models added.
         """
-        from domains.infrastructure.safetensors_loader import _get_model_dir
+
 
         added = 0
         # Scan HuggingFace cache

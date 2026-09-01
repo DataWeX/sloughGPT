@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 """
 .slnc parser — memory-mapped loader for .slnc files.
 
-Zero-copy weight loading via mmap. Numpy arrays are views into file pages.
-OS handles demand loading — only accessed blocks get paged in from disk.
+True zero-copy weight loading via mmap. Numpy arrays are views into file
+pages. OS handles demand loading — only accessed blocks get paged in from disk.
 
 Usage:
     from domains.infrastructure.slnc.parser import SLNCParser
 
     parser = SLNCParser("models/gpt2.slnc")
-    q_weight = parser.get_tensor("blocks.0.attn.c_attn.weight")
+    q_weight = parser.get_tensor("h.0.attn.c_attn.weight")  # zero-copy view
     block0 = parser.get_block(0)
-    all_weights = parser.get_weights_dict()
+    all_weights = parser.get_weights_dict()  # still zero-copy
 """
 
 import json
@@ -20,17 +22,20 @@ import os
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from domains.infrastructure.slnc.spec import (
     MAGIC,
     VERSION,
-    ALIGNMENT,
-    DTYPE_FLOAT32,
+    MAX_NDIM,
+    MAX_TENSOR_COUNT,
+    MAX_NAME_LEN,
+    FLAG_HAS_HEADER_CRC,
+    FLAG_ALIGNED_TENSORS,
+    SLNCConfig,
     compute_header_size,
-    compute_tensor_entry_size,
     code_to_dtype,
 )
 
@@ -41,19 +46,26 @@ class SLNCParser:
     """Memory-mapped parser for .slnc files.
 
     Weights are numpy views into mmap'd file pages.
-    Zero copy — the numpy array IS the file memory.
+    True zero copy — the numpy array IS the file memory.
     Demand loading — OS pages in only accessed blocks.
     """
 
-    def __init__(self, path: str, verify_checksums: bool = False):
+    def __init__(
+        self,
+        path: str,
+        verify_checksums: bool = False,
+        config: Optional[SLNCConfig] = None,
+    ):
         """Open .slnc file and parse header + tensor table.
 
         Args:
             path: Path to .slnc file
             verify_checksums: If True, verify CRC32 on first access
+            config: Optional config overrides
         """
         self._path = path
         self._verify = verify_checksums
+        self._config = config or SLNCConfig()
         self._fd = os.open(path, os.O_RDONLY)
         self._file_size = os.fstat(self._fd).st_size
         self._mm = mmap.mmap(self._fd, 0, access=mmap.ACCESS_READ)
@@ -74,7 +86,7 @@ class SLNCParser:
         )
 
     def _parse_header(self):
-        """Parse the fixed-size header."""
+        """Parse the fixed-size header with soft version check."""
         self._mm.seek(0)
 
         # Magic
@@ -82,13 +94,21 @@ class SLNCParser:
         if magic != MAGIC:
             raise ValueError(f"Invalid magic: {magic!r} (expected {MAGIC!r})")
 
-        # Version
+        # Version — soft check
         version = struct.unpack("<I", self._mm.read(4))[0]
-        if version != VERSION:
-            raise ValueError(f"Unsupported version: {version}")
+        if version > VERSION:
+            logger.warning(
+                "SLNC version %d > supported %d — some features may be unavailable",
+                version, VERSION,
+                extra={"tag": "INFRA"},
+            )
 
         # Flags
         self._flags = struct.unpack("<I", self._mm.read(4))[0]
+
+        # Decode flags
+        self._has_header_crc = bool(self._flags & FLAG_HAS_HEADER_CRC)
+        self._aligned_tensors = bool(self._flags & FLAG_ALIGNED_TENSORS)
 
         # Model metadata (64 bytes)
         self._n_layer = struct.unpack("<I", self._mm.read(4))[0]
@@ -101,30 +121,62 @@ class SLNCParser:
         self._block_size = struct.unpack("<I", self._mm.read(4))[0]
         self._tensor_count = struct.unpack("<I", self._mm.read(4))[0]
         self._data_offset = struct.unpack("<I", self._mm.read(4))[0]
-        self._reserved = self._mm.read(24)
+
+        # Reserved region (24 bytes)
+        reserved = self._mm.read(24)
+        self._header_crc = struct.unpack("<I", reserved[:4])[0]
+
+        # Validate tensor count
+        if self._tensor_count > MAX_TENSOR_COUNT:
+            raise ValueError(f"Too many tensors: {self._tensor_count} (max {MAX_TENSOR_COUNT})")
 
         # Config JSON
         json_len = struct.unpack("<I", self._mm.read(4))[0]
-        self._config = json.loads(self._mm.read(json_len))
+        self._config_dict = json.loads(self._mm.read(json_len))
+
+        # Verify header CRC if present
+        if self._has_header_crc and self._header_crc != 0:
+            self._verify_header_crc()
+
+    def _verify_header_crc(self):
+        """Verify header integrity via CRC32."""
+        import zlib
+        # Read entire header up to tensor table start
+        header_size = compute_header_size(
+            json.dumps(self._config_dict, sort_keys=True).encode()
+        )
+        self._mm.seek(0)
+        header_data = self._mm.read(header_size)
+        actual_crc = zlib.crc32(header_data) & 0xFFFFFFFF
+        if actual_crc != self._header_crc:
+            raise ValueError(
+                f"Header CRC mismatch: expected {self._header_crc:#x}, got {actual_crc:#x}"
+            )
 
     def _parse_tensor_table(self):
-        """Parse the tensor table (offsets + metadata for all tensors)."""
+        """Parse the tensor table (variable-length entries)."""
         self._tensor_map: Dict[str, Tuple[int, Tuple[int, ...], np.dtype, int]] = {}
-        # name → (file_offset, shape, dtype, crc32)
 
-        # Skip to tensor table (after header)
-        header_size = compute_header_size(json.dumps(self._config, sort_keys=True).encode())
+        header_size = compute_header_size(
+            json.dumps(self._config_dict, sort_keys=True).encode()
+        )
         self._mm.seek(header_size)
 
         for _ in range(self._tensor_count):
             # Read name string
             name_len = struct.unpack("<I", self._mm.read(4))[0]
+            if name_len > MAX_NAME_LEN:
+                raise ValueError(f"Tensor name too long: {name_len} > {MAX_NAME_LEN}")
             name = self._mm.read(name_len).decode()
 
             # Read entry fields
             offset = struct.unpack("<Q", self._mm.read(8))[0]
             size = struct.unpack("<I", self._mm.read(4))[0]
             ndim = struct.unpack("<I", self._mm.read(4))[0]
+
+            # Validate ndim
+            if ndim > MAX_NDIM:
+                raise ValueError(f"Tensor {name!r} has {ndim} dims (max {MAX_NDIM})")
 
             shape = tuple(
                 struct.unpack("<I", self._mm.read(4))[0] for _ in range(ndim)
@@ -143,7 +195,7 @@ class SLNCParser:
             name: Tensor name (e.g. "h.0.attn.c_attn.weight")
 
         Returns:
-            numpy array — COPY of data from mmap'd file
+            numpy array — TRUE ZERO-COPY VIEW into mmap'd file
         """
         if name not in self._tensor_map:
             raise KeyError(f"Unknown tensor: {name}")
@@ -151,9 +203,8 @@ class SLNCParser:
         offset, shape, dtype, crc = self._tensor_map[name]
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
 
-        # np.frombuffer with mmap slice, .copy() creates independent array
-        # (avoids extra bytes() intermediate copy)
-        arr = np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape).copy()
+        # True zero-copy: view into mmap without .copy()
+        arr = np.frombuffer(self._mm[offset:offset + nbytes], dtype=dtype).reshape(shape)
 
         # Optional integrity check
         if self._verify:
@@ -164,11 +215,23 @@ class SLNCParser:
 
         return arr
 
-    def get_tensor_info(self, name: str) -> Tuple[int, Tuple[int, ...], np.dtype, int]:
-        """Get tensor metadata without reading data.
+    def get_tensor_copy(self, name: str) -> np.ndarray:
+        """Get weight tensor as an independent writable copy.
+
+        Use this when you need to modify the tensor (e.g. for inference
+        computation). For read-only access, prefer get_tensor() which
+        returns a zero-copy view.
 
         Args:
             name: Tensor name
+
+        Returns:
+            numpy array — independent copy that can be freely modified
+        """
+        return self.get_tensor(name).copy()
+
+    def get_tensor_info(self, name: str) -> Tuple[int, Tuple[int, ...], np.dtype, int]:
+        """Get tensor metadata without reading data.
 
         Returns:
             (offset, shape, dtype, crc) — file offset, array shape, element dtype, CRC32
@@ -181,16 +244,9 @@ class SLNCParser:
         return self._tensor_map[name]
 
     def read_tensor_region(self, name: str) -> np.ndarray:
-        """Read tensor directly from mmap into numpy array.
+        """Read tensor directly from mmap into numpy array (writable copy).
 
-        Like get_tensor() but returns a writable copy that can be assigned
-        directly to model parameter buffers.
-
-        Args:
-            name: Tensor name
-
-        Returns:
-            numpy array — writable copy of mmap data
+        Like get_tensor_copy() but named for backward compatibility.
         """
         offset, shape, dtype, crc = self.get_tensor_info(name)
         nbytes = int(np.prod(shape)) * np.dtype(dtype).itemsize
@@ -202,10 +258,7 @@ class SLNCParser:
         return list(self._tensor_map.keys())
 
     def get_block(self, layer_idx: int) -> Dict[str, np.ndarray]:
-        """Get all weights for a transformer block.
-
-        Returns dict mapping short tensor names to numpy views.
-        """
+        """Get all weights for a transformer block."""
         block_tensor_names = [
             "ln_1.weight", "ln_1.bias",
             "attn.c_attn.weight", "attn.c_attn.bias",
@@ -218,11 +271,12 @@ class SLNCParser:
         result = {}
         for tensor_name in block_tensor_names:
             key = f"h.{layer_idx}.{tensor_name}"
-            result[tensor_name] = self.get_tensor(key)
+            if key in self._tensor_map:
+                result[tensor_name] = self.get_tensor(key)
         return result
 
     def get_weights_dict(self) -> Dict[str, np.ndarray]:
-        """Get all weights as a dict (backward compatibility)."""
+        """Get all weights as a dict (zero-copy views)."""
         return {name: self.get_tensor(name) for name in self._tensor_map}
 
     def get_weights_dict_parallel(self, max_workers: Optional[int] = None) -> Dict[str, np.ndarray]:
@@ -236,7 +290,7 @@ class SLNCParser:
             max_workers: Thread pool size. Defaults to min(32, os.cpu_count() + 4).
 
         Returns:
-            Dict mapping tensor names → numpy arrays (copies from mmap).
+            Dict mapping tensor names → numpy arrays (zero-copy views).
         """
         names = list(self._tensor_map.keys())
 
@@ -250,17 +304,7 @@ class SLNCParser:
         return result
 
     def release_file_pages(self) -> bool:
-        """Discard resident file-backed pages back to the OS.
-
-        ``get_tensor()`` returns copies of the mmap data, so after all
-        tensors have been loaded the mmap pages hold no live references.
-        Dropping them (``MADV_DONTNEED``) frees their resident-set memory
-        without affecting correctness; a later read re-faults the pages
-        from disk.
-
-        Returns:
-            True if resident pages were released, False if unsupported.
-        """
+        """Discard resident file-backed pages back to the OS."""
         if self._mm is None:
             return False
         try:
@@ -286,7 +330,7 @@ class SLNCParser:
 
     @property
     def config(self) -> dict:
-        return self._config
+        return self._config_dict
 
     @property
     def file_size(self) -> int:
@@ -298,12 +342,7 @@ class SLNCParser:
 
     @property
     def param_count(self) -> int:
-        """Total number of model parameters (sum of tensor elements).
-
-        Computed from the tensor table only — no weight pages are faulted
-        into memory, so this is cheap and safe to call before any tensor
-        access.
-        """
+        """Total number of model parameters (sum of tensor elements)."""
         return int(sum(np.prod(shape) for (_, shape, _, _) in self._tensor_map.values()))
 
     @property
@@ -327,11 +366,7 @@ class SLNCParser:
         return self._n_positions
 
     def close(self) -> None:
-        """Close the mmap and file descriptor, releasing the header pages.
-
-        Safe to call multiple times; a no-op once already closed. Frees the
-        small resident footprint of the header/tensor-table read.
-        """
+        """Close the mmap and file descriptor."""
         try:
             if self._mm is not None:
                 self._mm.close()

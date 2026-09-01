@@ -42,15 +42,15 @@
     {
       "id": "20260830_103238_test-coverage-expansion-core-python-modules",
       "title": "Test Coverage Expansion - Core Python Modules",
-      "description": "",
-      "column": "in_progress",
+      "description": "Added 149 tests for domains.training.service (the only untested module). Total coverage: 310/311 modules. 507+ tests passing.",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "testing",
         "coverage"
       ],
       "created_at": "2026-08-30T10:32:38.549365+00:00",
-      "updated_at": "2026-08-31T09:26:19.241248+00:00",
+      "updated_at": "2026-09-01T12:00:00.000000+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -204,7 +204,7 @@
       "id": "20260829_121936_stage-13-diurnal-energy-cycle-boundary-source-implemented-ve",
       "title": "Stage 13 diurnal energy cycle (boundary source) implemented + verified: apply_solar deposits onto topmost exposed cells per tick, WorldGrid.light perceptible as cells feature index 5 (cells_input_dim 6), _conservation_sweep now boundary-aware (subtracts scene.solar_energy_deposited), benchmark_solar all-four-invariants green (conservation exact, closed monotonic, brains identical, solar emerged). Live realm view: domains/shell/realm_view.py + realm_live.py -- render_frame skyline w/ sun position, grayscale energy heat, all-alive baby overlay on the baby-richest z-slice, live_view drives the real Simulation.step loop re-seeded from world_seed; 12 tests in tests/test_realm_view.py pass. Realm regression suites green (test_evolution, test_civilization, test_lifecycle, test_specialization, test_predation, test_territoriality, test_world_driver). docs/WORLD_REALM.md Stage 13 section + Live Realm View + test_realm_view table rows added.",
       "description": "",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "world-realm",
@@ -212,7 +212,7 @@
         "done"
       ],
       "created_at": "2026-08-29T12:19:36.469394+00:00",
-      "updated_at": "2026-08-31T09:26:19.259808+00:00",
+      "updated_at": "2026-09-01T12:00:00.000000+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -7911,6 +7911,36 @@
       "comments": [],
       "sprint": "",
       "gh": ""
+    },
+    {
+      "id": "cleanup-20260901",
+      "title": "Code quality sweep: 284 unused imports removed + logging fixes",
+      "column": "done",
+      "tags": [
+        "cleanup",
+        "code-quality",
+        "backend"
+      ],
+      "created_at": "2026-09-01T12:00:00.000000+00:00",
+      "updated_at": "2026-09-01T12:00:00.000000+00:00",
+      "description": "Removed 284 unused imports across 60+ files (360\u219276 remaining). Fixed 2 silent except Exception:pass in training/service.py. All 1142 tests passing."
+    },
+    {
+      "id": "20260901_175948-code-quality-cleanup",
+      "title": "Code quality cleanup: unused imports, logging fixes, test expansion",
+      "description": "Completed: (1) Added future annotations to 355 files, (2) Removed 284 unused imports from production, (3) Cleaned 70+ unused imports from tests, (4) Fixed 6 logging test failures (SloFormatter\u2192LogFormatter API mismatch), (5) Added corr field to JSON format, (6) Fixed vm.py BlockDevice forward references, (7) 1340+ tests passing.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "cleanup",
+        "tests",
+        "logging"
+      ],
+      "created_at": "2026-09-01T17:59:48.079953",
+      "updated_at": "2026-09-01T17:59:48.079959",
+      "due_date": null,
+      "assignee": null,
+      "notes": ""
     }
   ]
 }

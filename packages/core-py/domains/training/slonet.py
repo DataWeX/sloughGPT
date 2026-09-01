@@ -170,9 +170,17 @@ def _broadcast_back(g: np.ndarray, shape: tuple) -> np.ndarray:
     """
     if g.ndim > len(shape):
         g = g.sum(axis=tuple(range(g.ndim - len(shape))), keepdims=False)
+    elif g.ndim < len(shape):
+        g = g.reshape((1,) * (len(shape) - g.ndim) + g.shape)
+    needs_broadcast = False
     for i, d in enumerate(shape):
-        if d == 1 and i < g.ndim and g.shape[i] > 1:
-            g = np.sum(g, axis=i, keepdims=True)
+        if i < g.ndim:
+            if d == 1 and g.shape[i] > 1:
+                g = np.sum(g, axis=i, keepdims=True)
+            elif g.shape[i] == 1 and d != 1:
+                needs_broadcast = True
+    if needs_broadcast:
+        g = np.broadcast_to(g, shape)
     return g.copy()
 
 
@@ -265,18 +273,18 @@ class _MetaTensor:
 class Tensor:
     _id_counter = 0
 
-    def __init__(self, data, requires_grad: bool = False, _children: tuple = (), _copy: bool = True):
+    def __init__(self, data, requires_grad: bool = False, _children: tuple = (), _copy: bool = True, _raw: bool = False):
         if isinstance(data, np.ndarray):
-            if data.dtype != np.float32:
+            if not _raw and data.dtype != np.float32:
                 data = data.astype(np.float32)
-            elif _copy:
+            elif _copy and not _raw:
                 data = data.copy()
         elif isinstance(data, (list, memoryview)):
-            data = np.array(data, dtype=np.float32)
+            data = np.array(data, dtype=np.float32) if not _raw else np.array(data)
         elif hasattr(data, 'detach'):  # PyTorch tensor
             data = data.detach().cpu().numpy().astype(np.float32)
         else:
-            data = np.asarray(data, dtype=np.float32)
+            data = np.asarray(data, dtype=np.float32) if not _raw else np.asarray(data)
         self.data = np.asarray(data)
         self.grad: Optional[Tensor] = None
         if _NO_GRAD:
@@ -472,13 +480,27 @@ class Tensor:
         """Jacobian-vector product via forward-mode AD.
 
         Args:
-            v: tangent vector (same shape as ``self``).
+            v: tangent vector (same shape as the inputs).
 
         Returns:
             Tensor holding ``J @ v`` at the output.
         """
-        tangents = {self.id: v.data}
-        result = self.forward_grad(tangents)
+        leaf_tangents = {}
+        visited = set()
+        def find_leaves(node):
+            if node.id in visited:
+                return
+            visited.add(node.id)
+            children = getattr(node, '_children', None) or ()
+            has_children = False
+            for c in children:
+                if isinstance(c, Tensor):
+                    has_children = True
+                    find_leaves(c)
+            if not has_children and node.requires_grad:
+                leaf_tangents[node.id] = v.data
+        find_leaves(self)
+        result = self.forward_grad(leaf_tangents)
         out_t = result.get(self.id, np.zeros_like(self.data))
         return Tensor(out_t)
 
@@ -494,9 +516,13 @@ class Tensor:
         if dtype is not None:
             if hasattr(dtype, '_np'):
                 dtype = dtype._np
-            if dtype in (np.float16, np.float32, np.float64, 'float16', 'float32', 'float64'):
+            # Float dtypes always pin to float32 (SloNet convention)
+            if dtype in (np.float16, np.float32, np.float64, 'float16', 'float32', 'float64',
+                         type(np.float16), type(np.float32), type(np.float64)):
                 self.data = self.data.astype(np.float32)
-            elif dtype in (np.int8, np.int16, np.int32, np.int64, 'int8', 'int16', 'int32', 'int64'):
+            elif dtype in (np.int8, np.int16, np.int32, np.int64,
+                           'int8', 'int16', 'int32', 'int64',
+                           type(np.int8), type(np.int16), type(np.int32), type(np.int64)):
                 self.data = self.data.astype(dtype)
         if device is not None and 'meta' not in str(device):
             pass  # no-op — SloNet is CPU/numpy native
@@ -519,16 +545,16 @@ class Tensor:
         return self
 
     def long(self):
-        return Tensor(self.data.astype(np.int64), requires_grad=self.requires_grad)
+        return Tensor(self.data.astype(np.int64), requires_grad=self.requires_grad, _raw=True)
 
     def int(self):
-        return Tensor(self.data.astype(np.int32), requires_grad=self.requires_grad)
+        return Tensor(self.data.astype(np.int32), requires_grad=self.requires_grad, _raw=True)
 
     def half(self):
-        return Tensor(self.data.astype(np.float16), requires_grad=self.requires_grad)
+        return Tensor(self.data.astype(np.float16), requires_grad=self.requires_grad, _raw=True)
 
     def double(self):
-        return Tensor(self.data.astype(np.float64), requires_grad=self.requires_grad)
+        return Tensor(self.data.astype(np.float64), requires_grad=self.requires_grad, _raw=True)
 
     def flatten(self, start_dim=0, end_dim=-1):
         return Tensor(self.data.reshape(-1), requires_grad=False)
@@ -1318,7 +1344,8 @@ def _sample_from_logits(logits: np.ndarray, temperature: float = 1.0,
     has_penalties = (repetition_penalty != 1.0 or frequency_penalty != 0.0 or
                      presence_penalty != 0.0 or eos_token is not None)
     if is_greedy and not has_penalties:
-        return int(np.argmax(logits[0]))
+        safe = np.where(np.isfinite(logits[0]), logits[0], -1e9)
+        return int(np.argmax(safe))
 
     # Copy only when mutations are needed
     logits = logits.copy()
