@@ -15,11 +15,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  Badge,
   IconRefresh,
   Skeleton,
+  STRUI_VERSION,
+  VersionInspector,
 } from '@sloughgpt/strui'
 import { Button, cn } from '@sloughgpt/strui'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
@@ -40,6 +43,17 @@ import { formatUptime } from '@/lib/chat-utils'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { settingsSchema } from '@/lib/validation-schemas'
+
+const WEB_VERSION = '3.0.0'
+
+function VersionBadge({ label, version }: { label: string; version?: string | null }) {
+  if (!version) return null
+  return (
+    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/50">
+      {label} {version}
+    </Badge>
+  )
+}
 
 function SettingsSlider({
   label, value, onChange, min, max, step, formatValue,
@@ -188,13 +202,18 @@ export default function SettingsPage() {
               </div>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Palette */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Palette</CardTitle>
-            <CardDescription>Full-spectrum color palette</CardDescription>
+            <div>
+              <CardTitle className="text-base">Palette</CardTitle>
+              <CardDescription>Full-spectrum color palette</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -225,13 +244,18 @@ export default function SettingsPage() {
               </div>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Language */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Language</CardTitle>
-            <CardDescription>Interface language</CardDescription>
+            <div>
+              <CardTitle className="text-base">Language</CardTitle>
+              <CardDescription>Interface language</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -249,13 +273,18 @@ export default function SettingsPage() {
               ))}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Connection */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Connection</CardTitle>
-            <CardDescription>Service connection and authentication</CardDescription>
+            <div>
+              <CardTitle className="text-base">Connection</CardTitle>
+              <CardDescription>Service connection and authentication</CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -311,6 +340,9 @@ export default function SettingsPage() {
               )}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={detailed?.versions?.api} />
+          </CardFooter>
         </Card>
 
         {/* Chat defaults */}
@@ -387,13 +419,18 @@ export default function SettingsPage() {
               </Button>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Memory */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Memory</CardTitle>
-            <CardDescription>Custom instructions included with every prompt</CardDescription>
+            <div>
+              <CardTitle className="text-base">Memory</CardTitle>
+              <CardDescription>Custom instructions included with every prompt</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -404,13 +441,18 @@ export default function SettingsPage() {
               aria-label="Custom instructions"
             />
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Chat commands reference */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Chat commands</CardTitle>
-            <CardDescription>Type <kbd className="inline-flex items-center rounded border border-border/40 bg-muted px-1.5 py-0.5 text-[11px] font-mono">/</kbd> in chat to open the command palette</CardDescription>
+            <div>
+              <CardTitle className="text-base">Chat commands</CardTitle>
+              <CardDescription>Type <kbd className="inline-flex items-center rounded border border-border/40 bg-muted px-1.5 py-0.5 text-[11px] font-mono">/</kbd> in chat to open the command palette</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
@@ -438,13 +480,18 @@ export default function SettingsPage() {
               ))}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Keyboard shortcuts */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Keyboard shortcuts</CardTitle>
-            <CardDescription>Global shortcuts available on any page</CardDescription>
+            <div>
+              <CardTitle className="text-base">Keyboard shortcuts</CardTitle>
+              <CardDescription>Global shortcuts available on any page</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
@@ -465,13 +512,18 @@ export default function SettingsPage() {
               ))}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* System health */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">System health</CardTitle>
-            <CardDescription>Backend status and resource usage</CardDescription>
+            <div>
+              <CardTitle className="text-base">System health</CardTitle>
+              <CardDescription>Backend status and resource usage</CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {healthError && !detailed && !metrics ? (
@@ -546,19 +598,24 @@ export default function SettingsPage() {
               <Button variant="ghost" size="sm" className="text-xs" onClick={fetchHealth}>
                 Refresh health
               </Button>
-              <span className="text-xs text-muted-foreground font-mono">v3.0.0</span>
             </div>
             </>
             )}
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="pkg" version={detailed?.versions?.package} />
+            <VersionBadge label="api" version={detailed?.versions?.api} />
+          </CardFooter>
         </Card>
 
         {/* System info */}
         {info && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">System information</CardTitle>
-              <CardDescription>Detailed platform and environment details</CardDescription>
+              <div>
+                <CardTitle className="text-base">System information</CardTitle>
+                <CardDescription>Detailed platform and environment details</CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -584,14 +641,34 @@ export default function SettingsPage() {
                 </div>
               </div>
             </CardContent>
+            <CardFooter className="justify-end">
+              <VersionBadge label="torch" version={detailed?.versions?.torch} />
+            </CardFooter>
           </Card>
         )}
+
+        {/* Version Inspector */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Version inspector</CardTitle>
+            <CardDescription>Strui component ↔ backend feature version alignment</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <VersionInspector backendFeatures={detailed?.versions?.features} />
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+              <p className="text-xs text-muted-foreground">Component ↔ feature version sync</p>
+              <span className="text-xs text-muted-foreground font-mono">strui {STRUI_VERSION}</span>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Export / Import settings */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Backup & restore</CardTitle>
-            <CardDescription>Export your settings to a file, or import from a backup</CardDescription>
+            <div>
+              <CardTitle className="text-base">Backup & restore</CardTitle>
+              <CardDescription>Export your settings to a file, or import from a backup</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
@@ -625,6 +702,9 @@ export default function SettingsPage() {
               }}>Import settings</Button>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Process isolation */}
@@ -659,6 +739,28 @@ export default function SettingsPage() {
                     <span className="font-mono text-xs">{processGuard.model_id}</span>
                   </div>
                 )}
+                {processGuard.health && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Alive</span>
+                      <span className={processGuard.health.alive ? 'text-success' : 'text-destructive'}>
+                        {processGuard.health.alive ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    {processGuard.health.memory_mb !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Memory</span>
+                        <span className="font-mono text-xs">{processGuard.health.memory_mb} MB</span>
+                      </div>
+                    )}
+                    {processGuard.health.restarts !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Restarts</span>
+                        <span className="font-mono text-xs">{processGuard.health.restarts}</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <p className="text-xs text-muted-foreground pt-1">
                   Process isolation runs the model in a subprocess. If it crashes, the app survives and restarts it automatically. Uses ~2 GB more RAM.
                 </p>
@@ -671,13 +773,18 @@ export default function SettingsPage() {
               </div>
             )}
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={detailed?.versions?.package} />
+          </CardFooter>
         </Card>
 
         {/* Danger zone */}
         <Card className="border-destructive/30">
           <CardHeader>
-            <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
-            <CardDescription>Irreversible actions</CardDescription>
+            <div>
+              <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+              <CardDescription>Irreversible actions</CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -726,6 +833,9 @@ export default function SettingsPage() {
               </AlertDialog>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
     </PageContainer>
   )

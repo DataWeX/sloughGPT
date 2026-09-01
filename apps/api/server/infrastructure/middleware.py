@@ -43,6 +43,80 @@ SLOW_THRESHOLD_SECONDS = 1.0
 # Paths that are always slow during cold start - suppress SLOW log for these
 _COLD_START_PATHS = frozenset({"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs", "/system/stream"})
 
+# Inference endpoints that require a loaded model
+_INFERENCE_PATHS = frozenset({"/chat", "/chat/stream", "/inference/generate", "/inference/generate/stream"})
+
+
+def _model_ready() -> bool:
+    """True when a model is actually materialized and ready for inference."""
+    try:
+        import state as server_state
+        if server_state.model is not None:
+            return True
+        provider = server_state.provider
+        if provider is None:
+            return False
+        return getattr(provider, '_model', None) is not None
+    except Exception:
+        return False
+
+
+def _get_startup_phase() -> dict:
+    """Return the current startup phase info."""
+    try:
+        from startup_progress import STARTUP_PHASE
+        return STARTUP_PHASE
+    except Exception:
+        return {"phase": "unknown", "step": 0, "total": 9, "message": "Starting..."}
+
+
+class ReadinessGateMiddleware(BaseHTTPMiddleware):
+    """Blocks inference requests until the model is loaded.
+
+    Returns 503 with Retry-After header for /chat and /inference/*
+    endpoints when the model is not ready. Includes startup phase
+    info in the response body so the frontend can show progress.
+    """
+
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        path = request.url.path
+        if path not in _INFERENCE_PATHS:
+            return await call_next(request)
+
+        if _model_ready():
+            return await call_next(request)
+
+        phase = _get_startup_phase()
+        phase_name = phase.get("phase", "unknown")
+        step = phase.get("step", 0)
+        total = phase.get("total", 9)
+        msg = phase.get("message", "Starting...")
+
+        if phase_name in ("initializing", "unknown"):
+            retry_after = 30
+        elif phase_name == "ready":
+            retry_after = 2
+        else:
+            remaining_steps = max(1, total - step)
+            retry_after = min(30, remaining_steps * 10)
+
+        corr_id = request.scope.get("correlation_id", "-")
+        logger.warning(
+            "readiness_gate: %s %s blocked (phase=%s step=%d/%d) retry_after=%ds corr=%s",
+            request.method, path, phase_name, step, total, retry_after, corr_id,
+            extra={"tag": "INFRA", "http": {"method": request.method, "path": path, "status": 503, "corr": corr_id}},
+        )
+
+        return JSONResponse(
+            status_code=503,
+            content=error_response(
+                f"Model still loading — {msg} (step {step}/{total})",
+                "E_MODEL_LOADING",
+                details={"phase": phase_name, "step": step, "total": total, "message": msg},
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
 
 class RequestTimeoutMiddleware(BaseHTTPMiddleware):
     """Enforces a server-side per-request timeout.
@@ -355,16 +429,18 @@ def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) 
     order, and the inbound request path is the reverse of it.
 
     Request path (inbound -> outbound):
-        ClientErrorFilter -> CorrelationId -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
+        ClientErrorFilter -> CorrelationId -> ReadinessGate -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
 
-    CorrelationId MUST run before UnifiedRequest inbound so that
-    ``request.scope["correlation_id"]`` is populated when UnifiedRequest logs.
+    CorrelationId MUST run before ReadinessGate so that the gate can
+    include the correlation ID in its logs.  ReadinessGate MUST run
+    before UnifiedRequest so blocked requests are logged by the gate.
     """
     return [
         (RequestTimeoutMiddleware, {"timeout": request_timeout}),
         (MetricsMiddleware, {}),
         (PayloadLoggingMiddleware, {}),
         (UnifiedRequestMiddleware, {}),
+        (ReadinessGateMiddleware, {}),
         (CorrelationIdMiddleware, {}),
         (ClientErrorFilterMiddleware, {}),
     ]

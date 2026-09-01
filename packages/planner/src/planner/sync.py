@@ -14,6 +14,7 @@ from pathlib import Path
 
 from planner import config
 from planner.store import Store
+from planner.hashtree import HashTreeStore, create_hash_tree
 
 
 def sync_notes_to_board(note_store, board_store: Store) -> tuple[int, int, int]:
@@ -22,6 +23,8 @@ def sync_notes_to_board(note_store, board_store: Store) -> tuple[int, int, int]:
     A note matches a card when their titles are equal (case-sensitive).
     Card column is derived from the note status via ``config.STATUS_TO_COLUMN``;
     an existing card is moved to that column when it differs.
+
+    Also creates/updates hash trees for cards.
 
     Args:
         note_store: planner NoteStore instance.
@@ -32,6 +35,7 @@ def sync_notes_to_board(note_store, board_store: Store) -> tuple[int, int, int]:
         cards, *updated* the number of cards moved to a different column, and
         *total* the resulting board card count.
     """
+    ht_store = HashTreeStore()
     notes = note_store.list_notes(limit=9999)
     board = board_store.load_board()
     existing = {card.title: card for card in board.cards}
@@ -42,12 +46,24 @@ def sync_notes_to_board(note_store, board_store: Store) -> tuple[int, int, int]:
         title = note.title or "(untitled)"
         card = existing.get(title)
         if card is None:
-            board_store.create_card(
+            new_card = board_store.create_card(
                 title=title,
                 column=col,
                 tags=list(note.tags or []),
                 description=note.body or "",
             )
+            # Create hash tree for new card
+            tree = create_hash_tree(
+                card_id=new_card.id,
+                card_content=title,
+                tray=col,
+                position=0,
+            )
+            if note.body:
+                tree.add_note(note.id, note.body)
+            ht_store.save(tree)
+            # Update card with root_hash
+            board_store.update_card(new_card.id, root_hash=tree.root.root)
             existing[title] = None
             added += 1
             continue
@@ -55,6 +71,11 @@ def sync_notes_to_board(note_store, board_store: Store) -> tuple[int, int, int]:
             board_store.move_card(card.id, col)
             card.column = col
             updated += 1
+        # Update hash tree with current note content
+        tree = ht_store.get(card.id)
+        if tree and note.body:
+            tree.add_note(note.id, note.body)
+            ht_store.save(tree)
     total = len(board_store.load_board().cards)
     return added, updated, total
 

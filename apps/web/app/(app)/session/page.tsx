@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
 import { sessionController, type SessionInspector } from '@/lib/session-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { trackEvent } from '@/lib/dev-log'
 
 export default function SessionPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -80,6 +81,7 @@ export default function SessionPage() {
   const handleCreate = useCallback(async () => {
     try {
       const resp = await sessionController.create(createSoul || 'new session')
+      trackEvent('session_created')
       addToast('Session created', 'success')
       setSessionId(resp.id)
       setShowCreate(false)

@@ -92,7 +92,7 @@ describe('ExportPage — initial load flow', () => {
   it('loads checkpoints on mount', async () => {
     render(<ExportPage />)
     await waitFor(() => {
-      expect(mockApiGet).toHaveBeenCalledWith('/auto-train/checkpoints')
+      expect(mockApiGet).toHaveBeenCalledWith('/training/checkpoints')
     })
   })
 

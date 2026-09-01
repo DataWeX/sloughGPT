@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { trainingJobsController, type Webhook, type WebhookStats } from '@/lib/training-controller'
+import { trackEvent } from '@/lib/dev-log'
 
 export const AVAILABLE_EVENTS = [
   { key: 'training.completed', label: 'Training Completed' },
@@ -156,6 +157,7 @@ export function useWebhooks(): UseWebhooksReturn {
     setAdding(true)
     try {
       await trainingJobsController.createWebhook(newUrl.trim(), newEvents)
+      trackEvent('webhook_created', { url: newUrl.trim() })
       setNewUrl('')
       setNewEvents(['training.completed'])
       addToast('Webhook added', 'success')
@@ -170,6 +172,7 @@ export function useWebhooks(): UseWebhooksReturn {
   const deleteWebhook = useCallback(async (id: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
     try {
       await trainingJobsController.deleteWebhook(id)
+      trackEvent('webhook_deleted', { id })
       addToast('Webhook deleted', 'success')
       setPendingDelete(null)
       await fetchWebhooks()
@@ -182,6 +185,7 @@ export function useWebhooks(): UseWebhooksReturn {
     setTestingUrl(url)
     try {
       await trainingJobsController.testWebhook(url)
+      trackEvent('webhook_tested', { url })
       addToast('Test sent', 'success')
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Test failed', 'error')

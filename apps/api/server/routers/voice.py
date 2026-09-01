@@ -8,6 +8,7 @@ import time as _time
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from pydantic import Field
 from pydantic import BaseModel
 
 from infrastructure.auth import require_auth_if_enabled

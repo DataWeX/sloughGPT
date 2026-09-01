@@ -23,18 +23,15 @@ for _sys_path in [_CLI_DIR, str(_CORE_PY_DIR)]:
 
 # ── Structured logging (centralized, CLI uses CLILogger via BridgeHandler)
 from domains.logging.config import setup_logging  # noqa: E402
-from domains.logging import CLILogger, BridgeHandler, set_global, get_global  # noqa: E402
+from domains.logging import CLILogger, BridgeHandler, set_global  # noqa: E402
 
 setup_logging(enable_console=False, enable_output_buffer=False)
-_cli_logger = CLILogger("slo")
-set_global(_cli_logger)
-_bridge = BridgeHandler(_cli_logger)
+log = CLILogger("slo")
+set_global(log)
+_bridge = BridgeHandler(log)
 logging.root.addHandler(_bridge)
-logger = logging.getLogger("slo")
 
 from core.version import format_version_display  # noqa: E402
-from domains.logging import get_global  # noqa: E402
-log = get_global()
 
 # ── Inline CLI framework (replaces Click) ──────────────────────────────
 
@@ -409,7 +406,11 @@ def _parse_args(args: List[str], options: List[Option], arguments: List[Argument
                 if not matched:
                     raise UsageError(f"Unknown option: {arg}")
         else:
-            positional.append(arg)
+            # First non-option arg: subcommand name or positional.
+            # Stop here — everything from this point on belongs to the
+            # subcommand and is forwarded untouched.
+            positional.extend(args[i:])
+            break
         i += 1
     for opt in options:
         if opt.required and opt.dest not in kwargs:
@@ -613,7 +614,7 @@ def _run_command(cmd: Command, ctx: Context, args: List[str], cmd_path: str = ""
 
 def _show_error(group: Group, cmd_name: str) -> None:
     _p()
-    _p(f"  {_c('✗', _RED)} {_c('Unknown command: ', _BOLD)}{_c(cmd_name, _CYAN)}")
+    _p(f"  {_c('err', _RED)} {_c('Unknown command: ', _BOLD)}{_c(cmd_name, _CYAN)}")
     _p()
     all_names = sorted(list(group.commands.keys()) + list(group.groups.keys()))
     if all_names:
@@ -642,7 +643,7 @@ def _resolve_and_run(group: Group, ctx: Context, cmd_name: str, cmd_args: List[s
         if _TTY and sys.stdin.isatty():
             _p()
             _p(f"  {_c('?', _YELLOW)} {_c('Unknown command: ', _DIM)}{_c(cmd_name, _RED)}")
-            _p(f"  {_c('→', _GREEN)} {_c('Did you mean ', _DIM)}{_c(best, _CYAN + _BOLD)}{_c('?', _DIM)}")
+            _p(f"  {_c('>', _GREEN)} {_c('Did you mean ', _DIM)}{_c(best, _CYAN + _BOLD)}{_c('?', _DIM)}")
             try:
                 answer = input("    [Y/n] ").strip().lower()
             except (EOFError, KeyboardInterrupt):
@@ -665,12 +666,16 @@ def _run_group(group: Group, ctx: Context, args: List[str],
         if cb:
             import inspect
             sig = inspect.signature(cb)
-            # Parse group options from remaining args
             grp_opts = getattr(group, "_options", [])
-            kwargs, _ = _parse_args(args, grp_opts, [])
+            try:
+                kwargs, positional = _parse_args(args, grp_opts, [])
+            except UsageError as e:
+                _p(f"  {_c('Error:', _RED)} {e}")
+                sys.exit(1)
             if "ctx" in sig.parameters:
                 kwargs["ctx"] = ctx
             cb(**kwargs)
+            args = positional  # forward only subcommand args
     if not args:
         if not group.invoke_without_command:
             _format_group_help(group, ctx)
@@ -680,73 +685,89 @@ def _run_group(group: Group, ctx: Context, args: List[str],
     path = f"{full_path} {cmd_name}" if full_path else cmd_name
     return _resolve_and_run(group, ctx, cmd_name, cmd_args, full_path=path)
 
-def _parse_global_options(args: List[str]) -> Tuple[dict, List[str]]:
-    global_opts = {}
-    remaining = []
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        # Stop parsing global options at the first non-option argument (command name)
-        if not arg.startswith("-") or arg == "-":
-            remaining.extend(args[i:])
-            break
-        if arg == "--host" and i + 1 < len(args):
-            global_opts["host"] = args[i + 1]; i += 2
-        elif arg in ("-c", "--config") and i + 1 < len(args):
-            global_opts["config"] = args[i + 1]; i += 2
-        elif arg == "--json":
-            global_opts["json"] = True; i += 1
-        elif arg == "--no-color":
-            global_opts["no_color"] = True; i += 1
-        elif arg in ("-q", "--quiet"):
-            global_opts["quiet"] = True; i += 1
-        elif arg == "--timeout" and i + 1 < len(args):
-            global_opts["timeout"] = int(args[i + 1]); i += 2
-        elif arg == "--version":
-            global_opts["version"] = True; i += 1
-        elif arg in ("--help", "-h"):
-            global_opts["help"] = True; i += 1
-        elif arg in ("--yes", "-y"):
-            global_opts["yes"] = True; i += 1
-        else:
-            remaining.append(arg); i += 1
-    global_opts.setdefault("host", "localhost")
-    global_opts.setdefault("timeout", 10)
-    return global_opts, remaining
-
 def run(group: Group, args: Optional[List[str]] = None):
+    """Single entry-point for CLI dispatch.
+
+    Parsing model
+    ─────────────
+    • ``grp._options`` is the **single source of truth** for every option
+      the top-level group accepts (``--host``, ``--port``, ``--config``,
+      …).  They are defined once via ``@click.option`` decorators on the
+      ``cli`` function and collected into ``grp._options`` by the
+      ``group()`` decorator.
+    • ``_parse_args`` walks the argv list left-to-right.  The first token
+      that is *not* a recognised option (or an option-value) is treated as
+      a positional argument and appended to the ``positional`` return
+      list.  Parsing stops there — everything from that point on is
+      returned untouched as ``remaining_args``.
+    • ``--help`` / ``-h`` and ``--version`` are **meta-options**: they are
+      recognised by the group's option list but handled *before* the
+      group callback runs, so the callback never sees them.
+    """
     if args is None:
         args = sys.argv[1:]
+
     ctx = Context()
     ctx.ensure_object()
-    global_opts, remaining = _parse_global_options(args)
-    ctx.obj.update(global_opts)
-    # Always invoke the top-level group callback to populate ctx.obj
-    # with all option defaults (host, port, config, etc.)
-    if hasattr(group, 'callback') and group.callback:
+
+    # ── 1. Parse group-level options in one pass ────────────────────────
+    #    ``grp._options`` is set by the ``@click.option`` decorators on
+    #    the ``cli`` function (see the ``group()`` decorator).
+    #    ``_parse_args`` walks argv left-to-right.  The first token that
+    #    is *not* a recognised option (or option-value) is treated as a
+    #    positional arg and parsing stops there — everything from that
+    #    point on is returned as ``positional`` (subcommand + its args).
+    grp_opts = list(getattr(group, "_options", [])) + [
+        Option(["--help", "-h"],  help="Show this message and exit", is_flag=True),
+        Option(["--version"],     help="Show version and exit",      is_flag=True),
+    ]
+    try:
+        kwargs, positional = _parse_args(args, grp_opts, [])
+    except UsageError as e:
+        _p(f"  {_c('Error:', _RED)} {e}")
+        sys.exit(1)
+
+    # Separate meta-options from options that go into ctx / callback.
+    show_help = kwargs.pop("help", False)
+    show_version = kwargs.pop("version", False)
+
+    # The first positional arg is the subcommand name (or a fuzzy match
+    # that _resolve_and_run will resolve).  Everything after it is the
+    # subcommand's own argv.
+    cmd_name = positional[0] if positional else None
+    cmd_args = positional[1:] if len(positional) > 1 else []
+
+    # ── 2. Populate ctx.obj ─────────────────────────────────────────────
+    ctx.obj.update(kwargs)
+    if cmd_name:
+        ctx.invoked_subcommand = cmd_name
+
+    # ── 3. Invoke the group callback (populates ctx.obj with defaults) ──
+    if hasattr(group, "callback") and group.callback:
         import inspect
         sig = inspect.signature(group.callback)
-        grp_opts = getattr(group, "_options", [])
-        kwargs, _ = _parse_args(remaining, grp_opts, [])
+        cb_kwargs = dict(kwargs)
         if "ctx" in sig.parameters:
-            kwargs["ctx"] = ctx
-        if remaining:
-            ctx.invoked_subcommand = remaining[0]
-        group.callback(**kwargs)
-    if ctx.obj.get("help"):
+            cb_kwargs["ctx"] = ctx
+        group.callback(**cb_kwargs)
+
+    # ── 4. Handle meta-options ──────────────────────────────────────────
+    if show_help:
         _format_help(group, ctx)
         return
-    if ctx.obj.get("version"):
+    if show_version:
         try:
             echo(format_version_display())
         except Exception:
             echo("sloughgpt v0.1.0")
         return
-    if not remaining:
+
+    # ── 5. No subcommand → show help ────────────────────────────────────
+    if cmd_name is None:
         _format_help(group, ctx)
         return
-    cmd_name = remaining[0]
-    cmd_args = remaining[1:]
+
+    # ── 6. Dispatch to subcommand ───────────────────────────────────────
     result = _resolve_and_run(group, ctx, cmd_name, cmd_args)
     if _TTY and result:
         suggestion = _SUGGESTIONS.get(result[0])
@@ -985,11 +1006,11 @@ def _show_server_status():
 
             if data.get("model_loaded"):
                 model = data.get("model_type", "unknown")
-                _line(f"    {_c('✓', _GREEN)} Server running (model: {model})")
+                _line(f"    {_c('ok', _GREEN)} Server running (model: {model})")
             else:
-                _line(f"    {_c('!', _YELLOW)} Server running (no model loaded)")
+                _line(f"    {_c('warn', _YELLOW)} Server running (no model loaded)")
         else:
-            _line(f"    {_c('✗', _RED)} Server unreachable")
+            _line(f"    {_c('err', _RED)} Server unreachable")
     except requests.exceptions.ConnectionError:
         _line(f"    {_c('·', _DIM)} Server not running")
     except Exception:
@@ -3186,12 +3207,12 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
     k = Kernel()
     boot_msg = k.boot()
     t_boot = time.perf_counter() - t0
-    _p(f"  {_c('✓', _GREEN)} Booted in {t_boot*1000:.1f}ms — {boot_msg}")
+    _p(f"  {_c('ok', _GREEN)} Booted in {t_boot*1000:.1f}ms — {boot_msg}")
 
     try:
         # ── Register devices ──
         k.register_devices()
-        _p(f"  {_c('✓', _GREEN)} {k.devices.stats()['total_devices']} devices registered")
+        _p(f"  {_c('ok', _GREEN)} {k.devices.stats()['total_devices']} devices registered")
 
         # ── Load model ──
         t1 = time.perf_counter()
@@ -3245,13 +3266,13 @@ def simulate(ctx, model: str, prompt: str, max_tokens: int, iterations: int,
                 provider = npu._models[model].provider
                 k.engine.load_model(model, provider)
         t_load = time.perf_counter() - t1
-        _p(f"  {_c('✓', _GREEN)} Model '{model}' loaded in {t_load*1000:.1f}ms")
+        _p(f"  {_c('ok', _GREEN)} Model '{model}' loaded in {t_load*1000:.1f}ms")
 
         # ── Tokenize ──
         t2 = time.perf_counter()
         tokens = k.tokenize(prompt)
         t_tok = time.perf_counter() - t2
-        _p(f"  {_c('✓', _GREEN)} Tokenized '{prompt[:40]}...' → {len(tokens)} tokens in {t_tok*1000:.2f}ms")
+        _p(f"  {_c('ok', _GREEN)} Tokenized '{prompt[:40]}...' -> {len(tokens)} tokens in {t_tok*1000:.2f}ms")
 
         # ── Create inference process ──
         from domains.shell.kernel_neural import NeuralProcessType
@@ -3411,7 +3432,7 @@ def collect_merge(inputs, output):
                     if line:
                         out_f.write(line + "\n")
                         count += 1
-    log.success(f"Merged {len(inputs)} files → {output} ({count} records)")
+    log.success(f"Merged {len(inputs)} files -> {output} ({count} records)")
 
 
 @collect.command("stats", help="Show collection statistics")

@@ -8,6 +8,7 @@ import type { UserAdapterStats } from './user-adapters-controller'
 import { useErrorStore, addGlobalError } from './error-store'
 import { useApiMonitor } from './api-monitor-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { trackEvent } from '@/lib/dev-log'
 
 interface FeedbackState {
   stats: FeedbackStats | null
@@ -40,6 +41,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
   error: null,
 
   recordFeedback: async (params) => {
+    trackEvent('feedback_recorded', { rating: params.rating, conversation_id: params.conversationId })
     set({ isLoading: true, error: null })
     try {
       await feedbackController.recordFeedbackWorkflow(params)

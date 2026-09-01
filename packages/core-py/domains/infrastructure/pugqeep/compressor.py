@@ -184,11 +184,19 @@ class PointCompressor:
             return self.compress_cluster(weights, identity)
         elif method == "function":
             return self.compress_function(weights, identity)
+        elif method == "block_q4":
+            return self.compress_block_q4(weights, identity)
+        elif method == "block_q8":
+            return self.compress_block_q8(weights, identity)
         else:
             raise ValueError(f"Unknown method: {method}")
 
     def decompress(self, point: Point, n: int) -> np.ndarray:
         """Decompress a point back to weights."""
+        if point.function_type == "block_q4":
+            return self.decompress_block_q4(point)
+        elif point.function_type == "block_q8":
+            return self.decompress_block_q8(point)
         return point.generate(n)
 
     def measure_compression(self, weights: np.ndarray, point: Point) -> dict:
@@ -201,6 +209,10 @@ class PointCompressor:
             compressed_bytes = centroids.nbytes + assignments.nbytes
             if point.residual is not None:
                 compressed_bytes += point.residual.nbytes
+        elif point.function_type == "block_q4":
+            compressed_bytes = point.nbytes()
+        elif point.function_type == "block_q8":
+            compressed_bytes = point.nbytes()
         elif point.function_type == "raw":
             compressed_bytes = raw_size
         else:
@@ -289,9 +301,9 @@ class PointCompressor:
 
         # Pack uint4 into uint8 (2 per byte, low nibble first)
         n_values = n_blocks * bs
+        q_flat = q.ravel()
         packed = np.zeros(n_values // 2, dtype=np.uint8)
-        packed[0::2] = q.ravel()[0::2]           # low nibble
-        packed[1::2] = q.ravel()[1::2] << 4      # high nibble
+        packed = q_flat[0::2].astype(np.uint8) | (q_flat[1::2].astype(np.uint8) << 4)
 
         # Compute accuracy
         deq = q.astype(np.float32) * scale[:, None] + bmin[:, None]
@@ -327,8 +339,8 @@ class PointCompressor:
 
         # Unpack uint4 → uint8
         unpacked = np.zeros(n_blocks * bs, dtype=np.uint8)
-        unpacked[0::2] = packed[0::2] & 0x0F
-        unpacked[1::2] = (packed[1::2] >> 4) & 0x0F
+        unpacked[0::2] = packed & 0x0F
+        unpacked[1::2] = (packed >> 4) & 0x0F
 
         # Dequantize: val = q * scale + min
         q = unpacked.reshape(n_blocks, bs).astype(np.float32)

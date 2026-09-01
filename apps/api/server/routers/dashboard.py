@@ -52,10 +52,8 @@ def _get_active_processes() -> dict:
                     "detail": detail.strip(),
                     "progress": progress,
                 }
-    except Exception:
-        pass
-
-    # Self-training subprocess
+    except Exception as e:
+        logger.debug("Failed to collect training processes: %s", e)
     try:
         import state as server_state
         proc = server_state._self_train_proc
@@ -77,8 +75,8 @@ def _get_active_processes() -> dict:
                     "detail": f"exit code {ret}",
                     "progress": 100 if ret == 0 else 0,
                 }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to collect self-train status: %s", e)
 
     # Auto-train turbo
     try:
@@ -103,8 +101,8 @@ def _get_active_processes() -> dict:
                 "detail": detail.strip(),
                 "progress": progress,
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to collect auto-train status: %s", e)
 
     # Active downloads
     try:
@@ -138,8 +136,8 @@ def _get_active_processes() -> dict:
                 "detail": detail,
                 "progress": progress,
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to collect download status: %s", e)
 
     return processes
 

@@ -31,11 +31,11 @@ import { registryController } from '@/lib/registry-controller'
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(registryController.list).mockResolvedValue([
-    { name: 'gpt2', status: 'loaded', type: 'local' },
-    { name: 'qwen', status: 'failed', type: 'remote', error: 'Timeout' },
-  ] as any)
-  vi.mocked(registryController.stats).mockResolvedValue({ total: 2, loaded: 1, failed: 1, circuit_breaker: 'closed' } as any)
-  vi.mocked(registryController.best).mockResolvedValue({ name: 'gpt2' } as any)
+    { model_id: 'gpt2', status: 'loaded', metrics: {} },
+    { model_id: 'qwen', status: 'failed', metrics: { error: 'Timeout' } },
+  ])
+  vi.mocked(registryController.stats).mockResolvedValue({ total_models: 2, loaded_models: 1, failed_models: 1, circuit_breaker_open: false })
+  vi.mocked(registryController.best).mockResolvedValue({ model_id: 'gpt2' })
 })
 
 afterEach(() => cleanup())

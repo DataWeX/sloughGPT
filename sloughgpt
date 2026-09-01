@@ -2,15 +2,7 @@
 # SloughGPT — single entry point for the app.
 # For pip-installed users: `sloughgpt` console script (pyproject.toml) handles this.
 set -e
-
-# Resolve symlinks to find the actual repo root
-SOURCE="${BASH_SOURCE[0]}"
-while [ -L "$SOURCE" ]; do
-    DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+DIR="$(cd "$(dirname "$0")" && pwd)"
 
 PYTHON=python3
 if [ -x "$DIR/.venv/bin/python" ]; then

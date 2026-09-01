@@ -11,22 +11,23 @@ Error logging router — accepts frontend JS errors for server-side monitoring.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
-import hashlib
+import re
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
-from datetime import datetime, timezone
-import re
 
-from infrastructure.auth import require_auth_if_enabled
-from schemas.common import success_response, safe_audit_log, classify_and_raise
-
+from domains.infrastructure.output_buffer import get_server_buffer
+from domains.logging.base import LogTag
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.errors")
 
@@ -101,6 +102,7 @@ class ErrorsRouter:
         self.router.add_api_route("/clear", self.clear_errors, methods=["DELETE"])
         self.router.add_api_route("/unread", self.unread_count, methods=["GET"])
         self.router.add_api_route("/log", self.get_opencode_log, methods=["GET"])
+        self.router.add_api_route("/stream", self.error_stream, methods=["GET"], response_model=None)
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -237,55 +239,31 @@ class ErrorsRouter:
             classify_and_raise(e, source="errors.log")
 
     async def ingest_frontend_logs(self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Ingest frontend logs into the server buffer AND write to log file."""
+        """Ingest frontend logs through the core logging pipeline."""
         try:
-            from domains.infrastructure.output_buffer import get_server_buffer
-            import json as _json
-            from datetime import datetime, timezone
+            import logging
 
-            buf = get_server_buffer()
-            level_map = {
-                "debug": "DEBUG", "info": "INFO", "warning": "WARNING",
-                "error": "ERROR", "critical": "CRITICAL",
-            }
+            user_id = (auth_user or {}).get("id") or (auth_user or {}).get("username") or "anonymous"
 
             for entry in batch.logs:
-                lvl = level_map.get(entry.level.upper(), "INFO")
                 context: dict = {}
                 if entry.context:
                     context.update(entry.context)
                 if entry.exception:
                     context["exception"] = entry.exception
 
-                # Write to OutputBuffer for SSE streaming
-                buf.append_log(
-                    text=f"{entry.logger} {entry.message}",
-                    level=entry.level,
-                    source=f"web.{entry.logger}",
-                    tag="WEB",
-                    context=context,
+                raw_tag = context.pop("tag", None)
+                tag = raw_tag if raw_tag and raw_tag in LogTag._value2member_map_ else "WEB"
+                context["user"] = user_id
+                level = getattr(logging, entry.level.upper(), logging.INFO)
+                logger_name = f"slo.web.{entry.logger}" if entry.logger and not entry.logger.startswith("slo.") else entry.logger or "slo.web"
+
+                _log = logging.getLogger(logger_name)
+                _log.log(
+                    level,
+                    entry.message,
+                    extra={"tag": tag, "context": context, "source": f"web.{entry.logger}"},
                 )
-
-                # Also write to log file for CLI querying
-                log_record = {
-                    "ts": datetime.now(timezone.utc).isoformat(),
-                    "level": lvl,
-                    "logger": f"slo.web.{entry.logger}",
-                    "msg": entry.message,
-                    "tag": "WEB",
-                    "ctx": context,
-                }
-                # Extract correlation ID from context if present
-                if "corrId" in context:
-                    log_record["request_id"] = context["corrId"]
-
-                try:
-                    log_file = _REPO_ROOT / "logs" / "sloughgpt.log"
-                    log_file.parent.mkdir(parents=True, exist_ok=True)
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write(_json.dumps(log_record, default=str) + "\n")
-                except Exception:
-                    pass  # Don't fail ingestion if file write fails
 
             return success_response(data={"status": "ok", "ingested": len(batch.logs)})
         except Exception as e:
@@ -431,6 +409,123 @@ class ErrorsRouter:
             return success_response(data={"unread_count": count})
         except Exception as e:
             classify_and_raise(e, source="errors.unread")
+
+    async def error_stream(self, request: Request) -> StreamingResponse:
+        """SSE endpoint pushing real-time error events to the frontend.
+
+        Streams errors as they arrive (from both frontend ingestion and
+        backend exception handlers). Each event is a JSON envelope:
+        {"stream": "errors", "phase": "ERROR", "status": "working",
+         "data": {error record}, "meta": {"ts": ...}}
+        """
+        import time as _time
+
+        from fastapi.responses import StreamingResponse
+
+        buf = get_server_buffer()
+        subscriber = buf.subscribe("error-stream")
+        seen_seq = buf.seq
+
+        async def generate():
+            nonlocal seen_seq
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+
+                    # Read new lines from the output buffer (1s timeout for heartbeat cadence)
+                    lines = await subscriber.async_read(timeout=1.0)
+
+                    # Send SSE comment as keepalive every ~30s of idle time
+                    # (proxy/firewall timeout is typically 60-120s)
+                    now = _time.time()
+                    if not hasattr(generate, "_last_yield"):
+                        generate._last_yield = now
+                    if now - generate._last_yield >= 30.0:
+                        yield ": heartbeat\n\n"
+                        generate._last_yield = now
+
+                    # Filter for error/critical level lines and recent errors from the buffer
+                    for line in lines:
+                        if line.level in ("error", "critical"):
+                            # Extract correlation ID and request context from the line's context
+                            ctx = line.context or {}
+                            corr_id = ctx.get("corr") or ctx.get("correlation_id") or ""
+                            http_method = ctx.get("method", "")
+                            http_path = ctx.get("path", "")
+                            http_status = ctx.get("status")
+                            dur_ms = ctx.get("dur_ms")
+
+                            event = {
+                                "stream": "errors",
+                                "phase": "ERROR",
+                                "status": "working",
+                                "data": {
+                                    "message": line.text,
+                                    "level": line.level,
+                                    "source": line.source,
+                                    "tag": line.tag,
+                                    "context": ctx,
+                                    "ts": line.timestamp,
+                                    "correlation_id": corr_id,
+                                    "http_method": http_method,
+                                    "http_path": http_path,
+                                    "http_status": http_status,
+                                    "duration_ms": dur_ms,
+                                },
+                                "meta": {"ts": _time.time()},
+                            }
+                            yield "data: " + json.dumps(event, default=str) + "\n\n"
+                            generate._last_yield = _time.time()
+
+                    # Also push any new entries from the error buffer
+                    with self._errors_lock:
+                        current_count = len(self._error_buffer)
+
+                    if current_count > seen_seq:
+                        with self._errors_lock:
+                            new_errors = list(self._error_buffer[seen_seq:current_count])
+                        seen_seq = current_count
+                        for err in new_errors:
+                            event = {
+                                "stream": "errors",
+                                "phase": "CLIENT_ERROR",
+                                "status": "working",
+                                "data": {
+                                    "id": err.get("id", ""),
+                                    "message": err.get("message", ""),
+                                    "source": err.get("source", ""),
+                                    "stack": err.get("stack"),
+                                    "url": err.get("url"),
+                                    "line": err.get("line"),
+                                    "col": err.get("col"),
+                                    "fingerprint": err.get("fingerprint", ""),
+                                    "count": err.get("count", 1),
+                                    "timestamp": err.get("timestamp", ""),
+                                    "metadata": err.get("metadata", {}),
+                                },
+                                "meta": {"ts": _time.time()},
+                            }
+                            yield "data: " + json.dumps(event, default=str) + "\n\n"
+                            generate._last_yield = _time.time()
+
+            except Exception as e:
+                yield "data: " + json.dumps({
+                    "stream": "errors", "phase": "ERROR", "status": "error",
+                    "data": {"error": str(e)}, "message": str(e),
+                }) + "\n\n"
+            finally:
+                buf.unsubscribe("error-stream")
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     async def get_opencode_log(self) -> dict:
         """Get opencode CLI and UI error logs."""

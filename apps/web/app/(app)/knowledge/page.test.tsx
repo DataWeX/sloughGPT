@@ -48,6 +48,7 @@ vi.mock('@sloughgpt/strui', () => {
     cn: vi.fn((...a: any[]) => a.join(' ')),
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
+    CardDescription: ({ children }: any) => <div>{children}</div>,
     EmptyCard: ({ message, action }: any) => <div><span>{message}</span>{action}</div>,
     Button: ({ children, onClick, disabled, variant, 'aria-label': ariaLabel }: any) => (
       <button onClick={onClick} disabled={disabled} aria-label={ariaLabel} data-variant={variant}>{children}</button>

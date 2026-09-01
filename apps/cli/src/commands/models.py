@@ -260,7 +260,7 @@ def _cmd_models_download(args):
         if result.get("status") == "complete":
             log.success(
                 f"Downloaded in {result.get('elapsed_seconds', '?')}s "
-                f"→ {result.get('cache_dir', '')}"
+                f"-> {result.get('cache_dir', '')}"
             )
         elif result.get("status") == "failed":
             log.error(f"Download failed: {result.get('error', 'unknown error')}")

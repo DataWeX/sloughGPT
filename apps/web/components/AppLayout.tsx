@@ -80,6 +80,18 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('toggle-output-panel', handler)
   }, [])
 
+  // Global toast listener — bridges show-toast custom events to the toast store
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.message) {
+        useToastStore.getState().addToast(detail.message, detail.type || 'info')
+      }
+    }
+    window.addEventListener('show-toast', handler)
+    return () => window.removeEventListener('show-toast', handler)
+  }, [])
+
   useEffect(() => {
     setMobileNavOpen(false)
   }, [pathname])
@@ -153,7 +165,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             className={cn(
               'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
               'rounded-r-md cursor-pointer',
-              'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)]',
+              'transition-all duration-300 ease-[cubic-bezier(222,133,0,1)\_]',
               'hover:w-[1.4rem]',
               'right-0 translate-x-[calc(100%-1px)]',
               'bg-gradient-to-b from-primary/80 via-primary to-primary/90',

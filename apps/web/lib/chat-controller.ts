@@ -27,9 +27,17 @@ export const chatController = {
     max_tokens?: number
     temperature?: number
     session_id?: string
+    waitForModel?: boolean
   }): Promise<ChatResponse> {
-    const modelStatus = await modelController.status()
-    if (!modelStatus.loaded) throw new Error('No model loaded. Load a model first.')
+    let modelStatus = await modelController.status()
+    if (!modelStatus.loaded) {
+      if (options?.waitForModel) {
+        modelStatus = await modelController.waitForReady()
+        if (!modelStatus.loaded) throw new Error('Model still loading — please wait.')
+      } else {
+        throw new Error('No model loaded. Load a model first.')
+      }
+    }
 
     try {
       const data = await apiPost<{ message?: string; text?: string; session_id?: string }>(
@@ -66,9 +74,17 @@ export const chatController = {
   async *stream(message: string, options?: {
     max_tokens?: number
     temperature?: number
+    waitForModel?: boolean
   }): AsyncGenerator<string> {
-    const modelStatus = await modelController.status()
-    if (!modelStatus.loaded) { yield '[No model loaded]'; return }
+    let modelStatus = await modelController.status()
+    if (!modelStatus.loaded) {
+      if (options?.waitForModel) {
+        modelStatus = await modelController.waitForReady()
+        if (!modelStatus.loaded) { yield '[Model still loading — please wait.]'; return }
+      } else {
+        yield '[No model loaded]'; return
+      }
+    }
 
     const body = {
       messages: [{ role: 'user', content: message }],

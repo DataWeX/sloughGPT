@@ -165,7 +165,7 @@ def cmd_config_check(args):
         log.error(f"{result.failed_count}/{len(result.checks)} checks failed")
         for check in result.checks:
             if not check.passed and check.suggestion:
-                log.info(f"  → {check.suggestion}")
+                log.info(f"  > {check.suggestion}")
 
 
 def cmd_config_validate(args):

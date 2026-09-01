@@ -19,7 +19,7 @@ from .point import Point
 from .compressor import PointCompressor
 from .library import PointLibrary
 from .config import TreeConfig
-from .strategies import CompressStrategy, ClusterStrategy, FunctionStrategy, RawStrategy
+from .strategies import CompressStrategy, ClusterStrategy, FunctionStrategy, RawStrategy, BlockQuantStrategy
 from .executor import ParallelExecutor
 
 logger = logging.getLogger("slo.pugqeep")
@@ -45,6 +45,8 @@ class Tree:
     _STRATEGIES: Dict[str, Type[CompressStrategy]] = {
         "cluster": ClusterStrategy,
         "function": FunctionStrategy,
+        "block_q4": lambda c: BlockQuantStrategy(c, bits=4),
+        "block_q8": lambda c: BlockQuantStrategy(c, bits=8),
     }
 
     def __init__(self, name: str, library: Optional[PointLibrary] = None,
@@ -71,6 +73,8 @@ class Tree:
         cls = self._STRATEGIES.get(method)
         if cls is None:
             return RawStrategy()
+        if callable(cls) and not isinstance(cls, type):
+            return cls(self._compressor)
         return cls(self._compressor)
 
     # Backward-compat aliases

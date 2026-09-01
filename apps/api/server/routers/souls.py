@@ -380,8 +380,8 @@ Be yourself — let your personality shape how you respond."""
                 from domains.infrastructure.event_buffer import get_event_buffer
                 detail = f" checkpoint={req.checkpoint_name}" if req.checkpoint_name else ""
                 get_event_buffer().record("SOUL", f"switched to {req.name}{detail}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to record dashboard event: %s", e)
 
             _switch_elapsed_ms = (_time.monotonic() - _switch_t0) * 1000
             safe_audit_log("soul.switch", resource=req.name, detail=f"elapsed={_switch_elapsed_ms:.0f}ms checkpoint_loaded" if req.checkpoint_name else f"elapsed={_switch_elapsed_ms:.0f}ms", checkpoint_name=req.checkpoint_name or "")

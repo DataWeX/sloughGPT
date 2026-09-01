@@ -5,7 +5,7 @@ import { trainingJobsController } from '@/lib/controllers'
 import { operationsStore } from '@/lib/operations-store'
 import { appShellStore, readTraining, writeTraining, isTrainingActive, type TrainingShellState, type TrainingToastFn } from '@/lib/app-shell'
 import { useToastStore } from '@/lib/toast-store'
-import { logger } from '@/lib/dev-log'
+import { logger, trackEvent } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useTrainingPolling } from './useTrainingPolling'
 import { useTrainingStream } from './useTrainingStream'
@@ -208,7 +208,8 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Could not stop training', e))
     operationsStore.getState().cancelAll('training').catch((e) => logger.warning('Could not cancel all training', { exception: String(e?.message || e) }))
     resetTraining()
-  }, [resetTraining])
+    trackEvent('training_stopped', { method: training.method })
+  }, [resetTraining, training.method])
 
   const pauseTraining = useCallback(async (addToast?: TrainingToastFn) => {
     try { await trainingJobsController.pauseTraining(); writeTraining({ message: 'Paused' }) } catch (e: unknown) {
@@ -234,6 +235,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   ) => {
     appShellStore.getState().resetTraining()
     writeTraining({ phase: 'TRAINING', method: 'hf' })
+    trackEvent('training_started', { method: 'hf', model: params.model, dataset: params.dataset })
     trainingJobsController.startLoraFinetune({
       model_path: params.model,
       dataset: params.dataset,
@@ -257,6 +259,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
   ) => {
     appShellStore.getState().resetTraining()
     writeTraining({ phase: 'TRAINING', method: 'hf' })
+    trackEvent('training_started', { method: 'visual', dataset: params.dataset })
     trainingJobsController.startVisualTrain({
       dataset: params.dataset, vision_encoder: params.visionEncoder, llm: params.llm,
       stage1_epochs: params.stage1Epochs, stage2_epochs: params.stage2Epochs,
@@ -291,6 +294,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     clearAllPolls()
     appShellStore.getState().resetTraining()
     writeTraining({ phase: 'TRAINING', method: 'turbo' })
+    trackEvent('training_started', { method: 'turbo', dataset_id: datasetId })
     trainingJobsController.startTurboTrain({
       dataset_id: datasetId, epochs: config.epochs, learning_rate: config.lr,
       n_embed: config.embed, n_head: config.heads, n_layer: config.layers,
@@ -307,6 +311,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
     trainingJobsController.stopAutoTrain().catch((e) => logger.warning('Could not stop turbo training', e))
     operationsStore.getState().cancelAll('training').catch((e) => _log.debug('Could not cancel all training ops', { error: e instanceof Error ? e.message : String(e) }))
     resetTraining()
+    trackEvent('training_stopped', { method: 'turbo' })
   }, [resetTraining])
 
   return {

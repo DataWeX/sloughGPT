@@ -19,7 +19,7 @@ class CheckResult:
     suggestion: str = ""
 
     def __str__(self) -> str:
-        status = "✓" if self.passed else "✗"
+        status = "ok" if self.passed else "err"
         return f"[{status}] {self.name}: {self.message}"
 
 

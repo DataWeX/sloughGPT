@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, memo, useState, useEffect, useCallback, useMemo } from 'react'
+import React, { forwardRef, memo, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MessageBubble } from './../messages/MessageBubble'
 import { EmptyState } from './../messages/EmptyState'
 import { SystemBanner } from './../messages/SystemBanner'
@@ -76,6 +76,32 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
+    const scrollRef = useRef<HTMLDivElement>(null)
+    const wasAtBottomRef = useRef(true)
+
+    // Auto-scroll during streaming — only if user was at bottom
+    useEffect(() => {
+      const el = scrollRef.current
+      if (!el) return
+      const onScroll = () => {
+        const threshold = 80
+        wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+      }
+      el.addEventListener('scroll', onScroll, { passive: true })
+      return () => el.removeEventListener('scroll', onScroll)
+    }, [])
+
+    // Scroll to bottom when new tokens arrive during streaming
+    useEffect(() => {
+      if (loading && wasAtBottomRef.current) {
+        const el = scrollRef.current
+        if (el) {
+          requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight
+          })
+        }
+      }
+    }, [messages, loading])
 
     const handleSuggestionClick = useCallback((text: string) => {
       onSuggestionClick?.(text)
@@ -173,8 +199,9 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         )}
 
         <div
+          ref={scrollRef}
           id="chat-messages"
-          className="mx-auto w-full max-w-3xl space-y-1.5 sm:space-y-2 px-4 sm:px-6 pb-4"
+          className="mx-auto w-full max-w-3xl space-y-1.5 sm:space-y-2 px-4 sm:px-6 pb-4 overflow-y-auto"
           role="feed"
           aria-label="Message history"
           aria-busy={loading}

@@ -718,6 +718,7 @@ class LiveDisplay:
     def __init__(self, refresh_rate: float = 10):
         self._rate = refresh_rate
         self._prev = ""
+        self._prev_line_count = 0
         self._running = False
 
     def __enter__(self) -> LiveDisplay:
@@ -739,18 +740,17 @@ class LiveDisplay:
     def update(self, renderable: str):
         """Replace screen content without causing terminal scroll."""
         _refresh_size()
-        max_rows = _ROWS - 1
+        max_rows = max(1, _ROWS - 1)
         lines = renderable.split("\n")
-        prev_count = len(self._prev.split("\n")) if self._prev else 0
         visible = lines[:max_rows]
         buf = []
         for i, line in enumerate(visible, 1):
             buf.append(f"\033[{i};1H{line}\033[K")
-        for i in range(len(visible) + 1, min(prev_count, max_rows) + 1):
+        for i in range(len(visible) + 1, min(self._prev_line_count, max_rows) + 1):
             buf.append(f"\033[{i};1H\033[K")
-        buf.append(f"\033[{len(visible) + 1};1H\033[K")
         sys.stdout.write("".join(buf))
         self._prev = renderable
+        self._prev_line_count = len(visible)
         sys.stdout.flush()
 
 
@@ -880,6 +880,7 @@ class DevDashboard:
         # resource metrics (collected every ~2s in serve loop)
         self._metrics: dict[str, float] = {"cpu": 0.0, "memory": 0.0, "disk": 0.0}
         self._last_metrics_collect: float = 0.0
+        self._linux_cpu_sample: tuple[float, float] | None = None  # (idle, total)
 
         # search/filter mode
         self._search_mode: bool = False
@@ -922,26 +923,22 @@ class DevDashboard:
         is_linux = platform.system() == "Linux"
 
         if is_linux:
-            # CPU via /proc/stat (two samples 0.1s apart)
+            # CPU via /proc/stat (non-blocking: store sample, compute delta next call)
             try:
                 with open("/proc/stat") as f:
                     line = f.readline()
                 parts = line.split()
                 # user, nice, system, idle, iowait, irq, softirq, steal
                 vals = [int(x) for x in parts[1:9]]
-                idle1 = vals[3] + vals[4]
-                total1 = sum(vals)
-                time.sleep(0.1)
-                with open("/proc/stat") as f:
-                    line = f.readline()
-                parts = line.split()
-                vals = [int(x) for x in parts[1:9]]
-                idle2 = vals[3] + vals[4]
-                total2 = sum(vals)
-                d_idle = idle2 - idle1
-                d_total = total2 - total1
-                if d_total > 0:
-                    m["cpu"] = min(100, max(0, (1 - d_idle / d_total) * 100))
+                idle = vals[3] + vals[4]
+                total = sum(vals)
+                if self._linux_cpu_sample is not None:
+                    prev_idle, prev_total = self._linux_cpu_sample
+                    d_idle = idle - prev_idle
+                    d_total = total - prev_total
+                    if d_total > 0:
+                        m["cpu"] = min(100, max(0, (1 - d_idle / d_total) * 100))
+                self._linux_cpu_sample = (idle, total)
             except Exception:
                 pass
 

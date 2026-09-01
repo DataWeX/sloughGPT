@@ -14,7 +14,7 @@
 
 import { useCallback, useRef, useEffect, useState } from 'react'
 import { streamChatResponse, type ToolCallEvent } from '@/lib/stream-chat-response'
-import { logger } from '@/lib/dev-log'
+import { logger, trackEvent } from '@/lib/dev-log'
 import type { ChatMessage } from '@/lib/chat-utils'
 
 const _log = logger.child('streaming-pipeline')
@@ -173,6 +173,7 @@ export function useStreamingPipeline({
   const stop = useCallback(() => {
     abortRef.current?.abort()
     accumulatorRef.current?.cancel()
+    trackEvent('stream_stopped')
     setIsStreaming(false)
     setStreamingMessageId(null)
     setToolEvents([])
@@ -204,6 +205,7 @@ export function useStreamingPipeline({
     setIsStreaming(true)
     setStreamingMessageId(assistantMsg.id)
     setToolEvents([])
+    trackEvent('stream_started')
 
     // Create accumulators
     const acc = createTokenAccumulator(() => messagesRef.current, setMessages)
@@ -250,6 +252,7 @@ export function useStreamingPipeline({
         },
         onComplete: () => {
           acc.cancel()
+          trackEvent('stream_completed', { message_id: assistantMsg.id })
           setMessages(prev => prev.map(m =>
             m.id === assistantMsg.id && !m.content
               ? { ...m, content: '(empty response)' }
@@ -258,6 +261,7 @@ export function useStreamingPipeline({
         },
         onError: (status, text) => {
           acc.cancel()
+          trackEvent('stream_error', { error: text || 'Stream failed' })
           setMessages(prev => prev.map(m =>
             m.id === assistantMsg.id
               ? { ...m, content: m.content || `(error: ${text || 'Stream failed'})`, isError: true }
@@ -267,6 +271,7 @@ export function useStreamingPipeline({
       })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
+      trackEvent('stream_error', { error: String(err) })
       _log.error('Stream error', { error: String(err) })
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id
@@ -313,6 +318,7 @@ export function useStreamingPipeline({
     setIsStreaming(true)
     setStreamingMessageId(assistantMsg.id)
     setToolEvents([])
+    trackEvent('regenerate_started')
 
     const acc = createTokenAccumulator(() => messagesRef.current, setMessages)
     accumulatorRef.current = acc
@@ -349,6 +355,7 @@ export function useStreamingPipeline({
         },
         onComplete: () => {
           acc.cancel()
+          trackEvent('stream_completed', { message_id: assistantMsg.id })
           setMessages(prev => prev.map(m =>
             m.id === assistantMsg.id && !m.content
               ? { ...m, content: '(empty response)' }
@@ -357,6 +364,7 @@ export function useStreamingPipeline({
         },
         onError: (status, text) => {
           acc.cancel()
+          trackEvent('stream_error', { error: text || 'Stream failed' })
           setMessages(prev => prev.map(m =>
             m.id === assistantMsg.id
               ? { ...m, content: m.content || `(error: ${text || 'Stream failed'})`, isError: true }
@@ -366,6 +374,7 @@ export function useStreamingPipeline({
       })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
+      trackEvent('stream_error', { error: String(err) })
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id
           ? { ...m, content: `(error: ${String(err)})`, isError: true }

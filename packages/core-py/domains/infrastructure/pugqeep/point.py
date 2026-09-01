@@ -60,8 +60,8 @@ class Point(PointProtocol):
             n_blk = self.params["n_blocks"]
             bs = self.params["block_size"]
             unpacked = np.zeros(n_blk * bs, dtype=np.uint8)
-            unpacked[0::2] = packed[0::2] & 0x0F
-            unpacked[1::2] = (packed[1::2] >> 4) & 0x0F
+            unpacked[0::2] = packed & 0x0F
+            unpacked[1::2] = (packed >> 4) & 0x0F
             q = unpacked.reshape(n_blk, bs).astype(np.float32)
             deq = q * scales[:, None] + mins[:, None]
             return deq.ravel()[:n]
@@ -130,6 +130,9 @@ class Point(PointProtocol):
             if assignments is not None:
                 return len(assignments) * 4  # float32 per element
             return 0
+        elif self.function_type in ("block_q4", "block_q8"):
+            n = self.params.get("n_elements", 0)
+            return n * 4  # float32 per element
         elif self.function_type == "raw":
             return self.nbytes()
         else:
@@ -396,6 +399,26 @@ class Point(PointProtocol):
                 dtype=pd["assignments_dtype"],
             ).reshape(pd["assignments_shape"])
             params = {"centroids": centroids, "assignments": assignments}
+        elif func_type == "block_q4":
+            pd = d["params"]
+            params = {
+                "mins": np.frombuffer(base64.b64decode(pd["mins_b64"]), dtype=np.float32),
+                "scales": np.frombuffer(base64.b64decode(pd["scales_b64"]), dtype=np.float32),
+                "packed": np.frombuffer(base64.b64decode(pd["packed_b64"]), dtype=np.uint8),
+                "n_elements": pd["n_elements"],
+                "n_blocks": pd["n_blocks"],
+                "block_size": pd["block_size"],
+            }
+        elif func_type == "block_q8":
+            pd = d["params"]
+            params = {
+                "mins": np.frombuffer(base64.b64decode(pd["mins_b64"]), dtype=np.float32),
+                "scales": np.frombuffer(base64.b64decode(pd["scales_b64"]), dtype=np.float32),
+                "values": np.frombuffer(base64.b64decode(pd["values_b64"]), dtype=np.uint8),
+                "n_elements": pd["n_elements"],
+                "n_blocks": pd["n_blocks"],
+                "block_size": pd["block_size"],
+            }
         elif func_type == "raw":
             params = dict(d["params"])
         else:

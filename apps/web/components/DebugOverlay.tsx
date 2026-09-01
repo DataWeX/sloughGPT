@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useErrorStore } from '@/lib/error-store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
-import { cn, IconX } from '@sloughgpt/strui'
+import { useErrorStream } from '@/hooks/useErrorStream'
+import { ErrorDiagnosticsPanel } from '@/components/ErrorDiagnosticsPanel'
+import { cn, Button, IconX } from '@sloughgpt/strui'
 
 interface HealthScore {
   score: number
@@ -69,10 +71,15 @@ function scoreBg(score: number): string {
 
 export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
   const errors = useErrorStore(s => s.errors)
+  const clearFrontendErrors = useErrorStore(s => s.clearErrors)
   const { health } = useLiveStatus()
+  const { errors: streamErrors, connected: streamConnected, clearErrors: clearStreamErrors } = useErrorStream()
   const [gpuBackend, setGpuBackend] = useState<string | null>(null)
   const [recentReqs, setRecentReqs] = useState<BackendDebug['recent_requests']>([])
+  const [errorRateHistory, setErrorRateHistory] = useState<number[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const errorCountRef = useRef<number>(0)
+  const [debugApiStatus, setDebugApiStatus] = useState<'ok' | 'error' | 'unreachable'>('ok')
 
   // Only poll /health/debug for the 2 fields not in the SSE stream (gpu_backend, recent_requests).
   // 10s interval instead of 3s since this is a debug overlay.
@@ -88,13 +95,38 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
           const d = await r.json()
           setGpuBackend(d.gpu_backend || null)
           setRecentReqs(d.recent_requests || [])
+          setDebugApiStatus('ok')
+        } else {
+          setDebugApiStatus('error')
         }
-      } catch { /* debug overlay — server may be offline */ }
+      } catch {
+        setDebugApiStatus('unreachable')
+      }
     }
     refresh()
     timerRef.current = setInterval(refresh, 10000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [open])
+
+  // Track error rate over time (every 5 seconds)
+  useEffect(() => {
+    if (!open) return
+    const currentCount = errors.length + streamErrors.length
+    if (currentCount > errorCountRef.current) {
+      const newRate = currentCount - errorCountRef.current
+      setErrorRateHistory(prev => [...prev.slice(-19), newRate])
+      errorCountRef.current = currentCount
+    }
+    const interval = setInterval(() => {
+      const now = errors.length + streamErrors.length
+      if (now > errorCountRef.current) {
+        const rate = now - errorCountRef.current
+        setErrorRateHistory(prev => [...prev.slice(-19), rate])
+        errorCountRef.current = now
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [open, errors.length, streamErrors.length])
 
   // Derive everything from the live SSE snapshot (no API call needed).
   const h = health
@@ -144,7 +176,31 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/30">
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Debug</span>
         <div className="flex items-center gap-2">
-          <span className="text-[8px] text-muted-foreground/50">^⇧D</span>
+          {errorRateHistory.length >= 2 && (
+            <div className="flex items-center gap-1" title={`Error rate: ${errorRateHistory[errorRateHistory.length - 1]} errors/5s`}>
+              <span className="text-[8px] text-muted-foreground/40">err</span>
+              <Sparkline data={errorRateHistory} width={40} height={10} />
+            </div>
+          )}
+          {debugApiStatus !== 'ok' && (
+            <span className={cn(
+              "text-[8px] flex items-center gap-0.5",
+              debugApiStatus === 'error' ? 'text-yellow-400/70' : 'text-destructive/70',
+            )} title={debugApiStatus === 'error' ? 'Debug API returned error' : 'Debug API unreachable'}>
+              <span className={cn(
+                "inline-block h-1 w-1 rounded-full",
+                debugApiStatus === 'error' ? 'bg-yellow-400' : 'bg-destructive',
+              )} />
+              {debugApiStatus === 'error' ? 'api err' : 'api off'}
+            </span>
+          )}
+          {streamConnected && (
+            <span className="text-[8px] text-green-400/70 flex items-center gap-0.5">
+              <span className="inline-block h-1 w-1 rounded-full bg-green-400 animate-pulse" />
+              live
+            </span>
+          )}
+          <span className="text-[8px] text-muted-foreground/50">⌘⇧\</span>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
@@ -155,7 +211,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
           </button>
         </div>
       </div>
-      <div className="max-h-72 overflow-y-auto p-2 space-y-0.5">
+      <div className="max-h-96 overflow-y-auto p-2 space-y-0.5">
         {healthScore && (
           <div className={cn("rounded-md border p-2 mb-1", scoreBg(healthScore.score))}>
             <div className="flex items-center justify-between">
@@ -164,7 +220,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
                 {healthHistory.length >= 2 && (
                   <Sparkline data={healthHistory.map(h => h.score)} width={60} height={12} />
                 )}
-                <span className={cn("text-lg font-bold tabular-nums", scoreColor(healthScore.score))}>
+                <span className={cn("text-base font-bold tabular-nums", scoreColor(healthScore.score))}>
                   {healthScore.score}
                 </span>
               </div>
@@ -293,12 +349,79 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
             </div>
           </div>
         )}
-        {lastError && (
+        {streamErrors.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-border/30">
+            <ErrorDiagnosticsPanel errors={streamErrors} onClear={clearStreamErrors} />
+          </div>
+        )}
+        {streamErrors.length === 0 && lastError && (
           <div className="mt-2 pt-2 border-t border-border/30">
             <div className="text-muted-foreground/50 text-[9px] mb-1">Last FE error</div>
             <div className="text-red-400 text-[10px] break-all leading-tight">{lastError.title}{lastError.requestId ? ` [${lastError.requestId}]` : ''}</div>
           </div>
         )}
+        {/* Quick diagnostic actions */}
+        <div className="mt-2 pt-2 border-t border-border/30">
+          <div className="text-muted-foreground/50 text-[9px] mb-1">Quick actions</div>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              onClick={async () => {
+                try {
+                  const r = await fetch('/health', { signal: AbortSignal.timeout(3000) })
+                  const d = await r.json()
+                  const status = d?.data?.model_loaded ? 'Model loaded' : 'No model'
+                  window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: status, type: 'info' } }))
+                } catch {
+                  window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Backend unreachable', type: 'error' } }))
+                }
+              }}
+            >
+              Check health
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              onClick={() => {
+                const data = {
+                  health: health ? {
+                    score: health.health_score,
+                    model: health.model_type,
+                    errors: health.error_count,
+                    uptime: health.uptime_seconds,
+                  } : null,
+                  frontendErrors: errors.length,
+                  streamErrors: streamErrors.length,
+                  recentErrors: streamErrors.slice(0, 10).map(e => ({
+                    message: e.message,
+                    source: e.source,
+                    correlationId: e.correlationId,
+                    timestamp: new Date(e.timestamp).toISOString(),
+                  })),
+                }
+                navigator.clipboard.writeText(JSON.stringify(data, null, 2)).catch(() => {})
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Diagnostics copied', type: 'success' } }))
+              }}
+            >
+              Export all
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+              onClick={() => {
+                clearStreamErrors()
+                clearFrontendErrors()
+                window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'All errors cleared', type: 'info' } }))
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   )

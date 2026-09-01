@@ -20,6 +20,12 @@
 
 import { PUBLIC_API_URL } from '@/lib/config'
 
+export type LogTag =
+  | 'REQ' | 'AUTH' | 'MODEL' | 'SOUL' | 'TRAIN' | 'INFRA'
+  | 'START' | 'SLOW' | 'ERROR' | 'WARN' | 'OK'
+  | 'CHAT' | 'IDLE' | 'DOWNLOAD' | 'INFERENCE' | 'WORKFLOW'
+  | 'UI' | 'SYSTEM' | 'WEB'
+
 type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical'
 
 interface LogContext {
@@ -33,6 +39,20 @@ interface LogRecord {
   timestamp: number
   context?: LogContext
   exception?: string
+}
+
+const EVENT_TAG_MAP: Partial<Record<string, LogTag>> = {
+  model_:       'MODEL',
+  training_:    'TRAIN',
+  session_:     'CHAT',
+  stream_:      'CHAT',
+  chat_:        'CHAT',
+  webhook_:     'WORKFLOW',
+  download_:    'DOWNLOAD',
+  auth_:        'AUTH',
+  vm_:          'INFRA',
+  shell_:       'INFRA',
+  soul_:        'SOUL',
 }
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
@@ -204,6 +224,38 @@ export class WebLogger {
     this._transport.flush()
   }
 
+  // ── Event tracking ────────────────────────────────────────────────
+
+  static inferTag(event: string): LogTag {
+    for (const [prefix, tag] of Object.entries(EVENT_TAG_MAP)) {
+      if (tag && event.startsWith(prefix)) return tag
+    }
+    return 'UI'
+  }
+
+  trackEvent(event: string, data?: Record<string, unknown>) {
+    const tag = (data?.tag as LogTag) || WebLogger.inferTag(event)
+    const summary = data
+      ? Object.entries(data)
+          .filter(([k]) => k !== 'tag')
+          .map(([k, v]) => `${k}=${v}`)
+          .join(' ')
+      : ''
+
+    const record: LogRecord = {
+      level: 'info',
+      logger: this._name,
+      message: summary ? `${event} ${summary}` : event,
+      timestamp: Date.now() / 1000,
+      context: { ...data, tag },
+    }
+    this._transport.enqueue(record)
+
+    if (IS_DEV) {
+      console.debug(`[${this._name}]`, event, data)
+    }
+  }
+
   // ── Internal ──────────────────────────────────────────────────────
 
   private _emit(level: LogLevel, message: string, context?: LogContext, exception?: string) {
@@ -228,6 +280,13 @@ export class WebLogger {
     this._transport.enqueue(record)
   }
 }
+
+/** @deprecated Use WebLogger directly. */
+export const WebEventLogger = WebLogger
+
+const _defaultEventLogger = new WebLogger('slo.web.ui')
+export const trackEvent = (event: string, data?: Record<string, unknown>) =>
+  _defaultEventLogger.trackEvent(event, data)
 
 // ── Singleton ────────────────────────────────────────────────────────
 

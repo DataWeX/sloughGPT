@@ -50,6 +50,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const d = depsRef.current
+      const foreKey = e.metaKey // alias for readability
       if (e.key === 'Escape') {
         if (d.loading && d.loadingRef.current) {
           d.loadingRef.current.abort()
@@ -61,87 +62,87 @@ export function useChatKeyboard(deps: KeyboardDeps) {
           d.setShowSettings(prev => !prev)
         }
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
         e.preventDefault()
         d.setToolPanelOpen(prev => !prev)
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && !e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'b' && !e.shiftKey) {
         e.preventDefault()
         d.setToolPanelOpen(prev => !prev)
       }
-      if (e.key === '?' && (e.metaKey || e.ctrlKey)) {
+      if (e.key === '?' && (foreKey || e.ctrlKey)) {
         e.preventDefault()
         d.setShowSettings(prev => !prev)
       }
-      if (e.key === 'n' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+      if (e.key === 'n' && (foreKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault()
         d.newChatRef.current?.()
       }
-      if (e.key === 'r' && (e.metaKey || e.ctrlKey)) {
+      if (e.key === 'r' && (foreKey || e.ctrlKey)) {
         e.preventDefault()
         d.handleRegenerateRef.current?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
         e.preventDefault()
         window.dispatchEvent(new CustomEvent('search-conversations'))
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && !e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'f' && !e.shiftKey) {
         e.preventDefault()
         d.searchInputRef?.current?.focus()
       }
-      if (e.key === '/' && !(e.metaKey || e.ctrlKey) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (e.key === '/' && !(foreKey || e.ctrlKey) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
         e.preventDefault()
         d.searchInputRef?.current?.focus()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'r' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'r' && e.shiftKey) {
         e.preventDefault()
         d.onRenameConversation?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'e' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'e' && e.shiftKey) {
         e.preventDefault()
         d.onExportMarkdown?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'd' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'd' && e.shiftKey) {
         e.preventDefault()
         d.onDuplicateConversation?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
         e.preventDefault()
         d.onToggleBookmarks?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+      if ((foreKey || e.ctrlKey) && e.key === 'y') {
         e.preventDefault()
         d.onApproveTool?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      if ((foreKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault()
         d.onDenyTool?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+      if ((foreKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault()
         d.onToggleSidebar?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'n' && e.shiftKey) {
         e.preventDefault()
         d.onAddNoteToLastMessage?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
         e.preventDefault()
         d.onOpenNoteSearch?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === '/' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === '/' && e.shiftKey) {
         e.preventDefault()
         d.onOpenShortcuts?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 't' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 't' && e.shiftKey) {
         e.preventDefault()
         d.onOpenTemplates?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'c' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'c' && e.shiftKey) {
         e.preventDefault()
         d.onOpenConversationSearch?.()
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === 's' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 's' && e.shiftKey) {
         e.preventDefault()
         d.onOpenStats?.()
       }

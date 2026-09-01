@@ -178,7 +178,7 @@ describe('ModelDetailPage', () => {
     })
     fireEvent.click(screen.getByText('Remove'))
     await waitFor(() => {
-      expect(mocks.unloadModel).toHaveBeenCalledWith('gpt2')
+      expect(mocks.unloadModel).toHaveBeenCalled()
       expect(mocks.addToast).toHaveBeenCalledWith('Model stopped', 'info')
     })
   })

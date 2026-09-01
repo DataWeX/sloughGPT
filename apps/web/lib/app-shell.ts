@@ -9,6 +9,7 @@
 
 import { createStore } from 'zustand/vanilla'
 import { persist } from 'zustand/middleware'
+import { trackEvent } from '@/lib/dev-log'
 
 export interface TrainingShellState {
   phase: 'idle' | 'TRAINING' | 'complete' | 'error'
@@ -93,19 +94,30 @@ export const appShellStore = createStore<AppShellState>()(
       lastActivity: Date.now(),
 
       setTraining: (partial) =>
-        set((state) => ({
-          training: { ...state.training, ...partial },
-          lastActivity: Date.now(),
-        })),
+        set((state) => {
+          if (partial.phase !== undefined && partial.phase !== state.training.phase) {
+            trackEvent('training_phase_changed', { from: state.training.phase, to: partial.phase, method: partial.method ?? state.training.method })
+          }
+          return {
+            training: { ...state.training, ...partial },
+            lastActivity: Date.now(),
+          }
+        }),
 
       resetTraining: () =>
-        set((state) => ({
-          training: { ...DEFAULT_TRAINING },
-          lastActivity: Date.now(),
-        })),
+        set((state) => {
+          trackEvent('training_reset', { phase: state.training.phase })
+          return {
+            training: { ...DEFAULT_TRAINING },
+            lastActivity: Date.now(),
+          }
+        }),
 
       setLastActiveRoute: (route) =>
-        set({ lastActiveRoute: route, lastActivity: Date.now() }),
+        set((state) => {
+          trackEvent('route_changed', { from: state.lastActiveRoute, to: route })
+          return { lastActiveRoute: route, lastActivity: Date.now() }
+        }),
     }),
     {
       name: 'app-shell',

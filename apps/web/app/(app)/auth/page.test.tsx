@@ -4,8 +4,12 @@ import React from 'react'
 
 const {
   mockLogin, mockRegister, mockGetMe, mockAddToast,
+  mockGetKV, mockSetKV, mockDeleteKV,
 } = vi.hoisted(() => ({
   mockLogin: vi.fn(), mockRegister: vi.fn(), mockGetMe: vi.fn(), mockAddToast: vi.fn(),
+  mockGetKV: vi.fn().mockResolvedValue(null),
+  mockSetKV: vi.fn().mockResolvedValue(undefined),
+  mockDeleteKV: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
@@ -49,13 +53,23 @@ vi.mock('@/lib/config', () => ({
   PUBLIC_API_URL: 'http://localhost:8000',
 }))
 
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    getKV: (...a: unknown[]) => mockGetKV(...a),
+    setKV: (...a: unknown[]) => mockSetKV(...a),
+    deleteKV: (...a: unknown[]) => mockDeleteKV(...a),
+  },
+}))
+
 import AuthPage from './page'
 
 afterEach(cleanup)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  localStorage.clear()
+  mockGetKV.mockResolvedValue(null)
+  mockSetKV.mockResolvedValue(undefined)
+  mockDeleteKV.mockResolvedValue(undefined)
   mockLogin.mockResolvedValue({ token: 'test-token-123', user: { username: 'testuser', email: 'test@example.com', role: 'user' } })
   mockRegister.mockResolvedValue({ token: 'new-token-456', user: { username: 'newuser', email: 'new@example.com', role: 'user' } })
   mockGetMe.mockResolvedValue({ username: 'testuser', email: 'test@example.com', role: 'user' })
@@ -133,7 +147,7 @@ describe('AuthPage — login flow', () => {
     }
   })
 
-  it('stores token in localStorage after login', async () => {
+  it('stores token in chatDB after login', async () => {
     render(<AuthPage />)
     await waitFor(() => { expect(screen.getAllByPlaceholderText(/username/i).length).toBeGreaterThanOrEqual(1) })
 
@@ -149,7 +163,7 @@ describe('AuthPage — login flow', () => {
     if (submitBtn) {
       await act(async () => { fireEvent.click(submitBtn) })
       await waitFor(() => {
-        expect(localStorage.getItem('auth_token')).toBe('test-token-123')
+        expect(mockSetKV).toHaveBeenCalledWith('auth_token', 'test-token-123')
       })
     }
   })
@@ -205,7 +219,7 @@ describe('AuthPage — register flow', () => {
 
 describe('AuthPage — logout flow', () => {
   it('logout button clears token and user', async () => {
-    localStorage.setItem('auth_token', 'existing-token')
+    mockGetKV.mockResolvedValue('existing-token')
     mockGetMe.mockResolvedValue({ username: 'testuser', email: 'test@example.com', role: 'user' })
 
     render(<AuthPage />)
@@ -219,7 +233,7 @@ describe('AuthPage — logout flow', () => {
     if (logoutBtn) {
       await act(async () => { fireEvent.click(logoutBtn) })
       await waitFor(() => {
-        expect(localStorage.getItem('auth_token')).toBeNull()
+        expect(mockDeleteKV).toHaveBeenCalledWith('auth_token')
         expect(screen.getByText('Guest')).toBeTruthy()
       })
     }
@@ -228,7 +242,7 @@ describe('AuthPage — logout flow', () => {
 
 describe('AuthPage — existing token flow', () => {
   it('loads user from saved token', async () => {
-    localStorage.setItem('auth_token', 'existing-token')
+    mockGetKV.mockResolvedValue('existing-token')
     mockGetMe.mockResolvedValue({ username: 'saveduser', email: 'saved@example.com', role: 'user' })
 
     render(<AuthPage />)
@@ -238,12 +252,12 @@ describe('AuthPage — existing token flow', () => {
   })
 
   it('clears token on invalid response', async () => {
-    localStorage.setItem('auth_token', 'invalid-token')
+    mockGetKV.mockResolvedValue('invalid-token')
     mockGetMe.mockRejectedValue(new Error('unauthorized'))
 
     render(<AuthPage />)
     await waitFor(() => {
-      expect(localStorage.getItem('auth_token')).toBeNull()
+      expect(mockDeleteKV).toHaveBeenCalledWith('auth_token')
     })
   })
 })

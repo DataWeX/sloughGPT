@@ -37,6 +37,7 @@ _CYAN = "\033[36m"
 _GREEN = "\033[32m"
 _YELLOW = "\033[33m"
 _RED = "\033[31m"
+_BLUE = "\033[34m"
 _GREY = "\033[90m"
 _CLEAR = "\033[2J\033[H"
 
@@ -169,7 +170,7 @@ def _category_color(cat: str) -> str:
         "TRAIN": _GREEN, "MODEL": _CYAN, "INFERENCE": "\033[35m",
         "SYSTEM": _GREY, "ERROR": _RED, "INFRA": _GREY, "CHAT": _CYAN,
         "SOUL": _YELLOW, "START": _GREY, "IDLE": _GREY, "DOWNLOAD": _CYAN,
-        "SLOW": _YELLOW, "WORKFLOW": _GREY,
+        "SLOW": _YELLOW, "WORKFLOW": _GREY, "UI": _BLUE,
     }.get(cat, "")
 
 
@@ -450,7 +451,7 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
     _line(f"  {'─' * 50}")
     _line(f"  Total lines:  {_c(str(total), _BOLD)}")
     if first_ts and last_ts:
-        _line(f"  Time range:   {_c(first_ts[:19], _DIM)} → {_c(last_ts[:19], _DIM)}")
+        _line(f"  Time range:   {_c(first_ts[:19], _DIM)} to {_c(last_ts[:19], _DIM)}")
     _line()
 
     _line(f"  {_c('Levels', _BOLD)}")

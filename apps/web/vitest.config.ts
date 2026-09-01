@@ -35,6 +35,9 @@ export default defineConfig({
       'app/(app)/model/[id]/ModelDetailPage.test.tsx',
     ],
     setupFiles: ['./vitest-setup.ts'],
+    typecheck: {
+      tsconfig: './vitest.tsconfig.json',
+    },
     pool: 'forks',
     poolOptions: {
       forks: {

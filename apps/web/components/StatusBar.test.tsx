@@ -34,10 +34,12 @@ vi.mock('@/components/WhatsNewDialog', () => ({
 
 const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, model_loaded: true, model_type: 'gpt2', soul: 'friendly', uptime_seconds: 100, request_count: 50, error_count: 0, cpu_percent: 30, memory_percent: 40 }
 
+const mockClearFailures = vi.fn()
+
 const { useApiMonitor: _useApiMonitor, setHealthSummaryData } = vi.hoisted(() => {
   let hc: typeof mockHealthSummary | null = null
   return {
-    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc, recentFailures: [], failureCount: 0, lastOffline: null }),
+    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc, recentFailures: [], failureCount: 0, lastOffline: null, clearFailures: mockClearFailures }),
     setHealthSummaryData: (v: typeof mockHealthSummary | null) => { hc = v },
   }
 })
@@ -46,10 +48,21 @@ vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: _useApiMonitor,
 }))
 
+vi.mock('@/lib/config', () => ({
+  PUBLIC_API_URL: 'http://localhost:8000',
+}))
+
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Tooltip: ({ children }: any) => <div>{children}</div>,
+  TooltipTrigger: ({ children }: any) => <div>{children}</div>,
+  TooltipContent: ({ children }: any) => <div>{children}</div>,
   IconMenu: (props: any) => <span />,
   IconGrid: (props: any) => <span />,
+  IconRefresh: (props: any) => <span />,
+  IconX: (props: any) => <span />,
 }))
 
 import { StatusBar } from './StatusBar'

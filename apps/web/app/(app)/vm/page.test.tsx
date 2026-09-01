@@ -949,42 +949,13 @@ describe('VMPage', () => {
     expect(kvStore.get('vm-max-steps')).toBe(250)
   })
 
-  it('renders mode selector with Assembly and Linux buttons', () => {
+  it('renders assembly source editor', () => {
     render(<VMPage />)
-    expect(screen.getByRole('button', { name: /assembly/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /linux/i })).toBeInTheDocument()
+    expect(screen.getAllByText('Assembly Source').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('defaults to assembly mode', () => {
+  it('defaults to assembly mode with textarea', () => {
     const { container } = render(<VMPage />)
     expect(container.querySelector('textarea')).toBeInTheDocument()
-  })
-
-  it('switches to linux mode when Linux button is clicked', () => {
-    const { container } = render(<VMPage />)
-    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
-    expect(container.querySelector('textarea')).not.toBeInTheDocument()
-    expect(screen.getByText('Save State')).toBeInTheDocument()
-    expect(screen.getByText('Restore')).toBeInTheDocument()
-  })
-
-  it('switches back to assembly mode from linux', () => {
-    const { container } = render(<VMPage />)
-    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
-    expect(container.querySelector('textarea')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /assembly/i }))
-    expect(container.querySelector('textarea')).toBeInTheDocument()
-  })
-
-  it('linux tab shows boot status', () => {
-    render(<VMPage />)
-    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
-    expect(screen.getByText('Booting...')).toBeInTheDocument()
-  })
-
-  it('linux tab shows v86 info text', () => {
-    render(<VMPage />)
-    fireEvent.click(screen.getByRole('button', { name: /linux/i }))
-    expect(screen.getByText(/Full Linux OS running in your browser/)).toBeInTheDocument()
   })
 })

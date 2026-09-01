@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiGet } from '@/lib/http-client'
-import { logger } from '@/lib/dev-log'
+import { logger, trackEvent } from '@/lib/dev-log'
 
 interface ConversionStatus {
   model_id: string
@@ -17,12 +17,20 @@ export function useConversionStatus(modelId: string | null) {
   const [status, setStatus] = useState<ConversionStatus | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const hiddenRef = useRef(false)
+  const prevStageRef = useRef<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
     if (!modelId || hiddenRef.current) { return }
     try {
       const data = await apiGet<{ data?: ConversionStatus }>(`/models/conversion-status?model_id=${encodeURIComponent(modelId)}`, undefined, { silent: true })
       const s = data?.data || data as ConversionStatus
+      if (s.stage !== prevStageRef.current) {
+        trackEvent('conversion_stage_changed', { from: prevStageRef.current, to: s.stage })
+        prevStageRef.current = s.stage
+      }
+      if (s.stage === 'error') {
+        trackEvent('conversion_error', { error: s.error || s.message || 'Unknown conversion error' })
+      }
       setStatus(s)
       if (s.stage === 'ready' || s.stage === 'error' || s.stage === 'idle') {
         if (intervalRef.current) clearInterval(intervalRef.current)

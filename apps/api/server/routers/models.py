@@ -41,8 +41,8 @@ class DownloadRequest(BaseModel):
 
 class QuantizeRequest(BaseModel):
     """Request body for POST /models/quantize."""
-    bits: int = Field(default=8, pattern=r'^(4|8)$')
-    mode: str = Field(default="symmetric", pattern=r'^(symmetric|asymmetric)$')
+    bits: int = Field(default=8)
+    mode: str = Field(default="symmetric")
 
 
 class PrecisionRequest(BaseModel):

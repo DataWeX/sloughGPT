@@ -4451,7 +4451,7 @@ class TestBlockDeviceInfo:
         from domains.shell.vm import BlockDevice
         bd = BlockDevice(num_sectors=64)
         info = bd.info()
-        assert info["type"] == "block"
+        assert info["type"] == "in_memory"
         assert info["sectors"] == 64
         assert info["sector_size"] == 512
         assert info["reads"] == 0

@@ -32,6 +32,8 @@ class Card:
     dueDate: str = ""
     createdAt: str = ""
     updatedAt: str = ""
+    root_hash: str = ""
+    notes: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -49,6 +51,8 @@ class Card:
             dueDate=d.get("dueDate", ""),
             createdAt=d.get("createdAt", ""),
             updatedAt=d.get("updatedAt", ""),
+            root_hash=d.get("root_hash", ""),
+            notes=d.get("notes", []),
         )
 
 

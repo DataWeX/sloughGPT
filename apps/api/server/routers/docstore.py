@@ -18,6 +18,7 @@ Collections:
 """
 
 import os
+import logging
 from pathlib import Path as PathLib
 from typing import Any, Dict, Optional
 
@@ -26,6 +27,8 @@ from fastapi import APIRouter, Body, Depends, Path, Query
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
 from mogdb import MogDB
+
+logger = logging.getLogger("slo.docstore")
 
 COLLECTIONS = frozenset({
     "sessions",
@@ -148,6 +151,11 @@ class DocStoreRouter:
             coll.insert_one(doc)
             return success_response(data={"id": doc_id, "created": created})
         except Exception as e:
+            logger.warning(
+                "docstore.put failed: collection=%s doc_id=%s error=%s",
+                collection, doc_id, str(e)[:200],
+                extra={"tag": "DOCSTORE", "collection": collection, "doc_id": doc_id, "error": str(e)[:200]},
+            )
             classify_and_raise(e, source="docstore.put")
 
     def patch_doc(

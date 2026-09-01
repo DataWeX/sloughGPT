@@ -13,7 +13,7 @@ sys.path.insert(0, str(StdPath(__file__).resolve().parent.parent / "src"))
 # Import the framework from cli.py
 from cli import (
     Choice, CliPath, Option, Argument, Context, Command, Group,
-    UsageError, BadParameter, _parse_args, _record_usage, _parse_global_options,
+    UsageError, BadParameter, _parse_args, _record_usage,
     run, option, argument, pass_context, version_option, echo, confirm, group, command,
     _TTY, _SUGGESTIONS,
 )
@@ -491,7 +491,8 @@ class TestRun:
 
     def test_run_with_context(self, capsys):
         @group()
-        def my_cli():
+        @option("--host", default="localhost")
+        def my_cli(host):
             pass
 
         @my_cli.command("test")
@@ -518,6 +519,44 @@ class TestRun:
         with patch("sys.argv", ["cli", "download"]):
             with pytest.raises(SystemExit):
                 run(my_cli)
+
+    def test_run_unknown_group_option_exits_cleanly(self, capsys):
+        @group()
+        def my_cli():
+            pass
+
+        @my_cli.command("test")
+        def test_cmd():
+            pass
+
+        with patch("sys.argv", ["cli", "--bogus-flag"]):
+            with pytest.raises(SystemExit) as exc_info:
+                run(my_cli)
+            assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        assert "Error:" in captured.out
+        assert "Unknown option: --bogus-flag" in captured.out
+        assert "Traceback" not in captured.out
+
+    def test_run_unknown_group_option_before_subcommand(self, capsys):
+        @group()
+        @option("--host", default="localhost")
+        def my_cli(host):
+            pass
+
+        @my_cli.command("serve")
+        def serve():
+            echo("serving")
+
+        with patch("sys.argv", ["cli", "--host", "example.com", "--invalid-opt", "serve"]):
+            with pytest.raises(SystemExit) as exc_info:
+                run(my_cli)
+            assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        assert "Error:" in captured.out
+        assert "Unknown option: --invalid-opt" in captured.out
 
 
 # ── Integration with real cli.py patterns ────────────────────────────────

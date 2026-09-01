@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import type { Checkpoint } from '@/lib/souls-controller'
 import type { TrainingBuild, TrainingJob } from '@/lib/training-controller'
-import { logger } from '@/lib/dev-log'
+import { logger, trackEvent } from '@/lib/dev-log'
 
 export interface UseTrainingCheckpointsReturn {
   checkpoints: Checkpoint[]
@@ -59,6 +59,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       await trainingJobsController.loadCheckpoint?.(name)
       setActiveCheckpoint(name)
+      trackEvent('checkpoint_loaded', { name })
       addToast(`Loaded trained version: ${name}`, 'success')
     } catch { addToast('Could not load trained version', 'error') }
   }, [])
@@ -69,6 +70,7 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
       await trainingJobsController.deleteCheckpoint?.(name)
       setCheckpoints(prev => prev.filter(c => c.name !== name))
       setActiveCheckpoint(prev => prev === name ? null : prev)
+      trackEvent('checkpoint_deleted', { name })
       addToast(`Deleted ${name}`, 'success')
     } catch { addToast('Could not delete trained version', 'error') }
   }, [])

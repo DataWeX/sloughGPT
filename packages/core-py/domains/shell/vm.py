@@ -884,6 +884,11 @@ class BlockDevice(Device):
             algo: Compression algorithm (persistent mode only)
             create: Create new device, overwriting existing (persistent mode only)
         """
+        # Backward compat: BlockDevice(1024) means num_sectors=1024
+        if isinstance(path, int):
+            num_sectors = path
+            path = None
+
         self._path = Path(path) if path else None
         self._block_size = block_size
         self._is_persistent = self._path is not None
@@ -906,6 +911,7 @@ class BlockDevice(Device):
         self._bytes_written = 0
         self._compressed_bytes_read = 0
         self._compressed_bytes_written = 0
+        self._original_bytes_written = 0
 
         if self._is_persistent:
             if create:
@@ -1158,6 +1164,7 @@ class BlockDevice(Device):
         self._file.write(compressed)
 
         self._compressed_bytes_written += len(compressed)
+        self._original_bytes_written += len(data)
 
         flags = BlockFlags.COMPRESSED if is_compressed else 0
         self._block_map[block_num] = BlockMapEntry(
@@ -1215,8 +1222,8 @@ class BlockDevice(Device):
                 "compressed_bytes_read": self._compressed_bytes_read,
                 "compressed_bytes_written": self._compressed_bytes_written,
                 "compression_ratio": (
-                    self._compressed_bytes_written / self._bytes_written
-                    if self._bytes_written > 0 else 1.0
+                    self._compressed_bytes_written / self._original_bytes_written
+                    if self._original_bytes_written > 0 else 1.0
                 ),
                 "disk_usage_bytes": self._get_disk_usage(),
             })
@@ -1237,9 +1244,10 @@ class BlockDevice(Device):
 
     def get_compression_ratio(self) -> float:
         """Get current compression ratio (compressed/original)."""
-        if self._bytes_written == 0:
+        if self._compressed_bytes_written == 0:
             return 1.0
-        return self._compressed_bytes_written / self._bytes_written
+        # Track original bytes written for ratio calculation
+        return self._compressed_bytes_written / self._original_bytes_written if self._original_bytes_written > 0 else 1.0
 
     def get_sector_usage(self) -> dict:
         """Get sector allocation info."""

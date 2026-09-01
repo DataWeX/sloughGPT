@@ -31,6 +31,7 @@ import { chatDB } from '@/lib/db'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
 import { formatBytes } from '@/lib/format-bytes'
+import { useModelReadiness, setModelReadiness } from '@/lib/store'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -54,7 +55,7 @@ export default function HomePage() {
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
-  const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
+  const modelReadiness = useModelReadiness()
   const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(false)
 
   useEffect(() => {
@@ -125,14 +126,14 @@ export default function HomePage() {
   }, [apiStatus])
 
   useEffect(() => {
-    if (apiStatus !== 'offline') return
+    if (apiStatus === 'loading' || apiStatus === 'offline') return
     let cancelled = false
     const poll = async () => {
       try {
         const result = await apiGet<{phase: string; step: number; total: number; message: string}>('/health/startup-progress')
-        if (!cancelled) setStartup(result)
+        if (!cancelled) setModelReadiness({ ...result, ready: result.phase === 'ready' })
       } catch {
-        if (!cancelled) setStartup(null)
+        if (!cancelled) setModelReadiness({ ready: false, phase: 'unknown', step: 0, total: 9, message: 'Connecting...' })
       }
     }
     poll()
@@ -221,15 +222,15 @@ export default function HomePage() {
       )}
 
       {apiStatus === 'offline' ? (
-        startup ? (
+        modelReadiness.phase !== 'initializing' && modelReadiness.phase !== 'unknown' ? (
           <Card className="border-warning/35 bg-warning/5">
             <CardHeader>
-              <CardTitle className="text-base">Starting up… ({startup.step}/{startup.total})</CardTitle>
+              <CardTitle className="text-base">Starting up… ({modelReadiness.step}/{modelReadiness.total})</CardTitle>
             </CardHeader>
             <CardContent className="text-sm space-y-2">
-              <p>{startup.message}</p>
+              <p>{modelReadiness.message}</p>
               <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(startup.step / startup.total) * 100}%`}} />
+                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
               </div>
               <p className="text-xs text-muted-foreground">First startup may take 90 seconds while AI components load.</p>
             </CardContent>
@@ -366,7 +367,7 @@ export default function HomePage() {
                     data.setTestRunning(true)
                     data.setTestResponse(null)
                     try {
-                      const result = await chatController.send('Hello!')
+                      const result = await chatController.send('Hello!', { waitForModel: true })
                       data.setTestResponse(result.message || 'No response')
                     } catch (e: unknown) {
                       data.setTestResponse(extractErrorMessage(e, 'Could not connect'))
@@ -420,12 +421,34 @@ export default function HomePage() {
         <Card className="border-dashed border-border/60 bg-muted/20">
           <CardContent className="py-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">No model loaded</p>
-              <p className="text-xs text-muted-foreground">Load a model in Personalities to start chatting</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">No model loaded</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Load a model in Models to start chatting</p>
             </div>
             <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => router.push('/models')}>
               Open Models
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && !modelReadiness.ready && modelReadiness.phase !== 'initializing' && modelReadiness.phase !== 'unknown' && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning/60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-warning" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Model loading</p>
+                <p className="text-xs text-muted-foreground">{modelReadiness.message}</p>
+              </div>
+              <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden shrink-0">
+                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

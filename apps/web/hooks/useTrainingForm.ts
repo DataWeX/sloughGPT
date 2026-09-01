@@ -8,6 +8,7 @@ import type { UseTrainingSessionReturn } from '@/hooks/useTrainingSession'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 import { chatDB } from '@/lib/db'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { trackEvent } from '@/lib/dev-log'
 
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
@@ -171,6 +172,7 @@ export function useTrainingForm(
   }, [])
 
   const saveCustomPreset = useCallback((preset: TrainingPreset) => {
+    trackEvent('training_preset_saved', { name: preset.name })
     setCustomPresets(prev => {
       const next = [...prev.filter(p => p.name !== preset.name), preset]
       chatDB.setKV('training-presets', next).catch(() => {})
@@ -179,6 +181,7 @@ export function useTrainingForm(
   }, [])
 
   const deleteCustomPreset = useCallback((name: string) => {
+    trackEvent('training_preset_deleted', { name })
     setCustomPresets(prev => {
       const next = prev.filter(p => p.name !== name)
       chatDB.setKV('training-presets', next).catch(() => {})
@@ -213,6 +216,7 @@ export function useTrainingForm(
   }, [addToast])
 
   const applyPreset = useCallback((preset: TrainingPreset) => {
+    trackEvent('training_preset_applied', { preset: preset.name })
     setMethod(preset.method)
     setTrainingEpochs(preset.epochs)
     setTrainingLR(preset.lr)
@@ -231,6 +235,7 @@ export function useTrainingForm(
     (method !== 'vlm' || !!datasets.selectedDataset)
 
   const startTraining = useCallback(async (checkpointName?: string) => {
+    trackEvent('training_started', { method, input_mode: inputMode })
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
 

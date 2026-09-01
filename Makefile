@@ -1,4 +1,4 @@
-.PHONY: api api-daemon api-stop web tsc lint test-py test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test setup-git
+.PHONY: api api-daemon api-stop web tsc lint test-py test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test setup-git test-doctor test-doctor-health test-doctor-flake test-doctor-recent
 
 # ── Dev Servers ──────────────────────────────────────────
 api:
@@ -122,6 +122,22 @@ colab-smoke:
 
 colab-test:
 	.venv/bin/python3 -m pytest tests/test_sloughgpt_colab_notebook.py -v
+
+# ── Test Doctor (Internal Diagnostics) ──────────────────
+test-doctor:
+	python3 scripts/test-doctor.py $(ARGS)
+
+test-doctor-health:
+	python3 scripts/test-doctor.py
+
+test-doctor-flake:
+	python3 scripts/test-doctor.py --flake
+
+test-doctor-recent:
+	python3 scripts/test-doctor.py --recent
+
+test-doctor-fix:
+	python3 scripts/test-doctor.py --fix-hint $(TEST)
 
 # ── Cleanup ─────────────────────────────────────────────
 clean:

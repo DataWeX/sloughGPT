@@ -85,6 +85,9 @@ vi.mock('@sloughgpt/strui', () => {
     Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
       <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
     ),
+    Slider: ({ value, onValueChange, ...props }: any) => (
+      <input type="range" value={value?.[0] ?? 0} onChange={(e) => onValueChange?.([Number(e.target.value)])} {...props} />
+    ),
   }
 })
 

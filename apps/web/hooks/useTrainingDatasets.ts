@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { datasetController } from '@/lib/controllers'
+import { trackEvent } from '@/lib/dev-log'
 import type { Dataset, DatasetPreview } from '@/lib/dataset-controller'
 
 export interface UseTrainingDatasetsReturn {
@@ -18,10 +19,15 @@ export interface UseTrainingDatasetsReturn {
 
 export function useTrainingDatasets(addToast: (msg: string, type?: 'success' | 'error' | 'info') => void): UseTrainingDatasetsReturn {
   const [datasets, setDatasets] = useState<Dataset[]>([])
-  const [selectedDataset, setSelectedDataset] = useState('')
+  const [selectedDataset, _setSelectedDataset] = useState('')
   const [loadingDatasets, setLoadingDatasets] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [datasetPreview, setDatasetPreview] = useState<DatasetPreview | null>(null)
+
+  const setSelectedDataset = (id: string) => {
+    trackEvent('dataset_selected', { dataset_id: id })
+    _setSelectedDataset(id)
+  }
 
   const fetchDatasets = useCallback(async () => {
     setLoadingDatasets(true)

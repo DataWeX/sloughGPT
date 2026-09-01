@@ -4,6 +4,16 @@
 // Core utilities
 export { cn } from './lib/cn'
 
+// Versioning system
+export {
+  STRUI_VERSION,
+  FEATURE_VERSIONS,
+  getComponentFeature,
+  listFeatures,
+  type FeatureVersion,
+  type FeatureName,
+} from './versions'
+
 // Button
 export { Button, buttonVariants, type ButtonProps } from './components/ui/button'
 
@@ -161,6 +171,7 @@ export { Timeline, type TimelineProps, type TimelineItem } from './components/co
 export { Breadcrumbs, type BreadcrumbsProps, type BreadcrumbItem } from './components/composed/breadcrumbs'
 export { Kbd, type KbdProps } from './components/composed/kbd'
 export { ThemeColorPicker, ThemeSwatch, ColorInput, DEFAULT_THEME_SWATCHES, type ThemeSwatch as ThemeSwatchType, type ThemeColorPickerProps } from './components/composed/theme-color-picker'
+export { VersionInspector, type VersionInspectorProps, type FeatureVersionEntry } from './components/composed/version-inspector'
 
 // === AI components (non-overlapping) ===
 export { MessageBubble, type MessageBubbleProps } from './components/ai/message-bubble'

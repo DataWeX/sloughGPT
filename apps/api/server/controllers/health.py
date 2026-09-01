@@ -515,6 +515,13 @@ class HealthController:
 
         lifecycle = _get_lifecycle_info()
 
+        # Version info
+        try:
+            from version import version_info as _version_info
+            versions = _version_info()
+        except Exception:
+            versions = {}
+
         result = {
             "status": "healthy" if lifecycle.get("is_running", False) else lifecycle.get("phase", "unknown"),
             "uptime_seconds": uptime,
@@ -558,6 +565,7 @@ class HealthController:
             "resource_allocation": _get_resource_allocation(),
             "process_guard": _get_process_guard_status(),
             "memory_pressure": _get_memory_pressure_stats(),
+            "versions": versions,
             "status_message": _build_status_message(
                 model_loaded, model_type, model_loading, current_soul,
                 request_count, error_count, lifecycle,

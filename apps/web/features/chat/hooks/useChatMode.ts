@@ -5,6 +5,7 @@ import type { ChatMessage } from '@/lib/chat-utils'
 import { useToastStore } from '@/lib/toast-store'
 import { imagesController } from '@/lib/images-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { trackEvent } from '@/lib/dev-log'
 import type { ImageStyle } from '@/lib/images-controller'
 import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
@@ -33,7 +34,16 @@ interface UseChatModeOptions {
 }
 
 export function useChatMode({ chat }: UseChatModeOptions) {
-  const [chatMode, setChatMode] = useState<ChatMode>('chat')
+  const [chatMode, _setChatMode] = useState<ChatMode>('chat')
+  const setChatMode = useCallback((mode: ChatMode | ((prev: ChatMode) => ChatMode)) => {
+    _setChatMode((prev) => {
+      const next = typeof mode === 'function' ? mode(prev) : mode
+      if (prev !== next) {
+        trackEvent('chat_mode_changed', { from: prev, to: next })
+      }
+      return next
+    })
+  }, [])
   const [writeTone, setWriteTone] = useState('Friendly')
   const [writeType, setWriteType] = useState('Email')
   const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar')
