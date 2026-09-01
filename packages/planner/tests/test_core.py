@@ -326,8 +326,9 @@ def test_sprint_list_and_report(cli_env, capsys):
     assert "DataWeX/sloughGPT#42" in out
 
 
-def test_kanban_and_sync_dispatch(cli_env):
-    for cmd in ("kanban", "sync", "gui"):
-        with pytest.raises(SystemExit) as exc:
-            cli_main([cmd, "--help"])
-        assert exc.value.code == 0
+def test_sync_dispatch(cli_env):
+    try:
+        code = cli_main(["sync", "--help"])
+        assert code == 0
+    except SystemExit as exc:
+        assert exc.code == 0

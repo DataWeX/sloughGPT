@@ -13,9 +13,9 @@ from planner import config
 
 
 def _write_board(root: Path) -> Path:
-    board = root / ".kanban" / "board.json"
+    board = root / ".kanban" / "board.jsonl"
     board.parent.mkdir(parents=True, exist_ok=True)
-    board.write_text(json.dumps({"cards": []}))
+    board.write_text("")
     return root
 
 
