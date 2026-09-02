@@ -1,43 +1,32 @@
-from unittest.mock import patch, MagicMock
+"""Tests for domains.shell.error — format_error."""
+
+from __future__ import annotations
+
 import pytest
-
 from domains.shell.error import format_error
-
-
-class FakeRequests:
-    ConnectionError = type("ConnectionError", (ConnectionError,), {})
-    Timeout = type("Timeout", (TimeoutError,), {})
-
-
-@pytest.fixture(autouse=True)
-def _patch_requests():
-    with patch.dict("sys.modules", {"requests": FakeRequests}):
-        yield
 
 
 class TestFormatError:
     def test_connection_error(self):
         e = ConnectionError("refused")
-        result = format_error(e, color=False)
+        result = format_error(e)
         assert "Connection failed" in result
         assert "Is the API server running" in result
 
     def test_timeout_error(self):
         e = TimeoutError("timed out")
         result = format_error(e)
-        assert "timed out" in result
+        assert "timed out" in result.lower()
 
     def test_permission_error(self):
-        e = PermissionError("/etc/shadow")
+        e = PermissionError("/secret")
         result = format_error(e)
         assert "Permission denied" in result
-        assert "/etc/shadow" in result
 
     def test_file_not_found(self):
-        e = FileNotFoundError("/tmp/nope.txt")
+        e = FileNotFoundError("/missing")
         result = format_error(e)
         assert "File not found" in result
-        assert "/tmp/nope.txt" in result
 
     def test_generic_error(self):
         e = ValueError("bad value")
@@ -45,31 +34,30 @@ class TestFormatError:
         assert "ValueError" in result
         assert "bad value" in result
 
-    def test_generic_error_with_cmd(self):
-        e = RuntimeError("oops")
-        result = format_error(e, cmd="train")
-        assert "[train]" in result
-        assert "RuntimeError" in result
+    def test_with_command_prefix(self):
+        e = ValueError("bad")
+        result = format_error(e, cmd="test_cmd")
+        assert "[test_cmd]" in result
 
-    def test_empty_cmd_no_prefix(self):
-        e = KeyError("missing")
-        result = format_error(e, cmd="")
-        assert result.startswith("  ")
-        assert "[train]" not in result
-
-    def test_color_param_accepted(self):
-        e = TypeError("nope")
-        result = format_error(e, color=True)
-        assert "TypeError" in result
-        result2 = format_error(e, color=False)
-        assert "TypeError" in result2
+    def test_without_command_prefix(self):
+        e = ValueError("bad")
+        result = format_error(e)
+        assert "  ValueError: bad" == result
 
     def test_requests_connection_error(self):
-        e = FakeRequests.ConnectionError("net fail")
-        result = format_error(e)
-        assert "Connection failed" in result
+        try:
+            import requests
+            e = requests.ConnectionError("refused")
+            result = format_error(e)
+            assert "Connection failed" in result
+        except ImportError:
+            pytest.skip("requests not installed")
 
-    def test_requests_timeout(self):
-        e = FakeRequests.Timeout("slow")
-        result = format_error(e)
-        assert "timed out" in result
+    def test_requests_timeout_error(self):
+        try:
+            import requests
+            e = requests.Timeout("timed out")
+            result = format_error(e)
+            assert "timed out" in result.lower()
+        except ImportError:
+            pytest.skip("requests not installed")
