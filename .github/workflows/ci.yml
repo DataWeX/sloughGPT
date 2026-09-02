@@ -119,6 +119,8 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pytest
+          # pytest.ini filterwarnings reference starlette warning categories.
+          pip install starlette
           pip install -e packages/mogdb
       - name: Syntax check
         run: |
