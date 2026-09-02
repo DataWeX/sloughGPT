@@ -123,25 +123,21 @@ class TestStatusBlock:
         import threading
         from commands.dev import StatusBlock
 
-        stream = MagicMock(spec=io.StringIO)
-        stream.isatty.return_value = True
-        stream.getvalue.return_value = ""
         written = []
         def capture_write(s):
             written.append(s)
-        stream.write = capture_write
-        stream.flush = MagicMock()
+
+        mock_tty = MagicMock()
+        mock_tty.write = capture_write
+        mock_tty.flush = MagicMock()
 
         logger = MagicMock()
-        logger._stream = stream
         logger._lock = threading.Lock()
         logger._colors = False
-        logger.save_position = MagicMock()
-        logger.restore_position = MagicMock()
-        logger.clear_lines = MagicMock()
 
-        block = StatusBlock(logger)
-        block.update("  SloughGPT", "  API: starting")
+        with patch('builtins.open', return_value=mock_tty):
+            block = StatusBlock(logger)
+            block.update("  SloughGPT", "  API: starting")
 
         output = "".join(written)
         assert "SloughGPT" in output
@@ -151,53 +147,55 @@ class TestStatusBlock:
         import threading
         from commands.dev import StatusBlock
 
-        stream = MagicMock()
-        stream.isatty.return_value = True
-        stream.write = MagicMock()
-        stream.flush = MagicMock()
+        written = []
+        def capture_write(s):
+            written.append(s)
+
+        mock_tty = MagicMock()
+        mock_tty.write = capture_write
+        mock_tty.flush = MagicMock()
 
         logger = MagicMock()
-        logger._stream = stream
         logger._lock = threading.Lock()
         logger._colors = False
-        logger.restore_position = MagicMock()
-        logger.clear_lines = MagicMock()
-        logger.save_position = MagicMock()
 
-        block = StatusBlock(logger)
-        assert block._is_tty is True
+        with patch('builtins.open', return_value=mock_tty):
+            block = StatusBlock(logger)
+            assert block._is_tty is True
 
-        block.update("  Line 1", "  Line 2")
-        assert len(block._lines) == 2
+            block.update("  Line 1", "  Line 2")
+            assert len(block._lines) == 2
 
-        block.update("  New Line 1")
-        logger.restore_position.assert_called()
-        logger.clear_lines.assert_called_with(2)
+            block.update("  New Line 1")
+            # After second update, should have escape codes for clearing
+            output = "".join(written)
+            assert "\033[" in output  # ANSI escape codes present
 
     def test_first_update_no_clear(self):
         import io
         import threading
         from commands.dev import StatusBlock
 
-        stream = MagicMock(spec=io.StringIO)
-        stream.isatty.return_value = True
         written = []
         def capture_write(s):
             written.append(s)
-        stream.write = capture_write
-        stream.flush = MagicMock()
+
+        mock_tty = MagicMock()
+        mock_tty.write = capture_write
+        mock_tty.flush = MagicMock()
 
         logger = MagicMock()
-        logger._stream = stream
         logger._lock = threading.Lock()
         logger._colors = False
-        logger.save_position = MagicMock()
 
-        block = StatusBlock(logger)
-        block.update("  Only line")
-        assert len(block._lines) == 1
-        output = "".join(written)
-        assert "Only line" in output
+        with patch('builtins.open', return_value=mock_tty):
+            block = StatusBlock(logger)
+            block.update("  Only line")
+            assert len(block._lines) == 1
+            output = "".join(written)
+            assert "Only line" in output
+            # First update should not have clear escape codes
+            assert "\033[2K" not in output
 
     def test_non_tty_uses_info(self):
         import threading
