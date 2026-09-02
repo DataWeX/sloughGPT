@@ -7958,6 +7958,107 @@
       "due_date": null,
       "assignee": null,
       "notes": ""
+    },
+    {
+      "id": "20260902_120000-mogdb-verify-stabilize",
+      "title": "Verify & stabilize MogDB migration",
+      "description": "Run full test suite (including voice router tests). Fix any regressions from MogDB migration. Clean up legacy JSON files (keep as backup).",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mogdb",
+        "testing",
+        "stability"
+      ],
+      "created_at": "2026-09-02T12:00:00.000000+00:00",
+      "updated_at": "2026-09-02T12:00:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "383 tests passing, but need to verify voice router and run full suite"
+    },
+    {
+      "id": "20260902_120100-mogdb-remaining-migrations",
+      "title": "Migrate remaining data stores to MogDB + JSON sync",
+      "description": "Migrate: (1) data/knowledge/entries.json, (2) data/knowledge/visited.json, (3) data/rag_store/documents.jsonl, (4) data/response_logs/*.jsonl, (5) data/model_catalog/ directory",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "migration",
+        "data"
+      ],
+      "created_at": "2026-09-02T12:01:00.000000+00:00",
+      "updated_at": "2026-09-02T12:01:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "These are smaller stores, lower priority than main routers"
+    },
+    {
+      "id": "20260902_120200-mogdb-performance-opt",
+      "title": "MogDB performance optimization",
+      "description": "Optimize SyncableCollection: (1) Add batch write support for high-throughput scenarios, (2) Implement lazy JSON sync (async background thread), (3) Add compression for JSON sync files, (4) Benchmark MogDB vs file-based performance",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "performance",
+        "optimization"
+      ],
+      "created_at": "2026-09-02T12:02:00.000000+00:00",
+      "updated_at": "2026-09-02T12:02:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Current implementation is simple and safe; optimize only if profiling shows bottleneck"
+    },
+    {
+      "id": "20260902_120300-mogdb-data-migration-tools",
+      "title": "Data migration tools for MogDB",
+      "description": "Create tools: (1) scripts/migrate_legacy_json.py to import existing JSON files into MogDB, (2) CLI command slo db migrate for one-time migration, (3) CLI command slo db sync to force JSON sync, (4) CLI command slo db status to show collection stats",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "cli",
+        "migration"
+      ],
+      "created_at": "2026-09-02T12:03:00.000000+00:00",
+      "updated_at": "2026-09-02T12:03:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Useful for users migrating from file-based setup"
+    },
+    {
+      "id": "20260902_120400-mogdb-documentation",
+      "title": "MogDB documentation",
+      "description": "Document MogDB: (1) Update README.md with MogDB usage examples, (2) Document SyncableCollection API, (3) Add migration guide for developers, (4) Create architecture decision record (ADR) for MogDB + JSON sync",
+      "column": "todo",
+      "priority": "low",
+      "tags": [
+        "mogdb",
+        "documentation"
+      ],
+      "created_at": "2026-09-02T12:04:00.000000+00:00",
+      "updated_at": "2026-09-02T12:04:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Good for onboarding new developers"
+    },
+    {
+      "id": "20260902_120500-slnc-memory-mapped",
+      "title": "Memory-mapped inference (.slnc format)",
+      "description": "Implement .slnc format for zero-copy model loading: (1) Write converter safetensors→slnc, (2) Write mmap loader, (3) Wire into NumpyEngine, (4) Wire into SloNetChatProvider, (5) Keep safetensors fallback",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "inference",
+        "performance",
+        "slnc"
+      ],
+      "created_at": "2026-09-02T12:05:00.000000+00:00",
+      "updated_at": "2026-09-02T12:05:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "See PLAN.md for full design spec. Expected: 200ms→1ms load time"
     }
   ]
 }
