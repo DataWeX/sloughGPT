@@ -52,30 +52,6 @@ class Point(PointProtocol):
                 values = values + self.residual[:n]
             return values
 
-        if self.function_type == "block_q4":
-            mins = self.params["mins"]
-            scales = self.params["scales"]
-            packed = self.params["packed"]
-            n_elem = self.params["n_elements"]
-            n_blk = self.params["n_blocks"]
-            bs = self.params["block_size"]
-            unpacked = np.zeros(n_blk * bs, dtype=np.uint8)
-            unpacked[0::2] = packed & 0x0F
-            unpacked[1::2] = (packed >> 4) & 0x0F
-            q = unpacked.reshape(n_blk, bs).astype(np.float32)
-            deq = q * scales[:, None] + mins[:, None]
-            return deq.ravel()[:n]
-
-        if self.function_type == "block_q8":
-            mins = self.params["mins"]
-            scales = self.params["scales"]
-            values = self.params["values"]
-            n_blk = self.params["n_blocks"]
-            bs = self.params["block_size"]
-            q = values.reshape(n_blk, bs).astype(np.float32)
-            deq = q * scales[:, None] + mins[:, None]
-            return deq.ravel()[:n]
-
         i = np.arange(n, dtype=np.float32)
 
         if self.function_type == "periodic":
@@ -103,20 +79,6 @@ class Point(PointProtocol):
                 return (centroids.nbytes + assignments.nbytes +
                         (self.residual.nbytes if self.residual is not None else 0))
             return 0
-        elif self.function_type == "block_q4":
-            mins = self.params.get("mins")
-            scales = self.params.get("scales")
-            packed = self.params.get("packed")
-            if mins is not None and scales is not None and packed is not None:
-                return mins.nbytes + scales.nbytes + packed.nbytes
-            return 0
-        elif self.function_type == "block_q8":
-            mins = self.params.get("mins")
-            scales = self.params.get("scales")
-            values = self.params.get("values")
-            if mins is not None and scales is not None and values is not None:
-                return mins.nbytes + scales.nbytes + values.nbytes
-            return 0
         elif self.function_type == "raw":
             return len(base64.b64decode(self.params.get("data_b64", "")))
         else:
@@ -130,9 +92,6 @@ class Point(PointProtocol):
             if assignments is not None:
                 return len(assignments) * 4  # float32 per element
             return 0
-        elif self.function_type in ("block_q4", "block_q8"):
-            n = self.params.get("n_elements", 0)
-            return n * 4  # float32 per element
         elif self.function_type == "raw":
             return self.nbytes()
         else:
@@ -148,8 +107,6 @@ class Point(PointProtocol):
         "polynomial": b"POLY",
         "cluster": b"CLUS",
         "raw": b"RAW ",
-        "block_q4": b"BQ4 ",
-        "block_q8": b"BQ8 ",
     }
     _TYPE_DECODE = {v: k for k, v in _TYPE_CODES.items()}
 
@@ -177,29 +134,6 @@ class Point(PointProtocol):
                 res_bytes = self.residual.astype(np.float32).tobytes()
                 param_bytes += struct.pack('<I', len(res_bytes))
                 param_bytes += res_bytes
-        elif self.function_type == "block_q4":
-            mins = self.params["mins"]
-            scales = self.params["scales"]
-            packed = self.params["packed"]
-            n_elem = self.params["n_elements"]
-            n_blk = self.params["n_blocks"]
-            param_bytes = struct.pack('<I', n_blk)
-            param_bytes += mins.tobytes()
-            param_bytes += scales.tobytes()
-            param_bytes += struct.pack('<I', n_elem)
-            param_bytes += struct.pack('<I', len(packed))
-            param_bytes += packed.tobytes()
-        elif self.function_type == "block_q8":
-            mins = self.params["mins"]
-            scales = self.params["scales"]
-            values = self.params["values"]
-            n_elem = self.params["n_elements"]
-            n_blk = self.params["n_blocks"]
-            param_bytes = struct.pack('<I', n_blk)
-            param_bytes += mins.tobytes()
-            param_bytes += scales.tobytes()
-            param_bytes += struct.pack('<I', n_elem)
-            param_bytes += values.tobytes()
         elif self.function_type == "periodic":
             param_bytes = struct.pack('fff', self.params["a"], self.params["b"], self.params["w"])
             has_res = 1 if self.residual is not None else 0
@@ -286,38 +220,6 @@ class Point(PointProtocol):
                 offset += 4
                 residual = np.frombuffer(param_bytes[offset:offset + res_len], dtype=np.float32)
             params = {"centroids": centroids, "assignments": assignments}
-        elif function_type == "block_q4":
-            offset = 0
-            n_blk = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
-            offset += 4
-            mins = np.frombuffer(param_bytes[offset:offset + n_blk * 4], dtype=np.float32)
-            offset += n_blk * 4
-            scales = np.frombuffer(param_bytes[offset:offset + n_blk * 4], dtype=np.float32)
-            offset += n_blk * 4
-            n_elem = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
-            offset += 4
-            n_packed = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
-            offset += 4
-            packed = np.frombuffer(param_bytes[offset:offset + n_packed], dtype=np.uint8)
-            params = {
-                "mins": mins, "scales": scales, "packed": packed,
-                "n_elements": n_elem, "n_blocks": n_blk, "block_size": 32,
-            }
-        elif function_type == "block_q8":
-            offset = 0
-            n_blk = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
-            offset += 4
-            mins = np.frombuffer(param_bytes[offset:offset + n_blk * 4], dtype=np.float32)
-            offset += n_blk * 4
-            scales = np.frombuffer(param_bytes[offset:offset + n_blk * 4], dtype=np.float32)
-            offset += n_blk * 4
-            n_elem = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
-            offset += 4
-            values = np.frombuffer(param_bytes[offset:offset + n_blk * 32], dtype=np.uint8)
-            params = {
-                "mins": mins, "scales": scales, "values": values,
-                "n_elements": n_elem, "n_blocks": n_blk, "block_size": 32,
-            }
         elif function_type == "raw":
             n_bytes = struct.unpack('<I', param_bytes[:4])[0]
             raw_data = param_bytes[4:4 + n_bytes]
@@ -353,24 +255,6 @@ class Point(PointProtocol):
                 "assignments_shape": list(assignments.shape),
                 "assignments_dtype": str(assignments.dtype),
             }
-        elif self.function_type == "block_q4":
-            d["params"] = {
-                "mins_b64": base64.b64encode(self.params["mins"].tobytes()).decode(),
-                "scales_b64": base64.b64encode(self.params["scales"].tobytes()).decode(),
-                "packed_b64": base64.b64encode(self.params["packed"].tobytes()).decode(),
-                "n_elements": self.params["n_elements"],
-                "n_blocks": self.params["n_blocks"],
-                "block_size": self.params["block_size"],
-            }
-        elif self.function_type == "block_q8":
-            d["params"] = {
-                "mins_b64": base64.b64encode(self.params["mins"].tobytes()).decode(),
-                "scales_b64": base64.b64encode(self.params["scales"].tobytes()).decode(),
-                "values_b64": base64.b64encode(self.params["values"].tobytes()).decode(),
-                "n_elements": self.params["n_elements"],
-                "n_blocks": self.params["n_blocks"],
-                "block_size": self.params["block_size"],
-            }
         elif self.function_type == "raw":
             d["params"] = dict(self.params)
         else:
@@ -399,26 +283,6 @@ class Point(PointProtocol):
                 dtype=pd["assignments_dtype"],
             ).reshape(pd["assignments_shape"])
             params = {"centroids": centroids, "assignments": assignments}
-        elif func_type == "block_q4":
-            pd = d["params"]
-            params = {
-                "mins": np.frombuffer(base64.b64decode(pd["mins_b64"]), dtype=np.float32),
-                "scales": np.frombuffer(base64.b64decode(pd["scales_b64"]), dtype=np.float32),
-                "packed": np.frombuffer(base64.b64decode(pd["packed_b64"]), dtype=np.uint8),
-                "n_elements": pd["n_elements"],
-                "n_blocks": pd["n_blocks"],
-                "block_size": pd["block_size"],
-            }
-        elif func_type == "block_q8":
-            pd = d["params"]
-            params = {
-                "mins": np.frombuffer(base64.b64decode(pd["mins_b64"]), dtype=np.float32),
-                "scales": np.frombuffer(base64.b64decode(pd["scales_b64"]), dtype=np.float32),
-                "values": np.frombuffer(base64.b64decode(pd["values_b64"]), dtype=np.uint8),
-                "n_elements": pd["n_elements"],
-                "n_blocks": pd["n_blocks"],
-                "block_size": pd["block_size"],
-            }
         elif func_type == "raw":
             params = dict(d["params"])
         else:

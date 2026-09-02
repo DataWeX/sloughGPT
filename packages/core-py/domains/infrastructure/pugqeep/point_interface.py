@@ -29,8 +29,6 @@ class FunctionType(str, Enum):
     POLYNOMIAL = "polynomial"
     CLUSTER = "cluster"
     RAW = "raw"
-    BLOCK_Q4 = "block_q4"
-    BLOCK_Q8 = "block_q8"
 
     @classmethod
     def from_str(cls, s: str) -> "FunctionType":

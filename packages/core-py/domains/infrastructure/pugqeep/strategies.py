@@ -1,8 +1,7 @@
 """
 Compression strategies for Tree.
 
-ABC + implementations: ClusterStrategy, FunctionStrategy, RawStrategy,
-BlockQuantStrategy (Q4_K and Q8 block quantization).
+ABC + implementations: ClusterStrategy, FunctionStrategy, RawStrategy.
 Each knows how to compress a numpy array into a Point.
 """
 from __future__ import annotations
@@ -95,34 +94,3 @@ class RawStrategy(CompressStrategy):
         )
         return point, raw.nbytes
 
-
-class BlockQuantStrategy(CompressStrategy):
-    """Block-wise quantization (Q4_K / Q8) for CPU inference.
-
-    Each block of 32 values gets its own min/max/scale.
-    Q4_K: 5.3:1 ratio, ~99% cosine.
-    Q8:   3.2:1 ratio, ~99.9% cosine.
-    """
-
-    __slots__ = ('_compressor', '_bits')
-
-    def __init__(self, compressor, bits: int = 4):
-        self._compressor = compressor
-        self._bits = bits
-
-    def compress(self, name: str, raw: np.ndarray, point_id: str,
-                 n_clusters: int) -> Tuple[Point, int]:
-        flat = raw.flatten()
-        if self._bits == 4:
-            point = self._compressor.compress_block_q4(flat, point_id)
-            mins = point.params["mins"]
-            scales = point.params["scales"]
-            packed = point.params["packed"]
-            compressed_bytes = mins.nbytes + scales.nbytes + packed.nbytes
-        else:
-            point = self._compressor.compress_block_q8(flat, point_id)
-            mins = point.params["mins"]
-            scales = point.params["scales"]
-            values = point.params["values"]
-            compressed_bytes = mins.nbytes + scales.nbytes + values.nbytes
-        return point, compressed_bytes
