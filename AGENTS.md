@@ -18,6 +18,7 @@
 
 - **Do NOT make changes or delete files without explicit user approval first.** Always describe what you plan to do, wait for confirmation, then execute. Even if the user asks you to "build X" or "fix Y", confirm the approach before writing code.
 - **Always use the project venv.** Check for `.venv/`, `venv/`, or `poetry env` before running Python commands. Never use bare `python` or `pip` without activating the project environment first.
+- **ALWAYS check if something already exists before building it.** Before creating new files, modules, or features, search the codebase for existing implementations. Use `grep`, `glob`, and `find` to check for existing code, patterns, or similar functionality. Duplicate work wastes time and creates confusion.
 
 ## File Safety
 

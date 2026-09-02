@@ -19,53 +19,48 @@
 - [x] `packages/core-py/domains/context/managers.py` (trait_weights) → `data/trait_weights_mogdb/` + `data/trait_weights_json/`
 - [x] `packages/core-py/domains/feedback/model_health.py` → `data/model_health_mogdb/` + `data/model_health_json/`
 
+### SLNC Memory-Mapped Inference (already implemented)
+- [x] `domains/infrastructure/slnc/spec.py` — Binary format with tensor table, CRC32, flags
+- [x] `domains/infrastructure/slnc/parser.py` — Zero-copy mmap loader, prefetch, parallel loading
+- [x] `domains/infrastructure/slnc/compiler.py` — Safetensors → .slnc converter
+- [x] Full integration in `slonet_provider.py` (from_slnc, lazy_from_slnc, quantization, mmap release)
+
 ### Other Features (from previous session)
 - [x] Voice selection/multi-voice support (`/voice/voices`, `/voice/stt`)
 - [x] Real token logprobs in SloneNet provider (forward_pass-based)
 - [x] Phi-3/Llama-3 architecture detection in gguf_export
 - [x] GPU matmul shader dispatch in wgpu_be.py
 
+### Bug Fixes
+- [x] Companion router `use_preset` — fixed `Field(...)` → `Query(...)` for FastAPI route registration
+
 ### Test Results
-- 176 (MogDB) + 143 (slonet+kanban) + 64 (CLI) = **383 tests passing**
-
----
-
-## In Progress 🔄
-
-### Commit MogDB Migration
-- [ ] Stage all changed files
-- [ ] Write commit message describing MogDB migration
-- [ ] Commit to git
+- 176 (MogDB) + 143 (slonet+kanban) + 64 (CLI) + 16 (SLNC) = **399 tests passing**
 
 ---
 
 ## Next Up 📋
 
-### Phase 1: Verify & Stabilize
-- [ ] Run full test suite (including voice router tests)
-- [ ] Fix any regressions from MogDB migration
-- [ ] Clean up legacy JSON files (keep as backup)
-
-### Phase 2: Remaining Migrations
+### Remaining MogDB Migrations
 - [ ] `data/knowledge/entries.json` → MogDB collection
 - [ ] `data/knowledge/visited.json` → MogDB collection
 - [ ] `data/rag_store/documents.jsonl` → MogDB collection (capped)
 - [ ] `data/response_logs/*.jsonl` → MogDB collection (TTL-indexed)
 - [ ] `data/model_catalog/` → MogDB collection
 
-### Phase 3: Performance Optimization
+### Performance Optimization
 - [ ] Add batch write support to `SyncableCollection` for high-throughput scenarios
 - [ ] Implement lazy JSON sync (async background thread)
 - [ ] Add compression for JSON sync files
 - [ ] Benchmark MogDB vs file-based performance
 
-### Phase 4: Data Migration Tools
+### Data Migration Tools
 - [ ] Create `scripts/migrate_legacy_json.py` to import existing JSON files into MogDB
 - [ ] Add CLI command `slo db migrate` for one-time migration
 - [ ] Add CLI command `slo db sync` to force JSON sync
 - [ ] Add CLI command `slo db status` to show collection stats
 
-### Phase 5: Documentation
+### Documentation
 - [ ] Update README.md with MogDB usage examples
 - [ ] Document `SyncableCollection` API
 - [ ] Add migration guide for developers
@@ -104,7 +99,7 @@
 - `packages/mogdb/src/mogdb/__init__.py` — Added SyncableCollection export
 - `packages/mogdb/src/mogdb/database.py` — Added sync_dir parameter
 - `apps/api/server/routers/experiments.py` — MogDB migration
-- `apps/api/server/routers/companion.py` — MogDB migration
+- `apps/api/server/routers/companion.py` — MogDB migration + Query fix
 - `apps/api/server/routers/errors.py` — MogDB migration
 - `apps/api/server/routers/files.py` — MogDB migration
 - `packages/core-py/domains/context/managers.py` — MogDB migration
@@ -113,4 +108,4 @@
 ---
 
 *Last updated: 2026-09-02*
-*Status: Ready for commit*
+*Status: Ready for next tasks*

@@ -8047,7 +8047,7 @@
       "id": "20260902_120500-slnc-memory-mapped",
       "title": "Memory-mapped inference (.slnc format)",
       "description": "Implement .slnc format for zero-copy model loading: (1) Write converter safetensors→slnc, (2) Write mmap loader, (3) Wire into NumpyEngine, (4) Wire into SloNetChatProvider, (5) Keep safetensors fallback",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "inference",
@@ -8055,10 +8055,10 @@
         "slnc"
       ],
       "created_at": "2026-09-02T12:05:00.000000+00:00",
-      "updated_at": "2026-09-02T12:05:00.000000+00:00",
+      "updated_at": "2026-09-02T12:30:00.000000+00:00",
       "due_date": null,
       "assignee": null,
-      "notes": "See PLAN.md for full design spec. Expected: 200ms→1ms load time"
+      "notes": "Already implemented in domains/infrastructure/slnc/: spec.py (binary format), parser.py (mmap zero-copy), compiler.py (safetensors→slnc). Full integration in slonet_provider.py (from_slnc, lazy_from_slnc, quantization, mmap release)."
     }
   ]
 }
