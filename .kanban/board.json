@@ -7941,6 +7941,23 @@
       "due_date": null,
       "assignee": null,
       "notes": ""
+    },
+    {
+      "id": "20260902_103341-shell-cmd-tests",
+      "title": "Shell cmd module tests: data_cmds, models_cmd, module_loader, linux.py",
+      "description": "Added tests for: (1) test_data_cmds.py \u2014 33 tests covering datasets, checkpoints, finetuned, knowledge, remember, recall, tokenizer commands. (2) test_models_cmd.py \u2014 32 tests covering models, unload, precision, quantize, dequantize. (3) test_module_loader.py \u2014 40+ tests covering ModuleInfo, discovery, loading, hot-reload, hooks, dependencies. (4) test_linux_cmds.py \u2014 80+ tests covering 40+ linux commands (cd, pwd, echo, mkdir, rm, cp, mv, cat, head, tail, wc, grep, sort, find, diff, chmod, ln, du, stat, seq, cut, tr, nl, uniq, tac, rev, fold, date, sleep, clear, hostname, nproc, uname, id, cal, yes, realpath, dirname, basename, env). Total 185+ new tests.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "tests",
+        "shell",
+        "linux"
+      ],
+      "created_at": "2026-09-02T10:33:41.900973",
+      "updated_at": "2026-09-02T10:33:41.900979",
+      "due_date": null,
+      "assignee": null,
+      "notes": ""
     }
   ]
 }
