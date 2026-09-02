@@ -37,7 +37,7 @@ class FakeAPI:
     def set_precision(self, mode):
         if self._raise:
             raise self._raise
-        return self._precision_result
+        return {"mode": mode}
 
     def quantize_model(self, bits, mode):
         if self._raise:
@@ -94,7 +94,7 @@ class TestModels:
 
     def test_list_health_fails(self, api, out):
         api._models = [{"model_id": "gpt2", "type": "causal", "size_gb": 1.5}]
-        api._raise = RuntimeError("no health")
+        api._api_get = MagicMock(side_effect=RuntimeError("no health"))
         assert _run("models", api=api, out=out) == 0
 
     def test_api_error(self, api, out):

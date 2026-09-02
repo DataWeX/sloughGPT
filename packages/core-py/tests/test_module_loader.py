@@ -145,7 +145,9 @@ class TestDiscovery:
         _write_addon(tmp_addon_dir, "mod1")
         found1 = loader.discover()
         found2 = loader.discover()
-        assert found1 == found2
+        # First call discovers mod1, second call finds nothing new (already known)
+        assert found1 == ["mod1"]
+        assert found2 == []
         assert len(loader.list_modules()) == 1
 
 
@@ -154,6 +156,7 @@ class TestDiscovery:
 class TestLoading:
     def test_load_addon_class(self, loader, tmp_addon_dir):
         _write_addon(tmp_addon_dir, "my_addon")
+        loader.set_kernel(MagicMock())
         loader.discover()
         instance = loader.load("my_addon")
         assert instance is not None
