@@ -83,6 +83,11 @@ class ReadinessGateMiddleware(BaseHTTPMiddleware):
         if path not in _INFERENCE_PATHS:
             return await call_next(request)
 
+        # OPTIONS requests are CORS preflight — they never hit inference
+        # logic and MUST succeed or the browser cannot make the real request.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         if _model_ready():
             return await call_next(request)
 
