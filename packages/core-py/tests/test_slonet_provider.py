@@ -66,6 +66,12 @@ class MockModel:
             if hasattr(layer, "weight"):
                 yield layer.weight
 
+    def forward_pass(self, input_ids):
+        from domains.inference.forward_pass import ForwardPassResult
+        batch, seq_len = input_ids.shape
+        logits = np.random.randn(batch, seq_len, self.vocab_size)
+        return ForwardPassResult(logits=logits, engine="mock")
+
     def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0,
                                temperature=1.0, top_k=None, top_p=None,
                                repetition_penalty=1.0, extra_stop_ids=None, kv_state=None):

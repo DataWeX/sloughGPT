@@ -72,6 +72,9 @@ class WgpuBE(ComputeBackend):
         # Pre-build flat lookup for numpy fallback
         self._flat = self._build_flat_lookup(weights, arch)
 
+        # GPU pipeline cache
+        self._matmul_pipeline = None
+
         # Cache common shapes
         self._cached_cos = None
         self._cached_sin = None
@@ -108,15 +111,82 @@ class WgpuBE(ComputeBackend):
         return cls(weights, arch)
 
     def warmup(self, seq_len: int = 1) -> None:
-        pass
+        """Pre-compile GPU shaders and allocate scratch buffers."""
+        if not self._has_gpu:
+            return
+        try:
+            src = (_SHADERS_DIR / "matmul.wgsl").read_text()
+            shader = self._gpu.shader_create_wgsl(src, entry="main")
+            # Bindings: 0=A, 1=B, 2=C, 3=params (uniform)
+            self._matmul_pipeline = self._gpu.pipeline_create(shader, [
+                (0, 0, 1),  # binding=0, type=storage, stage=compute
+                (1, 0, 1),  # binding=1, type=storage, stage=compute
+                (2, 0, 1),  # binding=2, type=storage, stage=compute
+                (3, 1, 1),  # binding=3, type=uniform, stage=compute
+            ])
+            logger.info("WgpuBE: matmul shader compiled and pipeline created")
+        except Exception as e:
+            logger.warning("WgpuBE: shader warmup failed (%s), will use numpy fallback", e)
+            self._matmul_pipeline = None
 
     # ── Tensor primitives ───────────────────────────────────────────────
 
     def matmul(self, a: Any, b: Any) -> Any:
-        if isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
+        if not isinstance(a, np.ndarray) or not isinstance(b, np.ndarray):
             return a @ b
-        # GPU matmul via shader — placeholder
-        return a @ b
+
+        # Fall back to numpy if GPU not ready
+        if not self._has_gpu or self._matmul_pipeline is None:
+            return a @ b
+
+        # Only support 2D matmul for now
+        if a.ndim != 2 or b.ndim != 2:
+            return a @ b
+
+        M, K = a.shape
+        K2, N = b.shape
+        if K != K2:
+            return a @ b
+
+        try:
+            from domains.infrastructure.gpu.gpu_engine import GPU_BUF_STORAGE, GPU_BUF_UNIFORM
+
+            a_f32 = np.ascontiguousarray(a.astype(np.float32))
+            b_f32 = np.ascontiguousarray(b.astype(np.float32))
+
+            buf_a = self._gpu.buffer_create(a_f32.nbytes, GPU_BUF_STORAGE)
+            buf_a.write(a_f32)
+            buf_b = self._gpu.buffer_create(b_f32.nbytes, GPU_BUF_STORAGE)
+            buf_b.write(b_f32)
+            buf_c = self._gpu.buffer_create(M * N * 4, GPU_BUF_STORAGE)
+
+            # Params struct: M, N, K, pad (4 x u32 = 16 bytes)
+            params = np.array([M, N, K, 0], dtype=np.uint32)
+            buf_params = self._gpu.buffer_create(params.nbytes, GPU_BUF_UNIFORM)
+            buf_params.write(params)
+
+            ctx = self._gpu.compute_begin()
+            ctx.bind_pipeline(self._matmul_pipeline)
+            ctx.bind_buffer(0, buf_a)
+            ctx.bind_buffer(1, buf_b)
+            ctx.bind_buffer(2, buf_c)
+            ctx.bind_buffer(3, buf_params)
+            # Dispatch (N/16, M/16, 1) — shader uses 16x16 workgroups
+            ctx.dispatch(-(-N // 16), -(-M // 16), 1)
+            ctx.end()
+
+            result = buf_c.read((M, N), dtype=np.float32)
+
+            # Cleanup
+            buf_a.destroy()
+            buf_b.destroy()
+            buf_c.destroy()
+            buf_params.destroy()
+
+            return result
+        except Exception as e:
+            logger.debug("WgpuBE: GPU matmul failed (%s), falling back to numpy", e)
+            return a @ b
 
     def softmax(self, x: Any, axis: int = -1) -> Any:
         if isinstance(x, np.ndarray):

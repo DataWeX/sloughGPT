@@ -139,7 +139,13 @@ class NPUDevice(DeviceDriver):
 
     def load_model(self, name: str = "", source: str = "", *,
                    backend: str | None = None, **kwargs) -> SyscallResult:
-        """Load a model from a source path. Routes to C or numpy provider."""
+        """Load a model from a source path. Routes to C or numpy provider.
+
+        Backends:
+            - "c": CTransformProvider for .slnc files (fastest)
+            - "numpy": SlonetChatProvider for .slnc files (pure Python)
+            - None: auto-detect (tries C, falls back to numpy)
+        """
         if not source:
             return SyscallResult.fail("no source path provided")
 
@@ -187,8 +193,8 @@ class NPUDevice(DeviceDriver):
 
     def _load_provider(self, name: str, source: str, path: str,
                        backend: str = "", *args, **kwargs) -> tuple[Any, str]:
-        """Route to C backend (.slnc), numpy backend, or HuggingFace."""
-        if backend and backend not in ("c", "numpy", "huggingface"):
+        """Route to C backend (.slnc) or numpy backend."""
+        if backend and backend not in ("c", "numpy"):
             raise ValueError(f"Unknown backend: {backend}")
         if source.endswith(".slnc"):
             try:
@@ -218,7 +224,7 @@ class NPUDevice(DeviceDriver):
         return CTransformProvider.from_slnc(path, model_id=name)
 
     def _load_numpy_provider(self, name: str, source: str, path: str,
-                             kwargs: dict) -> Any:
+                              kwargs: dict) -> Any:
         if source.endswith(".slnc"):
             from domains.inference.slonet_provider import SlonetChatProvider
             return SlonetChatProvider.from_slnc(path, model_id=name)

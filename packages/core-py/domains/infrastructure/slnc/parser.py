@@ -70,6 +70,9 @@ class SLNCParser:
         self._file_size = os.fstat(self._fd).st_size
         self._mm = mmap.mmap(self._fd, 0, access=mmap.ACCESS_READ)
 
+        # Prefetch entire file into page cache — read 2.5GB in <1s on NVMe
+        self._prefetch()
+
         # Parse header
         self._parse_header()
 
@@ -84,6 +87,22 @@ class SLNCParser:
             self._file_size / 1e6,
             extra={"tag": "INFRA"},
         )
+
+    def _prefetch(self) -> None:
+        """Prefetch entire file into page cache.
+
+        Uses madvise(MADV_WILLNEED) which hints the kernel to start
+        async readahead. Non-blocking — actual I/O happens in background.
+
+        Performance (2.5GB file):
+            - SSD (~500 MB/s): ~5s to fill page cache
+            - NVMe (~3 GB/s): ~0.8s to fill page cache
+            - First read after open hits cached pages — near-instant
+        """
+        try:
+            self._mm.madvise(3, 0, self._file_size)  # MADV_WILLNEED=3
+        except Exception as e:
+            logger.debug("madvise WILLNEED failed: %s", e)
 
     def _parse_header(self):
         """Parse the fixed-size header with soft version check."""

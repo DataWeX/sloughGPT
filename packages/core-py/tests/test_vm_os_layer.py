@@ -6000,7 +6000,7 @@ class TestX86ShellRunLoop:
 
 class TestDiskProgramLoader:
     def test_list_programs(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         fs.write("test.asm", b"NOP")
         loader = DiskProgramLoader(fs)
@@ -6008,7 +6008,7 @@ class TestDiskProgramLoader:
         assert "test.asm" in progs
 
     def test_load_source(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         fs.write("prog.asm", b"MOV EAX, 1\nHLT")
         loader = DiskProgramLoader(fs)
@@ -6016,7 +6016,7 @@ class TestDiskProgramLoader:
         assert "MOV EAX" in src
 
     def test_load_source_no_ext(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         fs.write("prog.asm", b"NOP")
         loader = DiskProgramLoader(fs)
@@ -6170,7 +6170,7 @@ class TestSysUname:
 
 class TestSysReaddirEntries:
     def test_readdir_with_entries(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         fs.write("file1.txt", b"hello")
         fs.write("file2.txt", b"world")
@@ -6717,12 +6717,12 @@ class TestAssemblerShiftReg8Imm:
 
 class TestFlatFSLoadTable:
     def test_load_table_empty(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         assert isinstance(fs.list_files(), list)
 
     def test_load_table_with_files(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         fs.write("test.txt", b"hello world")
         assert "test.txt" in fs.list_files()
@@ -6985,21 +6985,21 @@ class TestVirtualSystem:
 
 class TestDiskProgramLoaderRun:
     def test_save_program(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         loader = DiskProgramLoader(fs)
         loader.save_program("test.asm", "NOP")
         assert "test.asm" in fs.list_files()
 
     def test_save_program_no_ext(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         loader = DiskProgramLoader(fs)
         loader.save_program("test", "NOP")
         assert "test.asm" in fs.list_files()
 
     def test_run_program(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         loader = DiskProgramLoader(fs)
         loader.save_program("nop.asm", "NOP\nPRINT 0")
@@ -7008,7 +7008,7 @@ class TestDiskProgramLoaderRun:
         assert result["name"] == "nop.asm"
 
     def test_assemble(self):
-        dev = BlockDevice(1024)
+        dev = BlockDevice(num_sectors=1024)
         fs = FlatFS(dev)
         loader = DiskProgramLoader(fs)
         code = loader.assemble("NOP")

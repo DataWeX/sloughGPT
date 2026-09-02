@@ -1692,35 +1692,57 @@ class SloNetChatProvider:
         prompt_tokens = self._tokenizer.encode(prompt)
         input_ids = np.array([prompt_tokens], dtype=np.int64)
         eos_id = self._tokenizer.eos_token_id or 0
+        stop_ids = set()
+        if eos_id:
+            stop_ids.add(eos_id)
 
-        # Copy model weights for reference
         m = self._get_model()
         logprobs_list = []
+        generated_ids = []
 
-        # Use the streaming path to capture logits
-        for step, tok_id in enumerate(m.generate_numpy_stream(
-            input_ids,
-            max_new_tokens=max_tokens,
-            eos_token=eos_id,
-            extra_stop_ids=getattr(self._tokenizer, "chat_stop_ids", lambda: ())(),
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            repetition_penalty=repetition_penalty,
-        )):
-            decoded = self._tokenizer.decode([tok_id])
-            # Approximate logprob from softmax (use 0.0 as placeholder — real
-            # logprobs require modifying the forward pass to return logits)
+        for step in range(max_tokens):
+            # Forward pass to get logits
+            result = m.forward_pass(input_ids)
+            logits = result.logits[0, -1, :]  # (vocab_size,)
+
+            # Apply temperature
+            if temperature > 0:
+                logits = logits / temperature
+
+            # Apply top-k filtering
+            if top_k is not None and top_k > 0:
+                top_k_ids = np.argpartition(logits, -top_k)[-top_k:]
+                top_k_logits = logits[top_k_ids]
+                # Softmax over top-k only
+                exp_logits = np.exp(top_k_logits - top_k_logits.max())
+                probs = exp_logits / exp_logits.sum()
+                # Sample
+                sampled_idx = np.random.choice(len(top_k_ids), p=probs)
+                tok_id = int(top_k_ids[sampled_idx])
+                logprob = float(np.log(probs[sampled_idx] + 1e-10))
+            else:
+                # Full softmax
+                exp_logits = np.exp(logits - logits.max())
+                probs = exp_logits / exp_logits.sum()
+                tok_id = int(np.random.choice(len(probs), p=probs))
+                logprob = float(np.log(probs[tok_id] + 1e-10))
+
+            # Stop if EOS
+            if tok_id in stop_ids:
+                break
+
+            generated_ids.append(tok_id)
             logprobs_list.append({
-                "token_id": int(tok_id),
-                "token": decoded,
-                "logprob": 0.0,
+                "token_id": tok_id,
+                "token": self._tokenizer.decode([tok_id]),
+                "logprob": logprob,
                 "position": step,
             })
 
-        text = self._tokenizer.decode(
-            [e["token_id"] for e in logprobs_list]
-        )
+            # Append token to input_ids for next step
+            input_ids = np.concatenate([input_ids, [[tok_id]]], axis=1)
+
+        text = self._tokenizer.decode(generated_ids)
         return text, logprobs_list
 
     def generate_with_stop(

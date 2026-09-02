@@ -669,8 +669,55 @@ class YiMapping(TensorMapping):
         return mapping
 
 
+class Phi3Mapping(TensorMapping):
+    """Tensor mapping for Phi-3 / Phi-3.5 (Microsoft).
+
+    Phi-3 uses the same tensor layout as Llama (model.layers., mlp.gate_proj)
+    but with a different architecture name in config.
+    """
+
+    def __init__(self):
+        super().__init__("phi3", "llama")
+
+    def get_tensor_map(self) -> Dict[str, str]:
+        return {
+            "model.embed_tokens.weight": "token_embd.weight",
+            "lm_head.weight": "output.weight",
+            "model.norm.weight": "output_norm.weight",
+        }
+
+    def get_block_prefix(self) -> str:
+        return "model.layers."
+
+    def has_rope(self) -> bool:
+        return True
+
+    def has_position_embeddings(self) -> bool:
+        return False
+
+    def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
+        mapping = {}
+        for i in range(n_layers):
+            prefix = f"model.layers.{i}."
+
+            mapping[f"{prefix}input_layernorm.weight"] = f"blk.{i}.attn_norm.weight"
+            mapping[f"{prefix}post_attention_layernorm.weight"] = f"blk.{i}.ffn_norm.weight"
+
+            mapping[f"{prefix}self_attn.q_proj.weight"] = f"blk.{i}.attn_q.weight"
+            mapping[f"{prefix}self_attn.k_proj.weight"] = f"blk.{i}.attn_k.weight"
+            mapping[f"{prefix}self_attn.v_proj.weight"] = f"blk.{i}.attn_v.weight"
+            mapping[f"{prefix}self_attn.o_proj.weight"] = f"blk.{i}.attn_output.weight"
+
+            mapping[f"{prefix}mlp.gate_proj.weight"] = f"blk.{i}.ffn_gate.weight"
+            mapping[f"{prefix}mlp.up_proj.weight"] = f"blk.{i}.ffn_up.weight"
+            mapping[f"{prefix}mlp.down_proj.weight"] = f"blk.{i}.ffn_down.weight"
+
+        return mapping
+
+
 ARCHITECTURE_MAPPINGS.update({
     "phi": PhiMapping(),
+    "phi3": Phi3Mapping(),
     "gemma": GemmaMapping(),
     "qwen": QwenMapping(),
     "starcoder": DeepseekMapping(),  # Starcoder uses same structure
@@ -709,6 +756,7 @@ def detect_architecture(state_dict: StateDict) -> Optional[TensorMapping]:
     patterns = {
         "sloughgpt": ["tok_emb.weight", "norm.weight", "mlp.w1.weight"],
         "llama": ["model.embed_tokens.weight", "model.norm.weight", "model.layers."],
+        "phi3": ["model.embed_tokens.weight", "model.layers.", "mlp.gate_proj.weight"],
         "mistral": ["model.embed_tokens.weight", "input_layernorm.weight"],
         "gpt2": ["wte.weight", "ln_f.weight", "h."],
         "opt": ["model.embed_tokens.weight", "model.decoder."],
