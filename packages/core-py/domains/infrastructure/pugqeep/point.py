@@ -47,8 +47,16 @@ class Point(PointProtocol):
         if self.function_type == "cluster":
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
+            # Huffman decoding: if huffman_data exists, decode it
+            huffman_data = self.params.get("huffman_data")
+            if huffman_data is not None:
+                from .compressor import HuffmanTree
+                huffman_codes = self.params["huffman_codes"]
+                total_bits = self.params["huffman_bits"]
+                tree = HuffmanTree.from_dict(huffman_codes).tree
+                assignments = HuffmanTree.decode(
+                    huffman_data, total_bits, tree, len(assignments))
             if self.params.get("centroid_quantized"):
-                # Dequantize uint8 centroids on the fly
                 scale = self.params["centroid_scale"]
                 zp = self.params["centroid_zero_point"]
                 centroids = (centroids.astype(np.float32) - zp) * scale
@@ -81,12 +89,29 @@ class Point(PointProtocol):
             centroids = self.params.get("centroids")
             assignments = self.params.get("assignments")
             if centroids is not None and assignments is not None:
+                huffman_data = self.params.get("huffman_data")
+                if huffman_data is not None:
+                    tree_size = sum(len(v) for v in self.params.get("huffman_codes", {}).values())
+                    return centroids.nbytes + len(huffman_data) + tree_size + 8
                 if self.params.get("centroid_quantized"):
-                    # Quantized: uint8 centroids + scale + zero_point + assignments
                     nc = len(centroids)
                     return nc + 8 + assignments.nbytes
                 return (centroids.nbytes + assignments.nbytes +
                         (self.residual.nbytes if self.residual is not None else 0))
+            return 0
+        elif self.function_type == "block_q4":
+            mins = self.params.get("mins")
+            scales = self.params.get("scales")
+            packed = self.params.get("packed")
+            if mins is not None and scales is not None and packed is not None:
+                return mins.nbytes + scales.nbytes + packed.nbytes
+            return 0
+        elif self.function_type == "block_q8":
+            mins = self.params.get("mins")
+            scales = self.params.get("scales")
+            values = self.params.get("values")
+            if mins is not None and scales is not None and values is not None:
+                return mins.nbytes + scales.nbytes + values.nbytes
             return 0
         elif self.function_type == "raw":
             return len(base64.b64decode(self.params.get("data_b64", "")))
