@@ -2,8 +2,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import bubblecaster as bc  # noqa: E402
@@ -54,7 +52,6 @@ def test_fit_aim_model_learns_linear_power():
     # dx -> power relationship is approximately linear; feed noisy samples
     records = []
     for dx, power in [(5, 3), (10, 6), (15, 8), (20, 11), (30, 16)]:
-        sky = [bc.Star(x=bc.CASTER_X + dx, y=6.0)]
         records.append({
             "cast": {"target_index": 0, "power": power, "angle": 60.0, "sigil": "◆"},
             "sky": [bc.Star(x=bc.CASTER_X + dx, y=6.0, radius=bc.STAR_RADIUS)],
