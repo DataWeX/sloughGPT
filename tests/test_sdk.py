@@ -472,27 +472,27 @@ class TestNewSDKEndpoints(unittest.TestCase):
 
     def test_start_auto_train(self):
         self._client().start_auto_train({'soul': 'friendly'})
-        self._assert_called('POST', '/auto-train/start')
+        self._assert_called('POST', '/training/start')
 
     def test_stop_auto_train(self):
         self._client().stop_auto_train()
-        self._assert_called('POST', '/auto-train/stop')
+        self._assert_called('POST', '/training/stop')
 
     def test_get_auto_train_status(self):
         self._client().get_auto_train_status()
-        self._assert_called('GET', '/auto-train/status')
+        self._assert_called('GET', '/training/status')
 
     def test_list_auto_train_checkpoints(self):
         self._client().list_auto_train_checkpoints()
-        self._assert_called('GET', '/auto-train/checkpoints')
+        self._assert_called('GET', '/training/checkpoints')
 
     def test_delete_auto_train_checkpoint(self):
         self._client().delete_auto_train_checkpoint('ckpt-1')
-        self._assert_called('DELETE', '/auto-train/checkpoints/ckpt-1')
+        self._assert_called('DELETE', '/training/checkpoints/ckpt-1')
 
     def test_load_auto_train_checkpoint(self):
         self._client().load_auto_train_checkpoint('ckpt-1')
-        self._assert_called('POST', '/auto-train/checkpoints/ckpt-1/load')
+        self._assert_called('POST', '/training/checkpoints/ckpt-1/load')
 
     # === Feedback / Workflow ===
 
