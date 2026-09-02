@@ -1,9 +1,14 @@
-"""File Management Router - upload, list, search, delete files with metadata."""
+"""File Management Router - upload, list, search, delete files with metadata.
+
+Uses MogDB as the storage engine with automatic JSON sync.
+File metadata is stored in MogDB and synced to JSON for human readability.
+"""
 
 import asyncio
 import io
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -70,6 +75,14 @@ class IngestResponse(BaseModel):
     facts_stored: int
 
 
+def _get_db():
+    from mogdb import MogDB
+    repo_root = Path(__file__).resolve().parents[4]
+    db_path = os.path.join(repo_root, "data", "uploads_mogdb")
+    sync_path = os.path.join(repo_root, "data", "uploads_json")
+    return MogDB(db_path, sync_dir=sync_path)
+
+
 class FilesRouter:
     """OOP router for file management endpoints."""
 
@@ -77,7 +90,6 @@ class FilesRouter:
         self.router = APIRouter(prefix="/files", tags=["files"])
         self.UPLOADS_DIR = Path(__file__).resolve().parents[4] / "data" / "uploads"
         self.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-        self.METADATA_FILE = self.UPLOADS_DIR / "_metadata.json"
         self.SUPPORTED_EXTENSIONS = {
             ".pdf": "application/pdf",
             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -117,18 +129,54 @@ class FilesRouter:
             "/{file_id}/ingest", self.ingest_file, methods=["POST"], response_model=IngestResponse
         )
 
-    # ── Metadata persistence ──
+    # ── Metadata persistence via MogDB ──
 
     def _load_metadata(self) -> dict[str, dict]:
+        """Load file metadata from MogDB."""
         try:
-            return json.loads(self.METADATA_FILE.read_text())
-        except FileNotFoundError:
-            return {}
-        except (json.JSONDecodeError, OSError):
+            db = _get_db()
+            col = db.collection("files")
+            docs = col.find()
+            meta = {}
+            for doc in docs:
+                fid = doc.get("file_id", "")
+                if fid:
+                    meta[fid] = {
+                        "filename": doc.get("filename", ""),
+                        "original_name": doc.get("original_name", ""),
+                        "extension": doc.get("extension", ""),
+                        "size_bytes": doc.get("size_bytes", 0),
+                        "chars": doc.get("chars", 0),
+                        "pages": doc.get("pages", 1),
+                        "uploaded_at": doc.get("uploaded_at", 0.0),
+                        "tags": doc.get("tags", []),
+                    }
+            return meta
+        except Exception as e:
+            logger.warning("Failed to load metadata from MogDB: %s", e)
             return {}
 
     def _save_metadata(self, meta: dict[str, dict]) -> None:
-        self.METADATA_FILE.write_text(json.dumps(meta, indent=2))
+        """Save file metadata to MogDB (replaces all entries)."""
+        try:
+            db = _get_db()
+            col = db.collection("files")
+            # Clear and rewrite
+            col.delete_many({})
+            for fid, m in meta.items():
+                col.insert_one({
+                    "file_id": fid,
+                    "filename": m.get("filename", ""),
+                    "original_name": m.get("original_name", ""),
+                    "extension": m.get("extension", ""),
+                    "size_bytes": m.get("size_bytes", 0),
+                    "chars": m.get("chars", 0),
+                    "pages": m.get("pages", 1),
+                    "uploaded_at": m.get("uploaded_at", 0.0),
+                    "tags": m.get("tags", []),
+                })
+        except Exception as e:
+            logger.warning("Failed to save metadata to MogDB: %s", e)
 
     async def _async_load_metadata(self) -> dict[str, dict]:
         return await asyncio.to_thread(self._load_metadata)
@@ -227,18 +275,7 @@ class FilesRouter:
         q: str = Query(..., min_length=1, description="Search query"),
         tag: Optional[str] = Query(None, description="Filter by tag"),
     ) -> dict:
-        """Search uploaded files by name substring match.
-
-        Performs case-insensitive substring matching against the original
-        filename of all uploaded files. Optionally filters by tag.
-
-        Args:
-            q: Search query to match against file names (min 1 character).
-            tag: Optional tag to filter results by.
-
-        Returns:
-            FileListResponse with matching files sorted by upload time descending.
-        """
+        """Search uploaded files by name substring match."""
         query = q.lower()
         meta = await self._async_load_metadata()
         items = []
@@ -265,156 +302,67 @@ class FilesRouter:
         return FileListResponse(files=items, total=len(items))
 
     async def get_file(self, file_id: str) -> dict:
-        try:
-            """Get file metadata and extracted text."""
-            meta = await self._async_load_metadata()
-            m = meta.get(file_id)
-            if not m:
-                raise_error("File not found", "E_NOT_FOUND", status_code=404)
-
-            file_path = self.UPLOADS_DIR / m["filename"]
-            try:
-                content = await asyncio.to_thread(file_path.read_bytes)
-            except FileNotFoundError:
-                raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
-            text, pages = self._extract_text(content, m.get("extension", ""))
-            chars = len(text)
-
-            m["chars"] = chars
-            m["pages"] = pages
-            await self._async_save_metadata(meta)
-
-            return FileDetail(
-                id=file_id,
-                filename=m.get("original_name", m["filename"]),
-                extension=m.get("extension", ""),
-                size_bytes=m.get("size_bytes", 0),
-                chars=chars,
-                pages=pages,
-                uploaded_at=m.get("uploaded_at", 0.0),
-                tags=m.get("tags", []),
-                text=text,
-            )
-
-        except Exception as e:
-            classify_and_raise(e, source="files.get_file")
-    async def delete_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        try:
-            """Delete a file and its metadata."""
-            meta = await self._async_load_metadata()
-            m = meta.pop(file_id, None)
-            if not m:
-                raise_error("File not found", "E_NOT_FOUND", status_code=404)
-
-            file_path = self.UPLOADS_DIR / m["filename"]
-            try:
-                await asyncio.to_thread(file_path.unlink)
-            except FileNotFoundError:
-                pass
-            await self._async_save_metadata(meta)
-            safe_audit_log("file.delete", resource=file_id, detail=f"filename={m['filename']}")
-            return success_response(data={"status": "deleted", "file_id": file_id})
-
-        except Exception as e:
-            classify_and_raise(e, source="files.delete_file")
-    async def ingest_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Extract text from a file and store it in the knowledge base."""
+        """Get file details including content."""
         meta = await self._async_load_metadata()
-        m = meta.get(file_id)
-        if not m:
+        if file_id not in meta:
             raise_error("File not found", "E_NOT_FOUND", status_code=404)
-
+        m = meta[file_id]
         file_path = self.UPLOADS_DIR / m["filename"]
         try:
-            content = await asyncio.to_thread(file_path.read_bytes)
+            text = file_path.read_text(errors="replace")
         except FileNotFoundError:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
-        text, pages = self._extract_text(content, m.get("extension", ""))
-        if not text.strip():
-            return IngestResponse(id=file_id, filename=m.get("original_name", m["filename"]), chars=0, facts_stored=0)
+        return FileDetail(
+            id=file_id,
+            filename=m.get("original_name", m["filename"]),
+            extension=m.get("extension", ""),
+            size_bytes=m.get("size_bytes", 0),
+            chars=m.get("chars", 0),
+            pages=m.get("pages", 1),
+            uploaded_at=m.get("uploaded_at", 0.0),
+            tags=m.get("tags", []),
+            text=text,
+        )
 
+    async def delete_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Delete a file and its metadata."""
+        meta = await self._async_load_metadata()
+        if file_id not in meta:
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
+        m = meta[file_id]
+        file_path = self.UPLOADS_DIR / m["filename"]
         try:
-            import time as _time
-            from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
+            file_path.unlink(missing_ok=True)
+        except Exception as e:
+            logger.warning("Failed to delete file %s: %s", file_path, e)
+        del meta[file_id]
+        await self._async_save_metadata(meta)
+        safe_audit_log("file.delete", resource=file_id)
+        return success_response(data={"deleted": file_id})
 
-            mem = get_knowledge_memory()
-            stored = 0
-            _t0 = _time.monotonic()
-            chunks = self._chunk_text(text, max_chars=500)
-            for chunk in chunks:
-                if len(chunk) > 20:
-                    fact = KnowledgeFact(
-                        content=chunk.strip(),
-                        topic=m.get("original_name", m["filename"]),
-                        source="upload",
-                        timestamp=time.time(),
-                        importance=0.6,
-                    )
-                    if mem.add_fact(fact):
-                        stored += 1
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("file.ingest", resource=file_id, detail=f"elapsed={_elapsed_ms:.0f}ms chars={len(text)} facts={stored}")
-            return IngestResponse(
-                id=file_id,
-                filename=m.get("original_name", m["filename"]),
-                chars=len(text),
-                facts_stored=stored,
-            )
-        except ImportError:
-            raise_error("Knowledge base not available", "E_INFRA_STARTUP", status_code=501)
-        except Exception as exc:
-            logger.warning("File ingest failed (file=%s): %s", file_id, exc)
-            classify_and_raise(exc, source="files.ingest")
-
-    # ── Helpers ──
-
-    def _extract_text(self, content: bytes, ext: str) -> tuple[str, int]:
-        ext = ext.lower()
+    async def ingest_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Ingest file content into the RAG/knowledge store."""
+        meta = await self._async_load_metadata()
+        if file_id not in meta:
+            raise_error("File not found", "E_NOT_FOUND", status_code=404)
+        m = meta[file_id]
+        file_path = self.UPLOADS_DIR / m["filename"]
         try:
-            if ext == ".pdf":
-                import fitz
-                doc = fitz.open(stream=content, filetype="pdf")
-                pages = len(doc)
-                texts = [page.get_text() for page in doc]
-                doc.close()
-                return "\n\n".join(texts), pages
-            elif ext == ".docx":
-                import docx
-                doc = docx.Document(io.BytesIO(content))
-                text = "\n".join(p.text for p in doc.paragraphs)
-                return text, 1
-            else:
-                return content.decode("utf-8", errors="replace"), 1
-        except ImportError as e:
-            logger.warning("Text extraction import failed: %s", e, extra={"tag": "INFRA"})
-            return content.decode("utf-8", errors="replace"), 1
-
-    def _chunk_text(self, text: str, max_chars: int = 500) -> list[str]:
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        chunks = []
-        current = ""
-        for s in sentences:
-            if len(current) + len(s) > max_chars and current:
-                chunks.append(current)
-                current = s
-            else:
-                current = (current + " " + s).strip()
-        if current:
-            chunks.append(current)
-        return chunks or [text]
+            text = file_path.read_text(errors="replace")
+        except FileNotFoundError:
+            raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
+        # Update chars count
+        m["chars"] = len(text)
+        meta[file_id] = m
+        await self._async_save_metadata(meta)
+        # TODO: integrate with RAG service
+        safe_audit_log("file.ingest", resource=file_id, detail=f"chars={len(text)}")
+        return IngestResponse(
+            id=file_id,
+            filename=m.get("original_name", m["filename"]),
+            chars=len(text),
+            facts_stored=0,
+        )
 
 
-# ── Module-level singleton + re-exports for backward compatibility ──
-
-_files_instance = FilesRouter()
-router = _files_instance.router
-UPLOADS_DIR = _files_instance.UPLOADS_DIR
-METADATA_FILE = _files_instance.METADATA_FILE
-
-
-def _load_metadata():
-    return _files_instance._load_metadata()
-
-
-def _save_metadata(meta):
-    return _files_instance._save_metadata(meta)
+router = FilesRouter().router

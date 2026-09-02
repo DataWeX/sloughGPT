@@ -1,19 +1,14 @@
 """
 Error logging router — accepts frontend JS errors for server-side monitoring.
 
-- POST /errors/log: log one or more client-side errors
-- GET /errors/recent: retrieve recent errors (newest first)
-- GET /errors/grouped: errors grouped by message fingerprint
-- GET /errors/trends: error counts per hour for last 24h
-- GET /errors/export: dump full error log as JSON
-- DELETE /errors/clear: clear all errors
-- GET /errors/unread: unread count
+Uses MogDB as the storage engine with automatic JSON sync.
+Errors are stored in a capped MogDB collection and synced to JSON.
 """
-
 import asyncio
 import hashlib
 import json
 import logging
+import os
 import re
 import threading
 import uuid
@@ -35,8 +30,13 @@ logger = logging.getLogger("slo.errors")
 
 MAX_ERRORS = 500
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_ERROR_LOG_DIR = _REPO_ROOT / "data" / "error_log"
-_ERROR_LOG_FILE = _ERROR_LOG_DIR / "errors.jsonl"
+_ERROR_DB_PATH = os.path.join(_REPO_ROOT, "data", "errors_mogdb")
+_ERROR_SYNC_PATH = os.path.join(_REPO_ROOT, "data", "errors_json")
+
+
+def _get_error_db():
+    from mogdb import MogDB
+    return MogDB(_ERROR_DB_PATH, sync_dir=_ERROR_SYNC_PATH)
 
 
 # ── Pydantic models ──────────────────────────────────────────────────────
@@ -74,8 +74,6 @@ class FrontendLogBatch(BaseModel):
 class ErrorsRouter:
     """OOP router for error-logging endpoints."""
 
-    # Dedup: message -> last-seen timestamp.  Identical errors within this
-    # window are collapsed into a count bump instead of new records.
     _DEDUP_WINDOW_S = 10
 
     def __init__(self):
@@ -85,12 +83,10 @@ class ErrorsRouter:
         self._error_count_since_clear = 0
         self._dedup_map: dict[str, float] = {}
 
-        self._error_buffer = self._load_from_disk()
+        self._error_buffer = self._load_from_mogdb()
         self._error_count_since_clear = 0
 
         self._register_routes()
-
-    # ── Route registration ──────────────────────────────────────────────
 
     def _register_routes(self):
         self.router.add_api_route("/log", self.log_errors, methods=["POST"])
@@ -106,56 +102,34 @@ class ErrorsRouter:
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
-    def _ensure_dir(self):
-        _ERROR_LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    def _persist_to_disk(self, record: dict):
+    def _load_from_mogdb(self) -> list[dict]:
+        """Load recent errors from MogDB."""
         try:
-            self._ensure_dir()
-            with open(_ERROR_LOG_FILE, "a") as f:
-                f.write(json.dumps(record, default=str) + "\n")
+            db = _get_error_db()
+            col = db.collection("errors")
+            docs = col.find(sort=[("_created", -1)], limit=MAX_ERRORS)
+            return docs
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="errors_persist")
-            pass
+            logger.warning("failed to load errors from mogdb: %s", e)
+            return []
 
-    def _persist_batch(self, records: list[dict]):
+    def _persist_to_mogdb(self, records: list[dict]):
+        """Persist error records to MogDB."""
         try:
-            self._ensure_dir()
-            with open(_ERROR_LOG_FILE, "a") as f:
-                for record in records:
-                    f.write(json.dumps(record, default=str) + "\n")
+            db = _get_error_db()
+            col = db.collection("errors")
+            col.insert_many(records)
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="errors_persist_batch")
+            logger.warning("failed to persist errors to mogdb: %s", e)
 
-    def _load_from_disk(self) -> list[dict]:
+    def _clear_mogdb(self):
+        """Clear all errors from MogDB."""
         try:
-            if _ERROR_LOG_FILE.exists():
-                records = []
-                for line in _ERROR_LOG_FILE.read_text().splitlines():
-                    line = line.strip()
-                    if line:
-                        records.append(json.loads(line))
-                return records[-MAX_ERRORS:]
+            db = _get_error_db()
+            col = db.collection("errors")
+            col.delete_many({})
         except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="errors_load_from_disk")
-            pass
-        return []
-
-    def _clear_disk(self):
-        try:
-            if _ERROR_LOG_FILE.exists():
-                _ERROR_LOG_FILE.unlink()
-        except Exception as e:
-            from domains.infrastructure.errors import classify_exception, emit_error_event
-            err = classify_exception(e)
-            emit_error_event(err, source="errors_clear_disk")
-            pass
+            logger.warning("failed to clear mogdb errors: %s", e)
 
     def _fingerprint(self, message: str) -> str:
         normalized = re.sub(r'\d+', 'N', message.lower())
@@ -232,7 +206,7 @@ class ErrorsRouter:
                     self._error_buffer.pop(0)
 
             if records_to_persist:
-                await asyncio.to_thread(self._persist_batch, records_to_persist)
+                await asyncio.to_thread(self._persist_to_mogdb, records_to_persist)
 
             return success_response(data={"status": "ok", "logged": logged})
         except Exception as e:
@@ -344,29 +318,22 @@ class ErrorsRouter:
                     pass
 
             try:
-                def _read_trends():
-                    if _ERROR_LOG_FILE.exists():
-                        return _ERROR_LOG_FILE.read_text().splitlines()
-                    return []
-                lines = await asyncio.to_thread(_read_trends)
-                for line in lines:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            rec = json.loads(line)
-                            ts = rec.get("timestamp", "")
-                            t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                            key = t.strftime("%Y-%m-%dT%H:00")
-                            if key in buckets:
-                                buckets[key] += 1
-                        except (ValueError, TypeError, json.JSONDecodeError):
-                            pass
+                db = _get_error_db()
+                col = db.collection("errors")
+                all_errors = col.find()
+                for rec in all_errors:
+                    ts = rec.get("timestamp", "")
+                    if not ts:
+                        continue
+                    try:
+                        t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        key = t.strftime("%Y-%m-%dT%H:00")
+                        if key in buckets:
+                            buckets[key] += 1
+                    except (ValueError, TypeError):
+                        pass
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="errors_trends")
-                pass
+                logger.warning("failed to read trends from mogdb: %s", e)
 
             result = [{"hour": k, "count": v} for k, v in sorted(buckets.items())]
             return success_response(data={"trends": result, "hours": hours})
@@ -395,7 +362,7 @@ class ErrorsRouter:
                 self._error_buffer.clear()
                 self._error_count_since_clear = 0
                 self._dedup_map.clear()
-            await asyncio.to_thread(self._clear_disk)
+            await asyncio.to_thread(self._clear_mogdb)
             safe_audit_log("errors.clear", resource="all")
             return success_response(data={"status": "ok", "cleared": True})
         except Exception as e:
@@ -411,13 +378,7 @@ class ErrorsRouter:
             classify_and_raise(e, source="errors.unread")
 
     async def error_stream(self, request: Request) -> StreamingResponse:
-        """SSE endpoint pushing real-time error events to the frontend.
-
-        Streams errors as they arrive (from both frontend ingestion and
-        backend exception handlers). Each event is a JSON envelope:
-        {"stream": "errors", "phase": "ERROR", "status": "working",
-         "data": {error record}, "meta": {"ts": ...}}
-        """
+        """SSE endpoint pushing real-time error events to the frontend."""
         import time as _time
 
         from fastapi.responses import StreamingResponse
@@ -433,11 +394,8 @@ class ErrorsRouter:
                     if await request.is_disconnected():
                         break
 
-                    # Read new lines from the output buffer (1s timeout for heartbeat cadence)
                     lines = await subscriber.async_read(timeout=1.0)
 
-                    # Send SSE comment as keepalive every ~30s of idle time
-                    # (proxy/firewall timeout is typically 60-120s)
                     now = _time.time()
                     if not hasattr(generate, "_last_yield"):
                         generate._last_yield = now
@@ -445,10 +403,8 @@ class ErrorsRouter:
                         yield ": heartbeat\n\n"
                         generate._last_yield = now
 
-                    # Filter for error/critical level lines and recent errors from the buffer
                     for line in lines:
                         if line.level in ("error", "critical"):
-                            # Extract correlation ID and request context from the line's context
                             ctx = line.context or {}
                             corr_id = ctx.get("corr") or ctx.get("correlation_id") or ""
                             http_method = ctx.get("method", "")
@@ -478,7 +434,6 @@ class ErrorsRouter:
                             yield "data: " + json.dumps(event, default=str) + "\n\n"
                             generate._last_yield = _time.time()
 
-                    # Also push any new entries from the error buffer
                     with self._errors_lock:
                         current_count = len(self._error_buffer)
 
@@ -551,10 +506,7 @@ class ErrorsRouter:
                             "cwd": rec.get("cwd", ""),
                         })
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="errors_opencode_log_cli")
-                pass
+                logger.warning("failed to read cli log: %s", e)
 
             ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
             try:
@@ -573,10 +525,7 @@ class ErrorsRouter:
                             "cwd": rec.get("cwd", ""),
                         })
             except Exception as e:
-                from domains.infrastructure.errors import classify_exception, emit_error_event
-                err = classify_exception(e)
-                emit_error_event(err, source="errors_opencode_log_ui")
-                pass
+                logger.warning("failed to read ui log: %s", e)
 
             entries.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
             return success_response(data={"entries": entries[:200], "total": len(entries)})

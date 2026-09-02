@@ -1,9 +1,8 @@
 """
 Model Health Monitor — periodic perplexity tracking and drift detection.
 
-Runs the model on a fixed benchmark corpus, logs perplexity over time,
-and alerts when significant drift is detected. Integrates with the
-quality guard system used by auto-feedback training.
+Uses MogDB as the storage engine with automatic JSON sync.
+Benchmark history is stored in MogDB and synced to JSON for human readability.
 
 Usage:
     monitor = ModelHealthMonitor(model, tokenizer)
@@ -15,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import time
 import logging
 import threading
@@ -55,8 +55,8 @@ class ModelHealthMonitor:
     """Periodically benchmarks model perplexity and tracks health over time.
 
     Uses a fixed benchmark corpus (15 sentences covering diverse topics)
-    to measure model quality. History is persisted to a JSON file so
-    trends survive server restarts.
+    to measure model quality. History is persisted to MogDB with automatic
+    JSON sync for human readability.
     """
 
     def __init__(self, db_path: str = "data/model_health.json"):
@@ -65,7 +65,16 @@ class ModelHealthMonitor:
         self._history: List[Dict[str, Any]] = []
         self._model = None
         self._tokenizer = None
+        self._db = self._init_mogdb()
         self._load_history()
+
+    def _init_mogdb(self):
+        """Initialize MogDB with JSON sync for model health."""
+        from mogdb import MogDB
+        repo_root = self.db_path.parent.parent.parent
+        db_path = os.path.join(repo_root, "data", "model_health_mogdb")
+        sync_path = os.path.join(repo_root, "data", "model_health_json")
+        return MogDB(db_path, sync_dir=sync_path)
 
     def set_model(self, model, tokenizer) -> None:
         """Set the model and tokenizer to benchmark."""
@@ -73,21 +82,44 @@ class ModelHealthMonitor:
         self._tokenizer = tokenizer
 
     def _load_history(self) -> None:
-        """Load benchmark history from disk."""
+        """Load benchmark history from MogDB."""
+        try:
+            col = self._db.collection("benchmarks")
+            docs = col.find(sort=[("_created", -1)], limit=200)
+            self._history = [
+                {
+                    "timestamp": d.get("timestamp", 0),
+                    "perplexity": d.get("perplexity", 0),
+                    "loss": d.get("loss", 0),
+                    "num_sentences": d.get("num_sentences", 0),
+                }
+                for d in docs
+            ]
+            self._history.reverse()  # chronological order
+        except Exception as e:
+            logger.warning("Failed to load health history from MogDB: %s", e)
+            self._load_legacy()
+
+    def _load_legacy(self) -> None:
+        """Fallback: load from legacy JSON file if it exists."""
         if self.db_path.exists():
             try:
                 data = json.loads(self.db_path.read_text())
                 self._history = data if isinstance(data, list) else []
             except Exception as e:
-                logger.warning("Failed to load health history from %s, resetting: %s", self.db_path, e)
+                logger.warning("Failed to load legacy health history: %s", e)
                 self._history = []
 
     def _save_history(self) -> None:
-        """Persist benchmark history to disk."""
+        """Persist benchmark history to MogDB (with automatic JSON sync)."""
         try:
-            self.db_path.write_text(json.dumps(self._history[-200:], indent=2))
+            col = self._db.collection("benchmarks")
+            # Only save the latest entry (older ones are already in MogDB)
+            if self._history:
+                latest = self._history[-1]
+                col.insert_one(latest)
         except Exception as e:
-            logger.warning("Failed to save health history: %s", e, extra={"tag": "INFRA"})
+            logger.warning("Failed to save health history to MogDB: %s", e)
 
     def run_benchmark(self) -> Optional[HealthSnapshot]:
         """Run model on the benchmark corpus and compute average perplexity.

@@ -53,6 +53,9 @@ class TraitWeightsConfig:
 
     Each weight is a float clamped to [0.0, 1.0]. Default for any unset
     trait is 0.5. Supports snapshots (named save/load) and batch update.
+
+    Uses MogDB as the storage engine with automatic JSON sync to
+    data/trait_weights_mogdb/ and data/trait_weights_json/.
     """
 
     def __init__(self, path: str = "data/trait_weights.json"):
@@ -67,7 +70,17 @@ class TraitWeightsConfig:
             key_suffix=".json",
         )
         self._snapshot_repo.enable_cache(ttl_seconds=5.0)
+        self._db = self._init_mogdb()
         self._load()
+
+    def _init_mogdb(self):
+        """Initialize MogDB with JSON sync for trait weights."""
+        import os
+        from mogdb import MogDB
+        repo_root = self._path.parent.parent.parent
+        db_path = os.path.join(repo_root, "data", "trait_weights_mogdb")
+        sync_path = os.path.join(repo_root, "data", "trait_weights_json")
+        return MogDB(db_path, sync_dir=sync_path)
 
     # ── Access ───────────────────────────────────────────────────────
 
@@ -244,19 +257,42 @@ class TraitWeightsConfig:
     # ── Persistence ──────────────────────────────────────────────────
 
     def _save(self) -> None:
-        """Write weights to disk."""
-        tmp = self._path.with_suffix(".tmp")
+        """Write weights to MogDB (with automatic JSON sync)."""
         try:
-            with open(tmp, "w") as f:
-                json.dump({k: round(v, 4) for k, v in self._weights.items()}, f)
-            tmp.rename(self._path)
+            col = self._db.collection("weights")
+            # Upsert: update if exists, insert if not
+            existing = col.find_one({"_key": "trait_weights"})
+            weights_data = {k: round(v, 4) for k, v in self._weights.items()}
+            if existing:
+                col.update_one(
+                    {"_key": "trait_weights"},
+                    {"$set": {"weights": weights_data}},
+                )
+            else:
+                col.insert_one({"_key": "trait_weights", "weights": weights_data})
         except Exception as e:
-            logger.warning("Failed to save trait weights to %s: %s", self._path, e)
-            if tmp.exists():
-                tmp.unlink()
+            logger.warning("Failed to save trait weights to MogDB: %s", e)
 
     def _load(self) -> None:
-        """Read weights from disk."""
+        """Read weights from MogDB (with automatic JSON sync bootstrap)."""
+        try:
+            col = self._db.collection("weights")
+            doc = col.find_one({"_key": "trait_weights"})
+            if doc and "weights" in doc:
+                self._weights = {
+                    k: max(0.0, min(1.0, float(v)))
+                    for k, v in doc["weights"].items()
+                    if k in ALL_TRAITS
+                }
+            else:
+                # Fallback: try legacy JSON file
+                self._load_legacy()
+        except Exception as e:
+            logger.warning("Failed to load trait weights from MogDB: %s", e)
+            self._load_legacy()
+
+    def _load_legacy(self) -> None:
+        """Fallback: load from legacy JSON file if it exists."""
         if self._path.exists():
             try:
                 with open(self._path) as f:
@@ -266,7 +302,7 @@ class TraitWeightsConfig:
                         if k in ALL_TRAITS
                     }
             except Exception as e:
-                logger.warning("Failed to load trait weights from %s, resetting to empty: %s", self._path, e)
+                logger.warning("Failed to load legacy trait weights: %s", e)
                 self._weights = {}
 
 
