@@ -123,6 +123,46 @@ def _load_csv(path: str) -> List[Dict[str, Any]]:
     return docs
 
 
+def _load_with_format(file_path: str, file_format: Optional[str]) -> tuple:
+    """Validate the source file and load documents, resolving the format."""
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Source file not found: {file_path}")
+
+    if file_format is None:
+        ext = path.suffix.lower()
+        format_map = {".json": "json", ".jsonl": "jsonl", ".csv": "csv"}
+        file_format = format_map.get(ext)
+        if file_format is None:
+            raise ValueError(f"Cannot detect format from extension '{ext}'. Pass file_format explicitly.")
+
+    loaders = {"json": _load_json, "jsonl": _load_jsonl, "csv": _load_csv}
+    return path, loaders[file_format](str(path))
+
+
+def _index_by_key(docs: List[Dict[str, Any]], key_field: str) -> Dict[Any, Dict[str, Any]]:
+    """Index documents by a key field, skipping docs missing that field."""
+    return {doc[key_field]: doc for doc in docs if key_field in doc}
+
+
+def _diff_result(source_by_key, existing_by_key, delete_missing: bool) -> SyncResult:
+    """Classify source vs existing documents into an insert/update/unchanged plan."""
+    result = SyncResult()
+    for kv, source_doc in source_by_key.items():
+        existing_doc = existing_by_key.get(kv)
+        if existing_doc is None:
+            result.inserted += 1
+        elif _content_hash(existing_doc) != _content_hash(source_doc):
+            result.updated += 1
+        else:
+            result.unchanged += 1
+    if delete_missing:
+        for kv in existing_by_key:
+            if kv not in source_by_key:
+                result.deleted += 1
+    return result
+
+
 def sync_from_files(
     collection,
     file_path: str,
@@ -156,65 +196,27 @@ def sync_from_files(
     Returns a SyncResult with counts of inserted, updated, deleted,
     and unchanged documents.
     """
-    path = Path(file_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Source file not found: {file_path}")
+    path, source_docs = _load_with_format(file_path, file_format)
+    source_by_key = _index_by_key(source_docs, key_field)
+    existing_by_key = _index_by_key(collection.find(), key_field)
 
-    if file_format is None:
-        ext = path.suffix.lower()
-        format_map = {".json": "json", ".jsonl": "jsonl", ".csv": "csv"}
-        file_format = format_map.get(ext)
-        if file_format is None:
-            raise ValueError(f"Cannot detect format from extension '{ext}'. Pass file_format explicitly.")
+    result = _diff_result(source_by_key, existing_by_key, delete_missing)
 
-    loaders = {"json": _load_json, "jsonl": _load_jsonl, "csv": _load_csv}
-    source_docs = loaders[file_format](str(path))
-
-    # Build source index: key_value -> source doc
-    source_by_key: Dict[Any, Dict[str, Any]] = {}
-    for doc in source_docs:
-        kv = doc.get(key_field)
-        if kv is not None:
-            source_by_key[kv] = doc
-
-    # Build collection index: key_value -> collection doc
-    existing = collection.find()
-    existing_by_key: Dict[Any, Dict[str, Any]] = {}
-    for doc in existing:
-        kv = doc.get(key_field)
-        if kv is not None:
-            existing_by_key[kv] = doc
-
-    result = SyncResult()
-
-    # Insert or update
+    # Apply the plan: mutate the collection only when there is work to do.
     for kv, source_doc in source_by_key.items():
         existing_doc = existing_by_key.get(kv)
         if existing_doc is None:
-            # Insert new document
             collection.insert_one(source_doc)
-            result.inserted += 1
-        else:
-            # Compare content hash
-            old_hash = _content_hash(existing_doc)
-            new_hash = _content_hash(source_doc)
-            if old_hash != new_hash:
-                # Update changed document
-                update_ops = {k: v for k, v in source_doc.items() if not k.startswith("_")}
-                collection.update_one(
-                    {"_id": existing_doc["_id"]},
-                    {"$set": update_ops},
-                )
-                result.updated += 1
-            else:
-                result.unchanged += 1
-
-    # Delete missing documents
+        elif _content_hash(existing_doc) != _content_hash(source_doc):
+            update_ops = {k: v for k, v in source_doc.items() if not k.startswith("_")}
+            collection.update_one(
+                {"_id": existing_doc["_id"]},
+                {"$set": update_ops},
+            )
     if delete_missing:
         for kv, existing_doc in existing_by_key.items():
             if kv not in source_by_key:
                 collection.delete_one({"_id": existing_doc["_id"]})
-                result.deleted += 1
 
     logger.info(
         "sync complete: +%d ~%d -%d =%d (%d errors)",
@@ -222,6 +224,27 @@ def sync_from_files(
         len(result.errors),
     )
     return result
+
+
+def preview_from_files(
+    collection,
+    file_path: str,
+    key_field: str,
+    *,
+    delete_missing: bool = False,
+    file_format: Optional[str] = None,
+) -> SyncResult:
+    """Compute what ``sync_from_files`` would do without mutating the collection.
+
+    Returned SyncResult counts inserts, updates, and (optionally) deletes.
+    Useful for dry-run reporting before applying a migration.
+
+    Parameters mirror ``sync_from_files``.
+    """
+    _, source_docs = _load_with_format(file_path, file_format)
+    source_by_key = _index_by_key(source_docs, key_field)
+    existing_by_key = _index_by_key(collection.find(), key_field)
+    return _diff_result(source_by_key, existing_by_key, delete_missing)
 
 
 # Convenience aliases
