@@ -96,6 +96,11 @@ export const TrainingLogCard = memo(function TrainingLogCard({
               <Skeleton className="h-3 w-3/4" />
               <Skeleton className="h-3 w-1/2" />
             </div>
+          ) : error ? (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-destructive">{error}</p>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void fetchLogsLoading()}>Retry</Button>
+            </div>
           ) : lines.length === 0 ? (
             <p className="text-xs text-muted-foreground">No logs yet.</p>
           ) : (
