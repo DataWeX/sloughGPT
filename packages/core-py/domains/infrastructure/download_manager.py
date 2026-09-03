@@ -19,8 +19,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-import numpy as np
-
 logger = logging.getLogger("slo.infrastructure.download_manager")
 
 try:
@@ -441,52 +439,6 @@ class DownloadManager:
             percentage=100.0,
         )
         self._notify_callbacks(model_id)
-
-        # Auto-convert to .slnc after download
-        try:
-            from domains.infrastructure.slnc.compiler import SLNCCompiler
-            from domains.infrastructure.safetensors_loader import _find_safetensors, load_model_config
-            from pathlib import Path
-
-            cache_path = Path(cache_dir)
-            snapshots_dir = cache_path / "snapshots" / "default"
-            if snapshots_dir.exists():
-                st_path = _find_safetensors(cache_path)
-                if st_path is not None:
-                    slnc_path = snapshots_dir / "model.slnc"
-                    if not slnc_path.exists():
-                        logger.info("Auto-converting %s to .slnc...", model_id, extra={"tag": "INFRA"})
-                        config = load_model_config(model_id)
-                        # Read weights from safetensors
-                        import struct, json as _json
-                        weights = {}
-                        with open(str(st_path), "rb") as f:
-                            header_len = struct.unpack("<Q", f.read(8))[0]
-                            header = _json.loads(f.read(header_len))
-                            for key, info in header.items():
-                                if key.startswith("__"):
-                                    continue
-                                dtype_str = info["dtype"]
-                                offsets = info["data_offsets"]
-                                f.seek(8 + header_len + offsets[0])
-                                raw = f.read(offsets[1] - offsets[0])
-                                if dtype_str == "BF16":
-                                    arr = np.frombuffer(raw, dtype=np.uint16)
-                                    f32 = np.zeros(len(arr), dtype=np.float32)
-                                    f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
-                                    weights[key] = f32.reshape(info["shape"])
-                                elif dtype_str == "F32":
-                                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-                                elif dtype_str == "F16":
-                                    weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
-                                else:
-                                    weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-
-                        compiler = SLNCCompiler()
-                        compiler.compile_from_dict(config, weights, str(slnc_path))
-                        logger.info("Auto-converted to .slnc: %s", slnc_path.name, extra={"tag": "INFRA"})
-        except Exception as e:
-            logger.debug("SLNC auto-conversion skipped for %s: %s", model_id, e)
 
         # Record dashboard event
         try:
