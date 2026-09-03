@@ -18,6 +18,10 @@ vi.mock('@/components/Sidebar', () => ({
   )),
 }))
 
+vi.mock('@/components/BottomNav', () => ({
+  BottomNav: () => <div data-testid="bottom-nav" />,
+}))
+
 vi.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }))
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...classes: any[]) => classes.filter(Boolean).join(' '),

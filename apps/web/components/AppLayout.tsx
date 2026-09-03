@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom'
 import { cn, Button, IconChevronRight } from '@sloughgpt/strui'
 import { IconMenu } from '@/components/icons/NavIcons'
 import { Sidebar } from '@/components/Sidebar'
+import { BottomNav } from '@/components/BottomNav'
 import { ErrorPanel } from '@sloughgpt/strui'
 import { StatusBar } from '@/components/StatusBar'
 import { OutputPanel } from '@/components/OutputPanel'
@@ -194,6 +195,9 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           <StatusBar />
         </main>
       </div>
+
+      {/* Mobile bottom navigation */}
+      <BottomNav />
 
       {/* Mobile drawer portal */}
       {portalMounted && createPortal(
