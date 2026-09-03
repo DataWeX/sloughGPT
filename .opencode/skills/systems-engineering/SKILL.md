@@ -3,20 +3,322 @@ name: systems-engineering
 description: >
   Use when building OS components, kernel modules, device drivers, init system
   services, Buildroot configurations, x86 VM extensions, or shell TUI infrastructure
-  in sloughGPT. Covers the Dait kernel, x86 VM, v86 browser Linux, and custom
-  Buildroot image builds.
+  in sloughGPT. Also covers all Python development conventions. Covers the Dait kernel,
+  x86 VM, v86 browser Linux, custom Buildroot image builds, and Python coding standards.
 ---
 
-# Systems Engineering Skill
+# Systems Engineering + Python Skill
 
 ## Overview
 
-This skill provides the architectural knowledge and coding conventions for building
-OS-level components in sloughGPT. The Dait operating system has two deployment
-targets: a custom Buildroot image for the v86 browser VM, and a Python x86 emulator
-for training and development.
+This skill covers two areas:
+1. **Python conventions** — imports, types, error handling, docstrings, naming, logging, testing, file organization
+2. **Systems architecture** — kernel, VM, devices, init system, shell TUI, Buildroot
 
-## When to Use
+## Python Conventions
+
+### Imports
+
+```python
+from __future__ import annotations  # Use in production files
+
+# Standard lib
+import json
+import logging
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+# Third party (if needed)
+import numpy as np
+
+# Local
+from domains.logging import CLILogger
+from .base import Logger, LogLevel
+```
+
+**Rules:**
+- Use `from __future__ import annotations` in production files (not required in tests)
+- Relative imports within packages: `from .base import Logger`
+- Lazy imports for optional deps (torch, etc.):
+  ```python
+  try:
+      from domains.models import SloughGPTModel
+  except ImportError:
+      SloughGPTModel = None
+  ```
+- Use `TYPE_CHECKING` guard for type-only imports:
+  ```python
+  from typing import TYPE_CHECKING
+  if TYPE_CHECKING:
+      from domains.training.tracking import ExperimentTracker
+  ```
+
+### Type Hints
+
+```python
+def get_batch(self, split: str = "train") -> tuple:
+    """Get a batch of data."""
+    ...
+
+def prepare_data(
+    data_path: str,
+    block_size: int,
+    tokenizer: Optional[Any] = None,
+) -> tuple:
+    ...
+```
+
+**Rules:**
+- Use `typing` module imports: `Optional[str]`, `Dict[str, Any]`, `List[str]`
+- No PEP 604 union syntax (`str | None`) — use `Optional[str]`
+- Annotate public method return types: `-> None`, `-> str`, `-> dict[str, Any]`
+- Internal helpers can skip type hints
+
+### Error Handling
+
+```python
+# Domain logic — raise explicit exceptions
+raise ValueError(f"Dataset not found: {name}")
+raise ValueError(f"Cannot resume from '{resume_path}': checkpoint is unreadable ({exc})")
+
+# Infrastructure — degrade gracefully
+try:
+    from domains.infrastructure.output_buffer import install_log_bridge
+    install_log_bridge()
+except Exception as e:
+    logger.debug("OutputBuffer bridge unavailable: %s", e)
+    return None
+```
+
+**Rules:**
+- Domain logic: raise `ValueError` or `KeyError` with descriptive f-string messages
+- Infrastructure: catch broad exceptions, log at debug/warning level, continue
+- No custom exception classes unless the domain specifically needs them
+
+### Docstrings (Google Style)
+
+```python
+def prepare_data(
+    data_path: str,
+    block_size: int,
+    tokenizer: Optional[Any] = None,
+) -> tuple:
+    """Prepare training data from a text file.
+
+    Converts raw text into integer sequences suitable for training.
+    Supports both BPE tokenizers and character-level fallback.
+
+    Args:
+        data_path: Path to a UTF-8 text file.
+        block_size: Context window length for each training sample.
+        tokenizer: Optional SloBPE-compatible tokenizer. If None, falls
+            back to character-level encoding.
+
+    Returns:
+        (data, vocab_size, stoi, itos) where data is a 1-D numpy int array,
+        vocab_size is the vocabulary size, stoi/itos are mapping dicts.
+    """
+```
+
+**Rules:**
+- Module docstrings: describe purpose, usage examples with `Usage::`
+- Public functions: `Args:` and `Returns:` blocks
+- Private helpers: one-line docstring or none
+- Class docstrings: describe purpose, list constructor params in `Parameters:`
+
+### Class Structure
+
+```python
+from dataclasses import dataclass, field
+from enum import Enum
+
+# Config DTOs — use @dataclass
+@dataclass
+class TrainerConfig:
+    vocab_size: int = 0
+    n_embed: int = 128
+    n_layer: int = 4
+    epochs: int = 10
+    learning_rate: float = 3e-4
+
+# Constants — use Enum
+class DatasetType(Enum):
+    TEXT = "text"
+    CODE = "code"
+    CONVERSATION = "conversation"
+
+# Performance-critical — use __slots__
+class SloughGPTBlock:
+    __slots__ = ("ln_1", "attn", "ln_2", "mlp")
+    ...
+
+# Everything else — plain classes
+class CheckpointManager:
+    ...
+```
+
+**Rules:**
+- `@dataclass` for config/value objects
+- `Enum` for type-safe constants
+- `__slots__` only in hot paths (neural network, compression)
+- Plain classes for everything else
+
+### Naming
+
+```python
+# Functions/methods — snake_case
+def setup_logging() -> None: ...
+def get_request_id() -> str: ...
+def _format_human(record: logging.LogRecord) -> str: ...
+
+# Classes — PascalCase
+class CLILogger(Logger): ...
+class TrainerConfig: ...
+
+# Constants — UPPER_SNAKE_CASE
+_NO_COLOR = os.environ.get("NO_COLOR")
+_KNOWN_KEYS = {"tag", "op", "request_id"}
+
+# Private — _leading_underscore
+_request_id: str = ""
+_collect_extras(record)
+
+# Logger names — slo.* namespace
+logger = logging.getLogger("slo.trainer")
+logger = logging.getLogger("slo.training.datasets")
+```
+
+### Logging
+
+```python
+import logging
+
+# Module-level logger
+logger = logging.getLogger("slo.my_module")
+
+# Structured logging with extra
+logger.info("Registered: %s (%s)", config.name, config.dataset_type.value,
+    extra={"tag": "TRAIN"})
+
+# Lazy %-style formatting (not f-strings in log calls)
+logger.info("Step %d/%d | Loss: %.4f", step, total, loss,
+    extra={"tag": "TRAIN"})
+```
+
+**Rules:**
+- Module-level: `logger = logging.getLogger("slo.<name>")`
+- Use `extra={"tag": "TAG"}` for structured fields
+- Lazy `%s` formatting, not f-strings in log calls
+- Levels: `debug` = diagnostics, `info` = normal flow, `warning` = recoverable, `error` = failure
+
+### Testing (pytest)
+
+```python
+import pytest
+from unittest.mock import patch
+
+class TestMyFeature:
+    """Tests for MyFeature."""
+
+    @pytest.fixture(autouse=True)
+    def _clean(self):
+        """Reset state before each test."""
+        yield
+        # cleanup
+
+    def test_basic(self):
+        """Test basic functionality."""
+        result = my_function("input")
+        assert result == "expected"
+
+    @pytest.mark.parametrize("input,expected", [
+        ("a", 1),
+        ("b", 2),
+        ("c", 3),
+    ])
+    def test_parametrized(self, input, expected):
+        assert my_function(input) == expected
+
+    def test_error(self):
+        """Test error handling."""
+        with pytest.raises(ValueError, match="not found"):
+            my_function("invalid")
+```
+
+**Rules:**
+- Class-based grouping by feature area
+- `@pytest.fixture(autouse=True)` for setup/teardown
+- `@pytest.mark.parametrize` for multiple test cases
+- `pytest.raises` for error testing
+- Helper functions for test data creation
+
+### File Organization
+
+```python
+"""Module docstring describing purpose."""
+
+from __future__ import imports
+
+# ── Imports ──────────────────────────────────────────────────────────
+
+import ...
+
+# ── Constants ────────────────────────────────────────────────────────
+
+_KNOWN_KEYS = {...}
+
+# ── Classes ──────────────────────────────────────────────────────────
+
+class MyClass:
+    ...
+
+# ── Functions ────────────────────────────────────────────────────────
+
+def my_function() -> None:
+    ...
+```
+
+**Rules:**
+- Module docstring at top
+- `# ── Section ──────────` dividers in large files
+- `__all__` in `__init__.py` for public API
+- Lazy `__getattr__` for optional dependencies in `__init__.py`
+- Domain-driven directory structure: `domains/<domain>/`
+
+### `__init__.py` Pattern
+
+```python
+"""Package docstring."""
+
+from __future__ import annotations
+
+# Eager imports (always available)
+from .base import Logger, LogLevel
+from .config import LogFormatter
+
+# Lazy imports (optional dependencies)
+LAZY_IMPORTS = {
+    "TrainingUX": ".training_ux",
+}
+
+__all__ = ["Logger", "LogLevel", "LogFormatter", "TrainingUX"]
+
+def __getattr__(name):
+    if name in LAZY_IMPORTS:
+        import importlib
+        module = importlib.import_module(LAZY_IMPORTS[name], package=__name__)
+        obj = getattr(module, name)
+        globals()[name] = obj
+        return obj
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+```
+
+---
+
+## Systems Architecture
+
+### When to Use
 
 - Writing or modifying kernel code (scheduler, memory, syscalls, addons)
 - Writing or modifying device drivers (DeviceBus, DeviceDriver, fd I/O)
@@ -26,7 +328,7 @@ for training and development.
 - Working on the shell TUI (pane engine, surfaces, borders, cursor lifecycle)
 - Working on VFS (mount points, /dev/*, /proc/*, host fs bridging)
 
-## Architecture Reference
+### Architecture Reference
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -63,7 +365,7 @@ for training and development.
 └─────────────────────────────────────────────────┘
 ```
 
-## Key Files
+### Key Files
 
 | Component | File | Key Classes |
 |-----------|------|-------------|
@@ -89,9 +391,9 @@ for training and development.
 | v86 Hook | `apps/web/hooks/useV86.ts` | `useV86()` |
 | VM API | `apps/api/server/routers/vm.py` | `/vm/run`, `/vm/builtins`, `/vm/info` |
 
-## Kernel Development
+### Kernel Development
 
-### Syscall Table (INT 0x80)
+#### Syscall Table (INT 0x80)
 
 The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 
@@ -111,7 +413,7 @@ The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 | 29 | SYS_TRAIN_STATUS | job_id | status | ADMIN |
 | 30 | SYS_TRAIN_GET_RESULT | job_id | result_addr | ADMIN |
 
-### Adding a New Syscall
+#### Adding a New Syscall
 
 1. Define the syscall number in `vm.py` (add to `SYSCALL_TABLE`)
 2. Implement the handler function in `vm.py`
@@ -120,16 +422,14 @@ The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 5. Write tests in `tests/test_vm*.py`
 6. Update this skill doc
 
-### Adding a New Kernel Addon
+#### Adding a New Kernel Addon
 
 1. Create `packages/core-py/domains/shell/addons/<name>.py`
 2. Implement the `Addon` protocol from `base.py`
 3. Register via `kernel.install_addon(<name>)` in `runtime.py`
 4. Add test in `tests/test_shell_runtime.py`
 
-### Dynamic Module Loading
-
-Use `ModuleLoader` for runtime addon management:
+#### Dynamic Module Loading
 
 ```python
 from domains.shell.addons.module_loader import ModuleLoader
@@ -137,25 +437,14 @@ from domains.shell.addons.module_loader import ModuleLoader
 loader = ModuleLoader(addon_dirs=["path/to/addons"])
 loader.set_kernel(kernel)
 
-# Discover available modules
 available = loader.discover()
-
-# Load a module
 addon = loader.load("my_addon")
-
-# Hot-reload during development
 addon = loader.reload("my_addon")
-
-# Unload
 loader.unload("my_addon")
-
-# Query state
 print(loader.summary())
 ```
 
-### VM Debugger
-
-Use `Debugger` for interactive debugging:
+#### VM Debugger
 
 ```python
 from domains.shell.vm_debugger import Debugger
@@ -163,43 +452,36 @@ from domains.shell.vm_debugger import Debugger
 debugger = Debugger()
 debugger.set_output(print)
 
-# Load source
 engine = debugger.engine
 engine.load_source(source)
 debugger.load_symbols(source)
 
-# Set breakpoints
 debugger.bp_set("main")
 debugger.bp_set(0x1000, "loop_start")
 
-# Step through
-debugger.stepi()           # single instruction
-debugger.step_over()       # step over CALL
-debugger.step_out()        # run until return
+debugger.stepi()
+debugger.step_over()
+debugger.step_out()
 
-# Inspect state
 debugger.dump_regs()
 debugger.dump_flags()
 debugger.dump_memory(0x1000, 64)
 debugger.dump_stack(8)
 
-# Continue execution
 trace = debugger.continue_exec()
-
-# Analyze
 analysis = debugger.analyze_trace(trace)
 ```
 
-### Adding a New Device Driver
+#### Adding a New Device Driver
 
 1. Subclass `DeviceDriver` in `device_system.py`
 2. Implement `open()`, `call()`, `close()` methods
 3. Register with `DeviceSystem` in `devices.py`
 4. The device appears at `/dev/<name>` in VFS
 
-## Buildroot Build System
+### Buildroot Build System
 
-### Directory Structure
+#### Directory Structure
 
 ```
 buildroot/
@@ -221,7 +503,7 @@ buildroot/
 └── README.md                     # Build instructions
 ```
 
-### Build Commands
+#### Build Commands
 
 ```bash
 # Setup Buildroot (first time)
@@ -237,7 +519,7 @@ make -C buildroot sloughgpt-rebuild
 make -C buildroot clean && make -C buildroot
 ```
 
-### v86 Integration
+#### v86 Integration
 
 The v86 browser VM loads a raw disk image. After Buildroot builds:
 
@@ -246,22 +528,9 @@ The v86 browser VM loads a raw disk image. After Buildroot builds:
 3. Serve from `apps/web/public/buildroot/` or a CDN
 4. Update `LINUX_IMAGE_URL` in `apps/web/hooks/useV86.ts`
 
-### Defconfig Essentials
+### Shell TUI Architecture
 
-A minimal Buildroot defconfig for sloughgPT should include:
-
-- Architecture: x86_64 (for v86 compatibility)
-- Kernel: Linux 6.x (minimal config)
-- Init: BusyBox init or custom
-- Packages: busybox, bash, coreutils, python3 (optional)
-- Filesystem: ext2/raw
-- Overlay: custom rootfs overlay for Dait packages
-
-## Shell TUI Architecture
-
-### Pane Layout
-
-The pane engine (`pane.py`) provides pure-geometry layout:
+#### Pane Layout
 
 ```python
 layout = PaneLayout([
@@ -273,7 +542,7 @@ layout = PaneLayout([
 regions = layout.compute(term_rows, term_cols)
 ```
 
-### Rendering Pipeline
+#### Rendering Pipeline
 
 ```
 TuiRepl._render_all()
@@ -284,7 +553,7 @@ TuiRepl._render_all()
   └─ _render_input(win_input)            # Input line + cursor
 ```
 
-### Cursor Lifecycle
+#### Cursor Lifecycle
 
 All ANSI cursor operations must be guarded:
 
@@ -296,10 +565,12 @@ if self._io._is_tty():
     self._io.write("\x1b[?25h")  # show
 ```
 
-### CJK Support
+#### CJK Support
 
 `clip()` in `surface.py` uses `unicodedata.east_asian_width()` for proper
 display-width truncation. CJK characters count as 2 columns.
+
+---
 
 ## Conventions
 
@@ -320,3 +591,19 @@ display-width truncation. CJK characters count as 2 columns.
 - [ ] `make test-py ARGS="tests/test_vm*.py -x -q"` for VM changes
 - [ ] `make test-py ARGS="tests/test_shell_tui_repl.py -x -q"` for TUI changes
 - [ ] Full shell suite before completion: `make test-py ARGS="tests/test_shell_*.py -q"`
+
+## Running Python Code
+
+```bash
+# Core library
+PYTHONPATH=packages/core-py .venv/bin/python -c "from domains.infrastructure.pugqeep import Tree; print('ok')"
+
+# API server
+cd apps/api && .venv/bin/python -m uvicorn server.main:app --port 8000
+
+# CLI
+.venv/bin/python -m apps.cli.src.cli
+
+# Tests
+PYTHONPATH=packages/core-py .venv/bin/python -m pytest packages/core-py/tests/test_file.py -x -v
+```
