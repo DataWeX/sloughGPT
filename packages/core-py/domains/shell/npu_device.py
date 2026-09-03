@@ -1,5 +1,5 @@
 """
-NPUDevice — hardware device driver.
+NPUDevice — standalone neural processing hardware.
 
 Uses TensorDevice for computation.
 Adds: model management, I/O, assembly interface (ioctl).
@@ -9,61 +9,73 @@ from __future__ import annotations
 
 import time
 import logging
-import threading
 import numpy as np
 from typing import Any
 
-from .kernel_devices import DeviceDriver, DeviceType, DeviceState
-from .kernel_syscall import SyscallResult
 from .tensor_device import TensorDevice
 
-logger = logging.getLogger("slo.kernel.npu")
+logger = logging.getLogger("slo.npu")
 
 
-class NPUDevice(DeviceDriver):
-    """NPU hardware device — loads models, executes them.
+class NPUDevice:
+    """Standalone neural processing hardware — loads models, executes them.
 
     Uses TensorDevice for computation.
     Adds: model management, I/O, assembly interface (ioctl).
     """
 
     def __init__(self, name: str = "npu"):
-        super().__init__(name, DeviceType.INFERENCE)
+        self._name = name
         self._compute = TensorDevice()  # Pure compute engine
         self._models: dict[str, Any] = {}
         self._default_model: str = ""
         self._checkpoints: dict[str, dict] = {}
-        self._open_count: int = 0
-        self._lock = threading.Lock()
 
-    # ── Device lifecycle ──────────────────────────────────────────────────
+    # ── ioctl interface ───────────────────────────────────────────────────
 
-    def open(self) -> bool:
-        self._open_count += 1
-        self._state = DeviceState.OPEN
-        return True
+    def ioctl(self, command: str, *args: Any) -> Any:
+        """Assembly interface — all operations go through ioctl."""
+        ops = {
+            # Device info
+            "INFO": self._info,
 
-    def close(self) -> bool:
-        self._state = DeviceState.CLOSED
-        return True
+            # Model management
+            "LOAD": self._load,
+            "UNLOAD": self._unload,
+            "CALL": self._call,
 
-    def info(self) -> dict:
-        return {
-            "device": self.name,
-            "compute_ops": self._compute.list_ops(),
-            "models": len(self._models),
-            "names": list(self._models.keys()),
-            "default": self._default_model,
-            "checkpoints": list(self._checkpoints.keys()),
+            # Advanced operations
+            "BATCH": self._batch,
+            "PIPE": self._pipeline,
+            "PROFILE": self._profile,
+            "QUANTIZE": self._quantize,
+
+            # Checkpoints
+            "CHECKPOINT_SAVE": self._checkpoint_save,
+            "CHECKPOINT_LOAD": self._checkpoint_load,
+
+            # Memory
+            "MEMORY": self._memory,
+
+            # Compute (direct to TensorDevice)
+            "COMPUTE": self._compute_op,
         }
 
-    # ── Compute access (for direct tensor ops) ────────────────────────────
+        fn = ops.get(command)
+        if fn is None:
+            raise ValueError(f"unknown command: {command}")
+        return fn(*args)
 
-    def compute(self, op: str, *args, **kwargs):
-        """Direct access to TensorDevice for pure compute."""
-        return self._compute(op, *args, **kwargs)
+    def list_commands(self) -> list[str]:
+        """List all available commands."""
+        return sorted([
+            "INFO", "LOAD", "UNLOAD", "CALL",
+            "BATCH", "PIPE", "PROFILE", "QUANTIZE",
+            "CHECKPOINT_SAVE", "CHECKPOINT_LOAD",
+            "MEMORY", "COMPUTE",
+        ])
 
-    # ── Model management ──────────────────────────────────────────────────
+    # ── Function calls (direct use) ───────────────────────────────────────
 
     def load(self, path: str = "", name: str = "", **kwargs) -> Any:
         """Load model from file."""
@@ -97,7 +109,7 @@ class NPUDevice(DeviceDriver):
             return True
         return False
 
-    def __call__(self, model_name: str, input_data, **kwargs):
+    def execute(self, model_name: str, input_data, **kwargs):
         """Execute model — input goes in, output comes out."""
         name = model_name or self._default_model
         provider = self._models.get(name)
@@ -112,41 +124,16 @@ class NPUDevice(DeviceDriver):
             return self._execute_tokens(provider, input_data, **kwargs)
         return {"data": input_data}
 
-    def _execute_text(self, provider, text: str, **kwargs):
-        """Text → tokenize → model → output."""
-        mode = kwargs.get("mode", "generate")
-        max_tokens = kwargs.get("max_tokens", 100)
-
-        if mode == "tokenize":
-            tokens = provider.tokenize(text)
-            return {"tokens": tokens, "count": len(tokens)}
-        elif mode == "embed":
-            emb = provider.embed(text)
-            return {"embedding": emb, "shape": list(emb.shape)}
-
-        # generate
-        t0 = time.time()
-        tokens = provider.tokenize(text)
-        ids = np.array([tokens], dtype=np.int64)
-        gen = provider.generate_numpy(ids, max_new_tokens=max_tokens)
-        result = provider.detokenize(gen[0].tolist())
-        ms = (time.time() - t0) * 1000
-        return {"text": result, "tokens": len(gen[0]), "ms": round(ms, 2)}
-
-    def _execute_tokens(self, provider, tokens, **kwargs):
-        """Tokens → model → logits."""
-        ids = np.array([tokens], dtype=np.int64) if isinstance(tokens, list) else tokens
-        t0 = time.time()
-        inner = getattr(provider, "_model", provider)
-        if hasattr(inner, "forward_pass"):
-            fpr = inner.forward_pass(ids)
-            logits = fpr.logits if hasattr(fpr, "logits") else fpr
-        else:
-            logits = provider.forward_numpy(ids)
-        ms = (time.time() - t0) * 1000
-        return {"logits": logits, "shape": list(logits.shape), "ms": round(ms, 2)}
-
-    # ── Advanced operations ───────────────────────────────────────────────
+    def info(self) -> dict:
+        """Get device info."""
+        return {
+            "device": self._name,
+            "compute_ops": self._compute.list_commands(),
+            "models": len(self._models),
+            "names": list(self._models.keys()),
+            "default": self._default_model,
+            "checkpoints": list(self._checkpoints.keys()),
+        }
 
     def batch(self, model_name: str, inputs: list, **kwargs) -> dict:
         """Execute multiple inputs."""
@@ -156,7 +143,7 @@ class NPUDevice(DeviceDriver):
             raise ValueError(f"model '{name}' not loaded")
 
         t0 = time.time()
-        results = [self(name, inp, **kwargs) for inp in inputs]
+        results = [self.execute(name, inp, **kwargs) for inp in inputs]
         ms = (time.time() - t0) * 1000
         return {
             "results": results,
@@ -176,7 +163,7 @@ class NPUDevice(DeviceDriver):
             if provider is None:
                 raise ValueError(f"model '{name}' not loaded")
             t1 = time.time()
-            data = self(name, data, **kwargs)
+            data = self.execute(name, data, **kwargs)
             ms = (time.time() - t1) * 1000
             trace.append({"model": name, "ms": round(ms, 2)})
 
@@ -203,7 +190,7 @@ class NPUDevice(DeviceDriver):
             prompt = "a" * seq_len
             t0 = time.time()
             for _ in range(bs):
-                self(name, prompt)
+                self.execute(name, prompt)
             ms = (time.time() - t0) * 1000
             toks_per_sec = (bs * seq_len) / (ms / 1000) if ms > 0 else 0
             profiles.append({
@@ -280,84 +267,100 @@ class NPUDevice(DeviceDriver):
             "total_model_mb": round(sum(model_mem.values()), 2),
         }
 
-    # ── Ioctl dispatch ────────────────────────────────────────────────────
+    # ── Private methods (ioctl handlers) ──────────────────────────────────
 
-    def ioctl(self, command: str, *args: Any) -> SyscallResult | dict:
-        """All operations go through ioctl."""
-        try:
-            # Compute ops (direct to TensorDevice)
-            if command.startswith("COMPUTE:"):
-                op = command[8:]  # Remove "COMPUTE:" prefix
-                result = self._compute(op, *args)
-                return SyscallResult.ok({"result": result})
+    def _info(self, *args):
+        return self.info()
 
-            # Device ops
-            elif command == "INFO":
-                return SyscallResult.ok(self.info())
+    def _load(self, *args):
+        path = args[0] if len(args) > 0 else ""
+        name = args[1] if len(args) > 1 else ""
+        provider = self.load(path, name)
+        return {"model": name or path.rsplit("/", 1)[-1]}
 
-            elif command == "LOAD":
-                path = args[0] if len(args) > 0 else ""
-                name = args[1] if len(args) > 1 else ""
-                provider = self.load(path, name)
-                return SyscallResult.ok({"model": name or path.rsplit("/", 1)[-1]})
+    def _unload(self, *args):
+        name = args[0] if args else ""
+        ok = self.unload(name)
+        return {"unloaded": ok}
 
-            elif command == "UNLOAD":
-                name = args[0] if args else ""
-                ok = self.unload(name)
-                return SyscallResult.ok({"unloaded": ok})
+    def _call(self, *args):
+        name = args[0] if len(args) > 0 else ""
+        inp = args[1] if len(args) > 1 else ""
+        return self.execute(name, inp)
 
-            elif command == "CALL":
-                name = args[0] if len(args) > 0 else ""
-                inp = args[1] if len(args) > 1 else ""
-                result = self(name, inp)
-                return SyscallResult.ok(result)
+    def _batch(self, *args):
+        name = args[0] if len(args) > 0 else ""
+        inputs = args[1] if len(args) > 1 else []
+        return self.batch(name, inputs)
 
-            elif command == "BATCH":
-                name = args[0] if len(args) > 0 else ""
-                inputs = args[1] if len(args) > 1 else []
-                result = self.batch(name, inputs)
-                return SyscallResult.ok(result)
+    def _pipeline(self, *args):
+        names = args[0] if len(args) > 0 else []
+        inp = args[1] if len(args) > 1 else ""
+        return self.pipeline(names, inp)
 
-            elif command == "PIPE":
-                names = args[0] if len(args) > 0 else []
-                inp = args[1] if len(args) > 1 else ""
-                result = self.pipeline(names, inp)
-                return SyscallResult.ok(result)
+    def _profile(self, *args):
+        name = args[0] if len(args) > 0 else ""
+        seq_len = args[1] if len(args) > 1 else 512
+        return self.profile(name, int(seq_len))
 
-            elif command == "PROFILE":
-                name = args[0] if len(args) > 0 else ""
-                seq_len = args[1] if len(args) > 1 else 512
-                result = self.profile(name, int(seq_len))
-                return SyscallResult.ok(result)
+    def _quantize(self, *args):
+        name = args[0] if len(args) > 0 else ""
+        bits = args[1] if len(args) > 1 else 8
+        return self.quantize(name, int(bits))
 
-            elif command == "QUANTIZE":
-                name = args[0] if len(args) > 0 else ""
-                bits = args[1] if len(args) > 1 else 8
-                result = self.quantize(name, int(bits))
-                return SyscallResult.ok(result)
+    def _checkpoint_save(self, *args):
+        name = args[0] if len(args) > 0 else ""
+        path = args[1] if len(args) > 1 else ""
+        return self.checkpoint_save(name, path)
 
-            elif command == "CHECKPOINT_SAVE":
-                name = args[0] if len(args) > 0 else ""
-                path = args[1] if len(args) > 1 else ""
-                result = self.checkpoint_save(name, path)
-                return SyscallResult.ok(result)
+    def _checkpoint_load(self, *args):
+        name = args[0] if len(args) > 0 else ""
+        path = args[1] if len(args) > 1 else ""
+        return self.checkpoint_load(name, path)
 
-            elif command == "CHECKPOINT_LOAD":
-                name = args[0] if len(args) > 0 else ""
-                path = args[1] if len(args) > 1 else ""
-                result = self.checkpoint_load(name, path)
-                return SyscallResult.ok(result)
+    def _memory(self, *args):
+        return self.memory()
 
-            elif command == "MEMORY":
-                return SyscallResult.ok(self.memory())
+    def _compute_op(self, *args):
+        op = args[0] if len(args) > 0 else ""
+        op_args = args[1:] if len(args) > 1 else ()
+        return self._compute.ioctl(op, *op_args)
 
-            else:
-                return SyscallResult.fail(f"unknown ioctl: {command}")
+    # ── Internal helpers ──────────────────────────────────────────────────
 
-        except Exception as e:
-            return SyscallResult.fail(f"ioctl {command} failed: {e}")
+    def _execute_text(self, provider, text: str, **kwargs):
+        """Text → tokenize → model → output."""
+        mode = kwargs.get("mode", "generate")
+        max_tokens = kwargs.get("max_tokens", 100)
 
-    # ── Backend loaders ───────────────────────────────────────────────────
+        if mode == "tokenize":
+            tokens = provider.tokenize(text)
+            return {"tokens": tokens, "count": len(tokens)}
+        elif mode == "embed":
+            emb = provider.embed(text)
+            return {"embedding": emb, "shape": list(emb.shape)}
+
+        # generate
+        t0 = time.time()
+        tokens = provider.tokenize(text)
+        ids = np.array([tokens], dtype=np.int64)
+        gen = provider.generate_numpy(ids, max_new_tokens=max_tokens)
+        result = provider.detokenize(gen[0].tolist())
+        ms = (time.time() - t0) * 1000
+        return {"text": result, "tokens": len(gen[0]), "ms": round(ms, 2)}
+
+    def _execute_tokens(self, provider, tokens, **kwargs):
+        """Tokens → model → logits."""
+        ids = np.array([tokens], dtype=np.int64) if isinstance(tokens, list) else tokens
+        t0 = time.time()
+        inner = getattr(provider, "_model", provider)
+        if hasattr(inner, "forward_pass"):
+            fpr = inner.forward_pass(ids)
+            logits = fpr.logits if hasattr(fpr, "logits") else fpr
+        else:
+            logits = provider.forward_numpy(ids)
+        ms = (time.time() - t0) * 1000
+        return {"logits": logits, "shape": list(logits.shape), "ms": round(ms, 2)}
 
     def _load_slnc(self, path: str, name: str, **kwargs):
         backend = kwargs.get("backend")

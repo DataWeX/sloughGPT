@@ -3,6 +3,21 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
+// Make React.lazy resolve synchronously in tests
+const originalLazy = React.lazy
+React.lazy = ((factory: () => Promise<{ default: React.ComponentType<any> }>) => {
+  const LazyComponent = React.forwardRef<any, any>((props, ref) => {
+    const [Component, setComponent] = React.useState<React.ComponentType<any> | null>(null)
+    React.useEffect(() => {
+      factory().then(m => setComponent(() => m.default))
+    }, [])
+    if (!Component) return null
+    return <Component {...props} ref={ref} />
+  })
+  LazyComponent.displayName = 'LazyComponent'
+  return LazyComponent
+}) as typeof React.lazy
+
 const mockCva = vi.hoisted(() => { const fn = () => ''; return fn })
 vi.mock('class-variance-authority', () => ({ cva: () => mockCva }))
 
@@ -30,6 +45,7 @@ vi.mock('@sloughgpt/strui', () => {
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     StatCard: ({ label, value, icon }: any) => <div><span>{label}</span>{value}{icon}</div>,
     FoldSection: ({ heading, children }: any) => <div><h3>{heading}</h3>{children}</div>,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   }
 })
 
@@ -40,6 +56,121 @@ vi.mock('@/components/icons/NavIcons', () => ({
 
 vi.mock('next/link', () => ({
   default: ({ children, href, className, ...rest }: any) => <a href={href} className={className} {...rest}>{children}</a>,
+}))
+
+vi.mock('@/components/home/StatsGrid', () => ({
+  StatsGrid: ({ modelCount, currentSoul }: any) => (
+    <div><p>{modelCount}</p><p>{currentSoul?.name}</p></div>
+  ),
+}))
+vi.mock('@/components/home/FeedbackBar', () => ({
+  FeedbackBar: ({ feedbackStats }: any) => {
+    if (!feedbackStats?.db_stats || feedbackStats.db_stats.feedback_total === 0) return null
+    return (
+      <div>
+        <span>{feedbackStats.db_stats.feedback_total}</span>
+        <span>{Math.round(feedbackStats.db_stats.ratio * 100)}%</span>
+        <a href="/training">Train from feedback →</a>
+      </div>
+    )
+  },
+}))
+vi.mock('@/components/home/TrainingStatus', () => ({
+  TrainingStatus: ({ apiStatus, modelReadiness, runningTraining, modelStatus }: any) => {
+    if (apiStatus === 'offline') {
+      if (modelReadiness.phase !== 'initializing' && modelReadiness.phase !== 'unknown') {
+        return (
+          <div>
+            <p>Starting up… ({modelReadiness.step}/{modelReadiness.total})</p>
+            <p>{modelReadiness.message}</p>
+          </div>
+        )
+      }
+      return (
+        <div>
+          <p>API not reachable</p>
+          <p>API server at http://localhost:8000 is not reachable</p>
+        </div>
+      )
+    }
+    if (runningTraining) {
+      return (
+        <div>
+          <p>Training: {runningTraining.name}</p>
+          <p>{runningTraining.status_message}</p>
+        </div>
+      )
+    }
+    if (!modelStatus.loaded) {
+      return <div><p>No model loaded</p></div>
+    }
+    return null
+  },
+}))
+vi.mock('@/components/home/QuickActions', () => ({
+  QuickActions: ({ modelStatus, testRunning, testResponse, setTestRunning, setTestResponse, knowledgeCount, setKnowledgeCount }: any) => {
+    if (!modelStatus.loaded) return null
+    return (
+      <div>
+        <button onClick={() => { setTestRunning(true); setTestResponse(null) }}>Test model</button>
+        {testRunning && <span>Testing...</span>}
+        {testResponse && <div>{testResponse}</div>}
+        <form onSubmit={(e: any) => { e.preventDefault(); const input = e.currentTarget.querySelector('input'); if (input?.value) setKnowledgeCount((k: number) => k + 1) }}>
+          <input placeholder="e.g., I prefer Python over JavaScript" />
+          <button type="submit">Save</button>
+        </form>
+      </div>
+    )
+  },
+}))
+vi.mock('@/components/home/RecentActivity', () => ({
+  RecentActivity: ({ apiStatus, modelStatus, recentSessions, recentJobs }: any) => {
+    if (apiStatus !== 'online' || !modelStatus.loaded) return null
+    return (
+      <div>
+        {recentSessions.map((s: any) => <div key={s.id}>{s.name}</div>)}
+        {recentJobs.map((j: any) => <div key={j.id}>{j.name}</div>)}
+      </div>
+    )
+  },
+}))
+vi.mock('@/components/home/UsageStats', () => ({
+  UsageStats: () => <div>usage</div>,
+}))
+vi.mock('@/components/home/SystemHealth', () => ({
+  SystemHealth: ({ apiStatus, liveHealth }: any) => {
+    if (apiStatus !== 'online' || !liveHealth) return null
+    return (
+      <div>
+        <span>{Math.round(liveHealth.cpu_percent)}%</span>
+        <span>{Math.round(liveHealth.memory_percent)}%</span>
+        <span>{liveHealth.request_count}</span>
+      </div>
+    )
+  },
+}))
+vi.mock('@/components/home/NavigationGrid', () => ({
+  NavigationGrid: () => (
+    <div>
+      <a href="/chat">Chat</a>
+      <a href="/models">Personalities</a>
+      <a href="/datasets">Datasets</a>
+      <a href="/training">Teach me</a>
+      <a href="/monitoring">System Health</a>
+      <a href="/knowledge">Knowledge</a>
+    </div>
+  ),
+}))
+vi.mock('@/components/ui/HomePageSkeleton', () => ({
+  ActiveModelBannerSkeleton: () => <div data-testid="skeleton" />,
+  StatsGridSkeleton: () => <div data-testid="skeleton" />,
+  FeedbackBarSkeleton: () => <div data-testid="skeleton" />,
+  TrainingStatusSkeleton: () => <div data-testid="skeleton" />,
+  QuickActionsSkeleton: () => <div data-testid="skeleton" />,
+  RecentActivitySkeleton: () => <div data-testid="skeleton" />,
+  UsageStatsSkeleton: () => <div data-testid="skeleton" />,
+  SystemHealthSkeleton: () => <div data-testid="skeleton" />,
+  NavigationGridSkeleton: () => <div data-testid="skeleton" />,
 }))
 
 const { mockPush, mockApiGet, mockChatSend, mockKnowledgeAdd, mockSessionList, mockDatasetList, mockAddToast } = vi.hoisted(() => ({
@@ -152,6 +283,15 @@ vi.mock('@/lib/format-bytes', () => ({
 
 vi.mock('@/lib/config', () => ({
   PUBLIC_API_URL: 'http://localhost:8000',
+}))
+
+vi.mock('@/lib/feedback-controller', () => ({
+  feedbackController: { getFeedbackStats: vi.fn() },
+}))
+
+vi.mock('@/lib/store', () => ({
+  useModelReadiness: () => ({ ready: true, phase: 'ready', step: 9, total: 9, message: 'Ready' }),
+  setModelReadiness: vi.fn(),
 }))
 
 import HomePage from './page'
@@ -378,6 +518,6 @@ describe('HomePage', () => {
     render(<HomePage />)
     expect(screen.getByText('Chat').closest('a')?.getAttribute('href')).toBe('/chat')
     expect(screen.getByText('Personalities').closest('a')?.getAttribute('href')).toBe('/models')
-    expect(screen.getByText(/Train/).closest('a')?.getAttribute('href')).toBe('/training')
+    expect(screen.getByText(/Teach me/).closest('a')?.getAttribute('href')).toBe('/training')
   })
 })
