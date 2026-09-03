@@ -346,13 +346,14 @@ def setup_structured_logging(
 
         from domains.infrastructure.structured_log import setup_structured_logging
         setup_structured_logging()
+
+    Note: This adds a handler to the root logger. The main setup_logging()
+    in domains.logging.config should be called first to establish the base
+    logging pipeline. This function adds structured JSON output on top.
     """
     handler = logging.StreamHandler()
     handler.setFormatter(fmt or JSONFormatter())
     root = logging.getLogger()
-    # Remove existing handlers to avoid duplicate output
-    for h in list(root.handlers):
-        root.removeHandler(h)
     root.addHandler(handler)
     root.setLevel(root_level)
     # Quiet noisy third-party loggers

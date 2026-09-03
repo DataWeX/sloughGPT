@@ -21,12 +21,14 @@ class TestCmdSystem:
     def test_header_called(self, mock_log):
         from commands.system import cmd_system
         args = MagicMock()
+        args.json_output = False
         cmd_system(args)
         mock_log.header.assert_called_with("System Information")
 
     def test_platform_section(self, mock_log):
         from commands.system import cmd_system
         args = MagicMock()
+        args.json_output = False
         cmd_system(args)
         sections = [c[0][0] for c in mock_log.section.call_args_list]
         assert "Platform" in sections
@@ -34,6 +36,7 @@ class TestCmdSystem:
     def test_platform_key_values(self, mock_log):
         from commands.system import cmd_system
         args = MagicMock()
+        args.json_output = False
         cmd_system(args)
         kv_keys = [c[0][0] for c in mock_log.key_value.call_args_list]
         assert "Platform" in kv_keys
@@ -49,6 +52,7 @@ class TestCmdStatus:
         args = MagicMock()
         args.watch = False
         args.interval = 3
+        args.json_output = False
         cmd_status(args)
         mock_log.header.assert_called_with("SloughGPT Status")
         mock_log.status.assert_called()
@@ -60,6 +64,7 @@ class TestCmdStatus:
         args = MagicMock()
         args.watch = False
         args.interval = 3
+        args.json_output = False
         cmd_status(args)
         mock_log.info.assert_called()
         assert "watch" in mock_log.info.call_args[0][0].lower()
@@ -70,6 +75,7 @@ class TestCmdOptimize:
         from commands.system import cmd_optimize
         args = MagicMock()
         args.optimize = False
+        args.json_output = False
         cmd_optimize(args)
         mock_log.header.assert_called()
 
@@ -77,6 +83,7 @@ class TestCmdOptimize:
         from commands.system import cmd_optimize
         args = MagicMock()
         args.optimize = False
+        args.json_output = False
         cmd_optimize(args)
         kv_keys = [c[0][0] for c in mock_log.key_value.call_args_list]
         assert any("ccelerator" in k or "Backend" in k or "Device" in k for k in kv_keys)
@@ -86,6 +93,7 @@ class TestCmdConfigCheck:
     def test_runs_doctor(self, mock_log):
         from commands.system import cmd_config_check
         args = MagicMock()
+        args.json_output = False
         cmd_config_check(args)
         mock_log.header.assert_called()
 
@@ -95,6 +103,7 @@ class TestCmdConfigValidate:
         from commands.system import cmd_config_validate
         args = MagicMock()
         args.env = "/nonexistent/.env"
+        args.json_output = False
         cmd_config_validate(args)
         mock_log.warning.assert_called()
         assert "not found" in mock_log.warning.call_args[0][0].lower()
@@ -105,6 +114,7 @@ class TestCmdConfigValidate:
         env_file.write_text("SLO_API_KEY=abcdefghijklmnopqrstuvwxyz123456\n")
         args = MagicMock()
         args.env = str(env_file)
+        args.json_output = False
         cmd_config_validate(args)
         mock_log.header.assert_called()
 
@@ -114,6 +124,7 @@ class TestCmdConfigGenerate:
         from commands.system import cmd_config_generate
         args = MagicMock()
         args.type = "api-key"
+        args.json_output = False
         cmd_config_generate(args)
         commands = [c[0][0] for c in mock_log.command.call_args_list]
         assert any("SLO_API_KEY=" in c for c in commands)
@@ -125,6 +136,7 @@ class TestCmdConfigGenerate:
         from commands.system import cmd_config_generate
         args = MagicMock()
         args.type = "jwt-secret"
+        args.json_output = False
         cmd_config_generate(args)
         commands = [c[0][0] for c in mock_log.command.call_args_list]
         assert any("SLO_JWT_SECRET=" in c for c in commands)
@@ -136,6 +148,7 @@ class TestCmdConfigGenerate:
         from commands.system import cmd_config_generate
         args = MagicMock()
         args.type = "all"
+        args.json_output = False
         cmd_config_generate(args)
         commands = [c[0][0] for c in mock_log.command.call_args_list]
         assert any("SLO_API_KEY=" in c for c in commands)
@@ -151,5 +164,6 @@ class TestCmdStats:
         (tmp_path / "datasets").mkdir()
         (tmp_path / "checkpoints").mkdir()
         args = MagicMock()
+        args.json_output = False
         cmd_stats(args)
         mock_log.header.assert_called_with("SloughGPT Statistics")

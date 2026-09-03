@@ -543,7 +543,8 @@ def main():
     parser.add_argument("--quant-clip", type=float, default=0.999)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
+    from domains.logging.config import setup_logging
+    setup_logging()
 
     engine = InferenceEngine(
         model_id=args.model_id,

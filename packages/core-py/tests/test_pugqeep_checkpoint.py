@@ -402,14 +402,17 @@ class TestDecompressTree:
 
     def test_decompress_many_clusters_better_accuracy(self):
         from domains.infrastructure.pugqeep.model_tree import ModelTree, decompress_tree
+        from domains.infrastructure.pugqeep.compressor import PointCompressor
 
         orig = np.random.randn(64, 32).astype(np.float32)
 
-        tree_low = ModelTree("low", n_clusters=4)
+        compressor_low = PointCompressor(n_clusters=4, quantize_centroids=False, residual_threshold=0.0)
+        tree_low = ModelTree("low", n_clusters=4, compressor=compressor_low)
         tree_low.load_weights({"w": orig.copy()})
         dec_low = decompress_tree(tree_low)["w"]
 
-        tree_high = ModelTree("high", n_clusters=32)
+        compressor_high = PointCompressor(n_clusters=32, quantize_centroids=False, residual_threshold=0.0)
+        tree_high = ModelTree("high", n_clusters=32, compressor=compressor_high)
         tree_high.load_weights({"w": orig.copy()})
         dec_high = decompress_tree(tree_high)["w"]
 

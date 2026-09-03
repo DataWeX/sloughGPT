@@ -396,10 +396,10 @@ async def main():
 
     if args.file:
         count = await ingester.ingest_single_file(args.file)
-        print(f"✅ Ingested {count} chunks from {args.file}")
+        logger.info("Ingested %d chunks from %s", count, args.file)
     else:
         stats = await ingester.ingest(dry_run=args.dry_run)
-        print(f"📊 Done: {stats}")
+        logger.info("Done: %s", stats)
 
 
 if __name__ == "__main__":
