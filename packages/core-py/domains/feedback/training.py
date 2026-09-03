@@ -7,6 +7,8 @@ Uses collected feedback data to fine-tune the model using:
 3. RLHF-style reward modeling
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path
@@ -331,22 +333,22 @@ def create_training_pipeline(db_path: str = "data/feedback.db") -> FeedbackTrain
 if __name__ == "__main__":
     trainer = create_training_pipeline()
 
-    logger.info("=" * 60)
-    logger.info("Feedback Training Pipeline")
-    logger.info("=" * 60)
+    print("=" * 60)
+    print("Feedback Training Pipeline")
+    print("=" * 60)
 
     stats = trainer.get_training_stats()
-    logger.info("Available Training Data:")
-    logger.info("  Total conversations: %d", stats['total_conversations'])
-    logger.info("  Total responses: %d", stats['total_responses'])
-    logger.info("  Thumbs up: %d", stats['thumbs_up'])
-    logger.info("  Thumbs down: %d", stats['thumbs_down'])
-    logger.info("  DPO pairs available: %d", stats['available_dpo_pairs'])
-    logger.info("  SFT examples available: %d", stats['available_sft_examples'])
+    print("\nAvailable Training Data:")
+    print(f"  Total conversations: {stats['total_conversations']}")
+    print(f"  Total responses: {stats['total_responses']}")
+    print(f"  Thumbs up: {stats['thumbs_up']}")
+    print(f"  Thumbs down: {stats['thumbs_down']}")
+    print(f"  DPO pairs available: {stats['available_dpo_pairs']}")
+    print(f"  SFT examples available: {stats['available_sft_examples']}")
 
     if stats["available_dpo_pairs"] >= 10:
-        logger.info("Exporting training data...")
+        print("\nExporting training data...")
         results = trainer.export_for_alignment()
-        logger.info("Exported files:")
+        print("\nExported files:")
         for fmt, path in results.items():
-            logger.info("  %s: %s", fmt, path)
+            print(f"  {fmt}: {path}")

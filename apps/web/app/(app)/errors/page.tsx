@@ -8,6 +8,8 @@ import { ErrorInsightsCard } from '@/components/errors/ErrorInsightsCard'
 import { downloadJson } from '@/lib/download-utils'
 import { errorsController } from '@/lib/errors-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { useErrorStream } from '@/hooks/useErrorStream'
+import { cn } from '@sloughgpt/strui'
 
 export default function ErrorsPage() {
   const [grouped, setGrouped] = useState<Awaited<ReturnType<typeof errorsController.getGrouped>>>([])
@@ -20,6 +22,7 @@ export default function ErrorsPage() {
   const [search, setSearch] = useState('')
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const addToast = useToastStore(s => s.addToast)
+  const { errors: streamErrors, connected: streamConnected } = useErrorStream()
 
   const fetchData = async () => {
     setLoading(true)
@@ -41,6 +44,31 @@ export default function ErrorsPage() {
   }
 
   useEffect(() => { fetchData() }, [])
+
+  // Sync SSE stream errors into the recent list for real-time updates
+  const seenIdsRef = useRef(new Set<string>())
+  useEffect(() => {
+    if (streamErrors.length === 0) return
+    const newErrors = streamErrors.filter(e => {
+      if (seenIdsRef.current.has(e.id)) return false
+      seenIdsRef.current.add(e.id)
+      return true
+    })
+    if (newErrors.length === 0) return
+    setRecent(prev => {
+      const mapped = newErrors.map(e => ({
+        id: e.id,
+        message: e.message,
+        source: e.source,
+        url: e.url || undefined,
+        line: e.line || undefined,
+        timestamp: new Date(e.timestamp).toISOString(),
+        fingerprint: e.fingerprint || '',
+      }))
+      return [...mapped, ...prev].slice(0, 100)
+    })
+    setTotal(prev => prev + newErrors.length)
+  }, [streamErrors])
 
   useEffect(() => {
     if (autoRefresh) {
@@ -122,6 +150,12 @@ export default function ErrorsPage() {
       title="Errors"
       subtitle={`${total} total errors`}
     >
+      {streamConnected && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+          <span>Live — real-time errors via SSE</span>
+        </div>
+      )}
         <KpiGrid>
           <StatCard label="Total Errors" value={String(total)} />
           <StatCard label="Error Groups" value={String(grouped.length)} />

@@ -22,21 +22,18 @@ Usage:
 
 from __future__ import annotations
 
-import os
-import json
 import time
-import struct
 import logging
 import threading
 from typing import Optional
 from pathlib import Path
 
-import numpy as np
+
 
 from domains.shared import find_repo_root
 from domains.training.slonet import (
     SloTransformer, SloAdam,
-    cross_entropy, tensor, export_to_sou, import_from_sou,
+    tensor, export_to_sou, import_from_sou,
 )
 
 logger = logging.getLogger("slo.learner")

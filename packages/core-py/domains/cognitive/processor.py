@@ -5,6 +5,8 @@ This module provides the main cognitive processor that coordinates
 memory, reasoning, and metacognitive components.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time

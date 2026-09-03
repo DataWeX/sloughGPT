@@ -99,6 +99,40 @@ export interface DetailedHealth {
   kv_sessions?: KvSessionsInfo
   quantization?: unknown
   training_pool?: { active_jobs: number; max_workers: number; total_tracked: number } | null
+  lifecycle?: { phase: string; profile?: string; is_running: boolean; is_draining?: boolean; uptime?: number; in_flight?: number; error?: string }
+  resource_allocation?: {
+    mode?: string
+    compute_threads?: number
+    io_threads?: number
+    omp_num_threads?: number
+    mkl_num_threads?: number
+    openblas_num_threads?: number
+    numexpr_num_threads?: number
+    inference_pool_size?: number
+    train_pool_size?: number
+    task_queue_workers?: number
+    dataloader_workers?: number
+    concurrent_reads?: number
+    concurrent_writes?: number
+    process_guard_concurrent?: number
+  }
+  process_guard?: {
+    active?: boolean
+    enabled?: boolean
+    health?: { alive: boolean; memory_mb?: number; restarts?: number }
+  } | null
+  memory_pressure?: { current_mb?: number; peak_mb?: number; pressure_level?: string; tracked_count?: number } | null
+  registry?: { healthy: boolean; default_model?: string; models?: Array<Record<string, unknown>> }
+  versions?: {
+    app?: string
+    api?: string
+    package?: string
+    torch?: string
+    pydantic?: string
+    features?: Record<string, { backend: string; api: string }>
+  }
+  mps_monitor?: { usage: number; locked_to_cpu: boolean } | null
+  idle?: { enabled: boolean; idle_seconds?: number }
 }
 
 export interface OutputLine {

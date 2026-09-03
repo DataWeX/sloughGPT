@@ -7,6 +7,8 @@ Subdomains:
 - companion: Personality management (from companion.py)
 """
 
+from __future__ import annotations
+
 import time
 from typing import Any, Dict, Optional, Protocol, runtime_checkable
 

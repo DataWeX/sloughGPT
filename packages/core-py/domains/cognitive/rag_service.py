@@ -10,6 +10,8 @@ the chat pipeline by:
 3. Providing a singleton accessor for the chat router.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
@@ -34,7 +36,7 @@ class ProductionRAGWithRealEmbeddings(ProductionRAG):
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
-        self.retriever._get_embedding = self._real_embed
+        self.retriever._embedding_fn = self._real_embed
 
     @staticmethod
     def _real_embed(text: str) -> np.ndarray:
@@ -85,7 +87,7 @@ class RAGService:
                         chunk_size=doc.get("chunk_size", 512),
                         overlap=doc.get("overlap", 50),
                     )
-            logger.info("Loaded %d documents from RAG store", len(self._documents))
+            logger.debug("Loaded %d documents from RAG store", len(self._documents))
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to load RAG documents: %s", e)
 
@@ -166,7 +168,7 @@ class RAGService:
 
         self._extract_kg_claims(content, metadata)
 
-        logger.info(
+        logger.debug(
             "Ingested document (%d chars → %d chunks) into RAG index",
             len(content),
             len(chunk_ids),
@@ -187,19 +189,18 @@ class RAGService:
         Returns:
             Dict with 'context' (concatenated text), 'results' (ranked list), 'num_results'.
         """
-        import time as _time
-        t0 = _time.monotonic()
+        t0 = time.monotonic()
         try:
             result = self.rag.query(question, top_k=top_k, return_context=True)
-            elapsed_ms = (_time.monotonic() - t0) * 1000
-            logger.info("rag_service: query complete", extra={
+            elapsed_ms = (time.monotonic() - t0) * 1000
+            logger.debug("rag_service: query complete", extra={
                 "question_len": len(question), "top_k": top_k,
                 "num_results": result.get("num_results", 0),
                 "elapsed_ms": round(elapsed_ms, 1),
             })
             return result
         except Exception as e:
-            elapsed_ms = (_time.monotonic() - t0) * 1000
+            elapsed_ms = (time.monotonic() - t0) * 1000
             logger.error("rag_service: query failed", extra={
                 "question_len": len(question), "top_k": top_k,
                 "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
@@ -220,11 +221,10 @@ class RAGService:
         Returns:
             Dict with 'verification', 'citations', 'confidence', 'is_verified'.
         """
-        import time as _time
-        t0 = _time.monotonic()
+        t0 = time.monotonic()
         try:
             result = self.rag.verify_and_ground(generated_text, question)
-            elapsed_ms = (_time.monotonic() - t0) * 1000
+            elapsed_ms = (time.monotonic() - t0) * 1000
             logger.info("rag_service: verify_and_ground complete", extra={
                 "is_verified": result.get("is_verified", False),
                 "confidence": result.get("confidence", 0),
@@ -233,7 +233,7 @@ class RAGService:
             })
             return result
         except Exception as e:
-            elapsed_ms = (_time.monotonic() - t0) * 1000
+            elapsed_ms = (time.monotonic() - t0) * 1000
             logger.error("rag_service: verify_and_ground failed", extra={
                 "error": str(e), "elapsed_ms": round(elapsed_ms, 1),
             })
@@ -263,7 +263,7 @@ class RAGService:
                 _DOCUMENTS_FILE.unlink()
         except OSError as e:
             logger.warning("Failed to delete RAG persistence file: %s", e)
-        logger.info("Cleared RAG index (%d documents removed)", count)
+        logger.debug("Cleared RAG index (%d documents removed)", count)
         return count
 
     def stats(self) -> Dict[str, Any]:
@@ -309,7 +309,7 @@ class RAGService:
                 logger.debug("auto-ingest file %s failed: %s", path, e)
 
         if ingested > 0:
-            logger.info("Auto-ingested %d files into RAG from %s", ingested, root_path)
+            logger.debug("Auto-ingested %d files into RAG from %s", ingested, root_path)
         return ingested
 
     def kg_stats(self) -> Dict[str, Any]:
@@ -443,7 +443,7 @@ class KGTrainingPipeline:
             queue.submit(task)
             submitted += 1
 
-        logger.info("KG pipeline: submitted %d/%d triples", submitted, len(triples))
+        logger.debug("KG pipeline: submitted %d/%d triples", submitted, len(triples))
         return submitted
 
     def process_batch(self, max_tasks: int = 50) -> Dict[str, Any]:
@@ -456,7 +456,8 @@ class KGTrainingPipeline:
             Dict with keys: processed, failed, remaining.
         """
         if max_tasks <= 0:
-            return {"processed": 0, "failed": 0, "remaining": len(self._get_queue()._pending)}
+            qstats = self._get_queue().stats()
+            return {"processed": 0, "failed": 0, "remaining": qstats["pending"]}
 
         queue = self._get_queue()
         processed = 0
@@ -486,8 +487,8 @@ class KGTrainingPipeline:
                 failed += 1
                 logger.warning("KG pipeline task %s failed: %s", task.id, e)
 
-        remaining = len(queue._pending)
-        logger.info(
+        remaining = queue.stats()["pending"]
+        logger.debug(
             "KG pipeline batch: processed=%d failed=%d remaining=%d",
             processed, failed, remaining,
         )
@@ -509,7 +510,7 @@ class KGTrainingPipeline:
         """
         if kg is None:
             if not hasattr(self._rag, '_kg') or self._rag._kg is None:
-                logger.info("KG pipeline: no knowledge graph available")
+                logger.debug("KG pipeline: no knowledge graph available")
                 return {"total_triples": 0, "processed": 0, "failed": 0}
             kg = self._rag._kg
 
@@ -529,10 +530,11 @@ class KGTrainingPipeline:
             Dict with keys: pending, running, completed.
         """
         queue = self._get_queue()
+        qstats = queue.stats()
         return {
-            "pending": len(queue._pending),
-            "running": len(queue._running),
-            "completed": len(queue._completed),
+            "pending": qstats["pending"],
+            "running": qstats["running"],
+            "completed": qstats["completed"],
         }
 
 

@@ -39,8 +39,6 @@ import logging
 import logging.handlers
 import os
 import sys
-import time
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -156,6 +154,7 @@ _TAG_STYLE = {
     "LEARN":  (_A.GREEN,              "LEARN"),
     "BENCH":  (_A.MAGENTA,            "BENCH"),
     "EVENT":  (_A.CYAN,               "EVENT"),
+    "UI":     (_A.BLUE + _A.BOLD,     "UI"),
 }
 
 
@@ -186,31 +185,57 @@ def _enriched_record_factory(*args, **kwargs):
     return record
 
 
-# ── Human-readable formatter ─────────────────────────────────────────
+# ── Unified formatter ─────────────────────────────────────────────────
 
-class HumanFormatter(logging.Formatter):
-    """Colored terminal output: HH:MM:SS LVL [TAG] logger message key=val"""
+class LogFormatter(logging.Formatter):
+    """Single formatter for all output types: human, json, slo.
 
-    def __init__(self, colors: bool = True):
+    Works with both stdlib ``logging.LogRecord`` and OOP ``LogRecord``.
+
+    Args:
+        fmt:    Output format — ``"human"`` (colored terminal), ``"json"``
+                (structured JSON lines), or ``"slo"`` (slo.log v1 envelope).
+        colors: Enable ANSI colors in human mode.
+    """
+
+    def __init__(self, fmt: str = "human", colors: bool = True):
         super().__init__()
+        self._mode = fmt
         self._colors = colors
 
     def format(self, record: logging.LogRecord) -> str:
+        if self._mode == "json":
+            return self._format_json(record)
+        if self._mode == "slo":
+            return self._format_slo(record)
+        return self._format_human(record)
+
+    def format_oop(self, record: "LogRecord") -> str:
+        """Format an OOP LogRecord (from domains.logging.base)."""
+        if self._mode == "json":
+            return self._format_json_oop(record)
+        if self._mode == "slo":
+            return self._format_slo_oop(record)
+        if self._mode == "cli":
+            return self._format_cli_oop(record)
+        if self._mode == "shell":
+            return self._format_shell_oop(record)
+        return self._format_human_oop(record)
+
+    # ── human ────────────────────────────────────────────────────────
+
+    def _format_human(self, record: logging.LogRecord) -> str:
         parts = []
         c = self._colors
 
-        # Timestamp
         ts = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
         parts.append(f"{_A.GREY}{ts}{_A.RESET}" if c else ts)
 
-        # Level badge
         color, abbrev = _LEVEL_STYLE.get(record.levelno, (_A.WHITE, "???"))
         parts.append(f"{color}{_A.BOLD}{abbrev:>3}{_A.RESET}" if c else abbrev.rjust(3))
 
-        # Tag — prefer slo.log op, fall back to legacy tag
         tag = getattr(record, "op", None)
         if tag:
-            # Show domain prefix as badge: "model.load" → "MODEL"
             domain = tag.split(".")[0].upper() if "." in tag else tag.upper()
             tc, tt = _TAG_STYLE.get(domain, (_A.CYAN, domain))
             parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
@@ -220,20 +245,16 @@ class HumanFormatter(logging.Formatter):
                 tc, tt = _TAG_STYLE.get(tag, (_A.CYAN, tag))
                 parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
 
-        # Logger name (last component only)
         logger_name = record.name.split(".")[-1] if record.name else ""
         if logger_name:
             parts.append(f"{_A.GREY}{_A.DIM}{logger_name}{_A.RESET}" if c else logger_name)
 
-        # Message
         parts.append(record.getMessage())
 
-        # Request ID (if present and not already in tag)
         rid = getattr(record, "request_id", None)
         if rid:
             parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
 
-        # Structured context — collect non-standard fields
         ctx = _collect_extras(record)
         if ctx:
             ctx_parts = []
@@ -244,7 +265,6 @@ class HumanFormatter(logging.Formatter):
                     ctx_parts.append(f"{k}={v}")
             parts.append(" ".join(ctx_parts))
 
-        # Exception
         if record.exc_info and record.exc_info[1]:
             exc_type = type(record.exc_info[1]).__name__
             exc_msg = str(record.exc_info[1])
@@ -257,20 +277,9 @@ class HumanFormatter(logging.Formatter):
 
         return " ".join(parts)
 
+    # ── json ─────────────────────────────────────────────────────────
 
-# ── JSON formatter ────────────────────────────────────────────────────
-
-class JSONFormatter(logging.Formatter):
-    """Structured JSON lines: one JSON object per line."""
-
-    _KNOWN = frozenset({
-        "name", "levelno", "levelname", "pathname", "filename", "module",
-        "lineno", "funcName", "created", "msecs", "relativeCreated",
-        "thread", "threadName", "process", "processName", "args", "msg",
-        "exc_info", "exc_text", "stack_info", "taskName", "message",
-    })
-
-    def format(self, record: logging.LogRecord) -> str:
+    def _format_json(self, record: logging.LogRecord) -> str:
         entry: dict[str, Any] = {
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
             "level": record.levelname,
@@ -278,26 +287,228 @@ class JSONFormatter(logging.Formatter):
             "msg": record.getMessage(),
         }
 
-        # Correlation ID
         rid = getattr(record, "request_id", None)
         if rid:
             entry["request_id"] = rid
 
-        # Tag
         tag = getattr(record, "tag", None)
         if tag:
             entry["tag"] = tag
 
-        # Structured extras
         ctx = _collect_extras(record)
         if ctx:
             entry["ctx"] = ctx
 
-        # Exception
         if record.exc_info and record.exc_info[0]:
             entry["exception"] = self.formatException(record.exc_info)
 
         return json.dumps(entry, default=str, ensure_ascii=False)
+
+    # ── slo ──────────────────────────────────────────────────────────
+
+    def _format_slo(self, record: logging.LogRecord) -> str:
+        op = _derive_op(record)
+        rid = getattr(record, "request_id", None)
+        ok = getattr(record, "ok", True)
+        dur_ms = getattr(record, "dur_ms", None)
+        err = getattr(record, "err", None)
+
+        entry: dict[str, Any] = {
+            "v": 1,
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "lvl": record.levelname,
+            "op": op,
+            "corr": rid,
+            "dur_ms": dur_ms,
+            "ok": ok,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+
+        if err:
+            entry["err"] = err
+
+        tag = getattr(record, "tag", None)
+        if tag:
+            entry["tag"] = tag
+
+        error_code = getattr(record, "error_code", None)
+        if error_code:
+            entry["error_code"] = error_code
+
+        extras = _collect_extras(record)
+        if extras:
+            entry["ctx"] = extras
+
+        domain, _, verb = op.partition(".")
+        domain_payload = _collect_domain_payload(record, domain)
+        if domain_payload:
+            entry[domain] = domain_payload
+
+        if record.exc_info and record.exc_info[0]:
+            entry["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(entry, default=str, ensure_ascii=False)
+
+    # ── OOP LogRecord methods ───────────────────────────────────────
+
+    def _format_human_oop(self, record: "LogRecord") -> str:
+        parts = []
+        c = self._colors
+
+        ts = datetime.fromtimestamp(record.timestamp).strftime("%H:%M:%S")
+        parts.append(f"{_A.GREY}{ts}{_A.RESET}" if c else ts)
+
+        _level_map = {
+            "debug": (_A.DIM, "DBG"), "info": (_A.GREEN, "INF"),
+            "warning": (_A.YELLOW + _A.BOLD, "WRN"), "error": (_A.RED + _A.BOLD, "ERR"),
+            "critical": (_A.BG_RED + _A.BOLD + _A.WHITE, "CRI"),
+        }
+        level_val = getattr(record.level, "value", str(record.level)) if record.level else "info"
+        color, abbrev = _level_map.get(level_val, (_A.WHITE, "???"))
+        parts.append(f"{color}{_A.BOLD}{abbrev:>3}{_A.RESET}" if c else abbrev.rjust(3))
+
+        if record.tag:
+            tc, tt = _TAG_STYLE.get(record.tag, (_A.CYAN, record.tag))
+            parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
+
+        logger_name = record.logger.split(".")[-1] if record.logger else ""
+        if logger_name:
+            parts.append(f"{_A.GREY}{_A.DIM}{logger_name}{_A.RESET}" if c else logger_name)
+
+        parts.append(record.message)
+
+        if record.error_code:
+            parts.append(f"({_A.YELLOW}{record.error_code}{_A.RESET})" if c else f"({record.error_code})")
+
+        if record.context:
+            ctx_parts = []
+            for k, v in record.context.items():
+                if c:
+                    ctx_parts.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
+                else:
+                    ctx_parts.append(f"{k}={v}")
+            parts.append(" ".join(ctx_parts))
+
+        if record.exception:
+            exc_type = record.exception.split(":")[0].strip() if ":" in record.exception else record.exception
+            if c:
+                parts.append(f"{_A.RED}{_A.BOLD}[{exc_type}]{_A.RESET} {_A.RED}{record.exception}{_A.RESET}")
+            else:
+                parts.append(f"[{exc_type}] {record.exception}")
+
+        return " ".join(parts)
+
+    def _format_json_oop(self, record: "LogRecord") -> str:
+        entry: dict[str, Any] = {
+            "ts": datetime.fromtimestamp(record.timestamp, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "level": record.level.value.upper(),
+            "logger": record.logger,
+            "msg": record.message,
+        }
+        rid = getattr(record, "request_id", None)
+        if rid:
+            entry["corr"] = rid
+        if record.tag:
+            entry["tag"] = record.tag
+        if record.error_code:
+            entry["code"] = record.error_code
+        if record.context:
+            entry["ctx"] = record.context
+        if record.exception:
+            entry["err"] = record.exception
+        return json.dumps(entry, default=str, ensure_ascii=False)
+
+    def _format_slo_oop(self, record: "LogRecord") -> str:
+        tag = record.tag or "sys.info"
+        entry: dict[str, Any] = {
+            "v": 1,
+            "ts": datetime.fromtimestamp(record.timestamp, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "lvl": record.level.value.upper(),
+            "op": tag,
+            "corr": record.context.get("request_id") if record.context else None,
+            "dur_ms": None,
+            "ok": record.level.value not in ("error", "critical"),
+            "logger": record.logger,
+            "msg": record.message,
+        }
+        if record.error_code:
+            entry["error_code"] = record.error_code
+        if record.context:
+            entry["ctx"] = record.context
+        if record.exception:
+            entry["err"] = record.exception
+        return json.dumps(entry, default=str, ensure_ascii=False)
+
+    def _format_cli_oop(self, record: "LogRecord") -> str:
+        """CLI format: timestamp + icon + message, two-line output."""
+        c = self._colors
+
+        def _wrap(text: str, style: str) -> str:
+            return f"{style}{text}{_A.RESET}" if c else text
+
+        _cli_icons = {
+            "debug": (_A.DIM + _A.CYAN, "·"),
+            "info": (_A.GREEN, "ℹ"),
+            "warning": (_A.BOLD + _A.YELLOW, "!"),
+            "error": (_A.BOLD + _A.RED, "✗"),
+            "critical": (_A.BG_RED + _A.BOLD + _A.WHITE, "✗"),
+        }
+        color, icon = _cli_icons.get(record.level.value, (_A.WHITE, "·"))
+
+        ts = datetime.fromtimestamp(record.timestamp).strftime("%H:%M:%S")
+        msg = record.message
+        if record.exception:
+            msg += _wrap(f" — {record.exception}", _A.RED)
+        primary = f"  {_wrap(ts, _A.DIM)} {_wrap(icon, color)} {msg}"
+
+        meta_parts = []
+        if record.logger:
+            meta_parts.append(_wrap(record.logger, _A.DIM))
+        if record.context:
+            ctx_str = " ".join(f"{k}={v}" for k, v in record.context.items())
+            meta_parts.append(_wrap(ctx_str, _A.DIM))
+
+        lines = [primary]
+        if meta_parts:
+            lines.append("    " + " ".join(meta_parts))
+        return "\n".join(lines)
+
+    def _format_shell_oop(self, record: "LogRecord") -> str:
+        """Shell format: timestamp + icon + level + logger + context + message."""
+        c = self._colors
+
+        def _wrap(text: str, style: str) -> str:
+            return f"{style}{text}{_A.RESET}" if c else text
+
+        parts = []
+
+        ts = datetime.fromtimestamp(record.timestamp).strftime("%H:%M:%S")
+        parts.append(_wrap(ts, _A.DIM))
+
+        _shell_icons = {
+            "debug": (_A.DIM + _A.CYAN, "·"),
+            "info": (_A.GREEN, "ℹ"),
+            "warning": (_A.YELLOW + _A.BOLD, "!"),
+            "error": (_A.RED + _A.BOLD, "✗"),
+            "critical": (_A.RED + _A.BOLD, "✗"),
+        }
+        color, icon = _shell_icons.get(record.level.value, ("", "·"))
+        level_label = record.level.value.upper()
+        parts.append(_wrap(f"{icon} {level_label}", color))
+
+        parts.append(_wrap(record.logger, _A.DIM + _A.CYAN))
+
+        if record.context:
+            ctx_str = " ".join(f"{k}={v}" for k, v in record.context.items())
+            parts.append(_wrap(ctx_str, _A.DIM))
+
+        parts.append(record.message)
+
+        if record.exception:
+            parts.append(_wrap(record.exception, _A.RED))
+
+        return " ".join(parts)
 
 
 # ── Legacy tag → slo.log op mapping (backward compat) ────────────────
@@ -346,55 +557,7 @@ def _derive_op(record: logging.LogRecord) -> str:
     return "sys.info"
 
 
-# ── slo.log v1 JSON formatter ─────────────────────────────────────────
 
-class SloJSONFormatter(logging.Formatter):
-    """slo.log v1 structured JSON lines.
-
-    Every log line is one JSON object with envelope + domain payload::
-
-        {"v":1,"ts":"...","lvl":"INFO","op":"model.load","corr":"abc1",
-         "dur_ms":null,"ok":true,"logger":"slo.model","model":{"id":"gpt2",...}}
-    """
-
-    _KNOWN = frozenset({
-        "name", "levelno", "levelname", "pathname", "filename", "module",
-        "lineno", "funcName", "created", "msecs", "relativeCreated",
-        "thread", "threadName", "process", "processName", "args", "msg",
-        "exc_info", "exc_text", "stack_info", "taskName", "message",
-    })
-
-    def format(self, record: logging.LogRecord) -> str:
-        op = _derive_op(record)
-        rid = getattr(record, "request_id", None)
-        ok = getattr(record, "ok", True)
-        dur_ms = getattr(record, "dur_ms", None)
-        err = getattr(record, "err", None)
-
-        entry: dict[str, Any] = {
-            "v": 1,
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
-            "lvl": record.levelname,
-            "op": op,
-            "corr": rid,
-            "dur_ms": dur_ms,
-            "ok": ok,
-            "logger": record.name,
-        }
-
-        if err:
-            entry["err"] = err
-
-        # Domain payload — exactly one per line (looked up by op prefix)
-        domain, _, verb = op.partition(".")
-        domain_payload = _collect_domain_payload(record, domain)
-        if domain_payload:
-            entry[domain] = domain_payload
-
-        if record.exc_info and record.exc_info[0]:
-            entry["exception"] = self.formatException(record.exc_info)
-
-        return json.dumps(entry, default=str, ensure_ascii=False)
 
 
 def _collect_domain_payload(record: logging.LogRecord, domain: str) -> dict:
@@ -498,10 +661,7 @@ def _create_file_handler(
         encoding="utf-8",
     )
     handler.setLevel(level)
-    if fmt == "slo":
-        handler.setFormatter(SloJSONFormatter())
-    else:
-        handler.setFormatter(JSONFormatter())
+    handler.setFormatter(LogFormatter(fmt=fmt, colors=False))
     handler.addFilter(ClientExtensionFilter())
     return handler
 
@@ -584,12 +744,7 @@ def setup_logging(
     # Console handler
     if enable_console:
         colors = _color_enabled(sys.stderr)
-        if fmt == "slo":
-            console_formatter = SloJSONFormatter()
-        elif fmt == "json":
-            console_formatter = JSONFormatter()
-        else:
-            console_formatter = HumanFormatter(colors=colors)
+        console_formatter = LogFormatter(fmt=fmt, colors=colors)
 
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(log_level)
@@ -630,3 +785,6 @@ def setup_logging(
         "file_handler": file_handler,
         "bridge": bridge,
     }
+
+
+

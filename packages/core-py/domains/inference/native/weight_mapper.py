@@ -8,6 +8,8 @@ Flat layout per layer:
   down_w[FF*D], down_b[D]
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Dict, Tuple
 

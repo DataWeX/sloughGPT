@@ -13,6 +13,8 @@ knowledge-enrichment attach path; ``store()`` is available to any producer
 (e.g. the future persistent-task layer) for explicit fact writes.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from typing import Any, Dict, List, Optional

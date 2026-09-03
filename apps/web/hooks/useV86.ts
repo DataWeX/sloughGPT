@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { V86Controller } from '@/lib/v86-controller'
-import { logger } from '@/lib/dev-log'
+import { logger, trackEvent } from '@/lib/dev-log'
 
 const LINUX_IMAGE_URL = 'https://copy.sh/v86/images/buildroot'
 const LINUX_IMAGE_SIZE = 8 * 1024 * 1024 // 8MB for Buildroot
@@ -74,6 +74,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
       controllerRef.current = ctrl
       setIsBooted(true)
       setError(null)
+      trackEvent('vm_booted')
 
       // Try to restore persisted state
       const saved = await ctrl.loadPersistedState()
@@ -86,6 +87,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
         ctrl.persistState().catch(e => { logger.warning('VM auto-save failed', { exception: String(e) }) })
       }, AUTO_SAVE_INTERVAL_MS)
     } catch (err: unknown) {
+      trackEvent('vm_boot_error', { error: err instanceof Error ? err.message : 'Could not start Linux VM' })
       setError(err instanceof Error ? err.message : 'Could not start Linux VM')
     }
   }, [options.biosUrl, options.vgaBiosUrl, options.imageUrl, options.imageSize, options.memoryMb, options.wasmPath])
@@ -95,6 +97,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
     if (!ctrl) return
     await ctrl.persistState()
     setStateSaved(true)
+    trackEvent('vm_saved')
   }, [])
 
   const restore = useCallback(async () => {
@@ -103,11 +106,13 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
     const state = await ctrl.loadPersistedState()
     if (state) {
       await ctrl.restoreState(state)
+      trackEvent('vm_restored')
     }
   }, [])
 
   const reset = useCallback(() => {
     controllerRef.current?.restart()
+    trackEvent('vm_reset')
   }, [])
 
   // Cleanup on unmount

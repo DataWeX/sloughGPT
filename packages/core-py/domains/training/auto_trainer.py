@@ -11,6 +11,8 @@ Env vars:
     SLO_AUTO_TRAIN_INTERVAL   Min seconds between trains (default: 300)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os

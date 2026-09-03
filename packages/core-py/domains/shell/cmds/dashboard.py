@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Any as _Any
 
 from ..console import Console
 from ..commands import ShellCommands, _api_get

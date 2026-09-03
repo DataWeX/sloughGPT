@@ -150,6 +150,16 @@ export const modelController = {
     }
   },
 
+  async waitForReady(timeoutMs = 90_000, pollMs = 2_000): Promise<ModelStatus> {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      const s = await this.status()
+      if (s.loaded) return s
+      await new Promise(r => setTimeout(r, pollMs))
+    }
+    return this.status()
+  },
+
   async info(modelId: string): Promise<ModelInfo | null> {
     try {
       const models = await this.list()

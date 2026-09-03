@@ -12,6 +12,8 @@ Format: SOUL + version + config_len + JSON_config + [state_len + JSON state_dict
 Trademark (c) 2026 SloughGPT. All rights reserved.
 """
 
+from __future__ import annotations
+
 import os
 import json
 import math
@@ -21,7 +23,6 @@ import logging
 logger = logging.getLogger("slo.inference.slo_format")
 import hashlib
 import datetime
-import numpy as np
 from dataclasses import dataclass, field, asdict
 from typing import Optional, List, Dict, Any
 from pathlib import Path

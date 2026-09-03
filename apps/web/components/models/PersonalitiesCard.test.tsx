@@ -18,11 +18,11 @@ vi.mock('@sloughgpt/strui', async () => {
         )}
       </div>
     ),
-    SelectTrigger: ({ children, ...props }: any) => <div role="combobox" {...props}>{children}</div>,
+    SelectTrigger: ({ children, ...props }: any) => <div role="combobox" aria-controls="select-content" aria-expanded="false" {...props}>{children}</div>,
     SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-    SelectContent: ({ children }: any) => <div>{children}</div>,
+    SelectContent: ({ children }: any) => <div id="select-content" role="listbox">{children}</div>,
     SelectItem: ({ children, value, ...props }: any) => (
-      <div role="option" data-value={value} {...props}>{children}</div>
+      <div role="option" aria-selected="false" data-value={value} {...props}>{children}</div>
     ),
   }
 })

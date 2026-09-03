@@ -288,7 +288,8 @@ describe('AutoTrainPage', () => {
     fireEvent.click(screen.getByText('Info'))
     await waitFor(() => {
       expect(mocks.getCheckpointInfo).toHaveBeenCalledWith('cp-1')
-      expect(screen.getByText('Checkpoint: cp-1')).toBeTruthy()
+      expect(screen.getByText('loss')).toBeTruthy()
+      expect(screen.getByText('0.5')).toBeTruthy()
     })
   })
 
@@ -301,7 +302,11 @@ describe('AutoTrainPage', () => {
     render(<AutoTrainPage />)
     await waitFor(() => { expect(screen.getByText('Select all')).toBeTruthy() })
     fireEvent.click(screen.getByText('Select all'))
+    await waitFor(() => { expect(screen.getByText('Delete 2')).toBeTruthy() })
     fireEvent.click(screen.getByText('Delete 2'))
+    const deleteBtns = screen.getAllByText('Delete')
+    const lastDelete = deleteBtns[deleteBtns.length - 1]
+    fireEvent.click(lastDelete)
     await waitFor(() => {
       expect(mocks.deleteCheckpointsBatch).toHaveBeenCalledWith(['cp-1', 'cp-2'])
     })

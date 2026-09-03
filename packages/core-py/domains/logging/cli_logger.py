@@ -154,6 +154,8 @@ class CLILogger(Logger):
         self._stream = stream or sys.stdout
         self._colors = _color_enabled(self._stream) if colors is None else colors
         self._cursor_hidden = False
+        from .config import LogFormatter
+        self._formatter = LogFormatter(fmt="cli", colors=self._colors)
 
     # ── Cursor lifecycle ─────────────────────────────────────────────────
 
@@ -169,39 +171,47 @@ class CLILogger(Logger):
             _write(self._stream, self._SHOW_CURSOR)
             self._cursor_hidden = False
 
+    def cursor_up(self, n: int = 1) -> None:
+        """Move cursor up n lines."""
+        if _is_tty(self._stream) and n > 0:
+            _write(self._stream, f"\033[{n}A")
+
+    def cursor_down(self, n: int = 1) -> None:
+        """Move cursor down n lines."""
+        if _is_tty(self._stream) and n > 0:
+            _write(self._stream, f"\033[{n}B")
+
+    def clear_line(self) -> None:
+        """Clear the current line."""
+        if _is_tty(self._stream):
+            _write(self._stream, "\033[2K")
+
+    def clear_lines(self, n: int = 1) -> None:
+        """Clear n lines starting from cursor position up."""
+        if _is_tty(self._stream):
+            for _ in range(n):
+                self.cursor_up(1)
+                self.clear_line()
+
+    def save_position(self) -> None:
+        """Save cursor position."""
+        if _is_tty(self._stream):
+            _write(self._stream, "\033[s")
+
+    def restore_position(self) -> None:
+        """Restore cursor position."""
+        if _is_tty(self._stream):
+            _write(self._stream, "\033[u")
+
     # ── Core emit ───────────────────────────────────────────────────────
 
     def emit(self, record: LogRecord) -> None:
-        """Format and write the record to the output stream (thread-safe).
-
-        Format:
-            {icon} {message} — {exception}  (if exception)
-              {logger} {context...}
-        """
+        """Format and write the record to the output stream (thread-safe)."""
         if not _TERMINAL_ENABLED:
             return
-
-        color, icon, _ = _LEVEL_STYLE.get(record.level, (_A.WHITE, "·", "debug"))
-        c = self._colors
-
-        # Primary line: icon + message + exception
-        msg = record.message
-        if record.exception:
-            msg += _c(f" — {record.exception}", _A.RED, c)
-        primary = f"  {_c(icon, color, c)} {msg}"
-
-        # Secondary line: logger + context
-        meta_parts = []
-        if record.logger:
-            meta_parts.append(_c(record.logger, _A.DIM, c))
-        if record.context:
-            ctx_str = " ".join(f"{k}={v}" for k, v in record.context.items())
-            meta_parts.append(_c(ctx_str, _A.DIM, c))
-
+        line = self._formatter.format_oop(record)
         with self._lock:
-            _write(self._stream, primary + "\n")
-            if meta_parts:
-                _write(self._stream, "    " + " ".join(meta_parts) + "\n")
+            _write(self._stream, line + "\n")
 
     # ── CLI-specific helpers ────────────────────────────────────────────
 
@@ -209,8 +219,11 @@ class CLILogger(Logger):
         """Log a success (green checkmark)."""
         if not _TERMINAL_ENABLED:
             return
+        import time as _time
+        from datetime import datetime as _dt
+        ts = _dt.fromtimestamp(_time.time()).strftime("%H:%M:%S")
         c = self._colors
-        primary = f"  {_c('✓', _A.GREEN, c)} {msg}"
+        primary = f"  {_c(ts, _A.DIM, c)} {_c('✓', _A.GREEN, c)} {msg}"
         meta = " ".join(f"{k}={v}" for k, v in ctx.items()) if ctx else ""
         with self._lock:
             _write(self._stream, primary + "\n")
@@ -221,8 +234,11 @@ class CLILogger(Logger):
         """Log a step/action (cyan arrow)."""
         if not _TERMINAL_ENABLED:
             return
+        import time as _time
+        from datetime import datetime as _dt
+        ts = _dt.fromtimestamp(_time.time()).strftime("%H:%M:%S")
         c = self._colors
-        primary = f"  {_c('→', _A.CYAN, c)} {msg}"
+        primary = f"  {_c(ts, _A.DIM, c)} {_c('→', _A.CYAN, c)} {msg}"
         meta = " ".join(f"{k}={v}" for k, v in ctx.items()) if ctx else ""
         with self._lock:
             _write(self._stream, primary + "\n")

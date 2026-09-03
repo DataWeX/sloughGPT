@@ -174,10 +174,17 @@ class StructuredLogger:
             merged = dict(self._tags)
             merged.update(extra_dict)
             extra_dict = merged
+        exc_info = extra_dict.pop("exc_info", None)
+        stack_info = extra_dict.pop("stack_info", None)
+        stacklevel = extra_dict.pop("stacklevel", None)
         if args:
-            self._logger.log(level, msg, *args, extra=extra_dict)
+            self._logger.log(level, msg, *args, extra=extra_dict,
+                             exc_info=exc_info, stack_info=stack_info,
+                             stacklevel=stacklevel or 1)
         else:
-            self._logger.log(level, msg, extra=extra_dict)
+            self._logger.log(level, msg, extra=extra_dict,
+                             exc_info=exc_info, stack_info=stack_info,
+                             stacklevel=stacklevel or 1)
 
     def debug(self, msg: str, *args: Any, **extra: Any) -> None:
         self._log(logging.DEBUG, msg, *args, **extra)
@@ -339,14 +346,13 @@ def setup_structured_logging(
 
         from domains.infrastructure.structured_log import setup_structured_logging
         setup_structured_logging()
-
-    Note: This adds a handler to the root logger. The main setup_logging()
-    in domains.logging.config should be called first to establish the base
-    logging pipeline. This function adds structured JSON output on top.
     """
     handler = logging.StreamHandler()
     handler.setFormatter(fmt or JSONFormatter())
     root = logging.getLogger()
+    # Remove existing handlers to avoid duplicate output
+    for h in list(root.handlers):
+        root.removeHandler(h)
     root.addHandler(handler)
     root.setLevel(root_level)
     # Quiet noisy third-party loggers

@@ -1,110 +1,82 @@
-/* Planner client — browser-side fetch wrappers for /api/planner/* routes. */
+/**
+ * Browser-side fetch wrappers — delegates to oon.ts.
+ *
+ * Kept for backward compatibility with existing imports.
+ * New code should import { oon } from '@/lib/oon' directly.
+ */
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface PlannerCard {
-  id: string;
-  title: string;
-  description: string;
-  column: string;
-  priority: string;
-  tags: string[];
-  due_date: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlannerNote {
-  id: string;
-  title: string;
-  body: string;
-  status: string;
-  tags: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Board {
-  columns: Record<string, PlannerCard[]>;
-  wip_limits: Record<string, number>;
-}
-
-export interface TagCount {
-  tag: string;
-  count: number;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api/planner${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Planner API error: ${res.status}`);
-  }
-  return res.json();
-}
-
-// ---------------------------------------------------------------------------
-// API functions
-// ---------------------------------------------------------------------------
+import { oon } from './oon'
+import type { Card, Board, Note, TagCount, Stats } from '@/components/planner/types'
 
 export async function fetchBoard(): Promise<{ board: Board }> {
-  return api("/board");
+  return oon.board() as Promise<{ board: Board }>
 }
 
-export async function moveCard(payload: {
-  card_id: string;
-  column: string;
-}): Promise<void> {
-  await api("/board/move", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+export async function moveCard(payload: { card_id: string; column: string }): Promise<void> {
+  await oon.move(payload.card_id, payload.column)
 }
 
-export async function syncNotes(): Promise<void> {
-  await api("/sync", { method: "POST" });
+export async function createCard(payload: {
+  title: string
+  description?: string
+  column?: string
+  priority?: string
+  tags?: string[]
+  due_date?: string
+  assignee?: string
+  sprint?: string
+  gh?: string
+}): Promise<{ card: Card }> {
+  return oon.create(payload) as Promise<{ card: Card }>
+}
+
+export async function updateCard(
+  id: string,
+  payload: Partial<Pick<Card, 'title' | 'description' | 'priority' | 'tags' | 'due_date' | 'assignee' | 'column' | 'sprint' | 'gh'>>,
+): Promise<{ card: Card }> {
+  return oon.update(id, payload) as Promise<{ card: Card }>
+}
+
+export async function deleteCard(id: string): Promise<void> {
+  await oon.delete(id)
+}
+
+export async function fetchTags(): Promise<{ tags: TagCount[] }> {
+  return oon.tags() as Promise<{ tags: TagCount[] }>
+}
+
+export async function fetchNotes(): Promise<{ notes: Note[] }> {
+  return oon.list() as Promise<{ notes: Note[] }>
 }
 
 export async function createNote(payload: {
-  title: string;
-  tags?: string[];
-  status?: string;
-  body?: string;
-}): Promise<{ note: PlannerNote }> {
-  return api("/notes", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  title: string
+  body?: string
+  status?: string
+  tags?: string[]
+  sprint?: string
+  gh?: string
+}): Promise<{ note: Note }> {
+  return oon.createNote(payload) as Promise<{ note: Note }>
 }
 
 export async function updateNote(
   id: string,
-  payload: {
-    title?: string;
-    body?: string;
-    status?: string;
-    tags?: string[];
-  },
-): Promise<{ note: PlannerNote }> {
-  return api(`/notes/${encodeURIComponent(id)}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  payload: Partial<Pick<Note, 'title' | 'body' | 'status' | 'tags' | 'sprint' | 'gh'>>,
+): Promise<{ note: Note }> {
+  return oon.updateNote(id, payload) as Promise<{ note: Note }>
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  await api(`/notes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await oon.deleteNote(id)
 }
 
-export async function fetchTags(): Promise<{ tags: TagCount[] }> {
-  return api("/tags");
+export async function fetchStats(): Promise<{ stats: Stats }> {
+  const { stats } = await oon.stats()
+  return { stats: stats as unknown as Stats }
+}
+
+export async function syncNotes(): Promise<{ added: number; updated: number; total: number }> {
+  const { added, moved, total } = await oon.sync()
+  return { added, updated: moved, total }
 }

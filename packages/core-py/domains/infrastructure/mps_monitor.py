@@ -9,6 +9,8 @@ Usage:
     device = get_mps_monitor().get_device("auto")  # returns "cpu" if MPS is full
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 from typing import Optional

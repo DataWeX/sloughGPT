@@ -5,6 +5,8 @@ Uses feedback database to retrieve similar good responses and
 adjust generation parameters accordingly.
 """
 
+from __future__ import annotations
+
 import numpy as np
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass

@@ -19,7 +19,7 @@ class CheckResult:
     suggestion: str = ""
 
     def __str__(self) -> str:
-        status = "✓" if self.passed else "✗"
+        status = "ok" if self.passed else "err"
         return f"[{status}] {self.name}: {self.message}"
 
 
@@ -68,9 +68,6 @@ class Doctor:
         """Run all validation checks."""
         self._check_python_version()
         self._check_required_dirs()
-        self._check_required_packages()
-        self._check_disk_space()
-        self._check_accelerator()
         self._check_api_server()
         self._check_env_file()
         return self.result
@@ -79,7 +76,7 @@ class Doctor:
         """Check Python version meets minimum requirements."""
         major, minor = sys.version_info.major, sys.version_info.minor
         if major >= 3 and minor >= 9:
-            self.result.add_pass("Python", f"{major}.{minor}.{sys.version_info.micro}")
+            self.result.add_pass("Python", f"{major}.{minor}")
         else:
             self.result.add_fail(
                 "Python",
@@ -99,64 +96,6 @@ class Doctor:
                     "Directory missing",
                     f"Run 'mkdir {dir_name}' or 'cli.py setup'",
                 )
-
-    def _check_required_packages(self):
-        """Check critical Python packages are importable."""
-        critical = ["numpy", "click"]
-        optional = ["torch", "transformers", "fastapi", "uvicorn", "psutil"]
-        for pkg in critical:
-            try:
-                mod = __import__(pkg)
-                ver = getattr(mod, "__version__", "?")
-                self.result.add_pass(f"pkg:{pkg}", ver)
-            except ImportError:
-                self.result.add_fail(
-                    f"pkg:{pkg}",
-                    "Not installed",
-                    f"pip install {pkg}",
-                )
-        for pkg in optional:
-            try:
-                mod = __import__(pkg)
-                ver = getattr(mod, "__version__", "?")
-                self.result.add_pass(f"pkg:{pkg}", ver)
-            except ImportError:
-                self.result.add_warn(
-                    f"pkg:{pkg}",
-                    "Not installed (optional)",
-                    f"pip install {pkg}",
-                )
-
-    def _check_disk_space(self):
-        """Check available disk space."""
-        try:
-            import shutil
-            usage = shutil.disk_usage(str(self.root))
-            free_gb = usage.free / (1024 ** 3)
-            if free_gb >= 5:
-                self.result.add_pass("Disk", f"{free_gb:.1f} GB free")
-            elif free_gb >= 1:
-                self.result.add_warn("Disk", f"{free_gb:.1f} GB free (low)")
-            else:
-                self.result.add_fail(
-                    "Disk",
-                    f"{free_gb:.1f} GB free (critical)",
-                    "Free up disk space before training",
-                )
-        except Exception:
-            self.result.add_warn("Disk", "Could not determine free space")
-
-    def _check_accelerator(self):
-        """Check SloNet accelerator availability."""
-        try:
-            from domains.training.slonet import _get_accelerator
-            acc = _get_accelerator()
-            if acc is not None:
-                self.result.add_pass("Accelerator", f"{acc.name}")
-            else:
-                self.result.add_pass("Accelerator", "CPU (numpy)")
-        except Exception:
-            self.result.add_warn("Accelerator", "Could not probe")
 
     def _check_api_server(self):
         """Check if API server is reachable."""

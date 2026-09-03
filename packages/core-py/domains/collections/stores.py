@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
 from collections import deque
 from pathlib import Path
 from typing import Iterator, Protocol, runtime_checkable

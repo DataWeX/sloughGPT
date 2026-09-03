@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react'
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
-import { chatDB } from '@/lib/db'
+import { trackEvent } from '@/lib/dev-log'
 import {
   isStoredThemeId,
   isStoredPaletteId,
@@ -25,42 +25,59 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+function getInitialTheme(): StoredThemeId {
+  if (typeof window === 'undefined') return 'purple'
+  const v = localStorage.getItem(THEME_STORAGE_KEY)
+  return isStoredThemeId(v) ? v : 'purple'
+}
+
+function getInitialMode(): ThemeMode {
+  if (typeof window === 'undefined') return 'dark'
+  const v = localStorage.getItem(MODE_STORAGE_KEY)
+  if (v === 'light' || v === 'dark') return v
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
+function getInitialPalette(): StoredPaletteId {
+  if (typeof window === 'undefined') return 'noir-violet'
+  const v = localStorage.getItem(PALETTE_STORAGE_KEY)
+  return isStoredPaletteId(v) ? v : 'noir-violet'
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<StoredThemeId>('purple')
-  const [mode, setMode] = useState<ThemeMode>('dark')
-  const [palette, setPalette] = useState<StoredPaletteId>('noir-violet')
+  const [theme, _setTheme] = useState<StoredThemeId>(getInitialTheme)
+  const [mode, _setMode] = useState<ThemeMode>(getInitialMode)
+  const [palette, _setPalette] = useState<StoredPaletteId>(getInitialPalette)
   const [mounted, setMounted] = useState(false)
 
+  const setTheme = (next: StoredThemeId) => {
+    trackEvent('theme_changed', { from: theme, to: next })
+    _setTheme(next)
+  }
+
+  const setMode = (next: ThemeMode) => {
+    trackEvent('mode_changed', { from: mode, to: next })
+    _setMode(next)
+  }
+
+  const setPalette = (next: StoredPaletteId) => {
+    trackEvent('palette_changed', { from: palette, to: next })
+    _setPalette(next)
+  }
+
   useLayoutEffect(() => {
-    Promise.all([
-      chatDB.getKV<string>(THEME_STORAGE_KEY),
-      chatDB.getKV<string>(MODE_STORAGE_KEY),
-      chatDB.getKV<string>(PALETTE_STORAGE_KEY),
-    ]).then(([savedTheme, savedMode, savedPalette]) => {
-      const t = isStoredThemeId(savedTheme ?? null) ? savedTheme as StoredThemeId : 'purple'
-      const p = isStoredPaletteId(savedPalette ?? null) ? savedPalette as StoredPaletteId : 'noir-violet'
-      let m: ThemeMode
-      if (savedMode === 'light' || savedMode === 'dark') {
-        m = savedMode
-      } else if (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: light)').matches) {
-        m = 'light'
-      } else {
-        m = 'dark'
-      }
-      setTheme(t)
-      setMode(m)
-      setPalette(p)
-      syncHtmlTheme(m, t, p)
-      setMounted(true)
-    })
+    // Theme is already loaded from localStorage synchronously.
+    // Sync to HTML element and mark as mounted.
+    syncHtmlTheme(mode, theme, palette)
+    setMounted(true)
   }, [])
 
   useEffect(() => {
     if (!mounted) return
     syncHtmlTheme(mode, theme, palette)
-    chatDB.setKV(THEME_STORAGE_KEY, theme).catch(() => {})
-    chatDB.setKV(MODE_STORAGE_KEY, mode).catch(() => {})
-    chatDB.setKV(PALETTE_STORAGE_KEY, palette).catch(() => {})
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+    localStorage.setItem(MODE_STORAGE_KEY, mode)
+    localStorage.setItem(PALETTE_STORAGE_KEY, palette)
   }, [theme, mode, palette, mounted])
 
   return (

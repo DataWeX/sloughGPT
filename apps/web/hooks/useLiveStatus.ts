@@ -21,6 +21,7 @@ import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import type { HealthStatus } from '@/lib/model-controller'
 import { systemController, type DetailedHealth } from '@/lib/system-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { trackEvent } from '@/lib/dev-log'
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading'
 
@@ -140,7 +141,12 @@ export const liveStatusStore = createStore<LiveStatusState>((set) => ({
   lastError: null,
   ready: false,
 
-  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  setConnectionStatus: (connectionStatus) => set((s) => {
+    if (s.connectionStatus !== connectionStatus) {
+      trackEvent('connection_status_changed', { from: s.connectionStatus, to: connectionStatus })
+    }
+    return { connectionStatus }
+  }),
   setHealth: (health) => set((s) => ({ health, lastUpdate: Date.now(), failureCount: 0, lastError: null, ready: s.ready || true })),
   setHealthLegacy: (healthLegacy) => set({ healthLegacy }),
   setFailureCount: (failureCount) => set({ failureCount }),

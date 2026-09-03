@@ -43,6 +43,8 @@ Usage:
     tree.save("/tmp/my_token_tree")
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os

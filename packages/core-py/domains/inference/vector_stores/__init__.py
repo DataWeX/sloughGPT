@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Provider implementations for ``VectorStore`` ABC.
 

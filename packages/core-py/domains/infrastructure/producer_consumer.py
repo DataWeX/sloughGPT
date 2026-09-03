@@ -43,7 +43,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 logger = logging.getLogger("slo.infrastructure.producer_consumer")
 

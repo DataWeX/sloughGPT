@@ -40,6 +40,7 @@ _CYAN = "\033[36m"
 _GREEN = "\033[32m"
 _YELLOW = "\033[33m"
 _RED = "\033[31m"
+_BLUE = "\033[34m"
 _GREY = "\033[90m"
 
 _CLEAR = "\033[2J\033[H"
@@ -79,21 +80,22 @@ def _category_color(cat: str) -> str:
         "SOUL": _YELLOW,
         "START": _GREY,
         "IDLE": _GREY,
+        "UI": _BLUE,
     }
     return colors.get(cat, "")
 
 
 def _status_icon(status: str) -> str:
     icons = {
-        "running": _c("▶", _GREEN),
-        "queued": _c("◆", _YELLOW),
-        "starting": _c("↻", _CYAN),
-        "complete": _c("✓", _GREEN),
-        "completed": _c("✓", _GREEN),
-        "error": _c("✗", _RED),
-        "exited": _c("■", _GREY),
-        "idle": _c("·", _GREY),
-        "stopped": _c("■", _GREY),
+        "running": _c("run", _GREEN),
+        "queued": _c("wait", _YELLOW),
+        "starting": _c("init", _CYAN),
+        "complete": _c("ok", _GREEN),
+        "completed": _c("ok", _GREEN),
+        "error": _c("err", _RED),
+        "exited": _c("stop", _GREY),
+        "idle": _c("idle", _GREY),
+        "stopped": _c("stop", _GREY),
     }
     return icons.get(status, _c("?", _YELLOW))
 

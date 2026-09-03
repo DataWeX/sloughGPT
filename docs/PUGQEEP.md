@@ -1,6 +1,10 @@
 # pugqeep — Point-Graph-Queue System
 
-Core infrastructure engine for spawning processes, branching parallel tasks, and managing compressed data across tiers.
+**Processing queue on graphed files** — not a messaging queue.
+
+Loads any model AND files of the same MIME type (behavior trees, Android OS configs,
+knowledge graphs, weight files). Everything compresses to Points via VQ or function
+fitting, regardless of origin.
 
 **Location:** `packages/core-py/domains/infrastructure/pugqeep/`
 
@@ -9,7 +13,7 @@ Core infrastructure engine for spawning processes, branching parallel tasks, and
 ```
 PGQ (facade)
   ├── Engine — process dispatch, Trees, Stems
-  ├── ModelTree — compresses weights into Points
+  ├── Tree / ModelTree — compresses files into Points
   │     └── PointLibrary — stores Points
   ├── TaskQueue — priority task execution
   ├── TieredCache — hot/memory/disk tiers
@@ -22,7 +26,8 @@ PGQ (facade)
 | **PointProtocol** | ABC defining the contract for Points |
 | **PointView** | Lazy decompression wrapper |
 | **PointLibrary** | Thread-safe Point storage with search, batch ops, views |
-| **ModelTree** | Compresses model weights into Points, generates on demand |
+| **Tree** | Generic file/data compressor — loads any array data into Points |
+| **ModelTree** | Tree subclass with ML-specific skip logic (embeddings, biases) |
 | **TaskQueue** | Priority task execution with worker pool |
 | **Engine** | Process dispatch with Trees and Stems |
 | **PGQ** | High-level facade combining all components |
@@ -30,22 +35,26 @@ PGQ (facade)
 ## Quick start
 
 ```python
-from domains.infrastructure.pugqeep import PGQ, Point, PointLibrary, ModelTree
+from domains.infrastructure.pugqeep import PGQ, Point, PointLibrary, Tree, ModelTree
 
 # High-level facade
 pgq = PGQ("my-model")
 pgq.put("layer_0.weight", numpy_array)
 data = pgq.get("layer_0.weight")
 
-# Or work with components directly
-lib = PointLibrary("my-lib")
-lib.add(Point(identity="w1", function_type="cluster", params={...}))
-point = lib.get("w1")
+# Generic Tree — compress ANY numpy data (behavior trees, configs, graphs)
+tree = Tree("behavior-tree", n_clusters=16)
+tree.load_data({"node_0": arr_0, "node_1": arr_1, "edge_weights": arr_2})
+restored = tree.get_data("node_0")
 
-# Model compression
-tree = ModelTree("gpt2", n_clusters=16)
-tree.load_weights(model.state_dict(), num_workers=4)  # parallel compression
-weight = tree.get_weight("blocks.0.attn.c_attn.weight")  # decompress on demand
+# ModelTree — ML-specific with skip logic for embeddings/biases
+model_tree = ModelTree("gpt2", n_clusters=16)
+model_tree.load_weights(model.state_dict(), num_workers=4)
+weight = model_tree.get_weight("blocks.0.attn.c_attn.weight")
+
+# Process management
+future = engine.submit(my_fn, arg1, arg2)
+result = future.result(timeout=10.0)
 ```
 
 ## Point interface
@@ -144,9 +153,31 @@ if "w1" in lib:
     print("found")
 ```
 
-## ModelTree
+## Tree (generic)
 
-Compresses model weights into Points and generates them on demand.
+Compresses ANY numpy data into Points — not just model weights.
+
+```python
+from domains.infrastructure.pugqeep import Tree
+
+# Behavior tree nodes
+tree = Tree("game-ai", n_clusters=16)
+tree.load_data({
+    "patrol_node": patrol_weights,
+    "attack_node": attack_weights,
+    "flee_node": flee_weights,
+})
+behavior = tree.get_data("patrol_node")
+
+# Knowledge graph embeddings
+tree = Tree("knowledge-graph", n_clusters=8)
+tree.load_data(graph_embeddings)
+```
+
+## ModelTree (ML-specific)
+
+Extends Tree with skip logic for embeddings and biases (discrete tensors
+that shouldn't be VQ-compressed).
 
 ```python
 from domains.infrastructure.pugqeep import ModelTree, save_library, load_library

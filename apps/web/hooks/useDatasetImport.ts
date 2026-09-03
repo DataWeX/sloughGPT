@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { datasetController, type ImportSource, type GitHubRepo, type BookResult } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { reportError } from '@/lib/error-reporter'
+import { trackEvent } from '@/lib/dev-log'
 
 interface UseDatasetImportReturn {
   source: ImportSource
@@ -226,6 +227,7 @@ export function useDatasetImport(
       }
 
       setSuccess({ message: result.message || `Imported dataset` })
+      trackEvent('dataset_imported', { source })
       onImportComplete(result.dataset_id)
     } catch (err) {
       if (ac.signal.aborted) return

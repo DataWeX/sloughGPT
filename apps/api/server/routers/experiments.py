@@ -1,8 +1,10 @@
 """
 Experiments Router - ML experiment tracking
+
+Uses MogDB as the storage engine with automatic JSON sync.
+Each experiment, metric, param, and status is a MogDB document.
+The JSON files are written to data/experiments_json/ for human readability.
 """
-import asyncio
-import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -23,19 +25,27 @@ class ExperimentCreate(BaseModel):
     config: Optional[dict] = None
 
 
+def _get_db():
+    from mogdb import MogDB
+    import os
+    repo_root = Path(__file__).parent.parent.parent.parent
+    db_path = os.path.join(repo_root, "data", "experiments_mogdb")
+    sync_path = os.path.join(repo_root, "data", "experiments_json")
+    return MogDB(db_path, sync_dir=sync_path)
+
+
 class ExperimentsRouter:
     """Router for ML experiment creation, tracking, and metric logging."""
 
     def __init__(self):
         self.router = APIRouter(prefix="/experiments", tags=["experiments"])
-        self.REPO_ROOT = Path(__file__).parent.parent.parent.parent
-        self.EXPERIMENTS_DIR = self.REPO_ROOT / "data" / "experiments"
         self._VALID_EXP_ID = re.compile(r'^[a-zA-Z0-9_\-]+$')
         self._register_routes()
 
     def _register_routes(self):
         self.router.add_api_route("", self.create_experiment, methods=["POST"])
         self.router.add_api_route("", self.list_experiments, methods=["GET"])
+        self.router.add_api_route("/compare", self.compare_experiments, methods=["GET"])
         self.router.add_api_route("/{experiment_id}", self.get_experiment, methods=["GET"])
         self.router.add_api_route("/{experiment_id}", self.delete_experiment, methods=["DELETE"])
         self.router.add_api_route("/{experiment_id}/runs", self.get_experiment_runs, methods=["GET"])
@@ -45,172 +55,181 @@ class ExperimentsRouter:
         self.router.add_api_route("/{experiment_id}/log_param", self.log_param, methods=["POST"])
 
     async def create_experiment(self, req: ExperimentCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Create a new ML experiment with a timestamped directory."""
+        """Create a new ML experiment."""
         try:
             exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-            def _create():
-                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-                exp_dir = self.EXPERIMENTS_DIR / exp_id
-                exp_dir.mkdir(exist_ok=True)
-
-            await asyncio.to_thread(_create)
+            db = _get_db()
+            col = db.collection("experiments")
+            col.insert_one({
+                "experiment_id": exp_id,
+                "name": req.name,
+                "config": req.config or {},
+                "status": "created",
+            })
             safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
             return success_response(data={"id": exp_id, "name": req.name, "created": True})
         except Exception as e:
             classify_and_raise(e, source="create_experiment")
 
     async def list_experiments(self) -> dict:
+        """List all ML experiments."""
         try:
-            """List all ML experiments stored on disk.
-
-            Scans the data/experiments/ directory for subdirectories, each
-            representing an experiment, and returns their names.
-
-            Returns:
-                Success envelope with experiments array and count.
-            """
-            def _scan():
-                if not self.EXPERIMENTS_DIR.exists():
-                    return []
-                return [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
-            exps = await asyncio.to_thread(_scan)
-            return success_response(data={"experiments": exps, "count": len(exps)})
-
+            db = _get_db()
+            col = db.collection("experiments")
+            docs = col.find()
+            exp_ids = sorted(set(d.get("experiment_id", "") for d in docs))
+            return success_response(data={"experiments": exp_ids, "count": len(exp_ids)})
         except Exception as e:
             classify_and_raise(e, source="experiments.list_experiments")
+
     async def get_experiment(self, experiment_id: str) -> dict:
+        """Retrieve metadata for a single experiment."""
         try:
-            """Retrieve metadata for a single experiment by its ID.
-
-            Validates the experiment ID format and checks that the directory
-            exists under data/experiments/.
-
-            Args:
-                experiment_id: The unique experiment identifier.
-
-            Returns:
-                Success envelope with id and filesystem path.
-
-            Raises:
-                400 if the experiment ID is invalid.
-                404 if the experiment directory is not found.
-            """
             if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
                 raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-            def _check():
-                p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-                return p.exists() and str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())), str(p)
-            exists, path_str = await asyncio.to_thread(_check)
-            if not exists:
+            db = _get_db()
+            col = db.collection("experiments")
+            doc = col.find_one({"experiment_id": experiment_id})
+            if not doc:
                 raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-            return success_response(data={"id": experiment_id, "path": path_str})
-
+            return success_response(data={"id": experiment_id, "name": doc.get("name"), "config": doc.get("config", {})})
         except Exception as e:
             classify_and_raise(e, source="experiments.get_experiment")
+
     async def delete_experiment(self, experiment_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Delete an experiment and all its data."""
         try:
-            """Delete an experiment and all its data."""
-            import shutil
             if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
                 raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-            def _check_delete():
-                p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-                if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-                    return None
-                shutil.rmtree(p)
-                return True
-            result = await asyncio.to_thread(_check_delete)
-            if result is None:
+            db = _get_db()
+            # Delete experiment metadata
+            exp_col = db.collection("experiments")
+            deleted = exp_col.delete_many({"experiment_id": experiment_id})
+            # Delete associated metrics
+            metrics_col = db.collection("metrics")
+            metrics_col.delete_many({"experiment_id": experiment_id})
+            # Delete associated params
+            params_col = db.collection("params")
+            params_col.delete_many({"experiment_id": experiment_id})
+            # Delete associated status
+            status_col = db.collection("status")
+            status_col.delete_many({"experiment_id": experiment_id})
+            if not deleted:
                 raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
             safe_audit_log("experiment.delete", resource=experiment_id)
             return success_response(data={"id": experiment_id, "deleted": True})
-
         except Exception as e:
             classify_and_raise(e, source="experiments.delete_experiment")
+
     async def get_experiment_runs(self, experiment_id: str) -> dict:
+        """Get run count for an experiment."""
         try:
-            """Get runs for an experiment"""
             if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
                 raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-            def _check_runs():
-                p = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-                if not p.exists() or not str(p).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-                    return None
-                return list(p.glob("*.json"))
-            runs = await asyncio.to_thread(_check_runs)
-            if runs is None:
+            db = _get_db()
+            col = db.collection("experiments")
+            doc = col.find_one({"experiment_id": experiment_id})
+            if not doc:
                 raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
-            return success_response(data={"runs": len(runs)})
-
+            # Count metrics as a proxy for runs
+            metrics_col = db.collection("metrics")
+            count = metrics_col.count({"experiment_id": experiment_id})
+            return success_response(data={"runs": count})
         except Exception as e:
             classify_and_raise(e, source="experiments.get_experiment_runs")
+
     async def get_experiment_data(self, experiment_id: str) -> dict:
         """Get logged metrics and params for an experiment."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
-        metrics_file = self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl"
-        params_file = self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl"
-        status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
-
-        def _read_data():
-            metrics = []
-            params = []
-            status = None
-            if metrics_file.exists():
-                with open(metrics_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                metrics.append(json.loads(line))
-                            except json.JSONDecodeError as e:
-                                logger.warning("Corrupt metric line in %s: %s", e_id, e)
-            if params_file.exists():
-                with open(params_file) as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            try:
-                                params.append(json.loads(line))
-                            except json.JSONDecodeError as e:
-                                logger.warning("Corrupt param line in %s: %s", e_id, e)
-            if status_file.exists():
-                with open(status_file) as f:
-                    try:
-                        status = json.load(f)
-                    except json.JSONDecodeError as e:
-                        logger.warning("Corrupt status file %s: %s", status_file.name, e)
-            return metrics, params, status
-
         try:
-            metrics, params, status = await asyncio.to_thread(_read_data)
-            return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
+            db = _get_db()
+            metrics_col = db.collection("metrics")
+            params_col = db.collection("params")
+            status_col = db.collection("status")
+
+            metrics = metrics_col.find({"experiment_id": e_id})
+            params = params_col.find({"experiment_id": e_id})
+            status_doc = status_col.find_one({"experiment_id": e_id})
+
+            return success_response(data={
+                "id": e_id,
+                "metrics": metrics,
+                "params": params,
+                "status": status_doc,
+            })
         except Exception as e:
             classify_and_raise(e, source="get_experiment_data")
 
     async def complete_experiment(self, experiment_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Mark experiment as complete and persist status to disk."""
+        """Mark experiment as complete."""
         e_id = experiment_id
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         try:
-            def _write_status():
-                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-                status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
-                status_data = {
-                    "experiment_id": e_id,
-                    "status": "completed",
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                }
-                with open(status_file, "w") as f:
-                    json.dump(status_data, f)
-            await asyncio.to_thread(_write_status)
+            db = _get_db()
+            status_col = db.collection("status")
+            existing = status_col.find_one({"experiment_id": e_id})
+            status_data = {
+                "experiment_id": e_id,
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if existing:
+                status_col.update_one(
+                    {"experiment_id": e_id},
+                    {"$set": {"status": "completed", "completed_at": status_data["completed_at"]}},
+                )
+            else:
+                status_col.insert_one(status_data)
             safe_audit_log("experiment.complete", resource=e_id)
             return success_response(data={"id": e_id, "status": "completed"})
         except Exception as e:
             classify_and_raise(e, source="complete_experiment")
+
+    async def compare_experiments(self, ids: str = Query(..., description="Comma-separated experiment IDs")) -> dict:
+        """Compare metrics across multiple experiments."""
+        try:
+            exp_ids = [eid.strip() for eid in ids.split(",") if eid.strip()]
+            if len(exp_ids) < 2:
+                raise_error("Provide at least 2 experiment IDs", "E_BAD_REQUEST", status_code=400)
+            if len(exp_ids) > 10:
+                raise_error("Maximum 10 experiments to compare", "E_BAD_REQUEST", status_code=400)
+            for eid in exp_ids:
+                if not self._VALID_EXP_ID.match(eid) or '..' in eid:
+                    raise_error(f"Invalid experiment ID: {eid}", "E_BAD_REQUEST", status_code=400)
+
+            db = _get_db()
+            metrics_col = db.collection("metrics")
+            params_col = db.collection("params")
+
+            results = {}
+            for eid in exp_ids:
+                # Aggregate: last value per metric name, all params merged
+                metric_docs = metrics_col.find({"experiment_id": eid})
+                param_docs = params_col.find({"experiment_id": eid})
+                metric_summary = {}
+                for m in metric_docs:
+                    metric_summary[m.get("metric", "")] = m.get("value")
+                param_dict = {}
+                for p in param_docs:
+                    param_dict[p.get("param", "")] = p.get("value")
+                results[eid] = {"metrics": metric_summary, "params": param_dict}
+
+            all_metric_keys = sorted(set().union(*(r["metrics"].keys() for r in results.values())))
+            all_param_keys = sorted(set().union(*(r["params"].keys() for r in results.values())))
+
+            comparison = {
+                "experiments": exp_ids,
+                "metrics": {eid: results[eid]["metrics"] for eid in exp_ids},
+                "params": {eid: results[eid]["params"] for eid in exp_ids},
+                "metric_keys": all_metric_keys,
+                "param_keys": all_param_keys,
+            }
+            return success_response(data=comparison)
+        except Exception as e:
+            classify_and_raise(e, source="compare_experiments")
 
     async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Log a metric for an experiment."""
@@ -218,12 +237,15 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         try:
-            def _write_metric():
-                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-                entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
-                with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
-                    f.write(json.dumps(entry) + "\n")
-            await asyncio.to_thread(_write_metric)
+            db = _get_db()
+            col = db.collection("metrics")
+            col.insert_one({
+                "experiment_id": e_id,
+                "metric": metric_name,
+                "value": value,
+                "step": step,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
             safe_audit_log("experiment.log_metric", resource=e_id, detail=f"metric={metric_name} value={value}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
         except Exception as e:
@@ -235,12 +257,14 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         try:
-            def _write_param():
-                self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-                entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
-                with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
-                    f.write(json.dumps(entry) + "\n")
-            await asyncio.to_thread(_write_param)
+            db = _get_db()
+            col = db.collection("params")
+            col.insert_one({
+                "experiment_id": e_id,
+                "param": param_name,
+                "value": value,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
             safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")
             return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
         except Exception as e:

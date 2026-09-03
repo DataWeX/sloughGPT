@@ -33,9 +33,9 @@ reconstructed = point.generate(weights.size)
 ### Compress a full model
 
 ```python
-from pugqeep import ModelTree
+from pugqeep import Tree
 
-tree = ModelTree("my-model", n_clusters=16)
+tree = Tree("my-model", n_clusters=16)
 stats = tree.load_weights({
     "layer0.weight": np.random.randn(512, 512).astype(np.float32),
     "layer0.bias": np.random.randn(512).astype(np.float32),
@@ -89,14 +89,14 @@ point = Point.from_dict(data)     # reconstruct
 ### Skip embeddings and biases
 
 ```python
-from pugqeep import ModelTree, TreeConfig
+from pugqeep import Tree, TreeConfig
 
 config = TreeConfig(
     skip_embeddings=True,   # store as raw (discrete data)
     skip_biases=True,       # store as raw (small tensors)
     n_clusters=32,
 )
-tree = ModelTree("model", config=config)
+tree = Tree("model", config=config)
 tree.load_weights(weights_dict)
 ```
 
@@ -119,7 +119,7 @@ lib.add(point)  # auto-saved to ./checkpoints/my-weights.points.json
 
 ```
 PGQ (facade)
-  ├── ModelTree (one per loaded model)
+  ├── Tree (one per loaded model)
   │     └── PointLibrary (stores Points)
   │           └── Point (generator function, not raw bytes)
   ├── TieredCache (Disk → Hot → Memory)

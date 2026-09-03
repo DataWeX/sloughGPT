@@ -51,8 +51,8 @@ export const FeedbackCard = memo(function FeedbackCard({ dpoStatus, visualStatus
             value={visualStatus ? <span className="font-mono">{visualStatus.visual_loaded ? 'Yes' : 'No'}</span> : <Skeleton className="h-5 w-12" />}
             icon={<span className={cn('inline-block w-2 h-2 rounded-full', !visualStatus ? 'bg-warning' : visualStatus.visual_loaded ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
-          <StatCard label="Accepted" value={dpoStatus ? dpoStatus.accepted_count.toString() : <Skeleton className="h-5 w-8" />} numeric />
-          <StatCard label="Rejected" value={dpoStatus ? dpoStatus.rejected_count.toString() : <Skeleton className="h-5 w-8" />} numeric />
+          <StatCard label="Accepted" value={dpoStatus?.accepted_count != null ? dpoStatus.accepted_count.toString() : <Skeleton className="h-5 w-8" />} numeric />
+          <StatCard label="Rejected" value={dpoStatus?.rejected_count != null ? dpoStatus.rejected_count.toString() : <Skeleton className="h-5 w-8" />} numeric />
         </KpiGrid>
         <div className="mt-2">
           <Button

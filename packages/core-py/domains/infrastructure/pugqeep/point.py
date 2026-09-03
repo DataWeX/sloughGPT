@@ -12,10 +12,11 @@ time series, sensor data, or any structured numerical data.
 
 Implements PointProtocol — the abstract interface for compressed data.
 """
+from __future__ import annotations
 
 import base64
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import numpy as np
@@ -46,6 +47,19 @@ class Point(PointProtocol):
         if self.function_type == "cluster":
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
+            # Huffman decoding: if huffman_data exists, decode it
+            huffman_data = self.params.get("huffman_data")
+            if huffman_data is not None:
+                from .compressor import HuffmanTree
+                huffman_codes = self.params["huffman_codes"]
+                total_bits = self.params["huffman_bits"]
+                tree = HuffmanTree.from_dict(huffman_codes).tree
+                assignments = HuffmanTree.decode(
+                    huffman_data, total_bits, tree, len(assignments))
+            if self.params.get("centroid_quantized"):
+                scale = self.params["centroid_scale"]
+                zp = self.params["centroid_zero_point"]
+                centroids = (centroids.astype(np.float32) - zp) * scale
             values = centroids[assignments[:n]]
             if self.residual is not None:
                 values = values + self.residual[:n]
@@ -75,8 +89,29 @@ class Point(PointProtocol):
             centroids = self.params.get("centroids")
             assignments = self.params.get("assignments")
             if centroids is not None and assignments is not None:
+                huffman_data = self.params.get("huffman_data")
+                if huffman_data is not None:
+                    tree_size = sum(len(v) for v in self.params.get("huffman_codes", {}).values())
+                    return centroids.nbytes + len(huffman_data) + tree_size + 8
+                if self.params.get("centroid_quantized"):
+                    nc = len(centroids)
+                    return nc + 8 + assignments.nbytes
                 return (centroids.nbytes + assignments.nbytes +
                         (self.residual.nbytes if self.residual is not None else 0))
+            return 0
+        elif self.function_type == "block_q4":
+            mins = self.params.get("mins")
+            scales = self.params.get("scales")
+            packed = self.params.get("packed")
+            if mins is not None and scales is not None and packed is not None:
+                return mins.nbytes + scales.nbytes + packed.nbytes
+            return 0
+        elif self.function_type == "block_q8":
+            mins = self.params.get("mins")
+            scales = self.params.get("scales")
+            values = self.params.get("values")
+            if mins is not None and scales is not None and values is not None:
+                return mins.nbytes + scales.nbytes + values.nbytes
             return 0
         elif self.function_type == "raw":
             return len(base64.b64decode(self.params.get("data_b64", "")))
@@ -123,8 +158,15 @@ class Point(PointProtocol):
         if self.function_type == "cluster":
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
+            is_quantized = self.params.get("centroid_quantized", False)
             param_bytes = struct.pack('<I', len(centroids))
-            param_bytes += centroids.astype(np.float32).tobytes()
+            param_bytes += struct.pack('<B', 1 if is_quantized else 0)
+            if is_quantized:
+                param_bytes += centroids.tobytes()  # uint8
+                param_bytes += struct.pack('f', self.params["centroid_scale"])
+                param_bytes += struct.pack('f', self.params["centroid_zero_point"])
+            else:
+                param_bytes += centroids.astype(np.float32).tobytes()
             param_bytes += struct.pack('<I', len(assignments))
             param_bytes += assignments.tobytes()
             has_res = 1 if self.residual is not None else 0
@@ -206,19 +248,33 @@ class Point(PointProtocol):
             offset = 0
             n_centroids = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
             offset += 4
-            centroids = np.frombuffer(param_bytes[offset:offset + n_centroids * 4], dtype=np.float32)
-            offset += n_centroids * 4
+            is_quantized = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
+            offset += 1
+            if is_quantized:
+                centroids = np.frombuffer(param_bytes[offset:offset + n_centroids], dtype=np.uint8)
+                offset += n_centroids
+                scale = struct.unpack('f', param_bytes[offset:offset + 4])[0]
+                offset += 4
+                zp = struct.unpack('f', param_bytes[offset:offset + 4])[0]
+                offset += 4
+                params = {"centroids": centroids, "assignments": None,
+                          "centroid_quantized": True, "centroid_scale": scale,
+                          "centroid_zero_point": zp}
+            else:
+                centroids = np.frombuffer(param_bytes[offset:offset + n_centroids * 4], dtype=np.float32)
+                offset += n_centroids * 4
+                params = {"centroids": centroids, "assignments": None}
             n_assignments = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
             offset += 4
             assignments = np.frombuffer(param_bytes[offset:offset + n_assignments], dtype=np.uint8)
             offset += n_assignments
+            params["assignments"] = assignments
             has_res = struct.unpack('<B', param_bytes[offset:offset + 1])[0]
             offset += 1
             if has_res:
                 res_len = struct.unpack('<I', param_bytes[offset:offset + 4])[0]
                 offset += 4
                 residual = np.frombuffer(param_bytes[offset:offset + res_len], dtype=np.float32)
-            params = {"centroids": centroids, "assignments": assignments}
         elif function_type == "raw":
             n_bytes = struct.unpack('<I', param_bytes[:4])[0]
             raw_data = param_bytes[4:4 + n_bytes]
@@ -246,6 +302,7 @@ class Point(PointProtocol):
         if self.function_type == "cluster":
             centroids = self.params["centroids"]
             assignments = self.params["assignments"]
+            is_quantized = self.params.get("centroid_quantized", False)
             d["params"] = {
                 "centroids_b64": base64.b64encode(centroids.tobytes()).decode(),
                 "centroids_shape": list(centroids.shape),
@@ -253,7 +310,11 @@ class Point(PointProtocol):
                 "assignments_b64": base64.b64encode(assignments.tobytes()).decode(),
                 "assignments_shape": list(assignments.shape),
                 "assignments_dtype": str(assignments.dtype),
+                "centroid_quantized": is_quantized,
             }
+            if is_quantized:
+                d["params"]["centroid_scale"] = self.params["centroid_scale"]
+                d["params"]["centroid_zero_point"] = self.params["centroid_zero_point"]
         elif self.function_type == "raw":
             d["params"] = dict(self.params)
         else:
@@ -282,6 +343,10 @@ class Point(PointProtocol):
                 dtype=pd["assignments_dtype"],
             ).reshape(pd["assignments_shape"])
             params = {"centroids": centroids, "assignments": assignments}
+            if pd.get("centroid_quantized"):
+                params["centroid_quantized"] = True
+                params["centroid_scale"] = pd["centroid_scale"]
+                params["centroid_zero_point"] = pd["centroid_zero_point"]
         elif func_type == "raw":
             params = dict(d["params"])
         else:

@@ -634,7 +634,16 @@ class InferenceRouter:
         import state as _gen_state
 
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
+            phase = STARTUP_PHASE.get("phase", "unknown")
+            step = STARTUP_PHASE.get("step", 0)
+            total = STARTUP_PHASE.get("total", 9)
+            msg = STARTUP_PHASE.get("message", "Starting...")
+            raise_error(
+                f"Model still loading — {msg} (step {step}/{total})",
+                "E_MODEL_LOADING",
+                status_code=503,
+                details={"phase": phase, "step": step, "total": total, "message": msg},
+            )
 
         mem_err = _check_memory_pressure()
         if mem_err:
@@ -708,8 +717,8 @@ class InferenceRouter:
         except Exception as e:
             try:
                 await _coalescer.complete_error(_coalesce_key, e)
-            except Exception:
-                pass
+            except Exception as coalescer_err:
+                logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
             logger.warning("Generate failed: %s", e, extra={"tag": "INF"})
             classify_and_raise(e, source="generate")
 
@@ -835,8 +844,8 @@ class InferenceRouter:
             except Exception as e:
                 try:
                     await _coalescer.complete_error(_coalesce_key, e)
-                except Exception:
-                    pass
+                except Exception as coalescer_err:
+                    logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
                 err_code = "E_MEMORY_PRESSURE" if isinstance(e, RuntimeError) and "memory" in str(e).lower() else "E_INFRA_GENERATION"
@@ -1450,8 +1459,8 @@ class InferenceRouter:
                     except Exception as e:
                         try:
                             await _coalescer.complete_error(_coalesce_key, e)
-                        except Exception:
-                            pass
+                        except Exception as coalescer_err:
+                            logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
                         _mgr.finish(_op_id, str(e))
                         logger.error(
                             "CHAT_STREAM_ERROR corr=%s session=%s error=%s tokens_received=%d",
@@ -1669,7 +1678,16 @@ class InferenceRouter:
         import state as _chat_state
 
         if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            raise_error("Model still loading — please wait.", "E_BAD_REQUEST", status_code=503)
+            phase = STARTUP_PHASE.get("phase", "unknown")
+            step = STARTUP_PHASE.get("step", 0)
+            total = STARTUP_PHASE.get("total", 9)
+            msg = STARTUP_PHASE.get("message", "Starting...")
+            raise_error(
+                f"Model still loading — {msg} (step {step}/{total})",
+                "E_MODEL_LOADING",
+                status_code=503,
+                details={"phase": phase, "step": step, "total": total, "message": msg},
+            )
 
         mem_err = _check_memory_pressure()
         if mem_err:

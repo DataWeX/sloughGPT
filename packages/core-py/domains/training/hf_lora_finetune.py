@@ -20,6 +20,8 @@ Usage::
     # Adapter saved to models/gpt2_lora_r8.npz
 """
 
+from __future__ import annotations
+
 import logging
 import time
 import threading
@@ -33,7 +35,7 @@ from domains.training.lora import (
     count_lora_parameters,
 )
 from domains.training.slonet import (
-    SloTransformer, SloTransformerBlock, Tensor, cross_entropy,
+    SloTransformer, Tensor, cross_entropy,
 )
 from domains.training.trainer_protocol import TrainResult
 
@@ -387,7 +389,7 @@ def merge_lora_adapter(model: SloTransformer) -> SloTransformer:
     _get_weight_T_contig), so merged layers must be replaced.
     """
     from domains.training.lora import _walk_slo_tree, _set_nested, LoRAEmbedding
-    from domains.training.slonet import SloLinear, SloEmbedding
+    from domains.training.slonet import SloLinear
 
     for path, module in _walk_slo_tree(model, []):
         if isinstance(module, LoRALinear):

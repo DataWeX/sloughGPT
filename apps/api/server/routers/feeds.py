@@ -127,8 +127,8 @@ def _build_rss_xml(notes: list[dict], title: str = "sloughGPT Dev Notes") -> str
                 ET.SubElement(item, "pubDate").text = dt.strftime(
                     "%a, %d %b %Y %H:%M:%S +0000"
                 )
-            except Exception:
-                pass
+            except (ValueError, TypeError):
+                pass  # Skip malformed date — pubDate omitted from feed
 
         # Tags as categories
         if note["tags"]:

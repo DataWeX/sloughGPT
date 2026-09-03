@@ -15,19 +15,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 
 from domains.shared import find_repo_root
 from domains.training.slonet import (
-    Tensor, SloEmbedding, SloLinear, SloLayerNorm, SloRMSNorm,
-    SloTransformerBlock,
+    Tensor,
     SloAdam, cross_entropy as _cross_entropy, tensor as _tensor,
-    zeros, ones,
 )
 
 logger = logging.getLogger("slo.video_trainer")

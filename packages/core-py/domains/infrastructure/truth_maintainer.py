@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Truth maintainer — self-retrain on misclassified texts post-epoch.
 

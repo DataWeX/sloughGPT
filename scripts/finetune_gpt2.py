@@ -81,11 +81,11 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
     tokenizer.pad_token = tokenizer.eos_token
 
-    logger.info(f"Loading model: {model_name}")
+    logger.info("Loading model: %s", model_name)
     model = AutoModelForCausalLM.from_pretrained(model_name, local_files_only=True)
 
     texts = [format_conversation(c) for c in CONVERSATIONS]
-    logger.info(f"Training on {len(texts)} conversations")
+    logger.info("Training on %d conversations", len(texts))
 
     encodings = tokenizer(texts, truncation=True, padding=True, max_length=128, return_tensors="pt")
     dataset = Dataset.from_dict({"input_ids": encodings["input_ids"], "attention_mask": encodings["attention_mask"]})
@@ -117,7 +117,7 @@ def main():
     logger.info("Starting training...")
     trainer.train()
 
-    logger.info(f"Saving to {output_dir}")
+    logger.info("Saving to %s", output_dir)
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
 

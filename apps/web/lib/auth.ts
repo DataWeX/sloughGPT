@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { trackEvent } from '@/lib/dev-log'
 
 interface User {
   id: string
@@ -24,9 +25,18 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       isAuthenticated: false,
-      login: (user, token) => set({ user, token, isAuthenticated: true }),
-      logout: () => set({ user: null, token: null, isAuthenticated: false }),
-      setUser: (user) => set({ user }),
+      login: (user, token) => {
+        set({ user, token, isAuthenticated: true })
+        trackEvent('auth_login', { user_id: user?.id ?? user?.username ?? 'unknown' })
+      },
+      logout: () => {
+        set({ user: null, token: null, isAuthenticated: false })
+        trackEvent('auth_logout')
+      },
+      setUser: (user) => {
+        set({ user })
+        trackEvent('auth_user_changed', { user_id: user?.id ?? user?.username ?? 'unknown' })
+      },
     }),
     {
       name: 'man-auth',

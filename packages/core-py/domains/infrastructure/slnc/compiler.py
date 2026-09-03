@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 """
 .slnc compiler — converts safetensors to memory-mapped format.
 
 Pipeline:
   1. Parse source (safetensors or numpy dict)
   2. Compute layout (tensor offsets in computation order)
-  3. Write header (magic + metadata + config)
+  3. Write header (magic + metadata + config + optional header CRC)
   4. Write tensor table (offsets + checksums)
   5. Write tensor data (computation order)
   6. Verify (optional integrity check)
@@ -21,7 +23,7 @@ import json
 import logging
 import struct
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -29,14 +31,15 @@ from domains.shared import find_repo_root
 from domains.infrastructure.slnc.spec import (
     MAGIC,
     VERSION,
-    FLAGS_DEFAULT,
-    ALIGNMENT,
-    DTYPE_FLOAT32,
+    MAX_NDIM,
+    MAX_TENSOR_COUNT,
+    MAX_NAME_LEN,
+    SLNCConfig,
     compute_header_size,
-    compute_tensor_entry_size,
     compute_tensor_table_size,
     dtype_to_code,
     _align,
+    _align_offset,
 )
 
 logger = logging.getLogger("slo.infrastructure.slnc.compiler")
@@ -46,7 +49,6 @@ logger = logging.getLogger("slo.infrastructure.slnc.compiler")
 # Block tensor definitions (computation order)
 # ══════════════════════════════════════════════════════════════════════════════
 
-# GPT-2 block tensors in computation order
 GPT2_BLOCK_LAYOUT = [
     "ln_1.weight",
     "ln_1.bias",
@@ -62,7 +64,6 @@ GPT2_BLOCK_LAYOUT = [
     "mlp.c_proj.bias",
 ]
 
-# Non-block tensors (after all blocks)
 GPT2_NON_BLOCK_LAYOUT = [
     "ln_f.weight",
     "ln_f.bias",
@@ -70,7 +71,6 @@ GPT2_NON_BLOCK_LAYOUT = [
     "wpe.weight",
 ]
 
-# LLaMA/Qwen/Mistral block tensors in computation order
 LLAMA_BLOCK_LAYOUT = [
     "input_layernorm.weight",
     "self_attn.q_proj.weight",
@@ -83,14 +83,12 @@ LLAMA_BLOCK_LAYOUT = [
     "mlp.down_proj.weight",
 ]
 
-# Non-block tensors (after all blocks)
 LLAMA_NON_BLOCK_LAYOUT = [
     "model.norm.weight",
     "model.embed_tokens.weight",
     "model.lm_head.weight",
 ]
 
-# Mapping: architecture detection → block/non-block layouts
 _ARCH_LAYOUTS = {
     "gpt2": (GPT2_BLOCK_LAYOUT, GPT2_NON_BLOCK_LAYOUT, "h.{i}."),
     "llama": (LLAMA_BLOCK_LAYOUT, LLAMA_NON_BLOCK_LAYOUT, "model.layers.{i}."),
@@ -100,7 +98,8 @@ _ARCH_LAYOUTS = {
 class SLNCCompiler:
     """Compiles model weights into .slnc format."""
 
-    def __init__(self):
+    def __init__(self, config: Optional[SLNCConfig] = None):
+        self._config = config or SLNCConfig()
         self._tensor_entries: List[Tuple[str, int, bytes, np.dtype, int, int]] = []
         # (name, offset, data_bytes, dtype, ndim, crc32)
 
@@ -132,14 +131,12 @@ class SLNCCompiler:
 
         weights = self._read_weights(safetensors_path)
 
-        # Determine output path
         if output is None:
             repo_root = find_repo_root(Path(__file__).resolve())
             models_dir = repo_root / "models"
             models_dir.mkdir(exist_ok=True)
             output = str(models_dir / f"{model_id.replace('/', '_')}.slnc")
 
-        # Auto-protect: chmod444 + manifest + marker
         try:
             from domains.infrastructure.model_protector import protect_model
             protect_model(model_id, [output])
@@ -154,24 +151,7 @@ class SLNCCompiler:
         output: str,
         config_path: Optional[str] = None,
     ) -> str:
-        """Compile a local fine-tuned model directory to .slnc.
-
-        Reads ``config.json`` and ``model.safetensors`` directly from a local
-        directory (no HuggingFace cache lookup), so fine-tuned model output from
-        the training pipeline can be served by SloNet.
-
-        Args:
-            model_dir: Local directory containing config.json + model.safetensors
-            output: Output .slnc file path
-            config_path: Optional explicit path to config.json (defaults to
-                ``model_dir/config.json``)
-
-        Returns:
-            Path to created .slnc file
-
-        Raises:
-            FileNotFoundError: When config.json or model.safetensors is missing
-        """
+        """Compile a local fine-tuned model directory to .slnc."""
         directory = Path(model_dir)
         if not directory.is_dir():
             raise FileNotFoundError(f"Model directory not found: {model_dir}")
@@ -193,14 +173,7 @@ class SLNCCompiler:
         return self.compile_from_dict(config, weights, str(out_path))
 
     def _read_weights(self, safetensors_path: Path) -> Dict[str, np.ndarray]:
-        """Read all weight arrays from a safetensors file (handles BF16/F16/F32).
-
-        Args:
-            safetensors_path: Path to a .safetensors file
-
-        Returns:
-            Dict mapping tensor names to float32 numpy arrays
-        """
+        """Read all weight arrays from a safetensors file."""
         import json as _json
         weights = {}
         with open(str(safetensors_path), "rb") as f:
@@ -245,19 +218,31 @@ class SLNCCompiler:
         logger.info("Compiling %s (%d tensors)", output, len(weights),
             extra={"tag": "INFRA"})
 
+        # Validate tensor count
+        if len(weights) > MAX_TENSOR_COUNT:
+            raise ValueError(f"Too many tensors: {len(weights)} (max {MAX_TENSOR_COUNT})")
+
         # Build tensor list in computation order
         tensor_list = self._order_tensors(config, weights)
 
-        # Build tensor entries (compute sizes without storing data yet)
-        entries_for_size = []
+        # Validate ndim for all tensors
         for name, tensor in tensor_list:
-            ndim = len(tensor.shape)
-            # Format: (name, offset, data_bytes, ndim, dtype, crc)
-            entries_for_size.append((name, 0, None, ndim, tensor.dtype, 0))
+            if len(tensor.shape) > MAX_NDIM:
+                raise ValueError(f"Tensor {name} has {len(tensor.shape)} dims (max {MAX_NDIM})")
+
+        # Build shape lookup (O(1) instead of O(n²))
+        shape_map = {name: tensor.shape for name, tensor in tensor_list}
 
         # Compute layout
         config_json = json.dumps(config, sort_keys=True).encode()
         header_size = compute_header_size(config_json)
+
+        # Build tensor entries for size computation
+        entries_for_size = []
+        for name, tensor in tensor_list:
+            ndim = len(tensor.shape)
+            entries_for_size.append((name, 0, None, ndim, tensor.dtype, 0))
+
         tensor_table_size = compute_tensor_table_size(entries_for_size)
 
         # Compute offsets
@@ -271,6 +256,10 @@ class SLNCCompiler:
             dtype_code = dtype_to_code(tensor.dtype)
             ndim = len(tensor.shape)
 
+            # Align tensor data if enabled
+            if self._config.align_tensors:
+                current_offset = _align_offset(current_offset)
+
             self._tensor_entries.append((
                 name,
                 current_offset,
@@ -283,12 +272,15 @@ class SLNCCompiler:
 
         total_size = current_offset
 
+        # Compute flags
+        flags = self._config.to_flags()
+
         # Write file
         with open(output, "wb") as f:
-            # Header
+            # Header: magic + version + flags
             f.write(MAGIC)
             f.write(struct.pack("<I", VERSION))
-            f.write(struct.pack("<I", FLAGS_DEFAULT))
+            f.write(struct.pack("<I", flags))
 
             # Model metadata (64 bytes)
             n_layer = config.get("n_layer", config.get("num_hidden_layers", 0))
@@ -312,7 +304,10 @@ class SLNCCompiler:
             f.write(struct.pack("<I", block_size))
             f.write(struct.pack("<I", tensor_count))
             f.write(struct.pack("<I", data_offset))
-            f.write(b"\x00" * 24)  # reserved
+
+            # Reserved region (24 bytes): header_crc + unused
+            reserved_start = f.tell()
+            f.write(b"\x00" * 24)  # placeholder for header CRC
 
             # Config JSON
             f.write(struct.pack("<I", len(config_json)))
@@ -323,18 +318,34 @@ class SLNCCompiler:
             if current < header_size:
                 f.write(b"\x00" * (header_size - current))
 
-            # Tensor table
+            # Write header CRC into reserved region
+            if self._config.write_header_crc:
+                # Read back header data to compute CRC
+                f_pos = f.tell()
+                f.seek(0)
+                header_data = f.read(header_size)
+                f.seek(f_pos)
+
+                header_crc = _crc32(header_data)
+                f.seek(reserved_start)
+                f.write(struct.pack("<I", header_crc))
+                f.seek(f_pos)
+
+            # Tensor table (variable-length entries)
             for name, offset, data_bytes, dtype, ndim, crc in self._tensor_entries:
                 name_bytes = name.encode()
+                if len(name_bytes) > MAX_NAME_LEN:
+                    raise ValueError(f"Tensor name too long: {name} ({len(name_bytes)} > {MAX_NAME_LEN})")
+
                 f.write(struct.pack("<I", len(name_bytes)))
                 f.write(name_bytes)
                 f.write(struct.pack("<Q", offset))
                 f.write(struct.pack("<I", len(data_bytes)))
                 f.write(struct.pack("<I", ndim))
-                shape = tensor_list[[t[0] for t in tensor_list].index(name)][1].shape
+                shape = shape_map[name]
                 for dim in shape:
                     f.write(struct.pack("<I", dim))
-                f.write(struct.pack("<I", dtype_code))
+                f.write(struct.pack("<I", dtype_to_code(dtype)))
                 f.write(struct.pack("<I", crc))
 
             # Pad to data start
@@ -342,8 +353,12 @@ class SLNCCompiler:
             if current < data_start:
                 f.write(b"\x00" * (data_start - current))
 
-            # Tensor data (computation order)
+            # Tensor data (computation order, aligned)
             for name, offset, data_bytes, dtype, ndim, crc in self._tensor_entries:
+                # Pad to alignment before writing
+                current_pos = f.tell()
+                if current_pos < offset:
+                    f.write(b"\x00" * (offset - current_pos))
                 f.write(data_bytes)
 
         logger.info(
@@ -363,28 +378,23 @@ class SLNCCompiler:
         n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
         result = []
 
-        # Detect architecture from weight keys
         weight_keys = set(weights.keys())
         if "model.embed_tokens.weight" in weight_keys and "model.layers.0.self_attn.q_proj.weight" in weight_keys:
             arch = "llama"
         elif "wte.weight" in weight_keys:
             arch = "gpt2"
         else:
-            arch = "gpt2"  # fallback
+            arch = "gpt2"
 
         block_layout, non_block_layout, prefix_template = _ARCH_LAYOUTS[arch]
 
-        # Block tensors — include biases if they exist in weights
-        bias_suffixes = [".bias"]
+        # Block tensors
         for layer_idx in range(n_layer):
             prefix = prefix_template.format(i=layer_idx)
             for tensor_name in block_layout:
                 key = prefix + tensor_name
                 if key in weights:
                     result.append((key, weights[key]))
-                # Check for corresponding bias (e.g. q_proj.weight → q_proj.bias).
-                # Only auto-append when the bias is not already in the block
-                # layout (GPT-2 lists biases explicitly; LLaMA does not).
                 if tensor_name.endswith(".weight"):
                     bias_key = prefix + tensor_name[:-len(".weight")] + ".bias"
                     if bias_key in weights and bias_key not in (prefix + t for t in block_layout):
@@ -395,22 +405,19 @@ class SLNCCompiler:
             if tensor_name in weights:
                 result.append((tensor_name, weights[tensor_name]))
             elif tensor_name == "model.lm_head.weight":
-                # Weight tying: lm_head shares embed_tokens weight
                 if "model.embed_tokens.weight" in weights:
                     result.append((tensor_name, weights["model.embed_tokens.weight"]))
 
         return result
 
     def _compute_block_size(self, config: dict) -> int:
-        """Compute bytes per transformer block. Auto-detects GPT-2 vs LLaMA."""
+        """Compute bytes per transformer block."""
         n_embd = config.get("n_embd", config.get("hidden_size", 768))
         n_inner = config.get("n_inner", config.get("intermediate_size", n_embd * 4))
 
-        # Detect from config keys
         has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
 
         if has_rope:
-            # LLaMA/Qwen — SwiGLU has 3 weight matrices; biases included if present
             shapes = {
                 "input_layernorm.weight": (n_embd,),
                 "self_attn.q_proj.weight": (n_embd, n_embd),
@@ -422,18 +429,7 @@ class SLNCCompiler:
                 "mlp.up_proj.weight": (n_embd, n_inner),
                 "mlp.down_proj.weight": (n_inner, n_embd),
             }
-            # Dynamic bias shapes — will be included if present in weights
-            bias_shapes = {
-                "self_attn.q_proj.bias": (n_embd,),
-                "self_attn.k_proj.bias": (n_embd,),
-                "self_attn.v_proj.bias": (n_embd,),
-                "self_attn.o_proj.bias": (n_embd,),
-                "mlp.gate_proj.bias": (n_inner,),
-                "mlp.up_proj.bias": (n_inner,),
-                "mlp.down_proj.bias": (n_embd,),
-            }
         else:
-            # GPT-2
             shapes = {
                 "ln_1.weight": (n_embd,),
                 "ln_1.bias": (n_embd,),
@@ -460,10 +456,8 @@ def _crc32(data: bytes) -> int:
 
 def _xxhash64(data: bytes) -> int:
     """Compute xxHash64 (fast hash for tensor names)."""
-    # Simple implementation — use zlib if xxhash not available
     try:
         import xxhash
         return xxhash.xxh64(data).intdigest()
     except ImportError:
-        # Fallback: use CRC32 as hash (not cryptographically secure, but fine for this)
         return _crc32(data) | (_crc32(data[::-1]) << 32)

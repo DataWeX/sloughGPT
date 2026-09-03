@@ -1478,8 +1478,8 @@ NPU_PROGRAM_ASM = """\
     ; Open the Neural Processing Unit device
     DEV_OPEN   R0, npu
 
-    ; Load a model into the NPU
-    DEV_CALL   R1, R0, load_model, qwen, qwen2.5-0.5B-Instruct
+    ; Load a file into the NPU
+    DEV_CALL   R1, R0, load_model, qwen, qwen2.5-0.5B-Instruct.slnc
 
     ; Tokenize input text
     DEV_CALL   R2, R0, tokenize, qwen, Hello, how are you?
@@ -2966,8 +2966,6 @@ def export_x86_binary(source: str) -> bytes:
     Strips [BITS], [ORG], labels, and directives.
     Returns raw machine code.
     """
-    import re
-
     lines = source.split('\n')
     code_lines = []
 

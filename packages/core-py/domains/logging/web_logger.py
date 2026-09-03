@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 
 from .base import Logger, LogLevel, LogRecord
 
@@ -36,12 +36,35 @@ _CONSOLE_METHOD = {
 }
 
 
+# ── Event → tag mapping (shared by WebLogger.track_event) ──────────────
+
+_EVENT_TAG_MAP: Dict[str, str] = {
+    "model_":      "MODEL",
+    "training_":   "TRAIN",
+    "session_":    "CHAT",
+    "stream_":     "CHAT",
+    "chat_":       "CHAT",
+    "webhook_":    "WORKFLOW",
+    "download_":   "DOWNLOAD",
+    "auth_":       "AUTH",
+    "vm_":         "INFRA",
+    "shell_":      "INFRA",
+    "soul_":       "SOUL",
+}
+
+_DEFAULT_EVENT_TAG = "UI"
+
+
 class WebLogger(Logger):
     """Structured logger for browser/web environments.
 
     Emits records as JSON dicts.  In a browser context, delegates to
     ``console.debug / console.log / console.warn / console.error``.
     In Node.js / SSR, writes to ``stderr`` as JSON lines.
+
+    Also handles UI event tracking via ``track_event()``, which
+    auto-infers a ``LogTag`` from the event name prefix and delegates
+    to ``TaggedLogger`` internally.
 
     Parameters:
         name:      Logger name (e.g. ``"slo.web.chat"``).
@@ -50,6 +73,8 @@ class WebLogger(Logger):
         writable:  Writable stream for SSR (default: ``sys.stderr``).
         context:   Default context attached to every record.
     """
+
+    __slots__ = ('_browser_console', '_writable')
 
     def __init__(
         self,
@@ -111,7 +136,8 @@ class WebLogger(Logger):
                 except (OSError, ValueError):
                     pass
 
-    def _format_brief(self, record: LogRecord) -> str:
+    @staticmethod
+    def _format_brief(record: LogRecord) -> str:
         """One-line ``[logger] message`` format for console output."""
         parts = [f"[{record.logger}]"]
         if record.context:
@@ -149,3 +175,37 @@ class WebLogger(Logger):
             context=d.get("context", {}),
             exception=d.get("exception"),
         )
+
+    # ── Event tracking ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _infer_tag(event: str) -> str:
+        for prefix, tag in _EVENT_TAG_MAP.items():
+            if event.startswith(prefix):
+                return tag
+        return _DEFAULT_EVENT_TAG
+
+    def track_event(self, event: str, data: Optional[Dict[str, Any]] = None,
+                    tag: Optional[str] = None) -> None:
+        """Log a UI event with auto-inferred tag.
+
+        The tag is resolved in order:
+          1. Explicit ``tag`` argument
+          2. Prefix match from ``_EVENT_TAG_MAP``
+          3. Default ``"UI"``
+
+        Delegates to ``TaggedLogger`` so the tag is stamped consistently
+        with every other ``log.tag("X").info(...)`` call.
+        """
+        resolved_tag = tag or self._infer_tag(event)
+        summary_parts = [event]
+        if data:
+            summary_parts.extend(f"{k}={v}" for k, v in data.items())
+        ctx = dict(data) if data else {}
+        ctx["tag"] = resolved_tag
+        tagged = self.tag(resolved_tag)
+        tagged.emit(tagged._make_record(
+            level=LogLevel.INFO,
+            message=" ".join(summary_parts),
+            context=ctx,
+        ))

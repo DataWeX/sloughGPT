@@ -31,6 +31,19 @@ const DEDUP_WINDOW_MS = 30_000
 const MAX_ERRORS = 20
 const MAX_ACTIVITY = 50
 
+function fingerprint(message: string): string {
+  // Normalize: lowercase, replace numbers with N, replace long hex strings with ID
+  let norm = message.toLowerCase()
+  norm = norm.replace(/\d+/g, 'N')
+  norm = norm.replace(/[a-f0-9]{8,}/g, 'ID')
+  // Simple hash (djb2) — no crypto dependency needed
+  let hash = 5381
+  for (let i = 0; i < norm.length; i++) {
+    hash = ((hash << 5) + hash + norm.charCodeAt(i)) | 0
+  }
+  return (hash >>> 0).toString(36).slice(0, 12)
+}
+
 function extractErrorTitle(err: unknown): string {
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
@@ -90,10 +103,11 @@ const errorStore = createStore<ErrorStore>((set, get) => ({
     const severity = getSeverity(err, sev)
     const now = Date.now()
 
-    // Deduplication: same source + same message within 30s → increment count
+    // Deduplication: same fingerprint within 30s → increment count
+    const fp = fingerprint(message)
     const { errors } = get()
     const existing = errors.find(
-      e => e.source === source && e.message === message && (now - e.timestamp) < DEDUP_WINDOW_MS,
+      e => e.source === source && fingerprint(e.message) === fp && (now - e.timestamp) < DEDUP_WINDOW_MS,
     )
 
     if (existing) {

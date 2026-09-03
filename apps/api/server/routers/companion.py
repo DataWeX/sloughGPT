@@ -1,18 +1,29 @@
 """
 Companion Router - AI Companion endpoints
 
-Endpoints to manage and chat with the AI companion.
+Uses MogDB as the storage engine with automatic JSON sync.
+Presets are stored in MogDB and synced to JSON for human readability.
 """
 import logging
+import os
 import time as _time
+from pathlib import Path
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.routers.companion")
+
+
+def _get_db():
+    from mogdb import MogDB
+    repo_root = Path(__file__).resolve().parents[4]
+    db_path = os.path.join(repo_root, "data", "companion_mogdb")
+    sync_path = os.path.join(repo_root, "data", "companion_json")
+    return MogDB(db_path, sync_dir=sync_path)
 
 
 class SetPersonalityRequest(BaseModel):
@@ -35,10 +46,43 @@ class PatchPersonalityRequest(BaseModel):
     humor: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
-class PresetRequest(BaseModel):
-    """Use a preset personality."""
-    name: str = Field(default="Friend", max_length=100)
-    preset: str = Field(default="warm", max_length=50)
+class PresetInfo(BaseModel):
+    id: str
+    name: str
+    description: str
+    traits: dict
+    system_prompt: str = ""
+
+
+class PresetCreateRequest(BaseModel):
+    id: str = Field(..., max_length=50, pattern=r"^[a-z0-9_-]+$")
+    name: str = Field(..., max_length=100)
+    description: str = Field(default="", max_length=500)
+    traits: dict = Field(default_factory=dict)
+    system_prompt: str = Field(default="", max_length=2000)
+
+
+def _load_presets() -> List[dict]:
+    """Load presets from MogDB."""
+    db = _get_db()
+    col = db.collection("presets")
+    return col.find()
+
+
+def _seed_default_presets() -> None:
+    """Seed default presets if collection is empty."""
+    db = _get_db()
+    col = db.collection("presets")
+    if col.count() > 0:
+        return
+    defaults = [
+        {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}, "system_prompt": "You are a warm, caring friend."},
+        {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}, "system_prompt": "You are a deeply curious friend."},
+        {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}, "system_prompt": "You are a playful, fun-loving friend."},
+        {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}, "system_prompt": "You are a balanced, well-rounded friend."},
+    ]
+    for p in defaults:
+        col.insert_one(p)
 
 
 class ChatRequest(BaseModel):
@@ -75,6 +119,8 @@ class CompanionRouter:
         self.router.add_api_route("/prompt", self.get_prompt, methods=["GET"])
         self.router.add_api_route("/chat", self.chat, methods=["POST"], response_model=ChatResponse)
         self.router.add_api_route("/presets", self.list_presets, methods=["GET"])
+        self.router.add_api_route("/presets", self.create_preset, methods=["POST"])
+        self.router.add_api_route("/presets/{preset_id}", self.delete_preset, methods=["DELETE"])
 
     def _get_companion(self):
         """Get or create companion."""
@@ -86,157 +132,149 @@ class CompanionRouter:
     async def get_companion_info(self) -> dict:
         """Return the current companion's full state as a dictionary."""
         try:
-            comp = self._get_companion()
-            return success_response(data=comp.to_dict())
+            companion = self._get_companion()
+            return success_response(data=companion.to_dict())
         except Exception as e:
-            classify_and_raise(e, source="companion.info")
+            classify_and_raise(e, source="companion.get_info")
+
+    async def reset_companion(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Reset companion to default state."""
+        try:
+            self._companion = None
+            from domains.companion import reset_companion
+            reset_companion()
+            safe_audit_log("companion.reset")
+            return success_response(data={"reset": True})
+        except Exception as e:
+            classify_and_raise(e, source="companion.reset")
 
     async def set_personality(self, req: SetPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Set companion personality (full replacement)."""
         try:
-            comp = self._get_companion()
-            comp.set_personality(
-                name=req.name,
-                warmth=req.warmth,
-                curiosity=req.curiosity,
-                creativity=req.creativity,
-                confidence=req.confidence,
-                humor=req.humor,
-            )
-            safe_audit_log("companion.set_personality", detail=f"name={req.name}")
-            return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+            companion = self._get_companion()
+            companion.name = req.name
+            companion.warmth = req.warmth
+            companion.curiosity = req.curiosity
+            companion.creativity = req.creativity
+            companion.confidence = req.confidence
+            companion.humor = req.humor
+            safe_audit_log("companion.personality.set", detail=f"name={req.name}")
+            return success_response(data=companion.to_dict())
         except Exception as e:
             classify_and_raise(e, source="companion.set_personality")
 
     async def patch_personality(self, req: PatchPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Partial update to companion personality (only provided fields are changed)."""
+        """Partial update to companion personality."""
         try:
-            comp = self._get_companion()
-            current = comp.to_dict()["traits"]
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            merged = {**current, **updates}
-            comp.set_personality(
-                name=merged.get("name", current.get("name", "Friend")),
-                warmth=merged.get("warmth", current.get("warmth", 0.7)),
-                curiosity=merged.get("curiosity", current.get("curiosity", 0.6)),
-                creativity=merged.get("creativity", current.get("creativity", 0.5)),
-                confidence=merged.get("confidence", current.get("confidence", 0.5)),
-                humor=merged.get("humor", current.get("humor", 0.4)),
-            )
-            safe_audit_log("companion.patch", detail=f"fields={list(updates.keys())}")
-            return success_response(data={"status": "ok", "traits": comp.to_dict()["traits"]})
+            companion = self._get_companion()
+            if req.name is not None:
+                companion.name = req.name
+            if req.warmth is not None:
+                companion.warmth = req.warmth
+            if req.curiosity is not None:
+                companion.curiosity = req.curiosity
+            if req.creativity is not None:
+                companion.creativity = req.creativity
+            if req.confidence is not None:
+                companion.confidence = req.confidence
+            if req.humor is not None:
+                companion.humor = req.humor
+            safe_audit_log("companion.personality.patch")
+            return success_response(data=companion.to_dict())
         except Exception as e:
-            classify_and_raise(e, source="companion.patch")
+            classify_and_raise(e, source="companion.patch_personality")
 
-    async def reset_companion(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Reset companion to default personality."""
+    async def use_preset(self, preset_id: str = Field(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Apply a preset personality."""
         try:
-            from domains.companion import create_companion
-            self._companion = create_companion()
-            safe_audit_log("companion.reset")
-            return success_response(data={"status": "ok", "traits": self._companion.to_dict()["traits"]})
+            db = _get_db()
+            col = db.collection("presets")
+            preset = col.find_one({"id": preset_id})
+            if not preset:
+                raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
+            companion = self._get_companion()
+            traits = preset.get("traits", {})
+            for k, v in traits.items():
+                if hasattr(companion, k):
+                    setattr(companion, k, v)
+            safe_audit_log("companion.preset.use", resource=preset_id)
+            return success_response(data=companion.to_dict())
         except Exception as e:
-            classify_and_raise(e, source="companion.reset")
-
-    async def use_preset(self, req: PresetRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Replace the current companion with a preset personality.
-
-        Args:
-            req: PresetRequest with name (used as the companion's display
-                name) and preset (one of: warm, curious, playful, balanced).
-
-        Returns:
-            Success envelope containing the preset ID and the new traits
-            dictionary.
-
-        Side effects:
-            Replaces the internal CompanionSystem instance with a new
-            one configured to the chosen preset.
-        """
-        try:
-            from domains.companion import create_companion
-
-            self._companion = create_companion(name=req.name, personality=req.preset)
-            safe_audit_log("companion.preset", resource=req.preset, detail=f"name={req.name}")
-
-            return success_response(data={
-                "status": "ok",
-                "preset": req.preset,
-                "traits": self._companion.to_dict()["traits"],
-            })
-        except Exception as e:
-            classify_and_raise(e, source="companion.preset")
+            classify_and_raise(e, source="companion.use_preset")
 
     async def get_prompt(self) -> dict:
-        """Return the system prompt currently used by the companion."""
+        """Get the current system prompt."""
         try:
-            comp = self._get_companion()
-            return success_response(data={"system_prompt": comp.get_system_prompt()})
+            companion = self._get_companion()
+            return success_response(data={"system_prompt": companion.build_system_prompt()})
         except Exception as e:
-            classify_and_raise(e, source="companion.prompt")
+            classify_and_raise(e, source="companion.get_prompt")
 
-    async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Chat with companion — generates a response using the active model."""
-        # Block inference under memory pressure
+    async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> ChatResponse:
+        """Chat with the companion."""
         try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
-            if get_memory_pressure_monitor().check() == PressureLevel.EMERGENCY:
-                raise_error("System memory too low for inference — try again later",
-                            "E_MEMORY_PRESSURE", status_code=503)
-        except ImportError:
-            pass
-
-        comp = self._get_companion()
-
-        # Adjust for mood
-        if req.user_mood:
-            comp.adjust_for_mood(req.user_mood)
-
-        # Get system prompt
-        system_prompt = comp.get_system_prompt() if req.include_system_prompt else ""
-
-        # Build messages for the provider
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": req.message})
-
-        _chat_t0 = _time.monotonic()
-        try:
-            from domains.models.provider import get_provider
-            provider = get_provider("default")
-            if provider is None:
-                raise_error("No model loaded — load a model first", "E_BAD_REQUEST", status_code=503)
-            response_text = await provider.chat(
-                messages,
+            companion = self._get_companion()
+            system_prompt = companion.build_system_prompt() if req.include_system_prompt else ""
+            _chat_start = _time.monotonic()
+            response_text = await companion.generate(
+                user_message=req.message,
+                system_prompt=system_prompt,
                 max_tokens=req.max_tokens,
                 temperature=req.temperature,
             )
+            _chat_elapsed_ms = (_time.monotonic() - _chat_start) * 1000
+            safe_audit_log("companion.chat", detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}")
+
+            return ChatResponse(
+                response=response_text,
+                system_prompt=system_prompt,
+                elapsed_ms=round(_chat_elapsed_ms, 1),
+            )
         except Exception as e:
-            logger.warning("Companion chat failed: %s", e, extra={"tag": "MODEL", "context": {"error": str(e)}})
             classify_and_raise(e, source="companion.chat")
 
-        _chat_elapsed_ms = (_time.monotonic() - _chat_t0) * 1000
-        safe_audit_log("companion.chat", detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}")
-
-        return ChatResponse(
-            response=response_text,
-            system_prompt=system_prompt,
-            elapsed_ms=round(_chat_elapsed_ms, 1),
-        )
-
     async def list_presets(self) -> dict:
-        """Return the hardcoded list of available companion presets."""
+        """Return the list of available companion presets."""
         try:
-            presets = [
-                {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}},
-                {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}},
-                {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}},
-                {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}},
-            ]
+            _seed_default_presets()
+            presets = _load_presets()
             return success_response(data={"presets": presets})
         except Exception as e:
             classify_and_raise(e, source="companion.presets")
+
+    async def create_preset(self, req: PresetCreateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Create a new companion preset."""
+        try:
+            db = _get_db()
+            col = db.collection("presets")
+            existing = col.find_one({"id": req.id})
+            if existing:
+                raise_error(f"Preset '{req.id}' already exists", "E_CONFLICT", status_code=409)
+            preset = {
+                "id": req.id,
+                "name": req.name,
+                "description": req.description,
+                "traits": req.traits,
+                "system_prompt": req.system_prompt,
+            }
+            col.insert_one(preset)
+            safe_audit_log("companion.preset.create", resource=req.id)
+            return success_response(data={"preset": preset})
+        except Exception as e:
+            classify_and_raise(e, source="companion.create_preset")
+
+    async def delete_preset(self, preset_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Delete a companion preset."""
+        try:
+            db = _get_db()
+            col = db.collection("presets")
+            deleted = col.delete_one({"id": preset_id})
+            if not deleted:
+                raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("companion.preset.delete", resource=preset_id)
+            return success_response(data={"deleted": preset_id})
+        except Exception as e:
+            classify_and_raise(e, source="companion.delete_preset")
 
 
 _companion_router = CompanionRouter()

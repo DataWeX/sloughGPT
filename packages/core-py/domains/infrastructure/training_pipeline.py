@@ -18,6 +18,8 @@ Feedback ratings use the feedback-domain vocabulary ``"thumbs_up"`` /
 ``domains/feedback``.
 """
 
+from __future__ import annotations
+
 import dataclasses
 import json
 import logging

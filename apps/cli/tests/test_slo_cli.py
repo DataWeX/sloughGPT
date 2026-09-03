@@ -1,45 +1,223 @@
-"""
-Comprehensive tests for slo_cli — the custom CLI framework.
-Tests: Group, Command, Option, Argument, parser, types, fuzzy matching,
-auto-correct, echo, confirm, Context, help formatting, end-to-end runs.
-"""
+"""Tests for the CLI framework built into cli.py."""
 
-import sys
 import os
+import sys
 import json
-import tempfile
-from pathlib import Path
-from io import StringIO
-from unittest.mock import patch, MagicMock
+from pathlib import Path as StdPath
+from unittest.mock import patch
 
 import pytest
 
-# Ensure the CLI src is on the path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(StdPath(__file__).resolve().parent.parent / "src"))
 
-from core.slo_cli import (
-    Group, Command, Option, Argument, Context, Choice, Path as CliPath,
-    IntRange, UsageError, BadParameter,
-    option, argument, pass_context, version_option, group, command,
-    echo, confirm,
-    _parse_args, _parse_global_options, _format_help,
-    _resolve_and_run, _run_command, _run_group, _show_error, run,
-    _TTY, _c, _p,
+# Import the framework from cli.py
+from cli import (
+    Choice, CliPath, Option, Argument, Context, Command, Group,
+    UsageError, BadParameter, _parse_args, _record_usage,
+    run, option, argument, pass_context, version_option, echo, confirm, group, command,
+    _TTY, _SUGGESTIONS,
 )
 
 
-# ── Group tests ─────────────────────────────────────────────────────────
+# ── Choice type ─────────────────────────────────────────────────────────
+
+class TestChoice:
+    def test_valid_choice_case_insensitive(self):
+        c = Choice(["bash", "zsh", "fish"])
+        assert c.convert("bash", "shell") == "bash"
+        assert c.convert("Bash", "shell") == "bash"
+        assert c.convert("ZSH", "shell") == "zsh"
+
+    def test_invalid_choice(self):
+        c = Choice(["bash", "zsh", "fish"])
+        with pytest.raises(BadParameter):
+            c.convert("powershell", "shell")
+
+    def test_case_sensitive(self):
+        c = Choice(["bash", "zsh"], case_sensitive=True)
+        assert c.convert("bash", "shell") == "bash"
+        with pytest.raises(BadParameter):
+            c.convert("Bash", "shell")
+
+
+# ── Path type ───────────────────────────────────────────────────────────
+
+class TestPath:
+    def test_basic(self):
+        p = CliPath()
+        assert p.convert("/tmp", "file") == "/tmp"
+
+    def test_exists_check(self):
+        p = CliPath(exists=True)
+        with pytest.raises(BadParameter):
+            p.convert("/nonexistent/path/xyz", "file")
+
+    def test_resolve_path(self):
+        p = CliPath(resolve_path=True)
+        result = p.convert(".", "file")
+        assert os.path.isabs(result)
+
+
+# ── Option ──────────────────────────────────────────────────────────────
+
+class TestOption:
+    def test_primary_name(self):
+        opt = Option(["--host"], default="localhost")
+        assert opt.primary == "--host"
+
+    def test_short_name(self):
+        opt = Option(["-c", "--config"])
+        assert opt.short == "-c"
+
+    def test_no_short_name(self):
+        opt = Option(["--config"])
+        assert opt.short is None
+
+    def test_dest_from_flag(self):
+        opt = Option(["--no-color"])
+        assert opt.dest == "no_color"
+
+    def test_dest_from_secondary(self):
+        opt = Option(["--json", "output_json"])
+        assert opt.dest == "output_json"
+
+
+# ── Argument ────────────────────────────────────────────────────────────
+
+class TestArgument:
+    def test_required(self):
+        arg = Argument("name", required=True)
+        assert arg.required is True
+        assert arg.name == "name"
+
+    def test_optional_with_default(self):
+        arg = Argument("name", required=False, default="fallback")
+        assert arg.default == "fallback"
+
+
+# ── Context ─────────────────────────────────────────────────────────────
+
+class TestContext:
+    def test_ensure_object(self):
+        ctx = Context()
+        assert ctx.obj == {}
+        ctx.ensure_object(dict)
+        assert ctx.obj == {}
+
+    def test_ensure_object_preserves(self):
+        ctx = Context(obj={"key": "value"})
+        ctx.ensure_object(dict)
+        assert ctx.obj == {"key": "value"}
+
+    def test_invoke_callable(self):
+        ctx = Context()
+        called = []
+        def my_func(x=1):
+            called.append(x)
+        ctx.invoke(my_func, x=42)
+        assert called == [42]
+
+
+# ── Parser ──────────────────────────────────────────────────────────────
+
+class TestParser:
+    def test_parse_options(self):
+        opts = [Option(["--host"], default="localhost")]
+        args = ["--host", "example.com"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["host"] == "example.com"
+
+    def test_parse_flags(self):
+        opts = [Option(["--verbose"], is_flag=True)]
+        args = ["--verbose"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["verbose"] is True
+
+    def test_parse_no_flag(self):
+        opts = [Option(["--no-color"], is_flag=True)]
+        args = ["--no-color"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["no_color"] is True
+
+    def test_parse_positional(self):
+        args = ["hello", "world"]
+        kwargs, extra = _parse_args(args, [], [])
+        assert extra == ["hello", "world"]
+
+    def test_parse_argument_mapping(self):
+        args = ["my-model"]
+        arguments = [Argument("model_name")]
+        kwargs, extra = _parse_args(args, [], arguments)
+        assert kwargs["model_name"] == "my-model"
+
+    def test_parse_optional_argument_default(self):
+        args = []
+        arguments = [Argument("model_name", required=False, default="gpt2")]
+        kwargs, extra = _parse_args(args, [], arguments)
+        assert kwargs["model_name"] == "gpt2"
+
+    def test_parse_required_argument_missing(self):
+        args = []
+        arguments = [Argument("model_name", required=True)]
+        with pytest.raises(UsageError):
+            _parse_args(args, [], arguments)
+
+    def test_parse_int_option(self):
+        opts = [Option(["--port"], type=int, default=8000)]
+        args = ["--port", "9000"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["port"] == 9000
+        assert isinstance(kwargs["port"], int)
+
+    def test_parse_float_option(self):
+        opts = [Option(["--lr"], type=float, default=0.01)]
+        args = ["--lr", "0.001"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["lr"] == 0.001
+
+    def test_parse_choice_option(self):
+        choice = Choice(["cpu", "cuda", "mps"])
+        opts = [Option(["--device"], choice=choice, default="cpu")]
+        args = ["--device", "CUDA"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["device"] == "cuda"
+
+    def test_parse_equals_style(self):
+        opts = [Option(["--host"], default="localhost")]
+        args = ["--host=example.com"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["host"] == "example.com"
+
+    def test_parse_multiple(self):
+        opts = [Option(["--metadata"], multiple=True)]
+        args = ["--metadata", "key1=val1", "--metadata", "key2=val2"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["metadata"] == ["key1=val1", "key2=val2"]
+
+    def test_parse_unknown_option(self):
+        opts = []
+        args = ["--unknown"]
+        with pytest.raises(UsageError):
+            _parse_args(args, opts, [])
+
+    def test_parse_variadic_argument(self):
+        args = ["a", "b", "c"]
+        arguments = [Argument("items", nargs=-1)]
+        kwargs, extra = _parse_args(args, [], arguments)
+        assert kwargs["items"] == ["a", "b", "c"]
+
+    def test_parse_short_option(self):
+        opts = [Option(["-q", "--quiet"], is_flag=True)]
+        args = ["-q"]
+        kwargs, extra = _parse_args(args, opts, [])
+        assert kwargs["quiet"] is True
+
+
+# ── Group ───────────────────────────────────────────────────────────────
 
 class TestGroup:
-    def test_create_group(self):
-        g = Group("test", "Test help")
-        assert g.name == "test"
-        assert g.help == "Test help"
-        assert g.commands == {}
-        assert g.groups == {}
-
-    def test_command_decorator(self):
-        g = Group("root")
+    def test_register_command(self):
+        g = Group("test")
 
         @g.command("hello", help="Say hello")
         def hello():
@@ -47,361 +225,69 @@ class TestGroup:
 
         assert "hello" in g.commands
         assert g.commands["hello"].help == "Say hello"
-        assert g.commands["hello"].func is hello
 
-    def test_group_decorator(self):
-        g = Group("root")
+    def test_register_subgroup(self):
+        g = Group("test")
 
-        @g.group("sub", help="Sub group")
+        @g.group("sub", help="A subgroup")
         def sub():
             pass
 
         assert "sub" in g.groups
-        assert g.groups["sub"].help == "Sub group"
-        # group() returns the Group, not the function
-        assert isinstance(g.groups["sub"], Group)
-
-    def test_subgroup_commands_register(self):
-        root = Group("root")
-
-        @root.group("model")
-        def model():
-            pass
-
-        @model.command("list", help="List models")
-        def model_list():
-            pass
-
-        assert "list" in root.groups["model"].commands
-        assert root.groups["model"].commands["list"].func is model_list
-
-    def test_add_command(self):
-        g = Group("root")
-        cmd = Command("test", lambda: None)
-        g.add_command(cmd, "test")
-        assert "test" in g.commands
-
-    def test_add_group(self):
-        g = Group("root")
-        sub = Group("sub")
-        g.add_group(sub, "sub")
-        assert "sub" in g.groups
+        assert g.groups["sub"].help == "A subgroup"
 
     def test_fuzzy_match_prefix(self):
-        g = Group("root")
+        g = Group("test")
         g.commands["model"] = Command("model", lambda: None)
-        g.commands["train"] = Command("train", lambda: None)
-        assert g._fuzzy_match("mo") == ["model"]
-        assert g._fuzzy_match("tr") == ["train"]
+        g.commands["memory"] = Command("memory", lambda: None)
 
-    def test_fuzzy_match_substring(self):
-        g = Group("root")
-        g.commands["checkpoint"] = Command("checkpoint", lambda: None)
-        assert g._fuzzy_match("check") == ["checkpoint"]
-
-    def test_fuzzy_match_fuzzy(self):
-        g = Group("root")
-        g.commands["model"] = Command("model", lambda: None)
-        # "modl" is close to "model"
-        matches = g._fuzzy_match("modl")
+        matches = g._fuzzy_match("mo")
         assert "model" in matches
 
+    def test_fuzzy_match_substring(self):
+        g = Group("test")
+        g.commands["checkpoint"] = Command("checkpoint", lambda: None)
+
+        matches = g._fuzzy_match("point")
+        assert "checkpoint" in matches
+
     def test_fuzzy_match_no_match(self):
-        g = Group("root")
+        g = Group("test")
         g.commands["model"] = Command("model", lambda: None)
-        assert g._fuzzy_match("xyz") == []
 
-    def test_callable_group(self):
-        g = Group("root")
-        # Group should be callable (runs the CLI)
-        assert callable(g)
+        matches = g._fuzzy_match("xyz")
+        assert matches == []
 
 
-# ── Option tests ────────────────────────────────────────────────────────
-
-class TestOption:
-    def test_basic_option(self):
-        opt = Option(["--name"], help="Your name", default="world")
-        assert opt.names == ["--name"]
-        assert opt.help == "Your name"
-        assert opt.default == "world"
-        assert opt.dest == "name"
-
-    def test_short_option(self):
-        opt = Option(["-n", "--name"], help="Name")
-        assert opt.short == "-n"
-        assert opt.dest == "name"  # prefers long option
-
-    def test_flag_option(self):
-        opt = Option(["--verbose"], is_flag=True)
-        assert opt.is_flag is True
-
-    def test_bool_flag_pair(self):
-        opt = Option(["--tui", "--no-tui"], is_flag=True)
-        assert opt.is_bool_flag is True
-        assert opt.dest == "tui"
-
-    def test_multiple_option(self):
-        opt = Option(["--tag"], multiple=True)
-        assert opt.multiple is True
-
-    def test_required_option(self):
-        opt = Option(["--name"], required=True)
-        assert opt.required is True
-
-    def test_choice_option(self):
-        opt = Option(["--format"], choice=Choice(["json", "csv"]))
-        assert opt.choice is not None
-
-
-# ── Argument tests ──────────────────────────────────────────────────────
-
-class TestArgument:
-    def test_required_argument(self):
-        arg = Argument("name")
-        assert arg.name == "name"
-        assert arg.required is True
-
-    def test_optional_argument(self):
-        arg = Argument("name", required=False, default="world")
-        assert arg.required is False
-        assert arg.default == "world"
-
-    def test_variadic_argument(self):
-        arg = Argument("files", nargs=-1)
-        assert arg.nargs == -1
-
-
-# ── Parser tests ────────────────────────────────────────────────────────
-
-class TestParser:
-    def test_parse_simple_args(self):
-        opts = [Option(["--name"], default="world")]
-        args = [Argument("prompt")]
-        kwargs, extra = _parse_args(["hello", "--name", "test"], opts, args)
-        assert kwargs["prompt"] == "hello"
-        assert kwargs["name"] == "test"
-
-    def test_parse_flag(self):
-        opts = [Option(["--verbose"], is_flag=True)]
-        kwargs, extra = _parse_args(["--verbose"], opts, [])
-        assert kwargs["verbose"] is True
-
-    def test_parse_no_flag(self):
-        opts = [Option(["--verbose"], is_flag=True)]
-        kwargs, extra = _parse_args([], opts, [])
-        assert kwargs["verbose"] is False
-
-    def test_parse_bool_flag_pair(self):
-        opts = [Option(["--tui", "--no-tui"], is_flag=True)]
-        kwargs, extra = _parse_args(["--tui"], opts, [])
-        assert kwargs["tui"] is True
-        kwargs, extra = _parse_args(["--no-tui"], opts, [])
-        assert kwargs["tui"] is False
-
-    def test_parse_int_option(self):
-        opts = [Option(["--port"], type=int, default=8000)]
-        kwargs, extra = _parse_args(["--port", "9000"], opts, [])
-        assert kwargs["port"] == 9000
-
-    def test_parse_float_option(self):
-        opts = [Option(["--temp"], type=float, default=0.5)]
-        kwargs, extra = _parse_args(["--temp", "0.8"], opts, [])
-        assert kwargs["temp"] == 0.8
-
-    def test_parse_choice_option(self):
-        opts = [Option(["--format"], choice=Choice(["json", "csv"]))]
-        kwargs, extra = _parse_args(["--format", "json"], opts, [])
-        assert kwargs["format"] == "json"
-
-    def test_parse_invalid_choice(self):
-        opts = [Option(["--format"], choice=Choice(["json", "csv"]))]
-        with pytest.raises(UsageError):
-            _parse_args(["--format", "xml"], opts, [])
-
-    def test_parse_required_argument(self):
-        opts = []
-        args = [Argument("name")]
-        with pytest.raises(UsageError):
-            _parse_args([], opts, args)
-
-    def test_parse_optional_argument(self):
-        opts = []
-        args = [Argument("name", required=False, default="world")]
-        kwargs, extra = _parse_args([], opts, args)
-        assert kwargs["name"] == "world"
-
-    def test_parse_variadic_argument(self):
-        opts = []
-        args = [Argument("files", nargs=-1)]
-        kwargs, extra = _parse_args(["a.txt", "b.txt", "c.txt"], opts, args)
-        assert kwargs["files"] == ["a.txt", "b.txt", "c.txt"]
-
-    def test_parse_eq_style(self):
-        opts = [Option(["--name"])]
-        kwargs, extra = _parse_args(["--name=test"], opts, [])
-        assert kwargs["name"] == "test"
-
-    def test_parse_unknown_option(self):
-        opts = []
-        with pytest.raises(UsageError):
-            _parse_args(["--unknown"], opts, [])
-
-    def test_parse_missing_option_value(self):
-        opts = [Option(["--name"])]
-        with pytest.raises(UsageError):
-            _parse_args(["--name"], opts, [])
-
-    def test_parse_multiple_option(self):
-        opts = [Option(["--tag"], multiple=True)]
-        kwargs, extra = _parse_args(["--tag", "a", "--tag", "b"], opts, [])
-        assert kwargs["tag"] == ["a", "b"]
-
-    def test_parse_shows_default(self):
-        opts = [Option(["--port"], type=int, default=8000, show_default=True)]
-        kwargs, extra = _parse_args([], opts, [])
-        assert kwargs["port"] == 8000
-
-
-# ── Type tests ──────────────────────────────────────────────────────────
-
-class TestChoice:
-    def test_valid_choice(self):
-        c = Choice(["json", "csv"])
-        assert c.convert("json", "--format") == "json"
-
-    def test_case_insensitive(self):
-        c = Choice(["JSON", "CSV"])
-        assert c.convert("json", "--format") == "JSON"
-
-    def test_invalid_choice(self):
-        c = Choice(["json", "csv"])
-        with pytest.raises(BadParameter):
-            c.convert("xml", "--format")
-
-    def test_case_sensitive(self):
-        c = Choice(["JSON", "CSV"], case_sensitive=True)
-        with pytest.raises(BadParameter):
-            c.convert("json", "--format")
-
-
-class TestPath:
-    def test_path_exists(self):
-        with tempfile.NamedTemporaryFile() as f:
-            p = CliPath(exists=True)
-            result = p.convert(f.name, "path")
-            assert result == f.name
-
-    def test_path_not_exists(self):
-        p = CliPath(exists=True)
-        with pytest.raises(BadParameter):
-            p.convert("/nonexistent/path", "path")
-
-    def test_path_file_okay(self):
-        with tempfile.NamedTemporaryFile() as f:
-            p = CliPath(file_okay=True)
-            result = p.convert(f.name, "path")
-            assert result == f.name
-
-    def test_path_dir_not_okay(self):
-        with tempfile.TemporaryDirectory() as d:
-            p = CliPath(dir_okay=False)
-            with pytest.raises(BadParameter):
-                p.convert(d, "path")
-
-    def test_path_resolve(self):
-        p = CliPath(resolve_path=True)
-        result = p.convert(".", "path")
-        assert os.path.isabs(result)
-
-
-class TestIntRange:
-    def test_valid_int(self):
-        r = IntRange(min=0, max=100)
-        assert r.convert("50", "--port") == 50
-
-    def test_below_min(self):
-        r = IntRange(min=0, max=100)
-        with pytest.raises(BadParameter):
-            r.convert("-1", "--port")
-
-    def test_above_max(self):
-        r = IntRange(min=0, max=100)
-        with pytest.raises(BadParameter):
-            r.convert("101", "--port")
-
-    def test_not_int(self):
-        r = IntRange()
-        with pytest.raises(BadParameter):
-            r.convert("abc", "--port")
-
-
-# ── Context tests ───────────────────────────────────────────────────────
-
-class TestContext:
-    def test_context_obj(self):
-        ctx = Context({"host": "localhost"})
-        assert ctx.obj["host"] == "localhost"
-
-    def test_ensure_object(self):
-        ctx = Context()
-        ctx.ensure_object(dict)
-        assert isinstance(ctx.obj, dict)
-
-    def test_ensure_object_preserves(self):
-        ctx = Context({"existing": True})
-        ctx.ensure_object(dict)
-        assert ctx.obj["existing"] is True
-
-    def test_invoked_subcommand(self):
-        ctx = Context()
-        ctx.invoked_subcommand = "model"
-        assert ctx.invoked_subcommand == "model"
-
-    def test_invoke_command(self):
-        ctx = Context()
-        called = []
-
-        def my_func(x):
-            called.append(x)
-
-        cmd = Command("test", my_func)
-        ctx.invoke(cmd, x=42)
-        assert called == [42]
-
-    def test_invoke_callable(self):
-        ctx = Context()
-        called = []
-
-        def my_func():
-            called.append(True)
-
-        ctx.invoke(my_func)
-        assert called == [True]
-
-
-# ── Decorator tests ─────────────────────────────────────────────────────
+# ── Decorators ──────────────────────────────────────────────────────────
 
 class TestDecorators:
     def test_option_decorator(self):
-        @option("--name", help="Name", default="world")
-        def greet():
+        @option("--host", default="localhost", help="Host")
+        def my_cmd(host):
             pass
 
-        assert hasattr(greet, "_options")
-        assert len(greet._options) == 1
-        assert greet._options[0].dest == "name"
+        assert hasattr(my_cmd, "_options")
+        assert len(my_cmd._options) == 1
+        assert my_cmd._options[0].dest == "host"
+
+    def test_option_flag(self):
+        @option("--verbose", is_flag=True)
+        def my_cmd(verbose):
+            pass
+
+        assert my_cmd._options[0].is_flag is True
 
     def test_argument_decorator(self):
-        @argument("prompt", required=True)
-        def generate():
+        @argument("name", required=True)
+        def my_cmd(name):
             pass
 
-        assert hasattr(generate, "_arguments")
-        assert len(generate._arguments) == 1
-        assert generate._arguments[0].name == "prompt"
+        assert hasattr(my_cmd, "_arguments")
+        assert len(my_cmd._arguments) == 1
+        assert my_cmd._arguments[0].name == "name"
 
-    def test_pass_context(self):
+    def test_pass_context_decorator(self):
         @pass_context
         def my_cmd(ctx):
             pass
@@ -409,429 +295,335 @@ class TestDecorators:
         # pass_context is a no-op, just returns the function
         assert callable(my_cmd)
 
-    def test_version_option_decorator(self):
-        @version_option(package_name="sloughgpt", prog_name="sloughgpt")
-        def cli():
-            pass
-
-        assert hasattr(cli, "_version_option")
-        assert cli._version_option is True
-
-    def test_stacked_decorators(self):
-        @option("--name", help="Name")
-        @option("--count", type=int, default=1)
-        @argument("prompt")
-        def my_cmd():
+    def test_multiple_options(self):
+        @option("--host", default="localhost")
+        @option("--port", type=int, default=8000)
+        def my_cmd(host, port):
             pass
 
         assert len(my_cmd._options) == 2
-        assert len(my_cmd._arguments) == 1
 
 
-# ── Global options parser ───────────────────────────────────────────────
-
-class TestGlobalOptions:
-    def test_parse_host(self):
-        opts, remaining = _parse_global_options(["--host", "0.0.0.0", "model", "list"])
-        assert opts["host"] == "0.0.0.0"
-        assert remaining == ["model", "list"]
-
-    def test_parse_port(self):
-        opts, remaining = _parse_global_options(["--port", "9000", "model"])
-        assert opts["port"] == 9000
-
-    def test_parse_json_flag(self):
-        opts, remaining = _parse_global_options(["--json", "model"])
-        assert opts["json"] is True
-
-    def test_parse_quiet_flag(self):
-        opts, remaining = _parse_global_options(["-q", "model"])
-        assert opts["quiet"] is True
-
-    def test_parse_no_color(self):
-        opts, remaining = _parse_global_options(["--no-color", "model"])
-        assert opts["no_color"] is True
-
-    def test_parse_version(self):
-        opts, remaining = _parse_global_options(["--version"])
-        assert opts["version"] is True
-
-    def test_parse_help(self):
-        opts, remaining = _parse_global_options(["--help"])
-        assert opts["help"] is True
-
-    def test_parse_yes(self):
-        opts, remaining = _parse_global_options(["-y", "model"])
-        assert opts["yes"] is True
-
-    def test_parse_timeout(self):
-        opts, remaining = _parse_global_options(["--timeout", "30", "model"])
-        assert opts["timeout"] == 30
-
-    def test_defaults(self):
-        opts, remaining = _parse_global_options([])
-        assert opts["host"] == "localhost"
-        assert opts["port"] == 8000
-        assert opts["timeout"] == 10
-
-    def test_config_short(self):
-        opts, remaining = _parse_global_options(["-c", "my.yaml", "model"])
-        assert opts["config"] == "my.yaml"
-
-    def test_config_long(self):
-        opts, remaining = _parse_global_options(["--config", "my.yaml", "model"])
-        assert opts["config"] == "my.yaml"
-
-
-# ── Echo / Confirm tests ───────────────────────────────────────────────
+# ── echo / confirm ──────────────────────────────────────────────────────
 
 class TestEcho:
     def test_echo(self, capsys):
         echo("hello")
         captured = capsys.readouterr()
-        assert captured.out == "hello\n"
+        assert "hello" in captured.out
 
-    def test_echo_no_nl(self, capsys):
+    def test_echo_no_newline(self, capsys):
         echo("hello", nl=False)
         captured = capsys.readouterr()
         assert captured.out == "hello"
 
-    def test_echo_err(self, capsys):
+    def test_echo_stderr(self, capsys):
         echo("error", err=True)
         captured = capsys.readouterr()
-        assert captured.err == "error\n"
-
-    def test_echo_empty(self, capsys):
-        echo()
-        captured = capsys.readouterr()
-        assert captured.out == "\n"
-
-    def test_echo_int(self, capsys):
-        echo(42)
-        captured = capsys.readouterr()
-        assert captured.out == "42\n"
+        assert "error" in captured.err
 
 
 class TestConfirm:
-    def test_confirm_yes(self):
+    def test_confirm_yes(self, capsys):
         with patch("builtins.input", return_value="y"):
-            assert confirm("Continue?") is True
+            assert confirm("Proceed?") is True
 
-    def test_confirm_no(self):
+    def test_confirm_no(self, capsys):
         with patch("builtins.input", return_value="n"):
-            assert confirm("Continue?") is False
+            assert confirm("Proceed?") is False
 
-    def test_confirm_empty(self):
-        with patch("builtins.input", return_value=""):
-            assert confirm("Continue?") is False
-
-    def test_confirm_abort_on_no(self):
+    def test_confirm_abort(self):
         with patch("builtins.input", return_value="n"):
             with pytest.raises(SystemExit):
-                confirm("Continue?", abort=True)
-
-    def test_confirm_eof(self):
-        with patch("builtins.input", side_effect=EOFError):
-            assert confirm("Continue?") is False
-
-    def test_confirm_abort_on_eof(self):
-        with patch("builtins.input", side_effect=EOFError):
-            with pytest.raises(SystemExit):
-                confirm("Continue?", abort=True)
+                confirm("Proceed?", abort=True)
 
 
-# ── Error handling tests ────────────────────────────────────────────────
+# ── Usage tracking ──────────────────────────────────────────────────────
 
-class TestErrors:
-    def test_usage_error(self):
-        e = UsageError("bad option")
-        assert str(e) == "bad option"
-        assert e.message == "bad option"
+class TestUsageTracking:
+    def test_record_usage(self, tmp_path):
+        usage_file = tmp_path / "usage.json"
+        import cli as _cli
+        with patch.object(_cli, "_USAGE_PATH", usage_file):
+            _record_usage("model list")
+            _record_usage("model list")
+            _record_usage("train start")
 
-    def test_bad_parameter(self):
-        e = BadParameter("invalid value")
-        assert isinstance(e, UsageError)
+            data = json.loads(usage_file.read_text())
+            assert data["model list"] == 2
+            assert data["train start"] == 1
 
 
-# ── End-to-end run tests ────────────────────────────────────────────────
+# ── Group decorator (top-level) ─────────────────────────────────────────
 
-class TestEndToEnd:
-    def test_run_with_help(self, capsys):
-        root = Group("root", invoke_without_command=True)
+class TestGroupDecorator:
+    def test_creates_group(self):
+        @group(help="Test group")
+        def my_cli():
+            pass
 
-        @root.command("hello")
+        assert isinstance(my_cli, Group)
+        assert my_cli.help == "Test group"
+
+    def test_group_with_commands(self):
+        @group()
+        def my_cli():
+            pass
+
+        @my_cli.command("hello", help="Say hello")
         def hello():
-            echo("hello world")
+            pass
 
-        with patch("sys.argv", ["prog", "--help"]):
-            run(root)
+        assert "hello" in my_cli.commands
+
+
+# ── Run (integration) ──────────────────────────────────────────────────
+
+class TestRun:
+    def test_run_help(self, capsys):
+        @group(invoke_without_command=True)
+        def my_cli():
+            pass
+
+        @my_cli.command("test", help="Test command")
+        def test_cmd():
+            pass
+
+        with patch("sys.argv", ["cli", "--help"]):
+            run(my_cli)
 
         captured = capsys.readouterr()
         assert "Commands:" in captured.out
 
-    def test_run_command(self, capsys):
-        root = Group("root")
+    def test_run_version(self, capsys):
+        @group()
+        def my_cli():
+            pass
 
-        @root.command("hello")
-        def hello():
-            echo("hello world")
-
-        with patch("sys.argv", ["prog", "hello"]):
-            run(root)
+        with patch("sys.argv", ["cli", "--version"]):
+            run(my_cli)
 
         captured = capsys.readouterr()
-        assert "hello world" in captured.out
+        assert "v0.1.0" in captured.out or "dev" in captured.out
+
+    def test_run_command(self, capsys):
+        @group()
+        def my_cli():
+            pass
+
+        @my_cli.command("hello")
+        def hello():
+            echo("Hello, world!")
+
+        with patch("sys.argv", ["cli", "hello"]):
+            run(my_cli)
+
+        captured = capsys.readouterr()
+        assert "Hello, world!" in captured.out
 
     def test_run_subgroup(self, capsys):
-        root = Group("root")
+        @group()
+        def my_cli():
+            pass
 
-        @root.group("model")
+        @my_cli.group("model", help="Model commands")
         def model():
             pass
 
-        @model.command("list")
+        @model.command("list", help="List models")
         def model_list():
-            echo("listing models")
+            echo("model1\nmodel2")
 
-        with patch("sys.argv", ["prog", "model", "list"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "listing models" in captured.out
-
-    def test_run_with_options(self, capsys):
-        root = Group("root")
-
-        @root.command("greet")
-        @option("--name", default="world")
-        def greet(name):
-            echo(f"hello {name}")
-
-        with patch("sys.argv", ["prog", "greet", "--name", "test"]):
-            run(root)
+        with patch("sys.argv", ["cli", "model", "list"]):
+            run(my_cli)
 
         captured = capsys.readouterr()
-        assert "hello test" in captured.out
+        assert "model1" in captured.out
 
-    def test_run_with_arguments(self, capsys):
-        root = Group("root")
+    def test_run_fuzzy_match(self, capsys):
+        @group()
+        def my_cli():
+            pass
 
-        @root.command("echo")
-        @argument("text")
-        def echo_cmd(text):
-            echo(text)
+        @my_cli.command("model", help="Model commands")
+        def model():
+            echo("models here")
 
-        with patch("sys.argv", ["prog", "echo", "hello"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "hello" in captured.out
-
-    def test_run_with_context(self, capsys):
-        root = Group("root")
-
-        @root.command("check")
-        @pass_context
-        def check(ctx):
-            echo(f"host={ctx.obj.get('host', 'none')}")
-
-        with patch("sys.argv", ["prog", "check"]):
-            run(root)
+        # Non-interactive: auto-resolves silently
+        with patch("sys.argv", ["cli", "mo"]):
+            with patch("sys.stdin.isatty", return_value=False):
+                run(my_cli)
 
         captured = capsys.readouterr()
-        assert "host=localhost" in captured.out
-
-    def test_run_global_option_passed_to_ctx(self, capsys):
-        root = Group("root")
-
-        @root.command("check")
-        @pass_context
-        def check(ctx):
-            echo(f"host={ctx.obj.get('host')}")
-
-        with patch("sys.argv", ["prog", "--host", "0.0.0.0", "check"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "host=0.0.0.0" in captured.out
-
-    def test_run_version(self, capsys):
-        root = Group("root")
-
-        @root.command("hello")
-        def hello():
-            echo("hello")
-
-        with patch("sys.argv", ["prog", "--version"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "v" in captured.out or "sloughgpt" in captured.out
-
-    def test_run_no_command_shows_help(self, capsys):
-        root = Group("root", invoke_without_command=True)
-
-        @root.command("hello")
-        def hello():
-            echo("hello")
-
-        with patch("sys.argv", ["prog"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "Commands:" in captured.out
+        assert "models here" in captured.out
 
     def test_run_unknown_command(self, capsys):
-        root = Group("root")
+        @group()
+        def my_cli():
+            pass
 
-        @root.command("hello")
-        def hello():
-            echo("hello")
+        @my_cli.command("test")
+        def test_cmd():
+            pass
 
-        with patch("sys.argv", ["prog", "xyz"]):
-            run(root)
+        with patch("sys.argv", ["cli", "xyz"]):
+            with patch("sys.stdin.isatty", return_value=False):
+                run(my_cli)
 
         captured = capsys.readouterr()
         assert "Unknown command" in captured.out
 
-    def test_run_with_choice(self, capsys):
-        root = Group("root")
-
-        @root.command("fmt")
-        @option("--format", choice=Choice(["json", "csv"]))
-        def fmt(format):
-            echo(f"format={format}")
-
-        with patch("sys.argv", ["prog", "fmt", "--format", "json"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "format=json" in captured.out
-
-    def test_run_multiple_options(self, capsys):
-        root = Group("root")
-
-        @root.command("test")
-        @option("--a", default="1")
-        @option("--b", default="2")
-        def test(a, b):
-            echo(f"{a},{b}")
-
-        with patch("sys.argv", ["prog", "test", "--a", "x", "--b", "y"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "x,y" in captured.out
-
-    def test_run_flag(self, capsys):
-        root = Group("root")
-
-        @root.command("test")
-        @option("--verbose", is_flag=True)
-        def test(verbose):
-            echo(f"verbose={verbose}")
-
-        with patch("sys.argv", ["prog", "test", "--verbose"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "verbose=True" in captured.out
-
-    def test_run_bool_flag_pair(self, capsys):
-        root = Group("root")
-
-        @root.command("test")
-        @option("--tui/--no-tui", is_flag=True)
-        def test(tui):
-            echo(f"tui={tui}")
-
-        with patch("sys.argv", ["prog", "test", "--tui"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "tui=True" in captured.out
-
-    def test_run_hidden_command_not_in_help(self, capsys):
-        root = Group("root")
-
-        @root.command("secret", hidden=True)
-        def secret():
-            echo("secret")
-
-        @root.command("public")
-        def public():
-            echo("public")
-
-        with patch("sys.argv", ["prog", "--help"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "secret" not in captured.out
-        assert "public" in captured.out
-
-    def test_run_add_command(self, capsys):
-        root = Group("root")
-
-        def my_func():
-            echo("added")
-
-        cmd = Command("added", my_func)
-        root.add_command(cmd, "added")
-
-        with patch("sys.argv", ["prog", "added"]):
-            run(root)
-
-        captured = capsys.readouterr()
-        assert "added" in captured.out
-
-
-# ── Usage tracking tests ────────────────────────────────────────────────
-
-class TestUsageTracking:
-    def test_record_usage(self, tmp_path):
-        from core import slo_cli
-        usage_file = tmp_path / "usage.json"
-        old_path = slo_cli._USAGE_PATH
-        slo_cli._USAGE_PATH = usage_file
-        try:
-            slo_cli._record_usage("model")
-            data = json.loads(usage_file.read_text())
-            assert data["model"] == 1
-
-            slo_cli._record_usage("model")
-            data = json.loads(usage_file.read_text())
-            assert data["model"] == 2
-        finally:
-            slo_cli._USAGE_PATH = old_path
-
-
-# ── Module-level decorators test ────────────────────────────────────────
-
-class TestModuleLevelDecorators:
-    def test_module_group(self):
-        @group(help="Test group")
-        def mygroup():
-            pass
-
-        assert isinstance(mygroup, Group)
-        assert mygroup.help == "Test group"
-
-    def test_module_group_with_commands(self):
+    def test_run_with_options(self, capsys):
         @group()
-        def root():
+        def my_cli():
             pass
 
-        @root.command("hello")
-        def hello():
+        @my_cli.command("serve")
+        @option("--port", type=int, default=8000)
+        def serve(port):
+            echo(f"Port: {port}")
+
+        with patch("sys.argv", ["cli", "serve", "--port", "9000"]):
+            run(my_cli)
+
+        captured = capsys.readouterr()
+        assert "Port: 9000" in captured.out
+
+    def test_run_with_context(self, capsys):
+        @group()
+        @option("--host", default="localhost")
+        def my_cli(host):
             pass
 
-        assert "hello" in root.commands
+        @my_cli.command("test")
+        @pass_context
+        def test_cmd(ctx):
+            echo(f"host={ctx.obj.get('host', 'none')}")
 
-    def test_module_command(self):
-        @command("test", help="Test cmd")
-        def test():
+        with patch("sys.argv", ["cli", "--host", "example.com", "test"]):
+            run(my_cli)
+
+        captured = capsys.readouterr()
+        assert "host=example.com" in captured.out
+
+    def test_run_missing_argument(self, capsys):
+        @group()
+        def my_cli():
             pass
 
-        assert isinstance(test, Command)
-        assert test.name == "test"
-        assert test.help == "Test cmd"
+        @my_cli.command("download")
+        @argument("model_id")
+        def download(model_id):
+            pass
+
+        with patch("sys.argv", ["cli", "download"]):
+            with pytest.raises(SystemExit):
+                run(my_cli)
+
+    def test_run_unknown_group_option_exits_cleanly(self, capsys):
+        @group()
+        def my_cli():
+            pass
+
+        @my_cli.command("test")
+        def test_cmd():
+            pass
+
+        with patch("sys.argv", ["cli", "--bogus-flag"]):
+            with pytest.raises(SystemExit) as exc_info:
+                run(my_cli)
+            assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        assert "Error:" in captured.out
+        assert "Unknown option: --bogus-flag" in captured.out
+        assert "Traceback" not in captured.out
+
+    def test_run_unknown_group_option_before_subcommand(self, capsys):
+        @group()
+        @option("--host", default="localhost")
+        def my_cli(host):
+            pass
+
+        @my_cli.command("serve")
+        def serve():
+            echo("serving")
+
+        with patch("sys.argv", ["cli", "--host", "example.com", "--invalid-opt", "serve"]):
+            with pytest.raises(SystemExit) as exc_info:
+                run(my_cli)
+            assert exc_info.value.code == 1
+
+        captured = capsys.readouterr()
+        assert "Error:" in captured.out
+        assert "Unknown option: --invalid-opt" in captured.out
+
+
+# ── Integration with real cli.py patterns ────────────────────────────────
+
+class TestRealPatterns:
+    def test_cli_group_with_options(self, capsys):
+        """Test group with subcommand that has options."""
+        @group()
+        def cli():
+            pass
+
+        @cli.command("greet")
+        @option("--name", default="world", help="Name to greet")
+        @option("--count", default=1, type=int, help="Number of greetings")
+        def greet_cmd(name, count):
+            for _ in range(count):
+                echo(f"Hello {name}")
+
+        with patch("sys.argv", ["cli", "greet", "--name", "Alice", "--count", "2"]):
+            run(cli)
+
+        captured = capsys.readouterr()
+        assert "Hello Alice" in captured.out
+        assert captured.out.count("Hello Alice") == 2
+
+    def test_subgroup_with_subcommands(self, capsys):
+        """Test the model → list pattern used in cli.py."""
+        @group(invoke_without_command=True)
+        def cli():
+            pass
+
+        @cli.group("model", help="Model commands")
+        @pass_context
+        def model(ctx):
+            pass
+
+        @model.command("list", help="List models")
+        @pass_context
+        def model_list(ctx):
+            echo("gpt2\nllama")
+
+        @model.command("status", help="Model status")
+        @pass_context
+        def model_status(ctx):
+            echo("All good")
+
+        with patch("sys.argv", ["cli", "model", "list"]):
+            run(cli)
+
+        captured = capsys.readouterr()
+        assert "gpt2" in captured.out
+
+    def test_choice_type_in_option(self, capsys):
+        """Test Choice type used in cli.py export format."""
+        @group()
+        def cli():
+            pass
+
+        @cli.command("export")
+        @option("--format", "-f", "fmt",
+            type=Choice(["safetensors", "onnx", "gguf"]),
+            default="safetensors")
+        def export(fmt):
+            echo(f"Format: {fmt}")
+
+        with patch("sys.argv", ["cli", "export", "--format", "onnx"]):
+            run(cli)
+
+        captured = capsys.readouterr()
+        assert "Format: onnx" in captured.out

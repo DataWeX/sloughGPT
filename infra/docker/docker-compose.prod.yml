@@ -45,6 +45,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=https://your-domain.com
       - NODE_ENV=production
+      - NEXTAUTH_URL=https://your-domain.com
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:3000"]

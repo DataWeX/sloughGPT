@@ -25,7 +25,7 @@ from domains.logging.shell_logger import ShellLogger
 from domains.logging.web_logger import WebLogger
 from domains.logging.bridge import BridgeHandler, record_extra_context
 from domains.logging.config import (
-    SloFormatter,
+    LogFormatter,
     get_request_id,
     set_request_id,
     get_log_context,
@@ -410,9 +410,11 @@ class TestConsoleLogger:
         assert "8000" in output
 
     def test_format_json_record(self):
-        log = ConsoleLogger("slo.test", level=LogLevel.DEBUG, format="json", stream=StringIO())
+        stream = StringIO()
+        log = ConsoleLogger("slo.test", level=LogLevel.DEBUG, format="json", stream=stream)
         record = LogRecord(level=LogLevel.INFO, message="test", logger="slo.test")
-        output = log._format_json(record)
+        log.emit(record)
+        output = stream.getvalue()
         data = json.loads(output)
         assert data["level"] == "INFO"
         assert data["msg"] == "test"
@@ -820,11 +822,11 @@ class TestConfigContextVars:
         assert ctx["b"] == 2
 
 
-# ── SloFormatter ──────────────────────────────────────────────────────────
+# ── LogFormatter ──────────────────────────────────────────────────────────
 
-class TestSloFormatter:
+class TestLogFormatter:
     def test_human_format(self):
-        fmt = SloFormatter(colors=False)
+        fmt = LogFormatter(colors=False)
         record = logging.LogRecord(
             name="slo.test", level=logging.INFO, pathname="", lineno=0,
             msg="hello", args=(), exc_info=None, created=time.time(),
@@ -834,7 +836,7 @@ class TestSloFormatter:
         assert "hello" in output
 
     def test_human_format_with_tag(self):
-        fmt = SloFormatter(colors=False)
+        fmt = LogFormatter(colors=False)
         record = logging.LogRecord(
             name="slo.test", level=logging.INFO, pathname="", lineno=0,
             msg="loaded", args=(), exc_info=None, created=time.time(),
@@ -844,19 +846,18 @@ class TestSloFormatter:
         assert "MODEL" in output
 
     def test_json_format(self):
-        fmt = SloFormatter(fmt="json", colors=False)
+        fmt = LogFormatter(fmt="json", colors=False)
         record = logging.LogRecord(
             name="slo.test", level=logging.INFO, pathname="", lineno=0,
             msg="test msg", args=(), exc_info=None, created=time.time(),
         )
         output = fmt.format(record)
         data = json.loads(output)
-        assert data["v"] == 1
-        assert data["lvl"] == "INFO"
+        assert data["level"] == "INFO"
         assert data["msg"] == "test msg"
 
     def test_json_format_with_error_code(self):
-        fmt = SloFormatter(fmt="json", colors=False)
+        fmt = LogFormatter(fmt="json", colors=False)
         record = logging.LogRecord(
             name="slo.test", level=logging.ERROR, pathname="", lineno=0,
             msg="oom", args=(), exc_info=None, created=time.time(),
@@ -864,7 +865,7 @@ class TestSloFormatter:
         record.error_code = "E_MODEL_OOM"
         output = fmt.format(record)
         data = json.loads(output)
-        assert data["lvl"] == "ERROR"
+        assert data["level"] == "ERROR"
         assert data["msg"] == "oom"
 
 

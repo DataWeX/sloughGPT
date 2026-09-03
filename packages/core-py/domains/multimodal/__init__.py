@@ -10,6 +10,8 @@ Vision understanding using a custom CNN:
 - Speech recognition (browser Web Speech API)
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 

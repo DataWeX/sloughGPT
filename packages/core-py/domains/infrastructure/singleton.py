@@ -4,6 +4,9 @@ Singleton metaclass for thread-safe singleton pattern.
 Provides a metaclass that ensures only one instance of a class exists,
 with thread-safe double-checked locking.
 """
+
+from __future__ import annotations
+
 import threading
 from typing import Any, Callable, Dict, Optional, TypeVar
 

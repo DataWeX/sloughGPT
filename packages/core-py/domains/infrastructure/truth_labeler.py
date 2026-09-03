@@ -20,6 +20,8 @@ Usage:
     result = labeler.label("The sky is blue")
     # → {"label": "factual", "confidence": 0.8, "reason": "declarative statement"}
 """
+from __future__ import annotations
+
 import re
 import threading
 from dataclasses import dataclass

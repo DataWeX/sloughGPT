@@ -11,7 +11,7 @@ Classes:
     ConsoleLogger    — colored terminal output (API server)
     CLILogger        — native ANSI output (CLI commands)
     ShellLogger      — ANSI output (interactive REPL)
-    WebLogger        — structured JSON (browser / SSR)
+    WebLogger        — structured JSON (browser / SSR) + UI event tracking
     BridgeHandler    — routes Python logging.getLogger() through our Logger
     ErrorCode        — structured error codes (E_AUTH_*, E_MODEL_*, etc.)
     LogTag           — type tags (REQ, MODEL, AUTH, etc.)
@@ -28,6 +28,8 @@ Factory:
     set_global()     — set the global default logger
     get_global()     — get the global default logger
 """
+
+from __future__ import annotations
 
 from typing import Optional
 
@@ -46,6 +48,8 @@ from .config import (
     clear_log_context,
 )
 
+WebEventLogger = WebLogger  # backward compat alias
+
 __all__ = [
     "LogLevel",
     "LogRecord",
@@ -59,6 +63,7 @@ __all__ = [
     "CLILogger",
     "ShellLogger",
     "WebLogger",
+    "WebEventLogger",
     "BridgeHandler",
     "setup_logging",
     "get_request_id",

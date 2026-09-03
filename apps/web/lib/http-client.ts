@@ -53,6 +53,15 @@ const MAX_RETRIES = 2
 const BASE_DELAY = 500
 const DEFAULT_TIMEOUT_MS = 30_000
 
+// Docstore-specific: more retries with longer delays for startup transient failures
+const DOCSTORE_RETRYABLE_STATUSES = new Set([400, 408, 429, 500, 502, 503, 504])
+const DOCSTORE_MAX_RETRIES = 4
+const DOCSTORE_BASE_DELAY = 300
+
+function _isDocstoreUrl(url: string): boolean {
+  return url.includes('/docstore/')
+}
+
 async function request<T>(
   method: string,
   url: string,
@@ -77,6 +86,10 @@ async function request<T>(
   logger.debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
   const timeoutMs = opts?.timeout ?? DEFAULT_TIMEOUT_MS
+  const isDocstore = _isDocstoreUrl(url)
+  const maxRetries = isDocstore ? DOCSTORE_MAX_RETRIES : MAX_RETRIES
+  const baseDelay = isDocstore ? DOCSTORE_BASE_DELAY : BASE_DELAY
+  const retryableStatuses = isDocstore ? DOCSTORE_RETRYABLE_STATUSES : RETRYABLE_STATUSES
   let retries = 0
   while (true) {
     let signal = opts?.signal
@@ -99,11 +112,15 @@ async function request<T>(
 
       if (!res.ok) {
         const status = res.status
-        const isRetryable = RETRYABLE_STATUSES.has(status)
-        if (isRetryable && retries < MAX_RETRIES) {
+        const isRetryable = retryableStatuses.has(status)
+        if (isRetryable && retries < maxRetries) {
           retries++
           const retryAfter = Number(res.headers.get('Retry-After')) || 0
-          const delay = retryAfter > 0 ? retryAfter * 1000 : BASE_DELAY * Math.pow(2, retries - 1)
+          const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelay * Math.pow(2, retries - 1)
+          logger.warning(
+            `retry ${retries}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
+            { corrId, method, url, status, retries, maxRetries, delay },
+          )
           await new Promise(r => setTimeout(r, delay))
           continue
         }
@@ -170,9 +187,14 @@ async function request<T>(
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
       // Only report after retries exhausted (don't flood on each retry)
-      if (retries < MAX_RETRIES) {
+      if (retries < maxRetries) {
         retries++
-        await new Promise(r => setTimeout(r, BASE_DELAY * Math.pow(2, retries - 1)))
+        const delay = baseDelay * Math.pow(2, retries - 1)
+        logger.warning(
+          `retry ${retries}/${maxRetries} ${method} ${url} ${kind} delay=${delay}ms corr=${corrId}`,
+          { corrId, method, url, kind, retries, maxRetries, delay },
+        )
+        await new Promise(r => setTimeout(r, delay))
         continue
       }
 
@@ -323,6 +345,7 @@ interface StreamSSEOptions {
   signal?: AbortSignal
   noAuth?: boolean
   lastEventId?: string
+  maxRetries?: number
 }
 
 /**
@@ -332,69 +355,88 @@ interface StreamSSEOptions {
  */
 export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGenerator<SSEEvent> {
   const method = opts?.method ?? 'POST'
-  const corrId = _corrId()
-  const headers: Record<string, string> = {}
-  if (method !== 'GET') headers['Content-Type'] = 'application/json'
-  if (!opts?.noAuth) {
-    const token = useAuthStore.getState().token
-    if (token) headers['Authorization'] = `Bearer ${token}`
-  }
-  if (opts?.lastEventId) {
-    headers['Last-Event-ID'] = opts.lastEventId
-  }
-  headers['X-Correlation-ID'] = corrId
+  const maxRetries = opts?.maxRetries ?? 3
+  const baseDelay = 500
 
-  _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
-  if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const corrId = _corrId()
+    const headers: Record<string, string> = {}
+    if (method !== 'GET') headers['Content-Type'] = 'application/json'
+    if (!opts?.noAuth) {
+      const token = useAuthStore.getState().token
+      if (token) headers['Authorization'] = `Bearer ${token}`
+    }
+    if (opts?.lastEventId) {
+      headers['Last-Event-ID'] = opts.lastEventId
+    }
+    headers['X-Correlation-ID'] = corrId
 
-  logger.debug(`>>> SSE ${method} ${url} corr=${corrId}`, { corrId, method, url })
+    _recentCorrIds.push({ id: corrId, url, ts: Date.now() })
+    if (_recentCorrIds.length > MAX_RECENT) _recentCorrIds.shift()
 
-  let res: Response
-  try {
-    res = await fetch(`${PUBLIC_API_URL}${url}`, {
-      method,
-      headers,
-      body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
-      signal: opts?.signal,
-    })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Network error'
-    logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
-    yield { status: 'error', message: `Connection error: ${msg}` }
-    return
-  }
+    logger.debug(`>>> SSE ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
-  logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, { corrId, status: res.status })
+    let res: Response
+    try {
+      res = await fetch(`${PUBLIC_API_URL}${url}`, {
+        method,
+        headers,
+        body: opts?.body != null ? JSON.stringify(opts.body) : undefined,
+        signal: opts?.signal,
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Network error'
+      logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
+      yield { status: 'error', message: `Connection error: ${msg}` }
+      return
+    }
 
-  if (!res.ok || !res.body) {
-    yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`, data: { http_status: res.status, error: `HTTP ${res.status}` } }
-    return
-  }
+    logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, { corrId, status: res.status })
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  try {
-    while (true) {
-      let chunk: ReadableStreamReadResult<Uint8Array>
-      try {
-        chunk = await reader.read()
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Read error'
-        yield { status: 'error', message: `Stream disconnected: ${msg}` }
-        return
+    if (!res.ok) {
+      const status = res.status
+      if (status === 503 && attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt)
+        logger.warning(
+          `SSE retry ${attempt + 1}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
+          { corrId, method, url, status, attempt, maxRetries, delay },
+        )
+        await new Promise(r => setTimeout(r, delay))
+        continue
       }
-      if (chunk.done) break
-      buffer += decoder.decode(chunk.value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trimEnd()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
+      yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`, data: { http_status: res.status, error: `HTTP ${res.status}` } }
+      return
+    }
+
+    if (!res.body) {
+      yield { status: 'error', message: 'No response body' }
+      return
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      while (true) {
+        let chunk: ReadableStreamReadResult<Uint8Array>
         try {
-          yield JSON.parse(payload) as SSEEvent
+          chunk = await reader.read()
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : 'Read error'
+          yield { status: 'error', message: `Stream disconnected: ${msg}` }
+          return
+        }
+        if (chunk.done) break
+        buffer += decoder.decode(chunk.value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          const trimmed = line.trimEnd()
+          if (!trimmed.startsWith('data:')) continue
+          const payload = trimmed.slice(5).trim()
+          if (!payload || payload === '[DONE]') continue
+          try {
+            yield JSON.parse(payload) as SSEEvent
         } catch (e) {
           logger.warning('SSE malformed JSON payload skipped', { payload: payload.slice(0, 80), exception: String(e) })
         }
@@ -407,7 +449,9 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
         try { yield JSON.parse(payload) as SSEEvent } catch { /* skip */ }
       }
     }
+    return
   } finally {
     reader.releaseLock()
+  }
   }
 }

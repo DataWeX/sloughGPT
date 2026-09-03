@@ -1528,7 +1528,7 @@ def cmd_distill(args):
     elif preset == "medium":
         n_embed, n_layer, n_head, block_size = 256, 6, 8, 256
 
-    log.header("Knowledge Distillation (GPT-2 → Student)")
+    log.header("Knowledge Distillation (GPT-2 to Student)")
     log.key_value("Teacher", "gpt2")
     log.key_value("Student", f"{n_embed}d {n_layer}L {n_head}H")
     log.key_value("Context", str(block_size))
@@ -1867,7 +1867,7 @@ def cmd_train_from_sessions(args):
                     if samples:
                         log.info("Sample outputs:")
                         for s in samples[:3]:
-                            log.info(f"  {s.get('prompt', '')} → {s.get('response', '')[:80]}")
+                            log.info(f"  {s.get('prompt', '')} -> {s.get('response', '')[:80]}")
                     break
 
                 elif status == "error":

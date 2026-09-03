@@ -247,3 +247,6 @@ apps/mobile/android/gradlew
 releases/
 x
 y
+
+# Dev notes — derived from journal, not source of truth
+.dev-notes/*.md

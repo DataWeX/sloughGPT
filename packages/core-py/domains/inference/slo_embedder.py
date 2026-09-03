@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import os
 import struct
 import time
@@ -266,7 +265,6 @@ def _build_encoder(
             return out
 
         def parameters(self):
-            from domains.training.slonet import SloLayer
             ps = []
             for attr in [self.tok_emb, self.pos_emb, self.norm, self.proj]:
                 if hasattr(attr, "parameters"):
@@ -415,7 +413,7 @@ def train_embedder(
     Returns:
         dict with training stats
     """
-    from domains.training.slonet import SloAdam, Tensor, tensor as _tensor
+    from domains.training.slonet import SloAdam, Tensor
 
     if len(texts) < 2:
         raise ValueError("Need at least 2 text samples for contrastive training")
@@ -443,7 +441,7 @@ def train_embedder(
     logger.info("Encoder params: %d tensors", len(params), extra={"tag": "INFRA"})
 
     # 2b. Load meaning tags (the stars — fixed semantic reference points)
-    from domains.infrastructure.anchor_store import MeaningTags, get_default_meaning_tags
+    from domains.infrastructure.anchor_store import get_default_meaning_tags
     meaning_tags = get_default_meaning_tags(dimension=embed_dim)
     logger.info("Loaded %d meaning tags: %s", len(meaning_tags.names()), meaning_tags.names(), extra={"tag": "INFRA"})
 
@@ -940,7 +938,7 @@ def _save_checkpoint(
         json.dump({"vocab": vocab, "itos": {str(k): v for k, v in itos.items()}}, f)
 
     # Save as .soul (binary format compatible with import_from_sou)
-    from domains.training.slonet import export_to_sou, SloNet
+    from domains.training.slonet import SloNet
 
     net = SloNet(
         soul_name="text-embedder",
@@ -1064,8 +1062,6 @@ class SloTextEmbedder:
             return None
 
         try:
-            from domains.training.slonet import import_from_sou
-
             # Load metadata to get architecture params
             with open(path, "rb") as f:
                 raw = f.read()

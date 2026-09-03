@@ -8,6 +8,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { tokenizerController, type TokenizerStats, type SampleWord } from '@/lib/tokenizer-controller'
 import { TokenizerEfficiencyCard } from '@/components/tokenizer/TokenizerEfficiencyCard'
 import { TokenTreeQueryCard } from '@/components/tokenizer/TokenTreeQueryCard'
+import { clampNumber } from '@/lib/sanitize'
 import { TokenTreeTrainCard } from '@/components/tokenizer/TokenTreeTrainCard'
 import { TokenTreeCodecCard } from '@/components/tokenizer/TokenTreeCodecCard'
 import { TokenTreeMergesCard } from '@/components/tokenizer/TokenTreeMergesCard'
@@ -320,7 +321,7 @@ const handleGetMerges = async () => {
                 type="number"
                 aria-label="Vocab size"
                 value={trainVocab}
-                onChange={e => setTrainVocab(parseInt(e.target.value) || 512)}
+                onChange={e => setTrainVocab(clampNumber(parseInt(e.target.value) || 512, 2, 50_000))}
                 className="w-24"
                 min={32}
                 max={100000}

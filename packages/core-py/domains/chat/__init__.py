@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .domain import ChatDomain, ChatRequest, ChatResponse, get_chat_domain
 
 __all__ = [

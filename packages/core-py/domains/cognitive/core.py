@@ -3,6 +3,8 @@ Cognitive Core - Ported from recovered slo_cognitive_core.py
 Core: Reasoning + Thinking + Creativity
 """
 
+from __future__ import annotations
+
 import time
 import logging
 from typing import Dict, List, Any

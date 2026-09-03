@@ -7051,7 +7051,6 @@ class InteractivePrompt:
 
     def _table_sort_raw(self, headers: list[str], rows: list[list[str]],
                         title: str) -> list[list[str]]:
-        import locale as _loc
         fd = self._get_fd()
         sort_col = 0
         sort_asc = True

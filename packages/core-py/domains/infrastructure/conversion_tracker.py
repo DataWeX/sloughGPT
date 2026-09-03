@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Model Conversion Tracker — provides real-time status for model download + SLNC conversion.
 

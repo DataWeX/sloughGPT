@@ -13,7 +13,7 @@ import {
   IconChat,
   IconModels,
 } from '@/components/icons/NavIcons'
-import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve, IconThumbUp, IconThumbDown, FoldSection } from '@sloughgpt/strui'
+import { IconChevronRight, IconMessage, IconSearch, IconBolt, IconChart, LossCurve, IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -31,6 +31,7 @@ import { chatDB } from '@/lib/db'
 import { useHomePageData } from '@/hooks/useHomePageData'
 import { formatUptime } from '@/lib/chat-utils'
 import { formatBytes } from '@/lib/format-bytes'
+import { useModelReadiness, setModelReadiness } from '@/lib/store'
 
 function Greeting() {
   const [greeting, setGreeting] = useState('Hello')
@@ -54,7 +55,7 @@ export default function HomePage() {
 
   const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
 
-  const [startup, setStartup] = useState<{phase: string; step: number; total: number; message: string} | null>(null)
+  const modelReadiness = useModelReadiness()
   const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(false)
 
   useEffect(() => {
@@ -125,14 +126,14 @@ export default function HomePage() {
   }, [apiStatus])
 
   useEffect(() => {
-    if (apiStatus !== 'offline') return
+    if (apiStatus === 'loading' || apiStatus === 'offline') return
     let cancelled = false
     const poll = async () => {
       try {
         const result = await apiGet<{phase: string; step: number; total: number; message: string}>('/health/startup-progress')
-        if (!cancelled) setStartup(result)
+        if (!cancelled) setModelReadiness({ ...result, ready: result.phase === 'ready' })
       } catch {
-        if (!cancelled) setStartup(null)
+        if (!cancelled) setModelReadiness({ ready: false, phase: 'unknown', step: 0, total: 9, message: 'Connecting...' })
       }
     }
     poll()
@@ -146,7 +147,7 @@ export default function HomePage() {
     if (healthSummary) {
       const shortName = healthSummary.split('/').pop() || healthSummary
       const convs = inferenceCount !== null ? `${inferenceCount} conversation${inferenceCount === 1 ? '' : 's'}` : null
-      return convs ? `${shortName} loaded \u00b7 ${convs}` : `${shortName} loaded`
+      return convs ? `${shortName} loaded · ${convs}` : `${shortName} loaded`
     }
     return 'Your AI, your way'
   }
@@ -158,12 +159,11 @@ export default function HomePage() {
       className="relative"
       contentClassName="space-y-4"
     >
-      {/* Decorative training loss curve */}
+      {/* Decorative training loss curve — signature element */}
       <div className="absolute top-0 right-0 w-48 h-32 opacity-[0.06] pointer-events-none overflow-hidden hidden sm:block" aria-hidden="true">
         <LossCurve className="w-full h-full" />
       </div>
 
-      {/* ── Hero: Active Model ──────────────────────────────── */}
       {apiStatus === 'online' && modelStatus.loaded && (
         <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.04] via-transparent to-accent/[0.03]">
           <CardContent className="p-4 sm:p-5">
@@ -221,106 +221,136 @@ export default function HomePage() {
         </Card>
       )}
 
-      {/* ── Startup / Offline ───────────────────────────────── */}
-      {apiStatus === 'offline' && (
-        startup ? (
+      {apiStatus === 'offline' ? (
+        modelReadiness.phase !== 'initializing' && modelReadiness.phase !== 'unknown' ? (
           <Card className="border-warning/35 bg-warning/5">
-            <CardContent className="py-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium">Starting up\u2026 ({startup.step}/{startup.total})</p>
+            <CardHeader>
+              <CardTitle className="text-base">Starting up… ({modelReadiness.step}/{modelReadiness.total})</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <p>{modelReadiness.message}</p>
+              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
               </div>
-              <p className="text-xs text-muted-foreground mb-2">{startup.message}</p>
-              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(startup.step / startup.total) * 100}%`}} />
-              </div>
+              <p className="text-xs text-muted-foreground">First startup may take 90 seconds while AI components load.</p>
             </CardContent>
           </Card>
         ) : (
           <Card className="border-warning/35 bg-warning/5">
-            <CardContent className="py-3">
-              <p className="text-sm font-medium">{t('home.apiOffline.title')}</p>
-              <p className="text-xs text-muted-foreground mt-1">{t('home.apiOffline.body', { url: PUBLIC_API_URL })}</p>
+            <CardHeader>
+              <CardTitle className="text-base">{t('home.apiOffline.title')}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              {t('home.apiOffline.body', { url: PUBLIC_API_URL })}
             </CardContent>
           </Card>
         )
-      )}
+      ) : null}
 
-      {/* ── Quick Stats (compact row) ──────────────────────── */}
-      {apiStatus === 'online' && (
-        <div className="grid grid-cols-4 gap-2">
-          <div className="rounded-lg border border-border/50 bg-card/50 p-2.5 text-center">
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
-              </span>
-              <span className="text-[11px] text-muted-foreground">Status</span>
-            </div>
-            <p className="text-sm font-semibold">Online</p>
+      {apiStatus === 'offline' ? null : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Card className="flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.status')}</CardDescription>
+              </CardHeader>
+              <CardContent className="pb-4 px-4">
+                {apiStatus === 'loading' ? (
+                  <div className="h-6 w-20 animate-pulse rounded bg-muted" />
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+                    </span>
+                    <p className="text-sm font-semibold">Online</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.models')}</CardDescription>
+              </CardHeader>
+              <CardContent className="pb-4 px-4">
+                {apiStatus === 'loading' ? (
+                  <div className="h-6 w-12 animate-pulse rounded bg-muted" />
+                ) : (
+                  <p className="text-sm font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.personality')}</CardDescription>
+              </CardHeader>
+              <CardContent className="pb-4 px-4">
+                <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20 flex flex-col justify-between">
+              <CardHeader className="pb-1 px-4 pt-4">
+                <CardDescription className="text-xs font-medium text-muted-foreground">Active</CardDescription>
+              </CardHeader>
+              <CardContent className="pb-4 px-4">
+                <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
+                {inferenceCount !== null && inferenceCount !== undefined && (
+                  <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
-          <div className="rounded-lg border border-border/50 bg-card/50 p-2.5 text-center">
-            <p className="text-[11px] text-muted-foreground mb-1">Models</p>
-            <p className="text-sm font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
-          </div>
-          <div className="rounded-lg border border-border/50 bg-card/50 p-2.5 text-center">
-            <p className="text-[11px] text-muted-foreground mb-1">Personality</p>
-            <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
-          </div>
-          <div className="rounded-lg border border-accent/25 bg-accent/[0.03] p-2.5 text-center">
-            <p className="text-[11px] text-muted-foreground mb-1">Active</p>
-            <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model}` : 'None'}</p>
-            {inferenceCount !== null && inferenceCount !== undefined && (
-              <p className="text-[10px] text-muted-foreground tabular-nums">{inferenceCount} convs</p>
-            )}
-          </div>
-        </div>
-      )}
 
-      {/* ── Running Training indicator ──────────────────────── */}
-      {apiStatus === 'online' && runningTraining && (
-        <Link href="/training" className="block">
-          <Card className="border-primary/30 bg-primary/5 cursor-pointer hover:border-primary/50 transition-colors">
-            <CardContent className="py-2.5">
-              <div className="flex items-center gap-3">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">Training: {runningTraining.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{runningTraining.status_message}</p>
+          {feedbackStats?.db_stats && feedbackStats.db_stats.feedback_total > 0 && (
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-muted-foreground">Feedback</span>
+                    <span className="text-sm font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-success flex items-center gap-1"><IconThumbUp className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_up}</span>
+                    <span className="text-sm text-destructive flex items-center gap-1"><IconThumbDown className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_down}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-muted-foreground">Ratio</span>
+                    <span className={cn('text-sm font-medium', feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning')}>
+                      {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
+                    </span>
+                  </div>
+                  <Link href="/training" className="ml-auto text-sm text-primary hover:text-primary/80 shrink-0">
+                    Train from feedback →
+                  </Link>
                 </div>
-                <span className="text-sm text-primary shrink-0">View \u2192</span>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
+              </CardContent>
+            </Card>
+          )}
+
+          {runningTraining && (
+            <Link href="/training" className="block">
+              <Card className="border-primary/30 bg-primary/5 cursor-pointer hover:border-primary/50 transition-colors">
+                <CardContent className="py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">Training: {runningTraining.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{runningTraining.status_message}</p>
+                    </div>
+                    <span className="text-sm text-primary shrink-0">View →</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+        </>
       )}
 
-      {/* ── Feedback summary (if available) ─────────────────── */}
-      {apiStatus === 'online' && feedbackStats?.db_stats && feedbackStats.db_stats.feedback_total > 0 && (
-        <div className="flex items-center gap-4 px-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">Feedback</span>
-            <span className="text-xs font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-success flex items-center gap-0.5"><IconThumbUp className="h-3 w-3" /> {feedbackStats.db_stats.thumbs_up}</span>
-            <span className="text-xs text-destructive flex items-center gap-0.5"><IconThumbDown className="h-3 w-3" /> {feedbackStats.db_stats.thumbs_down}</span>
-          </div>
-          <span className={cn('text-xs font-medium', feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning')}>
-            {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
-          </span>
-          <Link href="/training" className="ml-auto text-xs text-primary hover:text-primary/80 shrink-0">
-            Train from feedback \u2192
-          </Link>
-        </div>
-      )}
-
-      {/* ── Quick Actions (primary CTAs) ────────────────────── */}
       {apiStatus === 'online' && modelStatus.loaded && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Quick test */}
           <Card>
             <CardContent className="py-3">
               <div className="flex items-center justify-between gap-3">
@@ -337,7 +367,7 @@ export default function HomePage() {
                     data.setTestRunning(true)
                     data.setTestResponse(null)
                     try {
-                      const result = await chatController.send('Hello!')
+                      const result = await chatController.send('Hello!', { waitForModel: true })
                       data.setTestResponse(result.message || 'No response')
                     } catch (e: unknown) {
                       data.setTestResponse(extractErrorMessage(e, 'Could not connect'))
@@ -356,8 +386,6 @@ export default function HomePage() {
               )}
             </CardContent>
           </Card>
-
-          {/* Quick note */}
           <Card>
             <CardContent className="py-3">
               <div className="flex items-center gap-2 mb-2">
@@ -389,13 +417,14 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ── No model loaded ─────────────────────────────────── */}
       {apiStatus === 'online' && !modelStatus.loaded && (
         <Card className="border-dashed border-border/60 bg-muted/20">
           <CardContent className="py-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">No model loaded</p>
-              <p className="text-xs text-muted-foreground">Load a model in Personalities to start chatting</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium">No model loaded</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Load a model in Models to start chatting</p>
             </div>
             <Button size="sm" variant="outline" className="h-8 text-xs shrink-0" onClick={() => router.push('/models')}>
               Open Models
@@ -404,132 +433,237 @@ export default function HomePage() {
         </Card>
       )}
 
-      {/* ── Navigation Cards (primary routes) ───────────────── */}
+      {apiStatus === 'online' && !modelReadiness.ready && modelReadiness.phase !== 'initializing' && modelReadiness.phase !== 'unknown' && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning/60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-warning" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">Model loading</p>
+                <p className="text-xs text-muted-foreground">{modelReadiness.message}</p>
+              </div>
+              <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden shrink-0">
+                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {apiStatus === 'online' && modelStatus.loaded && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
-          <Link
-            href="/chat"
-            className="sl-interactive group relative overflow-hidden rounded-lg border border-accent/25 bg-gradient-to-br from-accent/8 via-accent/3 to-transparent p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
-                <IconChat className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-semibold">Start chatting</p>
-                <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Ask anything, get answers</p>
-              </div>
-            </div>
-            <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-accent/50 transition-colors">
-              <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-          </Link>
-          <Link
-            href="/models"
-            className="sl-interactive group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <IconModels className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-semibold">Personalities</p>
-                <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Switch your agent&apos;s personality</p>
-              </div>
-            </div>
-            <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-              <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-          </Link>
-          <Link
-            href="/datasets"
-            className="sl-interactive group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-muted-foreground/10 text-muted-foreground">
-                <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-xs sm:text-sm font-semibold">Datasets</p>
-                  {datasetStats && datasetStats.totalDatasets > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
-                  )}
+        <Card>
+          <CardContent className="py-3">
+            <p className="text-sm font-medium mb-2">Recent activity</p>
+            <div className="space-y-1.5">
+              {recentSessions.slice(0, 3).map(s => (
+                <button
+                   key={s.id}
+                   type="button"
+                   onClick={() => router.push(`/chat?session=${s.id}`)}
+                   className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                  <span className="text-xs truncate flex-1">{s.name}</span>
+                  {s.starred && <span className="text-xs shrink-0">★</span>}
+                  {s.pinned && <span className="text-xs text-primary shrink-0">📌</span>}
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {s.message_count != null && <span>{s.message_count}m · </span>}
+                    {timeAgo(s.updated_at)}
+                  </span>
+                </button>
+              ))}
+              {recentJobs.slice(0, 2).map(j => (
+                <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
+                  <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
+                  <span className="text-xs truncate flex-1">{j.name || j.id}</span>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
                 </div>
-                <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
-              </div>
+              ))}
             </div>
-            <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-              <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </CardContent>
+        </Card>
+      )}
+
+      {apiStatus === 'online' && recentDatasets.length > 0 && (
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="text-sm font-medium">Recent datasets</p>
+              <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
             </div>
-          </Link>
-          <Link
-            href="/training"
-            className="sl-interactive group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
-                <IconBolt className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-xs sm:text-sm font-semibold">Teach me</p>
-                  {datasetStats && datasetStats.totalDatasets > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
-                  )}
+            <div className="space-y-1.5">
+              {recentDatasets.map(ds => (
+                <button
+                  key={ds.id}
+                  type="button"
+                  onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
+                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
+                  <span className="text-xs truncate flex-1">{ds.name}</span>
+                  {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
+                  <span className="text-xs text-primary shrink-0">Train →</span>
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!onboardingDismissed && (
+        <OnboardingCard
+          onComplete={() => setOnboardingDismissed(true)}
+        />
+      )}
+
+      {recentSessions.length > 0 && (
+        <button
+          type="button"
+          onClick={() => router.push(`/chat?session=${recentSessions[0].id}`)}
+          className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
+        >
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground transition-colors">
+            <IconMessage className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
+              {recentSessions[0].starred && <span className="text-xs">★</span>}
+              {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
+              {new Date(recentSessions[0].updated_at).toLocaleDateString()}
+            </p>
+          </div>
+          <IconChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+        </button>
+      )}
+
+      {apiStatus === 'online' && (convStats || datasetStats) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {convStats && convStats.totalConversations > 0 && (
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-medium">Your stats</p>
+                  <p className="text-xs text-muted-foreground">Usage overview</p>
                 </div>
-                <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>
-              </div>
-            </div>
-            <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-              <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-          </Link>
-          <Link
-            href="/monitoring"
-            className="sl-interactive group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-success/10 text-success">
-                <IconChart className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-semibold">System Health</p>
-                <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Monitor API and resources</p>
-              </div>
-            </div>
-            <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-              <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-          </Link>
-          <Link
-            href="/knowledge"
-            className="sl-interactive group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
-                <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-semibold">Knowledge</p>
-                <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Facts the AI remembers</p>
-              </div>
-            </div>
-            <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
-              <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
-            </div>
-          </Link>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalConversations}</p>
+                    <p className="text-xs text-muted-foreground">Conversations</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalMessages.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Messages</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{convStats.totalWords.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Words</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{convStats.activeDays}</p>
+                    <p className="text-xs text-muted-foreground">Active days</p>
+                  </div>
+                </div>
+                {convStats.mostActiveHour !== null && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Most active at {convStats.mostActiveHour}:00
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          {datasetStats && datasetStats.totalDatasets > 0 && (
+            <Card>
+              <CardContent className="py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className="text-xs font-medium">Datasets</p>
+                  <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
+                    <p className="text-xs text-muted-foreground">Datasets</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">
+                      {formatBytes(datasetStats.totalSize)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Total size</p>
+                  </div>
+                  <div>
+                    <p className="text-base font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Samples</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
-      {/* ── Ready to train CTA ──────────────────────────────── */}
+      {apiStatus === 'online' && liveHealth && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card>
+            <CardContent className="py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-xs font-medium">System</p>
+                <Link href="/monitoring" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">Details →</Link>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">CPU</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Memory</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Requests</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Uptime</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="rounded-lg border border-border/60 p-3 sm:p-4 flex flex-col justify-between">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-2">How it works</div>
+              <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground/70">
+                  Mix and match AI models with personalities. Each one has its own voice and style.
+                </p>
+                <p className="text-[11px] text-muted-foreground/70">
+                  Import text, files, or conversations. The AI learns from your data and gets better over time.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && modelStatus.loaded && (
         <Card className="border-accent/25 bg-accent/[0.03]">
           <CardContent className="py-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Ready to train</p>
               <p className="text-xs text-muted-foreground">
-                {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available \u00b7 {formatBytes(datasetStats.totalSize)}
+                {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available · {formatBytes(datasetStats.totalSize)}
               </p>
             </div>
             <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => router.push('/training')}>
@@ -539,99 +673,121 @@ export default function HomePage() {
         </Card>
       )}
 
-      {/* ── Recent + Onboarding (folded) ────────────────────── */}
-      {!onboardingDismissed && (
-        <OnboardingCard
-          onComplete={() => setOnboardingDismissed(true)}
-        />
-      )}
-
-      {(recentSessions.length > 0 || recentDatasets.length > 0 || convStats || datasetStats || liveHealth) && (
-        <FoldSection heading="Recent activity">
-          <div className="space-y-3">
-            {/* Recent sessions */}
-            {recentSessions.length > 0 && (
-              <div className="space-y-1">
-                {recentSessions.slice(0, 3).map(s => (
-                  <button
-                     key={s.id}
-                     type="button"
-                     onClick={() => router.push(`/chat?session=${s.id}`)}
-                     className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-2 py-1.5 transition-colors"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
-                    <span className="text-xs truncate flex-1">{s.name}</span>
-                    {s.starred && <span className="text-xs shrink-0">\u2605</span>}
-                    {s.pinned && <span className="text-xs text-primary shrink-0">\ud83d\udccc</span>}
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {s.message_count != null && <span>{s.message_count}m \u00b7 </span>}
-                      {timeAgo(s.updated_at)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Recent jobs */}
-            {recentJobs.length > 0 && (
-              <div className="space-y-1">
-                {recentJobs.slice(0, 2).map(j => (
-                  <div key={j.id} className="flex items-center gap-2 px-2 py-1.5">
-                    <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
-                    <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Recent datasets */}
-            {recentDatasets.length > 0 && (
-              <div className="space-y-1">
-                {recentDatasets.map(ds => (
-                  <button
-                    key={ds.id}
-                    type="button"
-                    onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
-                    className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-2 py-1.5 transition-colors"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
-                    <span className="text-xs truncate flex-1">{ds.name}</span>
-                    {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
-                    <span className="text-xs text-primary shrink-0">Train \u2192</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Stats row */}
-            {(convStats || datasetStats) && (
-              <div className="flex flex-wrap gap-x-6 gap-y-1 pt-1 border-t border-border/30">
-                {convStats && convStats.totalConversations > 0 && (
-                  <>
-                    <span className="text-[11px] text-muted-foreground"><span className="font-medium text-foreground/80 tabular-nums">{convStats.totalConversations}</span> conversations</span>
-                    <span className="text-[11px] text-muted-foreground"><span className="font-medium text-foreground/80 tabular-nums">{convStats.totalMessages.toLocaleString()}</span> messages</span>
-                    <span className="text-[11px] text-muted-foreground"><span className="font-medium text-foreground/80 tabular-nums">{convStats.totalWords.toLocaleString()}</span> words</span>
-                  </>
-                )}
-                {datasetStats && datasetStats.totalDatasets > 0 && (
-                  <span className="text-[11px] text-muted-foreground"><span className="font-medium text-foreground/80 tabular-nums">{datasetStats.totalDatasets}</span> datasets \u00b7 {formatBytes(datasetStats.totalSize)}</span>
-                )}
-              </div>
-            )}
-
-            {/* System snapshot */}
-            {liveHealth && (
-              <div className="flex flex-wrap gap-x-6 gap-y-1 pt-1 border-t border-border/30">
-                <span className="text-[11px] text-muted-foreground">CPU <span className="font-medium text-foreground/80 tabular-nums">{liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '\u2014'}</span></span>
-                <span className="text-[11px] text-muted-foreground">Memory <span className="font-medium text-foreground/80 tabular-nums">{liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '\u2014'}</span></span>
-                <span className="text-[11px] text-muted-foreground">Uptime <span className="font-medium text-foreground/80">{liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '\u2014'}</span></span>
-                <Link href="/monitoring" className="text-[11px] text-primary hover:text-primary/80 ml-auto">Details \u2192</Link>
-              </div>
-            )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+        <Link
+          href="/chat"
+          className="group relative overflow-hidden rounded-lg border border-accent/25 bg-gradient-to-br from-accent/8 via-accent/3 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-accent/8 hover:border-accent/40"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/15 text-accent">
+              <IconChat className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-semibold">Start chatting</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Ask anything, get answers</p>
+            </div>
           </div>
-        </FoldSection>
-      )}
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-accent/50 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+        <Link
+          href="/models"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <IconModels className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-semibold">Personalities</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Switch your agent&apos;s personality</p>
+            </div>
+          </div>
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+        <Link
+          href="/datasets"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-muted-foreground/10 text-muted-foreground">
+              <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-semibold">Datasets</p>
+                {datasetStats && datasetStats.totalDatasets > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{datasetStats.totalDatasets}</span>
+                )}
+              </div>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Manage training data</p>
+            </div>
+          </div>
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+        <Link
+          href="/training"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent/10 text-accent">
+              <IconBolt className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-semibold">Teach me</p>
+                {datasetStats && datasetStats.totalDatasets > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-accent/15 text-accent font-medium">{datasetStats.totalDatasets}</span>
+                )}
+              </div>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Train from your writing</p>
+            </div>
+          </div>
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+        <Link
+          href="/monitoring"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-success/10 text-success">
+              <IconChart className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-semibold">System Health</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Monitor API and resources</p>
+            </div>
+          </div>
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+        <Link
+          href="/knowledge"
+          className="group relative overflow-hidden rounded-lg border border-border/60 bg-gradient-to-br from-muted/40 to-transparent p-3 sm:p-4 transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
+        >
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-primary/8 text-primary">
+              <IconSearch className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-semibold">Knowledge</p>
+              <p className="hidden sm:block text-[11px] text-muted-foreground mt-0.5">Facts the AI remembers</p>
+            </div>
+          </div>
+          <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-muted-foreground/30 group-hover:text-primary/40 transition-colors">
+            <IconChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+          </div>
+        </Link>
+      </div>
+
     </PageContainer>
   )
 }

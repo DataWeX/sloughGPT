@@ -24,9 +24,25 @@
   ],
   "cards": [
     {
+      "id": "20260831_092619_expand-test-files-to-50-tests-each",
+      "title": "Expand test files to 50+ tests each",
+      "description": "All 5 test files already have 50+ tests (total 520): test_ops(85), test_vae(92), test_agents_types(170), test_chromadb_store(70), test_civilization(103). All pass. User's counts (16-17) were from an earlier version.",
+      "column": "done",
+      "priority": "medium",
+      "tags": [
+        "testing",
+        "coverage"
+      ],
+      "created_at": "2026-08-31T09:26:19.168304+00:00",
+      "updated_at": "2026-08-31T09:26:19.168304+00:00",
+      "due_date": "",
+      "assignee": "",
+      "notes": []
+    },
+    {
       "id": "20260830_103238_test-coverage-expansion-core-python-modules",
       "title": "Test Coverage Expansion - Core Python Modules",
-      "description": "",
+      "description": "Added 149 tests for domains.training.service (the only untested module). Total coverage: 310/311 modules. 507+ tests passing.",
       "column": "done",
       "priority": "medium",
       "tags": [
@@ -34,7 +50,7 @@
         "coverage"
       ],
       "created_at": "2026-08-30T10:32:38.549365+00:00",
-      "updated_at": "2026-08-30T10:32:38.549365+00:00",
+      "updated_at": "2026-09-01T12:00:00.000000+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -43,14 +59,14 @@
       "id": "20260830_103238_fix-failing-tests-in-appsweb",
       "title": "Fix failing tests in apps/web",
       "description": "",
-      "column": "done",
+      "column": "in_progress",
       "priority": "medium",
       "tags": [
         "testing",
         "frontend"
       ],
       "created_at": "2026-08-30T10:32:38.535488+00:00",
-      "updated_at": "2026-08-30T10:32:38.535488+00:00",
+      "updated_at": "2026-08-31T09:26:19.209315+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -196,7 +212,7 @@
         "done"
       ],
       "created_at": "2026-08-29T12:19:36.469394+00:00",
-      "updated_at": "2026-08-29T12:19:36.469394+00:00",
+      "updated_at": "2026-09-01T12:00:00.000000+00:00",
       "due_date": "",
       "assignee": "",
       "notes": []
@@ -7875,6 +7891,174 @@
       "due_date": "",
       "assignee": "",
       "notes": []
+    },
+    {
+      "id": "20260831_100000_tui-linux-fixes",
+      "title": "TUI LiveDisplay + Linux Metrics Fixes",
+      "description": "3 fixes: zero-newline cursor positioning, Linux /proc metrics, web restart cwd",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "tui",
+        "cli",
+        "bugfix",
+        "linux"
+      ],
+      "created_at": "2026-08-31T09:48:47.608971+00:00",
+      "updated_at": "2026-08-31T09:48:47.608989+00:00",
+      "due_date": "",
+      "assignee": "",
+      "comments": [],
+      "sprint": "",
+      "gh": ""
+    },
+    {
+      "id": "cleanup-20260901",
+      "title": "Code quality sweep: 284 unused imports removed + logging fixes",
+      "column": "done",
+      "tags": [
+        "cleanup",
+        "code-quality",
+        "backend"
+      ],
+      "created_at": "2026-09-01T12:00:00.000000+00:00",
+      "updated_at": "2026-09-01T12:00:00.000000+00:00",
+      "description": "Removed 284 unused imports across 60+ files (360\u219276 remaining). Fixed 2 silent except Exception:pass in training/service.py. All 1142 tests passing."
+    },
+    {
+      "id": "20260901_175948-code-quality-cleanup",
+      "title": "Code quality cleanup: unused imports, logging fixes, test expansion",
+      "description": "Completed: (1) Added future annotations to 355 files, (2) Removed 284 unused imports from production, (3) Cleaned 70+ unused imports from tests, (4) Fixed 6 logging test failures (SloFormatter\u2192LogFormatter API mismatch), (5) Added corr field to JSON format, (6) Fixed vm.py BlockDevice forward references, (7) 1340+ tests passing.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "cleanup",
+        "tests",
+        "logging"
+      ],
+      "created_at": "2026-09-01T17:59:48.079953",
+      "updated_at": "2026-09-01T17:59:48.079959",
+      "due_date": null,
+      "assignee": null,
+      "notes": ""
+    },
+    {
+      "id": "20260902_103341-shell-cmd-tests",
+      "title": "Shell cmd module tests: data_cmds, models_cmd, module_loader, linux.py",
+      "description": "Added tests for: (1) test_data_cmds.py \u2014 33 tests covering datasets, checkpoints, finetuned, knowledge, remember, recall, tokenizer commands. (2) test_models_cmd.py \u2014 32 tests covering models, unload, precision, quantize, dequantize. (3) test_module_loader.py \u2014 40+ tests covering ModuleInfo, discovery, loading, hot-reload, hooks, dependencies. (4) test_linux_cmds.py \u2014 80+ tests covering 40+ linux commands (cd, pwd, echo, mkdir, rm, cp, mv, cat, head, tail, wc, grep, sort, find, diff, chmod, ln, du, stat, seq, cut, tr, nl, uniq, tac, rev, fold, date, sleep, clear, hostname, nproc, uname, id, cal, yes, realpath, dirname, basename, env). Total 185+ new tests.",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "tests",
+        "shell",
+        "linux"
+      ],
+      "created_at": "2026-09-02T10:33:41.900973",
+      "updated_at": "2026-09-02T10:33:41.900979",
+      "due_date": null,
+      "assignee": null,
+      "notes": ""
+    },
+    {
+      "id": "20260902_120000-mogdb-verify-stabilize",
+      "title": "Verify & stabilize MogDB migration",
+      "description": "Run full test suite (including voice router tests). Fix any regressions from MogDB migration. Clean up legacy JSON files (keep as backup).",
+      "column": "todo",
+      "priority": "high",
+      "tags": [
+        "mogdb",
+        "testing",
+        "stability"
+      ],
+      "created_at": "2026-09-02T12:00:00.000000+00:00",
+      "updated_at": "2026-09-02T12:00:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "383 tests passing, but need to verify voice router and run full suite"
+    },
+    {
+      "id": "20260902_120100-mogdb-remaining-migrations",
+      "title": "Migrate remaining data stores to MogDB + JSON sync",
+      "description": "Migrate: (1) data/knowledge/entries.json, (2) data/knowledge/visited.json, (3) data/rag_store/documents.jsonl, (4) data/response_logs/*.jsonl, (5) data/model_catalog/ directory",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "migration",
+        "data"
+      ],
+      "created_at": "2026-09-02T12:01:00.000000+00:00",
+      "updated_at": "2026-09-02T12:01:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "These are smaller stores, lower priority than main routers"
+    },
+    {
+      "id": "20260902_120200-mogdb-performance-opt",
+      "title": "MogDB performance optimization",
+      "description": "Optimize SyncableCollection: (1) Add batch write support for high-throughput scenarios, (2) Implement lazy JSON sync (async background thread), (3) Add compression for JSON sync files, (4) Benchmark MogDB vs file-based performance",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "performance",
+        "optimization"
+      ],
+      "created_at": "2026-09-02T12:02:00.000000+00:00",
+      "updated_at": "2026-09-02T12:02:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Current implementation is simple and safe; optimize only if profiling shows bottleneck"
+    },
+    {
+      "id": "20260902_120300-mogdb-data-migration-tools",
+      "title": "Data migration tools for MogDB",
+      "description": "Create tools: (1) scripts/migrate_legacy_json.py to import existing JSON files into MogDB, (2) CLI command slo db migrate for one-time migration, (3) CLI command slo db sync to force JSON sync, (4) CLI command slo db status to show collection stats",
+      "column": "todo",
+      "priority": "medium",
+      "tags": [
+        "mogdb",
+        "cli",
+        "migration"
+      ],
+      "created_at": "2026-09-02T12:03:00.000000+00:00",
+      "updated_at": "2026-09-02T12:03:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Useful for users migrating from file-based setup"
+    },
+    {
+      "id": "20260902_120400-mogdb-documentation",
+      "title": "MogDB documentation",
+      "description": "Document MogDB: (1) Update README.md with MogDB usage examples, (2) Document SyncableCollection API, (3) Add migration guide for developers, (4) Create architecture decision record (ADR) for MogDB + JSON sync",
+      "column": "todo",
+      "priority": "low",
+      "tags": [
+        "mogdb",
+        "documentation"
+      ],
+      "created_at": "2026-09-02T12:04:00.000000+00:00",
+      "updated_at": "2026-09-02T12:04:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Good for onboarding new developers"
+    },
+    {
+      "id": "20260902_120500-slnc-memory-mapped",
+      "title": "Memory-mapped inference (.slnc format)",
+      "description": "Implement .slnc format for zero-copy model loading: (1) Write converter safetensors→slnc, (2) Write mmap loader, (3) Wire into NumpyEngine, (4) Wire into SloNetChatProvider, (5) Keep safetensors fallback",
+      "column": "done",
+      "priority": "high",
+      "tags": [
+        "inference",
+        "performance",
+        "slnc"
+      ],
+      "created_at": "2026-09-02T12:05:00.000000+00:00",
+      "updated_at": "2026-09-02T12:30:00.000000+00:00",
+      "due_date": null,
+      "assignee": null,
+      "notes": "Already implemented in domains/infrastructure/slnc/: spec.py (binary format), parser.py (mmap zero-copy), compiler.py (safetensors→slnc). Full integration in slonet_provider.py (from_slnc, lazy_from_slnc, quantization, mmap release)."
     }
   ]
 }

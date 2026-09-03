@@ -3,6 +3,8 @@ Test Framework - Ported from comprehensive_test_framework.py
 Enterprise-grade testing framework
 """
 
+from __future__ import annotations
+
 import time
 from typing import Dict, List, Any, Optional, Callable
 from dataclasses import dataclass, field

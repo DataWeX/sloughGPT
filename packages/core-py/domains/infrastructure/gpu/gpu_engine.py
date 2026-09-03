@@ -19,13 +19,12 @@ from __future__ import annotations
 
 import ctypes
 import os
-import sys
 import logging
 from ctypes import (
     c_void_p, c_char_p, c_uint32, c_int32, c_uint64, c_size_t,
-    Structure, CFUNCTYPE, POINTER, cast,
+    Structure, POINTER,
 )
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 

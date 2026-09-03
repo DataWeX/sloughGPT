@@ -64,6 +64,7 @@ class Note:
     sprint: str = ""
     gh: str = ""
     body: str = ""
+    note_hash: str = ""
 
     @property
     def date_str(self) -> str:
@@ -102,6 +103,8 @@ class Note:
             lines.append(f"sprint: {self.sprint}")
         if self.gh:
             lines.append(f"gh: {self.gh}")
+        if self.note_hash:
+            lines.append(f"note_hash: {self.note_hash}")
         lines.extend(["---", "", self.body.rstrip(), ""])
         return "\n".join(lines)
 
@@ -131,6 +134,7 @@ class Note:
             sprint=meta.get("sprint", ""),
             gh=meta.get("gh", ""),
             body=body,
+            note_hash=meta.get("note_hash", ""),
         )
 
 

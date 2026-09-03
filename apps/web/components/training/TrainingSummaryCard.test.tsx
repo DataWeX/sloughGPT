@@ -66,7 +66,7 @@ describe('TrainingSummaryCard', () => {
       cp({ name: 'cp2', training_duration_s: 60 }),
     ]} />)
     expect(screen.getByText('Total training time')).toBeDefined()
-    expect(screen.getByText('3m 0s')).toBeDefined()
+    expect(screen.getByText('3m 00s')).toBeDefined()
   })
 
   it('shows fastest run', () => {
@@ -101,6 +101,6 @@ describe('TrainingSummaryCard', () => {
     render(<TrainingSummaryCard checkpoints={[
       cp({ name: 'cp1', training_duration_s: 3660 }),
     ]} />)
-    expect(screen.getAllByText('1h 1m').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('1h 01m').length).toBeGreaterThanOrEqual(1)
   })
 })

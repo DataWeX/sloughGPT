@@ -3,12 +3,12 @@ from __future__ import annotations
 import json
 import time
 import threading
-from dataclasses import dataclass, field
-from typing import Any, Callable, Iterator
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Callable
 
-from .sources import Record, Source, FileSource
-from .stores import Store, MemoryStore, FileStore
+
+
+from .stores import Store, MemoryStore
 from .collector import Collector
 from .validators import CollectorRunner
 

@@ -8,14 +8,14 @@ tags, which determines its semantic meaning classification.
 Usage:
     from domains.infrastructure.anchor_store import MeaningTags, get_default_meaning_tags
     store = get_default_meaning_tags(dimension=128)
-    label = store.classify(embedding)  # → "factual"
-    distances = store.distances(embedding)  # → {"factual": 0.1, "procedural": 0.9}
 """
+
+from __future__ import annotations
 import json
 import os
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 from domains.shared import find_repo_root
 
 _TAG_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "models"

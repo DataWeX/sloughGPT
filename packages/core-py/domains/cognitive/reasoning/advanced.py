@@ -12,6 +12,8 @@ Implements state-of-the-art reasoning techniques:
 - Counterfactual Reasoning - What-if scenarios
 """
 
+from __future__ import annotations
+
 import asyncio
 import re
 import time
@@ -383,6 +385,8 @@ class SelfConsistency:
     def _majority_vote(self, conclusions: List[str]) -> str:
         """Select most common conclusion."""
         from collections import Counter
+        if not conclusions:
+            return ""
         counts = Counter(conclusions)
         return counts.most_common(1)[0][0]
 

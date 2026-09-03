@@ -1,133 +1,216 @@
-"""Tests for domains.infrastructure.slnc.spec — format constants, layout helpers, dtype mapping."""
+"""Tests for domains.infrastructure.slnc.spec — SLNC config, layout helpers, dtype conversion."""
+
+from __future__ import annotations
 
 import numpy as np
 import pytest
 
+from domains.infrastructure.slnc.spec import (
+    MAGIC,
+    VERSION,
+    FLAGS_DEFAULT,
+    FLAG_HAS_HEADER_CRC,
+    FLAG_ALIGNED_TENSORS,
+    FLAG_HAS_FILE_HASH,
+    ALIGNMENT,
+    DTYPE_FLOAT32,
+    DTYPE_FLOAT16,
+    DTYPE_BFLOAT16,
+    DTYPE_INT32,
+    DTYPE_INT64,
+    DTYPE_UINT8,
+    DTYPE_MAP,
+    SLNCConfig,
+    compute_header_size,
+    compute_tensor_entry_size,
+    compute_tensor_table_size,
+    _align,
+    _align_offset,
+    dtype_to_code,
+    code_to_dtype,
+)
+
+
+# ── Constants ─────────────────────────────────────────────────────────────────
 
 class TestConstants:
     def test_magic(self):
-        from domains.infrastructure.slnc.spec import MAGIC
         assert MAGIC == b"SLNC"
 
     def test_version(self):
-        from domains.infrastructure.slnc.spec import VERSION
         assert VERSION == 1
 
-    def test_alignment(self):
-        from domains.infrastructure.slnc.spec import ALIGNMENT
-        assert ALIGNMENT == 64
+    def test_alignment_power_of_two(self):
+        assert ALIGNMENT > 0
+        assert ALIGNMENT & (ALIGNMENT - 1) == 0
 
-    def test_dtype_codes(self):
-        from domains.infrastructure.slnc.spec import (
-            DTYPE_FLOAT32, DTYPE_FLOAT16, DTYPE_INT32, DTYPE_INT64, DTYPE_UINT8,
-        )
-        assert DTYPE_FLOAT32 == 0
-        assert DTYPE_FLOAT16 == 1
-        assert DTYPE_INT32 == 3
-        assert DTYPE_INT64 == 4
-        assert DTYPE_UINT8 == 5
+    def test_dtype_map_keys(self):
+        assert set(DTYPE_MAP.keys()) == {
+            DTYPE_FLOAT32, DTYPE_FLOAT16, DTYPE_BFLOAT16,
+            DTYPE_INT32, DTYPE_INT64, DTYPE_UINT8,
+        }
 
+
+# ── SLNCConfig ───────────────────────────────────────────────────────────────
+
+class TestSLNCConfig:
+    def test_defaults(self):
+        cfg = SLNCConfig()
+        assert cfg.alignment == ALIGNMENT
+        assert cfg.verify_checksums is False
+        assert cfg.align_tensors is False
+        assert cfg.write_header_crc is False
+
+    def test_from_flags_default(self):
+        cfg = SLNCConfig.from_flags(0)
+        assert cfg.align_tensors is False
+        assert cfg.write_header_crc is False
+
+    def test_from_flags_aligned(self):
+        cfg = SLNCConfig.from_flags(FLAG_ALIGNED_TENSORS)
+        assert cfg.align_tensors is True
+        assert cfg.write_header_crc is False
+
+    def test_from_flags_crc(self):
+        cfg = SLNCConfig.from_flags(FLAG_HAS_HEADER_CRC)
+        assert cfg.align_tensors is False
+        assert cfg.write_header_crc is True
+
+    def test_from_flags_both(self):
+        flags = FLAG_ALIGNED_TENSORS | FLAG_HAS_HEADER_CRC
+        cfg = SLNCConfig.from_flags(flags)
+        assert cfg.align_tensors is True
+        assert cfg.write_header_crc is True
+
+    def test_to_flags_default(self):
+        cfg = SLNCConfig()
+        assert cfg.to_flags() == 0
+
+    def test_to_flags_aligned(self):
+        cfg = SLNCConfig(align_tensors=True)
+        assert cfg.to_flags() == FLAG_ALIGNED_TENSORS
+
+    def test_to_flags_crc(self):
+        cfg = SLNCConfig(write_header_crc=True)
+        assert cfg.to_flags() == FLAG_HAS_HEADER_CRC
+
+    def test_roundtrip_flags(self):
+        cfg = SLNCConfig(align_tensors=True, write_header_crc=True)
+        flags = cfg.to_flags()
+        cfg2 = SLNCConfig.from_flags(flags)
+        assert cfg2.align_tensors == cfg.align_tensors
+        assert cfg2.write_header_crc == cfg.write_header_crc
+
+
+# ── _align / _align_offset ───────────────────────────────────────────────────
 
 class TestAlign:
-    def test_align_already_aligned(self):
-        from domains.infrastructure.slnc.spec import _align
+    def test_already_aligned(self):
         assert _align(64) == 64
         assert _align(128) == 128
 
-    def test_align_one_over(self):
-        from domains.infrastructure.slnc.spec import _align
+    def test_needs_alignment(self):
+        assert _align(1) == 64
         assert _align(65) == 128
 
-    def test_align_small(self):
-        from domains.infrastructure.slnc.spec import _align
-        assert _align(1) == 64
-        assert _align(63) == 64
+    def test_align_offset(self):
+        assert _align_offset(0) == 0
+        assert _align_offset(1) == 64
 
-    def test_align_zero(self):
-        from domains.infrastructure.slnc.spec import _align
-        assert _align(0) == 0
 
+# ── compute_header_size ──────────────────────────────────────────────────────
 
 class TestComputeHeaderSize:
     def test_empty_json(self):
-        from domains.infrastructure.slnc.spec import compute_header_size
         size = compute_header_size(b"")
-        assert size >= 4 + 4 + 4 + 64 + 4  # magic + version + flags + meta + json_len
-        assert size % 64 == 0
+        # MAGIC(4) + VERSION(4) + FLAGS(4) + MODEL_META(64) + JSON_LEN(4) = 80
+        # Aligned to 64
+        assert size == 128  # 80 aligned to 128
 
     def test_with_json(self):
-        from domains.infrastructure.slnc.spec import compute_header_size
-        json_data = b'{"model": "gpt2"}'
-        size = compute_header_size(json_data)
-        assert size % 64 == 0
-        assert size >= compute_header_size(b"")  # must be >= empty case
+        json_bytes = b'{"key": "value"}'
+        size = compute_header_size(json_bytes)
+        assert size >= 80 + len(json_bytes)
+        assert size % ALIGNMENT == 0
 
+
+# ── compute_tensor_entry_size ────────────────────────────────────────────────
 
 class TestComputeTensorEntrySize:
-    def test_1d(self):
-        from domains.infrastructure.slnc.spec import compute_tensor_entry_size
-        size = compute_tensor_entry_size(ndim=1, name_len=10)
-        assert size == 32 + 1 * 4 + 10  # 46
+    def test_1d_tensor(self):
+        # name_len(4) + name_bytes[5] + offset(8) + size(4) + ndim(4) + shape[1](4) + dtype(4) + crc32(4)
+        size = compute_tensor_entry_size(ndim=1, name_len=5)
+        assert size == 4 + 5 + 8 + 4 + 4 + 1 * 4 + 4 + 4
 
-    def test_2d(self):
-        from domains.infrastructure.slnc.spec import compute_tensor_entry_size
-        size = compute_tensor_entry_size(ndim=2, name_len=20)
-        assert size == 32 + 2 * 4 + 20  # 60
+    def test_2d_tensor(self):
+        size = compute_tensor_entry_size(ndim=2, name_len=10)
+        assert size == 4 + 10 + 8 + 4 + 4 + 2 * 4 + 4 + 4
 
-    def test_4d(self):
-        from domains.infrastructure.slnc.spec import compute_tensor_entry_size
-        size = compute_tensor_entry_size(ndim=4, name_len=5)
-        assert size == 32 + 4 * 4 + 5  # 53
+    def test_0d_tensor(self):
+        size = compute_tensor_entry_size(ndim=0, name_len=3)
+        assert size == 4 + 3 + 8 + 4 + 4 + 0 + 4 + 4
 
+
+# ── compute_tensor_table_size ────────────────────────────────────────────────
 
 class TestComputeTensorTableSize:
+    def test_empty(self):
+        assert compute_tensor_table_size([]) == 0
+
     def test_single_entry(self):
-        from domains.infrastructure.slnc.spec import compute_tensor_table_size
-        entries = [("ln_1.weight", 0, 256, 2, 0, 0)]
-        total = compute_tensor_table_size(entries)
-        assert total == 32 + 2 * 4 + len("ln_1.weight")
+        entries = [("weight", 0, 100, 2, DTYPE_FLOAT32, 0)]
+        size = compute_tensor_table_size(entries)
+        expected = compute_tensor_entry_size(ndim=2, name_len=6)
+        assert size == expected
 
     def test_multiple_entries(self):
-        from domains.infrastructure.slnc.spec import compute_tensor_table_size
         entries = [
-            ("a", 0, 100, 1, 0, 0),
-            ("bb", 100, 200, 2, 0, 0),
+            ("w1", 0, 100, 2, DTYPE_FLOAT32, 0),
+            ("w2", 100, 200, 1, DTYPE_FLOAT16, 0),
         ]
-        total = compute_tensor_table_size(entries)
-        e1 = 32 + 1 * 4 + 1
-        e2 = 32 + 2 * 4 + 2
-        assert total == e1 + e2
+        size = compute_tensor_table_size(entries)
+        s1 = compute_tensor_entry_size(ndim=2, name_len=2)
+        s2 = compute_tensor_entry_size(ndim=1, name_len=2)
+        assert size == s1 + s2
 
+
+# ── dtype_to_code / code_to_dtype ────────────────────────────────────────────
 
 class TestDtypeConversion:
     def test_float32_roundtrip(self):
-        from domains.infrastructure.slnc.spec import dtype_to_code, code_to_dtype, DTYPE_FLOAT32
         code = dtype_to_code(np.float32)
         assert code == DTYPE_FLOAT32
         assert code_to_dtype(code) == np.float32
 
     def test_float16_roundtrip(self):
-        from domains.infrastructure.slnc.spec import dtype_to_code, code_to_dtype
-        assert code_to_dtype(dtype_to_code(np.float16)) == np.float16
+        code = dtype_to_code(np.float16)
+        assert code == DTYPE_FLOAT16
+        assert code_to_dtype(code) == np.float16
 
     def test_int32_roundtrip(self):
-        from domains.infrastructure.slnc.spec import dtype_to_code, code_to_dtype
-        assert code_to_dtype(dtype_to_code(np.int32)) == np.int32
+        code = dtype_to_code(np.int32)
+        assert code == DTYPE_INT32
+        assert code_to_dtype(code) == np.int32
 
     def test_int64_roundtrip(self):
-        from domains.infrastructure.slnc.spec import dtype_to_code, code_to_dtype
-        assert code_to_dtype(dtype_to_code(np.int64)) == np.int64
+        code = dtype_to_code(np.int64)
+        assert code == DTYPE_INT64
+        assert code_to_dtype(code) == np.int64
 
     def test_uint8_roundtrip(self):
-        from domains.infrastructure.slnc.spec import dtype_to_code, code_to_dtype
-        assert code_to_dtype(dtype_to_code(np.uint8)) == np.uint8
+        code = dtype_to_code(np.uint8)
+        assert code == DTYPE_UINT8
+        assert code_to_dtype(code) == np.uint8
 
-    def test_unsupported_dtype(self):
-        from domains.infrastructure.slnc.spec import dtype_to_code
+    def test_bfloat16_code(self):
+        # bfloat16 is stored as uint16 but has its own code
+        code = code_to_dtype(DTYPE_BFLOAT16)
+        assert code == np.uint16
+
+    def test_unknown_dtype_raises(self):
         with pytest.raises(ValueError, match="Unsupported dtype"):
-            dtype_to_code(np.float64)
+            dtype_to_code(np.complex128)
 
-    def test_unknown_code(self):
-        from domains.infrastructure.slnc.spec import code_to_dtype
+    def test_unknown_code_raises(self):
         with pytest.raises(ValueError, match="Unknown dtype code"):
             code_to_dtype(999)

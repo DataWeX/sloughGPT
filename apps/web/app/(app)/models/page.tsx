@@ -152,7 +152,7 @@ export default function ModelsPage() {
     .map(([modelId, r]) => ({ name: compareModels.find(m => m.id === modelId)?.name || modelId, throughput: r.throughput_tokens_per_sec, latency: r.inference_time_ms, memory: r.memory_mb }))
     .sort((a, b) => b.throughput - a.throughput), [completedCompareResults, compareModels])
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     await Promise.allSettled([
       refetchModels(),
@@ -164,7 +164,7 @@ export default function ModelsPage() {
     ])
     setRefreshing(false)
     addToast('Refreshed', 'success')
-  }
+  }, [refetchModels, refetchSouls, refetchCurrentSoul, refetchCheckpoints, refreshHealth, fetchTraitWeights, addToast])
 
   useEffect(() => { fetchTraitWeights() }, [fetchTraitWeights])
   useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache info unavailable */ {}) }, [])

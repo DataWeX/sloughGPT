@@ -33,7 +33,7 @@ try:
 except (ImportError, AttributeError):
     _SET_ASYNC_EXC = None
 
-from .pane import Border, Pane, PaneLayout, Rect
+from .pane import Pane, PaneLayout, Rect
 from .surface import LogSurface, RenderLine, STYLE_INFO, STYLE_WARN, STYLE_ERROR, STYLE_DEBUG, STYLE_CRITICAL, TextSurface
 
 if TYPE_CHECKING:

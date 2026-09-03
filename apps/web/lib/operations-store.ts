@@ -3,7 +3,7 @@
 import { createStore } from 'zustand/vanilla'
 import { useStore } from 'zustand'
 import { apiGet, apiPost } from './http-client'
-import { logger } from './dev-log'
+import { logger, trackEvent } from './dev-log'
 
 const _log = logger.child('operations-store')
 
@@ -52,6 +52,14 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
     try {
       set({ loading: true, error: null })
       const res = await apiGet<{ operations: Operation[]; counts: Record<string, number> }>('/operations')
+      const prevOps = get().operations
+      const prevMap = new Map(prevOps.map(o => [o.id, o.status]))
+      for (const op of res.operations) {
+        const oldStatus = prevMap.get(op.id)
+        if (oldStatus && oldStatus !== op.status) {
+          trackEvent('operation_status_changed', { id: op.id, from: oldStatus, to: op.status })
+        }
+      }
       set({ operations: res.operations, counts: res.counts, loading: false })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Could not fetch operations', loading: false })
@@ -61,6 +69,7 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
   cancel: async (opId: string) => {
     try {
       await apiPost(`/cancel/${opId}`)
+      trackEvent('operation_cancelled', { id: opId })
       await get().fetch()
       return true
     } catch (e) {
@@ -73,6 +82,7 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
     try {
       const qs = type ? `?type=${type}` : ''
       const res = await apiPost<{ cancelled: string[]; count: number }>(`/cancel-all${qs}`)
+      trackEvent('operation_cancel_all', { type })
       await get().fetch()
       return res.count
     } catch (e) {

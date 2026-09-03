@@ -5,15 +5,15 @@ All implementations use SloLRScheduler from slonet as base.
 Factory delegates to slonet.create_scheduler for native types.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
-import math
 import logging
 
 logger = logging.getLogger("slo.lr_schedulers")
 
 from domains.training.slonet import (
-    SloLRScheduler,
     WarmupCosineScheduler as SloWarmupCosine,
     PolynomialDecayScheduler as SloPolynomial,
     LinearWarmupScheduler as SloLinearWarmup,

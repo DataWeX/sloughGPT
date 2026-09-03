@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 pugqeep — Point-Graph-Queue system.
 
@@ -28,15 +30,16 @@ from .point import Point
 from .point_interface import PointProtocol, PointView, FunctionType
 from .compressor import PointCompressor
 from .library import PointLibrary
-from .model_tree import ModelTree, load_model_to_points
+from .tree import Tree, load_model_to_points, load_from_points, decompress_tree
+from .model_tree import ModelTree
 from .queue import ModelQueue
-from .cache import TieredCache, Tier, MemoryStore as CacheMemoryStore, DiskStore, HotStore
+from .cache import TieredCache, Tier, MemoryStore as CacheMemoryStore
 from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
 from .dedup import PointDeduplicator, PointLibrarySync
 from .store import MemoryStore as FunctionMemoryStore, JSONStore, DirectoryStore
 from .config import PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig
 from .facade import PGQ
-from .engine import Engine, Process, Stem, Tree as EngineTree, ProcessStatus, StemStatus, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
+from .engine import Engine, Process, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache, TaskFuture
 from .generic import (
     PGQGeneric,
     CompressionStrategy,
@@ -64,6 +67,7 @@ __all__ = [
     "FunctionType",
     "PointCompressor",
     "PointLibrary",
+    "Tree",
     "ModelTree",
     "ModelQueue",
 

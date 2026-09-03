@@ -1,5 +1,7 @@
 """HuggingFace model map - Registry of available HF models."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Dict, Any

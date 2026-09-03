@@ -5,6 +5,8 @@ Handles device token registration, notification sending, and topic subscriptions
 Uses Expo Push Notifications (APNs/FCM via Expo) for cross-platform delivery.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from typing import Optional, List, Dict, Any

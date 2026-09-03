@@ -2,6 +2,8 @@
 ops/layernorm.py — Layer normalization. C base (future), numpy fallback.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 

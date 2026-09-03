@@ -35,7 +35,6 @@ import os
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Optional
 
 from domains.infrastructure.cpu_topology import CpuTopology, detect_topology

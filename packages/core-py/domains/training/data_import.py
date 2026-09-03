@@ -3,6 +3,8 @@ Data Import Tools
 Import datasets from various sources: GitHub, HuggingFace, URLs, local files.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -715,12 +717,12 @@ class HuggingFaceImporter:
 
             # Handle datasets with subsets/config
             try:
-                dataset = load_dataset(dataset_id)
+                dataset = load_dataset(dataset_id, trust_remote_code=True)
             except Exception as config_err:
                 # Try with default config for datasets with subsets
                 logger.warning("Full load failed, trying default config: %s", config_err,
                     extra={"tag": "TRAIN"},)
-                dataset = load_dataset(dataset_id, split="train")
+                dataset = load_dataset(dataset_id, split="train", trust_remote_code=True)
 
             # Handle both DatasetDict and Dataset
             total_chars = 0

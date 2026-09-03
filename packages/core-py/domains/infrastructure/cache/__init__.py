@@ -4,6 +4,8 @@ Cache Manager Implementation
 This module provides advanced caching capabilities with multiple backends.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time

@@ -757,7 +757,6 @@ def __getattr__(name: str):
 def _install_facade(kernel: Any) -> None:
     """Attach all neural facade functions and property descriptors to the kernel."""
     from .neural_bindings import (
-        Property,
         engine as _engine_prop,
         tokenizer_device as _tok_prop,
         embedding_device as _emb_prop,

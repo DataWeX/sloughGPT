@@ -233,7 +233,7 @@ describe('HomePage', () => {
     state.home = makeHomeData({ healthSummary: 'hf/gpt2', inferenceCount: 5 })
     render(<HomePage />)
     expect(screen.getByText(/gpt2 loaded/)).toBeTruthy()
-    expect(screen.getByText(/5 conversations/)).toBeTruthy()
+    expect(screen.getAllByText(/5 conversations/).length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders stat cards with model count, soul, and active model', () => {

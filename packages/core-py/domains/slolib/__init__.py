@@ -25,3 +25,5 @@ Usage:
     x = Tensor.randn(32, 128)
     logits = model(x)
 """
+
+from __future__ import annotations

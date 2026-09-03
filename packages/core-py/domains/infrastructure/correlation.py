@@ -5,6 +5,8 @@ Core uses this to include request correlation IDs in log records.
 API layer sets it per-request via middleware.
 """
 
+from __future__ import annotations
+
 import contextvars
 
 _correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(

@@ -8,6 +8,8 @@ Runs as a background thread that:
   - Logs recovery events
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time

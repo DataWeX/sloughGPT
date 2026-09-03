@@ -1,5 +1,6 @@
 'use client'
 import { create } from 'zustand'
+import { trackEvent } from '@/lib/dev-log'
 
 export type ApiStatus = 'connected' | 'connecting' | 'offline' | 'reloading'
 
@@ -62,17 +63,24 @@ export const useApiMonitor = create<ApiMonitorState>((set) => ({
   failureCount: 0,
   lastSuccessEndpoint: null,
   setStatus: (status) =>
-    set((s) => ({
-      status,
-      lastOnline: status === 'connected' ? Date.now() : s.lastOnline,
-      lastOffline: status !== 'connected' ? Date.now() : s.lastOffline,
-    })),
+    set((s) => {
+      if (s.status !== status) {
+        trackEvent('api_connection_changed', { from: s.status, to: status })
+      }
+      return {
+        status,
+        lastOnline: status === 'connected' ? Date.now() : s.lastOnline,
+        lastOffline: status !== 'connected' ? Date.now() : s.lastOffline,
+      }
+    }),
   setHealthSummary: (data) => set({ healthSummary: data }),
-  addFailure: (diag) =>
+  addFailure: (diag) => {
+    trackEvent('api_connection_failure', { endpoint: diag.endpoint, status_code: diag.status, error_type: diag.kind })
     set((s) => ({
       recentFailures: [diag, ...s.recentFailures].slice(0, MAX_RECENT_FAILURES),
       failureCount: s.failureCount + 1,
-    })),
+    }))
+  },
   clearFailures: () => set({ recentFailures: [], failureCount: 0 }),
 }))
 

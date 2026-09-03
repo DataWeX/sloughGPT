@@ -2,6 +2,8 @@
 ops/rmsnorm.py — RMS normalization. C base (future), numpy fallback.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 

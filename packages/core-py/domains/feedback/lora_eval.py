@@ -23,6 +23,8 @@ Usage:
     delta = eval.compare(baseline, with_adapter)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time

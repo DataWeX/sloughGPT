@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Memory pressure monitor — proactive memory management for model serving.
 
@@ -22,7 +24,6 @@ Usage::
 
 import gc
 import logging
-import os
 import threading
 import time
 from enum import Enum

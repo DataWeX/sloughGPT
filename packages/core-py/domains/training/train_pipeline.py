@@ -20,6 +20,8 @@ Features:
 Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 """
 
+from __future__ import annotations
+
 import math
 import os
 import logging
@@ -1190,8 +1192,8 @@ class SloughGPTTrainer:
                     sps = self._steps_per_sec()
                     eta = self._eta_seconds(steps_per_epoch)
                     logger.info(
-                        f"Step {self.global_step}/{denom} | Loss: {metrics['loss']:.4f} | "
-                        f"LR: {lr:.2e} | {pct}% | {sps:.1f} steps/s | ETA {self._format_eta(eta)}",
+                        "Step %d/%d | Loss: %.4f | LR: %.2e | %d%% | %.1f steps/s | ETA %s",
+                        self.global_step, denom, metrics['loss'], lr, pct, sps, self._format_eta(eta),
                         extra={"tag": "TRAIN"},
                     )
                     if self._experiment_tracker is not None:
@@ -1216,8 +1218,8 @@ class SloughGPTTrainer:
                 if self.global_step % self.config.eval_interval == 0:
                     eval_metrics = self.evaluate()
                     logger.info(
-                        f"Eval | Loss: {eval_metrics['eval_loss']:.4f} | "
-                        f"PPL: {eval_metrics['eval_ppl']:.2f}",
+                        "Eval | Loss: %.4f | PPL: %.2f",
+                        eval_metrics['eval_loss'], eval_metrics['eval_ppl'],
                         extra={"tag": "TRAIN"},
                     )
                     if self._experiment_tracker is not None:

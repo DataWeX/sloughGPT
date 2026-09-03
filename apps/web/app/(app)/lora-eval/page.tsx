@@ -6,6 +6,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, KpiGrid, StatCard } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
+import { clampNumber } from '@/lib/sanitize'
 
 export default function LoraEvalPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -112,11 +113,11 @@ export default function LoraEvalPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Top K</label>
-              <Input type="number" value={topK} onChange={e => setTopK(parseInt(e.target.value) || 10)} className="h-8 text-xs mt-1" />
+              <Input type="number" value={topK} onChange={e => setTopK(clampNumber(parseInt(e.target.value) || 10, 1, 100))} className="h-8 text-xs mt-1" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Min Feedback</label>
-              <Input type="number" value={minFeedback} onChange={e => setMinFeedback(parseInt(e.target.value) || 5)} className="h-8 text-xs mt-1" />
+              <Input type="number" value={minFeedback} onChange={e => setMinFeedback(clampNumber(parseInt(e.target.value) || 5, 1, 1000))} className="h-8 text-xs mt-1" />
             </div>
           </div>
           <Button size="sm" onClick={() => void handleAggregate()} disabled={aggregating}>

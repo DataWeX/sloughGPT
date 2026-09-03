@@ -1,14 +1,14 @@
 """
 Shared planner configuration — single source of truth for data locations,
 storage backend, and status <-> column mappings used by every tool
-(``planner``, ``notes``, ``kanban``, ``planner gui``, ``planner sync``).
+(``planner``, ``notes``, ``planner sync``).
 
 Resolution order (first match wins):
     1. Explicit CLI flag (per-command).
     2. Environment variable (``PLANNER_NOTES_DIR``, ``PLANNER_BOARD_DIR``,
        ``PLANNER_BACKEND``).
     3. Repository detection: walking up from the current directory, the
-       first ancestor containing ``.kanban/board.json`` is treated as the
+       first ancestor containing ``.kanban/board.jsonl`` is treated as the
        project root, giving ``<root>/.dev-notes`` and ``<root>/.kanban``.
     4. User config fallback (``~/.config/dev-notes`` and
        ``~/.config/kanban``).
@@ -43,12 +43,23 @@ COLUMN_TO_STATUS = {
 
 STATUSES = ["open", "wip", "done", "blocked", "review", "todo"]
 
+COLUMNS = ["todo", "in_progress", "review", "done"]
+
+COLUMN_LABELS = {
+    "todo": "To Do",
+    "in_progress": "In Progress",
+    "review": "Review",
+    "done": "Done",
+}
+
+PRIORITY_LEVELS = ["low", "medium", "high", "urgent"]
+
 
 def _walk_for_board(start: Path) -> Path | None:
-    """Return the nearest ancestor of *start* containing ``.kanban/board.json``."""
+    """Return the nearest ancestor of *start* containing ``.kanban/board.jsonl``."""
     cur = start.resolve()
     for candidate in (cur, *cur.parents):
-        if (candidate / ".kanban" / "board.json").is_file():
+        if (candidate / ".kanban" / "board.jsonl").is_file():
             return candidate
     return None
 
@@ -59,9 +70,8 @@ def find_project_root(start: Path | None = None) -> Path | None:
     With an explicit *start*, only *start* and its ancestors are searched.
     Without one, the current directory is searched first, then the directory
     tree of the installed ``planner`` package itself. The package fallback
-    keeps every planner tool (``notes``, ``kanban``, ``planner gui``) pointed
-    at the repository's board even when launched from a directory outside the
-    repo (the package is typically an editable install living inside it).
+    keeps every planner tool pointed at the repository's board even when
+    launched from a directory outside the repo.
     Returns ``None`` when no ancestor qualifies.
     """
     if start is not None:

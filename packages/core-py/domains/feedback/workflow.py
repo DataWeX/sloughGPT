@@ -8,6 +8,8 @@ Orchestrates the complete feedback → training pipeline:
 - Health monitoring and stats
 """
 
+from __future__ import annotations
+
 import copy
 import threading
 import time
@@ -274,8 +276,6 @@ class FeedbackWorkflowManager:
         rolls back the weights and logs the rejection.
         Uses gradient clipping and cosine LR scheduling for stable updates.
         """
-        import numpy as np
-
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
         if net is None or tok is None:
@@ -392,8 +392,6 @@ class FeedbackWorkflowManager:
         rejected probability down. Quality guard prevents degradation.
         Uses gradient clipping and cosine LR scheduling for stable updates.
         """
-        import numpy as np
-
         net = getattr(self, '_model', None)
         tok = getattr(self, '_tokenizer', None)
         if net is None or tok is None:

@@ -4,6 +4,8 @@ MLflow/W&B Integration for SloughGPT
 Experiment tracking and logging.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import time
 from typing import Iterator
 
 from .collector import Collector
-from .filters import Filter, FilterChain
+from .filters import Filter
 from .sources import Record, Source
 from .stores import Store
 

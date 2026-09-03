@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import threading
 from enum import IntEnum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Any
 
 

@@ -52,9 +52,10 @@ See Also
 
 """
 
+from __future__ import annotations
+
 import logging
 import datetime
-from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from dataclasses import dataclass, field, asdict

@@ -15,9 +15,11 @@ Built-in processors:
 - StyleProcessor: adjusts formality/directness/verbosity
 """
 
+from __future__ import annotations
+
 import asyncio
 import re
-from typing import AsyncIterator, Optional, List, Dict, Any, Protocol, runtime_checkable, Tuple, TYPE_CHECKING
+from typing import AsyncIterator, Optional, List, Dict, Any, Protocol, runtime_checkable, Tuple
 from dataclasses import dataclass
 import logging
 

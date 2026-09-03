@@ -8,6 +8,7 @@ import {
 import { chatDB, type ChatSession as DBChatSession } from '@/lib/db'
 import { sessionController } from '@/lib/session-controller'
 import { addGlobalError } from '@/lib/error-store'
+import { trackEvent } from '@/lib/dev-log'
 import type { Conversation } from '@/lib/session-controller'
 
 const MAX_STORAGE_MESSAGES = 200
@@ -105,6 +106,7 @@ export function useChatSessions(opts: {
     deletedSessionsRef.current.delete(sessionId)
     if (!_createdSessions.has(sessionId)) {
       _createdSessions.add(sessionId)
+      trackEvent('session_created')
       sessionController.create(sessionName, sessionId).catch(err => {
         _createdSessions.delete(sessionId)
         addGlobalError(err, 'Chat:SessionCreate')
@@ -117,6 +119,7 @@ export function useChatSessions(opts: {
   }, [])
 
   const loadSession = useCallback(async (sessionId: string) => {
+    trackEvent('session_loaded', { session_id: sessionId })
     sessionIdRef.current = sessionId
     setSessionLoading(true)
     inFlightLoadsRef.current++
@@ -168,6 +171,7 @@ export function useChatSessions(opts: {
   }, [showToast, setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef])
 
   const deleteSession = useCallback(async (sessionId: string) => {
+    trackEvent('session_deleted', { session_id: sessionId })
     deletedSessionsRef.current.add(sessionId)
     await chatDB.deleteSession(sessionId)
     sessionController.delete(sessionId).catch((e) => addGlobalError({ message: 'Could not session delete sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
@@ -182,6 +186,7 @@ export function useChatSessions(opts: {
   }, [showToast, setMessages, setSessionSaved])
 
   const starSession = useCallback(async (sessionId: string, starred: boolean) => {
+    trackEvent('session_starred', { session_id: sessionId })
     await chatDB.updateSession(sessionId, { starred })
     sessionController.update(sessionId, { starred }).catch((e) => addGlobalError({ message: 'Could not session star sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, starred } : s))
@@ -189,6 +194,7 @@ export function useChatSessions(opts: {
   }, [showToast])
 
   const pinSession = useCallback(async (sessionId: string, pinned: boolean) => {
+    trackEvent('session_pinned', { session_id: sessionId })
     await chatDB.updateSession(sessionId, { pinned })
     sessionController.update(sessionId, { pinned }).catch((e) => addGlobalError({ message: 'Could not session pin sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, pinned } : s))
@@ -196,6 +202,7 @@ export function useChatSessions(opts: {
   }, [showToast])
 
   const archiveSession = useCallback(async (sessionId: string, archived: boolean) => {
+    trackEvent('session_archived', { session_id: sessionId })
     await chatDB.updateSession(sessionId, { archived })
     sessionController.update(sessionId, { archived }).catch((e) => addGlobalError({ message: 'Could not session archive sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, archived } : s))
@@ -203,6 +210,7 @@ export function useChatSessions(opts: {
   }, [showToast])
 
   const renameSession = useCallback(async (sessionId: string, newName: string) => {
+    trackEvent('session_renamed', { session_id: sessionId, name: newName })
     await chatDB.updateSession(sessionId, { name: newName })
     sessionController.update(sessionId, { name: newName }).catch((e) => addGlobalError({ message: 'Could not session rename sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name: newName } : s))
@@ -210,6 +218,7 @@ export function useChatSessions(opts: {
   }, [showToast])
 
   const duplicateSession = useCallback(async (sessionId: string) => {
+    trackEvent('session_duplicated', { session_id: sessionId })
     const session = await chatDB.loadSession(sessionId)
     if (session) {
       const newId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`

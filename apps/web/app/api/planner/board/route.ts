@@ -1,5 +1,14 @@
-import { proxyRequest } from "@/lib/planner-proxy";
+import { NextResponse } from 'next/server'
+import { readBoard } from '../helpers'
 
 export async function GET() {
-  return proxyRequest("/api/board");
+  try {
+    const board = readBoard()
+    return NextResponse.json({ board })
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Failed to read board' },
+      { status: 500 },
+    )
+  }
 }

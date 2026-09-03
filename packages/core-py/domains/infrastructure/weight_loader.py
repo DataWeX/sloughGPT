@@ -20,10 +20,12 @@ Architecture:
     WeightLoaderRegistry      — format auto-detection + dispatch
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
+from typing import Dict, List, Optional, Set, Tuple, Type
 
 import numpy as np
 

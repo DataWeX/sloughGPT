@@ -86,7 +86,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     labelKey: 'nav.section.tools',
     routes: [
       { path: '/feedback', labelKey: 'nav.feedback', icon: 'activity', description: 'Feedback analytics' },
-      { path: '/kanban', labelKey: 'nav.planner', icon: 'kanban', description: 'Planner — board, notes, sync' },
+      { path: '/planner', labelKey: 'nav.planner', icon: 'grid', description: 'Planner board + notes' },
       { path: '/adapters', labelKey: 'nav.adapters', icon: 'settings', description: 'LoRA adapter management' },
     ],
   },
@@ -126,6 +126,6 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/voice': IconMic,
   '/shell': IconCode,
   '/feedback': IconThumbUp,
-  '/kanban': IconGrid,
+  '/planner': IconGrid,
   '/adapters': IconLabs,
 }

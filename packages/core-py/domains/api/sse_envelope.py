@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Standard SSE Envelope — SloughGPT Streaming API
 
@@ -47,7 +49,7 @@ Usage in routers:
                     data={}, meta={"elapsed_ms": 890}, message="done")
 """
 
-from typing import Any, Optional, Dict, Union, Literal
+from typing import Any, Optional, Dict, Union
 from dataclasses import dataclass, field
 from enum import Enum
 

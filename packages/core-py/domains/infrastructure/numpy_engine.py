@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Generic NumPy transformer inference engine.
 
@@ -33,7 +35,7 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Tup
 import numpy as np
 
 from domains.infrastructure.arch_config import ArchConfig, build_arch
-from domains.infrastructure.numpy_ops import softmax, to_float32
+from domains.infrastructure.numpy_ops import softmax
 from domains.infrastructure.numpy_forward import forward, forward_cached
 from domains.infrastructure.compression import CompressedWeight, LRUCache
 
@@ -72,54 +74,23 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
     with open(config_path) as f:
         config = json.load(f)
 
-    # Weights
+    # Weights — SLNC only
+    from pathlib import Path
     safetensors_path = _find_safetensors(model_dir)
     if safetensors_path is None:
-        raise FileNotFoundError(f"No .safetensors for {model_id}")
+        raise FileNotFoundError(f"No model weights for {model_id}")
 
-    from safetensors import safe_open
+    slnc_path = safetensors_path.with_suffix(".slnc")
+    if not slnc_path.exists():
+        raise FileNotFoundError(
+            f"No .slnc file for {model_id}. Convert first: "
+            f"python -m domains.infrastructure.slnc.compiler {model_id}"
+        )
 
-    # Try mmap first
-    try:
-        weights = {}
-        with safe_open(str(safetensors_path), framework="numpy") as f:
-            for key in f.keys():
-                weights[key] = f.get_tensor(key)
-        logger.info("Loaded %d weights from %s (mmap)", len(weights), model_id,
-            extra={"tag": "INFRA"})
-        return config, weights
-    except Exception as e:
-        logger.debug("safetensors mmap failed for %s, falling back to bfloat16: %s", model_id, e)
-
-    # bfloat16 fallback
-    logger.info("bfloat16 fallback for %s", model_id,
-        extra={"tag": "INFRA"})
-    with open(safetensors_path, "rb") as f:
-        header_len_bytes = f.read(8)
-        header_len = struct.unpack("<Q", header_len_bytes)[0]
-        header_bytes = f.read(header_len)
-        header = json.loads(header_bytes)
-
-        weights = {}
-        for key, info in header.items():
-            if key == "__metadata__":
-                continue
-            dtype_str = info.get("dtype", "")
-            data_offsets = info.get("data_offsets", [0, 0])
-            begin, end = data_offsets
-            shape = info.get("shape", [])
-            f.seek(8 + header_len + begin)
-            raw_bytes = f.read(end - begin)
-
-            if "bfloat" in dtype_str.lower() or dtype_str == "BF16":
-                raw_arr = np.frombuffer(raw_bytes, dtype=np.uint16)
-                weights[key] = (raw_arr.astype(np.uint32) << 16).view(np.float32).reshape(shape)
-            elif "float16" in dtype_str.lower() or dtype_str == "F16":
-                weights[key] = np.frombuffer(raw_bytes, dtype=np.float16).astype(np.float32).reshape(shape)
-            elif "float32" in dtype_str.lower() or dtype_str == "F32":
-                weights[key] = np.frombuffer(raw_bytes, dtype=np.float32).reshape(shape)
-
-    logger.info("Loaded %d weights from %s (bfloat16 fallback)", len(weights), model_id,
+    from domains.infrastructure.slnc.parser import SLNCParser
+    parser = SLNCParser(str(slnc_path))
+    weights = parser.get_weights_dict_parallel()
+    logger.info("Loaded %d weights from %s (slnc mmap)", len(weights), model_id,
         extra={"tag": "INFRA"})
     return config, weights
 

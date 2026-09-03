@@ -14,14 +14,13 @@ Usage:
     python3 compile_shaders.py [--naga PATH]
 """
 
+from __future__ import annotations
+
 import argparse
-import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
-
-logger = logging.getLogger("slo.gpu.compile_shaders")
 
 SHADERS_DIR = Path(__file__).parent / "shaders"
 OUTPUT_DIR = Path(__file__).parent / "shaders"
@@ -62,10 +61,10 @@ def compile_spirv(naga: str, wgsl_path: Path, out_path: Path) -> bool:
     cmd = [naga, str(wgsl_path), str(out_path)]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logger.error("SPIR-V FAILED: %s", wgsl_path.name)
-        logger.error("  %s", result.stderr.strip())
+        print(f"  SPIR-V FAILED: {wgsl_path.name}")
+        print(f"  {result.stderr.strip()}")
         return False
-    logger.info("SPIR-V: %s (%d bytes)", out_path.name, out_path.stat().st_size)
+    print(f"  SPIR-V: {out_path.name} ({out_path.stat().st_size} bytes)")
     return True
 
 
@@ -74,10 +73,10 @@ def compile_hlsl(naga: str, wgsl_path: Path, out_path: Path) -> bool:
     cmd = [naga, str(wgsl_path), str(out_path)]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logger.error("HLSL FAILED: %s", wgsl_path.name)
-        logger.error("  %s", result.stderr.strip())
+        print(f"  HLSL FAILED: {wgsl_path.name}")
+        print(f"  {result.stderr.strip()}")
         return False
-    logger.info("HLSL: %s (%d bytes)", out_path.name, out_path.stat().st_size)
+    print(f"  HLSL: {out_path.name} ({out_path.stat().st_size} bytes)")
     return True
 
 
@@ -86,10 +85,10 @@ def compile_msl(naga: str, wgsl_path: Path, out_path: Path) -> bool:
     cmd = [naga, str(wgsl_path), str(out_path)]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        logger.error("MSL FAILED: %s", wgsl_path.name)
-        logger.error("  %s", result.stderr.strip())
+        print(f"  MSL FAILED: {wgsl_path.name}")
+        print(f"  {result.stderr.strip()}")
         return False
-    logger.info("MSL: %s (%d bytes)", out_path.name, out_path.stat().st_size)
+    print(f"  MSL: {out_path.name} ({out_path.stat().st_size} bytes)")
     return True
 
 
@@ -101,9 +100,8 @@ def main():
     parser.add_argument("--msl-only", action="store_true", help="Only compile MSL")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
     naga = args.naga or find_naga()
-    logger.info("Using naga: %s", naga)
+    print(f"Using naga: {naga}")
 
     OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -111,10 +109,10 @@ def main():
     for name in COMPUTE_SHADERS:
         wgsl = SHADERS_DIR / f"{name}.wgsl"
         if not wgsl.exists():
-            logger.warning("SKIP: %s not found", wgsl)
+            print(f"SKIP: {wgsl} not found")
             continue
 
-        logger.info("Compiling %s.wgsl:", name)
+        print(f"\nCompiling {name}.wgsl:")
 
         if not args.hlsl_only and not args.msl_only:
             spv_out = OUTPUT_DIR / f"{name}.spv"
@@ -132,9 +130,9 @@ def main():
                 ok = False
 
     if ok:
-        logger.info("All shaders compiled to %s", OUTPUT_DIR)
+        print(f"\n✓ All shaders compiled to {OUTPUT_DIR}")
     else:
-        logger.error("Some shaders failed to compile")
+        print(f"\n✗ Some shaders failed to compile")
         sys.exit(1)
 
 

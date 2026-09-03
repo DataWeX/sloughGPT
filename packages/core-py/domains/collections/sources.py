@@ -259,7 +259,6 @@ class WatchSource:
         self._seen_mtimes: dict[str, float] = {}
 
     def read(self) -> Iterator[Record]:
-        import fnmatch
         for pattern in self.patterns:
             for file_path in self.path.glob(pattern):
                 if not file_path.is_file():

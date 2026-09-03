@@ -1,13 +1,4 @@
-import sys
-from .core import cli_main as notes_cli_main
-from .kanban import cli_main as kanban_cli_main
+from .cli import main
 
-if len(sys.argv) > 1 and sys.argv[1] == "kanban":
-    sys.exit(kanban_cli_main(sys.argv[2:]))
-if len(sys.argv) > 1 and sys.argv[1] == "gui":
-    from .gui import main as gui_main
-    sys.exit(gui_main(sys.argv[2:]))
-if len(sys.argv) > 1 and sys.argv[1] == "sync":
-    from .sync import cli_main as sync_main
-    sys.exit(sync_main(sys.argv[2:]))
-sys.exit(notes_cli_main(sys.argv[1:] if len(sys.argv) > 1 else None))
+if __name__ == "__main__":
+    main()

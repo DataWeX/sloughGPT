@@ -113,3 +113,154 @@ class TestCmdApiTest:
         args.endpoint = "/health"
         cmd_api_test(args)
         mock_log.header.assert_called_with("API Endpoint Tests")
+
+
+class TestStatusBlock:
+    """Tests for the StatusBlock in-place update class."""
+
+    def test_update_writes_to_tty(self):
+        import io
+        from commands.dev import StatusBlock
+
+        tty_file = io.StringIO()
+
+        logger = MagicMock()
+        logger._lock = __import__('threading').Lock()
+        logger._colors = False
+
+        block = StatusBlock.__new__(StatusBlock)
+        block._log = logger
+        block._lines = []
+        block._tty = tty_file
+        block._is_tty = True
+        block._non_tty_logged = False
+
+        block.update("  SloughGPT", "  API: starting")
+
+        output = tty_file.getvalue()
+        assert "SloughGPT" in output
+        assert "API: starting" in output
+        assert "\n" in output
+
+    def test_update_clears_previous_on_tty(self):
+        import io
+        from commands.dev import StatusBlock
+
+        tty_file = io.StringIO()
+
+        logger = MagicMock()
+        logger._lock = __import__('threading').Lock()
+        logger._colors = False
+
+        block = StatusBlock.__new__(StatusBlock)
+        block._log = logger
+        block._lines = []
+        block._tty = tty_file
+        block._is_tty = True
+        block._non_tty_logged = False
+
+        block.update("  Line 1", "  Line 2")
+        assert len(block._lines) == 2
+
+        block.update("  New Line 1")
+
+        output = tty_file.getvalue()
+        # Should contain ANSI escape codes for cursor movement and clearing
+        assert "\033[" in output
+        assert "Line 1" in output
+        assert "New Line 1" in output
+
+    def test_first_update_no_clear(self):
+        import io
+        from commands.dev import StatusBlock
+
+        tty_file = io.StringIO()
+
+        logger = MagicMock()
+        logger._lock = __import__('threading').Lock()
+        logger._colors = False
+
+        block = StatusBlock.__new__(StatusBlock)
+        block._log = logger
+        block._lines = []
+        block._tty = tty_file
+        block._is_tty = True
+        block._non_tty_logged = False
+
+        block.update("  Only line")
+
+        output = tty_file.getvalue()
+        assert "Only line" in output
+        # First update should not have clear escape codes
+        assert "\033[2K" not in output
+
+    def test_non_tty_uses_info(self):
+        import threading
+        from commands.dev import StatusBlock
+
+        logger = MagicMock()
+        logger._stream = MagicMock()
+        logger._stream.isatty.return_value = False
+        logger._lock = threading.Lock()
+        logger._colors = False
+
+        block = StatusBlock(logger)
+        assert block._is_tty is False
+
+        block.update("  Line 1", "  Line 2")
+        assert logger.info.call_count == 2
+
+    def test_line_count_tracking(self):
+        import threading
+        from commands.dev import StatusBlock
+
+        stream = MagicMock()
+        stream.isatty.return_value = True
+        stream.write = MagicMock()
+        stream.flush = MagicMock()
+
+        logger = MagicMock()
+        logger._stream = stream
+        logger._lock = threading.Lock()
+        logger._colors = False
+        logger.save_position = MagicMock()
+        logger.restore_position = MagicMock()
+        logger.clear_lines = MagicMock()
+
+        block = StatusBlock(logger)
+        block.update("a", "b", "c")
+        assert len(block._lines) == 3
+        block.update("x")
+        assert len(block._lines) == 1
+
+
+class TestPortHelpers:
+    """Tests for port utility functions."""
+
+    def test_is_port_bound_free(self):
+        from commands.dev import _is_port_bound
+        assert _is_port_bound(49999) is False
+
+    def test_find_free_port_same_if_free(self):
+        from commands.dev import _find_free_port
+        assert _find_free_port(49999) == 49999
+
+    def test_find_free_port_skips_bound(self):
+        import socket
+        from commands.dev import _find_free_port, _is_port_bound
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("localhost", 49998))
+            sock.listen(1)
+            assert _is_port_bound(49998) is True
+            result = _find_free_port(49998)
+            assert result != 49998
+            assert result >= 49998
+        finally:
+            sock.close()
+
+    def test_check_web_ready_nonexistent(self):
+        from commands.dev import _check_web_ready
+        assert _check_web_ready(49997) is False

@@ -104,17 +104,17 @@ export function useChatMessages(config: ChatMessagesConfig) {
   })
 
   // ── Token accumulator for streaming perf ─────────────────────────────────
-  // Buffers tokens in a ref and flushes to setMessages every FLUSH_MS.
-  // Uses targeted splice instead of O(n) map — only touches the streaming message.
+  // Buffers tokens in a ref and flushes via requestAnimationFrame.
+  // Uses targeted splice — only touches the streaming message, O(1) not O(n).
   const tokenBufRef = useRef<{ id: string; text: string }[]>([])
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const FLUSH_MS = 16
+  const rafIdRef = useRef<number>(0)
+  const pendingFlushRef = useRef(false)
 
   const sessionsRef = useRef(sessions)
   sessionsRef.current = sessions
 
   const flushTokens = useCallback(() => {
-    flushTimerRef.current = null
+    pendingFlushRef.current = false
     const buf = tokenBufRef.current
     if (buf.length === 0) return
     tokenBufRef.current = []
@@ -123,15 +123,14 @@ export function useChatMessages(config: ChatMessagesConfig) {
       byId.set(id, (byId.get(id) || '') + text)
     }
     setMessages(prev => {
-      let changed = false
-      const updated = prev.map(m => {
-        const delta = byId.get(m.id)
-        if (!delta) return m
-        changed = true
-        const content = m.content === 'Thinking...' ? '' : m.content
-        return { ...m, content: content + delta }
-      })
-      if (!changed) return prev
+      // Targeted splice: find the last streaming message and update only it
+      const lastIdx = prev.length - 1
+      if (lastIdx < 0) return prev
+      const last = prev[lastIdx]
+      const delta = byId.get(last.id)
+      if (!delta) return prev
+      const content = last.content === 'Thinking...' ? '' : last.content
+      const updated = [...prev.slice(0, lastIdx), { ...last, content: content + delta }]
       const now = Date.now()
       if (now - lastSaveRef.current > 500) {
         lastSaveRef.current = now
@@ -142,14 +141,16 @@ export function useChatMessages(config: ChatMessagesConfig) {
   }, [])
 
   const scheduleFlush = useCallback(() => {
-    if (flushTimerRef.current) return
-    flushTimerRef.current = setTimeout(flushTokens, FLUSH_MS)
+    if (pendingFlushRef.current) return
+    pendingFlushRef.current = true
+    rafIdRef.current = requestAnimationFrame(flushTokens)
   }, [flushTokens])
 
   // Cleanup on unmount — flush remaining tokens before clearing
   useEffect(() => {
     return () => {
-      if (flushTimerRef.current) clearTimeout(flushTimerRef.current)
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current)
+      pendingFlushRef.current = false
       const buf = tokenBufRef.current
       if (buf.length > 0) {
         tokenBufRef.current = []
@@ -158,15 +159,13 @@ export function useChatMessages(config: ChatMessagesConfig) {
           byId.set(id, (byId.get(id) || '') + text)
         }
         setMessages(prev => {
-          let changed = false
-          const updated = prev.map(m => {
-            const delta = byId.get(m.id)
-            if (!delta) return m
-            changed = true
-            const content = m.content === 'Thinking...' ? '' : m.content
-            return { ...m, content: content + delta }
-          })
-          return changed ? updated : prev
+          const lastIdx = prev.length - 1
+          if (lastIdx < 0) return prev
+          const last = prev[lastIdx]
+          const delta = byId.get(last.id)
+          if (!delta) return prev
+          const content = last.content === 'Thinking...' ? '' : last.content
+          return [...prev.slice(0, lastIdx), { ...last, content: content + delta }]
         })
       }
     }
@@ -254,8 +253,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
             msg.id === assistantId ? { ...msg, content: msg.content || '(empty response)' } : msg
           ))
         },
-        onError: (status, text) => {
-          setCurrentError(getErrorInfo(status, text))
+        onError: (status, text, opts) => {
+          setCurrentError(getErrorInfo(status, text, opts))
           setMessages(prev => prev.map(msg =>
             msg.id === assistantId
               ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
@@ -331,8 +330,8 @@ export function useChatMessages(config: ChatMessagesConfig) {
             msg.id === assistantId ? { ...msg, content: msg.content || '(empty response)' } : msg
           ))
         },
-        onError: (_status, text) => {
-          setCurrentError(getErrorInfo(0, text || 'Stream error'))
+        onError: (_status, text, opts) => {
+          setCurrentError(getErrorInfo(0, text || 'Stream error', opts))
           setMessages(prev => prev.map(msg =>
             msg.id === assistantId
               ? { ...msg, content: msg.content || '(response interrupted)', isError: true }
@@ -623,9 +622,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
               m.id === assistantId && m.content === 'Thinking...' ? { ...m, content: '' } : m
             ))
           },
-          onError: (status: number, text?: string) => {
+          onError: (status: number, text?: string, opts?: { correlationId?: string; backendError?: string }) => {
             flushTokens()
-            setCurrentError(getErrorInfo(status, text || 'Stream error'))
+            setCurrentError(getErrorInfo(status, text || 'Stream error', opts))
             setMessages(prev => prev.map(msg =>
               msg.id === assistantId
                 ? { ...msg, content: msg.content || '(response interrupted)', isError: true }

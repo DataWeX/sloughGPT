@@ -48,7 +48,7 @@ class TestResolveCorpus:
 
     def test_dataset_name_via_datasets_dir(self, tmp_path, monkeypatch):
         from commands.token_tree import _resolve_corpus_file
-        d = tmp_path / "datasets" / "demo"
+        d = tmp_path / "data" / "demo"
         d.mkdir(parents=True)
         f = d / "input.txt"
         f.write_text("x")

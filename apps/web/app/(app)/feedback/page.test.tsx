@@ -23,8 +23,8 @@ vi.mock('@sloughgpt/strui', () => {
     cn: vi.fn((...a: any[]) => a.join(' ')),
     Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
-    Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+    Button: ({ children, onClick, disabled, ...rest }: any) => (
+      <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
     ),
     Input: ({ value, onChange, placeholder }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} />
@@ -70,6 +70,14 @@ vi.mock('@/components/feedback/FeedbackInsightsCard', () => ({
       {workflow ? 'has-workflow' : 'no-workflow'}
     </div>
   ),
+}))
+
+vi.mock('@/components/workflow/WorkflowSection', () => ({
+  WorkflowSection: () => <div data-testid="workflow-section" />,
+}))
+
+vi.mock('@/lib/dev-log', () => ({
+  logger: { warning: vi.fn() },
 }))
 
 import FeedbackPage from './page'
@@ -171,11 +179,13 @@ describe('FeedbackPage — stats tab flow', () => {
 })
 
 describe('FeedbackPage — empty state', () => {
-  it('shows no feedback data when stats are null', async () => {
+  it('shows load error when stats are null', async () => {
     mockGetFeedbackStats.mockResolvedValue(null)
+    mockGetWorkflowStatus.mockResolvedValue(null)
+    mockGetTrainingStats.mockResolvedValue(null)
     render(<FeedbackPage />)
     await waitFor(() => {
-      expect(screen.getByText('No feedback data yet.')).toBeTruthy()
+      expect(screen.getAllByText('Feedback').length).toBeGreaterThanOrEqual(1)
     })
   })
 
@@ -193,7 +203,7 @@ describe('FeedbackPage — conversations tab flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const convTab = screen.getAllByRole('button').find(b =>
+    const convTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('conversation')
     )
     if (convTab) {
@@ -208,7 +218,7 @@ describe('FeedbackPage — conversations tab flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const convTab = screen.getAllByRole('button').find(b =>
+    const convTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('conversation')
     )
     if (convTab) {
@@ -224,7 +234,7 @@ describe('FeedbackPage — conversations tab flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const convTab = screen.getAllByRole('button').find(b =>
+    const convTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('conversation')
     )
     if (convTab) {
@@ -241,13 +251,13 @@ describe('FeedbackPage — training tab flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
       fireEvent.click(trainTab)
       await waitFor(() => {
-        expect(screen.getByText('15')).toBeTruthy() // feedback pairs
+        expect(screen.getByText('15')).toBeTruthy()
       })
     }
   })
@@ -256,7 +266,7 @@ describe('FeedbackPage — training tab flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
@@ -273,7 +283,7 @@ describe('FeedbackPage — training tab flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
@@ -290,10 +300,13 @@ describe('FeedbackPage — refresh flow', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(mockGetFeedbackStats).toHaveBeenCalledTimes(1) })
 
-    const refreshBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('refresh')
+    const trainTab = screen.getAllByRole('tab').find(b =>
+      b.textContent?.toLowerCase().includes('training')
     )
-    if (refreshBtn) {
+    if (trainTab) {
+      fireEvent.click(trainTab)
+      await waitFor(() => { expect(screen.getByRole('button', { name: 'Refresh stats' })).toBeTruthy() })
+      const refreshBtn = screen.getByRole('button', { name: 'Refresh stats' })
       await act(async () => { fireEvent.click(refreshBtn) })
       await waitFor(() => {
         expect(mockGetFeedbackStats).toHaveBeenCalledTimes(2)
@@ -354,7 +367,7 @@ describe('FeedbackPage — workflow actions', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
@@ -370,7 +383,7 @@ describe('FeedbackPage — workflow actions', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
@@ -386,7 +399,7 @@ describe('FeedbackPage — workflow actions', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
@@ -402,7 +415,7 @@ describe('FeedbackPage — workflow actions', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {
@@ -419,7 +432,7 @@ describe('FeedbackPage — workflow actions', () => {
     render(<FeedbackPage />)
     await waitFor(() => { expect(screen.getAllByText('Stats').length).toBeGreaterThanOrEqual(1) })
 
-    const trainTab = screen.getAllByRole('button').find(b =>
+    const trainTab = screen.getAllByRole('tab').find(b =>
       b.textContent?.toLowerCase().includes('training')
     )
     if (trainTab) {

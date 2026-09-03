@@ -4,6 +4,8 @@ Multimodal Engine — Vision + Text understanding.
 No external downloads. Everything learned from scratch.
 """
 
+from __future__ import annotations
+
 import os
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
@@ -13,13 +15,12 @@ import numpy as np
 logger = logging.getLogger("slo.multimodal.engine")
 
 from domains.training.slonet import (
-    Tensor, SloNet, SloConv2D, SloMaxPool2D, SloLinear,
-    SloLSTM, SloEmbedding, SloLayerNorm, SloTransformerBlock, SloCrossAttention,
+    Tensor, SloLinear,
+    SloEmbedding, SloLayerNorm, SloTransformerBlock, SloCrossAttention,
     SloMultiHeadAttention, SloFeedForward, SloRMSNorm, SloDropout, SloLayer,
-    SloAdam, softmax as _softmax, relu as _relu,
-    flatten as _flatten, tensor as _tensor,
-    cross_entropy as _cross_entropy, sigmoid as _sigmoid,
-    zeros, ones,
+    SloAdam, softmax as _softmax,
+    tensor as _tensor,
+    cross_entropy as _cross_entropy,
     compute_sensitivity,
 )
 

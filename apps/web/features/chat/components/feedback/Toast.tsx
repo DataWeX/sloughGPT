@@ -208,7 +208,7 @@ export function RadixToastContainer({ toasts, onDismiss, onClearAll }: ToastCont
         <button
           type="button"
           onClick={onClearAll}
-          className="fixed bottom-20 right-4 z-[101] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
+          className="fixed bottom-20 right-4 z-[301] text-[9px] text-muted-foreground/50 hover:text-foreground/80 px-1.5 py-0.5 rounded bg-background/60 backdrop-blur-sm transition-colors"
           aria-label="Dismiss all notifications"
         >
           Clear all

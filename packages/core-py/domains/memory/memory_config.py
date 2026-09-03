@@ -14,6 +14,7 @@ declarative - enabling or tuning memory never requires a code change.
 | ``SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES`` | ``60`` | How often the server schedules a ``memory.consolidate`` pass; ``0`` disables |
 | ``SLO_MEMORY_ARCHIVE_RETENTION_DAYS`` | ``30`` | Default retention window for ``prune_archive`` / ``memory archive --prune-days`` |
 """
+from __future__ import annotations
 
 import os
 import threading

@@ -15,17 +15,15 @@ removed — they were superseded by the unified Kernel in kernel.py.
 from __future__ import annotations
 
 import os
-import sys
 import time
 import json
-import shlex
 import signal
 import logging
 import threading
 import subprocess
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from domains.shared import find_repo_root, find_server_python
 

@@ -4,6 +4,8 @@ Chat Domain - Clean domain-based chat logic
 Simple, focused: receive message → generate response → log
 """
 
+from __future__ import annotations
+
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 import json

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -42,10 +42,12 @@ export default function SecurityPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [historyMode, setHistoryMode] = useState(false)
   const [filter, setFilter] = useState('')
+  const filterRef = useRef(filter)
+  filterRef.current = filter
   const addToast = useToastStore(s => s.addToast)
 
   const eventParam = () => {
-    const f = filter.trim()
+    const f = filterRef.current.trim()
     return f ? `&event_type=${encodeURIComponent(f)}` : ''
   }
 

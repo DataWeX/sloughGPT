@@ -2,14 +2,14 @@
 Auto-Ingestion Pipeline - Scans the repo and ingests all code/docs into vector store.
 Run: python3 -m domains.infrastructure.auto_ingest --path . --provider chromadb
 """
-import os
-import json
+
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Callable
+from typing import List, Dict, Any
 from dataclasses import dataclass
 import hashlib
 import logging
-import mimetypes
 
 logger = logging.getLogger("slo.auto_ingest")
 
@@ -396,10 +396,10 @@ async def main():
 
     if args.file:
         count = await ingester.ingest_single_file(args.file)
-        logger.info("Ingested %d chunks from %s", count, args.file)
+        print(f"✅ Ingested {count} chunks from {args.file}")
     else:
         stats = await ingester.ingest(dry_run=args.dry_run)
-        logger.info("Done: %s", stats)
+        print(f"📊 Done: {stats}")
 
 
 if __name__ == "__main__":

@@ -24,13 +24,14 @@ Public API:
 * ``verify_model``, ``list_missing_files``
 """
 
-import hashlib
+from __future__ import annotations
+
 import logging
 import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import requests
 

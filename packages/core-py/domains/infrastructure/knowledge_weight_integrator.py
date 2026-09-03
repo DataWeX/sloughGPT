@@ -8,6 +8,8 @@ and can be re-applied to the base model during inference.
 Runtime: pure NumPy / SloNet. No external ML framework required.
 """
 
+from __future__ import annotations
+
 import json
 import time
 import logging

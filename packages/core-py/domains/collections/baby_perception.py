@@ -1,8 +1,9 @@
-import numpy as np
-from dataclasses import dataclass, field
-from typing import Any
+from __future__ import annotations
 
-from .perception import WorldPerception, PerceptionEvent, PerceptionConfig
+import numpy as np
+from dataclasses import dataclass
+
+from .perception import WorldPerception, PerceptionEvent
 
 
 @dataclass

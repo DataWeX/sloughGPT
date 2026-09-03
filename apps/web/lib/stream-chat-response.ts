@@ -34,7 +34,7 @@ interface StreamChatParams {
   knowledge?: string[]
   onToken: (token: string) => void
   onComplete: () => void
-  onError: (status: number, text?: string) => void
+  onError: (status: number, text?: string, opts?: { correlationId?: string; backendError?: string; httpMethod?: string; httpPath?: string; durationMs?: number }) => void
   onKnowledge?: (source: string, count: number) => void
   onThinking?: () => void
   onToolCall?: (event: ToolCallEvent) => void
@@ -179,7 +179,13 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
             new Error(message),
             { source: 'chat/stream', title: `Chat stream error (${httpStatus})` },
           )
-          onError(httpStatus, message)
+          onError(httpStatus, message, {
+            correlationId: typeof d.correlation_id === 'string' ? d.correlation_id : undefined,
+            backendError: typeof d.error === 'string' ? d.error : undefined,
+            httpMethod: typeof d.http_method === 'string' ? d.http_method : undefined,
+            httpPath: typeof d.http_path === 'string' ? d.http_path : undefined,
+            durationMs: typeof d.duration_ms === 'number' ? d.duration_ms : undefined,
+          })
           return
         }
 
@@ -227,7 +233,7 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         err instanceof Error ? err : new Error(message),
         { source: 'chat/stream', title: 'Connection Error' },
       )
-      onError(0, message)
+      onError(0, message, undefined)
       return
     }
 

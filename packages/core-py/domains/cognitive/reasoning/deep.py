@@ -7,9 +7,10 @@ Implements:
 3. Formal Logic Engine - Our own predicate logic + syllogism system
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple

@@ -4,6 +4,8 @@ Training Domain - Simplified
 This domain provides unified training capabilities.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import re

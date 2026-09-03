@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { shellExec, shellExecStream, type ShellExecResult } from '@/lib/shell-controller'
+import { trackEvent } from '@/lib/dev-log'
 
 export interface ShellLine {
   text: string
@@ -65,6 +66,7 @@ export function useShell(maxLines = DEFAULT_MAX_LINES) {
     abortRef.current = new AbortController()
 
     setState({ lines: [], isRunning: true, exitCode: null, error: null })
+    trackEvent('shell_command_started', { command_length: command.length })
 
     if (stream) {
       const signal = abortRef.current.signal
@@ -80,6 +82,7 @@ export function useShell(maxLines = DEFAULT_MAX_LINES) {
           },
           onComplete: (exitCode) => {
             if (signal.aborted) return
+            trackEvent('shell_command_completed', { exit_code: exitCode })
             setState(prev => ({
               ...prev,
               isRunning: false,
@@ -89,6 +92,7 @@ export function useShell(maxLines = DEFAULT_MAX_LINES) {
           },
           onError: (error) => {
             if (signal.aborted) return
+            trackEvent('shell_command_error', { error })
             setState(prev => ({
               ...prev,
               isRunning: false,
@@ -108,6 +112,7 @@ export function useShell(maxLines = DEFAULT_MAX_LINES) {
           index: i,
           timestamp: Date.now(),
         })), maxLines)
+        trackEvent('shell_command_completed', { exit_code: result.exit_code ?? 1 })
         setState({
           lines,
           isRunning: false,
@@ -119,6 +124,7 @@ export function useShell(maxLines = DEFAULT_MAX_LINES) {
           setState(prev => ({ ...prev, isRunning: false }))
           return
         }
+        trackEvent('shell_command_error', { error: err instanceof Error ? err.message : 'Unknown error' })
         setState(prev => ({
           ...prev,
           isRunning: false,

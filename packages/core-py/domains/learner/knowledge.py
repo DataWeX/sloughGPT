@@ -17,20 +17,17 @@ Storage backed by VectorStore (InMemory/ChromaDB/Pinecone) instead of JSON files
 
 from __future__ import annotations
 
-import os
 import re
 import json
 import time
 import math
-import struct
 import hashlib
 import logging
 import threading
 from typing import Optional, Any
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 
-import numpy as np
 from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.learner.knowledge")
@@ -574,7 +571,6 @@ class KnowledgeMemory:
         for a never-used store).
         """
         try:
-            from domains.inference.vector_store import VectorEntry
             entries = getattr(self._vector_store, '_entries', None)
             if not entries and not ENTRIES_PATH.exists():
                 return
@@ -661,7 +657,6 @@ class KnowledgeMemory:
         with self._lock:
             if content_hash in self._visited:
                 return False
-        import asyncio
         try:
             vec = self._get_embedding(fact.content)
             from domains.inference.vector_store import VectorEntry

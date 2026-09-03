@@ -106,12 +106,14 @@ class TestPointCompressorCluster:
         assert p.accuracy > 0.0
 
     def test_deterministic(self):
-        np.random.seed(42)
-        weights = np.random.randn(128)
         c1 = PointCompressor()
         c2 = PointCompressor()
+        np.random.seed(42)
+        weights = np.random.randn(128)
         p1 = c1.compress_cluster(weights.copy(), identity="test")
-        p2 = c2.compress_cluster(weights.copy(), identity="test")
+        np.random.seed(42)
+        weights2 = np.random.randn(128)
+        p2 = c2.compress_cluster(weights2.copy(), identity="test")
         np.testing.assert_array_equal(p1.params["centroids"], p2.params["centroids"])
 
 
@@ -474,7 +476,13 @@ class TestPointNbytes:
         p = c.compress_cluster(np.random.randn(64))
         nb = p.nbytes()
         assert nb > 0
-        assert nb == p.params["centroids"].nbytes + p.params["assignments"].nbytes
+        huffman_data = p.params.get("huffman_data")
+        if huffman_data is not None:
+            tree_size = sum(len(v) for v in p.params.get("huffman_codes", {}).values())
+            expected = p.params["centroids"].nbytes + len(huffman_data) + tree_size + 8
+        else:
+            expected = p.params["centroids"].nbytes + p.params["assignments"].nbytes
+        assert nb == expected
 
     def test_cluster_nbytes_with_residual(self):
         c = PointCompressor(residual_threshold=0.99)

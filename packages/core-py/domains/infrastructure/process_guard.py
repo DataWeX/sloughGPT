@@ -9,6 +9,8 @@ Two construction modes:
 
   SloNet (preferred — pure NumPy)::
 
+from __future__ import annotations
+
       guard = ProcessGuard(slnc_path="models/gpt2.slnc", model_id="gpt2")
       guard.start()
       result = guard.generate("Hello")

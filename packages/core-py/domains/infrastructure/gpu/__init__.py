@@ -13,3 +13,5 @@ Files:
   wgpu_be.py     — ComputeBackend impl
   shaders/       — WGSL compute shaders
 """
+
+from __future__ import annotations

@@ -6,6 +6,8 @@ Uses a pure NumPy vision+text model that learns freely from
 user-provided image data. No external downloads.
 """
 
+from __future__ import annotations
+
 from typing import Optional
 from dataclasses import dataclass
 import logging
@@ -77,7 +79,7 @@ class MultimodalManager:
         """
         self._speech_server_mode = speech_server
 
-        logger.info(f"Initializing multimodal (speech_server={speech_server}, vision={vision_model})", extra={"tag": "MODEL"})
+        logger.info("Initializing multimodal (speech_server=%s, vision=%s)", speech_server, vision_model, extra={"tag": "MODEL"})
 
         if speech_server:
             self._speech_recognizer = get_speech_recognizer(use_server=True)
@@ -90,9 +92,9 @@ class MultimodalManager:
                 try:
                     self._multimodal_engine = MultimodalEngine.load()
                     self._learning_count = self._count_trained_images()
-                    logger.info(f"Loaded saved multimodal engine ({self._learning_count} images)", extra={"tag": "MODEL"})
+                    logger.info("Loaded saved multimodal engine (%d images)", self._learning_count, extra={"tag": "MODEL"})
                 except Exception as e:
-                    logger.warning(f"Failed to load saved engine: {e}", extra={"tag": "MODEL"})
+                    logger.warning("Failed to load saved engine: %s", e, extra={"tag": "MODEL"})
                     self._multimodal_engine = None
 
             if self._multimodal_engine is None:
@@ -382,7 +384,7 @@ class MultimodalManager:
             # Training path (unchanged for learning)
             # Step 1: Contrastive learning on vision encoder
             contrastive_loss_val = contrastive_step(engine, img_np, buf)
-            logger.debug(f"Contrastive loss: {contrastive_loss_val:.4f}")
+            logger.debug("Contrastive loss: %.4f", contrastive_loss_val)
 
             # Step 2: Get image embedding & generate/select caption
             embed = engine.vision.forward(img_np)
@@ -395,7 +397,7 @@ class MultimodalManager:
                 from domains.feedback.lora_eval import BLEUScorer
                 accuracy = BLEUScorer.score(generated_text, raw_text)
                 self._accuracy_history.append(accuracy)
-                logger.debug(f"Supervised training: BLEU={accuracy:.2f}")
+                logger.debug("Supervised training: BLEU=%.2f", accuracy)
             else:
                 # Self-supervised mode
                 if self._learning_count < 10:
@@ -413,9 +415,9 @@ class MultimodalManager:
                 if len(tokens) >= 3:
                     tokens_arr = np.array([tokens], dtype=np.int64)
                     loss = engine.train_step(img_np, tokens_arr)
-                    logger.debug(f"Decoder train loss: {loss:.4f}")
+                    logger.debug("Decoder train loss: %.4f", loss)
             except Exception as train_err:
-                logger.debug(f"Decoder train skipped: {train_err}")
+                logger.debug("Decoder train skipped: %s", train_err)
 
             # Store in replay buffer for future diverse training
             buf.add(img_np.copy(), raw_text)
@@ -423,7 +425,7 @@ class MultimodalManager:
             # Step 4: Periodically train decoder on diverse replay samples
             if self._learning_count > 0 and self._learning_count % 5 == 0:
                 replay_loss = replay_train_step(engine, buf, batch_size=4)
-                logger.debug(f"Replay train loss: {replay_loss:.4f}")
+                logger.debug("Replay train loss: %.4f", replay_loss)
 
             self._learning_count += 1
             self._caption_history.append(raw_text)
@@ -438,7 +440,7 @@ class MultimodalManager:
                             "last_caption": raw_text,
                         })
                     except Exception as save_err:
-                        logger.warning(f"Auto-save failed: {save_err}", extra={"tag": "MODEL"})
+                        logger.warning("Auto-save failed: %s", save_err, extra={"tag": "MODEL"})
                 threading.Thread(target=_async_save, daemon=True).start()
 
             confidence = min(float(np.mean(np.abs(embed.data))) * 2.0, 1.0)
@@ -450,7 +452,7 @@ class MultimodalManager:
                 accuracy=accuracy,
             )
         except Exception as e:
-            logger.error(f"MultimodalEngine caption error: {e}", extra={"tag": "MODEL"})
+            logger.error("MultimodalEngine caption error: %s", e, extra={"tag": "MODEL"})
             return ImageCaption(text="[caption failed]", confidence=0.0, tags=["error"])
 
     def train_on_path(self, path: str) -> ImageCaption:

@@ -10,14 +10,11 @@ Each device behaves like a Unix device file:
 from __future__ import annotations
 
 import os
-import io
 import re
-import json
-import time
 import random
 import string
 import logging
-from typing import Any, Callable
+from typing import Callable
 
 logger = logging.getLogger("slo.shell.devices")
 

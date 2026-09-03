@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react'
 import { chatDB } from '@/lib/db'
+import { trackEvent } from '@/lib/dev-log'
 
 type Locale = 'en' | 'es' | 'fr' | 'de' | 'zh'
 
@@ -207,7 +208,7 @@ const translations: Record<Locale, Translations> = {
     'nav.adapters': '适配器',
     'nav.errors': '错误',
     'nav.feedback': '反馈',
-    'nav.kanban': '看板',
+    'nav.planner': 'Planner',
     'nav.files': '文件',
     'nav.souls': '灵魂',
     'nav.security': '安全',
@@ -256,13 +257,17 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       if (!cancelled && saved && saved in translations) {
         setLocaleState(saved as Locale)
         document.documentElement.lang = saved
+        trackEvent('locale_loaded', { locale: saved })
       }
     })
     return () => { cancelled = true }
   }, [])
 
   const setLocale = useCallback((newLocale: Locale) => {
-    setLocaleState(newLocale)
+    setLocaleState(prev => {
+      trackEvent('locale_changed', { from: prev, to: newLocale })
+      return newLocale
+    })
     chatDB.setKV(LOCALE_KEY, newLocale).catch(() => {})
     document.documentElement.lang = newLocale
   }, [])

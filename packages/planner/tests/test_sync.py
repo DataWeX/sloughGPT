@@ -1,103 +1,122 @@
-"""
-Tests for planner.sync — shared notes -> board card sync used by
-``planner sync``, the GUI Sync button, and ``sync-notes-to-board``.
-"""
+"""Tests for planner.sync — reconcile notes and board cards."""
+
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from planner.core import NoteStore
-from planner.kanban import KanbanStore
-from planner.sync import cli_main, sync_notes_to_board
+from planner.sync import sync_notes_to_board
+from planner.store import Store
 
 
-@pytest.fixture
-def stores(tmp_path):
-    return (
-        NoteStore(notes_dir=tmp_path / "notes", backend="file"),
-        KanbanStore(board_dir=tmp_path / "board"),
-    )
+def _make_note(id: str, title: str, status: str, body: str = "", tags: list[str] | None = None):
+    """Create a mock note object."""
+    note = MagicMock()
+    note.id = id
+    note.title = title
+    note.status = status
+    note.body = body
+    note.tags = tags or []
+    return note
 
 
-def test_sync_creates_cards_for_notes(stores):
-    note_store, kanban_store = stores
-    note_store.create("Fix boot order", tags=["kernel"])
-    note_store.create("Ship v2.0")
-    added, updated, total = sync_notes_to_board(note_store, kanban_store)
-    assert added == 2
-    assert updated == 0
-    assert total == 2
-    titles = {c.title for c in kanban_store.load_board().cards}
-    assert titles == {"Fix boot order", "Ship v2.0"}
+def _make_note_store(notes: list):
+    """Create a mock note store."""
+    store = MagicMock()
+    store.list_notes.return_value = notes
+    return store
 
 
-def test_sync_is_idempotent(stores):
-    note_store, kanban_store = stores
-    note_store.create("Same title")
-    sync_notes_to_board(note_store, kanban_store)
-    added, updated, total = sync_notes_to_board(note_store, kanban_store)
-    assert added == 0
-    assert updated == 0
-    assert total == 1
+class TestSyncNotesToBoard:
+    def test_adds_new_cards(self, tmp_path):
+        notes = [
+            _make_note("n1", "Task 1", "todo", "body1"),
+            _make_note("n2", "Task 2", "doing", "body2"),
+        ]
+        note_store = _make_note_store(notes)
+        board_store = Store(tmp_path / "board")
 
+        added, updated, total = sync_notes_to_board(note_store, board_store)
 
-def test_sync_skips_notes_with_existing_card(stores):
-    note_store, kanban_store = stores
-    note_store.create("Existing")
-    kanban_store.add_card(title="Existing", column="todo")
-    added, updated, total = sync_notes_to_board(note_store, kanban_store)
-    assert added == 0
-    assert updated == 0
-    assert total == 1
+        assert added == 2
+        assert updated == 0
+        assert total == 2
 
+    def test_moves_existing_cards(self, tmp_path):
+        board_store = Store(tmp_path / "board")
+        card = board_store.create_card("Task 1", column="todo")
 
-def test_sync_derives_column_from_status(stores):
-    note_store, kanban_store = stores
-    note_store.create("A", status="done")
-    note_store.create("B", status="wip")
-    note_store.create("C", status="review")
-    note_store.create("D", status="open")
-    sync_notes_to_board(note_store, kanban_store)
-    columns = {c.title: c.column for c in kanban_store.load_board().cards}
-    assert columns == {"A": "done", "B": "in_progress", "C": "review", "D": "todo"}
+        notes = [_make_note("n1", "Task 1", "done")]
+        note_store = _make_note_store(notes)
 
+        added, updated, total = sync_notes_to_board(note_store, board_store)
 
-def test_sync_card_carries_tags_and_body(stores):
-    note_store, kanban_store = stores
-    note_store.create("Tagged", tags=["alpha", "beta"], body="some body text")
-    sync_notes_to_board(note_store, kanban_store)
-    card = kanban_store.load_board().cards[0]
-    assert card.tags == ["alpha", "beta"]
-    assert card.description.strip() == "some body text"
+        assert added == 0
+        assert updated == 1
+        assert total == 1
 
+        got = board_store.get_card(card.id)
+        assert got.column == "done"
 
-def test_sync_moves_card_when_status_changes(stores):
-    note_store, kanban_store = stores
-    note = note_store.create("Rotating task", status="wip")
-    sync_notes_to_board(note_store, kanban_store)
-    assert kanban_store.load_board().cards[0].column == "in_progress"
-    note_store.update(note.id, status="done")
-    added, updated, total = sync_notes_to_board(note_store, kanban_store)
-    assert added == 0
-    assert updated == 1
-    assert total == 1
-    assert kanban_store.load_board().cards[0].column == "done"
+    def test_creates_hash_trees(self, tmp_path):
+        notes = [_make_note("n1", "Task 1", "todo", "body content")]
+        note_store = _make_note_store(notes)
+        board_store = Store(tmp_path / "board")
 
+        sync_notes_to_board(note_store, board_store)
 
-def test_sync_does_not_move_card_with_matching_column(stores):
-    note_store, kanban_store = stores
-    note_store.create("Stable", status="done")
-    sync_notes_to_board(note_store, kanban_store)
-    added, updated, total = sync_notes_to_board(note_store, kanban_store)
-    assert added == 0
-    assert updated == 0
-    assert total == 1
+        card = board_store.get_cards_by_column("todo")[0]
+        assert card.root_hash  # should be set
 
+    def test_skips_untitled_notes(self, tmp_path):
+        notes = [_make_note("n1", "", "todo")]
+        note_store = _make_note_store(notes)
+        board_store = Store(tmp_path / "board")
 
-def test_sync_cli_quiet(tmp_path, capsys):
-    notes_dir = tmp_path / "notes"
-    board_dir = tmp_path / "board"
-    NoteStore(notes_dir=notes_dir, backend="file").create("CLI note")
-    code = cli_main(["--notes-dir", str(notes_dir), "--board-dir", str(board_dir), "--quiet"])
-    out = capsys.readouterr().out
-    assert code == 0
-    assert "1 new card(s) added, 0 moved, 1 total" in out
+        added, updated, total = sync_notes_to_board(note_store, board_store)
+
+        assert added == 1
+        card = board_store.get_cards_by_column("todo")[0]
+        assert card.title == "(untitled)"
+
+    def test_no_notes(self, tmp_path):
+        note_store = _make_note_store([])
+        board_store = Store(tmp_path / "board")
+
+        added, updated, total = sync_notes_to_board(note_store, board_store)
+
+        assert added == 0
+        assert updated == 0
+        assert total == 0
+
+    def test_status_mapping(self, tmp_path):
+        """Test that note statuses map to correct columns."""
+        from planner import config
+        notes = []
+        for status, expected_col in config.STATUS_TO_COLUMN.items():
+            if status is None:
+                continue  # skip None key
+            notes.append(_make_note(f"n-{status}", f"Task {status}", status))
+
+        note_store = _make_note_store(notes)
+        board_store = Store(tmp_path / "board")
+
+        added, updated, total = sync_notes_to_board(note_store, board_store)
+        assert added == len(notes)
+
+        for note in notes:
+            expected_col = config.STATUS_TO_COLUMN.get(note.status.lower(), "todo")
+            cards = board_store.get_cards_by_column(expected_col)
+            assert len(cards) >= 1, f"No cards in column {expected_col} for status {note.status}"
+
+    def test_idempotent_sync(self, tmp_path):
+        """Syncing twice should not create duplicate cards."""
+        notes = [_make_note("n1", "Task 1", "todo")]
+        note_store = _make_note_store(notes)
+        board_store = Store(tmp_path / "board")
+
+        sync_notes_to_board(note_store, board_store)
+        sync_notes_to_board(note_store, board_store)
+
+        board = board_store.load_board()
+        assert len(board.cards) == 1

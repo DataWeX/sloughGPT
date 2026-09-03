@@ -13,6 +13,8 @@ Architecture:
                               (tools never exposed via API)
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re

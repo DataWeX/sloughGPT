@@ -5,6 +5,8 @@ Uses Low-Rank Adaptation to enable fast, lightweight fine-tuning
 that can update model weights in seconds (not minutes/hours).
 """
 
+from __future__ import annotations
+
 import numpy as np
 from typing import Optional, Dict, Any
 from dataclasses import dataclass

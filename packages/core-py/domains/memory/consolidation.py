@@ -10,6 +10,8 @@ store uses for search, so consolidation agrees with retrieval semantics.
 removal plan. The task handler applies the plan through ``MemoryService``.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any, Dict, List
 

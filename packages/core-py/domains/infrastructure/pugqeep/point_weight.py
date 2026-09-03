@@ -11,6 +11,7 @@ This gives SloNet:
   - Smooth interpolation (Points can be interpolated)
   - Meaning (each weight has an identity/function type)
 """
+from __future__ import annotations
 
 import base64
 

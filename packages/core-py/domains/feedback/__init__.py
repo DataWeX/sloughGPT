@@ -5,6 +5,8 @@ Stores user feedback, conversations, and uses vector search
 to retrieve similar good responses for live generation adjustment.
 """
 
+from __future__ import annotations
+
 from .database import FeedbackDB, get_feedback_db, Message, Feedback, SimilarPattern
 from .meta_weights import MetaWeightManager, MetaWeights, get_meta_weight_manager
 from .training import FeedbackTrainer, TrainingExample, DPOPair, create_training_pipeline

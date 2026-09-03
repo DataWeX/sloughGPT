@@ -21,7 +21,7 @@ describe('route error boundaries', () => {
   afterEach(() => cleanup())
 
   it('covers every route error boundary', () => {
-    expect(errors.length).toBe(24)
+    expect(errors.length).toBe(49)
   })
 
   it.each(errors)('renders %s and retries', (key) => {
@@ -39,7 +39,7 @@ describe('route loading skeletons', () => {
   afterEach(() => cleanup())
 
   it('covers every route loading fallback', () => {
-    expect(loadings.length).toBe(24)
+    expect(loadings.length).toBe(49)
   })
 
   it.each(loadings)('renders %s with a skeleton', (key) => {

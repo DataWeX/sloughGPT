@@ -3,6 +3,8 @@
 First request runs; subsequent requests with the same hash await the shared result.
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import json

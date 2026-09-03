@@ -92,7 +92,6 @@ class TokenAccount:
         self.updated_at = time.time()
 
     def _maybe_reset(self, now: float) -> None:
-        import calendar
         from datetime import datetime
 
         now_dt = datetime.fromtimestamp(now)

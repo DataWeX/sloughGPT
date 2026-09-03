@@ -6,6 +6,8 @@ Architectures differ only in:
   - Which math ops to use (via arch.norm, arch.positional, etc.)
 """
 
+from __future__ import annotations
+
 from typing import List, Optional
 
 import numpy as np
