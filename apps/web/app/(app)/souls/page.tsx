@@ -351,7 +351,7 @@ export default function SoulsPage() {
             <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
             <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
           </KpiGrid>
-          <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+          <Card><CardContent><Skeleton className="h-32 w-full rounded" /></CardContent></Card>
         </div>
       </div>
     )

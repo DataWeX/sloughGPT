@@ -3,8 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, cn } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import Link from 'next/link'
 
 type DevTab = 'files' | 'voice' | 'shell'
@@ -43,11 +42,9 @@ export default function DeveloperPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">{active.label}</CardTitle>
-          <Button asChild size="sm" variant="ghost">
-            <Link href={active.href} aria-label={`Open ${active.label} page`}>
-              Open full page
-            </Link>
-          </Button>
+          <Link href={active.href} className="text-xs text-muted-foreground hover:text-foreground transition-colors" aria-label={`Open ${active.label} page`}>
+            Open full page →
+          </Link>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">{active.description}</p>

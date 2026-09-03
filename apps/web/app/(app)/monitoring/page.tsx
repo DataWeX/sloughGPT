@@ -48,12 +48,12 @@ const MAX_ALERT_HISTORY = 20
 
 const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
   ssr: false,
-  loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
+  loading: () => <Skeleton className="h-40 w-full rounded-lg" />,
 })
 
 const TrendChart = dynamicNext(() => import('@/components/monitoring/TrendChart').then(m => m.TrendChart), {
   ssr: false,
-  loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
+  loading: () => <Skeleton className="h-40 w-full rounded-lg" />,
 })
 
 export default function SystemHealthPage() {

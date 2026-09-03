@@ -283,7 +283,7 @@ class DeviceManager:
         return sorted(self._devices.keys())
 
     def list_devices(self) -> str:
-        lines = [f"  {'/dev/' + n:<20} {self._devices[n].description}" for n in self.names]
+        lines = [f"  {'/dev/' + n:<20} {self._devices[n].info().get('type', 'unknown')}" for n in self.names]
         return "\n".join(lines)
 
     def read(self, path: str, args: str = "") -> str:
@@ -320,12 +320,18 @@ class DeviceManager:
 
 def create_default_devices(get_kernel: Callable | None = None) -> DeviceManager:
     """Create and register all built-in device nodes."""
+    from .tensor_device import TensorDevice
+    from .npu_device import NPUDevice
+    from .storage_device import StorageDevice
+    from .network_device import NetworkDevice
+    from .display_device import DisplayDevice
+    from .input_device import InputDevice
+
     mgr = DeviceManager()
-    mgr.register(NullDevice())
-    mgr.register(RandomDevice())
-    mgr.register(LLMDevice())
-    mgr.register(EmbeddingDevice())
-    mgr.register(KnowledgeDevice())
-    mgr.register(VisionDevice())
-    mgr.register(ProcDevice(get_kernel))
+    mgr.register(TensorDevice("tensor"))
+    mgr.register(NPUDevice("npu"))
+    mgr.register(StorageDevice("storage"))
+    mgr.register(NetworkDevice("network"))
+    mgr.register(DisplayDevice("display"))
+    mgr.register(InputDevice("input"))
     return mgr

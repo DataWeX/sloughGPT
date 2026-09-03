@@ -212,33 +212,52 @@ class DeviceTable:
 # ── Device manager (backward compat) ──────────────────────────────────────
 
 class DeviceManager:
-    """High-level device manager — wraps DeviceTable."""
+    """High-level device manager — wraps DeviceTable.
+
+    Compatible with old interface (names, get) and new (open, close, ioctl).
+    """
 
     def __init__(self):
         self.table = DeviceTable()
+        self._devices: dict[str, DeviceDriver] = {}
 
     def register(self, device: DeviceDriver, device_type: int = 0) -> bool:
+        """Register device — compatible with old interface."""
+        self._devices[device.name] = device
         return self.table.register(device, device_type)
 
     def unregister(self, name: str) -> bool:
+        """Unregister device."""
+        self._devices.pop(name, None)
         return self.table.unregister(name)
 
     def get(self, name: str) -> DeviceDriver | None:
-        return self.table.get(name)
+        """Get device by name — compatible with old interface."""
+        return self._devices.get(name)
+
+    @property
+    def names(self) -> list[str]:
+        """List device names — compatible with old interface."""
+        return sorted(self._devices.keys())
 
     def open(self, name: str, mode: int = 0) -> int:
+        """Open device, return fd."""
         return self.table.open(name, mode)
 
     def close(self, fd: int) -> bool:
+        """Close fd."""
         return self.table.close(fd)
 
     def ioctl(self, fd: int, command: str, *args) -> SyscallResult:
+        """Issue ioctl on fd."""
         return self.table.ioctl(fd, command, *args)
 
     def list_devices(self) -> list[dict]:
+        """List all registered devices."""
         return self.table.list_devices()
 
     def stats(self) -> dict:
+        """Get table stats."""
         return self.table.stats()
 
 
