@@ -836,43 +836,26 @@ class NPUDevice(DeviceDriver):
     # ── Ioctl dispatch ────────────────────────────────────────────────────
 
     def ioctl(self, command: str, *args: Any) -> SyscallResult | dict:
+        """Assembly interface — all operations go through ioctl."""
         if command == "INFO":
             return SyscallResult.ok(self.info())
-        elif command == "SET_DEFAULT":
+
+        elif command == "LOAD":
+            path = args[0] if len(args) > 0 else ""
+            name = args[1] if len(args) > 1 else ""
+            graph = self.load(path, name)
+            return SyscallResult.ok({"graph": graph._name, "config": graph.config})
+
+        elif command == "UNLOAD":
             name = args[0] if args else ""
-            if name not in self._models:
-                return SyscallResult.fail(f"model '{name}' not loaded")
-            self._default_model = name
-            return SyscallResult.ok(True)
-        elif command == "GENERATE":
-            return self.generate(*args)
-        elif command == "FORWARD":
-            return self.forward(*args)
-        elif command == "TOKENIZE":
-            return self.tokenize(*args)
-        elif command == "EMBED":
-            return self.embed(*args)
-        elif command == "HEALTH":
-            return self.health()
-        elif command == "SAVE_CHECKPOINT":
-            return self.save_checkpoint(*args)
-        elif command == "LOAD_CHECKPOINT":
-            return self.load_checkpoint(*args)
-        elif command == "QUANTIZE":
-            return self.quantize(*args)
-        elif command == "DEQUANTIZE":
-            return self.dequantize(*args)
-        elif command == "CLEAR_CACHE":
-            return self.clear_cache(*args)
-        elif command == "BATCH":
-            return self.batch(*args)
-        elif command == "ATTENTION_MAPS":
-            return self.attention_maps(*args)
-        elif command == "COMPARE":
-            return self.compare(*args)
-        elif command == "LAYERS":
-            return self.layers(*args)
-        elif command == "BENCHMARK":
-            return self.benchmark(*args)
+            ok = self.unload(name)
+            return SyscallResult.ok({"unloaded": ok})
+
+        elif command == "CALL":
+            name = args[0] if len(args) > 0 else ""
+            inp = args[1] if len(args) > 1 else ""
+            result = self(name, inp)
+            return SyscallResult.ok(result)
+
         else:
             raise ValueError(f"unknown ioctl: {command}")

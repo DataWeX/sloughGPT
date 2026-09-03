@@ -64,7 +64,7 @@ def load_model_weights(
     dtype: np.dtype = np.float32,
 ) -> Dict[str, np.ndarray]:
     """
-    Load model weights from safetensors file as numpy arrays.
+    Load model weights via SLNC (mmap, zero-copy).
 
     Args:
         model_id: HuggingFace model ID (e.g. "gpt2", "Qwen/Qwen2.5-0.5B-Instruct")
@@ -76,7 +76,7 @@ def load_model_weights(
 
     Raises:
         FileNotFoundError: If model not found in cache
-        ValueError: If no safetensors file found
+        ValueError: If no .slnc file found
     """
     model_dir = _get_model_dir(model_id)
     if not model_dir.exists():
@@ -84,50 +84,16 @@ def load_model_weights(
 
     safetensors_path = _find_safetensors(model_dir)
     if safetensors_path is None:
-        raise ValueError(f"No .safetensors file found for {model_id}")
+        raise ValueError(f"No model weights found for {model_id}")
 
-    # Check for .slnc cache (2.2x faster load via mmap)
     slnc_path = safetensors_path.with_suffix(".slnc")
-    if slnc_path.exists():
-        return _load_from_slnc(slnc_path, dtype)
+    if not slnc_path.exists():
+        raise ValueError(
+            f"No .slnc file for {model_id}. Convert first: "
+            f"python -m domains.infrastructure.slnc.compiler {model_id}"
+        )
 
-    logger.info("Loading %s from %s", model_id, safetensors_path.name, extra={"tag": "INFRA"})
-
-    weights: Dict[str, np.ndarray] = {}
-    try:
-        from safetensors import safe_open
-    except ImportError:
-        logger.info("safetensors package not installed — using built-in raw parser",
-                    extra={"tag": "INFRA"})
-        try:
-            return _load_weights_raw(safetensors_path, dtype)
-        except (ValueError, json.JSONDecodeError, struct.error) as e:
-            logger.error("Failed to load corrupted safetensors file %s: %s",
-                         safetensors_path.name, e, extra={"tag": "INFRA"})
-            raise ValueError(f"Corrupted safetensors file {safetensors_path.name}: {e}") from e
-
-    with safe_open(str(safetensors_path), framework="numpy") as f:
-        for key in f.keys():
-            try:
-                tensor = f.get_tensor(key)
-                weights[key] = tensor.astype(dtype)
-            except TypeError:
-                # bfloat16 not supported by numpy — load as uint16 and convert
-                tensor = f.get_slice(key)
-                arr = tensor.get_all()
-                if hasattr(arr, 'dtype') and arr.dtype.name == 'bfloat16':
-                    # bfloat16 → float32: shift uint16 left by 16
-                    raw = np.asarray(arr).view(np.uint16).astype(np.uint32) << 16
-                    weights[key] = raw.view(np.float32)
-                else:
-                    weights[key] = np.asarray(arr).astype(dtype)
-
-    logger.info("Loaded %d parameters from %s", len(weights), model_id, extra={"tag": "INFRA"})
-
-    # Auto-convert to .slnc for faster future loads
-    _try_convert_to_slnc(model_id, safetensors_path, weights)
-
-    return weights
+    return _load_from_slnc(slnc_path, dtype)
 
 
 _MAX_HEADER_LEN = 100 * 1024 * 1024  # 100 MB sanity limit for header length

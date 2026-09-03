@@ -231,8 +231,9 @@ class TestPointLibraryInterface:
 
     def test_list_types(self):
         lib = PointLibrary("test-list-types")
+        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
         lib.add(Point(identity="a", function_type="linear", params={}))
-        lib.add(Point(identity="b", function_type="cluster", params={}))
+        lib.add(Point(identity="b", function_type="cluster", params=cluster_params))
         lib.add(Point(identity="c", function_type="linear", params={}))
         types = lib.list_types()
         assert types["linear"] == 2
@@ -247,8 +248,9 @@ class TestPointLibraryInterface:
 
     def test_iter_by_type(self):
         lib = PointLibrary("test-iter-type")
+        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
         lib.add(Point(identity="a", function_type="linear", params={}))
-        lib.add(Point(identity="b", function_type="cluster", params={}))
+        lib.add(Point(identity="b", function_type="cluster", params=cluster_params))
         lib.add(Point(identity="c", function_type="linear", params={}))
         linear = list(lib.iter_by_type("linear"))
         assert len(linear) == 2
@@ -293,9 +295,10 @@ class TestPointLibraryInterface:
 
     def test_stats(self):
         lib = PointLibrary("test-stats")
+        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
         lib.add(Point(identity="a", function_type="linear",
                       params={"a": 1.0, "b": 0.0}, accuracy=0.9))
-        lib.add(Point(identity="b", function_type="cluster", params={}))
+        lib.add(Point(identity="b", function_type="cluster", params=cluster_params))
         s = lib.stats()
         assert s["total_points"] == 2
         assert "ops" in s
@@ -315,9 +318,10 @@ class TestPointLibraryInterface:
 
     def test_search_by_type(self):
         lib = PointLibrary("test-search-type")
-        lib.add(Point(identity="layer_0.weight", function_type="cluster", params={}))
+        cluster_params = {"centroids": np.zeros(4, dtype=np.float32), "assignments": np.zeros(8, dtype=np.uint8)}
+        lib.add(Point(identity="layer_0.weight", function_type="cluster", params=cluster_params))
         lib.add(Point(identity="layer_1.bias", function_type="linear", params={}))
-        lib.add(Point(identity="embed.weight", function_type="cluster", params={}))
+        lib.add(Point(identity="embed.weight", function_type="cluster", params=cluster_params))
         results = lib.search_by_type("cluster", "layer")
         assert len(results) == 1
         assert results[0].identity == "layer_0.weight"

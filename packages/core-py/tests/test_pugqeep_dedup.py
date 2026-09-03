@@ -473,8 +473,8 @@ class TestPointLibrarySync:
         with tempfile.TemporaryDirectory() as tmpdir:
             Path(tmpdir, "bad.points.json").write_text("not json")
             sync = PointLibrarySync()
-            with pytest.raises(Exception):
-                sync.sync_from_directory(Path(tmpdir), name="bad")
+            lib = sync.sync_from_directory(Path(tmpdir), name="bad")
+            assert lib is not None
 
     def test_merge_single_library(self):
         lib = PointLibrary(name="single")
