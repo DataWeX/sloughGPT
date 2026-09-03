@@ -1484,7 +1484,7 @@ class ModelServer:
             slnc_path = self._slnc_path
             if not slnc_path:
                 # Resolve .slnc from HF model ID via cache directory
-                from domains.infrastructure.slnc.parser import get_model_dir as _get_model_dir
+                from domains.infrastructure.safetensors_loader import _get_model_dir
 
                 cache_dir = _get_model_dir(self._hf_model_id)
                 candidate = cache_dir / "model.slnc"

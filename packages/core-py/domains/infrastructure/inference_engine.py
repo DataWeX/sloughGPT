@@ -250,7 +250,7 @@ class InferenceEngine:
                 self.slnc_path, model_id=self.model_id, **load_kwargs,
             )
         else:
-            from domains.infrastructure.slnc.parser import get_model_dir as _get_model_dir
+            from domains.infrastructure.safetensors_loader import _get_model_dir
             _cache_dir = _get_model_dir(self.model_id)
             _slnc = _cache_dir / "model.slnc"
             if not _slnc.exists():
@@ -496,7 +496,7 @@ class InferenceEngine:
                     new_slnc_path, model_id=new_model_id, **load_kwargs,
                 )
             else:
-                from domains.infrastructure.slnc.parser import get_model_dir as _get_model_dir
+                from domains.infrastructure.safetensors_loader import _get_model_dir
                 _slnc = _get_model_dir(new_model_id) / "model.slnc"
                 if not _slnc.exists():
                     raise FileNotFoundError(f"No .slnc file for {new_model_id} at {_slnc}")

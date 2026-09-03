@@ -64,7 +64,7 @@ def load_model_weights(
     dtype: np.dtype = np.float32,
 ) -> Dict[str, np.ndarray]:
     """
-    Load model weights via SLNC (mmap, zero-copy). Auto-converts from safetensors.
+    Load model weights via SLNC (mmap, zero-copy).
 
     Args:
         model_id: HuggingFace model ID (e.g. "gpt2", "Qwen/Qwen2.5-0.5B-Instruct")
@@ -76,60 +76,24 @@ def load_model_weights(
 
     Raises:
         FileNotFoundError: If model not found in cache
+        ValueError: If no .slnc file found
     """
-    from domains.infrastructure.slnc.parser import get_model_dir, find_safetensors, load_model_config
-
-    model_dir = get_model_dir(model_id)
+    model_dir = _get_model_dir(model_id)
     if not model_dir.exists():
         raise FileNotFoundError(f"Model {model_id} not found in cache: {model_dir}")
 
-    safetensors_path = find_safetensors(model_dir)
+    safetensors_path = _find_safetensors(model_dir)
     if safetensors_path is None:
-        raise FileNotFoundError(f"No model weights found for {model_id}")
+        raise ValueError(f"No model weights found for {model_id}")
 
     slnc_path = safetensors_path.with_suffix(".slnc")
     if not slnc_path.exists():
-        _auto_convert_to_slnc(safetensors_path, slnc_path, model_id, load_model_config)
+        raise ValueError(
+            f"No .slnc file for {model_id}. Convert first: "
+            f"python -m domains.infrastructure.slnc.compiler {model_id}"
+        )
 
     return _load_from_slnc(slnc_path, dtype)
-
-
-def _auto_convert_to_slnc(st_path: Path, slnc_path: Path, model_id: str, load_config_fn) -> None:
-    """Convert safetensors to .slnc on first load."""
-    import struct
-
-    logger.info("Converting %s → .slnc (first load)", st_path.name, extra={"tag": "INFRA"})
-
-    config = load_config_fn(model_id)
-    weights: Dict[str, np.ndarray] = {}
-
-    with open(str(st_path), "rb") as f:
-        header_len = struct.unpack("<Q", f.read(8))[0]
-        header = json.loads(f.read(header_len))
-        for key, info in header.items():
-            if key.startswith("__"):
-                continue
-            dtype_str = info["dtype"]
-            offsets = info["data_offsets"]
-            f.seek(8 + header_len + offsets[0])
-            raw = f.read(offsets[1] - offsets[0])
-            if dtype_str == "BF16":
-                arr = np.frombuffer(raw, dtype=np.uint16)
-                f32 = np.zeros(len(arr), dtype=np.float32)
-                f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
-                weights[key] = f32.reshape(info["shape"])
-            elif dtype_str == "F32":
-                weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-            elif dtype_str == "F16":
-                weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
-            else:
-                weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-
-    from domains.infrastructure.slnc.compiler import SLNCCompiler
-    compiler = SLNCCompiler()
-    compiler.compile_from_dict(config, weights, str(slnc_path))
-    logger.info("Converted to .slnc: %s (%.1f MB)", slnc_path.name,
-                slnc_path.stat().st_size / 1e6, extra={"tag": "INFRA"})
 
 
 _MAX_HEADER_LEN = 100 * 1024 * 1024  # 100 MB sanity limit for header length
