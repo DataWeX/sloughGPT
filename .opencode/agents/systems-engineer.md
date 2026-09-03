@@ -214,6 +214,16 @@ Before completion:
 make test-py ARGS="tests/test_shell_*.py -q"
 ```
 
+### Full Verification Checklist
+
+1. **Syntax**: `python3 -m py_compile <file>`
+2. **Linting**: `ruff check <file>`
+3. **Type checking**: `mypy <file>` (if applicable)
+4. **Unit tests**: `pytest tests/test_<module>.py -x -v`
+5. **Coverage**: `pytest tests/ --cov=domains --cov-report=term-missing`
+6. **Integration**: `pytest tests/test_integration*.py -x -v`
+7. **No regressions**: Run full test suite before finishing
+
 ## Conventions
 
 - **No PyTorch**: SloNet is pure NumPy. Never import torch in kernel code.
@@ -242,3 +252,242 @@ make test-py ARGS="tests/test_shell_*.py -q"
 - If a change requires architectural change, stop and report rather than patching.
 - Use project venv (`.venv/`) for all Python commands.
 - Run `ruff check` before committing Python code.
+
+## Python Patterns
+
+### Decorators
+```python
+import functools
+import time
+
+def timer(func):
+    """Measure execution time."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        elapsed = time.perf_counter() - start
+        logger.info(f"{func.__name__} took {elapsed:.3f}s")
+        return result
+    return wrapper
+
+def retry(max_attempts: int = 3, delay: float = 1.0):
+    """Retry on exception."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if attempt == max_attempts - 1:
+                        raise
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                    time.sleep(delay)
+        return wrapper
+    return decorator
+```
+
+### Context Managers
+```python
+from contextlib import contextmanager
+
+@contextmanager
+def timer(label: str):
+    """Context manager for timing."""
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        logger.info(f"{label}: {elapsed:.3f}s")
+
+@contextmanager
+def temporary_directory():
+    """Create and clean up temp directory."""
+    import tempfile
+    import shutil
+    tmpdir = tempfile.mkdtemp()
+    try:
+        yield tmpdir
+    finally:
+        shutil.rmtree(tmpdir)
+```
+
+### Async Patterns
+```python
+import asyncio
+from typing import AsyncIterator
+
+async def fetch_data(url: str) -> dict:
+    """Fetch data from API."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
+
+async def process_stream(stream: AsyncIterator[dict]) -> list[dict]:
+    """Process async stream."""
+    results = []
+    async for item in stream:
+        results.append(await process_item(item))
+    return results
+```
+
+### Dataclasses
+```python
+from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass(slots=True, frozen=True)
+class Config:
+    """Immutable configuration."""
+    name: str
+    max_items: int = 100
+    enabled: bool = True
+    metadata: dict = field(default_factory=dict)
+
+@dataclass
+class State:
+    """Mutable state."""
+    count: int = 0
+    items: list[str] = field(default_factory=list)
+    
+    def increment(self) -> None:
+        self.count += 1
+```
+
+## FastAPI Patterns
+
+### Endpoint Structure
+```python
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+router = APIRouter()
+
+class Request(BaseModel):
+    """Request schema."""
+    name: str
+    data: dict = {}
+
+class Response(BaseModel):
+    """Response schema."""
+    success: bool
+    result: Optional[dict] = None
+    error: Optional[str] = None
+
+@router.post("/endpoint", response_model=Response)
+async def handler(req: Request) -> Response:
+    """Handle request."""
+    try:
+        result = await process(req)
+        return Response(success=True, result=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+### SSE Streaming
+```python
+from fastapi.responses import StreamingResponse
+import json
+
+async def stream_endpoint():
+    """SSE streaming endpoint."""
+    async def generate():
+        while True:
+            data = await get_next()
+            yield f"data: {json.dumps(data)}\n\n"
+    return StreamingResponse(generate(), media_type="text/event-stream")
+```
+
+## Inference Pipeline Patterns
+
+### Model Loading
+```python
+from pathlib import Path
+import numpy as np
+
+class ModelLoader:
+    """Load and manage inference models."""
+    
+    def __init__(self, cache_dir: Path):
+        self.cache_dir = cache_dir
+        self.models: dict[str, np.ndarray] = {}
+    
+    def load(self, model_path: Path) -> np.ndarray:
+        """Load model from disk."""
+        if model_path.suffix == ".slnc":
+            return self._load_slnc(model_path)
+        elif model_path.suffix == ".npy":
+            return np.load(model_path)
+        else:
+            raise ValueError(f"Unknown format: {model_path.suffix}")
+    
+    def _load_slnc(self, path: Path) -> np.ndarray:
+        """Load SLNC format."""
+        # Implementation specific to SLNC format
+        pass
+```
+
+### Batch Processing
+```python
+from typing import Iterator
+import numpy as np
+
+def batch_iter(data: list, batch_size: int) -> Iterator[list]:
+    """Iterate in batches."""
+    for i in range(0, len(data), batch_size):
+        yield data[i:i + batch_size]
+
+def process_batch(batch: list) -> list:
+    """Process a batch of items."""
+    return [process_item(item) for item in batch]
+```
+
+## Performance Considerations
+
+- **NumPy vectorization**: Avoid Python loops for numerical operations
+- **Memory mapping**: Use `np.memmap` for large arrays
+- **Lazy loading**: Load models on first use, not at import
+- **Caching**: Use `@functools.lru_cache` for expensive computations
+- **Profiling**: Use `cProfile` and `line_profiler` for hot paths
+
+## Security Considerations
+
+- **Input validation**: Validate all user inputs with Pydantic
+- **Path traversal**: Sanitize file paths, use `Path.resolve()`
+- **Secrets**: Never log or commit secrets, use environment variables
+- **RBAC**: Enforce permissions at syscall boundary
+- **Sandboxing**: Run untrusted code in isolated environments
+
+## Common Pitfalls
+
+1. **Mutable default arguments**: Use `None` + `field(default_factory=...)`
+2. **Circular imports**: Use `TYPE_CHECKING` or late imports
+3. **Forgetting `self`**: Always include in instance methods
+4. **Type hint mistakes**: Use `Optional[X]` not `X | None` (Python 3.9-)
+5. **Async blocking**: Never call `time.sleep()` in async code
+6. **Resource leaks**: Use context managers for files/connections
+7. **Testing mocks**: Use `unittest.mock.patch` not global state
+
+## Debugging Techniques
+
+```python
+# Logging
+import logging
+logger = logging.getLogger(__name__)
+logger.debug("Variable: %s", var)
+
+# Breakpoints
+import pdb; pdb.set_trace()  # Python 3.7+
+breakpoint()  # Python 3.7+
+
+# Memory profiling
+from memory_profiler import profile
+@profile
+def my_func():
+    pass
+
+# Type checking
+mypy --strict mymodule.py
+```

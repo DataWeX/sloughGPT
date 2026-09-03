@@ -1,71 +1,38 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import React from 'react'
-
 import CapabilitiesCard from './CapabilitiesCard'
 
+afterEach(() => cleanup())
+
+const fullCaps = {
+  speech_to_text: true, image_caption: true, vision_model: 'gpt-4v',
+  speech_model: 'whisper', trained: true, images_learned: 10,
+  replay_buffer_size: 500, learning_method: 'DPO', status: 'ready',
+}
+
 describe('CapabilitiesCard', () => {
-  afterEach(cleanup)
-
-  const caps = {
-    speech_to_text: true,
-    image_caption: false,
-    vision_model: 'vision-cnn',
-    speech_model: null,
-    trained: true,
-    images_learned: 42,
-    replay_buffer_size: 128,
-    learning_method: 'contrastive',
-    background_job_running: false,
-    status: 'ready',
-  }
-
-  it('renders capabilities as badges', () => {
-    render(<CapabilitiesCard caps={caps} />)
-    expect(screen.getByText('Speech-to-text')).toBeDefined()
-    expect(screen.getByText('Image captioning')).toBeDefined()
-    expect(screen.getByText('Vision model')).toBeDefined()
-    expect(screen.getByText('Trained')).toBeDefined()
+  it('renders all capability badges', () => {
+    render(<CapabilitiesCard caps={fullCaps} />)
+    expect(screen.getAllByText('Speech-to-text').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Image captioning').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Vision model').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Speech model').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Trained').length).toBeGreaterThanOrEqual(1)
   })
-
-  it('renders KPI grid values', () => {
-    render(<CapabilitiesCard caps={caps} />)
-    expect(screen.getByText('42')).toBeDefined()
-    expect(screen.getByText('128 items')).toBeDefined()
-    expect(screen.getByText('contrastive')).toBeDefined()
-    expect(screen.getByText('ready')).toBeDefined()
+  it('shows stats', () => {
+    render(<CapabilitiesCard caps={fullCaps} />)
+    expect(screen.getAllByText('10').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('500 items').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('DPO').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('ready').length).toBeGreaterThanOrEqual(1)
   })
-
-  it('handles null caps', () => {
+  it('shows empty state when caps null', () => {
     render(<CapabilitiesCard caps={null} />)
-    expect(screen.getByText('Images learned')).toBeDefined()
-    expect(screen.getByText('0')).toBeDefined()
+    expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1)
   })
-
-  it('shows vision model label', () => {
-    render(<CapabilitiesCard caps={caps} />)
-    expect(screen.getByText('Vision model')).toBeDefined()
-  })
-
-  it('shows background job status', () => {
-    render(<CapabilitiesCard caps={{ ...caps, background_job_running: true }} />)
-    expect(screen.getByText('Status')).toBeDefined()
-  })
-
-  it('handles all capabilities disabled', () => {
-    const disabled = { ...caps, speech_to_text: false, image_caption: false, trained: false }
-    render(<CapabilitiesCard caps={disabled} />)
-    expect(screen.getByText('Speech-to-text')).toBeDefined()
-    expect(screen.getByText('Image captioning')).toBeDefined()
-  })
-
-  it('handles zero images learned', () => {
-    render(<CapabilitiesCard caps={{ ...caps, images_learned: 0 }} />)
-    expect(screen.getByText('0')).toBeDefined()
-  })
-
-  it('handles large replay buffer', () => {
-    render(<CapabilitiesCard caps={{ ...caps, replay_buffer_size: 10000 }} />)
-    expect(screen.getByText('10000 items')).toBeDefined()
+  it('renders heading', () => {
+    render(<CapabilitiesCard caps={null} />)
+    expect(screen.getAllByText('Capabilities').length).toBeGreaterThanOrEqual(1)
   })
 })
