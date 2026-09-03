@@ -137,44 +137,106 @@ class NPUDevice(DeviceDriver):
             return None, SyscallResult.fail(f"model '{name}' not loaded")
         return model, None
 
-    def load_model(self, name: str = "", source: str = "", *,
+    def load_file(self, path: str = "", name: str = "", *,
                    backend: str | None = None, **kwargs) -> SyscallResult:
-        """Load a model from a source path. Routes to C or numpy provider.
+        """Load a file from disk.
 
-        Backends:
-            - "c": CTransformProvider for .slnc files (fastest)
-            - "numpy": SlonetChatProvider for .slnc files (pure Python)
-            - None: auto-detect (tries C, falls back to numpy)
+        Supported formats:
+            - .slnc: Compiled model weights (C backend fastest, numpy fallback)
+            - .npy/.npz: NumPy arrays (engine weights)
+            - .py: Python source (define models)
+            - .csv/.json/.parquet: Datasets (web engine)
         """
-        if not source:
-            return SyscallResult.fail("no source path provided")
+        if not path:
+            return SyscallResult.fail("no path provided")
 
         try:
-            if backend == "c":
-                try:
-                    provider = self._load_c_provider(name, source, source)
-                    provider_backend = "c"
-                except Exception:
-                    provider = self._load_numpy_provider(name, source, source, kwargs)
-                    provider_backend = "numpy"
-            elif backend == "numpy":
-                provider = self._load_numpy_provider(name, source, source, kwargs)
-                provider_backend = "numpy"
+            if path.endswith(".slnc"):
+                return self._load_slnc(path, name, backend, kwargs)
+            elif path.endswith((".npy", ".npz")):
+                return self._load_numpy_array(path, name)
+            elif path.endswith(".py"):
+                return self._load_python(path, name)
+            elif path.endswith((".csv", ".json", ".parquet")):
+                return self._load_dataset(path, name)
             else:
-                provider, provider_backend = self._load_provider(name, source, source, **kwargs)
-
-            model = NPUModel(
-                name=name,
-                provider=provider,
-                config=provider.metadata() if hasattr(provider, "metadata") else {},
-                loaded_at=time.time(),
-            )
-            self._models[name] = model
-            if not self._default_model:
-                self._default_model = name
-            return SyscallResult.ok({"model": name, "backend": provider_backend})
+                return SyscallResult.fail(f"unsupported format: {path}")
         except Exception as e:
-            return SyscallResult.fail(f"load_model failed: {e}")
+            return SyscallResult.fail(f"load_file failed: {e}")
+
+    def _load_slnc(self, path: str, name: str, backend: str | None,
+                    kwargs: dict) -> SyscallResult:
+        if backend == "c":
+            try:
+                provider = self._load_c_provider(name or path, path, path)
+                provider_backend = "c"
+            except Exception:
+                provider = self._load_numpy_provider(name or path, path, path, kwargs)
+                provider_backend = "numpy"
+        elif backend == "numpy":
+            provider = self._load_numpy_provider(name or path, path, path, kwargs)
+            provider_backend = "numpy"
+        else:
+            provider, provider_backend = self._load_provider(name or path, path, path, **kwargs)
+
+        model = NPUModel(
+            name=name or path,
+            provider=provider,
+            config=provider.metadata() if hasattr(provider, "metadata") else {},
+            loaded_at=time.time(),
+        )
+        self._models[name or path] = model
+        if not self._default_model:
+            self._default_model = name or path
+        return SyscallResult.ok({"model": name or path, "backend": provider_backend})
+
+    def _load_numpy_array(self, path: str, name: str) -> SyscallResult:
+        import numpy as np
+        if path.endswith(".npy"):
+            arr = np.load(path, allow_pickle=False)
+        else:
+            arr = np.load(path, allow_pickle=False)
+        self._models[name or path] = NPUModel(
+            name=name or path,
+            provider=arr,
+            config={"shape": list(arr.shape), "dtype": str(arr.dtype)},
+            loaded_at=time.time(),
+        )
+        return SyscallResult.ok({"model": name or path, "shape": list(arr.shape)})
+
+    def _load_python(self, path: str, name: str) -> SyscallResult:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(name or path, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self._models[name or path] = NPUModel(
+            name=name or path,
+            provider=module,
+            config={"type": "python_module"},
+            loaded_at=time.time(),
+        )
+        return SyscallResult.ok({"model": name or path, "type": "python"})
+
+    def _load_dataset(self, path: str, name: str) -> SyscallResult:
+        if path.endswith(".csv"):
+            import pandas as pd
+            data = pd.read_csv(path)
+        elif path.endswith(".json"):
+            import pandas as pd
+            data = pd.read_json(path)
+        elif path.endswith(".parquet"):
+            import pandas as pd
+            data = pd.read_parquet(path)
+        else:
+            return SyscallResult.fail(f"unsupported dataset format: {path}")
+
+        self._models[name or path] = NPUModel(
+            name=name or path,
+            provider=data,
+            config={"rows": len(data), "columns": list(data.columns)},
+            loaded_at=time.time(),
+        )
+        return SyscallResult.ok({"model": name or path, "rows": len(data)})
 
     def unload_model(self, name: str = "") -> SyscallResult:
         if not name:
@@ -193,7 +255,7 @@ class NPUDevice(DeviceDriver):
 
     def _load_provider(self, name: str, source: str, path: str,
                        backend: str = "", *args, **kwargs) -> tuple[Any, str]:
-        """Route to C backend (.slnc) or numpy backend."""
+        """Route to C backend (.slnc) or numpy backend (.slnc, .safetensors)."""
         if backend and backend not in ("c", "numpy"):
             raise ValueError(f"Unknown backend: {backend}")
         if source.endswith(".slnc"):
@@ -203,11 +265,14 @@ class NPUDevice(DeviceDriver):
             except Exception:
                 provider = self._load_numpy_provider(name, source, path, kwargs)
                 return provider, "numpy"
+        elif source.endswith(".safetensors"):
+            provider = self._load_numpy_provider(name, source, path, kwargs)
+            return provider, "numpy"
         elif source.startswith("huggingface:") or backend == "huggingface":
             provider = self._load_huggingface_provider(name, source, kwargs)
             return provider, "huggingface"
         else:
-            raise ValueError(f"Unknown backend for {source}")
+            raise ValueError(f"Unknown format: {source}")
 
     def _load_huggingface_provider(self, name: str, source: str,
                                    kwargs: dict) -> Any:

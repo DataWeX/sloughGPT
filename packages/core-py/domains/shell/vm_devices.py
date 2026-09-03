@@ -808,9 +808,9 @@ class NPUVMDevice(Device):
         return fn(*args, **kwargs)
 
     def _load_model(self, name, source, **kwargs):
-        result = self._npu.load_model(str(name), str(source), **kwargs)
+        result = self._npu.load_file(str(source), str(name), **kwargs)
         if not result.success:
-            raise DeviceFault(f"NPU load_model failed: {result.error}")
+            raise DeviceFault(f"NPU load_file failed: {result.error}")
         return result.value
 
     def _unload_model(self, name):

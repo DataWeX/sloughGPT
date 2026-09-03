@@ -68,15 +68,17 @@ class SLNCParser:
         self._config = config or SLNCConfig()
         self._fd = os.open(path, os.O_RDONLY)
         self._file_size = os.fstat(self._fd).st_size
+
+        # Read header + tensor table via os.read (fast, ~KB)
+        self._header_data = self._read_header_and_table()
+
+        # mmap for random tensor access during inference
         self._mm = mmap.mmap(self._fd, 0, access=mmap.ACCESS_READ)
 
-        # Prefetch entire file into page cache — read 2.5GB in <1s on NVMe
-        self._prefetch()
-
-        # Parse header
+        # Parse header from buffered data
         self._parse_header()
 
-        # Parse tensor table
+        # Parse tensor table from buffered data
         self._parse_tensor_table()
 
         logger.info(
@@ -88,33 +90,32 @@ class SLNCParser:
             extra={"tag": "INFRA"},
         )
 
-    def _prefetch(self) -> None:
-        """Prefetch entire file into page cache.
+    def _read_header_and_table(self) -> bytes:
+        """Read header + tensor table via sequential os.read (~KB, fast).
 
-        Uses madvise(MADV_WILLNEED) which hints the kernel to start
-        async readahead. Non-blocking — actual I/O happens in background.
-
-        Performance (2.5GB file):
-            - SSD (~500 MB/s): ~5s to fill page cache
-            - NVMe (~3 GB/s): ~0.8s to fill page cache
-            - First read after open hits cached pages — near-instant
+        Only reads what's needed for init. Tensor data stays on disk
+        until accessed via mmap during inference.
         """
-        try:
-            self._mm.madvise(3, 0, self._file_size)  # MADV_WILLNEED=3
-        except Exception as e:
-            logger.debug("madvise WILLNEED failed: %s", e)
+        # Read first 64KB — covers header + tensor table for most models
+        header_size = 64 * 1024
+        data = os.read(self._fd, min(header_size, self._file_size))
+        os.lseek(self._fd, 0, os.SEEK_SET)
+        return data
 
     def _parse_header(self):
-        """Parse the fixed-size header with soft version check."""
-        self._mm.seek(0)
+        """Parse the fixed-size header from buffered data (fast, no mmap)."""
+        buf = self._header_data
+        pos = 0
 
         # Magic
-        magic = self._mm.read(4)
+        magic = buf[pos:pos + 4]
+        pos += 4
         if magic != MAGIC:
             raise ValueError(f"Invalid magic: {magic!r} (expected {MAGIC!r})")
 
         # Version — soft check
-        version = struct.unpack("<I", self._mm.read(4))[0]
+        version = struct.unpack("<I", buf[pos:pos + 4])[0]
+        pos += 4
         if version > VERSION:
             logger.warning(
                 "SLNC version %d > supported %d — some features may be unavailable",
@@ -123,35 +124,38 @@ class SLNCParser:
             )
 
         # Flags
-        self._flags = struct.unpack("<I", self._mm.read(4))[0]
+        self._flags = struct.unpack("<I", buf[pos:pos + 4])[0]
+        pos += 4
 
         # Decode flags
         self._has_header_crc = bool(self._flags & FLAG_HAS_HEADER_CRC)
         self._aligned_tensors = bool(self._flags & FLAG_ALIGNED_TENSORS)
 
-        # Model metadata (64 bytes)
-        self._n_layer = struct.unpack("<I", self._mm.read(4))[0]
-        self._n_embd = struct.unpack("<I", self._mm.read(4))[0]
-        self._n_head = struct.unpack("<I", self._mm.read(4))[0]
-        self._n_inner = struct.unpack("<I", self._mm.read(4))[0]
-        self._vocab_size = struct.unpack("<I", self._mm.read(4))[0]
-        self._n_positions = struct.unpack("<I", self._mm.read(4))[0]
-        self._block_count = struct.unpack("<I", self._mm.read(4))[0]
-        self._block_size = struct.unpack("<I", self._mm.read(4))[0]
-        self._tensor_count = struct.unpack("<I", self._mm.read(4))[0]
-        self._data_offset = struct.unpack("<I", self._mm.read(4))[0]
+        # Model metadata (64 bytes → 10 × uint32)
+        self._n_layer = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._n_embd = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._n_head = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._n_inner = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._vocab_size = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._n_positions = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._block_count = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._block_size = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._tensor_count = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
+        self._data_offset = struct.unpack("<I", buf[pos:pos + 4])[0]; pos += 4
 
         # Reserved region (24 bytes)
-        reserved = self._mm.read(24)
+        reserved = buf[pos:pos + 24]
+        pos += 24
         self._header_crc = struct.unpack("<I", reserved[:4])[0]
 
         # Validate tensor count
         if self._tensor_count > MAX_TENSOR_COUNT:
             raise ValueError(f"Too many tensors: {self._tensor_count} (max {MAX_TENSOR_COUNT})")
 
-        # Config JSON
-        json_len = struct.unpack("<I", self._mm.read(4))[0]
-        self._config_dict = json.loads(self._mm.read(json_len))
+        # Config JSON — still in buffered data (after fixed header)
+        json_len = struct.unpack("<I", buf[pos:pos + 4])[0]
+        pos += 4
+        self._config_dict = json.loads(buf[pos:pos + json_len])
 
         # Verify header CRC if present
         if self._has_header_crc and self._header_crc != 0:
@@ -173,36 +177,46 @@ class SLNCParser:
             )
 
     def _parse_tensor_table(self):
-        """Parse the tensor table (variable-length entries)."""
+        """Parse the tensor table from buffered data (fast, no mmap)."""
         self._tensor_map: Dict[str, Tuple[int, Tuple[int, ...], np.dtype, int]] = {}
 
         header_size = compute_header_size(
             json.dumps(self._config_dict, sort_keys=True).encode()
         )
-        self._mm.seek(header_size)
+        buf = self._header_data
+        pos = header_size
 
         for _ in range(self._tensor_count):
             # Read name string
-            name_len = struct.unpack("<I", self._mm.read(4))[0]
+            name_len = struct.unpack("<I", buf[pos:pos + 4])[0]
+            pos += 4
             if name_len > MAX_NAME_LEN:
                 raise ValueError(f"Tensor name too long: {name_len} > {MAX_NAME_LEN}")
-            name = self._mm.read(name_len).decode()
+            name = buf[pos:pos + name_len].decode()
+            pos += name_len
 
             # Read entry fields
-            offset = struct.unpack("<Q", self._mm.read(8))[0]
-            size = struct.unpack("<I", self._mm.read(4))[0]
-            ndim = struct.unpack("<I", self._mm.read(4))[0]
+            offset = struct.unpack("<Q", buf[pos:pos + 8])[0]
+            pos += 8
+            size = struct.unpack("<I", buf[pos:pos + 4])[0]
+            pos += 4
+            ndim = struct.unpack("<I", buf[pos:pos + 4])[0]
+            pos += 4
 
             # Validate ndim
             if ndim > MAX_NDIM:
                 raise ValueError(f"Tensor {name!r} has {ndim} dims (max {MAX_NDIM})")
 
             shape = tuple(
-                struct.unpack("<I", self._mm.read(4))[0] for _ in range(ndim)
+                struct.unpack("<I", buf[pos + i * 4:pos + (i + 1) * 4])[0]
+                for i in range(ndim)
             )
+            pos += ndim * 4
 
-            dtype_code = struct.unpack("<I", self._mm.read(4))[0]
-            crc = struct.unpack("<I", self._mm.read(4))[0]
+            dtype_code = struct.unpack("<I", buf[pos:pos + 4])[0]
+            pos += 4
+            crc = struct.unpack("<I", buf[pos:pos + 4])[0]
+            pos += 4
 
             dtype = code_to_dtype(dtype_code)
             self._tensor_map[name] = (offset, shape, dtype, crc)
