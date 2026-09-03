@@ -12,6 +12,7 @@ import { Card, CardContent, Checkbox, EmptyCard, cn, Slider } from '@sloughgpt/s
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { KnowledgeStatsSkeleton, KnowledgeCategoryChartSkeleton, KnowledgeAdapterSkeleton, KnowledgeRAGSkeleton, KnowledgeTopicsSkeleton } from '@/components/ui/PageSkeletons'
 import { Chip } from '@sloughgpt/strui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown, IconMapPin } from '@sloughgpt/strui'
@@ -558,7 +559,9 @@ export default function KnowledgePage() {
       headerRight={headerRight}
       toolbar={toolbar}
     >
-      {stats && (
+      {loading && !stats ? (
+          <KnowledgeStatsSkeleton />
+        ) : stats ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="p-4">
@@ -585,13 +588,15 @@ export default function KnowledgePage() {
               </CardContent>
             </Card>
           </div>
-        )}
+        ) : null}
 
         {items.length > 0 && <KnowledgeCategoryChart items={items} stats={stats} />}
 
         <SpacedReviewCard addToast={addToast} />
 
-        {adapterStatus && (
+        {loading && !adapterStatus ? (
+          <KnowledgeAdapterSkeleton />
+        ) : adapterStatus ? (
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -626,9 +631,11 @@ export default function KnowledgePage() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
-        {ragStats && (
+        {loading && !ragStats ? (
+          <KnowledgeRAGSkeleton />
+        ) : ragStats ? (
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -690,16 +697,18 @@ export default function KnowledgePage() {
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
+          </div>
+        ) : null}
               {showRagDocs && ragDocs.length === 0 && (
                 <p className="mt-3 text-[11px] text-muted-foreground">No sources yet.</p>
               )}
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
-        {topics.length > 0 && (
+        {loading && topics.length === 0 ? (
+          <KnowledgeTopicsSkeleton />
+        ) : topics.length > 0 ? (
           <Card>
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-2">What we talk about</p>
@@ -728,7 +737,7 @@ export default function KnowledgePage() {
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         {topics.length > 0 && (
           <div className="flex flex-wrap gap-1.5">

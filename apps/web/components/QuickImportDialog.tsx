@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
@@ -9,6 +9,26 @@ import { Spinner } from '@sloughgpt/strui'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useToastStore } from '@/lib/toast-store'
+
+const KAGGLE_PRESETS = [
+  { slug: 'heptapod/titanic', title: 'Titanic', desc: 'Classic ML dataset' },
+  { slug: 'uciml/iris', title: 'Iris', desc: 'Flower classification' },
+  { slug: 'zillow/zecon', title: 'Zillow Housing', desc: 'Home value estimates' },
+  { slug: 'dgomonov/new-york-city-airbnb-open-data', title: 'NYC Airbnb', desc: 'Listings & reviews' },
+  { slug: 'rounakbanik/pokemon', title: 'Pokemon', desc: 'All Pokemon stats' },
+  { slug: 'unsdsn/world-happiness', title: 'Happiness', desc: 'World Happiness Report' },
+  { slug: 'rsrishav/youtube-trending-video-dataset', title: 'YouTube Trending', desc: 'Daily trending videos' },
+  { slug: 'nelgiriyewithana/global-weather-repository', title: 'World Weather', desc: 'Daily weather data' },
+  { slug: 'ashirwadsangwan/imdb-dataset', title: 'IMDb Movies', desc: 'Full IMDb database' },
+  { slug: 'saurabhshahane/statsbomb-football-data', title: 'Football Stats', desc: 'StatsBomb data' },
+  { slug: 'rsrishav/world-population', title: 'World Population', desc: '2021 population data' },
+  { slug: 'markmedhat/supermarket-sales', title: 'Supermarket Sales', desc: 'Sales transaction data' },
+]
+
+function shuffleAndPick(arr: typeof KAGGLE_PRESETS, n: number) {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, n)
+}
 
 interface Props {
   open: boolean
@@ -27,9 +47,12 @@ export default function QuickImportDialog({ open, onOpenChange, onImported }: Pr
   const [githubUrl, setGithubUrl] = useState('')
   const [hfId, setHfId] = useState('')
   const [url, setUrl] = useState('')
+  const [kaggleSlug, setKaggleSlug] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
-  const reset = () => { setName(''); setLocalPath(''); setGithubUrl(''); setHfId(''); setUrl(''); setResult(null) }
+  const randomPresets = useMemo(() => shuffleAndPick(KAGGLE_PRESETS, 4), [open])
+
+  const reset = () => { setName(''); setLocalPath(''); setGithubUrl(''); setHfId(''); setUrl(''); setKaggleSlug(''); setResult(null) }
 
   const handleImport = async () => {
     const ac = new AbortController()
@@ -46,6 +69,8 @@ export default function QuickImportDialog({ open, onOpenChange, onImported }: Pr
         res = await datasetController.importFromHuggingFace({ dataset_id: hfId.trim(), name: name.trim() || undefined }, { signal })
       } else if (activeTab === 'url' && url.trim()) {
         res = await datasetController.importFromURL({ url: url.trim(), name: name.trim() || 'imported_dataset' }, { signal })
+      } else if (activeTab === 'kaggle' && kaggleSlug.trim()) {
+        res = await datasetController.importFromKaggle({ dataset: kaggleSlug.trim(), name: name.trim() || undefined }, { signal })
       } else {
         addToast('Fill in the required field', 'error'); setImporting(false); return
       }
@@ -83,6 +108,7 @@ export default function QuickImportDialog({ open, onOpenChange, onImported }: Pr
                 <TabsTrigger value="local" className="text-xs">Local Path</TabsTrigger>
                 <TabsTrigger value="github" className="text-xs">GitHub</TabsTrigger>
                 <TabsTrigger value="huggingface" className="text-xs">HuggingFace</TabsTrigger>
+                <TabsTrigger value="kaggle" className="text-xs">Kaggle</TabsTrigger>
                 <TabsTrigger value="url" className="text-xs">URL</TabsTrigger>
               </TabsList>
               <TabsContent value="local">
@@ -93,6 +119,22 @@ export default function QuickImportDialog({ open, onOpenChange, onImported }: Pr
               </TabsContent>
               <TabsContent value="huggingface">
                 <Input placeholder="username/dataset-name" value={hfId} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHfId(e.target.value)} className="h-8 text-xs" />
+              </TabsContent>
+              <TabsContent value="kaggle" className="space-y-2">
+                <Input placeholder="owner/dataset-name" value={kaggleSlug} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKaggleSlug(e.target.value)} className="h-8 text-xs" />
+                <div className="grid grid-cols-2 gap-1.5">
+                  {randomPresets.map((p) => (
+                    <button
+                      key={p.slug}
+                      type="button"
+                      className="text-left p-1.5 rounded border border-border/50 hover:border-primary/50 hover:bg-accent/50 transition-colors"
+                      onClick={() => setKaggleSlug(p.slug)}
+                    >
+                      <span className="text-xs font-medium">{p.title}</span>
+                      <span className="block text-[10px] text-muted-foreground">{p.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </TabsContent>
               <TabsContent value="url">
                 <Input placeholder="https://example.com/data.txt" value={url} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrl(e.target.value)} className="h-8 text-xs" />

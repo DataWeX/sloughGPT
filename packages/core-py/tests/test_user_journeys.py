@@ -183,6 +183,96 @@ class TestKnowledge:
         assert has_kw
 
 
+# ── Datasets Import ───────────────────────────────────────────
+
+class TestDatasetsImport:
+    def test_loads(self, page: Page):
+        body = go(page, "/datasets")
+        has_content = len(body) > 50
+        ok("datasets_loads", has_content, f"len={len(body)}")
+        assert has_content
+
+    def test_import_button_exists(self, page: Page):
+        go(page, "/datasets")
+        buttons = page.query_selector_all("button")
+        import_btns = [b for b in buttons if "import" in (b.inner_text() or "").lower()]
+        ok("datasets_import_button", len(import_btns) > 0, f"found={len(import_btns)}")
+        assert len(import_btns) > 0
+
+    def test_import_dialog_opens(self, page: Page):
+        go(page, "/datasets")
+        buttons = page.query_selector_all("button")
+        import_btn = None
+        for b in buttons:
+            txt = (b.inner_text() or "").lower()
+            if "import" in txt:
+                import_btn = b
+                break
+        if not import_btn:
+            ok("datasets_import_dialog_opens", False, "no import button")
+            pytest.skip("no import button")
+        import_btn.click()
+        time.sleep(0.5)
+        dialogs = page.query_selector_all("[role='dialog'], .modal, [data-state='open']")
+        ok("datasets_import_dialog_opens", len(dialogs) > 0, f"found={len(dialogs)}")
+        assert len(dialogs) > 0
+
+    def test_import_has_kaggle_tab(self, page: Page):
+        go(page, "/datasets")
+        buttons = page.query_selector_all("button")
+        import_btn = None
+        for b in buttons:
+            txt = (b.inner_text() or "").lower()
+            if "import" in txt:
+                import_btn = b
+                break
+        if not import_btn:
+            ok("datasets_import_has_kaggle_tab", False, "no import button")
+            pytest.skip("no import button")
+        import_btn.click()
+        time.sleep(0.5)
+        tabs = page.query_selector_all("[role='tab'], button")
+        kaggle_tab = None
+        for t in tabs:
+            txt = (t.inner_text() or "").lower()
+            if "kaggle" in txt:
+                kaggle_tab = t
+                break
+        ok("datasets_import_has_kaggle_tab", kaggle_tab is not None, f"tabs={[t.inner_text() for t in tabs[:5]]}")
+        assert kaggle_tab is not None
+
+    def test_kaggle_presets_visible(self, page: Page):
+        go(page, "/datasets")
+        buttons = page.query_selector_all("button")
+        import_btn = None
+        for b in buttons:
+            txt = (b.inner_text() or "").lower()
+            if "import" in txt:
+                import_btn = b
+                break
+        if not import_btn:
+            ok("datasets_kaggle_presets_visible", False, "no import button")
+            pytest.skip("no import button")
+        import_btn.click()
+        time.sleep(0.5)
+        tabs = page.query_selector_all("[role='tab'], button")
+        kaggle_tab = None
+        for t in tabs:
+            txt = (t.inner_text() or "").lower()
+            if "kaggle" in txt:
+                kaggle_tab = t
+                break
+        if not kaggle_tab:
+            ok("datasets_kaggle_presets_visible", False, "no kaggle tab")
+            pytest.skip("no kaggle tab")
+        kaggle_tab.click()
+        time.sleep(0.5)
+        body = page.inner_text("body")
+        has_presets = any(w in body.lower() for w in ["titanic", "iris", "pokemon", "airbnb"])
+        ok("datasets_kaggle_presets_visible", has_presets, f"body_sample={body[:200]}")
+        assert has_presets
+
+
 # ── Redirects ─────────────────────────────────────────────────
 
 REDIRECTS = [

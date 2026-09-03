@@ -263,7 +263,7 @@ export function DatasetImportDialog({
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Examples: <code className="font-mono text-[10px]">zillow/zecon</code>, <code className="font-mono text-[10px]">nlp-datasets/tinyshakespeare</code>, <code className="font-mono text-[10px]">datasets/opensubtitles</code>
+                  Examples: <code className="font-mono text-[10px]">heptapod/titanic</code>, <code className="font-mono text-[10px]">uciml/iris</code>, <code className="font-mono text-[10px]">rounakbanik/pokemon</code>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   Requires Kaggle CLI installed and authenticated (<code className="font-mono text-[10px]">kaggle config</code>)

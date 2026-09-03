@@ -112,8 +112,9 @@ vi.mock('@/components/home/RecentActivity', () => ({
   RecentActivity: ({ apiStatus, modelStatus, recentSessions, recentJobs }: any) => {
     if (apiStatus !== 'online' || !modelStatus.loaded) return null
     return (
-      <div data-testid="recent-activity">
-        <span>recent</span>
+      <div>
+        {recentSessions.map((s: any) => <div key={s.id}>{s.name}</div>)}
+        {recentJobs.map((j: any) => <div key={j.id}>{j.name}</div>)}
       </div>
     )
   },
@@ -275,10 +276,9 @@ vi.mock('@/lib/feedback-controller', () => ({
 
 vi.mock('@/lib/store', () => ({
   useModelReadiness: () => {
-    // Return different state based on global health state
     const health = (globalThis as any).__testHealth
+    const progress = (globalThis as any).__testModelReadiness
     if (health === 'offline') {
-      const progress = (globalThis as any).__testModelReadiness
       if (progress) return progress
       return { ready: false, phase: 'initializing', step: 0, total: 9, message: 'Connecting...' }
     }
@@ -321,6 +321,7 @@ beforeEach(() => {
   Object.keys(kvStore).forEach(k => delete kvStore[k])
   localStorage.clear()
   ;(globalThis as any).__testHealth = null
+  ;(globalThis as any).__testModelReadiness = null
   state.health = onlineHealth
   state.liveHealth = onlineHealth
   state.home = makeHomeData()
@@ -343,7 +344,7 @@ describe('HomePage', () => {
     state.liveHealth = 'offline'
     ;(globalThis as any).__testHealth = 'offline'
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText('API server at http://localhost:8000 is not reachable')).toBeTruthy() })
+    expect(await screen.findByText('API server at http://localhost:8000 is not reachable')).toBeTruthy()
     expect(screen.queryByText('Online')).toBeFalsy()
   })
 
@@ -353,7 +354,7 @@ describe('HomePage', () => {
     ;(globalThis as any).__testHealth = 'offline'
     ;(globalThis as any).__testModelReadiness = { ready: false, phase: 'loading-model', step: 2, total: 5, message: 'Loading PyTorch' }
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText(/Starting up.*2\/5/)).toBeTruthy() })
+    expect(await screen.findByText(/Starting up.*2\/5/)).toBeTruthy()
     expect(screen.getByText('Loading PyTorch')).toBeTruthy()
   })
 
@@ -393,24 +394,24 @@ describe('HomePage', () => {
   })
 
   it('runs a quick test against chatController and shows the response', async () => {
-    // QuickActions is lazy-loaded; verify the page renders without error
+    // QuickActions is lazy-loaded; verify page renders after data ready
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText(/gpt2 loaded/)).toBeTruthy() })
+    expect(await screen.findByText(/gpt2 loaded/)).toBeTruthy()
   })
 
   it('shows an extracted error message when the quick test fails', async () => {
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText(/gpt2 loaded/)).toBeTruthy() })
+    expect(await screen.findByText(/gpt2 loaded/)).toBeTruthy()
   })
 
   it('saves a quick note via knowledgeController and toasts success', async () => {
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText(/gpt2 loaded/)).toBeTruthy() })
+    expect(await screen.findByText(/gpt2 loaded/)).toBeTruthy()
   })
 
   it('toasts failure when saving a quick note errors', async () => {
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText(/gpt2 loaded/)).toBeTruthy() })
+    expect(await screen.findByText(/gpt2 loaded/)).toBeTruthy()
   })
 
   it('renders feedback stats and links to training', async () => {
@@ -418,42 +419,41 @@ describe('HomePage', () => {
       feedbackStats: { db_stats: { feedback_total: 10, thumbs_up: 7, thumbs_down: 3, ratio: 0.7 }, train_stats: null, adapter_stats: null },
     })
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText('10')).toBeTruthy() })
+    expect(await screen.findByText('10')).toBeTruthy()
     expect(screen.getByText('70%')).toBeTruthy()
     const link = screen.getByText(/Train from feedback/)
     expect(link.getAttribute('href')).toBe('/training')
   })
 
-  it('renders the running training card', () => {
+  it('renders the running training card', async () => {
     state.home = makeHomeData({ runningTraining: { name: 'lora-finetune', status_message: 'Epoch 2/5' } })
     render(<HomePage />)
-    expect(screen.getByText('Training: lora-finetune')).toBeTruthy()
+    expect(await screen.findByText('Training: lora-finetune')).toBeTruthy()
     expect(screen.getByText('Epoch 2/5')).toBeTruthy()
   })
 
   it('lists recent sessions and jobs and navigates on click', async () => {
-    // RecentActivity is lazy-loaded; verify the page renders without error
     state.home = makeHomeData({
       recentSessions: [
         { id: 's1', name: 'First chat', updated_at: new Date().toISOString(), message_count: 3 },
-        { id: 's2', name: 'Second chat', updated_at: new Date(Date.now() - 60 * 60000).toISOString() },
       ],
-      recentJobs: [{ id: 'j1', name: 'distill', status: 'completed' }, { id: 'j2', name: 'fine-tune', status: 'running' }],
+      recentJobs: [{ id: 'j1', name: 'distill', status: 'completed' }],
+      modelStatus: { loaded: false, model: null },
     })
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText(/gpt2 loaded/)).toBeTruthy() })
+    const resume = await screen.findByText('First chat')
+    await act(async () => { resume.click() })
+    expect(mockPush).toHaveBeenCalledWith('/chat?session=s1')
   })
 
   it('provides a resume button for the most recent session', async () => {
-    // Resume button is eagerly rendered as a link-like button
     state.home = makeHomeData({
       recentSessions: [{ id: 's9', name: 'Latest chat', updated_at: new Date().toISOString(), message_count: 4 }],
+      modelStatus: { loaded: false, model: null },
     })
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText('Latest chat')).toBeTruthy() })
-    // Click the first "Latest chat" which is the resume button
-    const resumes = screen.getAllByText('Latest chat')
-    await act(async () => { resumes[0].click() })
+    const resume = await screen.findByText('Latest chat')
+    await act(async () => { resume.click() })
     expect(mockPush).toHaveBeenCalledWith('/chat?session=s9')
   })
 
@@ -485,14 +485,16 @@ describe('HomePage', () => {
   it('renders the live health system card with CPU, memory, requests, and uptime', async () => {
     state.liveHealth = { cpu_percent: 42.3, memory_percent: 60.9, request_count: 1200, uptime_seconds: 3661 }
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText('42%')).toBeTruthy() })
+    expect(await screen.findByText('42%')).toBeTruthy()
     expect(screen.getByText('61%')).toBeTruthy()
     expect(screen.getAllByText('1h 1m').length).toBeGreaterThanOrEqual(1)
   })
 
   it('always shows the CTA grid links', async () => {
-    // NavigationGrid is lazy-loaded; verify the page renders without error
     render(<HomePage />)
-    await waitFor(() => { expect(screen.getByText('Good morning')).toBeTruthy() })
+    const chatLinks = await screen.findAllByText('Chat')
+    expect(chatLinks.length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Personalities')).toBeTruthy()
+    expect(screen.getByText(/Teach me/)).toBeTruthy()
   })
 })

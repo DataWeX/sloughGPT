@@ -19,10 +19,10 @@ export interface StepProps {
 }
 
 const POPULAR_KAGGLE = [
-  { id: 'nlp-datasets/tinyshakespeare', label: 'Tiny Shakespeare' },
-  { id: 'HuggingFaceH4/ultrachat_200k', label: 'UltraChat 200K' },
-  { id: 'datasets/opensubtitles', label: 'OpenSubtitles' },
-  { id: 'heliosbrahma/mental-health-chatbot-dataset', label: 'Mental Health Chat' },
+  { id: 'heptapod/titanic', label: 'Titanic' },
+  { id: 'uciml/iris', label: 'Iris' },
+  { id: 'rounakbanik/pokemon', label: 'Pokemon' },
+  { id: 'unsdsn/world-happiness', label: 'World Happiness' },
 ]
 
 const POPULAR_HF = [

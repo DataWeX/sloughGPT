@@ -12,9 +12,8 @@ while [ -L "$SOURCE" ]; do
 done
 DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
 
-PYTHON=python3
-if [ -x "$DIR/.venv/bin/python" ]; then
-    PYTHON="$DIR/.venv/bin/python"
+if [ -f "$DIR/.venv/bin/activate" ]; then
+    source "$DIR/.venv/bin/activate"
 fi
 
-exec "$PYTHON" "$DIR/cli.py" "$@"
+exec python3 "$DIR/cli.py" "$@"
