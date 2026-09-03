@@ -21,6 +21,7 @@ const BUILD_TYPE_LABELS: Record<string, string> = {
 export function TrainingBuildsCard({ addToast }: Props) {
   const [builds, setBuilds] = useState<TrainingBuild[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [page, setPage] = useState(0)
@@ -28,11 +29,13 @@ export function TrainingBuildsCard({ addToast }: Props) {
 
   const fetchBuilds = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const result = await trainingJobsController.listBuilds()
       setBuilds(result ?? [])
     } catch {
       setBuilds([])
+      setError('Could not load builds')
     } finally {
       setLoading(false)
     }
@@ -115,6 +118,11 @@ export function TrainingBuildsCard({ addToast }: Props) {
             <Skeleton className="h-4 w-32" />
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button size="sm" variant="ghost" onClick={() => void fetchBuilds()}>Retry</Button>
           </div>
         ) : builds.length === 0 ? (
           <p className="text-xs text-muted-foreground">No builds found. Start training to create builds.</p>

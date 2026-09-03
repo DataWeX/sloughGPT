@@ -6,6 +6,7 @@ import type { Checkpoint } from '@/lib/souls-controller'
 
 interface TrainingHealthCardProps {
   checkpoints: Checkpoint[]
+  loading?: boolean
 }
 
 type HealthStatus = 'improving' | 'stagnant' | 'diverging' | 'no-data'
@@ -86,9 +87,26 @@ const STATUS_LABELS: Record<HealthStatus, string> = {
   'no-data': 'No data',
 }
 
-export function TrainingHealthCard({ checkpoints }: TrainingHealthCardProps) {
+export function TrainingHealthCard({ checkpoints, loading }: TrainingHealthCardProps) {
   const result = useMemo(() => analyze(checkpoints), [checkpoints])
   const styles = STATUS_STYLES[result.status]
+
+  if (loading && checkpoints.length === 0) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Training health</CardTitle>
+          <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (checkpoints.length === 0) return null
 

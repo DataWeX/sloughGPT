@@ -18,6 +18,7 @@ export const TrainingLogCard = memo(function TrainingLogCard({
 }: TrainingLogCardProps) {
   const [lines, setLines] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const prevLineCountRef = useRef(0)
@@ -26,22 +27,24 @@ export const TrainingLogCard = memo(function TrainingLogCard({
     try {
       const logs = await trainingJobsController.getTrainingLog()
       setLines(logs)
+      setError(null)
     } catch {
-      // Silent — will retry on next poll
+      if (lines.length === 0) setError('Could not load logs')
     }
-  }, [])
+  }, [lines.length])
 
   const fetchLogsLoading = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const logs = await trainingJobsController.getTrainingLog()
       setLines(logs)
     } catch {
-      // Silent
+      if (lines.length === 0) setError('Could not load logs')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [lines.length])
 
   // Auto-refresh during training
   useEffect(() => {

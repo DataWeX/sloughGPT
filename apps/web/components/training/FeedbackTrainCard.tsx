@@ -63,7 +63,10 @@ export function FeedbackTrainCard({ addToast }: Props) {
     }, 3000)
   }, [stopPolling, addToast])
 
+  const [starting, setStarting] = useState(false)
+
   const handleTrain = useCallback(async () => {
+    setStarting(true)
     setPhase('starting')
     setProgress(0)
     setLoss(null)
@@ -84,6 +87,8 @@ export function FeedbackTrainCard({ addToast }: Props) {
       setPhase('error')
       setError('Could not start training')
       addToast('Could not start training from feedback', 'error')
+    } finally {
+      setStarting(false)
     }
   }, [epochs, lr, batchSize, addToast, startPolling])
 
@@ -192,8 +197,8 @@ export function FeedbackTrainCard({ addToast }: Props) {
                 </div>
               </div>
             )}
-            <Button size="sm" onClick={handleTrain}>
-              Train from feedback
+            <Button size="sm" onClick={handleTrain} disabled={starting}>
+              {starting ? 'Starting...' : 'Train from feedback'}
             </Button>
           </div>
         )}

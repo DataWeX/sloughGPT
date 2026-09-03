@@ -51,15 +51,20 @@ export const QuickTrainCard = memo(function QuickTrainCard({
     return () => { active = false }
   }, [addToast])
 
-  const start = () => {
+  const [starting, setStarting] = useState(false)
+
+  const start = async () => {
     if (!datasets.selectedDataset) {
       addToast('Select a dataset first', 'error')
       return
     }
+    setStarting(true)
     try {
-      session.startTurboTrain(datasets.selectedDataset, config, addToast, selectedExperimentId || undefined)
+      await session.startTurboTrain(datasets.selectedDataset, config, addToast, selectedExperimentId || undefined)
     } catch {
       addToast('Could not start turbo training', 'error')
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -192,8 +197,8 @@ export const QuickTrainCard = memo(function QuickTrainCard({
                 </select>
               </div>
             )}
-            <Button size="sm" onClick={start} disabled={!datasets.selectedDataset}>
-              Start turbo train
+            <Button size="sm" onClick={start} disabled={!datasets.selectedDataset || starting}>
+              {starting ? 'Starting...' : 'Start turbo train'}
             </Button>
           </div>
         )}

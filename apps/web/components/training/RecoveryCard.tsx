@@ -15,16 +15,19 @@ interface Props {
 export function RecoveryCard({ addToast }: Props) {
   const [jobs, setJobs] = useState<RecoverableJob[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [recovering, setRecovering] = useState<string | null>(null)
   const [pendingAbandon, setPendingAbandon] = useState<string | null>(null)
 
   const fetchRecoverable = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const result = await trainingJobsController.recoverable()
       setJobs(result ?? [])
     } catch {
       setJobs([])
+      setError('Could not load recoverable jobs')
     } finally {
       setLoading(false)
     }
@@ -82,6 +85,22 @@ export function RecoveryCard({ addToast }: Props) {
         <CardContent className="space-y-2">
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card className="border-destructive/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Recoverable Jobs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-destructive">{error}</p>
+            <Button size="sm" variant="ghost" onClick={() => void fetchRecoverable()}>Retry</Button>
+          </div>
         </CardContent>
       </Card>
     )

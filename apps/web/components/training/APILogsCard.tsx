@@ -53,16 +53,14 @@ export function APILogsCard({
   const [loadingModel, setLoadingModel] = useState(false)
   const [config, setConfig] = useState<FormConfig>(DEFAULTS)
 
+  const [starting, setStarting] = useState(false)
+
   const start = useCallback(async () => {
-    if (phase === 'extracting' || phase === 'training') return
-    setPhase('extracting')
+    if (phase !== 'idle') return
+    setStarting(true)
     setProgress(0)
     setLoss(null)
-    setEpoch(0)
-    setTotalEpochs(config.epochs)
-    setResult(null)
     setError(null)
-
     try {
       const params: TrainFromSessionsParams = {
         epochs: config.epochs,
@@ -104,6 +102,8 @@ export function APILogsCard({
       setPhase('error')
       setError(err instanceof Error ? err.message : 'Unknown error')
       addToast('Training failed', 'error')
+    } finally {
+      setStarting(false)
     }
   }, [phase, config, addToast])
 
@@ -282,8 +282,8 @@ export function APILogsCard({
                 />
               </div>
             </div>
-            <Button size="sm" onClick={start}>
-              Start training
+            <Button size="sm" onClick={start} disabled={starting}>
+              {starting ? 'Starting...' : 'Start training'}
             </Button>
           </div>
         )}

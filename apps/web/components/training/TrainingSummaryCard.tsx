@@ -7,6 +7,7 @@ import { formatDuration } from '@/lib/formatDuration'
 
 interface TrainingSummaryCardProps {
   checkpoints: Checkpoint[]
+  loading?: boolean
 }
 
 interface Stat {
@@ -59,8 +60,28 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   return stats
 }
 
-export function TrainingSummaryCard({ checkpoints }: TrainingSummaryCardProps) {
+export function TrainingSummaryCard({ checkpoints, loading }: TrainingSummaryCardProps) {
   const stats = useMemo(() => computeStats(checkpoints), [checkpoints])
+
+  if (loading && stats.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Training summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-1">
+                <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                <div className="h-5 w-12 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (stats.length === 0) return null
 

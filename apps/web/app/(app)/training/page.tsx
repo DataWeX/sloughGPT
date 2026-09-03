@@ -252,9 +252,9 @@ export default function TrainingPage() {
           <StatCard label="Saved versions" value={checkpoints.loadingCheckpoints ? <Skeleton className="h-5 w-8 inline-block" /> : checkpoints.checkpoints.length} />
         </KpiGrid>
 
-        <TrainingSummaryCard checkpoints={checkpoints.checkpoints} />
+        <TrainingSummaryCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
 
-        <TrainingHealthCard checkpoints={checkpoints.checkpoints} />
+        <TrainingHealthCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
 
         <TrainingLogCard trainingRunning={session.trainingRunning} />
 
