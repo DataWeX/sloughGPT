@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { KnowledgePageSkeleton } from '@/components/ui/PageSkeletons'
 
 export default function KnowledgeLoading() {
-  return <PageSkeleton cards={4} />
+  return <KnowledgePageSkeleton />
 }

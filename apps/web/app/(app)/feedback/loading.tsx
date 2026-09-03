@@ -1,9 +1,9 @@
 import { PageContainer } from '@/components/PageContainer'
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { FeedbackPageSkeleton } from '@/components/ui/PageSkeletons'
 
 export default function FeedbackLoading() {
   return (
-    <PageContainer title="Feedback" subtitle="Analytics & management" loading loadingContent={<PageSkeleton cards={3} header={false} />}>
+    <PageContainer title="Feedback" subtitle="Analytics & management" loading loadingContent={<FeedbackPageSkeleton />}>
       <></>
     </PageContainer>
   )

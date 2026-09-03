@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { DatasetsPageSkeleton } from '@/components/ui/PageSkeletons'
 
 export default function DatasetsLoading() {
-  return <PageSkeleton cards={5} />
+  return <DatasetsPageSkeleton />
 }

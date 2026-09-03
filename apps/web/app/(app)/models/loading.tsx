@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { ModelsPageSkeleton } from '@/components/ui/PageSkeletons'
 
 export default function ModelsLoading() {
-  return <PageSkeleton cards={4} />
+  return <ModelsPageSkeleton />
 }

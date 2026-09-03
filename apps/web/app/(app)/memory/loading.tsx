@@ -1,3 +1,5 @@
-'use client'
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
-export default function Loading() { return <PageSkeleton cards={3} /> }
+import { MemoryPageSkeleton } from '@/components/ui/PageSkeletons'
+
+export default function MemoryLoading() {
+  return <MemoryPageSkeleton />
+}

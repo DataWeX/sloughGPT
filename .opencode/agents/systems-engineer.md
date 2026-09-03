@@ -461,48 +461,349 @@ async def stream_endpoint():
     return StreamingResponse(generate(), media_type="text/event-stream")
 ```
 
-## Inference Pipeline Patterns
+## ML/AI Infrastructure Patterns
 
-### Model Loading
+### Model Registry
 ```python
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional
 import numpy as np
 
-class ModelLoader:
-    """Load and manage inference models."""
+@dataclass
+class ModelMetadata:
+    """Model metadata for registry."""
+    name: str
+    version: str
+    format: str  # "slnc", "safetensors", "onnx"
+    size_bytes: int
+    checksum: str
+    created_at: str
+    tags: list[str] = field(default_factory=list)
+
+class ModelRegistry:
+    """Central model registry with versioning."""
     
-    def __init__(self, cache_dir: Path):
-        self.cache_dir = cache_dir
-        self.models: dict[str, np.ndarray] = {}
+    def __init__(self, registry_dir: Path):
+        self.registry_dir = registry_dir
+        self.models: dict[str, list[ModelMetadata]] = {}
     
-    def load(self, model_path: Path) -> np.ndarray:
-        """Load model from disk."""
-        if model_path.suffix == ".slnc":
-            return self._load_slnc(model_path)
-        elif model_path.suffix == ".npy":
-            return np.load(model_path)
+    def register(self, metadata: ModelMetadata) -> None:
+        """Register a new model version."""
+        if metadata.name not in self.models:
+            self.models[metadata.name] = []
+        self.models[metadata.name].append(metadata)
+    
+    def get_latest(self, name: str) -> Optional[ModelMetadata]:
+        """Get latest version of model."""
+        versions = self.models.get(name, [])
+        return versions[-1] if versions else None
+    
+    def load(self, name: str, version: Optional[str] = None) -> np.ndarray:
+        """Load model weights."""
+        if version:
+            meta = next((m for m in self.models[name] if m.version == version), None)
         else:
-            raise ValueError(f"Unknown format: {model_path.suffix}")
+            meta = self.get_latest(name)
+        
+        if meta is None:
+            raise ValueError(f"Model {name} not found")
+        
+        return self._load_weights(meta)
+```
+
+### Inference Engine
+```python
+from typing import Iterator, AsyncIterator
+import numpy as np
+
+class InferenceEngine:
+    """Unified inference engine for all model types."""
     
-    def _load_slnc(self, path: Path) -> np.ndarray:
-        """Load SLNC format."""
-        # Implementation specific to SLNC format
+    def __init__(self, registry: ModelRegistry):
+        self.registry = registry
+        self.cache: dict[str, np.ndarray] = {}
+    
+    def predict(self, model_name: str, input_data: np.ndarray) -> np.ndarray:
+        """Synchronous prediction."""
+        model = self._load_or_cache(model_name)
+        return self._run_inference(model, input_data)
+    
+    def predict_stream(self, model_name: str, input_data: np.ndarray) -> Iterator[np.ndarray]:
+        """Stream predictions token by token."""
+        model = self._load_or_cache(model_name)
+        yield from self._stream_inference(model, input_data)
+    
+    async def predict_async(self, model_name: str, input_data: np.ndarray) -> np.ndarray:
+        """Async prediction for API endpoints."""
+        model = self._load_or_cache(model_name)
+        return await self._run_inference_async(model, input_data)
+    
+    def _load_or_cache(self, name: str) -> np.ndarray:
+        """Load model or use cache."""
+        if name not in self.cache:
+            self.cache[name] = self.registry.load(name)
+        return self.cache[name]
+```
+
+### Training Pipeline
+```python
+from dataclasses import dataclass
+from typing import Optional, Callable
+import numpy as np
+
+@dataclass
+class TrainingConfig:
+    """Training configuration."""
+    model_name: str
+    epochs: int = 10
+    batch_size: int = 32
+    learning_rate: float = 0.001
+    optimizer: str = "adam"
+    checkpoint_dir: Optional[Path] = None
+
+class TrainingPipeline:
+    """Manages training lifecycle."""
+    
+    def __init__(self, config: TrainingConfig):
+        self.config = config
+        self.metrics: list[dict] = []
+    
+    def train(self, train_data: np.ndarray, val_data: Optional[np.ndarray] = None) -> dict:
+        """Run full training loop."""
+        for epoch in range(self.config.epochs):
+            train_loss = self._train_epoch(train_data)
+            val_loss = self._validate(val_data) if val_data else None
+            
+            self.metrics.append({
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+            })
+            
+            if self.config.checkpoint_dir:
+                self._save_checkpoint(epoch)
+        
+        return {"final_loss": train_loss, "metrics": self.metrics}
+    
+    def _train_epoch(self, data: np.ndarray) -> float:
+        """Train one epoch."""
+        # Implementation specific
         pass
 ```
 
-### Batch Processing
+## MLOps Patterns
+
+### Experiment Tracking
 ```python
-from typing import Iterator
+from dataclasses import dataclass, field
+from datetime import datetime
+import json
+
+@dataclass
+class Experiment:
+    """Experiment metadata."""
+    name: str
+    run_id: str
+    params: dict = field(default_factory=dict)
+    metrics: dict = field(default_factory=dict)
+    artifacts: list[str] = field(default_factory=list)
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+
+class ExperimentTracker:
+    """Track experiments and runs."""
+    
+    def __init__(self, tracker_dir: Path):
+        self.tracker_dir = tracker_dir
+        self.experiments: dict[str, Experiment] = {}
+    
+    def create_experiment(self, name: str, params: dict) -> Experiment:
+        """Create new experiment."""
+        run_id = f"{name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        exp = Experiment(name=name, run_id=run_id, params=params)
+        self.experiments[run_id] = exp
+        self._save_experiment(exp)
+        return exp
+    
+    def log_metrics(self, run_id: str, metrics: dict) -> None:
+        """Log metrics to experiment."""
+        exp = self.experiments[run_id]
+        exp.metrics.update(metrics)
+        self._save_experiment(exp)
+    
+    def log_artifact(self, run_id: str, artifact_path: Path) -> None:
+        """Log artifact (model, plot, etc)."""
+        exp = self.experiments[run_id]
+        exp.artifacts.append(str(artifact_path))
+        self._save_experiment(exp)
+```
+
+### Model Versioning
+```python
+from pathlib import Path
+import hashlib
+import json
+
+class ModelVersioning:
+    """Version control for models."""
+    
+    def __init__(self, models_dir: Path):
+        self.models_dir = models_dir
+    
+    def version_model(self, model_path: Path, tag: str) -> str:
+        """Create versioned copy of model."""
+        checksum = self._compute_checksum(model_path)
+        version_dir = self.models_dir / tag
+        version_dir.mkdir(parents=True, exist_ok=True)
+        
+        versioned_path = version_dir / f"model_{checksum[:8]}.slnc"
+        versioned_path.write_bytes(model_path.read_bytes())
+        
+        self._save_version_info(versioned_path, tag, checksum)
+        return checksum
+    
+    def rollback(self, tag: str) -> Path:
+        """Rollback to previous version."""
+        version_dir = self.models_dir / tag
+        if not version_dir.exists():
+            raise ValueError(f"Version {tag} not found")
+        
+        models = sorted(version_dir.glob("model_*.slnc"))
+        return models[-1] if models else None
+    
+    def _compute_checksum(self, path: Path) -> str:
+        """Compute SHA256 checksum."""
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+```
+
+### Model Deployment
+```python
+from dataclasses import dataclass
+from typing import Optional
+import subprocess
+
+@dataclass
+class DeploymentConfig:
+    """Deployment configuration."""
+    model_name: str
+    version: str
+    replicas: int = 1
+    cpu_limit: str = "1"
+    memory_limit: str = "2Gi"
+    gpu_limit: int = 0
+
+class ModelDeployer:
+    """Deploy models to production."""
+    
+    def __init__(self, config: DeploymentConfig):
+        self.config = config
+    
+    def deploy(self) -> dict:
+        """Deploy model to cluster."""
+        # Kubernetes deployment
+        deployment = self._create_deployment()
+        service = self._create_service()
+        
+        return {
+            "deployment": deployment,
+            "service": service,
+            "status": "deployed",
+        }
+    
+    def rollback(self, version: str) -> dict:
+        """Rollback to previous version."""
+        pass
+    
+    def scale(self, replicas: int) -> dict:
+        """Scale deployment."""
+        pass
+```
+
+## AI Engineering Features
+
+### Feature Store
+```python
+from dataclasses import dataclass
+from typing import Optional
 import numpy as np
 
-def batch_iter(data: list, batch_size: int) -> Iterator[list]:
-    """Iterate in batches."""
-    for i in range(0, len(data), batch_size):
-        yield data[i:i + batch_size]
+@dataclass
+class Feature:
+    """Feature definition."""
+    name: str
+    dtype: str
+    description: str
+    owner: str
+    tags: list[str] = field(default_factory=list)
 
-def process_batch(batch: list) -> list:
-    """Process a batch of items."""
-    return [process_item(item) for item in batch]
+class FeatureStore:
+    """Central feature store for ML."""
+    
+    def __init__(self, store_dir: Path):
+        self.store_dir = store_dir
+        self.features: dict[str, Feature] = {}
+    
+    def register_feature(self, feature: Feature) -> None:
+        """Register new feature."""
+        self.features[feature.name] = feature
+        self._save_feature(feature)
+    
+    def get_features(self, names: list[str]) -> np.ndarray:
+        """Get feature values."""
+        return np.column_stack([self._load_feature(n) for n in names])
+    
+    def create_training_dataset(self, feature_names: list[str], 
+                                 labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Create training dataset from features."""
+        X = self.get_features(feature_names)
+        return X, labels
+```
+
+### Model Monitoring
+```python
+from dataclasses import dataclass
+from typing import Optional
+import numpy as np
+
+@dataclass
+class MonitoringConfig:
+    """Monitoring configuration."""
+    model_name: str
+    drift_threshold: float = 0.1
+    performance_threshold: float = 0.9
+    alert_channel: Optional[str] = None
+
+class ModelMonitor:
+    """Monitor model performance and drift."""
+    
+    def __init__(self, config: MonitoringConfig):
+        self.config = config
+        self.metrics_history: list[dict] = []
+    
+    def check_drift(self, reference_data: np.ndarray, 
+                    current_data: np.ndarray) -> dict:
+        """Check for data drift."""
+        drift_score = self._compute_drift(reference_data, current_data)
+        return {
+            "drift_score": drift_score,
+            "threshold": self.config.drift_threshold,
+            "drifted": drift_score > self.config.drift_threshold,
+        }
+    
+    def check_performance(self, predictions: np.ndarray, 
+                          ground_truth: np.ndarray) -> dict:
+        """Check model performance."""
+        accuracy = np.mean(predictions == ground_truth)
+        return {
+            "accuracy": accuracy,
+            "threshold": self.config.performance_threshold,
+            "degraded": accuracy < self.config.performance_threshold,
+        }
+    
+    def alert(self, message: str) -> None:
+        """Send alert if configured."""
+        if self.config.alert_channel:
+            self._send_alert(message)
 ```
 
 ## Test Patterns (matches test_vm_devices_new.py)
@@ -557,40 +858,29 @@ class TestClassA:
         assert "error" in result.error.lower()
 ```
 
-### Running Tests
-```bash
-# Run specific test
-.venv/bin/python -m pytest tests/test_file.py -x -v
-
-# Run with coverage
-.venv/bin/python -m pytest tests/ --cov=domains --cov-report=term-missing
-
-# Run from project root
-PYTHONPATH=packages/core-py .venv/bin/python -m pytest packages/core-py/tests/test_file.py -x -v
-```
-
 **Test file location**: `packages/core-py/tests/test_<module>.py`
 **Test class pattern**: `class Test<Feature>:`
 **Test method pattern**: `def test_<behavior>(self):`
 
-## Performance Considerations
+## Performance & Security
 
+### Performance
 - **NumPy vectorization**: Avoid Python loops for numerical operations
 - **Memory mapping**: Use `np.memmap` for large arrays
 - **Lazy loading**: Load models on first use, not at import
 - **Caching**: Use `@functools.lru_cache` for expensive computations
 - **Profiling**: Use `cProfile` and `line_profiler` for hot paths
 
-## Security Considerations
-
+### Security
 - **Input validation**: Validate all user inputs with Pydantic
 - **Path traversal**: Sanitize file paths, use `Path.resolve()`
 - **Secrets**: Never log or commit secrets, use environment variables
 - **RBAC**: Enforce permissions at syscall boundary
 - **Sandboxing**: Run untrusted code in isolated environments
 
-## Common Pitfalls
+## Common Pitfalls & Debugging
 
+### Pitfalls
 1. **Mutable default arguments**: Use `None` + `field(default_factory=...)`
 2. **Circular imports**: Use `TYPE_CHECKING` or late imports
 3. **Forgetting `self`**: Always include in instance methods
@@ -599,23 +889,13 @@ PYTHONPATH=packages/core-py .venv/bin/python -m pytest packages/core-py/tests/te
 6. **Resource leaks**: Use context managers for files/connections
 7. **Testing mocks**: Use `unittest.mock.patch` not global state
 
-## Debugging Techniques
-
+### Debugging
 ```python
 # Logging
-import logging
-logger = logging.getLogger(__name__)
 logger.debug("Variable: %s", var)
 
 # Breakpoints
-import pdb; pdb.set_trace()  # Python 3.7+
 breakpoint()  # Python 3.7+
-
-# Memory profiling
-from memory_profiler import profile
-@profile
-def my_func():
-    pass
 
 # Type checking
 mypy --strict mymodule.py

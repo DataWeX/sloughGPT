@@ -15,7 +15,7 @@ class TestStart:
     def test_start_creates_status(self, tracker: ConversionTracker):
         status = tracker.start("model-1")
         assert status is not None
-        assert status.stage == ConversionStage.IDLE or status.stage == ConversionStage.DOWNLOADING
+        assert status.stage == ConversionStage.IDLE
 
     def test_start_with_stage(self, tracker: ConversionTracker):
         status = tracker.start("model-1", stage=ConversionStage.DOWNLOADING)
@@ -50,11 +50,11 @@ class TestUpdate:
 
 
 class TestFinish:
-    def test_finish_sets_done(self, tracker: ConversionTracker):
+    def test_finish_sets_ready(self, tracker: ConversionTracker):
         tracker.start("model-1")
         result = tracker.finish("model-1")
         assert result is not None
-        assert result.stage == ConversionStage.DONE
+        assert result.stage == ConversionStage.READY
 
     def test_finish_nonexistent_returns_none(self, tracker: ConversionTracker):
         assert tracker.finish("nonexistent") is None
@@ -65,7 +65,7 @@ class TestFail:
         tracker.start("model-1")
         result = tracker.fail("model-1", "disk full")
         assert result is not None
-        assert result.stage == ConversionStage.FAILED
+        assert result.stage == ConversionStage.ERROR
         assert result.error == "disk full"
 
     def test_fail_nonexistent_returns_none(self, tracker: ConversionTracker):

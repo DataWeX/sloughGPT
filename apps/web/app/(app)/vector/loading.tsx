@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { VectorPageSkeleton } from '@/components/ui/PageSkeletons'
 
 export default function VectorLoading() {
-  return <PageSkeleton cards={2} />
+  return <VectorPageSkeleton />
 }
