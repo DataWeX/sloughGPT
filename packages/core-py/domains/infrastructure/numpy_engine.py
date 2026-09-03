@@ -74,10 +74,21 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
     with open(config_path) as f:
         config = json.load(f)
 
-    # Weights
+    # Weights — try .slnc first (mmap, zero-copy), fall back to safetensors
+    from pathlib import Path
     safetensors_path = _find_safetensors(model_dir)
+    if safetensors_path is not None:
+        slnc_path = safetensors_path.with_suffix(".slnc")
+        if slnc_path.exists():
+            from domains.infrastructure.slnc.parser import SLNCParser
+            parser = SLNCParser(str(slnc_path))
+            weights = parser.get_weights_dict_parallel()
+            logger.info("Loaded %d weights from %s (slnc mmap)", len(weights), model_id,
+                extra={"tag": "INFRA"})
+            return config, weights
+
     if safetensors_path is None:
-        raise FileNotFoundError(f"No .safetensors for {model_id}")
+        raise FileNotFoundError(f"No .safetensors or .slnc for {model_id}")
 
     from safetensors import safe_open
 

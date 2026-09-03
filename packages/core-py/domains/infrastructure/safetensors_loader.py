@@ -215,7 +215,7 @@ def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
 
     logger.info("Loading from .slnc cache: %s (memory-mapped)", slnc_path.name, extra={"tag": "INFRA"})
     parser = SLNCParser(str(slnc_path))
-    weights = parser.get_weights_dict()
+    weights = parser.get_weights_dict_parallel()
 
     # Apply dtype conversion if needed
     result = {}

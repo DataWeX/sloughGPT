@@ -95,7 +95,7 @@ class TextDataset:
 
 def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
     """Load GPT-2 weights as numpy arrays + arch config + tokenizer vocab."""
-    from safetensors import safe_open
+    from domains.infrastructure.slnc.parser import SLNCParser
 
     hf_path = Path.home() / ".cache/huggingface/hub/models--gpt2"
     snapshots = sorted((hf_path / "snapshots").glob("*"))
@@ -103,11 +103,19 @@ def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
         raise RuntimeError("GPT-2 not found in HuggingFace cache. Download first.")
     snap = snapshots[0]
 
-    weights = {}
-    for f in sorted(snap.glob("*.safetensors")):
-        with safe_open(str(f), framework="numpy") as sf:
-            for key in sf.keys():
-                weights[key] = sf.get_tensor(key)
+    # Try .slnc first (mmap, zero-copy)
+    slnc_path = snap / "model.slnc"
+    if slnc_path.exists():
+        parser = SLNCParser(str(slnc_path))
+        weights = parser.get_weights_dict_parallel()
+    else:
+        # Fall back to safetensors
+        from safetensors import safe_open
+        weights = {}
+        for f in sorted(snap.glob("*.safetensors")):
+            with safe_open(str(f), framework="numpy") as sf:
+                for key in sf.keys():
+                    weights[key] = sf.get_tensor(key)
 
     arch = build_arch("gpt2", {}, set(weights.keys()))
     rw = pre_extract_weights(arch, weights)
