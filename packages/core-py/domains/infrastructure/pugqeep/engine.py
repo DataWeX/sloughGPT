@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from .config import RestartPolicy
+
 logger = logging.getLogger("slo.pugqeep.engine")
 
 _MSG_READY = "__READY__"

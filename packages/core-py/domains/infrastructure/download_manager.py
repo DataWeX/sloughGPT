@@ -369,11 +369,11 @@ class DownloadManager:
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
             size_str = ""
-            if total_est > 0:
-                if total_est > 1e9:
-                    size_str = f" ({total_est / 1e9:.1f}GB)"
-                elif total_est > 1e6:
-                    size_str = f" ({total_est / 1e6:.0f}MB)"
+            if total_bytes_hint > 0:
+                if total_bytes_hint > 1e9:
+                    size_str = f" ({total_bytes_hint / 1e9:.1f}GB)"
+                elif total_bytes_hint > 1e6:
+                    size_str = f" ({total_bytes_hint / 1e6:.0f}MB)"
             get_event_buffer().record("DOWNLOAD", f"{model_id} started{size_str}")
         except Exception:
             pass

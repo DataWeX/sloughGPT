@@ -16,8 +16,10 @@ from __future__ import annotations
 import os
 import sys
 import termios
+import threading
 import time
 import tty
+from typing import Any, Callable
 
 
 # ── Raw key reading ──────────────────────────────────────────────────────────
@@ -37,6 +39,8 @@ _KEY_CTRL_A = "ctrl_a"
 _KEY_CTRL_E = "ctrl_e"
 _KEY_PAGE_UP = "page_up"
 _KEY_PAGE_DOWN = "page_down"
+_KEY_SPACE = "space"
+_KEY_TAB = "tab"
 _KEY_CHAR = "char"
 
 
@@ -54,6 +58,20 @@ def _terminal_height() -> int:
         return os.get_terminal_size().lines
     except (AttributeError, ValueError, OSError):
         return 24
+
+
+def _truncate(text: str, width: int) -> str:
+    """Truncate *text* to *width* columns, adding an ellipsis when cut."""
+    if width <= 0:
+        return ""
+    if len(text) <= width:
+        return text
+    return text[: max(0, width - 1)] + "…"
+
+
+def _dash_row(widths: list[int]) -> str:
+    """Render a box-drawing dash separator row matching *widths*."""
+    return "  ".join("\u2500" * w for w in widths)
 
 
 class _RawKey:
@@ -2814,7 +2832,9 @@ class InteractivePrompt:
             bar_w = 20
             def _bar(val: int, color: str) -> str:
                 filled = int(val / 255 * bar_w)
-                return f"\u2588{color}{'\u2588' * filled}{_RESET}\u2591{' ' * (bar_w - filled)}"
+                block = "\u2588" * filled
+                gap = " " * (bar_w - filled)
+                return f"\u2588{color}{block}{_RESET}\u2591{gap}"
             r_bar = _bar(r, _RED if focus == 0 else "")
             g_bar = _bar(g, _GREEN if focus == 1 else "")
             b_bar = _bar(b, _CYAN if focus == 2 else "")
@@ -3217,7 +3237,7 @@ class InteractivePrompt:
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}")
             lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths))}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for i in range(min(max_visible, len(rows))):
                 idx = scroll + i
                 if idx >= len(rows): break
@@ -3481,7 +3501,7 @@ class InteractivePrompt:
             lines: list[str] = []
             lines.append(f"{_ERASE_LINE}\r  {_BOLD}{_CYAN}{title}{_RESET}  {_DIM}(Tab: cell  Enter: edit/save  Esc: done){_RESET}")
             lines.append(f"{_ERASE_LINE}\r  {'  '.join(f'{_BOLD}{h.ljust(w)}{_RESET}' for h, w in zip(headers, widths))}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for r_idx, row in enumerate(rows):
                 cells = []
                 for c_idx in range(min(len(widths), len(row))):
@@ -7088,7 +7108,7 @@ class InteractivePrompt:
                 else:
                     hdr_parts.append(f"{_BOLD}{h.ljust(w)}{_RESET}")
             lines.append(f"{_ERASE_LINE}\r  {'  '.join(hdr_parts)}")
-            lines.append(f"{_ERASE_LINE}\r  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+            lines.append(f"{_ERASE_LINE}\r  {_DIM}{_dash_row(widths)}{_RESET}")
             for i in range(min(max_visible, len(sorted_rows))):
                 idx = scroll + i
                 if idx >= len(sorted_rows): break
@@ -7202,7 +7222,7 @@ class InteractivePrompt:
 
         header_str = "  ".join(f"{_BOLD}{h.ljust(w)}{_RESET}" for h, w in zip(headers, widths))
         lines.append(f"  {_BOLD}{header_str}{_RESET}")
-        lines.append(f"  {_DIM}{'  '.join('\u2500' * w for w in widths)}{_RESET}")
+        lines.append(f"  {_DIM}{_dash_row(widths)}{_RESET}")
 
         for idx, row in enumerate(rows):
             color = _DIM if idx % 2 == 1 else ""
@@ -7238,7 +7258,9 @@ class InteractivePrompt:
 
         header = f"  {_DIM}{left_label:^{col_w}}{_RESET}  \u2502  {_DIM}{right_label:^{col_w}}{_RESET}"
         self._io.write(header)
-        sep = f"  {'  \u2500' * col_w}\u2500  \u253c\u2500  {'\u2500  ' * col_w}\u2500"
+        left = "  \u2500" * col_w
+        right = "\u2500  " * col_w
+        sep = f"  {left}\u2500  \u253c\u2500  {right}\u2500"
         self._io.write(f"{_DIM}{sep}{_RESET}")
 
         max_len = max(len(left_lines), len(right_lines))

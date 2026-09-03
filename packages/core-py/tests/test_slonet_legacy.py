@@ -1832,7 +1832,7 @@ class TestSloNetMiscMethods:
                 return None
         monkeypatch.setattr("domains.slolib.gpu.get_accelerator", lambda: _HasClear())
         slonet._invalidate_gpu_cache()
-        monkeypatch.setattr("domains.slolib.gpu.get_accelerator", _boom if False else (lambda: (_ for _ in ()).throw(RuntimeError("no gpu"))))
+        monkeypatch.setattr("domains.slolib.gpu.get_accelerator", lambda: (_ for _ in ()).throw(RuntimeError("no gpu")))
         slonet._invalidate_gpu_cache()
 
 

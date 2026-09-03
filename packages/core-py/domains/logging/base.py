@@ -20,7 +20,7 @@ import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 
 class LogLevel(Enum):

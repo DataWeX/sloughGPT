@@ -402,7 +402,7 @@ class MultimodalRouter:
             t0 = time.time()
             text = await asyncio.to_thread(trainer.generate, video_path=req.video_path, max_len=req.max_len, temperature=req.temperature)
             return success_response(data={"text": text, "checkpoint": latest["name"], "elapsed_ms": round((time.time() - t0) * 1000, 1)})
-        except HTTPException:
+        except HTTPException as e:
             classify_and_raise(e, source="multimodal.video_infer")
         except Exception as e:
             logger.warning("Multimodal video generate failed: %s", e)
@@ -734,7 +734,7 @@ class MultimodalRouter:
             await asyncio.to_thread(trainer.load_checkpoint, match[0]["path"])
             safe_audit_log("multimodal.checkpoint.load", resource=name)
             return success_response(data={"status": "loaded", "checkpoint": name})
-        except HTTPException:
+        except HTTPException as exc:
             classify_and_raise(exc, source="multimodal._find_checkpoint")
         except Exception as e:
             logger.warning("Multimodal load checkpoint failed: %s", e)
@@ -763,7 +763,7 @@ class MultimodalRouter:
                 raise_error(f"Checkpoint '{name}' not found", "E_NOT_FOUND")
             safe_audit_log("multimodal.checkpoint.delete", resource=name)
             return success_response(data={"status": "deleted", "checkpoint": name})
-        except HTTPException:
+        except HTTPException as e:
             classify_and_raise(e, source="multimodal._find_and_delete")
         except Exception as e:
             logger.warning("Multimodal delete checkpoint failed: %s", e)

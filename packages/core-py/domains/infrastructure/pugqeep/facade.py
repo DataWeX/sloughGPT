@@ -41,7 +41,7 @@ from .store import MemoryStore, JSONStore, DirectoryStore
 from .dedup import PointDeduplicator, PointLibrarySync
 from .queue import ModelQueue
 from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
-from .engine import Engine, Process, Stem, ProcessStatus, StemStatus, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
+from .engine import Engine, Process, Stem, Tree as EngineTree, ProcessStatus, StemStatus, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
 
 logger = logging.getLogger("slo.pugqeep")
 

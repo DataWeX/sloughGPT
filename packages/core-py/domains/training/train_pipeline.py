@@ -1302,6 +1302,11 @@ class SloughGPTTrainer:
 
         self._is_training = False
 
+        # final_loss: prefer best eval loss, fall back to last train loss
+        final_loss = self._best_val_loss
+        if final_loss is None or (isinstance(final_loss, float) and final_loss == float("inf")):
+            final_loss = self._last_train_loss
+
         # Record dashboard event
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
@@ -1309,11 +1314,6 @@ class SloughGPTTrainer:
             get_event_buffer().record("TRAIN", f"completed step={self.global_step} loss={final_loss_str}")
         except Exception:
             pass
-
-        # final_loss: prefer best eval loss, fall back to last train loss
-        final_loss = self._best_val_loss
-        if final_loss is None or (isinstance(final_loss, float) and final_loss == float("inf")):
-            final_loss = self._last_train_loss
         checkpoint_name = ""
         model_path = ""
         # Prefer best model path (set on eval improvement) over last checkpoint

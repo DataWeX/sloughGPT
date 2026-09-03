@@ -34,7 +34,7 @@ import shutil
 import threading
 import time
 from dataclasses import dataclass, field, asdict
-from typing import Any
+from typing import Any, Callable
 
 from .interactive import InteractivePrompt
 

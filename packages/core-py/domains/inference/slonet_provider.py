@@ -24,7 +24,7 @@ Features:
 import threading
 import time
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple, Union, Any
+from typing import AsyncIterator, Optional, Dict, List, Tuple, Union, Any
 import numpy as np
 
 from domains.infrastructure.structured_log import StructuredLogger

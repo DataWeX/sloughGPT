@@ -6,6 +6,7 @@ documented under *Checkpoint vocabulary* in ``docs/policies/CONTRIBUTING.md``.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Optional, Tuple, Dict
 
 from .schemas import TrainDatasetRef

@@ -45,6 +45,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+logger = logging.getLogger(__name__)
+
 # ── Correlation ID via contextvars (thread-safe, async-safe) ──────────
 
 _request_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(

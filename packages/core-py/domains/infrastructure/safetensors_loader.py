@@ -11,6 +11,7 @@ Usage:
 
 import json
 import logging
+import struct
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 

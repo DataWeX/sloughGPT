@@ -24,7 +24,7 @@ from infrastructure.shell_sandbox import validate_command, ShellSecurityError
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
 from domains.shell.runtime import DaitRuntime
-from schemas.common import safe_audit_log, classify_and_raise
+from schemas.common import raise_error, safe_audit_log, classify_and_raise
 
 logger = logging.getLogger("slo.api.shell")
 

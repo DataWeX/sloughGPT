@@ -18,6 +18,7 @@ from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
 from domains.shared import find_repo_root
+from domains.inference.forward_pass import ForwardPassResult
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("slo.slonet")
@@ -4730,7 +4731,6 @@ class SloTransformer(SloNet):
 
     def forward_pass(self, input_ids: "np.ndarray") -> "ForwardPassResult":
         """Unified forward pass interface for NPU integration."""
-        from domains.inference.forward_pass import ForwardPassResult
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
         logits, _ = self.forward(input_ids)

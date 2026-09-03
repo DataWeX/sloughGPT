@@ -153,6 +153,7 @@ class RssSource:
 
     def read(self) -> Iterator[Record]:
         import urllib.request
+        import feedparser
         try:
             req = urllib.request.Request(self.feed_url, headers={"User-Agent": "sloughgpt-culler/1.0"})
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:

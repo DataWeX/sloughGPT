@@ -37,6 +37,8 @@ from typing import Any
 from .runtime import DaitRuntime
 from .commands import ShellCommands
 from .console import Console
+from .cmds import CmdModule
+from .io import ShellIO
 from .state import ShellState
 from .cmds.linux import LinuxCommandsMixin
 
