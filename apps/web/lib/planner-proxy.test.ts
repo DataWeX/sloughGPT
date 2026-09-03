@@ -66,7 +66,7 @@ describe('proxyRequest', () => {
 
     const res = await proxyRequest('/board')
     expect(res.status).toBe(503)
-    expect(res.body.error).toContain('backend unavailable')
+    expect((res.body as unknown as Record<string, string>).error).toContain('backend unavailable')
   })
 
   it('preserves backend error status codes', async () => {
