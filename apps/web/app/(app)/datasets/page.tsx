@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, EmptyCard, cn } from '@slough
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { DatasetListSkeleton } from '@/components/ui/PageSkeletons'
 import { IconRefresh, IconPlus, IconTrash, IconChevronDown, IconDownload, IconPlay } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
@@ -312,11 +313,7 @@ export default function DatasetsPage() {
         )}
 
         {loading ? (
-          <div className="grid gap-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 rounded-lg" />
-            ))}
-          </div>
+          <DatasetListSkeleton />
         ) : fetchError && datasets.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center">

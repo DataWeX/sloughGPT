@@ -58,9 +58,9 @@ class TestDashboard:
 
     def test_has_nav(self, page: Page):
         go(page, "/")
-        links = page.query_selector_all("a")
-        ok("dashboard_has_nav", len(links) > 3, f"links={len(links)}")
-        assert len(links) > 3
+        links = page.get_by_role("link")
+        ok("dashboard_has_nav", links.count() > 3, f"links={links.count()}")
+        assert links.count() > 3
 
 
 # ── Navigation ────────────────────────────────────────────────
@@ -105,22 +105,19 @@ class TestChat:
 
     def test_has_input(self, page: Page):
         go(page, "/chat")
-        inputs = page.query_selector_all("input, textarea")
-        ok("chat_has_input", len(inputs) > 0, f"found={len(inputs)}")
-        assert len(inputs) > 0
+        inp = page.locator("textarea:visible, input[type='text']:visible").first
+        ok("chat_has_input", inp.count() > 0)
+        assert inp.count() > 0
 
     def test_type_message(self, page: Page):
         go(page, "/chat")
-        # Try visible inputs first, then any input
-        inputs = page.query_selector_all("textarea:visible, input[type='text']:visible")
-        if not inputs:
-            inputs = page.query_selector_all("input, textarea")
-        if not inputs:
+        inp = page.locator("textarea:visible, input[type='text']:visible").first
+        if inp.count() == 0:
             ok("chat_type_message", False, "no input found")
             pytest.skip("no input")
-        inputs[0].click()
-        inputs[0].fill("Hello test message")
-        val = inputs[0].input_value()
+        inp.click()
+        inp.fill("Hello test message")
+        val = inp.input_value()
         ok("chat_type_message", "test message" in val, f"val={val[:40]}")
         assert "test message" in val
 
@@ -132,6 +129,12 @@ class TestTraining:
         body = go(page, "/training")
         ok("training_loads", "train" in body.lower(), f"len={len(body)}")
         assert "train" in body.lower()
+
+    def test_import_button(self, page: Page):
+        go(page, "/training")
+        btn = page.get_by_role("button", name="+ Import").first
+        ok("training_import_button", btn.count() > 0)
+        assert btn.count() > 0
 
 
 # ── Settings ──────────────────────────────────────────────────
@@ -188,89 +191,67 @@ class TestKnowledge:
 class TestDatasetsImport:
     def test_loads(self, page: Page):
         body = go(page, "/datasets")
-        has_content = len(body) > 50
-        ok("datasets_loads", has_content, f"len={len(body)}")
-        assert has_content
+        ok("datasets_loads", len(body) > 50, f"len={len(body)}")
+        assert len(body) > 50
 
     def test_import_button_exists(self, page: Page):
         go(page, "/datasets")
-        buttons = page.query_selector_all("button")
-        import_btns = [b for b in buttons if "import" in (b.inner_text() or "").lower()]
-        ok("datasets_import_button", len(import_btns) > 0, f"found={len(import_btns)}")
-        assert len(import_btns) > 0
+        btn = page.get_by_role("button", name="Import").first
+        ok("datasets_import_button", btn.count() > 0)
+        assert btn.count() > 0
 
     def test_import_dialog_opens(self, page: Page):
         go(page, "/datasets")
-        buttons = page.query_selector_all("button")
-        import_btn = None
-        for b in buttons:
-            txt = (b.inner_text() or "").lower()
-            if "import" in txt:
-                import_btn = b
-                break
-        if not import_btn:
-            ok("datasets_import_dialog_opens", False, "no import button")
-            pytest.skip("no import button")
-        import_btn.click()
+        page.get_by_role("button", name="Import").first.click()
         time.sleep(0.5)
-        dialogs = page.query_selector_all("[role='dialog'], .modal, [data-state='open']")
-        ok("datasets_import_dialog_opens", len(dialogs) > 0, f"found={len(dialogs)}")
-        assert len(dialogs) > 0
+        dialog = page.get_by_role("dialog")
+        ok("datasets_import_dialog_opens", dialog.count() > 0)
+        assert dialog.count() > 0
 
-    def test_import_has_kaggle_tab(self, page: Page):
+    def test_kaggle_tab_exists(self, page: Page):
         go(page, "/datasets")
-        buttons = page.query_selector_all("button")
-        import_btn = None
-        for b in buttons:
-            txt = (b.inner_text() or "").lower()
-            if "import" in txt:
-                import_btn = b
-                break
-        if not import_btn:
-            ok("datasets_import_has_kaggle_tab", False, "no import button")
-            pytest.skip("no import button")
-        import_btn.click()
+        page.get_by_role("button", name="Import").first.click()
         time.sleep(0.5)
-        tabs = page.query_selector_all("[role='tab'], button")
-        kaggle_tab = None
-        for t in tabs:
-            txt = (t.inner_text() or "").lower()
-            if "kaggle" in txt:
-                kaggle_tab = t
-                break
-        ok("datasets_import_has_kaggle_tab", kaggle_tab is not None, f"tabs={[t.inner_text() for t in tabs[:5]]}")
-        assert kaggle_tab is not None
+        kaggle = page.locator("button:has-text('Kaggle'):visible").first
+        ok("datasets_kaggle_tab_exists", kaggle.count() > 0)
+        assert kaggle.count() > 0
 
-    def test_kaggle_presets_visible(self, page: Page):
+    def test_kaggle_tab_clicks(self, page: Page):
         go(page, "/datasets")
-        buttons = page.query_selector_all("button")
-        import_btn = None
-        for b in buttons:
-            txt = (b.inner_text() or "").lower()
-            if "import" in txt:
-                import_btn = b
-                break
-        if not import_btn:
-            ok("datasets_kaggle_presets_visible", False, "no import button")
-            pytest.skip("no import button")
-        import_btn.click()
+        page.get_by_role("button", name="Import").first.click()
         time.sleep(0.5)
-        tabs = page.query_selector_all("[role='tab'], button")
-        kaggle_tab = None
-        for t in tabs:
-            txt = (t.inner_text() or "").lower()
-            if "kaggle" in txt:
-                kaggle_tab = t
-                break
-        if not kaggle_tab:
-            ok("datasets_kaggle_presets_visible", False, "no kaggle tab")
-            pytest.skip("no kaggle tab")
-        kaggle_tab.click()
+        page.locator("button:has-text('Kaggle'):visible").first.click(force=True)
         time.sleep(0.5)
+        inp = page.locator("input[placeholder='username/dataset-name']:visible")
+        ok("datasets_kaggle_tab_clicks", inp.count() > 0)
+        assert inp.count() > 0
+
+    def test_kaggle_input_fills(self, page: Page):
+        go(page, "/datasets")
+        page.get_by_role("button", name="Import").first.click()
+        time.sleep(0.5)
+        page.locator("button:has-text('Kaggle'):visible").first.click(force=True)
+        time.sleep(0.5)
+        inp = page.locator("input[placeholder='username/dataset-name']:visible")
+        inp.fill("heptapod/titanic")
+        time.sleep(0.3)
+        ok("datasets_kaggle_input_fills", inp.input_value() == "heptapod/titanic")
+        assert inp.input_value() == "heptapod/titanic"
+
+    def test_kaggle_import_success(self, page: Page):
+        go(page, "/datasets")
+        page.get_by_role("button", name="Import").first.click()
+        time.sleep(0.5)
+        page.locator("button:has-text('Kaggle'):visible").first.click(force=True)
+        time.sleep(0.5)
+        page.locator("input[placeholder='username/dataset-name']:visible").fill("heptapod/titanic")
+        time.sleep(0.3)
+        page.locator("button:has-text('Import'):visible").last.click()
+        time.sleep(10)
         body = page.inner_text("body")
-        has_presets = any(w in body.lower() for w in ["titanic", "iris", "pokemon", "airbnb"])
-        ok("datasets_kaggle_presets_visible", has_presets, f"body_sample={body[:200]}")
-        assert has_presets
+        success = "downloaded" in body.lower() or "imported" in body.lower()
+        ok("datasets_kaggle_import_success", success, f"body_contains={'downloaded' in body.lower()}")
+        assert success
 
 
 # ── Redirects ─────────────────────────────────────────────────

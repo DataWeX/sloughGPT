@@ -646,13 +646,7 @@ export default function KnowledgePage() {
                   </span>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs px-2.5"
-                    onClick={handleRAGSync}
-                    disabled={ragSyncing}
-                  >
+                  <Button size="sm" variant="outline" className="h-7 text-xs px-2.5" onClick={handleRAGSync} disabled={ragSyncing}>
                     {ragSyncing ? (
                       <span className="flex items-center gap-1">
                         <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -660,21 +654,10 @@ export default function KnowledgePage() {
                       </span>
                     ) : 'Sync'}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs px-2.5"
-                    onClick={() => setShowRagDocs(!showRagDocs)}
-                  >
+                  <Button size="sm" variant="outline" className="h-7 text-xs px-2.5" onClick={() => setShowRagDocs(!showRagDocs)}>
                     {showRagDocs ? 'Hide' : 'Sources'}
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs px-2.5 text-destructive hover:text-destructive"
-                    onClick={handleRAGClear}
-                    disabled={ragClearing}
-                  >
+                  <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 text-destructive hover:text-destructive" onClick={handleRAGClear} disabled={ragClearing}>
                     {ragClearing ? 'Clearing...' : 'Clear'}
                   </Button>
                 </div>
@@ -697,8 +680,8 @@ export default function KnowledgePage() {
                       </div>
                     </div>
                   ))}
-          </div>
-        ) : null}
+                </div>
+              )}
               {showRagDocs && ragDocs.length === 0 && (
                 <p className="mt-3 text-[11px] text-muted-foreground">No sources yet.</p>
               )}

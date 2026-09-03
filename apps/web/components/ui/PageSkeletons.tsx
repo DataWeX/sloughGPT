@@ -25,9 +25,7 @@ export function KnowledgeCategoryChartSkeleton() {
         <Skeleton className="h-4 w-32 mb-3" />
         <div className="flex items-end gap-1 h-24">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex-1 space-y-1">
-              <Skeleton className="rounded-t" style={{ height: `${Math.max(20, 60 - i * 7)}%` }} />
-            </div>
+            <Skeleton key={i} className="flex-1 rounded-t" />
           ))}
         </div>
       </CardContent>
@@ -45,7 +43,7 @@ export function KnowledgeTopicsSkeleton() {
             <div key={i} className="flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
               <div className="flex-1 h-3 bg-muted/50 rounded-full overflow-hidden">
-                <Skeleton className="h-full rounded-full" style={{ width: `${Math.max(20, 80 - i * 12)}%` }} />
+                <Skeleton className="h-full rounded-full w-3/4" />
               </div>
               <Skeleton className="h-3 w-6" />
             </div>
