@@ -37,6 +37,24 @@ class NPUDevice:
     def name(self) -> str:
         return self._name
 
+    def info(self) -> dict:
+        return {
+            "name": self._name,
+            "type": "npu",
+            "compute_ops": self._compute.list_commands(),
+            "models": len(self._models),
+            "names": list(self._models.keys()),
+            "default": self._default_model,
+            "checkpoints": list(self._checkpoints.keys()),
+        }
+
+    def call(self, method: str, *args: Any) -> Any:
+        """VM Device interface — delegates to ioctl."""
+        result = self.ioctl(method, *args)
+        if result.success:
+            return result.value
+        raise Exception(result.error)
+
     # ── ioctl interface ───────────────────────────────────────────────────
 
     def ioctl(self, command: str | IoctlCommand, *args: Any) -> SyscallResult:
@@ -193,17 +211,6 @@ class NPUDevice:
         elif isinstance(input_data, (list, np.ndarray)):
             return self._execute_tokens(provider, input_data, **kwargs)
         return {"data": input_data}
-
-    def info(self) -> dict:
-        """Get device info."""
-        return {
-            "device": self._name,
-            "compute_ops": self._compute.list_commands(),
-            "models": len(self._models),
-            "names": list(self._models.keys()),
-            "default": self._default_model,
-            "checkpoints": list(self._checkpoints.keys()),
-        }
 
     def batch(self, model_name: str, inputs: list, **kwargs) -> dict:
         """Execute multiple inputs."""

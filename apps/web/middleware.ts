@@ -5,7 +5,6 @@ const IGNORE_PATHS = ['/_next', '/favicon', '/sw.js', '/workbox']
 
 const REDIRECTS: Record<string, string> = {
   '/companion': '/souls',
-  '/voice': '/souls',
   '/evaluate': '/benchmark',
   '/compare': '/benchmark',
   '/lora-eval': '/benchmark',
@@ -22,13 +21,19 @@ const REDIRECTS: Record<string, string> = {
   '/collections': '/datasets',
   '/self-train': '/training',
   '/learn': '/training',
+  '/auto-train': '/training',
   '/rate-limit': '/monitoring',
   '/admin': '/settings',
   '/auth': '/settings',
   '/export': '/settings',
-  '/images': '/files',
-  '/session': '/shell',
-  '/vm': '/shell',
+  '/errors': '/monitoring',
+  '/security': '/monitoring',
+  '/images': '/developer',
+  '/session': '/chat',
+  '/files': '/developer',
+  '/voice': '/developer',
+  '/shell': '/developer',
+  '/vm': '/developer',
   '/workflow': '/feedback',
 }
 

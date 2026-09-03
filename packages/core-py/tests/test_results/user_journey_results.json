@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "test": "training_loads",
+    "passed": true,
+    "detail": "len=1451"
+  },
+  {
+    "test": "training_import_button",
+    "passed": true,
+    "detail": ""
+  }
+]

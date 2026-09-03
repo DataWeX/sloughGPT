@@ -119,6 +119,13 @@ class TensorDevice:
             "commands": len(self._ops),
         }
 
+    def call(self, method: str, *args: Any) -> Any:
+        """VM Device interface — delegates to ioctl."""
+        result = self.ioctl(method, *args)
+        if result.success:
+            return result.value
+        raise Exception(result.error)
+
     # ── ioctl interface ───────────────────────────────────────────────────
 
     def ioctl(self, command: str | IoctlCommand, *args: Any) -> SyscallResult:

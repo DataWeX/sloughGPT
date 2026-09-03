@@ -31,6 +31,7 @@ export interface HomePageData {
   inferenceCount: number | null
   healthSummary: string | null
   feedbackStats: FeedbackStats | null
+  loading: boolean
   /** Per-section error flags — true if that section's fetch failed */
   errors: {
     models: boolean
@@ -69,8 +70,8 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const ready = useApiReady()
 
   // Use shared query cache for models and souls — eliminates 2 redundant API calls.
-  const { data: modelsData } = useModels()
-  const { data: soulsData } = useSouls()
+  const { data: modelsData, isLoading: modelsLoading } = useModels()
+  const { data: soulsData, isLoading: soulsLoading } = useSouls()
 
   // Derive model count from the query cache instead of a separate API call.
   useEffect(() => {
@@ -156,6 +157,8 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     return () => { cancelled.current = true }
   }, [ready])
 
+  const loading = modelsLoading || soulsLoading || health === null
+
   return {
     modelCount, checkpointCount,
     modelStatus, currentSoul,
@@ -165,6 +168,7 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
     setTestRunning, setTestResponse,
     setKnowledgeCount, inferenceCount,
     healthSummary, feedbackStats,
+    loading,
     errors,
   }
 }

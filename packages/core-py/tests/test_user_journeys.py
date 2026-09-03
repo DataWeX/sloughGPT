@@ -43,8 +43,12 @@ def page(browser):
 
 def go(page: Page, path: str) -> str:
     """Navigate and return body text."""
-    page.goto(f"{BASE}{path}", wait_until="domcontentloaded", timeout=15000)
-    time.sleep(1)
+    page.goto(f"{BASE}{path}", wait_until="load", timeout=20000)
+    try:
+        page.wait_for_function("() => !document.body.innerText.includes('Connecting...')", timeout=10000)
+    except Exception:
+        pass
+    time.sleep(0.5)
     return page.inner_text("body")
 
 
@@ -197,42 +201,47 @@ class TestDatasetsImport:
 
     def test_import_button_exists(self, page: Page):
         go(page, "/datasets")
+        time.sleep(1)
         btn = page.get_by_role("button", name="Import").first
         ok("datasets_import_button", btn.count() > 0)
         assert btn.count() > 0
 
     def test_import_dialog_opens(self, page: Page):
         go(page, "/datasets")
+        time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
-        time.sleep(0.5)
+        time.sleep(1)
         dialog = page.get_by_role("dialog")
         ok("datasets_import_dialog_opens", dialog.count() > 0)
         assert dialog.count() > 0
 
-    def test_kaggle_tab_exists(self, page: Page):
+    def test_kaggle_radio_exists(self, page: Page):
         go(page, "/datasets")
+        time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
-        time.sleep(0.5)
-        kaggle = page.get_by_role("button", name="Kaggle")
-        ok("datasets_kaggle_tab_exists", kaggle.count() > 0)
+        time.sleep(1)
+        kaggle = page.get_by_role("radio", name="Kaggle: Download from Kaggle")
+        ok("datasets_kaggle_radio_exists", kaggle.count() > 0)
         assert kaggle.count() > 0
 
-    def test_kaggle_tab_clicks(self, page: Page):
+    def test_kaggle_radio_clicks(self, page: Page):
         go(page, "/datasets")
+        time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
-        time.sleep(0.5)
-        page.get_by_role("button", name="Kaggle").first.click(force=True)
-        time.sleep(0.5)
+        time.sleep(1)
+        page.get_by_role("radio", name="Kaggle: Download from Kaggle").first.click(force=True)
+        time.sleep(1)
         inp = page.locator("input[placeholder='username/dataset-name']")
-        ok("datasets_kaggle_tab_clicks", inp.count() > 0)
+        ok("datasets_kaggle_radio_clicks", inp.count() > 0)
         assert inp.count() > 0
 
     def test_kaggle_input_fills(self, page: Page):
         go(page, "/datasets")
+        time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
-        time.sleep(0.5)
-        page.get_by_role("button", name="Kaggle").first.click(force=True)
-        time.sleep(0.5)
+        time.sleep(1)
+        page.get_by_role("radio", name="Kaggle: Download from Kaggle").first.click(force=True)
+        time.sleep(1)
         inp = page.locator("input[placeholder='username/dataset-name']")
         inp.fill("heptapod/titanic")
         time.sleep(0.3)
@@ -244,16 +253,17 @@ class TestDatasetsImport:
         time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
-        page.get_by_role("button", name="Kaggle").first.click(force=True)
+        page.get_by_role("radio", name="Kaggle: Download from Kaggle").first.click(force=True)
         time.sleep(1)
         page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
         time.sleep(0.5)
         page.get_by_role("button", name="Import").last.click(force=True)
-        time.sleep(15)
+        page.wait_for_function("() => !document.body.innerText.includes('Importing...')", timeout=30000)
+        time.sleep(1)
         page.screenshot(path="/tmp/kaggle_e2e.png")
         body = page.inner_text("body")
         success = "downloaded" in body.lower() or "imported" in body.lower()
-        ok("datasets_kaggle_import_success", success, f"body_snippet={body[-200:]}")
+        ok("datasets_kaggle_import_success", success, f"body_snippet={body[-300:]}")
         assert success
 
 

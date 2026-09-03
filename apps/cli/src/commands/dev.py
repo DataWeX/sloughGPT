@@ -347,6 +347,7 @@ def cmd_dev(args):
 
     # ── Start API ────────────────────────────────────────
     env = os.environ.copy()
+    env["FORCE_COLOR"] = "1"
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
 
@@ -590,6 +591,7 @@ def _cmd_api_only(args):
     _update_status()
 
     env = os.environ.copy()
+    env["FORCE_COLOR"] = "1"
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
@@ -734,6 +736,7 @@ def _cmd_api_and_mobile(args):
 
     # ── Build env ─────────────────────────────────────────
     env = os.environ.copy()
+    env["FORCE_COLOR"] = "1"
     env["GIO_USE_PORTAL"] = "0"
 
     nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
@@ -946,6 +949,7 @@ def _cmd_api_and_web(args):
 
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
+    env["FORCE_COLOR"] = "1"
 
     # Suppress GNOME keyring warnings (epiphany secret storage)
     env["GIO_USE_PORTAL"] = "0"

@@ -84,12 +84,15 @@ def clear_log_context() -> None:
 # ── ANSI codes ────────────────────────────────────────────────────────
 
 _NO_COLOR = os.environ.get("NO_COLOR", "").strip() == "1"
+_FORCE_COLOR = os.environ.get("FORCE_COLOR", "").strip() == "1"
 _SLO_LOG_COLOR = os.environ.get("SLO_LOG_COLOR", "").strip().lower()
 
 
 def _color_enabled(stream=None) -> bool:
     if _NO_COLOR:
         return False
+    if _FORCE_COLOR:
+        return True
     if _SLO_LOG_COLOR in ("1", "true", "yes", "on"):
         return True
     if _SLO_LOG_COLOR in ("0", "false", "no", "off"):
