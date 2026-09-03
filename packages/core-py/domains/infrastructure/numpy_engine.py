@@ -51,41 +51,22 @@ if TYPE_CHECKING:
 
 def _load_weights(model_id: str) -> Tuple[dict, dict]:
     """Load config.json + weights from HF cache. Returns (config, weights)."""
-    from domains.infrastructure.safetensors_loader import _get_model_dir, _find_safetensors
+    from domains.infrastructure.safetensors_loader import _get_model_dir, _find_safetensors, load_model_config
 
     model_dir = _get_model_dir(model_id)
     if not model_dir.exists():
         raise FileNotFoundError(f"Model {model_id} not cached")
 
-    # Config
-    config_path = None
-    snapshots = model_dir / "snapshots"
-    if snapshots.exists():
-        for snap in snapshots.iterdir():
-            c = snap / "config.json"
-            if c.exists():
-                config_path = c
-                break
-    if config_path is None:
-        config_path = model_dir / "config.json"
-    if config_path is None or not config_path.exists():
-        raise FileNotFoundError(f"No config.json for {model_id}")
+    config = load_model_config(model_id)
 
-    with open(config_path) as f:
-        config = json.load(f)
-
-    # Weights — SLNC only
-    from pathlib import Path
+    # Weights — SLNC, auto-convert if needed
     safetensors_path = _find_safetensors(model_dir)
     if safetensors_path is None:
         raise FileNotFoundError(f"No model weights for {model_id}")
 
     slnc_path = safetensors_path.with_suffix(".slnc")
     if not slnc_path.exists():
-        raise FileNotFoundError(
-            f"No .slnc file for {model_id}. Convert first: "
-            f"python -m domains.infrastructure.slnc.compiler {model_id}"
-        )
+        _convert_to_slnc(safetensors_path, slnc_path, config)
 
     from domains.infrastructure.slnc.parser import SLNCParser
     parser = SLNCParser(str(slnc_path))
@@ -93,6 +74,42 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
     logger.info("Loaded %d weights from %s (slnc mmap)", len(weights), model_id,
         extra={"tag": "INFRA"})
     return config, weights
+
+
+def _convert_to_slnc(st_path, slnc_path, config):
+    """Convert safetensors to .slnc on first load."""
+    import struct
+
+    logger.info("Converting %s → .slnc", st_path.name, extra={"tag": "INFRA"})
+
+    weights = {}
+    with open(str(st_path), "rb") as f:
+        header_len = struct.unpack("<Q", f.read(8))[0]
+        header = json.loads(f.read(header_len))
+        for key, info in header.items():
+            if key.startswith("__"):
+                continue
+            dtype_str = info["dtype"]
+            offsets = info["data_offsets"]
+            f.seek(8 + header_len + offsets[0])
+            raw = f.read(offsets[1] - offsets[0])
+            if dtype_str == "BF16":
+                arr = np.frombuffer(raw, dtype=np.uint16)
+                f32 = np.zeros(len(arr), dtype=np.float32)
+                f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
+                weights[key] = f32.reshape(info["shape"])
+            elif dtype_str == "F32":
+                weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+            elif dtype_str == "F16":
+                weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
+            else:
+                weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+
+    from domains.infrastructure.slnc.compiler import SLNCCompiler
+    compiler = SLNCCompiler()
+    compiler.compile_from_dict(config, weights, str(slnc_path))
+    logger.info("Converted to .slnc: %s (%.1f MB)", slnc_path.name,
+                slnc_path.stat().st_size / 1e6, extra={"tag": "INFRA"})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
