@@ -81,10 +81,11 @@ describe('error-store', () => {
   })
 
   it('caps errors at 20', () => {
-    for (let i = 0; i < 25; i++) useErrorStore.getState().addError(`Error ${i}`)
+    const words = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet', 'Kilo', 'Lima', 'Mike', 'November', 'Oscar', 'Papa', 'Quebec', 'Romeo', 'Sierra', 'Tango', 'Uniform', 'Victor', 'Whiskey', 'Xray', 'Yankee']
+    for (let i = 0; i < 25; i++) useErrorStore.getState().addError(`Fail ${words[i]}`)
     expect(useErrorStore.getState().errors.length).toBe(20)
-    expect(useErrorStore.getState().errors[0].message).toBe('Error 24')
-    expect(useErrorStore.getState().errors[19].message).toBe('Error 5')
+    expect(useErrorStore.getState().errors[0].message).toBe('Fail Yankee')
+    expect(useErrorStore.getState().errors[19].message).toBe('Fail Foxtrot')
   })
 
   it('addGlobalError adds error via store getState', () => {

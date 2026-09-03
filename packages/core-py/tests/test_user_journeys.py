@@ -261,35 +261,32 @@ class TestDatasetsImport:
         time.sleep(0.3)
 
     def test_kaggle_import_success(self, page: Page):
-        # Use a fresh page to avoid stale state from previous tests
-        ctx = page.context
-        fresh = ctx.new_page()
-        fresh.goto(f"{BASE}/datasets", wait_until="load", timeout=20000)
+        # Reload to clear any stale state from prior tests
+        page.goto(f"{BASE}/datasets", wait_until="load", timeout=20000)
         try:
-            fresh.wait_for_function("() => !document.body.innerText.includes('Connecting...')", timeout=10000)
+            page.wait_for_function("() => !document.body.innerText.includes('Connecting...')", timeout=10000)
         except Exception:
             pass
         time.sleep(2)
-        fresh.get_by_role("button", name="Import").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(2)
-        kaggle_radio = fresh.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio = page.get_by_role("radio", name="Kaggle: Download from Kaggle").first
         kaggle_radio.focus()
         time.sleep(0.2)
         kaggle_radio.press("Space")
         time.sleep(1)
-        fresh.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
+        page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
         time.sleep(0.5)
-        fresh.get_by_role("button", name="Import").last.click(force=True)
-        for _ in range(15):
+        page.get_by_role("button", name="Import").last.click(force=True)
+        for _ in range(12):
             time.sleep(1)
-            body = fresh.inner_text("body")
+            body = page.inner_text("body")
             if "downloaded" in body.lower() or "failed" in body.lower() or "error" in body.lower():
                 break
-        fresh.screenshot(path="/tmp/kaggle_e2e.png")
-        body = fresh.inner_text("body")
+        page.screenshot(path="/tmp/kaggle_e2e.png")
+        body = page.inner_text("body")
         success = "downloaded" in body.lower()
         ok("datasets_kaggle_import_success", success, f"body_snippet={body[-200:]}")
-        fresh.close()
         assert success
 
 
