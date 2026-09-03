@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -136,9 +137,7 @@ _MAX_HEADER_LEN = 100 * 1024 * 1024  # 100 MB sanity limit for header length
 def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
     """Read a .safetensors file with the built-in raw parser.
 
-    Walks the binary format directly (8-byte header length + JSON header +
-    per-tensor data offsets) so no ``safetensors`` package is required.
-    Handles F32/F16/BF16; any other dtype is read as float32.
+    Uses mmap + parallel dtype conversion for faster loads on multi-core CPUs.
 
     Args:
         path: Path to the .safetensors file.
@@ -150,9 +149,10 @@ def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
     Raises:
         ValueError: If the file is corrupted or contains out-of-bounds offsets.
     """
+    import mmap
     import struct
+    from concurrent.futures import ThreadPoolExecutor
 
-    weights: Dict[str, np.ndarray] = {}
     file_size = path.stat().st_size
     with open(path, "rb") as f:
         raw_header_len = f.read(8)
@@ -176,6 +176,8 @@ def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
             raise ValueError(f"Truncated header JSON in {path.name}")
         header = json.loads(header_bytes)
 
+        # Build tensor info list (skip metadata)
+        tensor_infos = []
         for key, info in header.items():
             if key.startswith("__"):
                 continue
@@ -190,23 +192,43 @@ def _load_weights_raw(path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
                     f"Tensor '{key}' offsets [{start}, {end}] exceed file size "
                     f"({file_size}) in {path.name}"
                 )
-            f.seek(8 + header_len + start)
-            raw = f.read(end - start)
-            shape = info["shape"]
-            dtype_str = info.get("dtype", "F32")
-            if dtype_str == "BF16":
-                u16 = np.frombuffer(raw, dtype=np.uint16)
-                f32 = np.zeros(len(u16), dtype=np.float32)
-                f32.view(np.uint32)[:] = u16.astype(np.uint32) << 16
-                arr = f32.reshape(shape)
-            elif dtype_str == "F16":
-                arr = np.frombuffer(raw, dtype=np.float16).reshape(shape).astype(np.float32)
-            elif dtype_str == "F32":
-                arr = np.frombuffer(raw, dtype=np.float32).reshape(shape)
-            else:
-                arr = np.frombuffer(raw, dtype=np.float32).reshape(shape)
-            weights[key] = arr.astype(dtype)
-    return weights
+            tensor_infos.append((key, info, 8 + header_len + start, end - start))
+
+    # mmap the file for parallel random access
+    fd = os.open(str(path), os.O_RDONLY)
+    try:
+        mm = mmap.mmap(fd, 0, access=mmap.ACCESS_READ)
+        try:
+            data_offset = 8 + header_len
+
+            def _load_tensor(item):
+                key, info, file_start, size = item
+                raw = mm[file_start - data_offset : file_start - data_offset + size]
+                shape = info["shape"]
+                dtype_str = info.get("dtype", "F32")
+                if dtype_str == "BF16":
+                    u16 = np.frombuffer(raw, dtype=np.uint16)
+                    f32 = np.zeros(len(u16), dtype=np.float32)
+                    f32.view(np.uint32)[:] = u16.astype(np.uint32) << 16
+                    arr = f32.reshape(shape)
+                elif dtype_str == "F16":
+                    arr = np.frombuffer(raw, dtype=np.float16).reshape(shape).astype(np.float32)
+                elif dtype_str == "F32":
+                    arr = np.frombuffer(raw, dtype=np.float32).reshape(shape)
+                else:
+                    arr = np.frombuffer(raw, dtype=np.float32).reshape(shape)
+                return key, arr.astype(dtype) if arr.dtype != dtype else arr
+
+            weights = {}
+            with ThreadPoolExecutor() as pool:
+                for key, arr in pool.map(_load_tensor, tensor_infos):
+                    weights[key] = arr
+
+            return weights
+        finally:
+            mm.close()
+    finally:
+        os.close(fd)
 
 
 def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
@@ -215,7 +237,7 @@ def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> Dict[str, np.ndarray]:
 
     logger.info("Loading from .slnc cache: %s (memory-mapped)", slnc_path.name, extra={"tag": "INFRA"})
     parser = SLNCParser(str(slnc_path))
-    weights = parser.get_weights_dict()
+    weights = parser.get_weights_dict_parallel()
 
     # Apply dtype conversion if needed
     result = {}
