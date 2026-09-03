@@ -68,6 +68,13 @@ class TreeStatus(Enum):
     STOPPED = "stopped"
 
 
+class SchedulingPolicy(Enum):
+    """How the engine assigns ungrouped processes to trees."""
+
+    ROUND_ROBIN = "round_robin"
+    FIRST = "first"
+
+
 @dataclass
 class Process:
     """A unit of execution with lifecycle.
@@ -982,6 +989,7 @@ class Engine:
         self._completed: List[Process] = []
         self._dispatch_batch_size: int = 8
         self._round_robin_idx: int = 0
+        self._scheduling_policy: SchedulingPolicy = SchedulingPolicy.ROUND_ROBIN
         self._dependents: Dict[str, List[str]] = {}
         self._spawn_queue = None
         self._metrics = EngineMetrics()
@@ -1002,6 +1010,12 @@ class Engine:
     @property
     def metrics(self) -> EngineMetrics:
         return self._metrics
+
+    def set_scheduling(self, policy: SchedulingPolicy) -> None:
+        """Set how ungrouped processes are routed to trees."""
+        if not isinstance(policy, SchedulingPolicy):
+            raise TypeError("policy must be a SchedulingPolicy")
+        self._scheduling_policy = policy
 
     def spawn(self, fn: Callable[..., Any], *args: Any,
               name: str = "", tree: Optional[str] = None,

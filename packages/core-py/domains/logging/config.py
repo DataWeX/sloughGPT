@@ -348,6 +348,138 @@ def _derive_op(record: logging.LogRecord) -> str:
     return "sys.info"
 
 
+# ── Unified formatter ─────────────────────────────────────────────────
+
+class SloFormatter(logging.Formatter):
+    """Single unified formatter for console and file output.
+
+    Usage:
+        SloFormatter()              — human-readable with auto-detected colors
+        SloFormatter(colors=False)  — human-readable without colors
+        SloFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
+
+    Console (fmt="human"):
+        HH:MM:SS LVL [OP] logger message key=val
+
+    File (fmt="json"):
+        {"v":1,"ts":"...","lvl":"INFO","op":"model.load","corr":"abc1",...}
+    """
+
+    def __init__(self, colors: bool = True, fmt: str = "human"):
+        super().__init__()
+        self._colors = colors
+        self._fmt = fmt
+
+    def format(self, record: logging.LogRecord) -> str:
+        if self._fmt == "json":
+            return self._format_json(record)
+        return self._format_human(record)
+
+    def _format_human(self, record: logging.LogRecord) -> str:
+        parts = []
+        c = self._colors
+
+        # Timestamp
+        ts = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+        parts.append(f"{_A.GREY}{ts}{_A.RESET}" if c else ts)
+
+        # Level badge
+        color, abbrev = _LEVEL_STYLE.get(record.levelno, (_A.WHITE, "???"))
+        parts.append(f"{color}{_A.BOLD}{abbrev:>3}{_A.RESET}" if c else abbrev.rjust(3))
+
+        # Tag — prefer op, fall back to legacy tag
+        op = getattr(record, "op", None)
+        if op:
+            domain = op.split(".")[0].upper() if "." in op else op.upper()
+            tc, tt = _TAG_STYLE.get(domain, (_A.CYAN, domain))
+            parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
+        else:
+            tag = getattr(record, "tag", None)
+            if tag:
+                tc, tt = _TAG_STYLE.get(tag, (_A.CYAN, tag))
+                parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
+
+        # Logger name (last component only)
+        logger_name = record.name.split(".")[-1] if record.name else ""
+        if logger_name:
+            parts.append(f"{_A.GREY}{_A.DIM}{logger_name}{_A.RESET}" if c else logger_name)
+
+        # Message
+        parts.append(record.getMessage())
+
+        # Request ID
+        rid = getattr(record, "request_id", None)
+        if rid:
+            parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
+
+        # Structured context
+        ctx = _collect_extras(record)
+        if ctx:
+            ctx_parts = []
+            for k, v in ctx.items():
+                if c:
+                    ctx_parts.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
+                else:
+                    ctx_parts.append(f"{k}={v}")
+            parts.append(" ".join(ctx_parts))
+
+        # Exception
+        if record.exc_info and record.exc_info[1]:
+            exc_type = type(record.exc_info[1]).__name__
+            exc_msg = str(record.exc_info[1])
+            if c:
+                parts.append(f"{_A.RED}{_A.BOLD}[{exc_type}]{_A.RESET} {_A.RED}{exc_msg}{_A.RESET}")
+            else:
+                parts.append(f"[{exc_type}] {exc_msg}")
+        elif record.exc_text:
+            parts.append(record.exc_text)
+
+        return " ".join(parts)
+
+    def _format_json(self, record: logging.LogRecord) -> str:
+        op = _derive_op(record)
+        rid = getattr(record, "request_id", None)
+        ok = getattr(record, "ok", True)
+        dur_ms = getattr(record, "dur_ms", None)
+        err = getattr(record, "err", None)
+
+        entry: dict[str, Any] = {
+            "v": 1,
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "lvl": record.levelname,
+            "op": op,
+            "msg": record.getMessage(),
+            "corr": rid,
+            "dur_ms": dur_ms,
+            "ok": ok,
+            "logger": record.name,
+        }
+
+        if err:
+            entry["err"] = err
+
+        # Domain payload — exactly one per line
+        domain = op.split(".")[0] if "." in op else op
+        domain_payload = _collect_domain_payload(record, domain)
+        if domain_payload:
+            entry[domain] = domain_payload
+
+        # Legacy tag (backward compat for consumers still reading it)
+        tag = getattr(record, "tag", None)
+        if tag:
+            entry["tag"] = tag
+
+        # Non-standard extras
+        ctx = _collect_extras(record)
+        if ctx:
+            entry["ctx"] = ctx
+
+        if record.exc_info and record.exc_info[0]:
+            entry["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(entry, default=str, ensure_ascii=False)
+
+
 # ── slo.log v1 JSON formatter ─────────────────────────────────────────
 
 class SloJSONFormatter(logging.Formatter):
