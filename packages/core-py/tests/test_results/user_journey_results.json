@@ -1,7 +1,37 @@
 [
   {
+    "test": "datasets_loads",
+    "passed": true,
+    "detail": "len=1254"
+  },
+  {
+    "test": "datasets_import_button",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_import_dialog_opens",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_radio_exists",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_radio_clicks",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_input_fills",
+    "passed": true,
+    "detail": ""
+  },
+  {
     "test": "datasets_kaggle_import_success",
     "passed": false,
-    "detail": "body_snippet=L\nURL\nDownload from a URL\nFolder Path\nFolder on this machine\nKaggle Dataset ID\n\nExamples: heptapod/titanic, uciml/iris, rounakbanik/pokemon\n\nRequires Kaggle CLI installed and authenticated (kaggle config)\n\nDataset Name\nImporting...\nCancel Import\nImporting...\nClose\nNo model loaded.\nlive\n0 reqs\n1m 22s"
+    "detail": "body_snippet=tanic, uciml/iris, rounakbanik/pokemon\n\nRequires Kaggle CLI installed and authenticated (kaggle config)\n\nDataset Name\nImporting...\nCancel Import\nImporting...\nClose\nNo model loaded.\nlive\n0 reqs\n30m 26s"
   }
 ]

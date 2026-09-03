@@ -223,50 +223,73 @@ class TestDatasetsImport:
         kaggle = page.get_by_role("radio", name="Kaggle: Download from Kaggle")
         ok("datasets_kaggle_radio_exists", kaggle.count() > 0)
         assert kaggle.count() > 0
+        page.keyboard.press("Escape")
+        time.sleep(0.3)
 
     def test_kaggle_radio_clicks(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
-        page.get_by_role("radio", name="Kaggle: Download from Kaggle").first.click(force=True)
+        kaggle_radio = page.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio.focus()
+        time.sleep(0.2)
+        kaggle_radio.press("Space")
         time.sleep(1)
         inp = page.locator("input[placeholder='username/dataset-name']")
         ok("datasets_kaggle_radio_clicks", inp.count() > 0)
         assert inp.count() > 0
+        page.keyboard.press("Escape")
+        time.sleep(0.3)
 
     def test_kaggle_input_fills(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
         page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
-        page.get_by_role("radio", name="Kaggle: Download from Kaggle").first.click(force=True)
+        kaggle_radio = page.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio.focus()
+        time.sleep(0.2)
+        kaggle_radio.press("Space")
         time.sleep(1)
         inp = page.locator("input[placeholder='username/dataset-name']")
         inp.fill("heptapod/titanic")
         time.sleep(0.3)
         ok("datasets_kaggle_input_fills", inp.input_value() == "heptapod/titanic")
         assert inp.input_value() == "heptapod/titanic"
+        page.keyboard.press("Escape")
+        time.sleep(0.3)
 
     def test_kaggle_import_success(self, page: Page):
-        go(page, "/datasets")
+        # Use a fresh page to avoid stale state from previous tests
+        ctx = page.context
+        fresh = ctx.new_page()
+        fresh.goto(f"{BASE}/datasets", wait_until="load", timeout=20000)
+        try:
+            fresh.wait_for_function("() => !document.body.innerText.includes('Connecting...')", timeout=10000)
+        except Exception:
+            pass
+        time.sleep(2)
+        fresh.get_by_role("button", name="Import").first.click(force=True)
+        time.sleep(2)
+        kaggle_radio = fresh.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio.focus()
+        time.sleep(0.2)
+        kaggle_radio.press("Space")
         time.sleep(1)
-        page.get_by_role("button", name="Import").first.click(force=True)
-        time.sleep(1)
-        page.get_by_role("radio", name="Kaggle: Download from Kaggle").first.click(force=True)
-        time.sleep(1)
-        page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
+        fresh.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
         time.sleep(0.5)
-        page.get_by_role("button", name="Import").last.click(force=True)
-        for _ in range(30):
+        fresh.get_by_role("button", name="Import").last.click(force=True)
+        for _ in range(15):
             time.sleep(1)
-            body = page.inner_text("body")
+            body = fresh.inner_text("body")
             if "downloaded" in body.lower() or "failed" in body.lower() or "error" in body.lower():
                 break
-        page.screenshot(path="/tmp/kaggle_e2e.png")
-        body = page.inner_text("body")
+        fresh.screenshot(path="/tmp/kaggle_e2e.png")
+        body = fresh.inner_text("body")
         success = "downloaded" in body.lower()
-        ok("datasets_kaggle_import_success", success, f"body_snippet={body[-300:]}")
+        ok("datasets_kaggle_import_success", success, f"body_snippet={body[-200:]}")
+        fresh.close()
         assert success
 
 
