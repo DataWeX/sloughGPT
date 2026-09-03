@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, type InputHTMLAttributes, useCallback } from 'react'
 import { cn } from '../../lib/cn'
 
