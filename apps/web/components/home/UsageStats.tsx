@@ -31,13 +31,17 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
         <Card>
           <CardContent className="py-3">
             <div className="h-4 w-20 animate-pulse rounded bg-muted mb-2" />
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: 2 }).map((_, i) => (
                 <div key={i} className="space-y-1">
                   <div className="h-5 w-12 animate-pulse rounded bg-muted" />
                   <div className="h-3 w-16 animate-pulse rounded bg-muted" />
                 </div>
               ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-border/40">
+              <div className="h-5 w-12 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-16 animate-pulse rounded bg-muted" />
             </div>
           </CardContent>
         </Card>
@@ -89,7 +93,7 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
               <p className="text-xs font-medium">Datasets</p>
               <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-base font-semibold tabular-nums">{datasetStats.totalDatasets}</p>
                 <p className="text-xs text-muted-foreground">Datasets</p>
@@ -100,10 +104,10 @@ export function UsageStats({ apiStatus, loading, convStats, datasetStats }: Usag
                 </p>
                 <p className="text-xs text-muted-foreground">Total size</p>
               </div>
-              <div>
-                <p className="text-base font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Samples</p>
-              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-border/40">
+              <p className="text-base font-semibold tabular-nums">{datasetStats.totalSamples.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Samples</p>
             </div>
           </CardContent>
         </Card>
