@@ -117,9 +117,9 @@ class SLNCCompiler:
         Returns:
             Path to created .slnc file
         """
-        from domains.infrastructure.safetensors_loader import (
-            _get_model_dir,
-            _find_safetensors,
+        from domains.infrastructure.slnc.parser import (
+            get_model_dir as _get_model_dir,
+            find_safetensors as _find_safetensors,
             load_model_config,
         )
 
@@ -162,7 +162,7 @@ class SLNCCompiler:
         with open(cfg_path) as f:
             config = json.load(f)
 
-        from domains.infrastructure.safetensors_loader import _find_safetensors
+        from domains.infrastructure.slnc.parser import find_safetensors as _find_safetensors
         safetensors_path = _find_safetensors(directory)
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors in {model_dir}")
