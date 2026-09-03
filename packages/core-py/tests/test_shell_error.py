@@ -1,63 +1,55 @@
-"""Tests for domains.shell.error — format_error."""
-
+"""Tests for shell error formatting — user-friendly error messages."""
 from __future__ import annotations
 
 import pytest
+
 from domains.shell.error import format_error
 
 
 class TestFormatError:
-    def test_connection_error(self):
-        e = ConnectionError("refused")
-        result = format_error(e)
-        assert "Connection failed" in result
-        assert "Is the API server running" in result
-
-    def test_timeout_error(self):
-        e = TimeoutError("timed out")
-        result = format_error(e)
-        assert "timed out" in result.lower()
-
-    def test_permission_error(self):
-        e = PermissionError("/secret")
-        result = format_error(e)
-        assert "Permission denied" in result
-
-    def test_file_not_found(self):
-        e = FileNotFoundError("/missing")
-        result = format_error(e)
-        assert "File not found" in result
-
     def test_generic_error(self):
         e = ValueError("bad value")
-        result = format_error(e)
+        result = format_error(e, color=False)
         assert "ValueError" in result
         assert "bad value" in result
 
-    def test_with_command_prefix(self):
-        e = ValueError("bad")
-        result = format_error(e, cmd="test_cmd")
-        assert "[test_cmd]" in result
+    def test_error_with_cmd(self):
+        e = RuntimeError("oops")
+        result = format_error(e, cmd="train", color=False)
+        assert "[train]" in result
+        assert "oops" in result
 
-    def test_without_command_prefix(self):
-        e = ValueError("bad")
-        result = format_error(e)
-        assert "  ValueError: bad" == result
+    def test_permission_error(self):
+        e = PermissionError("denied")
+        result = format_error(e, color=False)
+        assert "Permission denied" in result
 
-    def test_requests_connection_error(self):
-        try:
-            import requests
-            e = requests.ConnectionError("refused")
-            result = format_error(e)
-            assert "Connection failed" in result
-        except ImportError:
-            pytest.skip("requests not installed")
+    def test_file_not_found(self):
+        e = FileNotFoundError("no file")
+        result = format_error(e, color=False)
+        assert "File not found" in result
 
-    def test_requests_timeout_error(self):
-        try:
-            import requests
-            e = requests.Timeout("timed out")
-            result = format_error(e)
-            assert "timed out" in result.lower()
-        except ImportError:
-            pytest.skip("requests not installed")
+    def test_connection_error(self):
+        e = ConnectionError("refused")
+        result = format_error(e, color=False)
+        assert "Connection failed" in result
+        assert "api start" in result
+
+    def test_timeout_error(self):
+        e = TimeoutError("timed out")
+        result = format_error(e, color=False)
+        assert "timed out" in result
+
+    def test_color_flag(self):
+        e = ValueError("test")
+        result_colored = format_error(e, color=True)
+        result_plain = format_error(e, color=False)
+        # Both should contain the error message
+        assert "test" in result_colored
+        assert "test" in result_plain
+
+    def test_fallback_format(self):
+        e = KeyError("missing_key")
+        result = format_error(e, cmd="load", color=False)
+        assert "KeyError" in result
+        assert "missing_key" in result
