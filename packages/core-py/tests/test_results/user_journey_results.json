@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "test": "datasets_loads",
+    "passed": true,
+    "detail": "len=265"
+  },
+  {
+    "test": "datasets_import_dialog_opens",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_radio_exists",
+    "passed": true,
+    "detail": ""
+  }
+]

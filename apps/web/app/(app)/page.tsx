@@ -276,124 +276,121 @@ export default function HomePage() {
             />
           </Suspense>
 
-          {apiStatus !== 'offline' && (
-            <>
-              {/* Lazy: Stats grid */}
-              <Suspense fallback={<StatsGridSkeleton />}>
-                <LazyStatsGrid
-                  apiStatus={apiStatus}
-                  modelCount={modelCount}
-                  currentSoul={currentSoul}
-                  modelStatus={modelStatus}
-                  inferenceCount={inferenceCount}
-                  t={t}
-                />
-              </Suspense>
+          {/* Lazy: Stats grid */}
+          <Suspense fallback={<StatsGridSkeleton />}>
+            <LazyStatsGrid
+              apiStatus={apiStatus}
+              loading={homeLoading}
+              modelCount={modelCount}
+              currentSoul={currentSoul}
+              modelStatus={modelStatus}
+              inferenceCount={inferenceCount}
+              t={t}
+            />
+          </Suspense>
 
-              {/* Lazy: Feedback bar */}
-              {feedbackStats && (
-                <Suspense fallback={<FeedbackBarSkeleton />}>
-                  <LazyFeedbackBar feedbackStats={feedbackStats} />
-                </Suspense>
-              )}
-
-              {/* Lazy: Quick actions */}
-              <Suspense fallback={<QuickActionsSkeleton />}>
-                <LazyQuickActions
-                  modelStatus={modelStatus}
-                  testRunning={data.testRunning}
-                  testResponse={data.testResponse}
-                  setTestRunning={data.setTestRunning}
-                  setTestResponse={data.setTestResponse}
-                  knowledgeCount={knowledgeCount}
-                  setKnowledgeCount={data.setKnowledgeCount}
-                />
-              </Suspense>
-
-              {/* Lazy: Recent activity */}
-              <Suspense fallback={<RecentActivitySkeleton />}>
-                <LazyRecentActivity
-                  apiStatus={apiStatus}
-                  modelStatus={modelStatus}
-                  recentSessions={recentSessions}
-                  recentJobs={recentJobs}
-                  recentDatasets={recentDatasets}
-                />
-              </Suspense>
-
-              {!onboardingDismissed && (
-                <OnboardingCard
-                  onComplete={() => setOnboardingDismissed(true)}
-                />
-              )}
-
-              {recentSessions.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => router.push(`/chat?session=${recentSessions[0].id}`)}
-                  className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground transition-colors">
-                    <IconMessage className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
-                      {recentSessions[0].starred && <span className="text-xs">★</span>}
-                      {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
-                      {new Date(recentSessions[0].updated_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <IconChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
-                </button>
-              )}
-
-              {/* Lazy: Usage stats */}
-              <Suspense fallback={<UsageStatsSkeleton />}>
-                <LazyUsageStats
-                  apiStatus={apiStatus}
-                  convStats={convStats}
-                  datasetStats={datasetStats}
-                />
-              </Suspense>
-
-              {/* Lazy: System health */}
-              <Suspense fallback={<SystemHealthSkeleton />}>
-                <LazySystemHealth
-                  apiStatus={apiStatus}
-                  liveHealth={liveHealth}
-                />
-              </Suspense>
-
-              {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && modelStatus.loaded && (
-                <Card className="border-accent/25 bg-accent/[0.03]">
-                  <CardContent className="py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">Ready to train</p>
-                      <p className="text-xs text-muted-foreground">
-                        {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available · {formatBytes(datasetStats.totalSize)}
-                      </p>
-                    </div>
-                    <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => router.push('/training')}>
-                      Start training
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Lazy: Navigation grid */}
-              <Suspense fallback={<NavigationGridSkeleton />}>
-                <LazyNavigationGrid
-                  apiStatus={apiStatus}
-                  modelStatus={modelStatus}
-                  datasetStats={datasetStats}
-                />
-              </Suspense>
-            </>
+          {/* Lazy: Feedback bar */}
+          {feedbackStats && (
+            <Suspense fallback={<FeedbackBarSkeleton />}>
+              <LazyFeedbackBar feedbackStats={feedbackStats} />
+            </Suspense>
           )}
+
+          {/* Lazy: Quick actions */}
+          <Suspense fallback={<QuickActionsSkeleton />}>
+            <LazyQuickActions
+              modelStatus={modelStatus}
+              testRunning={data.testRunning}
+              testResponse={data.testResponse}
+              setTestRunning={data.setTestRunning}
+              setTestResponse={data.setTestResponse}
+              knowledgeCount={knowledgeCount}
+              setKnowledgeCount={data.setKnowledgeCount}
+            />
+          </Suspense>
+
+          {/* Lazy: Recent activity */}
+          <Suspense fallback={<RecentActivitySkeleton />}>
+            <LazyRecentActivity
+              apiStatus={apiStatus}
+              modelStatus={modelStatus}
+              recentSessions={recentSessions}
+              recentJobs={recentJobs}
+              recentDatasets={recentDatasets}
+            />
+          </Suspense>
+
+          {!onboardingDismissed && (
+            <OnboardingCard
+              onComplete={() => setOnboardingDismissed(true)}
+            />
+          )}
+
+          {recentSessions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => router.push(`/chat?session=${recentSessions[0].id}`)}
+              className="w-full text-left rounded-lg border border-border/30 bg-card p-3 flex items-center gap-3 hover:border-border/60 hover:bg-muted/30 transition-colors group"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground transition-colors">
+                <IconMessage className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-medium truncate">{recentSessions[0].name}</p>
+                  {recentSessions[0].starred && <span className="text-xs">★</span>}
+                  {recentSessions[0].pinned && <span className="text-xs text-primary">📌</span>}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {recentSessions[0].message_count != null && <span>{recentSessions[0].message_count} messages · </span>}
+                  {new Date(recentSessions[0].updated_at).toLocaleDateString()}
+                </p>
+              </div>
+              <IconChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />
+            </button>
+          )}
+
+          {/* Lazy: Usage stats */}
+          <Suspense fallback={<UsageStatsSkeleton />}>
+            <LazyUsageStats
+              apiStatus={apiStatus}
+              convStats={convStats}
+              datasetStats={datasetStats}
+            />
+          </Suspense>
+
+          {/* Lazy: System health */}
+          <Suspense fallback={<SystemHealthSkeleton />}>
+            <LazySystemHealth
+              apiStatus={apiStatus}
+              liveHealth={liveHealth}
+            />
+          </Suspense>
+
+          {apiStatus === 'online' && datasetStats && datasetStats.totalDatasets > 0 && modelStatus.loaded && (
+            <Card className="border-accent/25 bg-accent/[0.03]">
+              <CardContent className="py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">Ready to train</p>
+                  <p className="text-xs text-muted-foreground">
+                    {datasetStats.totalDatasets} dataset{datasetStats.totalDatasets === 1 ? '' : 's'} available · {formatBytes(datasetStats.totalSize)}
+                  </p>
+                </div>
+                <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => router.push('/training')}>
+                  Start training
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Lazy: Navigation grid */}
+          <Suspense fallback={<NavigationGridSkeleton />}>
+            <LazyNavigationGrid
+              apiStatus={apiStatus}
+              modelStatus={modelStatus}
+              datasetStats={datasetStats}
+            />
+          </Suspense>
         </>
       )}
 

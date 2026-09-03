@@ -255,142 +255,203 @@ make test-py ARGS="tests/test_shell_*.py -q"
 
 ## Python Patterns
 
-### Decorators
+### File Structure (matches codebase style)
 ```python
-import functools
+"""
+Module purpose — short description.
+
+FEATURE: feature-name — What this module does.
+DO NOT DELETE. This is important because...
+"""
+
+from __future__ import annotations
+
+import threading
 import time
+from pathlib import Path
+from typing import Optional, Dict, List, Tuple, Any
+from dataclasses import dataclass
+from enum import IntEnum
 
-def timer(func):
-    """Measure execution time."""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        elapsed = time.perf_counter() - start
-        logger.info(f"{func.__name__} took {elapsed:.3f}s")
-        return result
-    return wrapper
+import numpy as np
 
-def retry(max_attempts: int = 3, delay: float = 1.0):
-    """Retry on exception."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if attempt == max_attempts - 1:
-                        raise
-                    logger.warning(f"Attempt {attempt + 1} failed: {e}")
-                    time.sleep(delay)
-        return wrapper
-    return decorator
+from domains.infrastructure.structured_log import StructuredLogger
+from .kernel_syscall import SyscallResult
+
+logger = StructuredLogger("slo.module.name")
 ```
 
-### Context Managers
+### Logging (use StructuredLogger, not print)
 ```python
-from contextlib import contextmanager
+from domains.infrastructure.structured_log import StructuredLogger
 
-@contextmanager
-def timer(label: str):
-    """Context manager for timing."""
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        elapsed = time.perf_counter() - start
-        logger.info(f"{label}: {elapsed:.3f}s")
+logger = StructuredLogger("slo.module.name")
 
-@contextmanager
-def temporary_directory():
-    """Create and clean up temp directory."""
-    import tempfile
-    import shutil
-    tmpdir = tempfile.mkdtemp()
-    try:
-        yield tmpdir
-    finally:
-        shutil.rmtree(tmpdir)
+logger.info("Operation completed", extra={"key": "value"})
+logger.error("Operation failed", exc_info=True)
+logger.debug("Variable: %s", var)
 ```
 
-### Async Patterns
+### Device Interface (matches kernel_devices.py)
 ```python
-import asyncio
-from typing import AsyncIterator
+from .kernel_syscall import SyscallResult
+from .ioctl import IoctlCommand
 
-async def fetch_data(url: str) -> dict:
-    """Fetch data from API."""
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            return await response.json()
-
-async def process_stream(stream: AsyncIterator[dict]) -> list[dict]:
-    """Process async stream."""
-    results = []
-    async for item in stream:
-        results.append(await process_item(item))
-    return results
+class MyDevice:
+    """Standalone hardware device — clean ioctl interface."""
+    
+    def __init__(self, name: str = "my_device"):
+        self._name = name
+        self._ops = {
+            IoctlCommand.COMMAND1: self._command1,
+            IoctlCommand.COMMAND2: self._command2,
+        }
+    
+    def call(self, method: str, *args: Any) -> Any:
+        """VM Device interface — delegates to ioctl."""
+        result = self.ioctl(method, *args)
+        if result.success:
+            return result.value
+        raise Exception(result.error)
+    
+    def ioctl(self, command: str, *args: Any) -> SyscallResult:
+        """Clean ioctl interface — type-safe, documented."""
+        try:
+            fn = self._ops.get(command)
+            if fn is None:
+                return SyscallResult.fail(f"unknown command: {command}")
+            result = fn(*args)
+            return SyscallResult.ok(result)
+        except Exception as e:
+            return SyscallResult.fail(f"ioctl error: {e}")
+    
+    def list_commands(self) -> list[str]:
+        """List all available commands."""
+        return sorted(self._ops.keys())
 ```
 
-### Dataclasses
+### Dataclasses (matches existing patterns)
 ```python
 from dataclasses import dataclass, field
 from typing import Optional
 
-@dataclass(slots=True, frozen=True)
+@dataclass
+class DeviceHandle:
+    """A file-descriptor-like handle to an open device."""
+    fd: int
+    device_name: str
+    mode: str = "r"
+    offset: int = 0
+
+@dataclass
 class Config:
-    """Immutable configuration."""
+    """Configuration object."""
     name: str
     max_items: int = 100
     enabled: bool = True
     metadata: dict = field(default_factory=dict)
+```
 
-@dataclass
-class State:
-    """Mutable state."""
-    count: int = 0
-    items: list[str] = field(default_factory=list)
+### Enums (use IntEnum for bit flags)
+```python
+from enum import IntEnum
+
+class DeviceType(IntEnum):
+    """Device categories as bit positions."""
+    INFERENCE = 1 << 0  # 0b000001
+    TRAINING  = 1 << 1  # 0b000010
+    STORAGE   = 1 << 2  # 0b000100
+    NETWORK   = 1 << 3  # 0b001000
+    DISPLAY   = 1 << 4  # 0b010000
+    INPUT     = 1 << 5  # 0b100000
+    CUSTOM    = 0       # no type
+```
+
+### Threading (matches kernel_devices.py)
+```python
+import threading
+
+class ThreadSafeDevice:
+    """Thread-safe device with lock."""
     
-    def increment(self) -> None:
-        self.count += 1
+    def __init__(self):
+        self._lock = threading.Lock()
+    
+    def operation(self):
+        with self._lock:
+            # Thread-safe code here
+            pass
 ```
 
 ## FastAPI Patterns
 
-### Endpoint Structure
+### File Structure (matches apps/api/server/routers/vm.py)
 ```python
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+"""
+Module Router — description of what this router does.
 
-router = APIRouter()
+Provides ... (what this router provides).
+"""
 
-class Request(BaseModel):
-    """Request schema."""
-    name: str
-    data: dict = {}
+from __future__ import annotations
 
-class Response(BaseModel):
+import time
+import logging
+from typing import Optional
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from pydantic import model_validator
+from schemas.common import raise_error, success_response
+from infrastructure.auth import require_auth_if_enabled
+
+logger = logging.getLogger("slo.api.module_name")
+router = APIRouter(prefix="/module", tags=["module"])
+```
+
+### Request/Response Schemas (matches codebase style)
+```python
+class MyRequest(BaseModel):
+    """Request schema with validation."""
+    
+    name: str = Field(..., max_length=100, description="Name of item")
+    data: Optional[dict] = Field(None, description="Optional data")
+    max_items: int = Field(100, ge=1, le=10000, description="Max items")
+    
+    @model_validator(mode="after")
+    def _validate_request(self):
+        if self.name is None and self.data is None:
+            raise ValueError("Either 'name' or 'data' must be provided")
+        return self
+
+class MyResponse(BaseModel):
     """Response schema."""
     success: bool
     result: Optional[dict] = None
     error: Optional[str] = None
-
-@router.post("/endpoint", response_model=Response)
-async def handler(req: Request) -> Response:
-    """Handle request."""
-    try:
-        result = await process(req)
-        return Response(success=True, result=result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    elapsed_ms: float = 0.0
 ```
 
-### SSE Streaming
+### Endpoint (matches codebase style)
+```python
+@router.post("/endpoint", response_model=MyResponse)
+async def handler(req: MyRequest) -> MyResponse:
+    """Handle request."""
+    start = time.perf_counter()
+    try:
+        result = await process(req)
+        elapsed = (time.perf_counter() - start) * 1000
+        return MyResponse(success=True, result=result, elapsed_ms=elapsed)
+    except Exception as e:
+        logger.error("Operation failed", exc_info=True)
+        raise_error(500, str(e))
+```
+
+### SSE Streaming (matches codebase style)
 ```python
 from fastapi.responses import StreamingResponse
 import json
 
+@router.get("/stream")
 async def stream_endpoint():
     """SSE streaming endpoint."""
     async def generate():
@@ -443,6 +504,74 @@ def process_batch(batch: list) -> list:
     """Process a batch of items."""
     return [process_item(item) for item in batch]
 ```
+
+## Test Patterns (matches test_vm_devices_new.py)
+
+### File Structure
+```python
+"""
+Comprehensive tests for module_name.
+
+Tests ClassA, ClassB. Covers method1(), method2(), and error handling.
+"""
+
+from __future__ import annotations
+
+import os
+import io
+import sys
+import tempfile
+import threading
+from unittest.mock import patch, MagicMock
+
+import numpy as np
+import pytest
+
+from domains.shell.module import ClassA, ClassB
+from domains.shell.kernel_syscall import SyscallResult
+
+
+# =============================================================================
+# ClassA
+# =============================================================================
+
+
+class TestClassA:
+    """Tests for ClassA."""
+    
+    @pytest.fixture
+    def dev(self):
+        return ClassA(name="test_name")
+    
+    def test_name(self, dev):
+        assert dev.name == "test_name"
+    
+    def test_method(self, dev):
+        result = dev.method()
+        assert result.success
+        assert result.value == expected
+    
+    def test_error(self, dev):
+        result = dev.ioctl("INVALID")
+        assert not result.success
+        assert "error" in result.error.lower()
+```
+
+### Running Tests
+```bash
+# Run specific test
+.venv/bin/python -m pytest tests/test_file.py -x -v
+
+# Run with coverage
+.venv/bin/python -m pytest tests/ --cov=domains --cov-report=term-missing
+
+# Run from project root
+PYTHONPATH=packages/core-py .venv/bin/python -m pytest packages/core-py/tests/test_file.py -x -v
+```
+
+**Test file location**: `packages/core-py/tests/test_<module>.py`
+**Test class pattern**: `class Test<Feature>:`
+**Test method pattern**: `def test_<behavior>(self):`
 
 ## Performance Considerations
 
