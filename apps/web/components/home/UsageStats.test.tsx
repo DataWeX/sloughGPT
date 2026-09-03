@@ -55,7 +55,7 @@ describe('UsageStats', () => {
 
   it('shows dataset stats', () => {
     const { container } = render(<UsageStats {...baseProps} />)
-    expect(container.textContent).toContain('10 KB')
+    expect(container.textContent).toContain('10.0 KB')
     expect(container.textContent).toContain('1,500')
   })
 

@@ -14,10 +14,7 @@ interface StatsGridProps {
 }
 
 export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inferenceCount, t }: StatsGridProps) {
-  const isLoading = apiStatus === 'loading'
-  const showPersonalitySkeleton = isLoading || currentSoul === null
-  const showActiveSkeleton = isLoading || modelStatus.model === null
-
+  const loading = apiStatus === 'loading'
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Card className="flex flex-col justify-between">
@@ -25,7 +22,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.status')}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          {isLoading ? (
+          {loading ? (
             <div className="h-6 w-20 animate-pulse rounded bg-muted" />
           ) : (
             <div className="flex items-center gap-2">
@@ -43,7 +40,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.models')}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          {isLoading ? (
+          {loading ? (
             <div className="h-6 w-12 animate-pulse rounded bg-muted" />
           ) : (
             <p className="text-sm font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
@@ -55,7 +52,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.personality')}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          {showPersonalitySkeleton ? (
+          {loading ? (
             <div className="h-6 w-24 animate-pulse rounded bg-muted" />
           ) : (
             <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
@@ -67,7 +64,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">Active</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          {showActiveSkeleton ? (
+          {loading ? (
             <div className="h-6 w-32 animate-pulse rounded bg-muted" />
           ) : (
             <>
