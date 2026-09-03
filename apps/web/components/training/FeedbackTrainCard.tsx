@@ -95,11 +95,15 @@ export function FeedbackTrainCard({ addToast }: Props) {
   const handleStop = useCallback(async () => {
     stopPolling()
     if (job?.job_id) {
-      try { await trainingJobsController.stop(job.job_id) } catch { /* best effort */ }
+      try {
+        await trainingJobsController.stop(job.job_id)
+      } catch {
+        addToast('Could not stop training', 'error')
+      }
     }
     setPhase('idle')
     setJob(null)
-  }, [job, stopPolling])
+  }, [job, stopPolling, addToast])
 
   const handleLoad = useCallback(async () => {
     const checkpoint = job?.checkpoint ?? null
