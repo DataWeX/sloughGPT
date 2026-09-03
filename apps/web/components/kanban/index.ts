@@ -5,7 +5,7 @@ export { KanbanColumn } from "./KanbanColumn";
 export { KanbanCard } from "./KanbanCard";
 export type {
   KanbanBoard as KanbanBoardData,
-  KanbanColumn,
+  KanbanColumn as KanbanColumnData,
   KanbanCardData,
   TagCount,
 } from "./types";
