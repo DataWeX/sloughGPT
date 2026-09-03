@@ -60,36 +60,9 @@ def load_model_weights(
 
 def _auto_convert(st_path: Path, slnc_path: Path, model_id: str) -> None:
     """Convert safetensors to .slnc on first load."""
-    logger.info("Converting %s → .slnc", st_path.name, extra={"tag": "INFRA"})
-
-    config = load_model_config(model_id)
-    weights: Dict[str, np.ndarray] = {}
-
-    with open(str(st_path), "rb") as f:
-        header_len = struct.unpack("<Q", f.read(8))[0]
-        header = json.loads(f.read(header_len))
-        for key, info in header.items():
-            if key.startswith("__"):
-                continue
-            dtype_str = info["dtype"]
-            offsets = info["data_offsets"]
-            f.seek(8 + header_len + offsets[0])
-            raw = f.read(offsets[1] - offsets[0])
-            if dtype_str == "BF16":
-                arr = np.frombuffer(raw, dtype=np.uint16)
-                f32 = np.zeros(len(arr), dtype=np.float32)
-                f32.view(np.uint32)[:] = arr.astype(np.uint32) << 16
-                weights[key] = f32.reshape(info["shape"])
-            elif dtype_str == "F32":
-                weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-            elif dtype_str == "F16":
-                weights[key] = np.frombuffer(raw, dtype=np.float16).reshape(info["shape"]).astype(np.float32)
-            else:
-                weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-
     from domains.infrastructure.slnc.compiler import SLNCCompiler
-    compiler = SLNCCompiler()
-    compiler.compile_from_dict(config, weights, str(slnc_path))
+    logger.info("Converting %s → .slnc", st_path.name, extra={"tag": "INFRA"})
+    SLNCCompiler().compile(model_id, str(slnc_path))
     logger.info("Converted to .slnc: %s (%.1f MB)", slnc_path.name,
                 slnc_path.stat().st_size / 1e6, extra={"tag": "INFRA"})
 
