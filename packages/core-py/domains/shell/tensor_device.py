@@ -1,7 +1,7 @@
 """
 TensorDevice — standalone compute hardware.
 
-Pure compute engine with ioctl interface.
+Pure compute engine with clean ioctl interface.
 No inheritance. No decorators. Just a device.
 """
 
@@ -10,112 +10,121 @@ from __future__ import annotations
 import numpy as np
 from typing import Any
 
+from .ioctl import IoctlCommand, IoctlResult, IoctlError, validate_command, validate_args
+
 
 class TensorDevice:
     """Standalone compute hardware — wraps numpy.
 
-    Has ioctl for assembly interface.
+    Has clean ioctl interface for assembly.
     Has function calls for direct use.
     """
 
     def __init__(self):
         self._ops = {
             # Linear algebra
-            "MATMUL": self._matmul,
-            "DOT": self._dot,
-            "INV": self._inv,
-            "SVD": self._svd,
-            "EIG": self._eig,
+            IoctlCommand.MATMUL: self._matmul,
+            IoctlCommand.DOT: self._dot,
+            IoctlCommand.INV: self._inv,
+            IoctlCommand.SVD: self._svd,
+            IoctlCommand.EIG: self._eig,
 
             # Activation functions
-            "RELU": self._relu,
-            "LEAKY_RELU": self._leaky_relu,
-            "SIGMOID": self._sigmoid,
-            "TANH": self._tanh,
-            "SOFTMAX": self._softmax,
-            "LOG_SOFTMAX": self._log_softmax,
-            "GELU": self._gelu,
-            "SILU": self._silu,
-            "ELU": self._elu,
-            "SELU": self._selu,
+            IoctlCommand.RELU: self._relu,
+            IoctlCommand.LEAKY_RELU: self._leaky_relu,
+            IoctlCommand.SIGMOID: self._sigmoid,
+            IoctlCommand.TANH: self._tanh,
+            IoctlCommand.SOFTMAX: self._softmax,
+            IoctlCommand.LOG_SOFTMAX: self._log_softmax,
+            IoctlCommand.GELU: self._gelu,
+            IoctlCommand.SILU: self._silu,
+            IoctlCommand.ELU: self._elu,
+            IoctlCommand.SELU: self._selu,
 
             # Arithmetic
-            "ADD": self._add,
-            "SUB": self._sub,
-            "MUL": self._mul,
-            "DIV": self._div,
-            "NEG": self._neg,
-            "ABS": self._abs,
-            "POW": self._pow,
-            "SQRT": self._sqrt,
-            "EXP": self._exp,
-            "LOG": self._log,
+            IoctlCommand.ADD: self._add,
+            IoctlCommand.SUB: self._sub,
+            IoctlCommand.MUL: self._mul,
+            IoctlCommand.DIV: self._div,
+            IoctlCommand.NEG: self._neg,
+            IoctlCommand.ABS: self._abs,
+            IoctlCommand.POW: self._pow,
+            IoctlCommand.SQRT: self._sqrt,
+            IoctlCommand.EXP: self._exp,
+            IoctlCommand.LOG: self._log,
 
             # Reduction
-            "SUM": self._sum,
-            "MEAN": self._mean,
-            "STD": self._std,
-            "VAR": self._var,
-            "MAX": self._max,
-            "MIN": self._min,
-            "ARGMAX": self._argmax,
-            "ARGMIN": self._argmin,
+            IoctlCommand.SUM: self._sum,
+            IoctlCommand.MEAN: self._mean,
+            IoctlCommand.STD: self._std,
+            IoctlCommand.VAR: self._var,
+            IoctlCommand.MAX: self._max,
+            IoctlCommand.MIN: self._min,
+            IoctlCommand.ARGMAX: self._argmax,
+            IoctlCommand.ARGMIN: self._argmin,
 
             # Shape
-            "RESHAPE": self._reshape,
-            "TRANSPOSE": self._transpose,
-            "FLATTEN": self._flatten,
-            "SQUEEZE": self._squeeze,
-            "UNSQUEEZE": self._unsqueeze,
-            "CAT": self._cat,
-            "STACK": self._stack,
+            IoctlCommand.RESHAPE: self._reshape,
+            IoctlCommand.TRANSPOSE: self._transpose,
+            IoctlCommand.FLATTEN: self._flatten,
+            IoctlCommand.SQUEEZE: self._squeeze,
+            IoctlCommand.UNSQUEEZE: self._unsqueeze,
+            IoctlCommand.CAT: self._cat,
+            IoctlCommand.STACK: self._stack,
 
             # Convolution
-            "CONV1D": self._conv1d,
-            "CONV2D": self._conv2d,
+            IoctlCommand.CONV1D: self._conv1d,
+            IoctlCommand.CONV2D: self._conv2d,
 
             # Pooling
-            "MAX_POOL1D": self._max_pool1d,
-            "MAX_POOL2D": self._max_pool2d,
-            "AVG_POOL1D": self._avg_pool1d,
-            "AVG_POOL2D": self._avg_pool2d,
+            IoctlCommand.MAX_POOL1D: self._max_pool1d,
+            IoctlCommand.MAX_POOL2D: self._max_pool2d,
+            IoctlCommand.AVG_POOL1D: self._avg_pool1d,
+            IoctlCommand.AVG_POOL2D: self._avg_pool2d,
 
             # Normalization
-            "BATCH_NORM": self._batch_norm,
-            "LAYER_NORM": self._layer_norm,
-            "RMS_NORM": self._rms_norm,
+            IoctlCommand.BATCH_NORM: self._batch_norm,
+            IoctlCommand.LAYER_NORM: self._layer_norm,
+            IoctlCommand.RMS_NORM: self._rms_norm,
 
             # Attention
-            "ATTENTION": self._attention,
+            IoctlCommand.ATTENTION: self._attention,
 
             # Loss functions
-            "CROSS_ENTROPY": self._cross_entropy,
-            "MSE": self._mse,
-            "MAE": self._mae,
+            IoctlCommand.CROSS_ENTROPY: self._cross_entropy,
+            IoctlCommand.MSE: self._mse,
+            IoctlCommand.MAE: self._mae,
 
             # Optimizers
-            "SGD_STEP": self._sgd_step,
-            "ADAM_STEP": self._adam_step,
+            IoctlCommand.SGD_STEP: self._sgd_step,
+            IoctlCommand.ADAM_STEP: self._adam_step,
 
             # Utility
-            "CLIP_GRAD_NORM": self._clip_grad_norm,
-            "DROPOUT": self._dropout,
-            "EMBEDDING": self._embedding,
-            "LINEAR": self._linear,
+            IoctlCommand.CLIP_GRAD_NORM: self._clip_grad_norm,
+            IoctlCommand.DROPOUT: self._dropout,
+            IoctlCommand.EMBEDDING: self._embedding,
+            IoctlCommand.LINEAR: self._linear,
         }
 
     # ── ioctl interface ───────────────────────────────────────────────────
 
-    def ioctl(self, command: str, *args: Any) -> Any:
-        """Assembly interface — all operations go through ioctl."""
-        fn = self._ops.get(command)
-        if fn is None:
-            raise ValueError(f"unknown command: {command}")
-        return fn(*args)
+    def ioctl(self, command: str | IoctlCommand, *args: Any) -> IoctlResult:
+        """Clean ioctl interface — type-safe, documented."""
+        try:
+            cmd = validate_command(command)
+            fn = self._ops.get(cmd)
+            if fn is None:
+                return IoctlResult.fail(f"command not implemented: {cmd.value}")
+            result = fn(*args)
+            return IoctlResult.ok(result)
+        except IoctlError as e:
+            return IoctlResult.fail(str(e))
+        except Exception as e:
+            return IoctlResult.fail(f"internal error: {e}")
 
     def list_commands(self) -> list[str]:
         """List all available commands."""
-        return sorted(self._ops.keys())
+        return sorted([cmd.value for cmd in self._ops.keys()])
 
     # ── Function calls (direct use) ───────────────────────────────────────
 
@@ -203,151 +212,192 @@ class TensorDevice:
         return np.array(v, dtype=np.float64)
 
     def _matmul(self, *args):
+        validate_args(args, 2, "MATMUL")
         return self.matmul(args[0], args[1])
 
     def _dot(self, *args):
+        validate_args(args, 2, "DOT")
         return np.dot(self._to_arr(args[0]), self._to_arr(args[1]))
 
     def _inv(self, *args):
+        validate_args(args, 1, "INV")
         return np.linalg.inv(self._to_arr(args[0]))
 
     def _svd(self, *args):
+        validate_args(args, 1, "SVD")
         return np.linalg.svd(self._to_arr(args[0]))
 
     def _eig(self, *args):
+        validate_args(args, 1, "EIG")
         return np.linalg.eig(self._to_arr(args[0]))
 
     def _relu(self, *args):
+        validate_args(args, 1, "RELU")
         return self.relu(args[0])
 
     def _leaky_relu(self, *args):
+        validate_args(args, 1, "LEAKY_RELU")
         x = self._to_arr(args[0])
         alpha = args[1] if len(args) > 1 else 0.01
         return np.where(x > 0, x, alpha * x)
 
     def _sigmoid(self, *args):
+        validate_args(args, 1, "SIGMOID")
         x = self._to_arr(args[0])
         return 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
 
     def _tanh(self, *args):
+        validate_args(args, 1, "TANH")
         return np.tanh(self._to_arr(args[0]))
 
     def _softmax(self, *args):
+        validate_args(args, 1, "SOFTMAX")
         return self.softmax(args[0])
 
     def _log_softmax(self, *args):
+        validate_args(args, 1, "LOG_SOFTMAX")
         return np.log(self.softmax(args[0]) + 1e-8)
 
     def _gelu(self, *args):
+        validate_args(args, 1, "GELU")
         x = self._to_arr(args[0])
         return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * x**3)))
 
     def _silu(self, *args):
+        validate_args(args, 1, "SILU")
         x = self._to_arr(args[0])
         return x * self._sigmoid(x)
 
     def _elu(self, *args):
+        validate_args(args, 1, "ELU")
         x = self._to_arr(args[0])
         alpha = args[1] if len(args) > 1 else 1.0
         return np.where(x > 0, x, alpha * (np.exp(x) - 1))
 
     def _selu(self, *args):
+        validate_args(args, 1, "SELU")
         x = self._to_arr(args[0])
         alpha = 1.6732632423543772
         scale = 1.0507009873554805
         return scale * np.where(x > 0, x, alpha * (np.exp(x) - 1))
 
     def _add(self, *args):
+        validate_args(args, 2, "ADD")
         return self.add(args[0], args[1])
 
     def _sub(self, *args):
+        validate_args(args, 2, "SUB")
         return self._to_arr(args[0]) - self._to_arr(args[1])
 
     def _mul(self, *args):
+        validate_args(args, 2, "MUL")
         return self.mul(args[0], args[1])
 
     def _div(self, *args):
+        validate_args(args, 2, "DIV")
         return self._to_arr(args[0]) / self._to_arr(args[1])
 
     def _neg(self, *args):
+        validate_args(args, 1, "NEG")
         return -self._to_arr(args[0])
 
     def _abs(self, *args):
+        validate_args(args, 1, "ABS")
         return np.abs(self._to_arr(args[0]))
 
     def _pow(self, *args):
+        validate_args(args, 2, "POW")
         return np.power(self._to_arr(args[0]), args[1])
 
     def _sqrt(self, *args):
+        validate_args(args, 1, "SQRT")
         return np.sqrt(self._to_arr(args[0]))
 
     def _exp(self, *args):
+        validate_args(args, 1, "EXP")
         return np.exp(self._to_arr(args[0]))
 
     def _log(self, *args):
+        validate_args(args, 1, "LOG")
         return np.log(self._to_arr(args[0]) + 1e-8)
 
     def _sum(self, *args):
+        validate_args(args, 1, "SUM")
         axis = args[1] if len(args) > 1 else None
         return np.sum(self._to_arr(args[0]), axis=axis)
 
     def _mean(self, *args):
+        validate_args(args, 1, "MEAN")
         axis = args[1] if len(args) > 1 else None
         return np.mean(self._to_arr(args[0]), axis=axis)
 
     def _std(self, *args):
+        validate_args(args, 1, "STD")
         axis = args[1] if len(args) > 1 else None
         return np.std(self._to_arr(args[0]), axis=axis)
 
     def _var(self, *args):
+        validate_args(args, 1, "VAR")
         axis = args[1] if len(args) > 1 else None
         return np.var(self._to_arr(args[0]), axis=axis)
 
     def _max(self, *args):
+        validate_args(args, 1, "MAX")
         axis = args[1] if len(args) > 1 else None
         return np.max(self._to_arr(args[0]), axis=axis)
 
     def _min(self, *args):
+        validate_args(args, 1, "MIN")
         axis = args[1] if len(args) > 1 else None
         return np.min(self._to_arr(args[0]), axis=axis)
 
     def _argmax(self, *args):
+        validate_args(args, 1, "ARGMAX")
         axis = args[1] if len(args) > 1 else -1
         return np.argmax(self._to_arr(args[0]), axis=axis)
 
     def _argmin(self, *args):
+        validate_args(args, 1, "ARGMIN")
         axis = args[1] if len(args) > 1 else -1
         return np.argmin(self._to_arr(args[0]), axis=axis)
 
     def _reshape(self, *args):
+        validate_args(args, 2, "RESHAPE")
         return self._to_arr(args[0]).reshape(args[1])
 
     def _transpose(self, *args):
+        validate_args(args, 1, "TRANSPOSE")
         axes = args[1] if len(args) > 1 else None
         return self._to_arr(args[0]).transpose(axes)
 
     def _flatten(self, *args):
+        validate_args(args, 1, "FLATTEN")
         return self._to_arr(args[0]).flatten()
 
     def _squeeze(self, *args):
+        validate_args(args, 1, "SQUEEZE")
         axis = args[1] if len(args) > 1 else None
         return np.squeeze(self._to_arr(args[0]), axis=axis)
 
     def _unsqueeze(self, *args):
+        validate_args(args, 1, "UNSQUEEZE")
         axis = args[1] if len(args) > 1 else 0
         return np.expand_dims(self._to_arr(args[0]), axis=axis)
 
     def _cat(self, *args):
+        validate_args(args, 1, "CAT")
         arrays = args[0]
         axis = args[1] if len(args) > 1 else 0
         return np.concatenate([self._to_arr(a) for a in arrays], axis=axis)
 
     def _stack(self, *args):
+        validate_args(args, 1, "STACK")
         arrays = args[0]
         axis = args[1] if len(args) > 1 else 0
         return np.stack([self._to_arr(a) for a in arrays], axis=axis)
 
     def _conv1d(self, *args):
+        validate_args(args, 2, "CONV1D")
         input, weight = args[0], args[1]
         stride = args[2] if len(args) > 2 else 1
         padding = args[3] if len(args) > 3 else 0
@@ -367,6 +417,7 @@ class TensorDevice:
         return out.reshape(batch, out_seq, out_channels).transpose(0, 2, 1)
 
     def _conv2d(self, *args):
+        validate_args(args, 2, "CONV2D")
         input, weight = args[0], args[1]
         stride = args[2] if len(args) > 2 else 1
         padding = args[3] if len(args) > 3 else 0
@@ -388,6 +439,7 @@ class TensorDevice:
         return out.reshape(batch, h_out, w_out, out_channels).transpose(0, 3, 1, 2)
 
     def _max_pool1d(self, *args):
+        validate_args(args, 2, "MAX_POOL1D")
         input, kernel_size = args[0], args[1]
         stride = args[2] if len(args) > 2 else kernel_size
         padding = args[3] if len(args) > 3 else 0
@@ -403,6 +455,7 @@ class TensorDevice:
         return out
 
     def _max_pool2d(self, *args):
+        validate_args(args, 2, "MAX_POOL2D")
         input, kernel_size = args[0], args[1]
         stride = args[2] if len(args) > 2 else kernel_size
         padding = args[3] if len(args) > 3 else 0
@@ -421,6 +474,7 @@ class TensorDevice:
         return out
 
     def _avg_pool1d(self, *args):
+        validate_args(args, 2, "AVG_POOL1D")
         input, kernel_size = args[0], args[1]
         stride = args[2] if len(args) > 2 else kernel_size
         padding = args[3] if len(args) > 3 else 0
@@ -436,6 +490,7 @@ class TensorDevice:
         return out
 
     def _avg_pool2d(self, *args):
+        validate_args(args, 2, "AVG_POOL2D")
         input, kernel_size = args[0], args[1]
         stride = args[2] if len(args) > 2 else kernel_size
         padding = args[3] if len(args) > 3 else 0
@@ -454,6 +509,7 @@ class TensorDevice:
         return out
 
     def _batch_norm(self, *args):
+        validate_args(args, 5, "BATCH_NORM")
         input, weight, bias, mean, var = args[0], args[1], args[2], args[3], args[4]
         eps = args[5] if len(args) > 5 else 1e-5
         x = self._to_arr(input)
@@ -465,6 +521,7 @@ class TensorDevice:
         return w * x_hat + b
 
     def _layer_norm(self, *args):
+        validate_args(args, 3, "LAYER_NORM")
         input, weight, bias = args[0], args[1], args[2]
         eps = args[3] if len(args) > 3 else 1e-5
         x = self._to_arr(input)
@@ -476,6 +533,7 @@ class TensorDevice:
         return w * x_hat + b
 
     def _rms_norm(self, *args):
+        validate_args(args, 2, "RMS_NORM")
         input, weight = args[0], args[1]
         eps = args[2] if len(args) > 2 else 1e-6
         x = self._to_arr(input)
@@ -484,23 +542,28 @@ class TensorDevice:
         return x / rms * w
 
     def _attention(self, *args):
+        validate_args(args, 3, "ATTENTION")
         query, key, value = args[0], args[1], args[2]
         mask = args[3] if len(args) > 3 else None
         return self.attention(query, key, value, mask)
 
     def _cross_entropy(self, *args):
+        validate_args(args, 2, "CROSS_ENTROPY")
         input, target = args[0], args[1]
         ignore_index = args[2] if len(args) > 2 else -100
         return self.cross_entropy(input, target, ignore_index)
 
     def _mse(self, *args):
+        validate_args(args, 2, "MSE")
         return np.mean((self._to_arr(args[0]) - self._to_arr(args[1])) ** 2)
 
     def _mae(self, *args):
+        validate_args(args, 2, "MAE")
         return np.mean(np.abs(self._to_arr(args[0]) - self._to_arr(args[1])))
 
     def _sgd_step(self, *args):
-        params, grads, lr = args[0], args[1], args[2] if len(args) > 2 else 0.01
+        validate_args(args, 3, "SGD_STEP")
+        params, grads, lr = args[0], args[1], args[2]
         momentum = args[3] if len(args) > 3 else 0.0
         state = args[4] if len(args) > 4 else None
         updates = {}
@@ -518,7 +581,8 @@ class TensorDevice:
         return updates
 
     def _adam_step(self, *args):
-        params, grads, lr = args[0], args[1], args[2] if len(args) > 2 else 0.001
+        validate_args(args, 3, "ADAM_STEP")
+        params, grads, lr = args[0], args[1], args[2]
         betas = args[3] if len(args) > 3 else (0.9, 0.999)
         eps = args[4] if len(args) > 4 else 1e-8
         state = args[5] if len(args) > 5 else None
@@ -542,7 +606,8 @@ class TensorDevice:
         return updates
 
     def _clip_grad_norm(self, *args):
-        grads, max_norm = args[0], args[1] if len(args) > 1 else 1.0
+        validate_args(args, 2, "CLIP_GRAD_NORM")
+        grads, max_norm = args[0], args[1]
         total_norm = 0.0
         for g in grads.values():
             arr = self._to_arr(g)
@@ -554,15 +619,18 @@ class TensorDevice:
         return dict(grads)
 
     def _dropout(self, *args):
+        validate_args(args, 1, "DROPOUT")
         input = args[0]
         p = args[1] if len(args) > 1 else 0.5
         training = args[2] if len(args) > 2 else True
         return self.dropout(input, p, training)
 
     def _embedding(self, *args):
+        validate_args(args, 2, "EMBEDDING")
         return self.embedding(args[0], args[1])
 
     def _linear(self, *args):
+        validate_args(args, 2, "LINEAR")
         input, weight = args[0], args[1]
         bias = args[2] if len(args) > 2 else None
         return self.linear(input, weight, bias)

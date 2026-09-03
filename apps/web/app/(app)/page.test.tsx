@@ -3,21 +3,6 @@ import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/re
 import React from 'react'
 import { act } from 'react'
 
-// Make React.lazy resolve synchronously in tests
-const originalLazy = React.lazy
-React.lazy = ((factory: () => Promise<{ default: React.ComponentType<any> }>) => {
-  const LazyComponent = React.forwardRef<any, any>((props, ref) => {
-    const [Component, setComponent] = React.useState<React.ComponentType<any> | null>(null)
-    React.useEffect(() => {
-      factory().then(m => setComponent(() => m.default))
-    }, [])
-    if (!Component) return null
-    return <Component {...props} ref={ref} />
-  })
-  LazyComponent.displayName = 'LazyComponent'
-  return LazyComponent
-}) as typeof React.lazy
-
 const mockCva = vi.hoisted(() => { const fn = () => ''; return fn })
 vi.mock('class-variance-authority', () => ({ cva: () => mockCva }))
 

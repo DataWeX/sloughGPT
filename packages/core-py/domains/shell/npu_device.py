@@ -2,7 +2,7 @@
 NPUDevice — standalone neural processing hardware.
 
 Uses TensorDevice for computation.
-Adds: model management, I/O, assembly interface (ioctl).
+Adds: model management, I/O, clean ioctl interface.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import numpy as np
 from typing import Any
 
 from .tensor_device import TensorDevice
+from .ioctl import IoctlCommand, IoctlResult, IoctlError, validate_command, validate_args
 
 logger = logging.getLogger("slo.npu")
 
@@ -21,7 +22,7 @@ class NPUDevice:
     """Standalone neural processing hardware — loads models, executes them.
 
     Uses TensorDevice for computation.
-    Adds: model management, I/O, assembly interface (ioctl).
+    Adds: model management, I/O, clean ioctl interface.
     """
 
     def __init__(self, name: str = "npu"):
@@ -33,44 +34,94 @@ class NPUDevice:
 
     # ── ioctl interface ───────────────────────────────────────────────────
 
-    def ioctl(self, command: str, *args: Any) -> Any:
-        """Assembly interface — all operations go through ioctl."""
-        ops = {
-            # Device info
-            "INFO": self._info,
+    def ioctl(self, command: str | IoctlCommand, *args: Any) -> IoctlResult:
+        """Clean ioctl interface — type-safe, documented."""
+        try:
+            cmd = validate_command(command)
+
+            # Common commands
+            if cmd == IoctlCommand.INFO:
+                return IoctlResult.ok(self.info())
+            elif cmd == IoctlCommand.LIST_COMMANDS:
+                return IoctlResult.ok(self.list_commands())
 
             # Model management
-            "LOAD": self._load,
-            "UNLOAD": self._unload,
-            "CALL": self._call,
+            elif cmd == IoctlCommand.LOAD:
+                validate_args(args, 1, "LOAD")
+                path = args[0]
+                name = args[1] if len(args) > 1 else ""
+                provider = self.load(path, name)
+                return IoctlResult.ok({"model": name or path.rsplit("/", 1)[-1]})
+
+            elif cmd == IoctlCommand.UNLOAD:
+                validate_args(args, 1, "UNLOAD")
+                ok = self.unload(args[0])
+                return IoctlResult.ok({"unloaded": ok})
+
+            elif cmd == IoctlCommand.CALL:
+                validate_args(args, 2, "CALL")
+                result = self.execute(args[0], args[1])
+                return IoctlResult.ok(result)
 
             # Advanced operations
-            "BATCH": self._batch,
-            "PIPE": self._pipeline,
-            "PROFILE": self._profile,
-            "QUANTIZE": self._quantize,
+            elif cmd == IoctlCommand.BATCH:
+                validate_args(args, 2, "BATCH")
+                result = self.batch(args[0], args[1])
+                return IoctlResult.ok(result)
+
+            elif cmd == IoctlCommand.PIPELINE:
+                validate_args(args, 2, "PIPELINE")
+                result = self.pipeline(args[0], args[1])
+                return IoctlResult.ok(result)
+
+            elif cmd == IoctlCommand.PROFILE:
+                validate_args(args, 1, "PROFILE")
+                seq_len = args[1] if len(args) > 1 else 512
+                result = self.profile(args[0], int(seq_len))
+                return IoctlResult.ok(result)
+
+            elif cmd == IoctlCommand.QUANTIZE:
+                validate_args(args, 1, "QUANTIZE")
+                bits = args[1] if len(args) > 1 else 8
+                result = self.quantize(args[0], int(bits))
+                return IoctlResult.ok(result)
 
             # Checkpoints
-            "CHECKPOINT_SAVE": self._checkpoint_save,
-            "CHECKPOINT_LOAD": self._checkpoint_load,
+            elif cmd == IoctlCommand.CHECKPOINT_SAVE:
+                validate_args(args, 2, "CHECKPOINT_SAVE")
+                result = self.checkpoint_save(args[0], args[1])
+                return IoctlResult.ok(result)
+
+            elif cmd == IoctlCommand.CHECKPOINT_LOAD:
+                validate_args(args, 2, "CHECKPOINT_LOAD")
+                result = self.checkpoint_load(args[0], args[1])
+                return IoctlResult.ok(result)
 
             # Memory
-            "MEMORY": self._memory,
+            elif cmd == IoctlCommand.MEMORY:
+                return IoctlResult.ok(self.memory())
 
             # Compute (direct to TensorDevice)
-            "COMPUTE": self._compute_op,
-        }
+            elif cmd == IoctlCommand.COMPUTE:
+                validate_args(args, 1, "COMPUTE")
+                op = args[0]
+                op_args = args[1:] if len(args) > 1 else ()
+                return self._compute.ioctl(op, *op_args)
 
-        fn = ops.get(command)
-        if fn is None:
-            raise ValueError(f"unknown command: {command}")
-        return fn(*args)
+            else:
+                return IoctlResult.fail(f"command not implemented: {cmd.value}")
+
+        except IoctlError as e:
+            return IoctlResult.fail(str(e))
+        except Exception as e:
+            return IoctlResult.fail(f"internal error: {e}")
 
     def list_commands(self) -> list[str]:
         """List all available commands."""
         return sorted([
-            "INFO", "LOAD", "UNLOAD", "CALL",
-            "BATCH", "PIPE", "PROFILE", "QUANTIZE",
+            "INFO", "LIST_COMMANDS",
+            "LOAD", "UNLOAD", "CALL",
+            "BATCH", "PIPELINE", "PROFILE", "QUANTIZE",
             "CHECKPOINT_SAVE", "CHECKPOINT_LOAD",
             "MEMORY", "COMPUTE",
         ])
@@ -266,65 +317,6 @@ class NPUDevice:
             "models": model_mem,
             "total_model_mb": round(sum(model_mem.values()), 2),
         }
-
-    # ── Private methods (ioctl handlers) ──────────────────────────────────
-
-    def _info(self, *args):
-        return self.info()
-
-    def _load(self, *args):
-        path = args[0] if len(args) > 0 else ""
-        name = args[1] if len(args) > 1 else ""
-        provider = self.load(path, name)
-        return {"model": name or path.rsplit("/", 1)[-1]}
-
-    def _unload(self, *args):
-        name = args[0] if args else ""
-        ok = self.unload(name)
-        return {"unloaded": ok}
-
-    def _call(self, *args):
-        name = args[0] if len(args) > 0 else ""
-        inp = args[1] if len(args) > 1 else ""
-        return self.execute(name, inp)
-
-    def _batch(self, *args):
-        name = args[0] if len(args) > 0 else ""
-        inputs = args[1] if len(args) > 1 else []
-        return self.batch(name, inputs)
-
-    def _pipeline(self, *args):
-        names = args[0] if len(args) > 0 else []
-        inp = args[1] if len(args) > 1 else ""
-        return self.pipeline(names, inp)
-
-    def _profile(self, *args):
-        name = args[0] if len(args) > 0 else ""
-        seq_len = args[1] if len(args) > 1 else 512
-        return self.profile(name, int(seq_len))
-
-    def _quantize(self, *args):
-        name = args[0] if len(args) > 0 else ""
-        bits = args[1] if len(args) > 1 else 8
-        return self.quantize(name, int(bits))
-
-    def _checkpoint_save(self, *args):
-        name = args[0] if len(args) > 0 else ""
-        path = args[1] if len(args) > 1 else ""
-        return self.checkpoint_save(name, path)
-
-    def _checkpoint_load(self, *args):
-        name = args[0] if len(args) > 0 else ""
-        path = args[1] if len(args) > 1 else ""
-        return self.checkpoint_load(name, path)
-
-    def _memory(self, *args):
-        return self.memory()
-
-    def _compute_op(self, *args):
-        op = args[0] if len(args) > 0 else ""
-        op_args = args[1:] if len(args) > 1 else ()
-        return self._compute.ioctl(op, *op_args)
 
     # ── Internal helpers ──────────────────────────────────────────────────
 
