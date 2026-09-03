@@ -301,6 +301,9 @@ html {
 .sl-bottom-nav-item:active {
   transform: scale(0.92);
 }
+.sl-bottom-nav-item:hover {
+  color: rgb(var(--foreground));
+}
 .sl-bottom-nav-item--active {
   color: rgb(var(--primary));
 }
@@ -350,7 +353,13 @@ html {
   justify-content: space-between;
   height: 1.75rem;
   padding: 0 0.5rem;
-  gap: 0.5rem;
+  background: rgb(var(--card));
+  border-top: 1px solid rgb(var(--border));
+  border-radius: 0;
+  transition: background 150ms ease;
+}
+.sl-status-bar-row:hover {
+  background: rgb(var(--accent));
 }
 @media (min-width: 640px) {
   .sl-status-bar-row { height: 2rem; padding: 0 0.75rem; }
