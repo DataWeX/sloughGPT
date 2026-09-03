@@ -31,6 +31,9 @@ class DatasetsController:
         for d in datasets_dir.iterdir():
             if not d.is_dir():
                 continue
+            # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
+            if d.name.endswith(".db"):
+                continue
 
             input_file = d / "input.txt"
             corpus_file = d / "corpus.jsonl"

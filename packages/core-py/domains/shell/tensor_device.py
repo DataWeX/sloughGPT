@@ -196,7 +196,14 @@ class TensorDevice:
         k = self._to_arr(key)
         v = self._to_arr(value)
         d_k = q.shape[-1]
-        scores = np.matmul(q, k.transpose(-2, -1)) / np.sqrt(d_k)
+        # Transpose last two axes; for 3D (batch, seq, features) use (0, 2, 1)
+        if k.ndim >= 3:
+            axes = list(range(k.ndim))
+            axes[-2], axes[-1] = axes[-1], axes[-2]
+            k_t = k.transpose(axes)
+        else:
+            k_t = k.T
+        scores = np.matmul(q, k_t) / np.sqrt(d_k)
         if mask is not None:
             scores = np.where(mask, scores, -1e9)
         weights = self.softmax(scores, axis=-1)
