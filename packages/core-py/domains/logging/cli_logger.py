@@ -54,7 +54,8 @@ def _color_enabled(stream: Optional[TextIO] = None) -> bool:
     if force_color:
         return True
     try:
-        return bool((stream or sys.stderr).isatty())
+        s = stream or sys.stdout
+        return hasattr(s, "isatty") and s.isatty()
     except (AttributeError, ValueError):
         return False
 

@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Checkbox } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
-import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy, cn } from '@sloughgpt/strui'
+import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy, cn, Skeleton } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
 import { agentsController, type Agent, type OrchestrateTask, type AgentRun } from '@/lib/agents-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -546,7 +546,16 @@ export default function AgentsPage() {
           <CardContent className="space-y-2">
             {loading ? (
               <div className="space-y-2">
-                {[1, 2, 3].map(i => <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />)}
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/40">
+                    <Skeleton className="h-8 w-8 rounded shrink-0" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-3 w-40" />
+                    </div>
+                    <Skeleton className="h-6 w-14 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : agents.length === 0 ? (
               <EmptyCard
@@ -879,7 +888,16 @@ export default function AgentsPage() {
           <CardContent className="space-y-2">
             {runsLoading ? (
               <div className="space-y-2">
-                {[1, 2, 3].map(i => <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />)}
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/40">
+                    <Skeleton className="h-6 w-6 rounded shrink-0" />
+                    <div className="flex-1 space-y-1">
+                      <Skeleton className="h-3.5 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                ))}
               </div>
             ) : runs.length === 0 ? (
               <EmptyCard message="No runs yet — orchestrate a goal to see history here" action={null} />

@@ -105,7 +105,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
     }
     error_code = code_map.get(h.status_code, "E_DOMAIN")
 
-    log_fn = logger.warning if h.status_code >= 500 else logger.info
+    log_fn = logger.error if h.status_code >= 500 else logger.warning
     log_fn(
         "HTTP %d on %s %s", h.status_code, request.method, request.url.path,
         extra={"tag": "REQ", "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code}},
@@ -193,7 +193,7 @@ def register_all_handlers(app: FastAPI):
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
             except Exception as e:
                 logger.debug("Error event emission failed: %s", e)
-            log_fn = logger.warning if exc.http_status >= 500 else logger.info
+            log_fn = logger.error if exc.http_status >= 500 else logger.warning
             log_fn(
                 "%s [%s] on %s %s", exc.code, exc.message, request.method, request.url.path,
                 extra={"tag": "REQ", "context": {"corr": cid, "code": exc.code, "status": exc.http_status}},

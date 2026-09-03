@@ -4,6 +4,8 @@ export const dynamic = 'force-dynamic'
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, cn } from '@sloughgpt/strui'
+import { Skeleton } from '@sloughgpt/strui'
+import { MemoryPageSkeleton } from '@/components/ui/PageSkeletons'
 import { useToastStore } from '@/lib/toast-store'
 import { memoryController, type MemoryItem, type MemoryConfigResult, type MemoryArchiveStats } from '@/lib/memory-controller'
 
@@ -324,7 +326,17 @@ export default function MemoryPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-xs text-muted-foreground">Loading...</p>
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                    <div className="space-y-1 flex-1">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                    <Skeleton className="h-4 w-10" />
+                  </div>
+                ))}
+              </div>
             ) : displayItems.length === 0 ? (
               <p className="text-xs text-muted-foreground">No memory items.</p>
             ) : (

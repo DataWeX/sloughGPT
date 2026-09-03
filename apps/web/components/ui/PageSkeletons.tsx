@@ -251,3 +251,172 @@ export function ModelsPageSkeleton() {
     </div>
   )
 }
+
+export function MemoryPageSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="md:col-span-1 space-y-3">
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-9 w-full rounded-md" />
+            <Skeleton className="h-9 w-full rounded-md" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-5 w-12" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-5 w-12" />
+          </CardContent>
+        </Card>
+      </div>
+      <div className="md:col-span-2">
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                <div className="space-y-1 flex-1">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-4 w-10" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+export function VectorPageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-4 space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-14" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-full" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-24 rounded-md" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-9 w-full rounded-md" />
+          <Skeleton className="h-8 w-20 rounded-md" />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export function FeedbackPageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 border-b border-border/30 pb-0">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-20 rounded-t" />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-4 space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-12" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-24 w-full rounded" />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export function AgentsPageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Skeleton className="h-4 w-28" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Skeleton className="h-9 rounded-md" />
+            <Skeleton className="h-9 rounded-md" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-8 w-20 rounded-md" />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-border/40">
+                <Skeleton className="h-8 w-8 rounded shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-3.5 w-24" />
+                  <Skeleton className="h-3 w-40" />
+                </div>
+                <Skeleton className="h-6 w-14 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export function ComparePageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-4 space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-12" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Skeleton className="h-4 w-32" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="p-2.5 rounded-lg border border-border/40 space-y-1.5">
+                <Skeleton className="h-3.5 w-20" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-6 w-14 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

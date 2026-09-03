@@ -211,6 +211,7 @@ export default function ComparePage() {
       title="Model Comparison"
       subtitle="Side-by-side benchmark results across models"
       headerRight={headerRight}
+      loading={loading}
     >
       {snapshots.length > 0 && (
           <Card>

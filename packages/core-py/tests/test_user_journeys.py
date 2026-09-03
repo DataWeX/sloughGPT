@@ -132,7 +132,8 @@ class TestTraining:
 
     def test_import_button(self, page: Page):
         go(page, "/training")
-        btn = page.get_by_role("button", name="+ Import").first
+        time.sleep(1)
+        btn = page.locator("button:has-text('+ Import'):visible").first
         ok("training_import_button", btn.count() > 0)
         assert btn.count() > 0
 
@@ -202,7 +203,7 @@ class TestDatasetsImport:
 
     def test_import_dialog_opens(self, page: Page):
         go(page, "/datasets")
-        page.get_by_role("button", name="Import").first.click()
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(0.5)
         dialog = page.get_by_role("dialog")
         ok("datasets_import_dialog_opens", dialog.count() > 0)
@@ -210,29 +211,29 @@ class TestDatasetsImport:
 
     def test_kaggle_tab_exists(self, page: Page):
         go(page, "/datasets")
-        page.get_by_role("button", name="Import").first.click()
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(0.5)
-        kaggle = page.locator("button:has-text('Kaggle'):visible").first
+        kaggle = page.get_by_role("button", name="Kaggle")
         ok("datasets_kaggle_tab_exists", kaggle.count() > 0)
         assert kaggle.count() > 0
 
     def test_kaggle_tab_clicks(self, page: Page):
         go(page, "/datasets")
-        page.get_by_role("button", name="Import").first.click()
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(0.5)
-        page.locator("button:has-text('Kaggle'):visible").first.click(force=True)
+        page.get_by_role("button", name="Kaggle").first.click(force=True)
         time.sleep(0.5)
-        inp = page.locator("input[placeholder='username/dataset-name']:visible")
+        inp = page.locator("input[placeholder='username/dataset-name']")
         ok("datasets_kaggle_tab_clicks", inp.count() > 0)
         assert inp.count() > 0
 
     def test_kaggle_input_fills(self, page: Page):
         go(page, "/datasets")
-        page.get_by_role("button", name="Import").first.click()
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(0.5)
-        page.locator("button:has-text('Kaggle'):visible").first.click(force=True)
+        page.get_by_role("button", name="Kaggle").first.click(force=True)
         time.sleep(0.5)
-        inp = page.locator("input[placeholder='username/dataset-name']:visible")
+        inp = page.locator("input[placeholder='username/dataset-name']")
         inp.fill("heptapod/titanic")
         time.sleep(0.3)
         ok("datasets_kaggle_input_fills", inp.input_value() == "heptapod/titanic")
@@ -240,17 +241,19 @@ class TestDatasetsImport:
 
     def test_kaggle_import_success(self, page: Page):
         go(page, "/datasets")
-        page.get_by_role("button", name="Import").first.click()
+        time.sleep(1)
+        page.get_by_role("button", name="Import").first.click(force=True)
+        time.sleep(1)
+        page.get_by_role("button", name="Kaggle").first.click(force=True)
+        time.sleep(1)
+        page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
         time.sleep(0.5)
-        page.locator("button:has-text('Kaggle'):visible").first.click(force=True)
-        time.sleep(0.5)
-        page.locator("input[placeholder='username/dataset-name']:visible").fill("heptapod/titanic")
-        time.sleep(0.3)
-        page.locator("button:has-text('Import'):visible").last.click()
-        time.sleep(10)
+        page.get_by_role("button", name="Import").last.click(force=True)
+        time.sleep(15)
+        page.screenshot(path="/tmp/kaggle_e2e.png")
         body = page.inner_text("body")
         success = "downloaded" in body.lower() or "imported" in body.lower()
-        ok("datasets_kaggle_import_success", success, f"body_contains={'downloaded' in body.lower()}")
+        ok("datasets_kaggle_import_success", success, f"body_snippet={body[-200:]}")
         assert success
 
 

@@ -14,6 +14,10 @@ interface StatsGridProps {
 }
 
 export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inferenceCount, t }: StatsGridProps) {
+  const isLoading = apiStatus === 'loading'
+  const showPersonalitySkeleton = isLoading || currentSoul === null
+  const showActiveSkeleton = isLoading || modelStatus.model === null
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Card className="flex flex-col justify-between">
@@ -21,7 +25,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.status')}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          {apiStatus === 'loading' ? (
+          {isLoading ? (
             <div className="h-6 w-20 animate-pulse rounded bg-muted" />
           ) : (
             <div className="flex items-center gap-2">
@@ -39,7 +43,7 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.models')}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          {apiStatus === 'loading' ? (
+          {isLoading ? (
             <div className="h-6 w-12 animate-pulse rounded bg-muted" />
           ) : (
             <p className="text-sm font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
@@ -51,7 +55,11 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.personality')}</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
+          {showPersonalitySkeleton ? (
+            <div className="h-6 w-24 animate-pulse rounded bg-muted" />
+          ) : (
+            <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
+          )}
         </CardContent>
       </Card>
       <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20 flex flex-col justify-between">
@@ -59,9 +67,15 @@ export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inf
           <CardDescription className="text-xs font-medium text-muted-foreground">Active</CardDescription>
         </CardHeader>
         <CardContent className="pb-4 px-4">
-          <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
-          {inferenceCount !== null && inferenceCount !== undefined && (
-            <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
+          {showActiveSkeleton ? (
+            <div className="h-6 w-32 animate-pulse rounded bg-muted" />
+          ) : (
+            <>
+              <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
+              {inferenceCount !== null && inferenceCount !== undefined && (
+                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

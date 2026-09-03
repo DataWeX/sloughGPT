@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { vectorController, type VectorSearchResult } from '@/lib/vector-controller'
@@ -101,7 +101,7 @@ export default function VectorPage() {
     >
       <KpiGrid>
         <StatCard label="Provider" value={provider === 'in_memory' ? 'In Memory' : provider} />
-        <StatCard label="Vectors" value={loading ? '...' : String(count)} />
+        <StatCard label="Vectors" value={loading ? <Skeleton className="h-5 w-10 inline-block" /> : String(count)} />
         <StatCard label="Dimension" value="384" />
         <StatCard label="Status" value={count > 0 ? 'Active' : 'Empty'} />
       </KpiGrid>
