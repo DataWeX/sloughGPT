@@ -1,4 +1,24 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+const mockOon = vi.hoisted(() => ({
+  board: vi.fn(),
+  move: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  tags: vi.fn(),
+  list: vi.fn(),
+  createNote: vi.fn(),
+  updateNote: vi.fn(),
+  deleteNote: vi.fn(),
+  stats: vi.fn(),
+  sync: vi.fn(),
+}))
+
+vi.mock('./oon', () => ({
+  oon: mockOon,
+}))
+
 import {
   fetchBoard,
   moveCard,
@@ -14,229 +34,179 @@ import {
   syncNotes,
 } from './planner-client'
 
-const mockFetch = vi.fn()
-vi.stubGlobal('fetch', mockFetch)
-
-function jsonResponse(data: unknown, ok = true, status = 200) {
-  return {
-    ok,
-    status,
-    json: () => Promise.resolve(data),
-  }
-}
-
 beforeEach(() => {
-  mockFetch.mockReset()
+  vi.clearAllMocks()
 })
-
-// ── fetchBoard ─────────────────────────────────────────────────────
 
 describe('fetchBoard', () => {
-  it('fetches board from /api/planner/board', async () => {
+  it('delegates to oon.board()', async () => {
     const board = { columns: [], cards: [] }
-    mockFetch.mockResolvedValue(jsonResponse({ board }))
+    mockOon.board.mockResolvedValue({ board })
     const result = await fetchBoard()
     expect(result).toEqual({ board })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/board')
+    expect(mockOon.board).toHaveBeenCalledOnce()
   })
 
-  it('throws on non-ok response', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 500))
-    await expect(fetchBoard()).rejects.toThrow('Failed to fetch board')
+  it('throws on failure', async () => {
+    mockOon.board.mockRejectedValue(new Error('oon.board failed'))
+    await expect(fetchBoard()).rejects.toThrow('oon.board failed')
   })
 })
-
-// ── moveCard ───────────────────────────────────────────────────────
 
 describe('moveCard', () => {
-  it('POSTs to /api/planner/board/move', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}))
+  it('delegates to oon.move()', async () => {
+    mockOon.move.mockResolvedValue(undefined)
     await moveCard({ card_id: 'c1', column: 'done' })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/board/move', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ card_id: 'c1', column: 'done' }),
-    })
+    expect(mockOon.move).toHaveBeenCalledWith('c1', 'done')
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 400))
-    await expect(moveCard({ card_id: 'c1', column: 'done' })).rejects.toThrow('Failed to move card')
+    mockOon.move.mockRejectedValue(new Error('oon.move failed'))
+    await expect(moveCard({ card_id: 'c1', column: 'done' })).rejects.toThrow('oon.move failed')
   })
 })
-
-// ── createCard ─────────────────────────────────────────────────────
 
 describe('createCard', () => {
-  it('POSTs card data', async () => {
+  it('delegates to oon.create()', async () => {
     const card = { id: 'c1', title: 'Test' }
-    mockFetch.mockResolvedValue(jsonResponse({ card }))
+    mockOon.create.mockResolvedValue({ card })
     const result = await createCard({ title: 'Test', column: 'todo', priority: 'high' })
     expect(result).toEqual({ card })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/board/cards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Test', column: 'todo', priority: 'high' }),
-    })
+    expect(mockOon.create).toHaveBeenCalledWith({ title: 'Test', column: 'todo', priority: 'high' })
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 400))
-    await expect(createCard({ title: 'Test' })).rejects.toThrow('Failed to create card')
+    mockOon.create.mockRejectedValue(new Error('oon.create failed'))
+    await expect(createCard({ title: 'Test' })).rejects.toThrow('oon.create failed')
   })
 })
-
-// ── updateCard ─────────────────────────────────────────────────────
 
 describe('updateCard', () => {
-  it('PUTs updated fields', async () => {
+  it('delegates to oon.update()', async () => {
     const card = { id: 'c1', title: 'Updated' }
-    mockFetch.mockResolvedValue(jsonResponse({ card }))
+    mockOon.update.mockResolvedValue({ card })
     const result = await updateCard('c1', { title: 'Updated' })
     expect(result).toEqual({ card })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/board/cards/c1', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Updated' }),
-    })
+    expect(mockOon.update).toHaveBeenCalledWith('c1', { title: 'Updated' })
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 404))
-    await expect(updateCard('c1', { title: 'X' })).rejects.toThrow('Failed to update card')
+    mockOon.update.mockRejectedValue(new Error('oon.update failed'))
+    await expect(updateCard('c1', { title: 'X' })).rejects.toThrow('oon.update failed')
   })
 })
-
-// ── deleteCard ─────────────────────────────────────────────────────
 
 describe('deleteCard', () => {
-  it('DELETEs card by id', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}))
+  it('delegates to oon.delete()', async () => {
+    mockOon.delete.mockResolvedValue(undefined)
     await deleteCard('c1')
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/board/cards/c1', { method: 'DELETE' })
+    expect(mockOon.delete).toHaveBeenCalledWith('c1')
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 404))
-    await expect(deleteCard('c1')).rejects.toThrow('Failed to delete card')
+    mockOon.delete.mockRejectedValue(new Error('oon.delete failed'))
+    await expect(deleteCard('c1')).rejects.toThrow('oon.delete failed')
   })
 })
-
-// ── fetchTags ──────────────────────────────────────────────────────
 
 describe('fetchTags', () => {
-  it('fetches tags', async () => {
-    const tags = [{ tag: 'bug', count: 5 }]
-    mockFetch.mockResolvedValue(jsonResponse({ tags }))
+  it('delegates to oon.tags()', async () => {
+    const tags = [{ name: 'bug', count: 5 }]
+    mockOon.tags.mockResolvedValue({ tags })
     const result = await fetchTags()
     expect(result).toEqual({ tags })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/tags')
+    expect(mockOon.tags).toHaveBeenCalledOnce()
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 500))
-    await expect(fetchTags()).rejects.toThrow('Failed to fetch tags')
+    mockOon.tags.mockRejectedValue(new Error('oon.tags failed'))
+    await expect(fetchTags()).rejects.toThrow('oon.tags failed')
   })
 })
-
-// ── fetchNotes ─────────────────────────────────────────────────────
 
 describe('fetchNotes', () => {
-  it('fetches notes', async () => {
+  it('delegates to oon.list()', async () => {
     const notes = [{ id: 'n1', title: 'Note 1' }]
-    mockFetch.mockResolvedValue(jsonResponse({ notes }))
+    mockOon.list.mockResolvedValue({ notes })
     const result = await fetchNotes()
     expect(result).toEqual({ notes })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/notes')
+    expect(mockOon.list).toHaveBeenCalledOnce()
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 500))
-    await expect(fetchNotes()).rejects.toThrow('Failed to fetch notes')
+    mockOon.list.mockRejectedValue(new Error('oon.list failed'))
+    await expect(fetchNotes()).rejects.toThrow('oon.list failed')
   })
 })
-
-// ── createNote ─────────────────────────────────────────────────────
 
 describe('createNote', () => {
-  it('POSTs note data', async () => {
+  it('delegates to oon.createNote()', async () => {
     const note = { id: 'n1', title: 'Test' }
-    mockFetch.mockResolvedValue(jsonResponse({ note }))
+    mockOon.createNote.mockResolvedValue({ note })
     const result = await createNote({ title: 'Test', body: 'Content' })
     expect(result).toEqual({ note })
+    expect(mockOon.createNote).toHaveBeenCalledWith({ title: 'Test', body: 'Content' })
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 400))
-    await expect(createNote({ title: 'X' })).rejects.toThrow('Failed to create note')
+    mockOon.createNote.mockRejectedValue(new Error('oon.createNote failed'))
+    await expect(createNote({ title: 'X' })).rejects.toThrow('oon.createNote failed')
   })
 })
-
-// ── updateNote ─────────────────────────────────────────────────────
 
 describe('updateNote', () => {
-  it('PUTs updated fields', async () => {
+  it('delegates to oon.updateNote()', async () => {
     const note = { id: 'n1', title: 'Updated' }
-    mockFetch.mockResolvedValue(jsonResponse({ note }))
+    mockOon.updateNote.mockResolvedValue({ note })
     const result = await updateNote('n1', { title: 'Updated' })
     expect(result).toEqual({ note })
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/notes/n1', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Updated' }),
-    })
+    expect(mockOon.updateNote).toHaveBeenCalledWith('n1', { title: 'Updated' })
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 404))
-    await expect(updateNote('n1', { title: 'X' })).rejects.toThrow('Failed to update note')
+    mockOon.updateNote.mockRejectedValue(new Error('oon.updateNote failed'))
+    await expect(updateNote('n1', { title: 'X' })).rejects.toThrow('oon.updateNote failed')
   })
 })
-
-// ── deleteNote ─────────────────────────────────────────────────────
 
 describe('deleteNote', () => {
-  it('DELETEs note by id', async () => {
-    mockFetch.mockResolvedValue(jsonResponse({}))
+  it('delegates to oon.deleteNote()', async () => {
+    mockOon.deleteNote.mockResolvedValue(undefined)
     await deleteNote('n1')
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/notes/n1', { method: 'DELETE' })
+    expect(mockOon.deleteNote).toHaveBeenCalledWith('n1')
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 404))
-    await expect(deleteNote('n1')).rejects.toThrow('Failed to delete note')
+    mockOon.deleteNote.mockRejectedValue(new Error('oon.deleteNote failed'))
+    await expect(deleteNote('n1')).rejects.toThrow('oon.deleteNote failed')
   })
 })
-
-// ── fetchStats ─────────────────────────────────────────────────────
 
 describe('fetchStats', () => {
-  it('fetches stats', async () => {
-    const stats = { total: 10, by_column: { todo: 5 } }
-    mockFetch.mockResolvedValue(jsonResponse({ stats }))
+  it('delegates to oon.stats()', async () => {
+    const stats = { total_cards: 10, byColumn: { todo: 5 }, columns: 4, total_notes: 3 }
+    mockOon.stats.mockResolvedValue({ stats })
     const result = await fetchStats()
     expect(result).toEqual({ stats })
+    expect(mockOon.stats).toHaveBeenCalledOnce()
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 500))
-    await expect(fetchStats()).rejects.toThrow('Failed to fetch stats')
+    mockOon.stats.mockRejectedValue(new Error('oon.stats failed'))
+    await expect(fetchStats()).rejects.toThrow('oon.stats failed')
   })
 })
 
-// ── syncNotes ──────────────────────────────────────────────────────
-
 describe('syncNotes', () => {
-  it('POSTs to /api/planner/sync', async () => {
-    const result_data = { added: 2, updated: 1, total: 10 }
-    mockFetch.mockResolvedValue(jsonResponse(result_data))
+  it('delegates to oon.sync()', async () => {
+    mockOon.sync.mockResolvedValue({ added: 2, moved: 0, total: 10 })
     const result = await syncNotes()
-    expect(result).toEqual(result_data)
-    expect(mockFetch).toHaveBeenCalledWith('/api/planner/sync', { method: 'POST' })
+    expect(result).toEqual({ added: 2, updated: 0, total: 10 })
+    expect(mockOon.sync).toHaveBeenCalledOnce()
   })
 
   it('throws on failure', async () => {
-    mockFetch.mockResolvedValue(jsonResponse(null, false, 500))
-    await expect(syncNotes()).rejects.toThrow('Failed to sync notes')
+    mockOon.sync.mockRejectedValue(new Error('oon.sync failed'))
+    await expect(syncNotes()).rejects.toThrow('oon.sync failed')
   })
 })

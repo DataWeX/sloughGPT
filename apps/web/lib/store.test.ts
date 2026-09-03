@@ -52,8 +52,11 @@ describe('useAppStore', () => {
     })
 
     it('persists settings to MogDB', () => {
+      vi.useFakeTimers()
       useAppStore.getState().updateSettings({ defaultTemp: 0.5 })
+      vi.advanceTimersByTime(500)
       expect(chatDBMock.setKV).toHaveBeenCalledWith('app-settings', expect.objectContaining({ defaultTemp: 0.5 }))
+      vi.useRealTimers()
     })
   })
 

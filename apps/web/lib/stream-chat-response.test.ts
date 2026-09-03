@@ -203,7 +203,7 @@ describe('streamChatResponse', () => {
       text: () => Promise.resolve('Service unavailable'),
     } as unknown as Response)
     await streamChatResponse(mockParams)
-    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'))
+    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'), expect.any(Object))
   })
 
   it('retries on transient 503 before calling onError', async () => {
@@ -247,7 +247,7 @@ describe('streamChatResponse', () => {
     await streamChatResponse(mockParams)
 
     expect(mockParams.onError).toHaveBeenCalledTimes(1)
-    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'))
+    expect(mockParams.onError).toHaveBeenCalledWith(503, expect.stringContaining('503'), expect.any(Object))
   })
 
   it('does not retry on non-retryable 400 error', async () => {
@@ -260,7 +260,7 @@ describe('streamChatResponse', () => {
     await streamChatResponse(mockParams)
 
     expect(mockParams.onError).toHaveBeenCalledTimes(1)
-    expect(mockParams.onError).toHaveBeenCalledWith(400, expect.stringContaining('400'))
+    expect(mockParams.onError).toHaveBeenCalledWith(400, expect.stringContaining('400'), expect.any(Object))
   })
 
   it('does not retry when signal is aborted', async () => {
