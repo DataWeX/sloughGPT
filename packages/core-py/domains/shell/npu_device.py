@@ -1,46 +1,36 @@
 """
-NPU (Neural Processing Unit) device — hardware only.
+NPUDevice — hardware device driver.
 
-The model file (.slnc) already contains the graph.
-NPUDevice loads/unloads/executes models via ioctl.
-
-ioctl commands:
-  INFO                         → device info
-  LOAD   path, name            → load model
-  UNLOAD name                  → unload model
-  CALL   name, input           → execute model
-  BATCH  name, [inputs]        → execute multiple inputs
-  PIPE   [names], input        → chain models
-  PROFILE name, seq_len        → benchmark
-  QUANTIZE name, bits          → compress weights
-  CHECKPOINT_SAVE name, path   → save state
-  CHECKPOINT_LOAD name, path   → load state
-  MEMORY                       → memory usage
+Uses TensorDevice for computation.
+Adds: model management, I/O, assembly interface (ioctl).
 """
 
 from __future__ import annotations
 
-import os
 import time
-import struct
 import logging
 import threading
 import numpy as np
-from dataclasses import dataclass, field
 from typing import Any
 
 from .kernel_devices import DeviceDriver, DeviceType, DeviceState
 from .kernel_syscall import SyscallResult
+from .tensor_device import TensorDevice
 
 logger = logging.getLogger("slo.kernel.npu")
 
 
 class NPUDevice(DeviceDriver):
-    """NPU hardware device — loads models, executes them."""
+    """NPU hardware device — loads models, executes them.
 
-    def __init__(self, name: str = "npu", capabilities: list | None = None):
+    Uses TensorDevice for computation.
+    Adds: model management, I/O, assembly interface (ioctl).
+    """
+
+    def __init__(self, name: str = "npu"):
         super().__init__(name, DeviceType.INFERENCE)
-        self._models: dict[str, Any] = {}  # name → provider
+        self._compute = TensorDevice()  # Pure compute engine
+        self._models: dict[str, Any] = {}
         self._default_model: str = ""
         self._checkpoints: dict[str, dict] = {}
         self._open_count: int = 0
@@ -60,16 +50,23 @@ class NPUDevice(DeviceDriver):
     def info(self) -> dict:
         return {
             "device": self.name,
+            "compute_ops": self._compute.list_ops(),
             "models": len(self._models),
             "names": list(self._models.keys()),
             "default": self._default_model,
             "checkpoints": list(self._checkpoints.keys()),
         }
 
+    # ── Compute access (for direct tensor ops) ────────────────────────────
+
+    def compute(self, op: str, *args, **kwargs):
+        """Direct access to TensorDevice for pure compute."""
+        return self._compute(op, *args, **kwargs)
+
     # ── Model management ──────────────────────────────────────────────────
 
     def load(self, path: str = "", name: str = "", **kwargs) -> Any:
-        """Load model from file — graph is already inside."""
+        """Load model from file."""
         if not path:
             raise ValueError("no path")
 
@@ -288,7 +285,14 @@ class NPUDevice(DeviceDriver):
     def ioctl(self, command: str, *args: Any) -> SyscallResult | dict:
         """All operations go through ioctl."""
         try:
-            if command == "INFO":
+            # Compute ops (direct to TensorDevice)
+            if command.startswith("COMPUTE:"):
+                op = command[8:]  # Remove "COMPUTE:" prefix
+                result = self._compute(op, *args)
+                return SyscallResult.ok({"result": result})
+
+            # Device ops
+            elif command == "INFO":
                 return SyscallResult.ok(self.info())
 
             elif command == "LOAD":
