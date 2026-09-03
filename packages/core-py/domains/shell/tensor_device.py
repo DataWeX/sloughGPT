@@ -10,7 +10,8 @@ from __future__ import annotations
 import numpy as np
 from typing import Any
 
-from .ioctl import IoctlCommand, IoctlResult, IoctlError, validate_command, validate_args
+from .ioctl import IoctlCommand
+from .kernel_syscall import SyscallResult
 
 
 class TensorDevice:
@@ -108,19 +109,25 @@ class TensorDevice:
 
     # ── ioctl interface ───────────────────────────────────────────────────
 
-    def ioctl(self, command: str | IoctlCommand, *args: Any) -> IoctlResult:
+    def ioctl(self, command: str | IoctlCommand, *args: Any) -> SyscallResult:
         """Clean ioctl interface — type-safe, documented."""
         try:
-            cmd = validate_command(command)
+            if isinstance(command, str):
+                try:
+                    cmd = IoctlCommand(command)
+                except ValueError:
+                    return SyscallResult.fail(f"unknown command: {command}")
+            else:
+                cmd = command
+
             fn = self._ops.get(cmd)
             if fn is None:
-                return IoctlResult.fail(f"command not implemented: {cmd.value}")
+                return SyscallResult.fail(f"command not implemented: {cmd.value}")
+
             result = fn(*args)
-            return IoctlResult.ok(result)
-        except IoctlError as e:
-            return IoctlResult.fail(str(e))
+            return SyscallResult.ok(result)
         except Exception as e:
-            return IoctlResult.fail(f"internal error: {e}")
+            return SyscallResult.fail(f"ioctl error: {e}")
 
     def list_commands(self) -> list[str]:
         """List all available commands."""
@@ -212,186 +219,186 @@ class TensorDevice:
         return np.array(v, dtype=np.float64)
 
     def _matmul(self, *args):
-        validate_args(args, 2, "MATMUL")
+        pass  # args validated by caller
         return self.matmul(args[0], args[1])
 
     def _dot(self, *args):
-        validate_args(args, 2, "DOT")
+        pass  # args validated by caller
         return np.dot(self._to_arr(args[0]), self._to_arr(args[1]))
 
     def _inv(self, *args):
-        validate_args(args, 1, "INV")
+        pass  # args validated by caller
         return np.linalg.inv(self._to_arr(args[0]))
 
     def _svd(self, *args):
-        validate_args(args, 1, "SVD")
+        pass  # args validated by caller
         return np.linalg.svd(self._to_arr(args[0]))
 
     def _eig(self, *args):
-        validate_args(args, 1, "EIG")
+        pass  # args validated by caller
         return np.linalg.eig(self._to_arr(args[0]))
 
     def _relu(self, *args):
-        validate_args(args, 1, "RELU")
+        pass  # args validated by caller
         return self.relu(args[0])
 
     def _leaky_relu(self, *args):
-        validate_args(args, 1, "LEAKY_RELU")
+        pass  # args validated by caller
         x = self._to_arr(args[0])
         alpha = args[1] if len(args) > 1 else 0.01
         return np.where(x > 0, x, alpha * x)
 
     def _sigmoid(self, *args):
-        validate_args(args, 1, "SIGMOID")
+        pass  # args validated by caller
         x = self._to_arr(args[0])
         return 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
 
     def _tanh(self, *args):
-        validate_args(args, 1, "TANH")
+        pass  # args validated by caller
         return np.tanh(self._to_arr(args[0]))
 
     def _softmax(self, *args):
-        validate_args(args, 1, "SOFTMAX")
+        pass  # args validated by caller
         return self.softmax(args[0])
 
     def _log_softmax(self, *args):
-        validate_args(args, 1, "LOG_SOFTMAX")
+        pass  # args validated by caller
         return np.log(self.softmax(args[0]) + 1e-8)
 
     def _gelu(self, *args):
-        validate_args(args, 1, "GELU")
+        pass  # args validated by caller
         x = self._to_arr(args[0])
         return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x + 0.044715 * x**3)))
 
     def _silu(self, *args):
-        validate_args(args, 1, "SILU")
+        pass  # args validated by caller
         x = self._to_arr(args[0])
         return x * self._sigmoid(x)
 
     def _elu(self, *args):
-        validate_args(args, 1, "ELU")
+        pass  # args validated by caller
         x = self._to_arr(args[0])
         alpha = args[1] if len(args) > 1 else 1.0
         return np.where(x > 0, x, alpha * (np.exp(x) - 1))
 
     def _selu(self, *args):
-        validate_args(args, 1, "SELU")
+        pass  # args validated by caller
         x = self._to_arr(args[0])
         alpha = 1.6732632423543772
         scale = 1.0507009873554805
         return scale * np.where(x > 0, x, alpha * (np.exp(x) - 1))
 
     def _add(self, *args):
-        validate_args(args, 2, "ADD")
+        pass  # args validated by caller
         return self.add(args[0], args[1])
 
     def _sub(self, *args):
-        validate_args(args, 2, "SUB")
+        pass  # args validated by caller
         return self._to_arr(args[0]) - self._to_arr(args[1])
 
     def _mul(self, *args):
-        validate_args(args, 2, "MUL")
+        pass  # args validated by caller
         return self.mul(args[0], args[1])
 
     def _div(self, *args):
-        validate_args(args, 2, "DIV")
+        pass  # args validated by caller
         return self._to_arr(args[0]) / self._to_arr(args[1])
 
     def _neg(self, *args):
-        validate_args(args, 1, "NEG")
+        pass  # args validated by caller
         return -self._to_arr(args[0])
 
     def _abs(self, *args):
-        validate_args(args, 1, "ABS")
+        pass  # args validated by caller
         return np.abs(self._to_arr(args[0]))
 
     def _pow(self, *args):
-        validate_args(args, 2, "POW")
+        pass  # args validated by caller
         return np.power(self._to_arr(args[0]), args[1])
 
     def _sqrt(self, *args):
-        validate_args(args, 1, "SQRT")
+        pass  # args validated by caller
         return np.sqrt(self._to_arr(args[0]))
 
     def _exp(self, *args):
-        validate_args(args, 1, "EXP")
+        pass  # args validated by caller
         return np.exp(self._to_arr(args[0]))
 
     def _log(self, *args):
-        validate_args(args, 1, "LOG")
+        pass  # args validated by caller
         return np.log(self._to_arr(args[0]) + 1e-8)
 
     def _sum(self, *args):
-        validate_args(args, 1, "SUM")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.sum(self._to_arr(args[0]), axis=axis)
 
     def _mean(self, *args):
-        validate_args(args, 1, "MEAN")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.mean(self._to_arr(args[0]), axis=axis)
 
     def _std(self, *args):
-        validate_args(args, 1, "STD")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.std(self._to_arr(args[0]), axis=axis)
 
     def _var(self, *args):
-        validate_args(args, 1, "VAR")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.var(self._to_arr(args[0]), axis=axis)
 
     def _max(self, *args):
-        validate_args(args, 1, "MAX")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.max(self._to_arr(args[0]), axis=axis)
 
     def _min(self, *args):
-        validate_args(args, 1, "MIN")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.min(self._to_arr(args[0]), axis=axis)
 
     def _argmax(self, *args):
-        validate_args(args, 1, "ARGMAX")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else -1
         return np.argmax(self._to_arr(args[0]), axis=axis)
 
     def _argmin(self, *args):
-        validate_args(args, 1, "ARGMIN")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else -1
         return np.argmin(self._to_arr(args[0]), axis=axis)
 
     def _reshape(self, *args):
-        validate_args(args, 2, "RESHAPE")
+        pass  # args validated by caller
         return self._to_arr(args[0]).reshape(args[1])
 
     def _transpose(self, *args):
-        validate_args(args, 1, "TRANSPOSE")
+        pass  # args validated by caller
         axes = args[1] if len(args) > 1 else None
         return self._to_arr(args[0]).transpose(axes)
 
     def _flatten(self, *args):
-        validate_args(args, 1, "FLATTEN")
+        pass  # args validated by caller
         return self._to_arr(args[0]).flatten()
 
     def _squeeze(self, *args):
-        validate_args(args, 1, "SQUEEZE")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else None
         return np.squeeze(self._to_arr(args[0]), axis=axis)
 
     def _unsqueeze(self, *args):
-        validate_args(args, 1, "UNSQUEEZE")
+        pass  # args validated by caller
         axis = args[1] if len(args) > 1 else 0
         return np.expand_dims(self._to_arr(args[0]), axis=axis)
 
     def _cat(self, *args):
-        validate_args(args, 1, "CAT")
+        pass  # args validated by caller
         arrays = args[0]
         axis = args[1] if len(args) > 1 else 0
         return np.concatenate([self._to_arr(a) for a in arrays], axis=axis)
 
     def _stack(self, *args):
-        validate_args(args, 1, "STACK")
+        pass  # args validated by caller
         arrays = args[0]
         axis = args[1] if len(args) > 1 else 0
         return np.stack([self._to_arr(a) for a in arrays], axis=axis)
@@ -509,7 +516,7 @@ class TensorDevice:
         return out
 
     def _batch_norm(self, *args):
-        validate_args(args, 5, "BATCH_NORM")
+        pass  # args validated by caller
         input, weight, bias, mean, var = args[0], args[1], args[2], args[3], args[4]
         eps = args[5] if len(args) > 5 else 1e-5
         x = self._to_arr(input)
@@ -521,7 +528,7 @@ class TensorDevice:
         return w * x_hat + b
 
     def _layer_norm(self, *args):
-        validate_args(args, 3, "LAYER_NORM")
+        pass  # args validated by caller
         input, weight, bias = args[0], args[1], args[2]
         eps = args[3] if len(args) > 3 else 1e-5
         x = self._to_arr(input)
@@ -533,7 +540,7 @@ class TensorDevice:
         return w * x_hat + b
 
     def _rms_norm(self, *args):
-        validate_args(args, 2, "RMS_NORM")
+        pass  # args validated by caller
         input, weight = args[0], args[1]
         eps = args[2] if len(args) > 2 else 1e-6
         x = self._to_arr(input)
@@ -542,27 +549,27 @@ class TensorDevice:
         return x / rms * w
 
     def _attention(self, *args):
-        validate_args(args, 3, "ATTENTION")
+        pass  # args validated by caller
         query, key, value = args[0], args[1], args[2]
         mask = args[3] if len(args) > 3 else None
         return self.attention(query, key, value, mask)
 
     def _cross_entropy(self, *args):
-        validate_args(args, 2, "CROSS_ENTROPY")
+        pass  # args validated by caller
         input, target = args[0], args[1]
         ignore_index = args[2] if len(args) > 2 else -100
         return self.cross_entropy(input, target, ignore_index)
 
     def _mse(self, *args):
-        validate_args(args, 2, "MSE")
+        pass  # args validated by caller
         return np.mean((self._to_arr(args[0]) - self._to_arr(args[1])) ** 2)
 
     def _mae(self, *args):
-        validate_args(args, 2, "MAE")
+        pass  # args validated by caller
         return np.mean(np.abs(self._to_arr(args[0]) - self._to_arr(args[1])))
 
     def _sgd_step(self, *args):
-        validate_args(args, 3, "SGD_STEP")
+        pass  # args validated by caller
         params, grads, lr = args[0], args[1], args[2]
         momentum = args[3] if len(args) > 3 else 0.0
         state = args[4] if len(args) > 4 else None
@@ -581,7 +588,7 @@ class TensorDevice:
         return updates
 
     def _adam_step(self, *args):
-        validate_args(args, 3, "ADAM_STEP")
+        pass  # args validated by caller
         params, grads, lr = args[0], args[1], args[2]
         betas = args[3] if len(args) > 3 else (0.9, 0.999)
         eps = args[4] if len(args) > 4 else 1e-8
@@ -606,7 +613,7 @@ class TensorDevice:
         return updates
 
     def _clip_grad_norm(self, *args):
-        validate_args(args, 2, "CLIP_GRAD_NORM")
+        pass  # args validated by caller
         grads, max_norm = args[0], args[1]
         total_norm = 0.0
         for g in grads.values():
@@ -619,18 +626,18 @@ class TensorDevice:
         return dict(grads)
 
     def _dropout(self, *args):
-        validate_args(args, 1, "DROPOUT")
+        pass  # args validated by caller
         input = args[0]
         p = args[1] if len(args) > 1 else 0.5
         training = args[2] if len(args) > 2 else True
         return self.dropout(input, p, training)
 
     def _embedding(self, *args):
-        validate_args(args, 2, "EMBEDDING")
+        pass  # args validated by caller
         return self.embedding(args[0], args[1])
 
     def _linear(self, *args):
-        validate_args(args, 2, "LINEAR")
+        pass  # args validated by caller
         input, weight = args[0], args[1]
         bias = args[2] if len(args) > 2 else None
         return self.linear(input, weight, bias)

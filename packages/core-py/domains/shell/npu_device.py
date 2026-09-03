@@ -13,7 +13,8 @@ import numpy as np
 from typing import Any
 
 from .tensor_device import TensorDevice
-from .ioctl import IoctlCommand, IoctlResult, IoctlError, validate_command, validate_args
+from .ioctl import IoctlCommand
+from .kernel_syscall import SyscallResult
 
 logger = logging.getLogger("slo.npu")
 
@@ -34,87 +35,101 @@ class NPUDevice:
 
     # ── ioctl interface ───────────────────────────────────────────────────
 
-    def ioctl(self, command: str | IoctlCommand, *args: Any) -> IoctlResult:
+    def ioctl(self, command: str | IoctlCommand, *args: Any) -> SyscallResult:
         """Clean ioctl interface — type-safe, documented."""
         try:
-            cmd = validate_command(command)
+            if isinstance(command, str):
+                try:
+                    cmd = IoctlCommand(command)
+                except ValueError:
+                    return SyscallResult.fail(f"unknown command: {command}")
+            else:
+                cmd = command
 
             # Common commands
             if cmd == IoctlCommand.INFO:
-                return IoctlResult.ok(self.info())
+                return SyscallResult.ok(self.info())
             elif cmd == IoctlCommand.LIST_COMMANDS:
-                return IoctlResult.ok(self.list_commands())
+                return SyscallResult.ok(self.list_commands())
 
             # Model management
             elif cmd == IoctlCommand.LOAD:
-                validate_args(args, 1, "LOAD")
+                if len(args) < 1:
+                    return SyscallResult.fail("LOAD requires path")
                 path = args[0]
                 name = args[1] if len(args) > 1 else ""
                 provider = self.load(path, name)
-                return IoctlResult.ok({"model": name or path.rsplit("/", 1)[-1]})
+                return SyscallResult.ok({"model": name or path.rsplit("/", 1)[-1]})
 
             elif cmd == IoctlCommand.UNLOAD:
-                validate_args(args, 1, "UNLOAD")
+                if len(args) < 1:
+                    return SyscallResult.fail("UNLOAD requires name")
                 ok = self.unload(args[0])
-                return IoctlResult.ok({"unloaded": ok})
+                return SyscallResult.ok({"unloaded": ok})
 
             elif cmd == IoctlCommand.CALL:
-                validate_args(args, 2, "CALL")
+                if len(args) < 2:
+                    return SyscallResult.fail("CALL requires name and input")
                 result = self.execute(args[0], args[1])
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             # Advanced operations
             elif cmd == IoctlCommand.BATCH:
-                validate_args(args, 2, "BATCH")
+                if len(args) < 2:
+                    return SyscallResult.fail("BATCH requires name and inputs")
                 result = self.batch(args[0], args[1])
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             elif cmd == IoctlCommand.PIPELINE:
-                validate_args(args, 2, "PIPELINE")
+                if len(args) < 2:
+                    return SyscallResult.fail("PIPELINE requires names and input")
                 result = self.pipeline(args[0], args[1])
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             elif cmd == IoctlCommand.PROFILE:
-                validate_args(args, 1, "PROFILE")
+                if len(args) < 1:
+                    return SyscallResult.fail("PROFILE requires name")
                 seq_len = args[1] if len(args) > 1 else 512
                 result = self.profile(args[0], int(seq_len))
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             elif cmd == IoctlCommand.QUANTIZE:
-                validate_args(args, 1, "QUANTIZE")
+                if len(args) < 1:
+                    return SyscallResult.fail("QUANTIZE requires name")
                 bits = args[1] if len(args) > 1 else 8
                 result = self.quantize(args[0], int(bits))
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             # Checkpoints
             elif cmd == IoctlCommand.CHECKPOINT_SAVE:
-                validate_args(args, 2, "CHECKPOINT_SAVE")
+                if len(args) < 2:
+                    return SyscallResult.fail("CHECKPOINT_SAVE requires name and path")
                 result = self.checkpoint_save(args[0], args[1])
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             elif cmd == IoctlCommand.CHECKPOINT_LOAD:
-                validate_args(args, 2, "CHECKPOINT_LOAD")
+                if len(args) < 2:
+                    return SyscallResult.fail("CHECKPOINT_LOAD requires name and path")
                 result = self.checkpoint_load(args[0], args[1])
-                return IoctlResult.ok(result)
+                return SyscallResult.ok(result)
 
             # Memory
             elif cmd == IoctlCommand.MEMORY:
-                return IoctlResult.ok(self.memory())
+                return SyscallResult.ok(self.memory())
 
             # Compute (direct to TensorDevice)
             elif cmd == IoctlCommand.COMPUTE:
-                validate_args(args, 1, "COMPUTE")
+                if len(args) < 1:
+                    return SyscallResult.fail("COMPUTE requires op")
                 op = args[0]
                 op_args = args[1:] if len(args) > 1 else ()
                 return self._compute.ioctl(op, *op_args)
 
             else:
-                return IoctlResult.fail(f"command not implemented: {cmd.value}")
+                return SyscallResult.fail(f"command not implemented: {cmd.value}")
 
-        except IoctlError as e:
-            return IoctlResult.fail(str(e))
         except Exception as e:
-            return IoctlResult.fail(f"internal error: {e}")
+            return SyscallResult.fail(f"ioctl error: {e}")
 
     def list_commands(self) -> list[str]:
         """List all available commands."""

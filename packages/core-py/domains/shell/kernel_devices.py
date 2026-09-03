@@ -11,7 +11,7 @@ from __future__ import annotations
 import threading
 from enum import IntEnum
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any
 
 
 class DeviceType(IntEnum):
@@ -31,22 +31,6 @@ class DeviceState(IntEnum):
     ERROR = 2
 
 
-class Device(Protocol):
-    """Protocol that all devices must satisfy."""
-
-    @property
-    def name(self) -> str: ...
-    @property
-    def device_type(self) -> DeviceType: ...
-    def open(self) -> bool: ...
-    def close(self) -> None: ...
-    def read(self, offset: int = 0, size: int = -1) -> Any: ...
-    def write(self, data: Any) -> bool: ...
-    def ioctl(self, command: str, *args: Any) -> Any: ...
-    def info(self) -> dict: ...
-
-
-@dataclass
 class DeviceHandle:
     """A file-descriptor-like handle to an open device."""
     fd: int
