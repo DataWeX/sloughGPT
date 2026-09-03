@@ -31,3 +31,15 @@
 - **Notes** (`~/.config/dev-notes/*.md`) are the user's journal — source of truth for task metadata (sprint, gh, status, body).
 - **Board** (`.kanban/board.jsonl`) is the kanban view derived from notes via sync.
 - Sync is bidirectional: note status ↔ card column.
+
+## Core Infrastructure Sync Rule
+
+**http-client.ts is the single source of truth for all API communication.**
+
+When backend endpoints, response envelopes, or error formats change:
+
+1. **Update http-client.ts first** — match the new backend contract (endpoints, response shape, error codes).
+2. **Propagate to consumers** — update hooks, controllers, and components that use http-client.
+3. **Never bypass http-client with raw `fetch()`** — all API calls must go through `apiGet`, `apiPost`, `apiPut`, `apiDelete`, `apiPatch`, or the `request()` function.
+
+This ensures consistent error handling, retries, caching, circuit breaking, and interceptors across the entire frontend. Bypassing http-client breaks these guarantees and creates silent bugs.
