@@ -188,3 +188,33 @@ class TestMatmulInt8F32:
 class TestHASAVX2:
     def test_flag_is_bool(self):
         assert isinstance(HAS_AVX2, bool)
+
+
+# ── AVX-512 VNNI flag ────────────────────────────────────────────────
+
+
+class TestHASAVX512:
+    def test_flag_is_bool(self):
+        from domains.infrastructure.quant_core.wrapper import HAS_AVX512
+        assert isinstance(HAS_AVX512, bool)
+
+    def test_crossover_tracks_kernel(self):
+        """Adaptive crossover must be lower when the AVX-512 kernel is active."""
+        from domains.infrastructure.quant_core.wrapper import HAS_AVX512
+        from domains.infrastructure import quantization as q
+
+        expected = 512 if HAS_AVX512 else 1024
+        assert q.QUANT_CROSSOVER_K == expected
+
+    def test_avx512_path_correct(self):
+        """The AVX-512 VNNI GEMM must match the numpy reference exactly."""
+        from domains.infrastructure.quant_core.wrapper import HAS_AVX512
+        if not HAS_AVX512:
+            pytest.skip("AVX-512 VNNI kernel not active on this host")
+        rng = np.random.default_rng(7)
+        for K in (512, 1024, 127):
+            A = rng.integers(-128, 127, (3, K), dtype=np.int8)
+            B = rng.integers(-128, 127, (K, K), dtype=np.int8)
+            got = matmul_int8_c(A, B)
+            ref = (A.astype(np.int32) @ B.astype(np.int32).T).astype(np.int32)
+            np.testing.assert_array_equal(got, ref)
