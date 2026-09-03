@@ -120,7 +120,7 @@ class ModelLoader:
 
         # Check if .slnc already exists — skip conversion stages
         try:
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
             cache_dir = _get_model_dir(model_id)
             has_slnc = (cache_dir / "model.slnc").exists()
         except Exception as exc:
@@ -184,7 +184,7 @@ class ModelLoader:
         Returns None if no .slnc file found, otherwise LoadResult.
         """
         try:
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
             cache_dir = _get_model_dir(model_id)
         except Exception as exc:
             logger.debug("Failed to resolve model directory: %s", exc)

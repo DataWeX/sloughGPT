@@ -1042,7 +1042,7 @@ def setup_providers(
     elif slonet_hf_id:
         try:
             from domains.inference.slonet_provider import SloNetChatProvider
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
             _cache_dir = _get_model_dir(slonet_hf_id)
             _slnc = _cache_dir / "model.slnc"
             if not _slnc.exists():
@@ -1072,7 +1072,7 @@ def setup_providers(
     else:
         # Standalone SloNet mode: auto-detect a cached .slnc model
         try:
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
             from domains.infrastructure.config import get_config
             cfg = get_config()
             default_model = cfg.autoload_model

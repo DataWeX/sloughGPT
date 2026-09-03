@@ -51,22 +51,38 @@ if TYPE_CHECKING:
 
 def _load_weights(model_id: str) -> Tuple[dict, dict]:
     """Load config.json + weights from HF cache. Returns (config, weights)."""
-    from domains.infrastructure.safetensors_loader import _get_model_dir, _find_safetensors, load_model_config
+    from domains.infrastructure.slnc.parser import get_model_dir as _get_model_dir, find_safetensors as _find_safetensors
 
     model_dir = _get_model_dir(model_id)
     if not model_dir.exists():
         raise FileNotFoundError(f"Model {model_id} not cached")
 
-    config = load_model_config(model_id)
+    # Config
+    config_path = None
+    snapshots = model_dir / "snapshots"
+    if snapshots.exists():
+        for snap in snapshots.iterdir():
+            c = snap / "config.json"
+            if c.exists():
+                config_path = c
+                break
+    if config_path is None:
+        config_path = model_dir / "config.json"
+    if config_path is None or not config_path.exists():
+        raise FileNotFoundError(f"No config.json for {model_id}")
+
+    with open(config_path) as f:
+        config = json.load(f)
 
     # Weights — SLNC, auto-convert if needed
+    from pathlib import Path
     safetensors_path = _find_safetensors(model_dir)
     if safetensors_path is None:
         raise FileNotFoundError(f"No model weights for {model_id}")
 
     slnc_path = safetensors_path.with_suffix(".slnc")
     if not slnc_path.exists():
-        _convert_to_slnc(safetensors_path, slnc_path, config)
+        _convert_safetensors_to_slnc(safetensors_path, slnc_path, config, model_id)
 
     from domains.infrastructure.slnc.parser import SLNCParser
     parser = SLNCParser(str(slnc_path))
@@ -76,16 +92,17 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
     return config, weights
 
 
-def _convert_to_slnc(st_path, slnc_path, config):
+def _convert_safetensors_to_slnc(st_path, slnc_path, config, model_id):
     """Convert safetensors to .slnc on first load."""
     import struct
+    import json as _json
 
-    logger.info("Converting %s → .slnc", st_path.name, extra={"tag": "INFRA"})
+    logger.info("Converting %s → .slnc (first load)", st_path.name, extra={"tag": "INFRA"})
 
     weights = {}
     with open(str(st_path), "rb") as f:
         header_len = struct.unpack("<Q", f.read(8))[0]
-        header = json.loads(f.read(header_len))
+        header = _json.loads(f.read(header_len))
         for key, info in header.items():
             if key.startswith("__"):
                 continue
