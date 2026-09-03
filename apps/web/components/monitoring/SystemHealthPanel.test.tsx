@@ -44,7 +44,7 @@ describe('SystemHealthPanel', () => {
       expect(screen.getByText('Reconnecting')).toBeDefined()
     })
     it('shows Offline', () => {
-      render(<SystemHealthPanel {...emptyProps} connectionStatus="disconnected" />)
+      render(<SystemHealthPanel {...emptyProps} connectionStatus="offline" />)
       expect(screen.getByText('Offline')).toBeDefined()
     })
   })

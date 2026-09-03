@@ -8,6 +8,7 @@ const fullCaps = {
   speech_to_text: true, image_caption: true, vision_model: 'gpt-4v',
   speech_model: 'whisper', trained: true, images_learned: 10,
   replay_buffer_size: 500, learning_method: 'DPO', status: 'ready',
+  background_job_running: false,
 }
 
 describe('CapabilitiesCard', () => {
