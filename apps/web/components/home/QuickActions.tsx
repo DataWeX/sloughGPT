@@ -7,6 +7,7 @@ import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 
 interface QuickActionsProps {
+  loading: boolean
   modelStatus: { loaded: boolean; model: string | null }
   testRunning: boolean
   testResponse: string | null
@@ -16,8 +17,35 @@ interface QuickActionsProps {
   setKnowledgeCount: React.Dispatch<React.SetStateAction<number>>
 }
 
-export function QuickActions({ modelStatus, testRunning, testResponse, setTestRunning, setTestResponse, knowledgeCount, setKnowledgeCount }: QuickActionsProps) {
+export function QuickActions({ loading, modelStatus, testRunning, testResponse, setTestRunning, setTestResponse, knowledgeCount, setKnowledgeCount }: QuickActionsProps) {
   const addToast = useToastStore(s => s.addToast)
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+              </div>
+              <div className="h-8 w-20 animate-pulse rounded bg-muted shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted mb-2" />
+            <div className="flex gap-2">
+              <div className="h-9 flex-1 animate-pulse rounded bg-muted" />
+              <div className="h-8 w-14 animate-pulse rounded bg-muted shrink-0" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (!modelStatus.loaded) return null
 

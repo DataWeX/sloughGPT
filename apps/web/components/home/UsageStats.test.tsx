@@ -20,6 +20,7 @@ vi.mock('@sloughgpt/strui', () => {
 
 const baseProps = {
   apiStatus: 'online' as string,
+  loading: false,
   convStats: { totalConversations: 15, totalMessages: 320, totalWords: 8500, activeDays: 5, mostActiveHour: 14 },
   datasetStats: { totalDatasets: 3, totalSize: 10240, totalSamples: 1500 },
 }

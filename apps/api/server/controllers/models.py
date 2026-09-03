@@ -54,11 +54,13 @@ class ModelsController:
             try:
                 from domains.infrastructure.ml_types import auto_device
                 return auto_device()
-            except Exception:
+            except ImportError:
+                logger.warning("ml_types not available, falling back to cpu", extra={"tag": "MODEL"})
                 return "cpu"
         try:
             from domains.infrastructure.ml_types import _cuda_available, _mps_available
-        except Exception:
+        except ImportError:
+            logger.warning("ml_types not available, device checks disabled", extra={"tag": "MODEL"})
             _cuda_available = _mps_available = None
         if device == "cuda" and (_cuda_available is None or not _cuda_available()):
             logger.warning("device='cuda' requested but CUDA unavailable — falling back to cpu", extra={"tag": "MODEL"})
@@ -797,13 +799,13 @@ class ModelsController:
             "last_inference_time": self._last_inference_time,
         }
 
-    def record_inference_start(self):
+    def record_inference_start(self) -> None:
         """Record inference start"""
         self._is_inferencing = True
         self._inference_count += 1
         self._last_inference_time = time.time()
 
-    def record_inference_end(self, tokens_generated: int = 0):
+    def record_inference_end(self, tokens_generated: int = 0) -> None:
         """Record inference end"""
         self._is_inferencing = False
         self._total_tokens_generated += tokens_generated

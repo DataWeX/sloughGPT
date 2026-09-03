@@ -326,8 +326,9 @@ def create_default_devices(get_kernel: Callable | None = None) -> DeviceManager:
     from .network_device import NetworkDevice
     from .display_device import DisplayDevice
     from .input_device import InputDevice
+    from .kernel_devices import DeviceManager as KernelDeviceManager
 
-    mgr = DeviceManager()
+    mgr = KernelDeviceManager()
     mgr.register(TensorDevice("tensor"))
     mgr.register(NPUDevice("npu"))
     mgr.register(StorageDevice("storage"))

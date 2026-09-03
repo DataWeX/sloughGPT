@@ -7,14 +7,34 @@ import { timeAgo } from '@/lib/time-ago'
 
 interface RecentActivityProps {
   apiStatus: string
+  loading: boolean
   modelStatus: { loaded: boolean; model: string | null }
   recentSessions: Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>
   recentJobs: Array<{ id: string; name: string; status: string; created_at?: string }>
   recentDatasets: Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
 }
 
-export function RecentActivity({ apiStatus, modelStatus, recentSessions, recentJobs, recentDatasets }: RecentActivityProps) {
+export function RecentActivity({ apiStatus, loading, modelStatus, recentSessions, recentJobs, recentDatasets }: RecentActivityProps) {
   const router = useRouter()
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="py-3">
+          <div className="h-4 w-28 animate-pulse rounded bg-muted mb-2" />
+          <div className="space-y-1.5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 px-1.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse bg-muted shrink-0" />
+                <span className="h-3 flex-1 animate-pulse rounded bg-muted" />
+                <span className="h-3 w-12 animate-pulse rounded bg-muted shrink-0" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (apiStatus !== 'online' || !modelStatus.loaded) return null
 

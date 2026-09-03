@@ -208,6 +208,15 @@ class DeviceTable:
             "devices": [d.info() for d in self._devices.values()],
         }
 
+    def capabilities(self, name: str) -> list[str]:
+        """Get device capabilities (list of commands)."""
+        dev = self.get(name)
+        if dev is None:
+            return []
+        if hasattr(dev, 'list_commands'):
+            return dev.list_commands()
+        return []
+
 
 # ── Device manager (backward compat) ──────────────────────────────────────
 
@@ -259,6 +268,21 @@ class DeviceManager:
     def stats(self) -> dict:
         """Get table stats."""
         return self.table.stats()
+
+    def capabilities(self, name: str) -> list[str]:
+        """Get device capabilities (list of commands)."""
+        dev = self.get(name)
+        if dev is None:
+            return []
+        if hasattr(dev, 'list_commands'):
+            return dev.list_commands()
+        return []
+
+    def hotplug(self, name: str, device: DeviceDriver, device_type: int = 0) -> bool:
+        """Hot-plug a device (register/unregister at runtime)."""
+        if name in self._devices:
+            return self.unregister(name)
+        return self.register(device, device_type)
 
 
 # ── Null device ───────────────────────────────────────────────────────────

@@ -6,10 +6,25 @@ import { IconThumbUp, IconThumbDown } from '@sloughgpt/strui'
 import type { FeedbackStats } from '@/lib/feedback-controller'
 
 interface FeedbackBarProps {
-  feedbackStats: FeedbackStats
+  loading: boolean
+  feedbackStats: FeedbackStats | null
 }
 
-export function FeedbackBar({ feedbackStats }: FeedbackBarProps) {
+export function FeedbackBar({ loading, feedbackStats }: FeedbackBarProps) {
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="py-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
   if (!feedbackStats?.db_stats || feedbackStats.db_stats.feedback_total === 0) return null
 
   return (

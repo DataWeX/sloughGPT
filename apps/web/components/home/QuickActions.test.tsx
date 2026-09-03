@@ -40,6 +40,7 @@ function QuickActionsWrapper(props: Partial<React.ComponentProps<typeof QuickAct
   const [knowledgeCount, setKnowledgeCount] = React.useState(props.knowledgeCount ?? 0)
   return (
     <QuickActions
+      loading={props.loading ?? false}
       modelStatus={props.modelStatus ?? { loaded: true, model: 'gpt2' }}
       testRunning={testRunning}
       testResponse={testResponse}

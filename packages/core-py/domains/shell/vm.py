@@ -155,6 +155,12 @@ OPCODES = {
     "DEV_CALL":   "Rd, H, method, args...  Rd = device.method(*args)",
     "DEV_CLOSE":  "H                  release device handle",
     "DEV_INFO":   "Rd, H              Rd = device.info()",
+    "DEV_TABLE_OPEN":  "Rd, name       Rd = fd (bit-based fd management)",
+    "DEV_TABLE_CALL":  "Rd, fd, cmd, args...  Rd = device_table.ioctl(fd, cmd, args)",
+    "DEV_TABLE_CLOSE": "fd             close device fd via DeviceTable",
+    "DEV_TABLE_INFO":  "Rd, fd         Rd = device_table.ioctl(fd, INFO)",
+    "DEV_REG_READ":    "Rd, addr      Rd = device_register_map.read(addr)",
+    "DEV_REG_WRITE":   "addr, val     device_register_map.write(addr, val)",
     "PUSH":       "Rs                 stack.push(Rs); sp -= 1",
     "POP":        "Rd                 sp += 1; Rd = stack[sp]",
     "FADD":       "Rd, Ra, Rb         Rd = float(Ra) + float(Rb)",
@@ -2194,6 +2200,224 @@ class DeviceBus:
         return list(self._devices.keys())
 
 
+# ── Device Bus Adapter (bridges DeviceBus → DeviceTable) ────────────────────
+
+class DeviceBusAdapter:
+    """Adapter bridging DeviceBus to DeviceTable for fd-based device access.
+
+    Provides a DeviceBus-compatible interface while using DeviceTable
+    for bit-based fd management and ioctl dispatch. This allows assembly
+    programs to use DEV_OPEN/DEV_CALL/DEV_CLOSE with the kernel's
+    DeviceTable infrastructure.
+
+    Usage:
+        adapter = DeviceBusAdapter()
+        adapter.register_device(my_driver, DeviceType.INFERENCE)
+        fd = adapter.open("my_device")  # returns fd via DeviceTable
+        result = adapter.ioctl(fd, "COMPUTE", data)  # returns SyscallResult
+        adapter.close(fd)
+    """
+
+    def __init__(self, max_fds: int = 64):
+        from .kernel_devices import DeviceTable, DeviceDriver
+        self._table = DeviceTable(max_fds=max_fds)
+        self._name_to_driver: dict[str, DeviceDriver] = {}
+        self._fd_names: dict[int, str] = {}
+
+    def register_device(self, driver, device_type: int = 0) -> bool:
+        """Register a DeviceDriver with the table."""
+        result = self._table.register(driver, device_type)
+        if result:
+            self._name_to_driver[driver.name] = driver
+        return result
+
+    def unregister_device(self, name: str) -> bool:
+        """Unregister a device by name."""
+        self._name_to_driver.pop(name, None)
+        return self._table.unregister(name)
+
+    def open(self, name: str) -> int:
+        """Open device by name, return fd. Returns -1 on error."""
+        fd = self._table.open(name)
+        if fd >= 0:
+            self._fd_names[fd] = name
+        return fd
+
+    def close(self, fd: int) -> bool:
+        """Close fd."""
+        self._fd_names.pop(fd, None)
+        return self._table.close(fd)
+
+    def ioctl(self, fd: int, command: str, *args):
+        """Route ioctl to device via DeviceTable. Returns SyscallResult."""
+        return self._table.ioctl(fd, command, *args)
+
+    def get_device(self, name: str):
+        """Get device driver by name."""
+        return self._table.get(name)
+
+    def list_devices(self) -> list[str]:
+        """List registered device names."""
+        return list(self._name_to_driver.keys())
+
+    def stats(self) -> dict:
+        """Get table stats."""
+        return self._table.stats()
+
+
+# ── Device Register Map (memory-mapped device access for assembly) ──────────
+
+class DeviceRegisterMap:
+    """Memory-mapped device registers for assembly access.
+
+    Maps device registers to specific memory addresses. Assembly programs
+    can read/write these addresses to interact with devices without using
+    DEV_OPEN/DEV_CALL instructions.
+
+    Register Layout (example):
+        0xF000 - 0xF0FF : TensorDevice registers
+        0xF100 - 0xF1FF : NPUDevice registers
+        0xF200 - 0xF2FF : StorageDevice registers
+        0xF300 - 0xF3FF : NetworkDevice registers
+        0xF400 - 0xF4FF : DisplayDevice registers
+        0xF500 - 0xF5FF : InputDevice registers
+
+    Each device block has:
+        0x00 : STATUS   (read-only)
+        0x04 : COMMAND  (write: trigger operation)
+        0x08 : ARG0     (argument register 0)
+        0x0C : ARG1     (argument register 1)
+        0x10 : ARG2     (argument register 2)
+        0x14 : RESULT   (read: operation result)
+        0x18 : ERROR    (read: error code)
+    """
+
+    # Device base addresses
+    BASE_ADDRESSES = {
+        "tensor":  0xF000,
+        "npu":     0xF100,
+        "storage": 0xF200,
+        "network": 0xF300,
+        "display": 0xF400,
+        "input":   0xF500,
+    }
+
+    # Register offsets within each device block
+    REG_STATUS  = 0x00
+    REG_COMMAND = 0x04
+    REG_ARG0    = 0x08
+    REG_ARG1    = 0x0C
+    REG_ARG2    = 0x10
+    REG_RESULT  = 0x14
+    REG_ERROR   = 0x18
+
+    # Status bits
+    STATUS_READY    = 0x01
+    STATUS_BUSY     = 0x02
+    STATUS_ERROR    = 0x04
+    STATUS_DATA_RDY = 0x08
+
+    def __init__(self):
+        self._registers: dict[int, int] = {}
+        self._devices: dict[str, object] = {}
+        self._pending_ops: dict[str, dict] = {}
+
+        # Initialize all register blocks
+        for base in self.BASE_ADDRESSES.values():
+            for offset in range(0, 0x100, 4):
+                self._registers[base + offset] = 0
+
+    def register_device(self, name: str, device, base_addr: int | None = None):
+        """Register a device for memory-mapped access."""
+        addr = base_addr or self.BASE_ADDRESSES.get(name)
+        if addr is None:
+            raise DeviceFault(f"no base address for device: {name}")
+        self._devices[name] = device
+        self.BASE_ADDRESSES[name] = addr
+        # Set status to READY
+        self._registers[addr + self.REG_STATUS] = self.STATUS_READY
+
+    def read(self, address: int) -> int:
+        """Read a device register."""
+        if address not in self._registers:
+            return 0
+        return self._registers[address]
+
+    def write(self, address: int, value: int):
+        """Write a device register."""
+        if address not in self._registers:
+            return
+
+        # Find which device block this belongs to
+        device_name = None
+        offset = 0
+        for name, base in self.BASE_ADDRESSES.items():
+            if base <= address < base + 0x100:
+                device_name = name
+                offset = address - base
+                break
+
+        if device_name is None:
+            return
+
+        # Handle COMMAND write — trigger operation if device exists
+        if offset == self.REG_COMMAND:
+            device = self._devices.get(device_name)
+            if device is not None:
+                self._execute_command(device_name, device, value)
+                return
+
+        # Store the value for all non-command registers
+        self._registers[address] = value
+
+    def _execute_command(self, device_name: str, device, command: int):
+        """Execute a command written to the COMMAND register."""
+        base = self.BASE_ADDRESSES[device_name]
+        arg0 = self._registers[base + self.REG_ARG0]
+        arg1 = self._registers[base + self.REG_ARG1]
+        arg2 = self._registers[base + self.REG_ARG2]
+
+        # Set busy status
+        self._registers[base + self.REG_STATUS] = self.STATUS_BUSY
+
+        try:
+            # Map command to device method
+            result = self._dispatch_command(device, command, arg0, arg1, arg2)
+
+            # Store result
+            if isinstance(result, (int, float)):
+                self._registers[base + self.REG_RESULT] = int(result)
+            elif isinstance(result, bool):
+                self._registers[base + self.REG_RESULT] = 1 if result else 0
+
+            # Clear error, set data ready
+            self._registers[base + self.REG_ERROR] = 0
+            self._registers[base + self.REG_STATUS] = self.STATUS_READY | self.STATUS_DATA_RDY
+
+        except Exception as e:
+            self._registers[base + self.REG_ERROR] = 1
+            self._registers[base + self.REG_STATUS] = self.STATUS_READY | self.STATUS_ERROR
+
+    def _dispatch_command(self, device, command: int, arg0: int, arg1: int, arg2: int):
+        """Dispatch a command to a device."""
+        # Generic dispatch — try ioctl if available
+        if hasattr(device, 'ioctl'):
+            result = device.ioctl(command, arg0, arg1, arg2)
+            if hasattr(result, 'success'):
+                if result.success:
+                    return result.value
+                raise Exception(result.error)
+            return result
+        elif hasattr(device, 'call'):
+            return device.call(command, arg0, arg1, arg2)
+        else:
+            raise DeviceFault(f"device does not support command: {command}")
+
+    def get_block_base(self, device_name: str) -> int:
+        """Get the base address for a device block."""
+        return self.BASE_ADDRESSES.get(device_name, 0)
+
+
 # ── CPU ──────────────────────────────────────────────────────────────────────
 
 class CPU:
@@ -2457,17 +2681,31 @@ ProgramLoader = Assembler  # backward-compatible alias
 # ── VM Runner ────────────────────────────────────────────────────────────────
 
 class VMRunner:
-    """Convenience: assemble + run + trace."""
+    """Convenience: assemble + run + trace.
 
-    def __init__(self, devices=None):
+    Supports both DeviceBus (name-based) and DeviceTable (fd-based) access.
+    """
+
+    def __init__(self, devices=None, device_table_adapter=None, register_map=None):
         self._assembler = Assembler()
         self._devices = devices or DeviceBus()
+        self._device_table_adapter = device_table_adapter
+        self._register_map = register_map
         self.cpu = None
 
     def assemble_and_run(self, source, trace=False, max_steps=None):
         instructions = self._assembler.assemble(source)
         self.cpu = CPU(devices=self._devices)
         self.cpu._tracing = trace
+
+        # Attach DeviceTable adapter if available
+        if self._device_table_adapter is not None:
+            self.cpu._device_table_adapter = self._device_table_adapter
+
+        # Attach DeviceRegisterMap if available
+        if self._register_map is not None:
+            self.cpu._device_register_map = self._register_map
+
         self.cpu.load_program(instructions)
         return self.cpu.run(max_steps=max_steps)
 
@@ -3037,31 +3275,223 @@ def _op_nop(cpu, ops):
 # ── Device Bus Ops ───────────────────────────────────────────────────────────
 
 def _op_dev_open(cpu, ops):
+    """DEV_OPEN Rd, name — open device by name, return handle string.
+
+    Registers a standalone device with the DeviceBus if not already present.
+    Returns a string handle for use with DEV_CALL/DEV_CLOSE.
+    """
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     name = str(cpu._val(ops[1]))
-    dev = cpu._devices.open(name)
-    cpu.regs[rd] = name
+    try:
+        dev = cpu._devices.open(name)
+        cpu.regs[rd] = name
+    except DeviceFault:
+        # Try registering from standalone device registry
+        standalone = _STANDALONE_DEVICES.get(name)
+        if standalone is not None:
+            cpu._devices.register(name, standalone)
+            cpu.regs[rd] = name
+        else:
+            cpu._output.append(f"[VM] DEV_OPEN: no such device: {name}")
+            cpu.regs[rd] = ""
 
 def _op_dev_call(cpu, ops):
+    """DEV_CALL Rd, handle, method, args... — call device method.
+
+    Returns SyscallResult.value on success, raises DeviceFault on error.
+    """
     cpu._check_arity(ops, 3)
     rd = cpu._reg(ops[0])
     handle = str(cpu._val(ops[1]))
     method = str(cpu._val(ops[2]))
     extra_args = [cpu._val(o) for o in ops[3:]]
-    dev = cpu._devices.open(handle)
-    cpu.regs[rd] = cpu._devices.call(dev, method, *extra_args)
+    try:
+        dev = cpu._devices.open(handle)
+        result = cpu._devices.call(dev, method, *extra_args)
+        cpu.regs[rd] = result
+    except DeviceFault as e:
+        cpu._output.append(f"[VM] DEV_CALL error: {e}")
+        cpu.regs[rd] = None
+    except Exception as e:
+        cpu._output.append(f"[VM] DEV_CALL exception: {e}")
+        cpu.regs[rd] = None
 
 def _op_dev_close(cpu, ops):
+    """DEV_CLOSE handle — release device handle (no-op for DeviceBus)."""
     cpu._check_arity(ops, 1)
+    # DeviceBus doesn't track open handles, so this is a no-op
     pass
 
 def _op_dev_info(cpu, ops):
+    """DEV_INFO Rd, handle — get device info dict."""
     cpu._check_arity(ops, 2)
     rd = cpu._reg(ops[0])
     handle = str(cpu._val(ops[1]))
-    dev = cpu._devices.open(handle)
-    cpu.regs[rd] = cpu._devices.info(dev)
+    try:
+        dev = cpu._devices.open(handle)
+        cpu.regs[rd] = cpu._devices.info(dev)
+    except DeviceFault as e:
+        cpu._output.append(f"[VM] DEV_INFO error: {e}")
+        cpu.regs[rd] = {}
+
+
+# ── Device Table Ops (fd-based with SyscallResult) ──────────────────────────
+
+def _op_dev_table_open(cpu, ops):
+    """DEV_TABLE_OPEN Rd, name — open device via DeviceTable, return fd.
+
+    Uses DeviceBusAdapter for bit-based fd management. Returns integer fd
+    on success, -1 on error. This is the preferred way to open devices
+    for fd-based I/O.
+    """
+    cpu._check_arity(ops, 2)
+    rd = cpu._reg(ops[0])
+    name = str(cpu._val(ops[1]))
+
+    adapter = _get_device_table_adapter(cpu)
+    if adapter is None:
+        cpu._output.append("[VM] DEV_TABLE_OPEN: DeviceTable not initialized")
+        cpu.regs[rd] = -1
+        return
+
+    fd = adapter.open(name)
+    cpu.regs[rd] = fd
+    if fd < 0:
+        cpu._output.append(f"[VM] DEV_TABLE_OPEN: failed to open: {name}")
+
+def _op_dev_table_call(cpu, ops):
+    """DEV_TABLE_CALL Rd, fd, command, args... — ioctl via DeviceTable.
+
+    Routes command to device via DeviceTable.ioctl(). Returns SyscallResult
+    value on success. Error information stored in R1 (0=success, nonzero=error).
+    """
+    cpu._check_arity(ops, 3)
+    rd = cpu._reg(ops[0])
+    fd = int(cpu._val(ops[1]))
+    command = str(cpu._val(ops[2]))
+    extra_args = [cpu._val(o) for o in ops[3:]]
+
+    adapter = _get_device_table_adapter(cpu)
+    if adapter is None:
+        cpu._output.append("[VM] DEV_TABLE_CALL: DeviceTable not initialized")
+        cpu.regs[rd] = None
+        return
+
+    result = adapter.ioctl(fd, command, *extra_args)
+    if hasattr(result, 'success'):
+        cpu.regs[rd] = result.value if result.success else None
+        if not result.success:
+            cpu._output.append(f"[VM] DEV_TABLE_CALL error: {result.error}")
+    else:
+        cpu.regs[rd] = result
+
+def _op_dev_table_close(cpu, ops):
+    """DEV_TABLE_CLOSE fd — close device fd via DeviceTable."""
+    cpu._check_arity(ops, 1)
+    fd = int(cpu._val(ops[0]))
+
+    adapter = _get_device_table_adapter(cpu)
+    if adapter is None:
+        return
+
+    adapter.close(fd)
+
+def _op_dev_table_info(cpu, ops):
+    """DEV_TABLE_INFO Rd, fd — get device info via DeviceTable ioctl."""
+    cpu._check_arity(ops, 2)
+    rd = cpu._reg(ops[0])
+    fd = int(cpu._val(ops[1]))
+
+    adapter = _get_device_table_adapter(cpu)
+    if adapter is None:
+        cpu.regs[rd] = {}
+        return
+
+    result = adapter.ioctl(fd, "INFO")
+    cpu.regs[rd] = result.value if hasattr(result, 'value') else {}
+
+
+# ── Device Register Ops (memory-mapped access) ──────────────────────────────
+
+def _op_dev_reg_read(cpu, ops):
+    """DEV_REG_READ Rd, address — read device register at memory address."""
+    cpu._check_arity(ops, 2)
+    rd = cpu._reg(ops[0])
+    address = int(cpu._val(ops[1]))
+
+    reg_map = _get_device_register_map(cpu)
+    if reg_map is None:
+        cpu.regs[rd] = 0
+        return
+
+    cpu.regs[rd] = reg_map.read(address)
+
+def _op_dev_reg_write(cpu, ops):
+    """DEV_REG_WRITE address, value — write device register at memory address."""
+    cpu._check_arity(ops, 2)
+    address = int(cpu._val(ops[0]))
+    value = int(cpu._val(ops[1]))
+
+    reg_map = _get_device_register_map(cpu)
+    if reg_map is None:
+        return
+
+    reg_map.write(address, value)
+
+
+# ── Device Table/Register Helpers ───────────────────────────────────────────
+
+# Module-level singletons for DeviceTable adapter and register map
+_device_table_adapter: DeviceBusAdapter | None = None
+_device_register_map: DeviceRegisterMap | None = None
+
+# Standalone device registry (devices that can be auto-registered)
+_STANDALONE_DEVICES: dict[str, object] = {}
+
+
+def register_standalone_device(name: str, device):
+    """Register a standalone device for auto-registration with DEV_OPEN."""
+    _STANDALONE_DEVICES[name] = device
+
+
+def set_device_table_adapter(adapter: DeviceBusAdapter):
+    """Set the global DeviceTable adapter for DEV_TABLE_* instructions."""
+    global _device_table_adapter
+    _device_table_adapter = adapter
+
+
+def get_device_table_adapter() -> DeviceBusAdapter | None:
+    """Get the global DeviceTable adapter."""
+    return _device_table_adapter
+
+
+def set_device_register_map(reg_map: DeviceRegisterMap):
+    """Set the global device register map for DEV_REG_* instructions."""
+    global _device_register_map
+    _device_register_map = reg_map
+
+
+def get_device_register_map() -> DeviceRegisterMap | None:
+    """Get the global device register map."""
+    return _device_register_map
+
+
+def _get_device_table_adapter(cpu) -> DeviceBusAdapter | None:
+    """Get DeviceTable adapter, checking CPU context first."""
+    global _device_table_adapter
+    # Check if CPU has a DeviceBusAdapter attached
+    if hasattr(cpu, '_device_table_adapter'):
+        return cpu._device_table_adapter
+    return _device_table_adapter
+
+
+def _get_device_register_map(cpu) -> DeviceRegisterMap | None:
+    """Get device register map, checking CPU context first."""
+    global _device_register_map
+    if hasattr(cpu, '_device_register_map'):
+        return cpu._device_register_map
+    return _device_register_map
 
 
 # ── Opcode Table ─────────────────────────────────────────────────────────────
@@ -3090,6 +3520,9 @@ _OPCODE_TABLE = {
     "CALL": _op_call, "RET": _op_ret, "LOOP": _op_loop, "HALT": _op_halt,
     "DEV_OPEN": _op_dev_open, "DEV_CALL": _op_dev_call,
     "DEV_CLOSE": _op_dev_close, "DEV_INFO": _op_dev_info,
+    "DEV_TABLE_OPEN": _op_dev_table_open, "DEV_TABLE_CALL": _op_dev_table_call,
+    "DEV_TABLE_CLOSE": _op_dev_table_close, "DEV_TABLE_INFO": _op_dev_table_info,
+    "DEV_REG_READ": _op_dev_reg_read, "DEV_REG_WRITE": _op_dev_reg_write,
     "PUSH": _op_push, "POP": _op_pop,
     "FADD": _op_fadd, "FSUB": _op_fsub, "FMUL": _op_fmul, "FDIV": _op_fdiv,
     "FCMP": _op_fcmp,

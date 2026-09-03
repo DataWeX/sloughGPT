@@ -493,7 +493,8 @@ class HealthController:
             health_history = ss.get_health_history(20)
             memory_history = ss.get_memory_history(10)
             rate_violations = ss.get_rate_limit_violations(5)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to load server state for detailed health: %s", e)
             request_count = 0
             error_count = 0
             current_soul = None

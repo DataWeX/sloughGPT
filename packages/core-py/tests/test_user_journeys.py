@@ -258,11 +258,11 @@ class TestDatasetsImport:
         page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
         time.sleep(0.5)
         page.get_by_role("button", name="Import").last.click(force=True)
-        page.wait_for_function(
-            "() => document.body.innerText.includes('Downloaded') || document.body.innerText.includes('failed') || document.body.innerText.includes('error')",
-            timeout=30000,
-        )
-        time.sleep(0.5)
+        for _ in range(30):
+            time.sleep(1)
+            body = page.inner_text("body")
+            if "downloaded" in body.lower() or "failed" in body.lower() or "error" in body.lower():
+                break
         page.screenshot(path="/tmp/kaggle_e2e.png")
         body = page.inner_text("body")
         success = "downloaded" in body.lower()

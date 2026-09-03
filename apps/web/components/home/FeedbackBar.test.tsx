@@ -30,39 +30,44 @@ function makeStats(overrides: Record<string, any> = {}) {
 }
 
 describe('FeedbackBar', () => {
+  it('shows skeleton when loading', () => {
+    const { container } = render(<FeedbackBar loading feedbackStats={null as any} />)
+    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+  })
+
   it('renders nothing when feedback_total is 0', () => {
-    const { container } = render(<FeedbackBar feedbackStats={makeStats({ feedback_total: 0 })} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ feedback_total: 0 })} />)
     expect(container.innerHTML).toBe('')
   })
 
   it('renders nothing when db_stats is missing', () => {
-    const { container } = render(<FeedbackBar feedbackStats={null as any} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={null as any} />)
     expect(container.innerHTML).toBe('')
   })
 
   it('shows feedback count', () => {
-    const { container } = render(<FeedbackBar feedbackStats={makeStats()} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats()} />)
     expect(container.textContent).toContain('100')
   })
 
   it('shows thumbs up and down counts', () => {
-    const { container } = render(<FeedbackBar feedbackStats={makeStats()} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats()} />)
     expect(container.textContent).toContain('80')
     expect(container.textContent).toContain('20')
   })
 
   it('shows positive ratio when >= 50%', () => {
-    const { container } = render(<FeedbackBar feedbackStats={makeStats({ ratio: 0.8 })} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.8 })} />)
     expect(container.textContent).toContain('80% positive')
   })
 
   it('shows warning ratio when < 50%', () => {
-    const { container } = render(<FeedbackBar feedbackStats={makeStats({ ratio: 0.3 })} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.3 })} />)
     expect(container.textContent).toContain('30% positive')
   })
 
   it('links to training page', () => {
-    const { container } = render(<FeedbackBar feedbackStats={makeStats()} />)
+    const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats()} />)
     const links = container.querySelectorAll('a')
     const trainingLink = Array.from(links).find(a => a.getAttribute('href') === '/training')
     expect(trainingLink).toBeDefined()

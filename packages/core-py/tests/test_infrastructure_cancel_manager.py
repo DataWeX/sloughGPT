@@ -126,8 +126,13 @@ class TestListAndCount:
         mgr.register(OpType.TRAINING, "t1", cancel_fn=lambda: None)
         mgr.register(OpType.INFERENCE, "i1", cancel_fn=lambda: None)
         counts = mgr.count()
-        assert counts["training"] == 1
-        assert counts["inference"] == 1
+        assert counts["registered"] == 2
+
+    def test_count_by_type(self, mgr: CancelManager):
+        mgr.register(OpType.TRAINING, "t1", cancel_fn=lambda: None)
+        mgr.register(OpType.INFERENCE, "i1", cancel_fn=lambda: None)
+        counts = mgr.count(op_type=OpType.TRAINING)
+        assert counts["registered"] == 1
 
     def test_list_all_with_limit(self, mgr: CancelManager):
         for i in range(5):

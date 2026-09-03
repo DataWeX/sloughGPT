@@ -1,12 +1,7 @@
 [
   {
-    "test": "datasets_kaggle_radio_clicks",
-    "passed": true,
-    "detail": ""
-  },
-  {
-    "test": "datasets_kaggle_input_fills",
-    "passed": true,
-    "detail": ""
+    "test": "datasets_kaggle_import_success",
+    "passed": false,
+    "detail": "body_snippet=L\nURL\nDownload from a URL\nFolder Path\nFolder on this machine\nKaggle Dataset ID\n\nExamples: heptapod/titanic, uciml/iris, rounakbanik/pokemon\n\nRequires Kaggle CLI installed and authenticated (kaggle config)\n\nDataset Name\nImporting...\nCancel Import\nImporting...\nClose\nNo model loaded.\nlive\n0 reqs\n1m 22s"
   }
 ]

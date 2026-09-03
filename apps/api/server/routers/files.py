@@ -355,13 +355,24 @@ class FilesRouter:
         m["chars"] = len(text)
         meta[file_id] = m
         await self._async_save_metadata(meta)
-        # TODO: integrate with RAG service
-        safe_audit_log("file.ingest", resource=file_id, detail=f"chars={len(text)}")
+        # Integrate with RAG service
+        facts_stored = 0
+        try:
+            from domains.cognitive.rag_service import get_rag_service
+            rag = get_rag_service()
+            chunk_ids = rag.add_document(
+                content=text,
+                metadata={"source": "file", "file_id": file_id, "filename": m.get("original_name", m["filename"])},
+            )
+            facts_stored = len(chunk_ids)
+        except Exception as e:
+            logger.warning("RAG ingest failed for file %s: %s", file_id, e)
+        safe_audit_log("file.ingest", resource=file_id, detail=f"chars={len(text)} facts={facts_stored}")
         return IngestResponse(
             id=file_id,
             filename=m.get("original_name", m["filename"]),
             chars=len(text),
-            facts_stored=0,
+            facts_stored=facts_stored,
         )
 
 

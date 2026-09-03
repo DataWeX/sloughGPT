@@ -298,7 +298,8 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
                 "personality_traits": {k: v for k, v in profile.personality.to_dict().items()},
                 "metadata": dict(profile.metadata),
             }
-        except Exception:
+        except Exception as e:
+            autotrain_logger.warning("Failed to parse .slo file %s: %s", ckpt_file, e)
             return {}
     return {}
 

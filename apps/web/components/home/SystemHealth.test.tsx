@@ -24,6 +24,7 @@ vi.mock('@sloughgpt/strui', () => {
 
 const baseProps = {
   apiStatus: 'online' as string,
+  loading: false,
   liveHealth: {
     cpu_percent: 45.2,
     memory_percent: 67.8,
@@ -33,6 +34,11 @@ const baseProps = {
 }
 
 describe('SystemHealth', () => {
+  it('shows skeleton when loading', () => {
+    const { container } = render(<SystemHealth {...baseProps} loading={true} />)
+    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+  })
+
   it('renders nothing when offline', () => {
     const { container } = render(<SystemHealth {...baseProps} apiStatus="offline" />)
     expect(container.innerHTML).toBe('')

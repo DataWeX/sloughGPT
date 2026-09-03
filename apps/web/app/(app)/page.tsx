@@ -280,7 +280,6 @@ export default function HomePage() {
           <Suspense fallback={<StatsGridSkeleton />}>
             <LazyStatsGrid
               apiStatus={apiStatus}
-              loading={homeLoading}
               modelCount={modelCount}
               currentSoul={currentSoul}
               modelStatus={modelStatus}
@@ -290,15 +289,17 @@ export default function HomePage() {
           </Suspense>
 
           {/* Lazy: Feedback bar */}
-          {feedbackStats && (
-            <Suspense fallback={<FeedbackBarSkeleton />}>
-              <LazyFeedbackBar feedbackStats={feedbackStats} />
-            </Suspense>
-          )}
+          <Suspense fallback={<FeedbackBarSkeleton />}>
+            <LazyFeedbackBar
+              loading={apiStatus === 'loading'}
+              feedbackStats={feedbackStats}
+            />
+          </Suspense>
 
           {/* Lazy: Quick actions */}
           <Suspense fallback={<QuickActionsSkeleton />}>
             <LazyQuickActions
+              loading={apiStatus === 'loading'}
               modelStatus={modelStatus}
               testRunning={data.testRunning}
               testResponse={data.testResponse}
@@ -313,6 +314,7 @@ export default function HomePage() {
           <Suspense fallback={<RecentActivitySkeleton />}>
             <LazyRecentActivity
               apiStatus={apiStatus}
+              loading={apiStatus === 'loading'}
               modelStatus={modelStatus}
               recentSessions={recentSessions}
               recentJobs={recentJobs}
@@ -354,6 +356,7 @@ export default function HomePage() {
           <Suspense fallback={<UsageStatsSkeleton />}>
             <LazyUsageStats
               apiStatus={apiStatus}
+              loading={apiStatus === 'loading'}
               convStats={convStats}
               datasetStats={datasetStats}
             />
@@ -363,6 +366,7 @@ export default function HomePage() {
           <Suspense fallback={<SystemHealthSkeleton />}>
             <LazySystemHealth
               apiStatus={apiStatus}
+              loading={apiStatus === 'loading'}
               liveHealth={liveHealth}
             />
           </Suspense>

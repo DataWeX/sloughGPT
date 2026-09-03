@@ -6,11 +6,45 @@ import { formatBytes } from '@/lib/format-bytes'
 
 interface UsageStatsProps {
   apiStatus: string
+  loading: boolean
   convStats: { totalConversations: number; totalMessages: number; totalWords: number; activeDays: number; mostActiveHour: number | null } | null
   datasetStats: { totalDatasets: number; totalSize: number; totalSamples: number } | null
 }
 
-export function UsageStats({ apiStatus, convStats, datasetStats }: UsageStatsProps) {
+export function UsageStats({ apiStatus, loading, convStats, datasetStats }: UsageStatsProps) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Card>
+          <CardContent className="py-3">
+            <div className="h-4 w-24 animate-pulse rounded bg-muted mb-2" />
+            <div className="grid grid-cols-2 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="h-5 w-12 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-3">
+            <div className="h-4 w-20 animate-pulse rounded bg-muted mb-2" />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="space-y-1">
+                  <div className="h-5 w-12 animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (apiStatus !== 'online' || (!convStats && !datasetStats)) return null
 
   return (

@@ -26,7 +26,8 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 const baseProps = {
-  apiStatus: 'online' as string,
+  apiStatus: 'online',
+  loading: false,
   modelStatus: { loaded: true, model: 'gpt2' },
   recentSessions: [
     { id: 's1', name: 'Chat 1', updated_at: '2026-01-01', message_count: 10, starred: true, pinned: false },
@@ -43,6 +44,11 @@ const baseProps = {
 }
 
 describe('RecentActivity', () => {
+  it('shows skeleton when loading', () => {
+    const { container } = render(<RecentActivity {...baseProps} loading={true} />)
+    expect(container.querySelector('.animate-pulse')).toBeTruthy()
+  })
+
   it('renders nothing when offline', () => {
     const { container } = render(<RecentActivity {...baseProps} apiStatus="offline" />)
     expect(container.innerHTML).toBe('')
