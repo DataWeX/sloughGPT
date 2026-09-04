@@ -84,6 +84,9 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart
           python -m pip install pytest pytest-asyncio
+          # apps/api/server imports mogdb (training/webhooks.py); install it so
+          # the server test suite can collect.
+          python -m pip install -e packages/mogdb
 
       - name: Run server tests
         working-directory: apps/api/server
