@@ -5,6 +5,7 @@ import { Input } from '@sloughgpt/strui'
 import { Label } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { Spinner, IconCheck } from '@sloughgpt/strui'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@sloughgpt/strui'
 import {
   Dialog,
   DialogContent,
@@ -22,13 +23,13 @@ interface DatasetImportDialogProps {
 }
 
 const SOURCE_OPTIONS = [
-  { value: 'github' as const, label: 'GitHub', description: 'Clone a repository' },
-  { value: 'huggingface' as const, label: 'HuggingFace', description: 'Download from HF Hub' },
-  { value: 'isbn' as const, label: 'ISBN / Book', description: 'Search by title or ISBN' },
-  { value: 'kaggle' as const, label: 'Kaggle', description: 'Download from Kaggle' },
-  { value: 'csv' as const, label: 'CSV', description: 'Import CSV from URL' },
-  { value: 'url' as const, label: 'URL', description: 'Download from a URL' },
-  { value: 'local' as const, label: 'Folder Path', description: 'Folder on this machine' },
+  { value: 'github' as const, label: 'GitHub', description: 'Clone a repository', tip: 'Clones a GitHub repo and imports matching files. Requires git installed on the server.' },
+  { value: 'huggingface' as const, label: 'HuggingFace', description: 'Download from HF Hub', tip: 'Downloads from HuggingFace Hub using the datasets library. Multi-config datasets auto-detect available configs.' },
+  { value: 'isbn' as const, label: 'ISBN / Book', description: 'Search by title or ISBN', tip: 'Searches Open Library for books by title or ISBN, then tries Project Gutenberg for full text extraction.' },
+  { value: 'kaggle' as const, label: 'Kaggle', description: 'Download from Kaggle', tip: 'Downloads from Kaggle. Requires Kaggle CLI installed and authenticated on the server.' },
+  { value: 'csv' as const, label: 'CSV', description: 'Import CSV from URL', tip: 'Downloads a CSV file from a URL and converts it to JSONL format automatically.' },
+  { value: 'url' as const, label: 'URL', description: 'Download from a URL', tip: 'Downloads content from any URL. The entire content becomes one JSONL record.' },
+  { value: 'local' as const, label: 'Folder Path', description: 'Folder on this machine', tip: 'Imports files from a local folder. Supports .txt, .json, .csv, .pdf (via PyMuPDF), and more.' },
 ]
 
 export function DatasetImportDialog({
@@ -53,24 +54,31 @@ export function DatasetImportDialog({
             <legend className="sr-only">Import source</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {SOURCE_OPTIONS.map((option) => (
-                <Button
-                  key={option.value}
-                  variant={di.source === option.value ? 'secondary' : 'outline'}
-                  onClick={() => {
-                    di.setSource(option.value)
-                    di.setSearchResults([])
-                    di.setBookResults([])
-                    di.setSelectedBook(null)
-                    di.setSelectedRepo(null)
-                  }}
-                  className={cn('h-auto flex-col items-start p-3', di.source === option.value ? 'border-primary' : '')}
-                  role="radio"
-                  aria-checked={di.source === option.value}
-                  aria-label={`${option.label}: ${option.description}`}
-                >
-                  <div className="font-medium">{option.label}</div>
-                  <div className="text-xs text-muted-foreground">{option.description}</div>
-                </Button>
+                <Tooltip key={option.value}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={di.source === option.value ? 'secondary' : 'outline'}
+                      onClick={() => {
+                        di.setSource(option.value)
+                        di.clearError()
+                        di.setSearchResults([])
+                        di.setBookResults([])
+                        di.setSelectedBook(null)
+                        di.setSelectedRepo(null)
+                      }}
+                      className={cn('h-auto flex-col items-start p-3', di.source === option.value ? 'border-primary' : '')}
+                      role="radio"
+                      aria-checked={di.source === option.value}
+                      aria-label={`${option.label}: ${option.description}`}
+                    >
+                      <div className="font-medium">{option.label}</div>
+                      <div className="text-xs text-muted-foreground">{option.description}</div>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" variant="muted" className="max-w-64 text-xs">
+                    {option.tip}
+                  </TooltipContent>
+                </Tooltip>
               ))}
             </div>
           </fieldset>

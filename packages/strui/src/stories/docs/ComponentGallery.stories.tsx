@@ -39,6 +39,17 @@ import { StatusDot } from '@/components/composed/status-dot'
 import { StepIndicator } from '@/components/composed/step-indicator'
 import { Timeline } from '@/components/composed/timeline'
 import { Toolbar } from '@/components/composed/toolbar'
+import { ActionCard } from '@/components/composed/action-card'
+import { ChipGroup } from '@/components/composed/chip-group'
+import { DetailRow } from '@/components/composed/detail-row'
+import { InfoCard } from '@/components/composed/info-card'
+import { InsightsCard } from '@/components/composed/insights-card'
+import { MetricsCard } from '@/components/composed/metrics-card'
+import { SortDropdown } from '@/components/composed/sort-dropdown'
+import { TabGroup } from '@/components/composed/tab-group'
+import { StatusBadge } from '@/components/composed/status-badge'
+import { DetailList } from '@/components/composed/detail-list'
+import { LoadingCard } from '@/components/composed/loading-card'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -305,6 +316,46 @@ function GalleryCanvas() {
               <Input id="gf" />
             </FormField>
             <SettingsRow title="Setting row" description="Two-column settings row pattern." control={<Switch defaultChecked />} />
+          </div>
+
+          <Separator className="my-8" />
+
+          <div className="space-y-6">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">New Composites</p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <ActionCard
+                title="System Health"
+                subtitle="Real-time metrics"
+                actions={<Button size="sm" variant="ghost">Refresh</Button>}
+              >
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between"><span className="text-muted-foreground">CPU</span><span>45%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Memory</span><span>8.2 GB</span></div>
+                </div>
+              </ActionCard>
+              <InsightsCard
+                title="Training Insights"
+                kpis={[{ label: 'Loss', value: '0.23' }, { label: 'Accuracy', value: '94%' }]}
+                details={[{ label: 'Epochs', value: 12 }, { label: 'Learning rate', value: '2e-4' }]}
+              />
+            </div>
+            <MetricsCard title="Overview" columns={4}>
+              <StatCard label="Total Jobs" value={42} />
+              <StatCard label="Active" value={3} trend={{ value: 12, positive: true }} />
+              <StatCard label="Failed" value={1} trend={{ value: 5, positive: false }} />
+              <StatCard label="Avg Time" value="2.4h" />
+            </MetricsCard>
+            <div className="flex flex-wrap gap-3">
+              <StatusBadge tone="success">Running</StatusBadge>
+              <StatusBadge tone="warning">Queued</StatusBadge>
+              <StatusBadge tone="destructive">Failed</StatusBadge>
+            </div>
+            <ChipGroup chips={[{ label: 'Python', tone: 'primary' }, { label: 'PyTorch', tone: 'success' }, { label: 'GPU', tone: 'warning' }]} />
+            <InfoCard icon={<IconCpu className="h-4 w-4" />} title="GPU" description="NVIDIA RTX 4090" tone="success" size="sm" />
+            <DetailList items={[{ label: 'Model', value: 'GPT-2' }, { label: 'Path', value: '/models/gpt2', mono: true }]} />
+            <LoadingCard title="Loading..." rows={2} />
+            <SortDropdown value="newest" options={[{ value: 'newest', label: 'Newest' }, { value: 'oldest', label: 'Oldest' }]} onChange={() => {}} />
+            <TabGroup defaultValue="a" tabs={[{ value: 'a', label: 'Tab A', content: <p className="text-sm">Content A</p> }, { value: 'b', label: 'Tab B', content: <p className="text-sm">Content B</p> }]} />
           </div>
         </Section>
 
