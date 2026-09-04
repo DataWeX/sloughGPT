@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -125,14 +125,14 @@ export function FineTunedModelsCard({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Fine-tuned models</CardTitle>
+    <ActionCard
+      title="Fine-tuned models"
+      actions={
         <Button size="sm" variant="ghost" onClick={() => void fetchModels()} aria-label="Refresh fine-tuned models">
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         {loading ? (
           <div className="grid gap-2 sm:grid-cols-2" aria-busy="true">
             {[1, 2].map(i => (
@@ -243,7 +243,6 @@ export function FineTunedModelsCard({
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

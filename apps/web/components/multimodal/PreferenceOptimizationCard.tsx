@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 
@@ -13,7 +14,7 @@ interface PreferenceOptimizationCardProps {
   onTrigger: () => void
 }
 
-export default function PreferenceOptimizationCard({ dpoRunning, dpoStatus, dpoResult, dpoError, dpoAccepted, dpoRejected, onTrigger }: PreferenceOptimizationCardProps) {
+export default memo(function PreferenceOptimizationCard({ dpoRunning, dpoStatus, dpoResult, dpoError, dpoAccepted, dpoRejected, onTrigger }: PreferenceOptimizationCardProps) {
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">DPO fine-tune</CardTitle></CardHeader>
@@ -57,4 +58,4 @@ export default function PreferenceOptimizationCard({ dpoRunning, dpoStatus, dpoR
       </CardContent>
     </Card>
   )
-}
+})

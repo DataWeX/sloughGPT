@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { memo, useMemo, useRef, useState, useEffect } from 'react'
 import { cn } from '@sloughgpt/strui'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-typescript'
@@ -269,7 +269,7 @@ function parseInline(text: string): React.ReactNode[] {
   return parts
 }
 
-export function Markdown({ content, className }: MarkdownProps) {
+export const Markdown = memo(function Markdown({ content, className }: MarkdownProps) {
   const lastParsedRef = useRef(content)
   const lastRenderedRef = useRef<React.ReactNode[]>(parseMarkdown(content))
   const throttleRef = useRef(0)
@@ -299,4 +299,4 @@ export function Markdown({ content, className }: MarkdownProps) {
       {rendered}
     </div>
   )
-}
+})

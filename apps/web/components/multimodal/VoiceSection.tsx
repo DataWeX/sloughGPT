@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
@@ -85,14 +85,14 @@ export function VoiceSection() {
         </KpiGrid>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">TTS Backend</CardTitle>
+      <ActionCard
+        title="TTS Backend"
+        actions={
           <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh TTS status">
             <IconRefresh className="h-4 w-4" />
           </Button>
-        </CardHeader>
-        <CardContent>
+        }
+      >
           {status ? (
             <div className="space-y-3">
               <KpiGrid columns={4}>
@@ -108,8 +108,7 @@ export function VoiceSection() {
           ) : (
             <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
           )}
-        </CardContent>
-      </Card>
+      </ActionCard>
 
       <VoicePresetCard />
 

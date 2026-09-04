@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { cn, IconX, IconCheckCircle, IconError, IconInfo } from '@sloughgpt/strui'
 
 export type ToastType = 'success' | 'error' | 'info'
@@ -167,7 +167,7 @@ interface ToastContainerProps {
   onClearAll?: () => void
 }
 
-export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
+export const ToastContainer = memo(function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainerProps) {
   if (toasts.length === 0) return null
   return (
     <div className="sl-toast-container" role="region" aria-label="Notifications">
@@ -186,7 +186,7 @@ export function ToastContainer({ toasts, onDismiss, onClearAll }: ToastContainer
       ))}
     </div>
   )
-}
+})
 
 // ── Radix Toast Bridge ──────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
@@ -9,7 +10,7 @@ interface SummaryCardProps {
   models: { id: string; name: string }[]
 }
 
-export default function SummaryCard({ completedResults, models }: SummaryCardProps) {
+export default memo(function SummaryCard({ completedResults, models }: SummaryCardProps) {
   if (completedResults.length < 2) return null
 
   return (
@@ -25,4 +26,4 @@ export default function SummaryCard({ completedResults, models }: SummaryCardPro
       </CardContent>
     </Card>
   )
-}
+})

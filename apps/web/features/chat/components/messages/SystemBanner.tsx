@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconAlert, IconInfo, IconCloudOff } from '@sloughgpt/strui'
 
@@ -26,7 +27,7 @@ const ICONS: Record<SystemBannerType, React.ReactNode> = {
   info: <IconInfo className="h-4 w-4" aria-hidden="true" />,
 }
 
-export function SystemBanner({ type, title, message, actionLabel, onAction, onDismiss }: SystemBannerProps) {
+export const SystemBanner = memo(function SystemBanner({ type, title, message, actionLabel, onAction, onDismiss }: SystemBannerProps) {
   return (
     <div
       className={cn('mb-3 rounded-lg border p-3 text-xs', STYLES[type])}
@@ -54,4 +55,4 @@ export function SystemBanner({ type, title, message, actionLabel, onAction, onDi
       </div>
     </div>
   )
-}
+})

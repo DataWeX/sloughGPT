@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 
 import {
@@ -190,13 +190,13 @@ export default function KnowledgePage() {
     return () => clearTimeout(timer)
   }, [search, handleSearch])
 
-  const displayItems = (searchResults ?? (activeTopic
+  const displayItems = useMemo(() => (searchResults ?? (activeTopic
     ? items.filter(i => i.topic === activeTopic)
     : items)).slice().sort((a, b) => {
     if (sortBy === 'importance') return b.importance - a.importance
     if (sortBy === 'topic') return (a.topic || '').localeCompare(b.topic || '')
     return b.timestamp - a.timestamp
-  })
+  }), [searchResults, activeTopic, items, sortBy])
 
   function highlightText(text: string, query: string): React.ReactNode {
     if (!query) return text
@@ -447,7 +447,7 @@ export default function KnowledgePage() {
     }
   }
 
-  const headerRight = (
+  const headerRight = useMemo(() => (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchData} disabled={loading}>
         <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
@@ -493,9 +493,9 @@ export default function KnowledgePage() {
         Add
       </Button>
     </div>
-  )
+  ), [loading, items.length, fetchData, handleExport, setShowAdd])
 
-  const toolbar = (
+  const toolbar = useMemo(() => (
     <div className="flex items-center gap-2">
       <div className="relative flex-1">
         <IconSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
@@ -550,7 +550,7 @@ export default function KnowledgePage() {
         </div>
       )}
     </div>
-  )
+  ), [search, sortBy, selectedIds.size, setPendingBatchDelete])
 
   return (
     <PageContainer

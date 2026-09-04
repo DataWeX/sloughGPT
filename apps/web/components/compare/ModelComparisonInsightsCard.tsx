@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 
 interface BenchmarkResult {
@@ -25,7 +26,7 @@ function winner(modelId: string, results: [string, BenchmarkResult][], key: keyo
   return entry ? (entry[1][key] as number) === best : false
 }
 
-export function ModelComparisonInsightsCard({ completedResults, models, bestMetrics }: ModelComparisonInsightsCardProps) {
+export const ModelComparisonInsightsCard = memo(function ModelComparisonInsightsCard({ completedResults, models, bestMetrics }: ModelComparisonInsightsCardProps) {
   if (completedResults.length < 2) return null
 
   const fastest = completedResults
@@ -85,4 +86,4 @@ export function ModelComparisonInsightsCard({ completedResults, models, bestMetr
       </CardContent>
     </Card>
   )
-}
+})

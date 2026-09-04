@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import {
   tokenTreeController,
@@ -80,14 +80,15 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
   const trained = stats?.trained ?? false
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Token Tree Vocabulary</CardTitle>
+    <ActionCard
+      title="Token Tree Vocabulary"
+      actions={
         <Button size="sm" variant="ghost" onClick={() => load(offset)} disabled={loading} aria-label="Refresh vocabulary">
           <IconRefresh className="h-4 w-4" />
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      }
+      contentClassName="space-y-3"
+    >
         {stats ? (
           <div className="flex flex-wrap gap-2">
             <Chip label={`Vocab ${stats.vocab_size}`} />
@@ -196,7 +197,6 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
           Browse the tree&apos;s vocabulary in id order — special tokens and base characters first, then merge tokens in
           the order they were learned. Click a token to expand its lineage down to character leaves.
         </p>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

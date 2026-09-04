@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Button } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle, Progress, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -109,14 +109,14 @@ export default function DownloadsCard() {
   if (downloads.length === 0) return null
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Downloads</CardTitle>
+    <ActionCard
+      title="Downloads"
+      actions={
         <Button size="sm" variant="ghost" onClick={fetchDownloads} aria-label="Refresh downloads">
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         <div className="space-y-2">
           {downloads.map(d => {
             const pct = Math.round(d.progress * 100)
@@ -153,7 +153,6 @@ export default function DownloadsCard() {
             )
           })}
         </div>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

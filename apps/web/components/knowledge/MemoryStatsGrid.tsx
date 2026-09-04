@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent, Skeleton } from '@sloughgpt/strui'
 import type { MemoryStats } from '@/lib/memory-controller'
 
@@ -8,7 +9,7 @@ interface MemoryStatsGridProps {
   loading: boolean
 }
 
-export function MemoryStatsGrid({ stats, loading }: MemoryStatsGridProps) {
+export const MemoryStatsGrid = memo(function MemoryStatsGrid({ stats, loading }: MemoryStatsGridProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
       <div className="rounded-lg border border-border/60 p-3">
@@ -31,4 +32,4 @@ export function MemoryStatsGrid({ stats, loading }: MemoryStatsGridProps) {
       </div>
     </div>
   )
-}
+})

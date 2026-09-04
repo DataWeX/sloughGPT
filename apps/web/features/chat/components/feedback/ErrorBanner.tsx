@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { memo, useCallback } from 'react'
 import { Button } from '@sloughgpt/strui'
 
 type ErrorType = 'network' | 'server' | 'model' | 'timeout' | 'unknown'
@@ -45,7 +45,7 @@ interface ErrorBannerProps {
   onDismiss: () => void
 }
 
-export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
+export const ErrorBanner = memo(function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
   const info = ERROR_MESSAGES[error.type]
 
   const handleCopyDiagnostics = useCallback(() => {
@@ -134,7 +134,7 @@ export function ErrorBanner({ error, onRetry, onDismiss }: ErrorBannerProps) {
       </div>
     </section>
   )
-}
+})
 
 export function getErrorInfo(
   status: number,

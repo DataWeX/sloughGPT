@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController } from '@/lib/workflow-controller'
 import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
@@ -118,11 +118,10 @@ export function WorkflowSection() {
         </div>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Status</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <ActionCard
+        title="Status"
+        contentClassName="space-y-3"
+      >
           <div className="flex items-center gap-3">
             <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium', status?.running
                 ? 'bg-success/15 text-success'
@@ -134,8 +133,7 @@ export function WorkflowSection() {
               {toggling ? '...' : status?.running ? 'Stop' : 'Start'}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+      </ActionCard>
 
       <WorkflowHealthCard status={status} />
 

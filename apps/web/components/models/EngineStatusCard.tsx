@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, KpiGrid, StatCard, Skeleton } from '@sloughgpt/strui'
+import { ActionCard, Card, CardContent, CardHeader, CardTitle, Button, KpiGrid, StatCard, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -87,9 +87,9 @@ export default function EngineStatusCard() {
   if (!status) return null
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Engine</CardTitle>
+    <ActionCard
+      title="Engine"
+      actions={
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh engine status">
             <IconRefresh className="h-3.5 w-3.5" />
@@ -98,8 +98,8 @@ export default function EngineStatusCard() {
             {reloading ? 'Reloading...' : 'Reload'}
           </Button>
         </div>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         <KpiGrid columns={3}>
           <StatCard label="Engine" value={status.engine} />
           <StatCard label="Version" value={status.version} />
@@ -107,7 +107,6 @@ export default function EngineStatusCard() {
           <StatCard label="Uptime" value={formatUptime(status.uptime_s)} />
           <StatCard label="Memory" value={`${status.memory_usage_mb} MB`} />
         </KpiGrid>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
@@ -95,14 +95,15 @@ export function ImageSection() {
         <span className="text-xs text-muted-foreground">{loading ? 'Loading' : `${gallery.length} images generated`}</span>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Generate</CardTitle>
+      <ActionCard
+        title="Generate"
+        actions={
           <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
             <IconRefresh className="h-4 w-4" />
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
+        }
+        contentClassName="space-y-3"
+      >
           <Textarea
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
@@ -132,8 +133,7 @@ export function ImageSection() {
             )}
           </div>
           {genError && <div className="text-xs text-destructive">{genError}</div>}
-        </CardContent>
-      </Card>
+      </ActionCard>
 
       {lastGenerated && (
         <Card>

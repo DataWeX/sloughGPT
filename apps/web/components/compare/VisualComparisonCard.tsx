@@ -1,5 +1,6 @@
 'use client'
 
+import { memo, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts'
 
@@ -7,19 +8,19 @@ interface VisualComparisonCardProps {
   chartData: { name: string; throughput: number; latency: number; memory: number }[]
 }
 
-export default function VisualComparisonCard({ chartData }: VisualComparisonCardProps) {
+export default memo(function VisualComparisonCard({ chartData }: VisualComparisonCardProps) {
   if (chartData.length < 2) return null
 
   const maxThroughput = Math.max(...chartData.map(d => d.throughput))
   const maxLatency = Math.max(...chartData.map(d => d.latency))
   const maxMemory = Math.max(...chartData.map(d => d.memory))
 
-  const radarData = chartData.map(d => ({
+  const radarData = useMemo(() => chartData.map(d => ({
     name: d.name,
     throughput: maxThroughput > 0 ? (d.throughput / maxThroughput) * 100 : 0,
     latency: maxLatency > 0 ? ((maxLatency - d.latency) / maxLatency) * 100 : 0,
     memory: maxMemory > 0 ? ((maxMemory - d.memory) / maxMemory) * 100 : 0,
-  }))
+  })), [chartData, maxThroughput, maxLatency, maxMemory])
 
   return (
     <Card>
@@ -88,4 +89,4 @@ export default function VisualComparisonCard({ chartData }: VisualComparisonCard
       </CardContent>
     </Card>
   )
-}
+})

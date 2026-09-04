@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
@@ -15,7 +16,7 @@ interface ConfirmDialogProps {
   destructive?: boolean
 }
 
-export function ConfirmDialog({
+export const ConfirmDialog = memo(function ConfirmDialog({
   open, onOpenChange, title, description,
   confirmLabel = 'Confirm', cancelLabel = 'Cancel',
   onConfirm, destructive = true,
@@ -39,4 +40,4 @@ export function ConfirmDialog({
       </AlertDialogContent>
     </AlertDialog>
   )
-}
+})

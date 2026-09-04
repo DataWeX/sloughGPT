@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Input, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { ActionCard, Card, CardHeader, CardTitle, CardContent, Input, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type SavedTree, type TokenTreeStats } from '@/lib/token-tree-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -88,14 +88,15 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
   const trained = stats?.trained ?? false
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Saved Token Trees</CardTitle>
+    <ActionCard
+      title="Saved Token Trees"
+      actions={
         <Button size="sm" variant="ghost" onClick={load} disabled={loadFailed} aria-label="Refresh saved trees">
           <IconRefresh className="h-4 w-4" />
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      }
+      contentClassName="space-y-4"
+    >
         {loadFailed ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
             Could not load saved trees. <button type="button" onClick={load} className="text-primary underline">Retry</button>
@@ -183,7 +184,6 @@ export function TokenTreePersistenceCard({ refreshKey = 0, onLoaded }: TokenTree
           Saved trees persist to <span className="font-mono">data/token_trees/</span> and survive restarts.
           Loading one swaps it in as the current tree for the other explorer cards.
         </p>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

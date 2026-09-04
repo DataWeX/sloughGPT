@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import {
   Card, CardContent, Button, Badge, Input, Textarea,
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -391,7 +391,7 @@ export default function PlannerPage() {
 
 // ── Board View ─────────────────────────────────────────────────────────
 
-function BoardView({
+const BoardView = memo(function BoardView({
   columns,
   cardsByColumn,
   draggedCard,
@@ -488,11 +488,11 @@ function BoardView({
       })}
     </div>
   )
-}
+})
 
 // ── Notes View ─────────────────────────────────────────────────────────
 
-function NotesView({
+const NotesView = memo(function NotesView({
   notes,
   onEdit,
   onDelete,
@@ -550,7 +550,7 @@ function NotesView({
       ))}
     </div>
   )
-}
+})
 
 // ── Note Dialog ────────────────────────────────────────────────────────
 

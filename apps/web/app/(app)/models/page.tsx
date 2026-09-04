@@ -166,6 +166,15 @@ export default function ModelsPage() {
     addToast('Refreshed', 'success')
   }, [refetchModels, refetchSouls, refetchCurrentSoul, refetchCheckpoints, refreshHealth, fetchTraitWeights, addToast])
 
+  const handleModelLoaded = useCallback(async () => {
+    await refreshHealth()
+    await refetchModels()
+  }, [refreshHealth, refetchModels])
+
+  const handleCacheRefresh = useCallback(() => {
+    modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})
+  }, [])
+
   useEffect(() => { fetchTraitWeights() }, [fetchTraitWeights])
   useEffect(() => { modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache info unavailable */ {}) }, [])
 
@@ -260,7 +269,7 @@ export default function ModelsPage() {
           models={models}
           modelsLoading={modelsLoading}
           activeRuntimeId={activeRuntimeId}
-          onModelLoaded={async () => { await refreshHealth(); await refetchModels() }}
+          onModelLoaded={handleModelLoaded}
         />
 
         {/* ── Secondary: Usage, Layers, Traits, Fine-tuned ─── */}
@@ -285,7 +294,7 @@ export default function ModelsPage() {
             />
             <FineTunedModelsCard
               activeModelId={activeRuntimeId}
-              onLoaded={async () => { await refreshHealth(); await refetchModels() }}
+              onLoaded={handleModelLoaded}
             />
           </div>
         </FoldSection>
@@ -298,7 +307,7 @@ export default function ModelsPage() {
             <ModelCacheCard
               cacheUsage={cacheUsage}
               health={health && health !== 'offline' ? health : null}
-              onRefresh={() => modelController.getCacheUsage().then(setCacheUsage).catch(() => /* cache refresh failed */ {})}
+              onRefresh={handleCacheRefresh}
             />
           </div>
         </FoldSection>

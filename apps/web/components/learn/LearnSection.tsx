@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
@@ -216,14 +216,15 @@ export function LearnSection() {
       )}
 
       {tab === 'knowledge' && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
+        <ActionCard
+          title="Knowledge ({knowledge.length})"
+          actions={
             <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
               <IconRefresh className={cn('h-4 w-4', loadingKnowledge ? 'animate-spin' : '')} />
             </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          }
+          contentClassName="space-y-3"
+        >
             <div className="flex gap-2">
               <Input value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} placeholder="Filter by topic..." />
               <Button size="sm" variant="outline" onClick={handleLoadKnowledge}>Search</Button>
@@ -243,8 +244,7 @@ export function LearnSection() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+        </ActionCard>
       )}
 
       {tab === 'feeds' && (

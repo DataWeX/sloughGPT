@@ -1,6 +1,6 @@
 'use client'
 
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
@@ -18,14 +18,14 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
   const maxCacheGb = 10
   const usagePercent = cacheUsage ? Math.min((cacheUsage.total_gb / maxCacheGb) * 100, 100) : 0
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Model Cache</CardTitle>
+    <ActionCard
+      title="Model Cache"
+      actions={
         <Button size="sm" variant="ghost" onClick={onRefresh} aria-label="Refresh cache">
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         {cacheUsage ? (
           <>
             <KpiGrid columns={3}>
@@ -59,7 +59,6 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
             <Skeleton className="h-1.5 w-full rounded-full" />
           </div>
         )}
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

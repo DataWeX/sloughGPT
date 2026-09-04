@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
 import { formatDuration } from '@/lib/formatDuration'
@@ -60,7 +60,7 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   return stats
 }
 
-export function TrainingSummaryCard({ checkpoints, loading }: TrainingSummaryCardProps) {
+export const TrainingSummaryCard = memo(function TrainingSummaryCard({ checkpoints, loading }: TrainingSummaryCardProps) {
   const stats = useMemo(() => computeStats(checkpoints), [checkpoints])
 
   if (loading && stats.length === 0) {
@@ -102,4 +102,4 @@ export function TrainingSummaryCard({ checkpoints, loading }: TrainingSummaryCar
       </CardContent>
     </Card>
   )
-}
+})

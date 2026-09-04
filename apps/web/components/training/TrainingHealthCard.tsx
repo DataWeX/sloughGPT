@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, ActionCard } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
 
 interface TrainingHealthCardProps {
@@ -93,32 +93,32 @@ export function TrainingHealthCard({ checkpoints, loading }: TrainingHealthCardP
 
   if (loading && checkpoints.length === 0) {
     return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Training health</CardTitle>
+      <ActionCard
+        title="Training health"
+        actions={
           <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
-        </CardHeader>
-        <CardContent>
+        }
+      >
           <div className="space-y-2">
             <div className="h-4 w-48 animate-pulse rounded bg-muted" />
             <div className="h-3 w-32 animate-pulse rounded bg-muted" />
           </div>
-        </CardContent>
-      </Card>
+      </ActionCard>
     )
   }
 
   if (checkpoints.length === 0) return null
 
   return (
-    <Card className={styles.border}>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Training health</CardTitle>
+    <ActionCard
+      title="Training health"
+      actions={
         <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', styles.badge)}>
           {STATUS_LABELS[result.status]}
         </span>
-      </CardHeader>
-      <CardContent>
+      }
+      className={styles.border}
+    >
         <p className="text-sm text-muted-foreground">{result.message}</p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground/60 mt-1">
           {result.bestLoss != null && (
@@ -128,7 +128,6 @@ export function TrainingHealthCard({ checkpoints, loading }: TrainingHealthCardP
             <span>Data quality: {result.avgQuality.toFixed(1)}/5</span>
           )}
         </div>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

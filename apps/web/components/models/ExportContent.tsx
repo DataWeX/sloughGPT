@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
@@ -232,14 +232,14 @@ export default function ExportContent() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Checkpoints</CardTitle>
+      <ActionCard
+        title="Checkpoints"
+        actions={
           <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
             <IconRefresh className={cn('h-3.5 w-3.5', loadingCheckpoints ? 'animate-spin' : '')} />
           </Button>
-        </CardHeader>
-        <CardContent>
+        }
+      >
           {checkpoints.length === 0 ? (
             <div className="text-center py-6 space-y-2">
               <p className="text-sm text-muted-foreground">No checkpoints found. Train a model to create checkpoints.</p>
@@ -270,8 +270,7 @@ export default function ExportContent() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </ActionCard>
     </>
   )
 }

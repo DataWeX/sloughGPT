@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton, Chip } from '@sloughgpt/strui'
+import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh, IconSearch } from '@sloughgpt/strui'
 import { tokenTreeController, type MergeRule, type LineageResult } from '@/lib/token-tree-controller'
 
@@ -69,14 +69,15 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Merge Rules Explorer</CardTitle>
+    <ActionCard
+      title="Merge Rules Explorer"
+      actions={
         <Button size="sm" variant="ghost" onClick={() => load(limit, query.trim())} disabled={loading} aria-label="Refresh merge rules">
           <IconRefresh className="h-4 w-4" />
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      }
+      contentClassName="space-y-3"
+    >
         <div className="flex items-center gap-2">
           <div className="relative flex-1 max-w-xs">
             <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -167,7 +168,6 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
           The most frequent BPE merges the tree learned from its corpus, ranked by count. Search filters rules by
           their parts; click a rule to expand its lineage down to character leaves.
         </p>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

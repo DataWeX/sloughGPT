@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 import { METRIC_COLUMNS } from '@/lib/compare-config'
@@ -10,7 +11,7 @@ interface ComparisonTableCardProps {
   bestMetrics: Record<string, number>
 }
 
-export default function ComparisonTableCard({ completedResults, models, bestMetrics }: ComparisonTableCardProps) {
+export default memo(function ComparisonTableCard({ completedResults, models, bestMetrics }: ComparisonTableCardProps) {
   if (completedResults.length === 0) return null
 
   return (
@@ -59,4 +60,4 @@ export default function ComparisonTableCard({ completedResults, models, bestMetr
       </CardContent>
     </Card>
   )
-}
+})

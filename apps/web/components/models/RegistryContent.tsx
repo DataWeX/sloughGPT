@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
@@ -97,14 +97,14 @@ export default function RegistryContent() {
 
       <RegistryHealthCard models={models} stats={stats} />
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Registered Models</CardTitle>
+      <ActionCard
+        title="Registered Models"
+        actions={
           <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh models">
             <IconRefresh className="h-4 w-4" />
           </Button>
-        </CardHeader>
-        <CardContent>
+        }
+      >
           {filteredModels.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {searchQuery ? 'No models match your search.' : 'No models registered. Load a model first.'}
@@ -154,8 +154,7 @@ export default function RegistryContent() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </ActionCard>
 
       {bestModel && Object.keys(bestModel).filter(k => !k.startsWith('_')).length > 0 && (
         <Card>

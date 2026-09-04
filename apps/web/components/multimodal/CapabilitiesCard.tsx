@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
@@ -9,7 +10,7 @@ interface CapabilitiesCardProps {
   caps: MultimodalCapabilities | null
 }
 
-export default function CapabilitiesCard({ caps }: CapabilitiesCardProps) {
+export default memo(function CapabilitiesCard({ caps }: CapabilitiesCardProps) {
   const capList = caps ? [
     { label: 'Speech-to-text', ok: caps.speech_to_text },
     { label: 'Image captioning', ok: caps.image_caption },
@@ -36,4 +37,4 @@ export default function CapabilitiesCard({ caps }: CapabilitiesCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

@@ -1,5 +1,6 @@
 /* KanbanCard — server-rendered card. Replace with custom component later. */
 
+import { memo } from 'react'
 import type { KanbanCardData } from "./types";
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -9,7 +10,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: "rgb(var(--color-error))",
 };
 
-export function KanbanCard({ card }: { card: KanbanCardData }) {
+export const KanbanCard = memo(function KanbanCard({ card }: { card: KanbanCardData }) {
   return (
     <div
       className="rounded-lg border p-3"
@@ -72,4 +73,4 @@ export function KanbanCard({ card }: { card: KanbanCardData }) {
       )}
     </div>
   );
-}
+})

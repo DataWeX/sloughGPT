@@ -1,5 +1,6 @@
 'use client'
 
+import { memo, useMemo } from 'react'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts'
 
 interface TraitRadarChartProps {
@@ -34,15 +35,15 @@ const LABEL_MAP: Record<string, string> = {
   distress_handling: 'Distress',
 }
 
-export default function TraitRadarChart({ data, label, color }: TraitRadarChartProps) {
+export default memo(function TraitRadarChart({ data, label, color }: TraitRadarChartProps) {
   const entries = Object.entries(data)
   if (entries.length === 0) return null
 
-  const chartData = entries.map(([name, value]) => ({
+  const chartData = useMemo(() => entries.map(([name, value]) => ({
     trait: LABEL_MAP[name] || name.replace(/_/g, ' '),
     value: Math.round(value * 100),
     fullName: name.replace(/_/g, ' '),
-  }))
+  })), [entries])
 
   return (
     <div className="flex flex-col items-center">
@@ -83,4 +84,4 @@ export default function TraitRadarChart({ data, label, color }: TraitRadarChartP
       </div>
     </div>
   )
-}
+})

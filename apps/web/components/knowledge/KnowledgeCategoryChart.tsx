@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { KnowledgeItem, KnowledgeStats } from '@/lib/knowledge-controller'
 
@@ -43,7 +44,7 @@ function computeImportanceDistribution(items: KnowledgeItem[]): Array<{ label: s
   }).filter(b => b.count > 0)
 }
 
-export function KnowledgeCategoryChart({ items, stats }: KnowledgeCategoryChartProps) {
+export const KnowledgeCategoryChart = memo(function KnowledgeCategoryChart({ items, stats }: KnowledgeCategoryChartProps) {
   const topics = computeTopicDistribution(items)
   const importance = computeImportanceDistribution(items)
 
@@ -111,4 +112,4 @@ export function KnowledgeCategoryChart({ items, stats }: KnowledgeCategoryChartP
       </CardContent>
     </Card>
   )
-}
+})

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type MatrixSummary } from '@/lib/token-tree-controller'
 
@@ -46,14 +46,15 @@ export function TokenTreeMatrixCard() {
   )
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Embedding Matrix Overview</CardTitle>
+    <ActionCard
+      title="Embedding Matrix Overview"
+      actions={
         <Button size="sm" variant="ghost" onClick={load} disabled={loading} aria-label="Refresh matrix overview">
           <IconRefresh className="h-4 w-4" />
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      }
+      contentClassName="space-y-4"
+    >
         {loading && summary === null ? (
           <div className="space-y-1">
             <Skeleton className="h-6 w-full rounded" />
@@ -99,7 +100,6 @@ export function TokenTreeMatrixCard() {
             </p>
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

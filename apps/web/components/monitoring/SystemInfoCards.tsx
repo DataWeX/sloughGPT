@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
 import type { GPUInfo, DiskUsage, SystemInfo } from '@/lib/system-controller'
 
-export function GpuCard({ gpu }: { gpu?: GPUInfo }) {
+export const GpuCard = memo(function GpuCard({ gpu }: { gpu?: GPUInfo }) {
   const hint = useMemo(() => {
     if (!gpu) return null
     try { return JSON.parse(gpu.memory_hint) } catch { return null }
@@ -33,9 +33,9 @@ export function GpuCard({ gpu }: { gpu?: GPUInfo }) {
       </CardContent>
     </Card>
   )
-}
+})
 
-export function DiskCard({ disk }: { disk?: DiskUsage }) {
+export const DiskCard = memo(function DiskCard({ disk }: { disk?: DiskUsage }) {
   if (!disk) return null
   const pct = Math.round(disk.percent)
   const color = pct > 90 ? 'bg-destructive' : pct > 75 ? 'bg-warning' : 'bg-success'
@@ -57,9 +57,9 @@ export function DiskCard({ disk }: { disk?: DiskUsage }) {
       </CardContent>
     </Card>
   )
-}
+})
 
-export function ServerInfoCard({ info }: { info?: SystemInfo }) {
+export const ServerInfoCard = memo(function ServerInfoCard({ info }: { info?: SystemInfo }) {
   if (!info) return null
   return (
     <Card className="p-3">
@@ -72,4 +72,4 @@ export function ServerInfoCard({ info }: { info?: SystemInfo }) {
       </CardContent>
     </Card>
   )
-}
+})
