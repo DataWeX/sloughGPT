@@ -554,7 +554,7 @@ const NotesView = memo(function NotesView({
 
 // ── Note Dialog ────────────────────────────────────────────────────────
 
-function NoteDialog({
+const NoteDialog = memo(function NoteDialog({
   note,
   onClose,
   onSave,
@@ -637,4 +637,4 @@ function NoteDialog({
       </DialogContent>
     </Dialog>
   )
-}
+})
