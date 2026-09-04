@@ -307,7 +307,7 @@ def _build_filter(config: dict):
         TruncateFilter, PrefixFilter, MetadataFilter,
     )
 
-    filter_type = config.pop("type", "")
+    filter_type = config.get("type", "")
     constructors = {
         "length": LengthFilter,
         "dedup": DedupFilter,
