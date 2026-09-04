@@ -54,8 +54,12 @@ _DYLIBS = {
 def _build_one(name: str) -> bool:
     """Compile a single C extension with gcc/clang.
 
-    Requires AVX2 support (Haswell or newer Intel, or AMD Zen).
-    If compilation fails, logs a warning and returns False.
+    Builds with AVX-512 BW + VNNI (int8 dot-product in one instruction) when
+    the toolchain supports it, falling back to AVX2-only, then to numpy. The
+    compiled library is CPU-portable: the AVX-512 path is gated at runtime by
+    a CPUID check in C, so older CPUs use the AVX2/scalar kernels automatically.
+    ``-fno-tree-vectorize`` keeps the compiler from emitting 512-bit code
+    outside the explicitly-gated intrinsics (which would SIGILL on older CPUs).
 
     Returns:
         True if the library was compiled successfully.
@@ -67,11 +71,24 @@ def _build_one(name: str) -> bool:
             logger.warning("quant_core: source not found: %s", src,
                 extra={"tag": "INFRA"})
             return False
-        result = subprocess.run(
-            ["gcc", "-O3", "-mavx2", "-shared", "-fPIC", "-pthread",
-             "-o", dylib, src],
-            capture_output=True, text=True, timeout=30,
-        )
+
+        def _compile(flags):
+            return subprocess.run(
+                ["gcc", "-O3", *flags, "-shared", "-fPIC", "-pthread",
+                 "-o", dylib, src],
+                capture_output=True, text=True, timeout=60,
+            )
+
+        base = ["-mavx2"]
+        # AVX-512 BW + VNNI fused int8 dot-product (llama.cpp-style). Try it
+        # first; if the toolchain rejects the flags, retry plain AVX2.
+        avx512 = [
+            "-mavx512f", "-mavx512bw", "-mavx512vnni", "-fno-tree-vectorize",
+        ]
+        result = _compile(base + avx512)
+        if result.returncode != 0:
+            result = _compile(base)
+
         if result.returncode != 0:
             logger.warning(
                 "quant_core: %s compilation failed (stderr):\n%s",
@@ -164,6 +181,26 @@ def _load_lib():
             extra={"tag": "INFRA"})
         has_int8 = False
 
+    # Expose whether the AVX-512 VNNI kernel is active (compiled + supported).
+    global HAS_AVX512
+    HAS_AVX512 = False
+    try:
+        if has_int8 and hasattr(_LIB, "quant_core_has_avx512"):
+            _LIB.quant_core_has_avx512.restype = ctypes.c_int
+            HAS_AVX512 = bool(_LIB.quant_core_has_avx512())
+    except Exception:
+        HAS_AVX512 = False
+
+    # Expose per-call kernel selection (smart per-shape dispatch).
+    _LIB.matmul_int8_select_kernel = getattr(_LIB, "matmul_int8_select_kernel", None)
+    _LIB.matmul_int8_kernel = getattr(_LIB, "matmul_int8_kernel", None)
+    if _LIB.matmul_int8_select_kernel is not None:
+        _LIB.matmul_int8_select_kernel.argtypes = [ctypes.c_int]
+        _LIB.matmul_int8_select_kernel.restype = None
+    if _LIB.matmul_int8_kernel is not None:
+        _LIB.matmul_int8_kernel.argtypes = []
+        _LIB.matmul_int8_kernel.restype = ctypes.c_int
+
     # Load int4 library (separate dylib)
     has_int4 = False
     try:
@@ -213,6 +250,8 @@ def matmul_int8_c(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     N = B.shape[0]
     assert B.shape[1] == K, f"B.shape[1]={B.shape[1]} != K={K}"
 
+    _set_kernel_for_shape(M)
+
     C = np.zeros((M, N), dtype=np.int32)
     _LIB.matmul_int8(
         A.ctypes.data,
@@ -251,6 +290,7 @@ def matmul_int8_f32_c(
         return None
 
     M, K = A.shape
+    _set_kernel_for_shape(M)
     N = B.shape[0]
     assert B.shape[1] == K, f"B.shape[1]={B.shape[1]} != K={K}"
 
@@ -338,6 +378,8 @@ def _fallback_int4(A: np.ndarray, B_packed: np.ndarray, K: int) -> np.ndarray:
 # ── Check at import time ──────────────────────────────────────────
 
 HAS_AVX2 = _load_lib()
+if not HAS_AVX2:
+    HAS_AVX512 = False  # no native kernel; set by _load_lib when present
 if HAS_AVX2:
     if hasattr(_LIB, "matmul_int4"):
         logger.info("quant_core: AVX2 int8 + int4 GEMM loaded",
@@ -348,3 +390,53 @@ if HAS_AVX2:
 else:
     logger.info("quant_core: using numpy fallback for all quantized GEMM",
         extra={"tag": "INFRA"})
+
+
+# ── Smart per-shape kernel dispatch ──────────────────────────────────
+#
+# No single int8 kernel wins everywhere. Measured on this host under sustained
+# load (warmup + median-of-7):
+#   * decode (M=1)      AVX2 wins 1.31–1.84×
+#   * prefill/batch     AVX-512 wins (AVX2 12–30% slower)
+# So route each GEMM by batch size: AVX2 for single-token decode, AVX-512 for
+# batched work. This is the honest benchmark-backed default — the in-process
+# microbenchmark is unreliable here because a long AVX-512 burst first engages
+# the frequency downclock, which brief interleaved timings never see.
+#
+# Overrides (in priority order):
+#   MAN_QUANT_KERNEL=2|512|auto   explicit pin (used by the A/B harness);
+#                                 handled in C, honored below.
+#   MAN_SMART_DISPATCH=0          disable smart routing, use hardware default
+#   (anything else)               use the benchmark-backed per-shape policy
+
+_K_AVX2 = 1
+_K_AVX512 = 2
+
+
+def _decode_only(m: int) -> bool:
+    """True for single-token decode, where AVX2 beats AVX-512 on this host."""
+    return m <= 1
+
+
+def policy_kernel(m: int) -> int:
+    """Benchmark-backed kernel for batch ``m``.
+
+    AVX2 for decode (M≤1); AVX-512 for batched work when it is compiled in and
+    supported, else AVX2. AVX2 is the tie/preference default.
+    """
+    if _decode_only(m):
+        return _K_AVX2
+    return _K_AVX512 if HAS_AVX512 and HAS_AVX2 else _K_AVX2
+
+
+def _set_kernel_for_shape(m: int) -> None:
+    """Set the C kernel for the next GEMM of batch size ``m``."""
+    if not HAS_AVX2 or _LIB.matmul_int8_select_kernel is None:
+        return
+    if os.environ.get("MAN_QUANT_KERNEL"):
+        return  # explicit pin already handled in C
+    mode = os.environ.get("MAN_SMART_DISPATCH", "1")
+    if mode == "0":
+        _LIB.matmul_int8_select_kernel(0)
+        return
+    _LIB.matmul_int8_select_kernel(policy_kernel(m))

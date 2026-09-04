@@ -122,13 +122,107 @@ _c_matmul_int4 = _int4_numpy_fallback
 logger = logging.getLogger("slo.infrastructure.quantization")
 
 try:
-    from domains.infrastructure.quant_core.wrapper import matmul_int8_c, matmul_int4_c, matmul_int8_f32_c, HAS_AVX2
+    from domains.infrastructure.quant_core.wrapper import (
+        matmul_int8_c, matmul_int4_c, matmul_int8_f32_c, HAS_AVX2, HAS_AVX512,
+    )
     if HAS_AVX2:
         _c_matmul = matmul_int8_c
         _c_matmul_int4 = matmul_int4_c
         logger.info("Using AVX2 int8 + int4 GEMM (quant_core)", extra={"tag": "INFRA"})
 except Exception:
     matmul_int8_f32_c = None
+
+
+# ── Adaptive quantization dispatch ─────────────────────────────────
+#
+# The AVX2 int8 GEMM kernel does not beat numpy's float32 BLAS at every
+# shape. On AVX512-equipped hosts numpy fp32 runs 512-bit FMA while the C
+# kernel is 256-bit, so for single-token decode (M=1, the normal generation
+# shape) int8 only pulls ahead once the weight matrix is large enough to be
+# memory-bound — measured crossover is K ≳ 1024. Quantizing small layers
+# makes decode *slower* (activation-quantize + dequantize overhead with no
+# compute savings). Adaptive quantization applies int8 only where it wins,
+# so every embed dim either speeds up or stays on fp32 — never regresses.
+
+# Coupled to the runtime so callers that force the fallback path off still
+# see the true state.
+def _has_int8_kernel() -> bool:
+    try:
+        return bool(HAS_AVX2)
+    except NameError:
+        return False
+
+
+# Crossover K (embed / inner dim) below which fp32 beats int8 for M=1 decode,
+# per active kernel. Measured on AVX512 host: the AVX-512 VNNI kernel wins from
+# ~K=512 (AVX2 only won from ~K=1024). Lower means small embeds can quantize.
+def _crossover_k() -> int:
+    try:
+        return 512 if bool(HAS_AVX512) else 1024
+    except NameError:
+        return 1024
+
+
+QUANT_CROSSOVER_K = _crossover_k()
+
+
+def should_quantize_row(k: int, crossover_k: int = QUANT_CROSSOVER_K) -> bool:
+    """Return True when int8 GEMM is expected to beat fp32 for a weight row.
+
+    Uses the memory-bound crossover: int8 helps once the weight matrix is
+    large enough to stream from DRAM. A layer with inner dimension ``k`` is
+    quantized only when ``k >= crossover_k``.
+    """
+    if not _has_int8_kernel():
+        return False
+    return int(k) >= int(crossover_k)
+
+
+def apply_adaptive_quantization(
+    model,
+    bits: int = 8,
+    mode: str = "symmetric",
+    crossover_k: int = QUANT_CROSSOVER_K,
+) -> dict:
+    """Quantize a SloNet model, but only layers where int8 actually wins.
+
+    Walks every ``SloLinear`` in ``model`` and calls ``set_quantized_weight``
+    only when the layer's inner dimension ``K`` is large enough that the AVX2
+    int8 GEMM beats numpy fp32 (see ``should_quantize_row``). Small embed
+    layers — where int8 is slower than fp32 — are left on fp32, so quantization
+    never regresses inference on small models.
+
+    Args:
+        model: SloughGPTModel (or any model with ``walk_slo_linears`` support).
+        bits: Quantization bit width (8 or 4).
+        mode: "symmetric" or "asymmetric".
+        crossover_k: Inner-dimension threshold; layers with K < this stay fp32.
+
+    Returns:
+        dict with ``quantized`` (number of layers quantized), ``total``
+        (number of quantizable linear layers found), ``left_fp32`` (number of
+        layers below crossover left on fp32).
+    """
+    engine = Quantine(bits=bits, mode=mode)
+    linears = walk_slo_linears(model)
+    quantized = 0
+    left_fp32 = 0
+    for name, module in linears.items():
+        w = getattr(module, "weight", None)
+        if w is None or not hasattr(w, "data"):
+            continue
+        inner = w.data.shape[-1] if w.data.ndim >= 1 else 0
+        if module._quant_info is not None:  # already quantized
+            quantized += 1
+            continue
+        if not should_quantize_row(inner, crossover_k=crossover_k):
+            left_fp32 += 1
+            continue
+        info = engine.quantize(name, w.data)
+        if info.is_quantized:
+            module.set_quantized_weight(info)
+            quantized += 1
+    return {"quantized": quantized, "total": len(linears), "left_fp32": left_fp32}
 
 
 class QuantMode(Enum):

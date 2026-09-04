@@ -45,6 +45,8 @@ from domains.infrastructure.quantization import (
     int4_quantized_linear,
     walk_hf_linears,
     walk_slo_linears,
+    should_quantize_row,
+    apply_adaptive_quantization,
 )
 
 
@@ -1061,6 +1063,130 @@ class TestWalkLinears:
         model = FakeModule()
         result = walk_hf_linears(model)
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# Adaptive quantization
+# ---------------------------------------------------------------------------
+class TestAdaptiveQuantization:
+    """Test adaptive int8 dispatch that only quantizes where int8 beats fp32."""
+
+    _MOCK_MOD = None
+
+    def _slo_linear(self, n, k, quantized=False):
+        """Build a fake SloLinear-compatible module with the fields used."""
+        from unittest.mock import MagicMock
+
+        w = MagicMock()
+        w.data = np.zeros((n, k), dtype=np.float32)
+        m = MagicMock()
+        m.weight = w
+        m._quant_info = MagicMock() if quantized else None
+        return m
+
+    @pytest.fixture(autouse=True)
+    def _patch_slonet(self):
+        """Expose the fake SloLinear class to walk_slo_linears."""
+        from unittest.mock import MagicMock, patch
+
+        FakeSloLinear = MagicMock()
+        mock_mod = MagicMock()
+        mock_mod.SloLinear = FakeSloLinear
+        with patch.dict("sys.modules", {"domains.training.slonet": mock_mod}):
+            yield FakeSloLinear
+
+    def test_should_quantize_small_false(self):
+        # Small embed dims must stay fp32 (int8 loses on AVX512 numpy).
+        assert should_quantize_row(96) is False
+        assert should_quantize_row(256) is False
+        assert should_quantize_row(511) is False
+
+    def test_should_quantize_large_true(self):
+        # Large inner dims cross the memory-bound threshold and should quantize.
+        assert should_quantize_row(1024) is True
+        assert should_quantize_row(4096) is True
+
+    def test_should_quantize_respects_crossover(self):
+        assert should_quantize_row(300, crossover_k=256) is True
+        assert should_quantize_row(200, crossover_k=256) is False
+
+    def test_no_kernel_means_never_quantize(self, _patch_slonet):
+        # When the AVX2 kernel is not available, never vote to quantize.
+        from domains.infrastructure import quantization as q
+        from unittest.mock import patch
+
+        w = self._slo_linear(4, 2048)
+        with patch.object(q, "_has_int8_kernel", return_value=False):
+            assert should_quantize_row(2048) is False
+
+    def test_apply_small_model_stays_fp32(self, _patch_slonet):
+        # A small-embed model: every layer below crossover, none quantized.
+        linears = {}
+        for name, n, k in [
+            ("lm_head", 65, 96),
+            ("blocks.0.attn.W_q", 96, 96),
+            ("blocks.0.ff.w1", 96, 96),
+            ("blocks.1.attn.W_k", 96, 96),
+        ]:
+            linears[name] = self._slo_linear(n, k)
+
+        from unittest.mock import patch
+        from domains.infrastructure import quantization as q
+
+        class FakeModel:
+            pass
+
+        fm = FakeModel()
+        with patch.object(q, "walk_slo_linears", return_value=linears):
+            res = apply_adaptive_quantization(fm, bits=8, mode="symmetric")
+
+        assert res["quantized"] == 0
+        assert res["total"] == 4
+        assert res["left_fp32"] == 4
+        # No layer got a quantized weight set.
+        for m in linears.values():
+            assert m.set_quantized_weight.call_count == 0
+
+    def test_apply_large_model_quantizes_big_layers(self, _patch_slonet):
+        # Mixed model: big layers quantized, small layer left fp32.
+        linears = {}
+        for name, n, k, qz in [
+            ("lm_head", 65, 1024, False),
+            ("blocks.0.attn.W_q", 1024, 1024, False),
+            ("blocks.0.ff.w1", 1024, 4096, False),
+            ("blocks.0.attn.W_k", 64, 64, False),   # small -> stays fp32
+        ]:
+            linears[name] = self._slo_linear(n, k, qz)
+
+        from unittest.mock import patch
+        from domains.infrastructure import quantization as q
+
+        fm = SimpleNamespace()
+        with patch.object(q, "walk_slo_linears", return_value=linears):
+            res = apply_adaptive_quantization(fm, bits=8, mode="symmetric")
+
+        assert res["total"] == 4
+        assert res["left_fp32"] == 1
+        assert res["quantized"] == 3
+        # big layers had set_quantized_weight called; small one did not.
+        assert linears["blocks.0.attn.W_q"].set_quantized_weight.call_count == 1
+        assert linears["blocks.0.attn.W_k"].set_quantized_weight.call_count == 0
+
+    def test_apply_skips_already_quantized(self, _patch_slonet):
+        linears = {
+            "lm_head": self._slo_linear(65, 2048, quantized=True),
+            "blocks.0.attn.W_q": self._slo_linear(2048, 2048, quantized=False),
+        }
+        from unittest.mock import patch
+        from domains.infrastructure import quantization as q
+
+        fm = SimpleNamespace()
+        with patch.object(q, "walk_slo_linears", return_value=linears):
+            res = apply_adaptive_quantization(fm, bits=8, mode="symmetric")
+
+        assert res["quantized"] == 2  # already-quantized lm_head counts, no re-quantize
+        assert linears["lm_head"].set_quantized_weight.call_count == 0
+        assert linears["blocks.0.attn.W_q"].set_quantized_weight.call_count == 1
 
 
 # ---------------------------------------------------------------------------
