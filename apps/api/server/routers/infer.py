@@ -18,12 +18,14 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, AsyncIterator, AsyncGenerator
 import datetime
 import logging
+from config import ServerConfig
 from schemas.common import raise_error, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
 from domains.infrastructure.errors import AppError
 import time as _time
 
 logger = logging.getLogger("slo.infer")
+cfg = ServerConfig.from_env()
 
 
 class InferRequest(BaseModel):
@@ -237,10 +239,10 @@ class InferRouter:
                 provider_messages = [{"role": "user", "content": req.prompt}]
                 start = datetime.datetime.now()
                 token_count = 0
-                _token_gen_start = time.time()
+                _token_gen_start = _time.time()
                 _max_token_wait_s = getattr(cfg, "generate_timeout", 60)
                 _heartbeat_interval_s = 10.0
-                _last_heartbeat = time.time()
+                _last_heartbeat = _time.time()
                 try:
                     async for token in provider.chat_stream(
                         provider_messages,
@@ -253,15 +255,15 @@ class InferRouter:
                         if await request.is_disconnected():
                             return
                         if token:
-                            _token_gen_start = time.time()
+                            _token_gen_start = _time.time()
                             token_count += 1
                             yield self._sse_token("infer", token)
                         else:
-                            now = time.time()
+                            now = _time.time()
                             if now - _last_heartbeat >= _heartbeat_interval_s:
                                 yield ": heartbeat\n\n"
                                 _last_heartbeat = now
-                        elapsed_since_token = time.time() - _token_gen_start
+                        elapsed_since_token = _time.time() - _token_gen_start
                         if elapsed_since_token > _max_token_wait_s:
                             logger.warning(
                                 "Infer stream stalled for %.1fs (limit=%.1fs)",

@@ -218,7 +218,7 @@ class TraitWeightsConfig:
                 if data and "_meta" in data:
                     meta.update(data["_meta"])
             except Exception as e:
-                logger.debug("Failed to load snapshot metadata %s: %s", path, e)
+                logger.debug("Failed to load snapshot metadata %s: %s", sid, e)
             results.append(meta)
         return sorted(results, key=lambda x: x.get("saved_at", ""))
 

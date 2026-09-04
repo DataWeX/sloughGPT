@@ -89,7 +89,7 @@ describe('RadioGroup', () => {
         <Radio value="b" id="rg3b" label="B" />
       </RadioGroup>,
     )
-    const radios = screen.getAllByRole('radio')
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[]
     expect(radios[0].checked).toBe(false)
     expect(radios[1].checked).toBe(true)
     fireEvent.click(radios[0])
@@ -103,7 +103,7 @@ describe('RadioGroup', () => {
         <Radio value="b" id="rg4b" />
       </RadioGroup>,
     )
-    expect(container.firstChild?.className).toContain('flex-col')
+    expect((container.firstChild as HTMLElement | null)?.className).toContain('flex-col')
   })
 
   it('applies horizontal layout', () => {
@@ -113,6 +113,6 @@ describe('RadioGroup', () => {
         <Radio value="b" id="rg5b" />
       </RadioGroup>,
     )
-    expect(container.firstChild?.className).toContain('flex-row')
+    expect((container.firstChild as HTMLElement | null)?.className).toContain('flex-row')
   })
 })

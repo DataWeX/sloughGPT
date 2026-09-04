@@ -895,7 +895,7 @@ class SloTransformerProvider:
         logger.info(
             "Loaded SloTransformer from %s (vocab=%d, "
             "n_embed=%d, n_layer=%d, n_head=%d)",
-            path, vocab, n_embed, n_layer, n_head,
+            path, arch["vocab_size"], arch["n_embed"], arch["n_layer"], arch["n_head"],
             extra={"tag": "MODEL"},
         )
         return cls(model, stoi, itos, model_id_str=model_id_str)

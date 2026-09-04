@@ -818,6 +818,7 @@ def run_turbo_worker(config: dict) -> None:
     on every progress tick. Called from a background thread or PGQ executor.
     """
     from domains.training.train_pipeline import SloughGPTTrainer
+    from domains.training.runtime_protocol import get_training_runtime
 
     job_id = _turbo_state.get("job_id", "")
     data_path = config.get("data_path", "")

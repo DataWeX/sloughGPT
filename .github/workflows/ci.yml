@@ -128,7 +128,7 @@ jobs:
           python3 -m py_compile packages/mogdb/src/mogdb/collection.py
           python3 -m py_compile packages/mogdb/src/mogdb/database.py
       - name: Run mogdb tests
-        run: python3 -m pytest packages/mogdb/tests/test_mogdb.py -q -o "addopts="
+        run: python3 -m pytest packages/mogdb/tests/test_mogdb.py -q -o "addopts=" -o "filterwarnings="
 
   feature-tags:
     name: Feature Tags

@@ -23,7 +23,6 @@ Quick start:
     pgq.put("weights", numpy_array)
     data = pgq.get("weights")
 """
-from __future__ import annotations
 
 import logging
 import threading
@@ -32,18 +31,17 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from .config import TreeConfig, QueueConfig
+from .config import PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig
 from .point import Point
 from .compressor import PointCompressor
 from .library import PointLibrary
-from .model_tree import ModelTree
-from .tree import load_model_to_points
+from .model_tree import ModelTree, load_model_to_points
 from .cache import TieredCache, Tier
-
-
+from .store import MemoryStore, JSONStore, DirectoryStore
+from .dedup import PointDeduplicator, PointLibrarySync
 from .queue import ModelQueue
-from .task_queue import TaskQueue, Task, TaskStatus
-from .engine import Engine, Process, Stem, ProcessStatus, ProcessGroup, TaskFuture
+from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
+from .engine import Engine, Process, Stem, Tree as EngineTree, ProcessStatus, StemStatus, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
 
 logger = logging.getLogger("slo.pugqeep")
 
@@ -287,19 +285,6 @@ class PGQ:
         return self._engine.spawn(fn, *args, name=name,
                                   timeout=timeout, priority=priority, **kwargs)
 
-    def submit(self, fn: Callable[..., Any], *args: Any,
-               name: str = "", tree: Optional[str] = None,
-               priority: int = 2, timeout: Optional[float] = None,
-               **kwargs: Any) -> "TaskFuture":
-        """Submit a callable and return a TaskFuture (sync convenience API).
-
-        Usage:
-            future = pgq.submit(my_fn, arg1, arg2)
-            result = future.result(timeout=10.0)
-        """
-        return self._engine.submit(fn, *args, name=name, tree=tree,
-                                   priority=priority, timeout=timeout, **kwargs)
-
     def tree(self, name: str, max_stems: int = 8,
              pool_workers: int = 4) -> "EngineTree":
         """Create a Tree on the core engine.
@@ -424,7 +409,7 @@ class PGQ:
     ) -> str:
         """Submit a training job through the shared TrainingExecutor.
 
-        Routes the job to a specific Tree (``tree_id``) for isolation.
+        Routes the job to a specific ModelTree (``tree_id``) for isolation.
         Trained weights are automatically compressed into Points and stored
         in the tree's PointLibrary on completion.
 
@@ -432,7 +417,7 @@ class PGQ:
             fn: Training function.  Receives (job_id, tree_id, point_library,
                 is_cancelled, *args, **kwargs).
             job_id: Unique job identifier.
-            tree_id: Tree name.  None uses ``self.name``.
+            tree_id: ModelTree name.  None uses ``self.name``.
             **kwargs: Forwarded to the training function.
 
         Returns:
