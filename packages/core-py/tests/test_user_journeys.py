@@ -141,6 +141,56 @@ class TestTraining:
         ok("training_import_button", btn.count() > 0)
         assert btn.count() > 0
 
+    def test_job_detail_loads(self, page: Page):
+        """Job detail page renders for a sample job ID (shows job info or not-found)."""
+        body = go(page, "/training/job/test-job-id")
+        has_content = len(body) > 50
+        ok("training_job_detail_loads", has_content, f"len={len(body)}")
+        assert has_content
+
+    def test_job_detail_back_link(self, page: Page):
+        """Job detail page has a back link to training list."""
+        go(page, "/training/job/test-job-id")
+        time.sleep(1)
+        back = page.locator('a[href="/training"]').first
+        ok("training_job_detail_back_link", back.count() > 0)
+        assert back.count() > 0
+
+    def test_tabs_visible(self, page: Page):
+        """Training page shows Train, Results, Settings tabs."""
+        go(page, "/training")
+        time.sleep(1)
+        tabs = page.locator('[role="tab"]')
+        count = tabs.count()
+        ok("training_tabs_visible", count >= 3, f"count={count}")
+        assert count >= 3
+
+    def test_train_tab_has_pipeline(self, page: Page):
+        """Train tab contains the training pipeline form."""
+        go(page, "/training")
+        time.sleep(1)
+        # Look for dataset selector or start button indicators
+        has_form = page.locator('button:has-text("Start"), select, [role="combobox"]').count() > 0
+        ok("training_train_tab_has_pipeline", has_form)
+        assert has_form
+
+    def test_results_tab_loads(self, page: Page):
+        """Results tab shows training history/analytics content."""
+        go(page, "/training")
+        time.sleep(1)
+        # Click Results tab
+        results_tab = page.locator('[role="tab"]:has-text("Results")')
+        if results_tab.count() > 0:
+            results_tab.click()
+            time.sleep(1)
+            body = page.inner_text("body")
+            has_results = "history" in body.lower() or "analytics" in body.lower() or "build" in body.lower()
+            ok("training_results_tab_loads", has_results, f"body_len={len(body)}")
+        else:
+            ok("training_results_tab_loads", False, "Results tab not found")
+            has_results = False
+        assert has_results
+
 
 # ── Settings ──────────────────────────────────────────────────
 

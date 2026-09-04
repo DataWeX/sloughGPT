@@ -16,6 +16,11 @@ End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user
 ### Training
 - **Load**: Training page (`/training`) loads with "train" content
 - **Import button**: "+ Import" button is visible
+- **Tabs**: Train, Results, Settings tabs are visible
+- **Train tab**: Contains training pipeline form with Start button or dataset selector
+- **Results tab**: Shows training history/analytics content
+- **Job detail**: `/training/job/[id]` loads with job info or not-found state
+- **Job back link**: Job detail page has a back link to training list
 
 ### Datasets
 - **Load**: Datasets page (`/datasets`) loads
@@ -57,7 +62,7 @@ End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user
 
 The following routes have `page.tsx` files but are not covered by Playwright tests:
 
-**Core**: `/training/job/[id]`, `/dataset/[id]`, `/model/[id]`
+**Core**: `/dataset/[id]`, `/model/[id]`
 **Agents/Souls**: `/agents`, `/souls`
 **Tools**: `/tokenizer`, `/benchmark`, `/compare`, `/shell`, `/errors`, `/monitoring`
 **Supporting**: `/feedback`, `/files`, `/security`, `/developer`, `/magazine`, `/learn`

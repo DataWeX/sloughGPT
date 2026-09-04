@@ -692,6 +692,8 @@ class HuggingFaceImporter:
         dataset_id: str,
         output_dir: str = "datasets",
         name: Optional[str] = None,
+        config: Optional[str] = None,
+        split: Optional[str] = None,
     ) -> ImportResult:
         """Download dataset from HuggingFace."""
         if not self._hf_available:
@@ -712,17 +714,54 @@ class HuggingFaceImporter:
             output_path = Path(output_dir) / name
             output_path.mkdir(parents=True, exist_ok=True)
 
-            logger.info("Downloading %s...", dataset_id,
+            logger.info("Downloading %s%s...", dataset_id, f" (config={config})" if config else "",
                 extra={"tag": "TRAIN"},)
 
-            # Handle datasets with subsets/config
+            load_kwargs: dict = {}
+            if config:
+                load_kwargs["name"] = config
+            if split:
+                load_kwargs["split"] = split
+
             try:
-                dataset = load_dataset(dataset_id)
+                dataset = load_dataset(dataset_id, **load_kwargs)
             except Exception as config_err:
-                # Try with default config for datasets with subsets
-                logger.warning("Full load failed, trying default config: %s", config_err,
-                    extra={"tag": "TRAIN"},)
-                dataset = load_dataset(dataset_id, split="train")
+                error_msg = str(config_err)
+                if "scripts are no longer supported" in error_msg or "trust_remote_code" in error_msg:
+                    logger.warning("Script-based dataset detected, retrying with trust_remote_code: %s", dataset_id,
+                        extra={"tag": "TRAIN"},)
+                    try:
+                        dataset = load_dataset(dataset_id, trust_remote_code=True, **load_kwargs)
+                    except Exception:
+                        fallback_kwargs = {k: v for k, v in load_kwargs.items() if k != "split"}
+                        dataset = load_dataset(dataset_id, split="train", trust_remote_code=True, **fallback_kwargs)
+                elif "Config name is missing" in error_msg:
+                    import re
+                    configs_match = re.search(r"available configs: \[(.+?)\]", error_msg)
+                    available_configs = []
+                    if configs_match:
+                        available_configs = [c.strip().strip("'") for c in configs_match.group(1).split(",")]
+                    if available_configs:
+                        auto_config = available_configs[0]
+                        logger.info("Auto-selecting config '%s' for dataset %s", auto_config, dataset_id,
+                            extra={"tag": "TRAIN"},)
+                        fallback_kwargs = {k: v for k, v in load_kwargs.items() if k != "split"}
+                        dataset = load_dataset(dataset_id, name=auto_config, split="train", **fallback_kwargs)
+                    else:
+                        return ImportResult(
+                            success=False,
+                            name=name or dataset_id,
+                            source=f"huggingface:{dataset_id}",
+                            files_imported=0,
+                            total_chars=0,
+                            output_path="",
+                            error=f"Dataset '{dataset_id}' requires a config name. Please specify a config.",
+                        )
+                else:
+                    logger.warning("Full load failed, trying default config: %s", config_err,
+                        extra={"tag": "TRAIN"},)
+                    fallback_kwargs = {k: v for k, v in load_kwargs.items() if k != "split"}
+                    dataset = load_dataset(dataset_id, split="train", **fallback_kwargs)
 
             # Handle both DatasetDict and Dataset
             total_chars = 0
