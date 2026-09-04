@@ -1,28 +1,25 @@
 """Tests for files router endpoints."""
-import json
-import os
-import time
-import pytest
 from io import BytesIO
-from pathlib import Path
+
+import pytest
+from routers.files import FilesRouter, _get_db
 
 from tests.test_support import get_test_client
-from routers.files import UPLOADS_DIR, METADATA_FILE, _save_metadata, _load_metadata
 
 client = get_test_client()
+_router = FilesRouter()
+_upload_dir = _router.UPLOADS_DIR
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_uploads(tmp_path):
-    """Save and restore metadata around tests to avoid pollution."""
-    orig_meta = {}
-    if METADATA_FILE.exists():
-        try:
-            orig_meta = json.loads(METADATA_FILE.read_text())
-        except Exception:
-            pass
+def _cleanup_uploads():
+    """Clear file metadata (MogDB) and uploaded files between tests."""
     yield
-    _save_metadata(orig_meta)
+    db = _get_db()
+    db.collection("files").delete_many({})
+    for f in _upload_dir.iterdir():
+        if f.is_file():
+            f.unlink(missing_ok=True)
 
 
 class TestListFiles:
@@ -95,7 +92,7 @@ class TestDeleteFile:
         fid = upload_resp.json()["id"]
         resp = client.delete(f"/files/{fid}")
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "deleted"
+        assert resp.json()["data"]["deleted"] == fid
 
         get_resp = client.get(f"/files/{fid}")
         assert get_resp.status_code == 404

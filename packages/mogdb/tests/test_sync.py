@@ -24,6 +24,7 @@ from mogdb.sync import (
     sync_from_json,
     sync_from_jsonl,
     sync_from_csv,
+    preview_from_files,
 )
 
 
@@ -302,6 +303,61 @@ class TestSyncFromFiles:
         assert result.inserted == 1
         assert result.updated == 1
         assert result.unchanged == 1
+
+
+# ── preview_from_files ───────────────────────────────────────────────
+
+class TestPreviewFromFiles:
+    def _mock_collection(self, existing=None):
+        coll = MagicMock()
+        coll.find.return_value = existing or []
+        return coll
+
+    def test_counts_without_mutating(self, tmp_path):
+        path = tmp_path / "data.json"
+        path.write_text(json.dumps([{"id": "a", "val": 1}, {"id": "b", "val": 2}]))
+        coll = self._mock_collection()
+        result = preview_from_files(coll, str(path), "id")
+        assert result.inserted == 2
+        assert result.updated == 0
+        assert result.deleted == 0
+        coll.insert_one.assert_not_called()
+        coll.update_one.assert_not_called()
+        coll.delete_one.assert_not_called()
+
+    def test_matches_sync_plan(self, tmp_path):
+        path = tmp_path / "data.json"
+        path.write_text(json.dumps([
+            {"id": "a", "val": 1},    # unchanged
+            {"id": "b", "val": 99},   # updated
+            {"id": "c", "val": 3},    # new
+        ]))
+        existing = [
+            {"_id": "1", "id": "a", "val": 1},
+            {"_id": "2", "id": "b", "val": 2},
+        ]
+        coll = self._mock_collection(existing)
+        result = preview_from_files(coll, str(path), "id")
+        assert result.inserted == 1
+        assert result.updated == 1
+        assert result.unchanged == 1
+
+    def test_delete_missing_counts(self, tmp_path):
+        path = tmp_path / "data.json"
+        path.write_text(json.dumps([{"id": "a", "val": 1}]))
+        existing = [
+            {"_id": "1", "id": "a", "val": 1},
+            {"_id": "2", "id": "b", "val": 2},
+        ]
+        coll = self._mock_collection(existing)
+        result = preview_from_files(coll, str(path), "id", delete_missing=True)
+        assert result.deleted == 1
+        coll.delete_one.assert_not_called()
+
+    def test_missing_file(self):
+        coll = self._mock_collection()
+        with pytest.raises(FileNotFoundError):
+            preview_from_files(coll, "/nonexistent.json", "id")
 
 
 # ── Convenience aliases ─────────────────────────────────────────────

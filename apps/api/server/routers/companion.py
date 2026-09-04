@@ -8,12 +8,12 @@ import logging
 import os
 import time as _time
 from pathlib import Path
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List, Optional
 
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from fastapi import APIRouter, Body, Depends
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.companion")
 
@@ -184,7 +184,7 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.patch_personality")
 
-    async def use_preset(self, preset_id: str = Field(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def use_preset(self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Apply a preset personality."""
         try:
             db = _get_db()
