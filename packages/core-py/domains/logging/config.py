@@ -375,6 +375,88 @@ class LogFormatter(logging.Formatter):
             return self._format_json(record)
         return self._format_human(record)
 
+    def format_oop(self, record) -> str:
+        """Format a custom base.LogRecord or standard logging.LogRecord."""
+        if isinstance(record, logging.LogRecord):
+            return self.format(record)
+        return self._format_custom(record)
+
+    def _format_custom(self, record) -> str:
+        """Format a custom base.LogRecord (non-standard logging).
+
+        Produces two lines when context or logger name are present:
+            Line 1: timestamp level [tag] message
+            Line 2:     logger_name k=v k=v
+        """
+        from .base import LogLevel as _LogLevel
+        parts = []
+        c = self._colors
+
+        # Timestamp
+        ts = datetime.fromtimestamp(record.timestamp).strftime("%H:%M:%S")
+        parts.append(f"{_A.GREY}{ts}{_A.RESET}" if c else ts)
+
+        # Level badge
+        _level_map = {
+            _LogLevel.DEBUG: (_A.CYAN, "DBG"),
+            _LogLevel.INFO: (_A.GREEN, "INF"),
+            _LogLevel.WARNING: (_A.YELLOW, "WRN"),
+            _LogLevel.ERROR: (_A.RED, "ERR"),
+            _LogLevel.CRITICAL: (_A.RED + _A.BOLD, "CRT"),
+        }
+        _icon_map = {
+            _LogLevel.WARNING: "⚠",
+            _LogLevel.ERROR: "✗",
+            _LogLevel.CRITICAL: "✗",
+        }
+        color, abbrev = _level_map.get(record.level, (_A.WHITE, "???"))
+        icon = _icon_map.get(record.level, "")
+        parts.append(f"{color}{_A.BOLD}{abbrev:>3}{icon}{_A.RESET}" if c else f"{abbrev.rjust(3)}{icon}")
+
+        # Tag
+        tag = getattr(record, "tag", None)
+        if tag:
+            tc, tt = _TAG_STYLE.get(tag, (_A.CYAN, tag))
+            parts.append(f"{tc}{_A.BOLD}[{tt}]{_A.RESET}" if c else f"[{tt}]")
+
+        # Message
+        parts.append(record.message)
+
+        # Request ID
+        rid = record.context.get("request_id") if record.context else None
+        if rid:
+            parts.append(f"{_A.DIM}req={rid}{_A.RESET}" if c else f"req={rid}")
+
+        # Exception
+        if record.exception:
+            if c:
+                parts.append(f"{_A.RED}{_A.BOLD}[{record.exception}]{_A.RESET}")
+            else:
+                parts.append(f"[{record.exception}]")
+
+        line1 = " ".join(parts)
+
+        # Secondary line: logger name + context
+        secondary_parts = []
+        logger_name = record.logger or ""
+        if logger_name:
+            if c:
+                secondary_parts.append(f"{_A.GREY}{_A.DIM}{logger_name}{_A.RESET}")
+            else:
+                secondary_parts.append(logger_name)
+
+        ctx = {k: v for k, v in (record.context or {}).items() if k != "request_id"}
+        if ctx:
+            for k, v in ctx.items():
+                if c:
+                    secondary_parts.append(f"{_A.DIM}{k}={_A.WHITE}{v}{_A.RESET}")
+                else:
+                    secondary_parts.append(f"{k}={v}")
+
+        if secondary_parts:
+            return line1 + "\n    " + " ".join(secondary_parts)
+        return line1
+
     def _format_human(self, record: logging.LogRecord) -> str:
         parts = []
         c = self._colors
@@ -478,6 +560,11 @@ class LogFormatter(logging.Formatter):
             entry["exception"] = self.formatException(record.exc_info)
 
         return json.dumps(entry, default=str, ensure_ascii=False)
+
+
+# ── Aliases ────────────────────────────────────────────────────────────────
+
+LogFormatter = SloFormatter
 
 
 # ── slo.log v1 JSON formatter ─────────────────────────────────────────
