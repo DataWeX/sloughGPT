@@ -9,8 +9,6 @@ interface VisualComparisonCardProps {
 }
 
 export default memo(function VisualComparisonCard({ chartData }: VisualComparisonCardProps) {
-  if (chartData.length < 2) return null
-
   const maxThroughput = Math.max(...chartData.map(d => d.throughput))
   const maxLatency = Math.max(...chartData.map(d => d.latency))
   const maxMemory = Math.max(...chartData.map(d => d.memory))
@@ -21,6 +19,8 @@ export default memo(function VisualComparisonCard({ chartData }: VisualCompariso
     latency: maxLatency > 0 ? ((maxLatency - d.latency) / maxLatency) * 100 : 0,
     memory: maxMemory > 0 ? ((maxMemory - d.memory) / maxMemory) * 100 : 0,
   })), [chartData, maxThroughput, maxLatency, maxMemory])
+
+  if (chartData.length < 2) return null
 
   return (
     <Card>

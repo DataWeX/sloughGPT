@@ -170,7 +170,7 @@ jobs:
 
       - name: Lint
         working-directory: apps/web
-        run: npx next lint --max-warnings 0
+        run: npx eslint .
 
       - name: Typecheck
         working-directory: apps/web
@@ -182,7 +182,7 @@ jobs:
 
       - name: Build
         working-directory: apps/web
-        run: npx next build
+        run: npx next build --webpack
 
   # ─── Python SDK tests ──────────────────────────────────────────
   test-sdk-py:

@@ -154,7 +154,7 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
 
       {query && filtered.length === 0 && (
         <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-          No sessions match "{query}"
+          No sessions match &quot;{query}&quot;
         </div>
       )}
     </div>
