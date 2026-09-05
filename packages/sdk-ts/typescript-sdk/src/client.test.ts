@@ -61,6 +61,18 @@ describe('SloughGPTClient', () => {
         expect.objectContaining({ method: 'GET' })
       );
     });
+
+    it('unwraps the success envelope', async () => {
+      mockFetch.mockResolvedValue(
+        createMockResponse({ status: 'success', data: { status: 'healthy', model_loaded: true, model_type: 'gpt2' } })
+      );
+
+      const client = new SloughGPTClient();
+      const result = await client.health();
+
+      expect(result.status).toBe('healthy');
+      expect(result.model_loaded).toBe(true);
+    });
   });
 
   describe('generate()', () => {
@@ -91,9 +103,9 @@ describe('SloughGPTClient', () => {
   });
 
   describe('chat()', () => {
-    it('sends POST /chat and maps { text } to ChatResult', async () => {
+    it('sends POST /chat and maps message to ChatResult', async () => {
       mockFetch.mockResolvedValue(
-        createMockResponse({ text: 'Hello!', model: 'gpt2-engine', tokens_generated: 3 })
+        createMockResponse({ message: 'Hello!', model: 'gpt2-engine', tokens_generated: 3 })
       );
 
       const client = new SloughGPTClient();
@@ -132,8 +144,8 @@ describe('SloughGPTClient', () => {
       await client.switchSoul('friendly');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8000/souls/switch/friendly',
-        expect.objectContaining({ method: 'POST', body: JSON.stringify({}) })
+        'http://localhost:8000/souls/switch',
+        expect.objectContaining({ method: 'POST', body: JSON.stringify({ name: 'friendly' }) })
       );
     });
   });
@@ -329,10 +341,10 @@ describe('SloughGPTClient', () => {
       await client.switchSoul('friendly', 'ckpt-v2');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8000/souls/switch/friendly',
+        'http://localhost:8000/souls/switch',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ checkpoint_name: 'ckpt-v2' }),
+          body: JSON.stringify({ name: 'friendly', checkpoint_name: 'ckpt-v2' }),
         })
       );
     });
@@ -612,6 +624,33 @@ describe('SloughGPTClient', () => {
       expect(result.name).toBe('gpt2');
       expect(mockFetch.mock.calls[0][0]).toContain('/models/current');
     });
+
+    it('listModels unwraps the success envelope', async () => {
+      mockFetch.mockResolvedValue(
+        createMockResponse({ status: 'success', data: [{ model_id: 'gpt2', name: 'GPT-2' }] })
+      );
+      const client = new SloughGPTClient();
+      const result = await client.listModels();
+      expect(result).toEqual([{ model_id: 'gpt2', name: 'GPT-2' }]);
+    });
+  });
+
+  describe('auth', () => {
+    it('exchanges an API key for a JWT token', async () => {
+      mockFetch.mockResolvedValue(
+        createMockResponse({ status: 'success', data: { access_token: 'jwt', token_type: 'bearer' } })
+      );
+      const client = new SloughGPTClient();
+      const result = await client.getToken('secret');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:8000/auth/token',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ api_key: 'secret' }),
+        })
+      );
+      expect(result).toEqual({ status: 'success', data: { access_token: 'jwt', token_type: 'bearer' } });
+    });
   });
 
   describe('datasets (extended)', () => {
@@ -731,12 +770,12 @@ describe('SloughGPTClient', () => {
   });
 
   describe('generate stream', () => {
-    it('returns async generator with raw SSE tokens', async () => {
+    it('yields tokens from SSE envelopes', async () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: Hello\n\n'));
-          controller.enqueue(encoder.encode('data:  world\n\n'));
+          controller.enqueue(encoder.encode('data: {"stream":"generate","status":"working","data":{"token":"Hello"}}\n\n'));
+          controller.enqueue(encoder.encode('data: {"stream":"generate","status":"working","data":{"token":" world"}}\n\n'));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
         },
@@ -748,7 +787,7 @@ describe('SloughGPTClient', () => {
       for await (const token of client.generateStream({ prompt: 'hello' })) {
         tokens.push(token);
       }
-      expect(tokens).toEqual(['Hello', 'world']);
+      expect(tokens).toEqual(['Hello', ' world']);
     });
   });
 

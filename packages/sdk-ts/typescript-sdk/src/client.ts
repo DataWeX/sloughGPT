@@ -252,23 +252,36 @@ export class SloughGPTClient {
   // ============ Health & Info ============
 
   async health(): Promise<HealthStatus> {
-    return this.request<HealthStatus>('GET', '/health');
+    const data = await this.request<unknown>('GET', '/health');
+    return this.unwrap(data) as HealthStatus;
   }
 
   async liveness(): Promise<{ status: string }> {
-    return this.request('GET', '/health/live');
+    const data = await this.request<unknown>('GET', '/health/live');
+    return this.unwrap(data) as { status: string };
   }
 
   async readiness(): Promise<{ status: string; model_loaded: boolean }> {
-    return this.request('GET', '/health/ready');
+    const data = await this.request<unknown>('GET', '/health/ready');
+    return this.unwrap(data) as { status: string; model_loaded: boolean };
   }
 
   async detailedHealth(): Promise<Record<string, unknown>> {
-    return this.request('GET', '/health/detailed');
+    const data = await this.request<unknown>('GET', '/health/detailed');
+    return this.unwrap(data) as Record<string, unknown>;
   }
 
   async info(): Promise<SystemInfo> {
-    return this.request<SystemInfo>('GET', '/info');
+    const data = await this.request<unknown>('GET', '/info');
+    const raw = (this.unwrap(data) as Record<string, unknown>) ?? {};
+    const model = (raw.model as Record<string, unknown>) ?? {};
+    return {
+      version: (raw.api_version as string) ?? (raw.version as string),
+      model: {
+        type: model.type as string,
+        loaded: model.loaded as boolean,
+      },
+    } as SystemInfo;
   }
 
   // ============ Inference & Generation ============
@@ -324,9 +337,28 @@ export class SloughGPTClient {
 
       for (const line of lines) {
         if (line.startsWith('data:')) {
-          const data = line.slice(5).trim();
-          if (data && data !== '[DONE]') {
-            yield data;
+          const payload = line.slice(5).trim();
+          if (payload && payload !== '[DONE]') {
+            let envelope: {
+              stream?: string;
+              status?: string;
+              data?: { token?: string; error?: string };
+              message?: string;
+            };
+            try {
+              envelope = JSON.parse(payload);
+            } catch {
+              continue;
+            }
+            if (envelope.status === 'error') {
+              throw new SloughGPTError(
+                envelope.data?.error || envelope.message || 'Stream error',
+                500,
+              );
+            }
+            if (envelope.data?.token) {
+              yield envelope.data.token;
+            }
           }
         }
       }
@@ -336,6 +368,7 @@ export class SloughGPTClient {
   async chat(request: ChatRequest): Promise<ChatResult> {
     this.log('info', `Chat: ${request.messages.length} messages`);
     const raw = await this.request<{
+      message?: string;
       text?: string;
       model?: string;
       tokens_generated?: number;
@@ -349,7 +382,7 @@ export class SloughGPTClient {
       top_k: request.top_k ?? 50,
     });
 
-    const content = raw.text ?? '';
+    const content = raw.message ?? raw.text ?? '';
     if (raw.error && !content) {
       throw new SloughGPTError(raw.error, 400);
     }
@@ -433,7 +466,13 @@ export class SloughGPTClient {
   // ============ Models ============
 
   async listModels(): Promise<ModelInfo[]> {
-    return this.request<ModelInfo[]>('GET', '/models');
+    const data = await this.request<unknown>('GET', '/models');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as ModelInfo[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.models as ModelInfo[]) ?? [];
   }
 
   async loadModel(modelId: string): Promise<{ status: string }> {
@@ -515,7 +554,13 @@ export class SloughGPTClient {
   // ============ Souls ============
 
   async listSouls(): Promise<SoulProfile[]> {
-    return this.request<SoulProfile[]>('GET', '/souls');
+    const data = await this.request<unknown>('GET', '/souls');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as SoulProfile[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.souls as SoulProfile[]) ?? [];
   }
 
   async getCurrentSoul(): Promise<SoulProfile> {
@@ -523,9 +568,9 @@ export class SloughGPTClient {
   }
 
   async switchSoul(name: string, checkpointName?: string): Promise<Record<string, unknown>> {
-    const body: Record<string, unknown> = {};
+    const body: Record<string, unknown> = { name };
     if (checkpointName) body.checkpoint_name = checkpointName;
-    return this.request('POST', `/souls/switch/${name}`, body);
+    return this.request('POST', '/souls/switch', body);
   }
 
   // ============ Knowledge ============
@@ -687,7 +732,8 @@ export class SloughGPTClient {
   // ============ Metrics ============
 
   async metrics(): Promise<MetricsData> {
-    return this.request<MetricsData>('GET', '/metrics');
+    const data = await this.request<unknown>('GET', '/metrics');
+    return this.unwrap(data) as MetricsData;
   }
 
   // ============ Experiments ============
@@ -803,8 +849,8 @@ export class SloughGPTClient {
 
   // ============ Auth ============
 
-  async getToken(username: string, password: string): Promise<unknown> {
-    return this.request('POST', '/auth/token', { username, password });
+  async getToken(apiKey: string): Promise<unknown> {
+    return this.request('POST', '/auth/token', { api_key: apiKey });
   }
 
   async refreshToken(refreshToken: string): Promise<unknown> {
