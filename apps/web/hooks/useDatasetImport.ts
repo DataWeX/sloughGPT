@@ -25,7 +25,6 @@ interface UseDatasetImportReturn {
   error: string | null
   clearError: () => void
   success: { message: string } | null
-  clearError: () => void
   searchResults: GitHubRepo[]
   bookResults: BookResult[]
   searching: boolean

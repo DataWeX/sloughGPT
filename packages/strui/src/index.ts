@@ -151,7 +151,6 @@ export { ErrorPanel } from './components/ui/error-panel'
 export { useErrorStore, type AppError, type ErrorSeverity } from './lib/error-store'
 
 // === Composed components (non-overlapping with our UI) ===
-export { ActionCard, type ActionCardProps } from './components/composed/action-card'
 export { PageHeader, type PageHeaderProps } from './components/composed/page-header'
 export { AppShell, type AppShellProps } from './components/composed/app-shell'
 export { NavRail, NavRailLink, type NavRailProps, type NavRailLinkProps } from './components/composed/nav-rail'
