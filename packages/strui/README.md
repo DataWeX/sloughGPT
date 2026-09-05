@@ -112,8 +112,16 @@ npm run test
 ```
 
 ```sh
-npm run ci
+npm run chromatic
 ```
+
+## Chromatic
+
+The strui Storybook is published to **Chromatic** from CI for visual review on pull requests (and baseline updates on `main`). The published build serves as the hosted Storybook you can share.
+
+- CI reads the **`CHROMATIC_PROJECT_TOKEN`** GitHub Actions secret — add the token from your Chromatic project to the repo secrets.
+- Locally: `npm run chromatic` publishes the current working tree (token via `CHROMATIC_PROJECT_TOKEN` env var).
+- The `test-strui` CI job now also runs `npm run build-storybook`, so a broken Storybook fails CI before publishing.
 
 ## Consume
 
