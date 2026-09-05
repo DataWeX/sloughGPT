@@ -4,6 +4,7 @@ import { useV86 } from './useV86'
 
 vi.mock('@/lib/dev-log', () => ({
   logger: { child: () => ({ warning: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }) },
+  trackEvent: vi.fn(),
 }))
 
 vi.mock('@/lib/v86-controller', () => {

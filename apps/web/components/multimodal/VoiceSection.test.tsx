@@ -18,9 +18,16 @@ vi.mock('@sloughgpt/strui', () => ({
   CardTitle: ({ children, ...p }: any) => <div data-testid="card-title" {...p}>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
   Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
-  Textarea: ({ value, onChange, ...p }: any) => <textarea value={value} onChange={e => onChange(e.target.value)} {...p} />,
+  Textarea: ({ value, onChange, ...p }: any) => <textarea value={value} onChange={e => onChange(e)} {...p} />,
   StatCard: ({ label, value, ...p }: any) => <div data-testid="stat-card" data-label={label}>{String(value)}</div>,
   KpiGrid: ({ children, ...p }: any) => <div data-testid="kpi-grid" {...p}>{children}</div>,
+  ActionCard: ({ children, title, actions, ...p }: any) => (
+    <div data-testid="action-card" {...p}>
+      {title && <div data-testid="action-card-title">{title}</div>}
+      {actions}
+      {children}
+    </div>
+  ),
   IconRefresh: () => <span>↻</span>,
 }))
 
