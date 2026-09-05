@@ -184,7 +184,11 @@ jobs:
 
       - name: Unit tests
         working-directory: apps/web
-        run: npx vitest run
+        run: npx vitest run --poolOptions.forks.maxForks=2
+        env:
+          # 2 forks x ~3GB stays under the 7GB runner; the default 4-fork x
+          # ~4GB-heap configuration caused a whole-suite OOM.
+          NODE_OPTIONS: "--max-old-space-size=3072"
 
       - name: Build
         working-directory: apps/web
