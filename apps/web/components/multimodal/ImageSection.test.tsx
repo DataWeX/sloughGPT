@@ -20,6 +20,7 @@ vi.mock('@/lib/toast-store', () => ({
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(' '),
   Card: ({ children, ...p }: any) => <div data-testid="card" {...p}>{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
   CardHeader: ({ children }: any) => <div>{children}</div>,
   CardTitle: ({ children, ...p }: any) => <div data-testid="card-title" {...p}>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,

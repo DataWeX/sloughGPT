@@ -19,6 +19,7 @@ vi.mock('@/lib/token-tree-controller', () => ({
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Card: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
   CardHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CardTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   CardContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

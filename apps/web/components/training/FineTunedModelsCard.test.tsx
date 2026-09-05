@@ -36,6 +36,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Card: ({ children }: any) => <div>{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
   CardHeader: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   CardTitle: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
