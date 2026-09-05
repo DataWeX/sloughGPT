@@ -350,13 +350,13 @@ def _derive_op(record: logging.LogRecord) -> str:
 
 # ── Unified formatter ─────────────────────────────────────────────────
 
-class SloFormatter(logging.Formatter):
+class LogFormatter(logging.Formatter):
     """Single unified formatter for console and file output.
 
     Usage:
-        SloFormatter()              — human-readable with auto-detected colors
-        SloFormatter(colors=False)  — human-readable without colors
-        SloFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
+        LogFormatter()              — human-readable with auto-detected colors
+        LogFormatter(colors=False)  — human-readable without colors
+        LogFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
 
     Console (fmt="human"):
         HH:MM:SS LVL [OP] logger message key=val

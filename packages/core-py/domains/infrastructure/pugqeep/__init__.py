@@ -39,7 +39,7 @@ from .dedup import PointDeduplicator, PointLibrarySync
 from .store import MemoryStore as FunctionMemoryStore, JSONStore, DirectoryStore
 from .config import PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig
 from .facade import PGQ
-from .engine import Engine, Process, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache, TaskFuture
+from .engine import Engine, Process, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
 from .generic import (
     PGQGeneric,
     CompressionStrategy,
