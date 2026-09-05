@@ -233,7 +233,7 @@ export default function DatasetDetailPage() {
       <Button variant="outline" size="sm" className="h-11 text-xs" onClick={() => setImportOpen(true)}>
         Import Data
       </Button>
-      <Button variant="secondary" size="sm" onClick={fetchDataset} disabled={loading}>
+       <Button variant="outline" size="sm" onClick={fetchDataset} disabled={loading}>
         <IconRefresh className={loading ? 'animate-spin h-4 w-4 mr-1' : 'h-4 w-4 mr-1'} />
         Refresh
       </Button>
@@ -274,7 +274,7 @@ export default function DatasetDetailPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base">Details</CardTitle>
-                  {dataset.type && <Badge variant={"secondary" as const} className="text-xs">{dataset.type}</Badge>}
+                   {dataset.type && <Badge variant="outline" className="text-xs">{dataset.type}</Badge>}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">

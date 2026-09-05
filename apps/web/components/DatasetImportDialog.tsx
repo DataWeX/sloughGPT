@@ -231,7 +231,7 @@ export function DatasetImportDialog({
                       {book.author} {book.year && `(${book.year})`}
                     </div>
                   </div>
-                  <Badge variant="secondary" className="shrink-0 ml-2">{book.isbn}</Badge>
+                   <Badge variant="outline" className="shrink-0 ml-2">{book.isbn}</Badge>
                 </Button>
               ))}
             </div>

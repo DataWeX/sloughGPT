@@ -169,7 +169,7 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({ datasetId }
               <p className="text-[10px] text-muted-foreground mb-1">Issues</p>
               <div className="flex flex-wrap gap-1">
                 {issues.map((issue, i) => (
-                  <Badge key={i} label={issue} variant="secondary" size="sm" />
+                   <Badge key={i} label={issue} variant="outline" size="sm" />
                 ))}
               </div>
             </div>

@@ -221,7 +221,7 @@ export default function ModelsPage() {
           }}>
             Export
           </Button>
-          <Button type="button" variant="secondary" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={cn('w-3.5 h-3.5 mr-1', refreshing && 'animate-spin')} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
+           <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={cn('w-3.5 h-3.5 mr-1', refreshing && 'animate-spin')} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
         </div>
       }
     >

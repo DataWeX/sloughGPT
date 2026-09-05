@@ -87,7 +87,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
                 {validation.valid ? 'Valid' : 'Invalid'}
               </Badge>
             )}
-            <Badge variant="secondary">{totalFiles} files</Badge>
+             <Badge variant="outline">{totalFiles} files</Badge>
           </div>
         </div>
       </CardHeader>
@@ -145,7 +145,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
             </div>
             <div className="flex flex-wrap gap-1">
               {languageEntries.slice(0, 6).map(([lang, count]) => (
-                <Badge key={lang} variant="secondary" className="text-xs">
+                <Badge key={lang} variant="outline" className="text-xs">
                   {lang}: {count}
                 </Badge>
               ))}
