@@ -161,6 +161,19 @@ _TAG_STYLE = {
 }
 
 
+# ── OOP LogLevel -> stdlib level mapping (for format_oop adapter) ─────
+
+from .base import LogLevel as _OopLogLevel
+
+_STDLIB_LEVEL = {
+    _OopLogLevel.DEBUG:    logging.DEBUG,
+    _OopLogLevel.INFO:     logging.INFO,
+    _OopLogLevel.WARNING:  logging.WARNING,
+    _OopLogLevel.ERROR:    logging.ERROR,
+    _OopLogLevel.CRITICAL: logging.CRITICAL,
+}
+
+
 # ── Record factory — auto-injects correlation ID ─────────────────────
 
 _original_record_factory = logging.getLogRecordFactory()
@@ -350,13 +363,13 @@ def _derive_op(record: logging.LogRecord) -> str:
 
 # ── Unified formatter ─────────────────────────────────────────────────
 
-class SloFormatter(logging.Formatter):
+class LogFormatter(logging.Formatter):
     """Single unified formatter for console and file output.
 
     Usage:
-        SloFormatter()              — human-readable with auto-detected colors
-        SloFormatter(colors=False)  — human-readable without colors
-        SloFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
+        LogFormatter()              — human-readable with auto-detected colors
+        LogFormatter(colors=False)  — human-readable without colors
+        LogFormatter(fmt="json")    — slo.log v1 JSON (for file handler)
 
     Console (fmt="human"):
         HH:MM:SS LVL [OP] logger message key=val
@@ -374,6 +387,36 @@ class SloFormatter(logging.Formatter):
         if self._fmt == "json":
             return self._format_json(record)
         return self._format_human(record)
+
+    def format_oop(self, record: "LogRecord") -> str:
+        """Format a ``domains.logging.base.LogRecord`` (OOP logger hierarchy).
+
+        Used by ConsoleLogger/CLILogger/ShellLogger, which build the
+        dataclass-based LogRecord rather than stdlib's ``logging.LogRecord``.
+        Adapts field names (``timestamp``->``created``, ``level``->``levelno``,
+        etc.) then reuses the same human/json rendering as ``format()``.
+        """
+        adapted = logging.LogRecord(
+            name=record.logger,
+            level=_STDLIB_LEVEL[record.level],
+            pathname="",
+            lineno=0,
+            msg=record.message,
+            args=(),
+            exc_info=None,
+        )
+        adapted.created = record.timestamp
+        if record.tag:
+            adapted.tag = record.tag
+        if record.error_code:
+            adapted.error_code = record.error_code
+        if record.exception:
+            adapted.exc_text = record.exception
+        for k, v in record.context.items():
+            setattr(adapted, k, v)
+        if self._fmt == "json":
+            return self._format_json(adapted)
+        return self._format_human(adapted)
 
     def _format_human(self, record: logging.LogRecord) -> str:
         parts = []
