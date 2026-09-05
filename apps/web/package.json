@@ -17,8 +17,8 @@
   },
   "scripts": {
     "clean": "rm -rf .next .next-dev",
-    "dev": "next dev",
-    "dev:clean": "npm run clean && next dev",
+    "dev": "next dev --webpack",
+    "dev:clean": "npm run clean && next dev --webpack",
     "dev:restart": "lsof -ti :3000 | xargs kill -9 2>/dev/null; npm run dev",
     "build": "next build --webpack",
     "build:export": "NEXT_EXPORT=1 next build",
