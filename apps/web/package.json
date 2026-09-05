@@ -20,7 +20,7 @@
     "dev": "next dev",
     "dev:clean": "npm run clean && next dev",
     "dev:restart": "lsof -ti :3000 | xargs kill -9 2>/dev/null; npm run dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "build:export": "NEXT_EXPORT=1 next build",
     "build:clean": "npm run clean && node ./scripts/next-build-retry.mjs",
     "start": "next start",

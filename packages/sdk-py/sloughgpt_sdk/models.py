@@ -161,6 +161,8 @@ class ChatResult:
             choice = choices[0] if choices else {}
             msg_data = choice.get("message", {})
             content = msg_data.get("content", "") or ""
+        elif "message" in response:
+            content = response.get("message") or ""
         elif "text" in response:
             content = response.get("text") or ""
         message = ChatMessage(role="assistant", content=content)
@@ -283,6 +285,8 @@ class HealthStatus:
 class SystemInfo:
     """System information."""
     version: Optional[str] = None
+    model_type: Optional[str] = None
+    model_loaded: bool = False
     pytorch_version: Optional[str] = None
     cuda_available: bool = False
     cuda: Optional[Dict[str, Any]] = None
@@ -294,9 +298,12 @@ class SystemInfo:
 
     @classmethod
     def from_response(cls, response: Dict[str, Any]) -> "SystemInfo":
-        """Create from API response."""
+        """Create from API response (backend ``/info`` nested ``model``/``host``)."""
+        model = response.get("model") or {}
         return cls(
-            version=response.get("version"),
+            version=response.get("api_version") or response.get("version"),
+            model_type=model.get("type") if isinstance(model, dict) else None,
+            model_loaded=bool(model.get("loaded")) if isinstance(model, dict) else False,
             pytorch_version=response.get("pytorch_version"),
             cuda_available=response.get("cuda_available", False),
             cuda=response.get("cuda"),

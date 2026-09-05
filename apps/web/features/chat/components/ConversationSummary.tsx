@@ -75,7 +75,7 @@ export const ConversationSummary = memo(function ConversationSummary({
 
       {!summary && !isGenerating && !error && (
         <div className="text-xs text-muted-foreground text-center py-2">
-          Click "Generate" to create a summary of this conversation
+          Click &quot;Generate&quot; to create a summary of this conversation
         </div>
       )}
     </div>

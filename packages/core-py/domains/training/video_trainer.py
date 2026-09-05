@@ -17,7 +17,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import numpy as np
 

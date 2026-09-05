@@ -149,32 +149,39 @@ class SloughGPTClient:
         response.raise_for_status()
         return response
 
+    # ============ Auth ============
+
+    def get_token(self, api_key: str) -> Dict[str, Any]:
+        """Exchange an API key for a JWT access token (``POST /auth/token``)."""
+        response = self._request("POST", "/auth/token", json={"api_key": api_key})
+        return _unwrap_response(response.json())
+
     # ============ Health & Status ============
 
     def health(self) -> HealthStatus:
         """Check API health status."""
         response = self._request("GET", "/health")
-        return HealthStatus.from_response(response.json())
+        return HealthStatus.from_response(_unwrap_response(response.json()))
 
     def liveness(self) -> Dict[str, Any]:
         """Check if the server is alive."""
         response = self._request("GET", "/health/live")
-        return response.json()
+        return _unwrap_response(response.json())
 
     def readiness(self) -> Dict[str, Any]:
         """Check if the server is ready."""
         response = self._request("GET", "/health/ready")
-        return response.json()
+        return _unwrap_response(response.json())
 
     def detailed_health(self) -> Dict[str, Any]:
         """Get detailed health info."""
         response = self._request("GET", "/health/detailed")
-        return response.json()
+        return _unwrap_response(response.json())
 
     def info(self) -> SystemInfo:
         """Get detailed system information."""
         response = self._request("GET", "/info")
-        return SystemInfo.from_response(response.json())
+        return SystemInfo.from_response(_unwrap_response(response.json()))
 
     # ============ Text Generation ============
 
@@ -244,12 +251,22 @@ class SloughGPTClient:
         )
         for line in response.iter_lines(decode_unicode=True):
             if line.startswith("data:"):
-                data = line[5:].strip()
-                if data and data != "[DONE]":
+                raw = line[5:].strip()
+                if raw and raw != "[DONE]":
                     try:
-                        yield data
+                        obj = json.loads(raw)
                     except json.JSONDecodeError:
-                        yield data
+                        continue
+                    if not isinstance(obj, dict):
+                        continue
+                    payload = obj.get("data") or {}
+                    if not isinstance(payload, dict):
+                        continue
+                    if obj.get("status") == "error" or payload.get("error"):
+                        break
+                    tok = payload.get("token")
+                    if tok:
+                        yield tok
 
     # ============ Chat Completions ============
 
@@ -281,7 +298,7 @@ class SloughGPTClient:
         response = self._request("POST", "/chat", json=request.to_dict())
         data = response.json()
         err = data.get("error")
-        if isinstance(err, str) and err.strip() and not str(data.get("text") or "").strip():
+        if isinstance(err, str) and err.strip() and not str(data.get("message") or "").strip():
             from .exceptions import SloughGPTError
             raise SloughGPTError(err)
         return ChatResult.from_response(data)
@@ -313,9 +330,14 @@ class SloughGPTClient:
                         obj = json.loads(raw)
                     except json.JSONDecodeError:
                         continue
-                    if obj.get("error"):
+                    if not isinstance(obj, dict):
+                        continue
+                    payload = obj.get("data") or {}
+                    if not isinstance(payload, dict):
+                        continue
+                    if obj.get("status") == "error" or payload.get("error"):
                         break
-                    tok = obj.get("token")
+                    tok = payload.get("token")
                     if tok:
                         yield tok
 
@@ -324,8 +346,10 @@ class SloughGPTClient:
     def list_models(self) -> List[ModelInfo]:
         """List available models."""
         response = self._request("GET", "/models")
-        data = response.json()
+        data = _unwrap_response(response.json())
         models_list = data.get("models", data) if isinstance(data, dict) else data
+        if not isinstance(models_list, list):
+            models_list = []
         return [ModelInfo.from_dict(m) for m in models_list]
 
     def load_model(self, model_id: str) -> Dict[str, Any]:
@@ -390,7 +414,7 @@ class SloughGPTClient:
     def list_souls(self) -> List[Dict[str, Any]]:
         """List available souls."""
         response = self._request("GET", "/souls")
-        data = response.json()
+        data = _unwrap_response(response.json())
         return data.get("souls", data) if isinstance(data, dict) else data
 
     def get_current_soul(self) -> Dict[str, Any]:
@@ -400,10 +424,10 @@ class SloughGPTClient:
 
     def switch_soul(self, name: str, checkpoint_name: Optional[str] = None) -> Dict[str, Any]:
         """Switch to a soul by name, optionally loading a checkpoint."""
-        body: Dict[str, Any] = {}
+        body: Dict[str, Any] = {"name": name}
         if checkpoint_name:
             body["checkpoint_name"] = checkpoint_name
-        response = self._request("POST", f"/souls/switch/{name}", json=body)
+        response = self._request("POST", "/souls/switch", json=body)
         return response.json()
 
     # ============ Knowledge ============
@@ -411,7 +435,7 @@ class SloughGPTClient:
     def list_knowledge(self) -> List[Dict[str, Any]]:
         """List knowledge items."""
         response = self._request("GET", "/knowledge")
-        data = response.json()
+        data = _unwrap_response(response.json())
         return data.get("items", data) if isinstance(data, dict) else data
 
     def add_knowledge(self, content: str, topic: Optional[str] = None) -> Dict[str, Any]:
@@ -557,7 +581,7 @@ class SloughGPTClient:
     def metrics(self) -> MetricsData:
         """Get API metrics."""
         response = self._request("GET", "/metrics")
-        return MetricsData.from_response(response.json())
+        return MetricsData.from_response(_unwrap_response(response.json()))
 
     def metrics_prometheus(self) -> str:
         """Get metrics in Prometheus text exposition format."""
@@ -873,9 +897,14 @@ class AsyncSloughGPTClient:
             response.raise_for_status()
             return response.json()
 
+    async def get_token(self, api_key: str) -> Dict[str, Any]:
+        """Exchange an API key for a JWT access token (``POST /auth/token``)."""
+        data = await self._request("POST", "/auth/token", json={"api_key": api_key})
+        return _unwrap_response(data)
+
     async def health(self) -> HealthStatus:
         data = await self._request("GET", "/health")
-        return HealthStatus.from_response(data)
+        return HealthStatus.from_response(_unwrap_response(data))
 
     async def generate(self, prompt: str, **kwargs) -> GenerationResult:
         from .models import GenerateRequest
@@ -890,28 +919,33 @@ class AsyncSloughGPTClient:
         }
         data = await self._request("POST", "/chat", json=body)
         err = data.get("error")
-        if isinstance(err, str) and err.strip() and not str(data.get("text") or "").strip():
+        if isinstance(err, str) and err.strip() and not str(data.get("message") or "").strip():
             from .exceptions import SloughGPTError
             raise SloughGPTError(err)
         return ChatResult.from_response(data)
 
     async def list_models(self) -> List[ModelInfo]:
         data = await self._request("GET", "/models")
+        data = _unwrap_response(data)
         models_list = data.get("models", data) if isinstance(data, dict) else data
+        if not isinstance(models_list, list):
+            models_list = []
         return [ModelInfo.from_dict(m) for m in models_list]
 
     async def list_souls(self) -> List[Dict[str, Any]]:
         data = await self._request("GET", "/souls")
+        data = _unwrap_response(data)
         return data.get("souls", data) if isinstance(data, dict) else data
 
     async def switch_soul(self, name: str, checkpoint_name: Optional[str] = None) -> Dict[str, Any]:
-        body: Dict[str, Any] = {}
+        body: Dict[str, Any] = {"name": name}
         if checkpoint_name:
             body["checkpoint_name"] = checkpoint_name
-        return await self._request("POST", f"/souls/switch/{name}", json=body)
+        return await self._request("POST", "/souls/switch", json=body)
 
     async def list_knowledge(self) -> List[Dict[str, Any]]:
         data = await self._request("GET", "/knowledge")
+        data = _unwrap_response(data)
         return data.get("items", data) if isinstance(data, dict) else data
 
     async def add_knowledge(self, content: str, topic: Optional[str] = None) -> Dict[str, Any]:
@@ -929,7 +963,7 @@ class AsyncSloughGPTClient:
 
     async def metrics(self) -> MetricsData:
         data = await self._request("GET", "/metrics")
-        return MetricsData.from_response(data)
+        return MetricsData.from_response(_unwrap_response(data))
 
     async def get_workflow_status(self) -> Dict[str, Any]:
         return await self._request("GET", "/workflow/status")

@@ -1,98 +1,93 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { proxyRequest, PLANNER_URL } from './planner-proxy'
+import { proxyRequest } from './planner-proxy'
 
-// Mock NextResponse
-vi.mock('next/server', () => ({
-  NextResponse: {
-    json: (body: unknown, init?: { status?: number }) => ({
-      body,
-      status: init?.status ?? 200,
-      ok: (init?.status ?? 200) < 400,
-    }),
-  },
-}))
+vi.mock('next/server', () => {
+  class NextResponse {
+    body: unknown
+    status: number
+    headers: Record<string, string>
+    ok: boolean
+    constructor(body: unknown, init: { status?: number; headers?: Record<string, string> } = {}) {
+      this.body = body
+      this.status = init.status ?? 200
+      this.headers = init.headers ?? {}
+      this.ok = (init.status ?? 200) < 400
+    }
+    static json(body: unknown, init?: { status?: number }) {
+      return new NextResponse(JSON.stringify(body), init)
+    }
+  }
+  return { NextResponse }
+})
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
+
+function fakeResponse(status: number, text: string, headers: Record<string, string> = {}) {
+  return {
+    ok: status < 400,
+    status,
+    text: () => Promise.resolve(text),
+    headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? (headers[name] ?? null) : null) },
+  }
+}
 
 beforeEach(() => {
   mockFetch.mockReset()
 })
 
-describe('PLANNER_URL', () => {
-  it('defaults to localhost:8787', () => {
-    expect(PLANNER_URL).toBe('http://127.0.0.1:8787')
-  })
-})
-
 describe('proxyRequest', () => {
   it('proxies GET request to planner backend', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ data: 'test' }),
-    })
+    mockFetch.mockResolvedValue(fakeResponse(200, '{"data":"test"}', { 'content-type': 'application/json' }))
 
     const res = await proxyRequest('/board')
     expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:8787/board', {
-      headers: { 'Content-Type': 'application/json' },
+      method: 'GET',
+      body: undefined,
+      headers: undefined,
     })
-    expect(res.body).toEqual({ data: 'test' })
     expect(res.status).toBe(200)
+    expect(res.body).toBe('{"data":"test"}')
   })
 
-  it('proxies POST request with body', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 201,
-      json: () => Promise.resolve({ id: 'new' }),
-    })
+  it('proxies POST request with body and custom headers', async () => {
+    mockFetch.mockResolvedValue(fakeResponse(201, '{"id":"new"}', { 'content-type': 'application/json' }))
 
     const res = await proxyRequest('/cards', {
       method: 'POST',
       body: JSON.stringify({ title: 'Test' }),
+      headers: { 'Content-Type': 'application/json' },
     })
     expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:8787/cards', {
       method: 'POST',
       body: JSON.stringify({ title: 'Test' }),
       headers: { 'Content-Type': 'application/json' },
     })
-    expect(res.body).toEqual({ id: 'new' })
     expect(res.status).toBe(201)
+    expect(res.body).toBe('{"id":"new"}')
   })
 
-  it('returns 503 when backend is unavailable', async () => {
+  it('returns 502 when backend is unreachable', async () => {
     mockFetch.mockRejectedValue(new Error('Connection refused'))
 
     const res = await proxyRequest('/board')
-    expect(res.status).toBe(503)
-    expect((res.body as unknown as Record<string, string>).error).toContain('backend unavailable')
+    expect(res.status).toBe(502)
+    expect(res.body).toContain('Planner backend unreachable')
   })
 
   it('preserves backend error status codes', async () => {
-    mockFetch.mockResolvedValue({
-      ok: false,
-      status: 404,
-      json: () => Promise.resolve({ error: 'Not found' }),
-    })
+    mockFetch.mockResolvedValue(fakeResponse(404, '{"error":"Not found"}', { 'content-type': 'application/json' }))
 
     const res = await proxyRequest('/cards/nonexistent')
     expect(res.status).toBe(404)
-    expect(res.body).toEqual({ error: 'Not found' })
+    expect(res.body).toBe('{"error":"Not found"}')
   })
 
-  it('merges custom headers', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({}),
-    })
+  it('defaults non-JSON responses to text/plain', async () => {
+    mockFetch.mockResolvedValue(fakeResponse(200, 'plain text', {}))
 
-    await proxyRequest('/board', {
-      headers: { 'X-Custom': 'value' },
-    })
-    expect(mockFetch).toHaveBeenCalledWith('http://127.0.0.1:8787/board', {
-      headers: { 'Content-Type': 'application/json', 'X-Custom': 'value' },
-    })
+    const res = await proxyRequest('/health')
+    expect(res.status).toBe(200)
+    expect((res.headers as unknown as Record<string, string>)['content-type']).toBe('text/plain')
   })
 })

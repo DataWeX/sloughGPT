@@ -359,12 +359,15 @@ class TestNewSDKEndpoints(unittest.TestCase):
 
     def test_switch_soul(self):
         self._client().switch_soul('friendly')
-        self._assert_called('POST', '/souls/switch/friendly')
+        self._assert_called('POST', '/souls/switch')
+        call_body = self.mock_request.call_args[1].get('json', {})
+        self.assertEqual(call_body.get('name'), 'friendly')
 
     def test_switch_soul_with_checkpoint(self):
         self._client().switch_soul('friendly', 'ckpt-v2')
-        self._assert_called('POST', '/souls/switch/friendly')
+        self._assert_called('POST', '/souls/switch')
         call_body = self.mock_request.call_args[1].get('json', {})
+        self.assertEqual(call_body.get('name'), 'friendly')
         self.assertEqual(call_body.get('checkpoint_name'), 'ckpt-v2')
 
     # === Knowledge ===

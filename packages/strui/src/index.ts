@@ -172,6 +172,7 @@ export { Breadcrumbs, type BreadcrumbsProps, type BreadcrumbItem } from './compo
 export { Kbd, type KbdProps } from './components/composed/kbd'
 export { ThemeColorPicker, ThemeSwatch, ColorInput, DEFAULT_THEME_SWATCHES, type ThemeSwatch as ThemeSwatchType, type ThemeColorPickerProps } from './components/composed/theme-color-picker'
 export { VersionInspector, type VersionInspectorProps, type FeatureVersionEntry } from './components/composed/version-inspector'
+export { ActionCard, type ActionCardProps } from './components/composed/action-card'
 
 // === AI components (non-overlapping) ===
 export { MessageBubble, type MessageBubbleProps } from './components/ai/message-bubble'

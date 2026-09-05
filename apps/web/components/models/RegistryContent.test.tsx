@@ -20,6 +20,7 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
   StatCard: ({ label, value, ...p }: any) => <div data-testid="stat-card" data-label={label}>{String(value)}</div>,
   KpiGrid: ({ children, ...p }: any) => <div data-testid="kpi-grid" {...p}>{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
   SearchInput: ({ value, onChange, ...p }: any) => <input value={value} onChange={e => onChange(e.target.value)} {...p} />,
   Skeleton: (p: any) => <div data-testid="skeleton" {...p} />,
   IconRefresh: () => <span>↻</span>,
