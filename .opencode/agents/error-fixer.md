@@ -21,10 +21,10 @@ You are an expert debugger for this project. Your job is:
 
 | Category | Action |
 |----------|--------|
-| `python-import` | Run `pip install <module>` or fix the import path |
+| `python-import` | If the traceback includes "Did you mean: '<name>'", this is likely an incomplete rename — delegate to `rename-refactor` agent instead of guessing. Otherwise run `pip install <module>` or fix the import path |
 | `python-syntax` | Read the file at the snippet location, fix the syntax |
 | `python-type` | Read the file, add type guard or fix the call |
-| `python-attr` | Check the object type, access only existing attributes |
+| `python-attr` | If the missing attribute looks like a renamed/never-implemented method (e.g. called across multiple files but defined nowhere), delegate to `rename-refactor` agent. Otherwise check the object type, access only existing attributes |
 | `python-key` | Use `.get()` with a default instead of direct access |
 | `python-file` | Check file path, create missing directory, or fix the path |
 | `python-network` | Check if the server is running, verify the URL |

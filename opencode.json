@@ -40,6 +40,11 @@
       "template": "Run systems engineering on the specified target: kernel, init, vm, buildroot, driver <name>, syscall <name>, addon <name>, pane, surface, tui, v86. Design and implement OS-level components for the Dait operating system.",
       "description": "Design and implement OS components, kernel modules, drivers, Buildroot configs, or VM extensions",
       "agent": "systems-engineer"
+    },
+    "rename": {
+      "template": "Find and fix incomplete renames/refactors for the given symbol or area: count every definition and call site, determine which side is stale, fix all of them atomically, then verify by running the actual entry point (not just an import check).",
+      "description": "Find and fix incomplete renames, refactors, and stale references",
+      "agent": "rename-refactor"
     }
   },
   "agent": {
@@ -70,6 +75,11 @@
     },
     "systems-engineer": {
       "description": "Systems engineering agent for OS design and code. Writes kernel modules, device drivers, init system services, Buildroot configurations, and VM infrastructure.",
+      "mode": "subagent",
+      "hidden": false
+    },
+    "rename-refactor": {
+      "description": "Finds and fixes incomplete renames/refactors — stale references where a symbol was renamed at its definition but not all call sites (or vice versa), including dangling calls to never-implemented methods.",
       "mode": "subagent",
       "hidden": false
     }
