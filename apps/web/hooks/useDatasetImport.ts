@@ -24,6 +24,7 @@ interface UseDatasetImportReturn {
   loading: boolean
   error: string | null
   success: { message: string } | null
+  clearError: () => void
   searchResults: GitHubRepo[]
   bookResults: BookResult[]
   searching: boolean
@@ -247,6 +248,7 @@ export function useDatasetImport(
     path, setPath,
     extensions, toggleExtension,
     loading, error, success,
+    clearError: () => setError(null),
     searchResults, bookResults,
     searching,
     selectedBook, selectedRepo,

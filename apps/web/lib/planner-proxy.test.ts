@@ -88,6 +88,6 @@ describe('proxyRequest', () => {
 
     const res = await proxyRequest('/health')
     expect(res.status).toBe(200)
-    expect(res.headers['content-type']).toBe('text/plain')
+    expect((res.headers as unknown as Record<string, string>)['content-type']).toBe('text/plain')
   })
 })
