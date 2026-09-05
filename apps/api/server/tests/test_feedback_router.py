@@ -68,7 +68,8 @@ class TestRecordFeedback:
         })
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "recorded"
+        assert body["status"] == "success"
+        assert body["data"]["status"] == "recorded"
 
     def test_record_feedback_down(self):
         resp = client.post("/feedback", json={
@@ -88,15 +89,16 @@ class TestRecordFeedback:
         })
         assert resp.status_code == 200
         body = resp.json()
-        assert body["feedback_id"].startswith("fb_")
-        assert "T" in body["timestamp"]
+        data = body["data"]
+        assert data["feedback_id"].startswith("fb_")
+        assert "T" in data["timestamp"]
 
 
 class TestFeedbackStats:
     def test_get_stats(self):
         resp = client.get("/feedback/stats/summary")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "thumbs_up" in body
         assert "thumbs_down" in body
         assert "total" in body
@@ -107,7 +109,7 @@ class TestFeedbackStats:
         client.post("/feedback", json={"message_id": "s2", "rating": "thumbs_up"})
         client.post("/feedback", json={"message_id": "s3", "rating": "thumbs_down"})
         resp = client.get("/feedback/stats/summary")
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["total"] == 3
         assert body["thumbs_up"] == 2
         assert body["thumbs_down"] == 1
@@ -127,10 +129,10 @@ class TestGetFeedback:
         })
         resp = client.get("/feedback/lookup-msg")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body["message_id"] == "lookup-msg"
-        assert body["rating"] == "thumbs_down"
-        assert body["session_id"] == "sess-lookup"
+        data = resp.json()["data"]
+        assert data["message_id"] == "lookup-msg"
+        assert data["rating"] == "thumbs_down"
+        assert data["session_id"] == "sess-lookup"
 
 
 class TestConversations:
@@ -140,14 +142,13 @@ class TestConversations:
             "session_id": "sess-123",
         })
         assert resp.status_code == 200
-        body = resp.json()
-        assert body["name"] == "Test Conversation"
+        data = resp.json()["data"]
+        assert data["name"] == "Test Conversation"
 
     def test_list_conversations(self):
         resp = client.get("/feedback/conversations")
         assert resp.status_code == 200
-        body = resp.json()
-        assert isinstance(body, list)
+        assert isinstance(resp.json()["data"], list)
 
     def test_get_conversation_not_found(self):
         resp = client.get("/feedback/conversations/nonexistent-id")
@@ -157,19 +158,19 @@ class TestConversations:
         create_resp = client.post("/feedback/conversations", json={
             "name": "Get Test Conv",
         })
-        conv_id = create_resp.json()["id"]
+        conv_id = create_resp.json()["data"]["id"]
         get_resp = client.get(f"/feedback/conversations/{conv_id}")
         assert get_resp.status_code == 200
-        assert get_resp.json()["name"] == "Get Test Conv"
+        assert get_resp.json()["data"]["name"] == "Get Test Conv"
 
     def test_update_conversation(self):
         create_resp = client.post("/feedback/conversations", json={
             "name": "Update Test",
         })
-        conv_id = create_resp.json()["id"]
+        conv_id = create_resp.json()["data"]["id"]
         resp = client.patch(f"/feedback/conversations/{conv_id}", json={"name": "Updated"})
         assert resp.status_code == 200
-        assert resp.json()["name"] == "Updated"
+        assert resp.json()["data"]["name"] == "Updated"
 
     def test_update_conversation_not_found(self):
         resp = client.patch("/feedback/conversations/nonexistent", json={"name": "x"})
@@ -177,7 +178,7 @@ class TestConversations:
 
     def test_delete_conversation(self):
         create_resp = client.post("/feedback/conversations", json={"name": "Delete Me"})
-        conv_id = create_resp.json()["id"]
+        conv_id = create_resp.json()["data"]["id"]
         resp = client.delete(f"/feedback/conversations/{conv_id}")
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "deleted"
@@ -187,22 +188,22 @@ class TestConversations:
         assert resp.status_code == 200
 
     def test_list_conversations_sorted_by_updated(self):
-        c1 = client.post("/feedback/conversations", json={"name": "First"})
-        c2 = client.post("/feedback/conversations", json={"name": "Second"})
+        client.post("/feedback/conversations", json={"name": "First"})
+        client.post("/feedback/conversations", json={"name": "Second"})
         resp = client.get("/feedback/conversations")
-        names = [c["name"] for c in resp.json()]
+        names = [c["name"] for c in resp.json()["data"]]
         assert "Second" in names
         assert "First" in names
 
     def test_conversation_has_required_fields(self):
         resp = client.post("/feedback/conversations", json={"name": "Field Check"})
-        body = resp.json()
+        data = resp.json()["data"]
         for key in ("id", "name", "session_id", "created_at", "updated_at", "pinned", "starred"):
-            assert key in body
+            assert key in data
 
     def test_update_conversation_pinned(self):
         create_resp = client.post("/feedback/conversations", json={"name": "Pinning"})
-        conv_id = create_resp.json()["id"]
+        conv_id = create_resp.json()["data"]["id"]
         resp = client.patch(f"/feedback/conversations/{conv_id}", json={"pinned": True})
         assert resp.status_code == 200
-        assert resp.json()["pinned"] is True
+        assert resp.json()["data"]["pinned"] is True
