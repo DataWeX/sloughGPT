@@ -76,9 +76,6 @@ def _load_weights(model_id: str) -> Tuple[dict, dict]:
     logger.info("Loaded %d weights from %s (slnc mmap)", len(weights), model_id,
         extra={"tag": "INFRA"})
     return config, weights
-    compiler.compile_from_dict(config, weights, str(slnc_path))
-    logger.info("Converted to .slnc: %s (%.1f MB)", slnc_path.name,
-                slnc_path.stat().st_size / 1e6, extra={"tag": "INFRA"})
 
 
 # ══════════════════════════════════════════════════════════════════════════════

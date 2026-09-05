@@ -7,9 +7,9 @@ describe('ChipGroup', () => {
     const html = renderToStaticMarkup(
       <ChipGroup
         chips={[
-          { label: 'Python' },
-          { label: 'PyTorch' },
-          { label: 'GPU' },
+          { children: 'Python' },
+          { children: 'PyTorch' },
+          { children: 'GPU' },
         ]}
       />
     )
@@ -25,14 +25,14 @@ describe('ChipGroup', () => {
 
   it('sets data-testid', () => {
     const html = renderToStaticMarkup(
-      <ChipGroup chips={[{ label: 'A' }]} testId="tags" />
+      <ChipGroup chips={[{ children: 'A' }]} testId="tags" />
     )
     expect(html).toContain('data-testid="tags"')
   })
 
   it('applies custom className', () => {
     const html = renderToStaticMarkup(
-      <ChipGroup chips={[{ label: 'A' }]} className="custom" />
+      <ChipGroup chips={[{ children: 'A' }]} className="custom" />
     )
     expect(html).toContain('custom')
   })
