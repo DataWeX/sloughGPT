@@ -23,6 +23,7 @@ interface UseDatasetImportReturn {
   toggleExtension: (ext: string) => void
   loading: boolean
   error: string | null
+  clearError: () => void
   success: { message: string } | null
   clearError: () => void
   searchResults: GitHubRepo[]
