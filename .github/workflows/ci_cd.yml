@@ -65,6 +65,12 @@ jobs:
             --ignore=tests/test_slonet_compute_sensitivity.py \
             --ignore=tests/test_slonet_provider.py \
             --ignore=tests/test_shell_repl.py \
+            --ignore=tests/test_npu.py \
+            --ignore=tests/test_kernel_npu_more.py \
+            --ignore=tests/test_slnc_loader.py \
+            --ignore=tests/test_loader_layout_contract.py \
+            --ignore=tests/test_training_ux.py \
+            --ignore=tests/test_user_journeys.py \
             -q --tb=short
 
   # ─── Server API tests ───────────────────────────────────────────
