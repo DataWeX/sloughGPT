@@ -262,10 +262,13 @@ class KBRouter:
                 source=req.source,
                 importance=req.importance,
             )
-            is_new = memory.add_fact(fact)
             import hashlib
             content_hash = hashlib.md5(req.content.encode()).hexdigest()
-            item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
+            # add_fact builds the stored id with the counter value before it
+            # increments, so capture it here to return the real id.
+            counter = memory._fact_counter
+            is_new = memory.add_fact(fact)
+            item_id = f"fact_{counter}_{content_hash[:8]}"
 
             # Auto-ingest into production RAG for grounding verification
             if is_new:
