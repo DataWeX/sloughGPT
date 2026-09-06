@@ -526,6 +526,7 @@ class KnowledgeMemory:
         self._lock = threading.Lock()
         self._mogdb = None
         self._visited_col = None
+        self._entries_col = None
         self._init_mogdb()
         self._visited: set[str] = set(self._load_visited()) if load_persisted else set()
         if vector_store is not None:
@@ -571,7 +572,8 @@ class KnowledgeMemory:
     def _load_visited(self) -> list[str]:
         """Load visited hashes from MogDB (or JSON fallback)."""
         # Try MogDB first
-        if self._visited_col is not None:
+        visited_col = getattr(self, '_visited_col', None)
+        if visited_col is not None:
             try:
                 docs = self._visited_col.find()
                 if docs:
@@ -590,7 +592,8 @@ class KnowledgeMemory:
     def _save_visited(self):
         """Persist visited hashes to MogDB (and legacy JSON for backward compat)."""
         # Save to MogDB
-        if self._visited_col is not None:
+        visited_col = getattr(self, '_visited_col', None)
+        if visited_col is not None:
             try:
                 # Clear and re-insert all hashes
                 self._visited_col.drop()
@@ -611,13 +614,19 @@ class KnowledgeMemory:
         try:
             entries = getattr(self._vector_store, '_entries', None)
             if not entries:
-                # Check if any MogDB entries exist before clearing
-                if self._entries_col is not None:
-                    existing = self._entries_col.find({})
-                    if existing:
+                # Clear MogDB entries
+                entries_col = getattr(self, '_entries_col', None)
+                if entries_col is not None:
+                    try:
                         self._entries_col.drop()
-                elif ENTRIES_PATH.exists():
-                    ENTRIES_PATH.write_text("[]")
+                    except Exception as e:
+                        logger.warning("Failed to clear MogDB entries: %s", e, extra={"tag": "INF"})
+                # Also write empty JSON for backward compatibility
+                try:
+                    if ENTRIES_PATH.exists():
+                        ENTRIES_PATH.write_text("[]")
+                except Exception as e:
+                    logger.warning("Failed to clear entries JSON: %s", e, extra={"tag": "INF"})
                 return
 
             data = []
@@ -631,7 +640,8 @@ class KnowledgeMemory:
                 })
 
             # Save to MogDB
-            if self._entries_col is not None:
+            entries_col = getattr(self, '_entries_col', None)
+            if entries_col is not None:
                 try:
                     self._entries_col.drop()
                     if data:

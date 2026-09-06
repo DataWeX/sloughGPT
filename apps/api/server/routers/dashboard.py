@@ -17,8 +17,9 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import success_response
 
 logger = logging.getLogger("slo.dashboard")
@@ -214,7 +215,7 @@ class DashboardRouter:
         self.router.add_api_route("/stream", self.dashboard_stream, methods=["GET"])
         self.router.add_api_route("/events", self.dashboard_events, methods=["GET"])
 
-    async def dashboard_stream(self, request: Request) -> StreamingResponse:
+    async def dashboard_stream(self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """SSE endpoint pushing dashboard snapshots every 2 seconds."""
 
         async def generate() -> AsyncGenerator[str, None]:
@@ -251,7 +252,7 @@ class DashboardRouter:
             },
         )
 
-    async def dashboard_events(self, n: int = 20) -> dict:
+    async def dashboard_events(self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Return the last N dashboard events as JSON."""
         try:
             from domains.infrastructure.event_buffer import get_event_buffer

@@ -13,6 +13,7 @@ from pathlib import Path
 from collections import deque
 
 from domains.logging import get_global
+from domains.logging.cli_logger import _is_tty
 from domains.shared import find_server_python
 from utils.formatting import format_time
 
