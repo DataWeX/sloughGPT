@@ -14,6 +14,7 @@ import math
 import time
 import threading
 import numpy as np
+from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Tuple, Callable, Sequence, Union
 from pathlib import Path
 import logging
@@ -6534,7 +6535,7 @@ class SloDataLoader:
 # =============================================================================
 
 
-class SloLRScheduler:
+class SloLRScheduler(ABC):
     """Base LR scheduler (analogous to torch.optim.lr_scheduler._LRScheduler).
 
     Works with SloSGD / SloAdam / SloAdamW via the .lr attribute on the
@@ -6553,6 +6554,7 @@ class SloLRScheduler:
         if last_epoch == -1:
             self.step()
 
+    @abstractmethod
     def get_lr(self):
         raise NotImplementedError
 

@@ -700,7 +700,46 @@ class _CPUBackend(_Accelerator):
             return psutil.virtual_memory().total / (1024 ** 3) * 0.5  # 50% for compute
         except Exception as e:
             logger.debug("psutil VRAM detection failed: %s", e)
-        return 8.0  # assume 8 GB system RAM available for compute
+
+        # Fallback 1: /proc/meminfo (Linux)
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemTotal:"):
+                        kb = int(line.split()[1])
+                        return (kb / (1024 ** 2)) * 0.5
+        except Exception:
+            pass
+
+        # Fallback 2: sysctl (macOS / BSD)
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                return int(result.stdout.strip()) / (1024 ** 3) * 0.5
+        except Exception:
+            pass
+
+        # Fallback 3: wmic (Windows)
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["wmic", "os", "get", "TotalVisibleMemorySize", "/Value"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    if line.startswith("TotalVisibleMemorySize="):
+                        kb = int(line.split("=")[1])
+                        return (kb / (1024 ** 2)) * 0.5
+        except Exception:
+            pass
+
+        logger.warning("All VRAM detection methods failed, defaulting to 8.0 GB")
+        return 8.0
 
     @property
     def compute_tier(self) -> str:

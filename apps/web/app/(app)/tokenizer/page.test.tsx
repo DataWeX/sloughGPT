@@ -43,6 +43,7 @@ vi.mock('@sloughgpt/strui', () => {
     IconActivity: iconMock('activity'),
     Chip: ({ label }: any) => <span>{label}</span>,
     Skeleton: () => <div data-testid="skeleton" />,
+    ActionCard: ({ title, actions, children }: any) => <div data-testid="action-card"><div>{title}</div>{actions}<div>{children}</div></div>,
   }
 })
 

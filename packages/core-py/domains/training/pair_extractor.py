@@ -14,7 +14,7 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+
 from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.training.pair_extractor")
@@ -32,8 +32,8 @@ _RESPONSE_LOGS_DIR.mkdir(parents=True, exist_ok=True)
 def extract_pairs_from_sessions(
     limit: int = 50,
     min_length: int = 5,
-    session_ids: Optional[List[str]] = None,
-) -> List[Dict[str, str]]:
+    session_ids: list[str] | None = None,
+) -> list[dict[str, str]]:
     """
     Extract (user_msg, assistant_msg) pairs from session JSON files.
 
@@ -55,7 +55,7 @@ def extract_pairs_from_sessions(
         return []
 
     seen_hashes: set = set()
-    pairs: List[Dict[str, str]] = []
+    pairs: list[dict[str, str]] = []
 
     # Get session files, newest first
     session_files = sorted(
@@ -120,8 +120,8 @@ def extract_pairs_from_sessions(
 def extract_pairs_from_logs(
     limit: int = 100,
     min_length: int = 5,
-    model: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    model: str | None = None,
+) -> list[dict[str, str]]:
     """
     Extract (user_msg, assistant_msg) pairs from MogDB response logs.
 
@@ -137,7 +137,7 @@ def extract_pairs_from_logs(
         Newest first.
     """
     seen_hashes: set = set()
-    pairs: List[Dict[str, str]] = []
+    pairs: list[dict[str, str]] = []
 
     # Try MogDB first
     try:
@@ -243,8 +243,8 @@ def extract_pairs_from_logs(
 def extract_pairs_from_corpus(
     limit: int = 100,
     min_length: int = 5,
-    model: Optional[str] = None,
-) -> List[Dict[str, str]]:
+    model: str | None = None,
+) -> list[dict[str, str]]:
     """
     Extract (user_msg, assistant_msg) pairs from captured API conversations.
 
@@ -268,7 +268,7 @@ def extract_pairs_from_corpus(
         return []
 
     seen_hashes: set = set()
-    pairs: List[Dict[str, str]] = []
+    pairs: list[dict[str, str]] = []
 
     try:
         with open(corpus_file, encoding="utf-8") as f:
@@ -321,8 +321,8 @@ def extract_pairs_from_corpus(
 
 
 def write_training_text(
-    pairs: List[Dict[str, str]],
-    output_dir: Optional[Path] = None,
+    pairs: list[dict[str, str]],
+    output_dir: Path | None = None,
 ) -> Path:
     """
     Write training pairs to a text file in 'User: ...\nAssistant: ...\n\n' format.

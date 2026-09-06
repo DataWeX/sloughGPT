@@ -18,6 +18,9 @@ vi.mock('@sloughgpt/strui', () => ({
   Input: (props: any) => <input data-testid="input" {...props} />,
   Label: ({ children, ...props }: any) => <label {...props}>{children}</label>,
   Badge: ({ children, variant }: any) => <span data-testid="badge" data-variant={variant}>{children}</span>,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <div>{children}</div>,
 }))
 
 const mocks = vi.hoisted(() => ({

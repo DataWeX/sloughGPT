@@ -50,6 +50,9 @@ vi.mock('@sloughgpt/strui', () => {
     DropdownMenuTrigger: ({ children }: any) => <>{children}</>,
     DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
     DropdownMenuItem: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <div>{children}</div>,
   }
 })
 

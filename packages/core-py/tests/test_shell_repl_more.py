@@ -3348,7 +3348,6 @@ class TestSystemBinaryFallback:
         out = repl._execute_single("awk '{print $1}'", "hello world")
         assert "hello" in out
 
-    @pytest.mark.skip(reason="sed stdin piping not implemented in _execute_single")
     def test_sed_runs(self, repl):
         out = repl._execute_single("sed 's/hello/goodbye/'", "hello world")
         assert "goodbye" in out

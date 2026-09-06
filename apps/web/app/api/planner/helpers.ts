@@ -286,7 +286,7 @@ export function getAllTags(): { name: string; count: number }[] {
   const board = readBoard()
   const tagMap = new Map<string, number>()
   for (const card of board.cards) {
-    for (const tag of card.tags) {
+    for (const tag of (card.tags || [])) {
       tagMap.set(tag, (tagMap.get(tag) || 0) + 1)
     }
   }

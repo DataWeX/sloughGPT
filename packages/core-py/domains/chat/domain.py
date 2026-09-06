@@ -6,11 +6,12 @@ Simple, focused: receive message → generate response → log
 
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
 import logging
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
 from domains.shared import find_repo_root
 
 logger = logging.getLogger(__name__)
@@ -18,13 +19,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ChatRequest:
-    messages: List[Dict[str, str]]
+    messages: list[dict[str, str]]
     model: str = "gpt2"
     system_prompt: str = ""
     temperature: float = 0.8
     max_tokens: int = 256
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
+    session_id: str | None = None
+    user_id: str | None = None
 
 
 @dataclass
@@ -52,7 +53,7 @@ class ChatDomain:
         # Returns response and logs automatically
     """
 
-    def __init__(self, log_dir: str = "data/response_logs", engine: Optional[Any] = None):
+    def __init__(self, log_dir: str = "data/response_logs", engine: Any | None = None):
         # Anchor relative to repo root, matching response_tracker.py, so the
         # log location does not depend on the process CWD.
         self.log_dir = find_repo_root(Path(__file__).resolve()) / log_dir
@@ -61,7 +62,7 @@ class ChatDomain:
 
     async def respond(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         model: str = "gpt2",
         system_prompt: str = "",
         temperature: float = 0.8,
@@ -124,7 +125,7 @@ class ChatDomain:
         model: str,
         temperature: float,
         max_tokens: int,
-        messages: List[Dict[str, str]] = None,
+        messages: list[dict[str, str]] = None,
         session_id: str = "default",
     ) -> str:
         """Generate response using provider pipeline.
@@ -170,7 +171,7 @@ class ChatDomain:
             return f"[Error: {type(e).__name__}: {str(e)}]"
 
     @staticmethod
-    def _build_prompt(system_prompt: str, messages: List[Dict[str, str]], user_msg: str) -> str:
+    def _build_prompt(system_prompt: str, messages: list[dict[str, str]], user_msg: str) -> str:
         """Build a prompt that preserves full conversation context."""
         parts = []
         if system_prompt:
@@ -221,7 +222,7 @@ class ChatDomain:
         except Exception as e:
             logger.warning("Failed to log response via ResponseTracker: %s", e)
 
-    def get_recent_responses(self, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_recent_responses(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent logged responses from MogDB."""
         try:
             from domains.feedback.response_tracker import get_response_tracker
@@ -245,7 +246,7 @@ class ChatDomain:
             logger.warning("Failed to get responses from MogDB: %s", e)
             return []
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get response statistics."""
         responses = self.get_recent_responses(100)
 
@@ -255,7 +256,7 @@ class ChatDomain:
         total = len(responses)
         avg_tokens = sum(r.get("tokens_generated", 0) for r in responses) / total
         avg_duration = sum(r.get("duration_ms", 0) for r in responses) / total
-        models = set(r.get("model") for r in responses)
+        models = {r.get("model") for r in responses}
 
         return {
             "total": total,
@@ -266,7 +267,7 @@ class ChatDomain:
 
 
 # Global instance
-_chat_domain: Optional[ChatDomain] = None
+_chat_domain: ChatDomain | None = None
 
 
 def get_chat_domain() -> ChatDomain:

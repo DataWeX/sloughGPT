@@ -326,9 +326,87 @@ static VkResult vulkan_buffer_write(GpuBuffer* buffer, const void* data, size_t 
         memcpy((char*)buf->mapped + offset, data, size);
         return VK_SUCCESS;
     }
-    /* Host-invisible: use staging buffer */
-    /* TODO: staging buffer upload for device-local memory */
-    return VK_ERROR_MEMORY_MAP_FAILED;
+    /* Host-invisible: staging buffer upload for device-local memory */
+    VulkanState* s = buffer->device->backend_data;
+
+    /* Create host-visible staging buffer */
+    VkBufferCreateInfo staging_ci = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    VkBuffer staging_buf;
+    if (check(vkCreateBuffer(s->device, &staging_ci, NULL, &staging_buf), "staging create") != VK_SUCCESS)
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+    VkMemoryRequirements staging_req;
+    vkGetBufferMemoryRequirements(s->device, staging_buf, &staging_req);
+    uint32_t staging_mem_type = find_memory_type(s, staging_req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (staging_mem_type == UINT32_MAX) {
+        vkDestroyBuffer(s->device, staging_buf, NULL);
+        return VK_ERROR_MEMORY_MAP_FAILED;
+    }
+
+    VkMemoryAllocateInfo staging_alloc = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = staging_req.size,
+        .memoryTypeIndex = staging_mem_type,
+    };
+    VkDeviceMemory staging_mem;
+    if (check(vkAllocateMemory(s->device, &staging_alloc, NULL, &staging_mem), "staging alloc") != VK_SUCCESS) {
+        vkDestroyBuffer(s->device, staging_buf, NULL);
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+    }
+    vkBindBufferMemory(s->device, staging_buf, staging_mem, 0);
+
+    /* Map, copy data, unmap */
+    void* mapped;
+    vkMapMemory(s->device, staging_mem, 0, size, 0, &mapped);
+    memcpy(mapped, data, size);
+    vkUnmapMemory(s->device, staging_mem);
+
+    /* Record and submit copy command */
+    VkCommandBufferAllocateInfo cb_ai = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = s->cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(s->device, &cb_ai, &cmd);
+
+    VkCommandBufferBeginInfo begin_ci = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_ci);
+
+    VkBufferCopy copy_region = { .srcOffset = 0, .dstOffset = offset, .size = size };
+    vkCmdCopyBuffer(cmd, staging_buf, buf->buffer, 1, &copy_region);
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_ci = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    VkFence fence;
+    vkCreateFence(s->device, &fence_ci, NULL, &fence);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(s->compute_queue, 1, &submit, fence);
+    vkWaitForFences(s->device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    /* Cleanup */
+    vkDestroyFence(s->device, fence, NULL);
+    vkFreeCommandBuffers(s->device, s->cmd_pool, 1, &cmd);
+    vkFreeMemory(s->device, staging_mem, NULL);
+    vkDestroyBuffer(s->device, staging_buf, NULL);
+
+    return VK_SUCCESS;
 }
 
 static VkResult vulkan_buffer_read(GpuBuffer* buffer, void* data, size_t size, size_t offset) {
@@ -337,9 +415,87 @@ static VkResult vulkan_buffer_read(GpuBuffer* buffer, void* data, size_t size, s
         memcpy(data, (char*)buf->mapped + offset, size);
         return VK_SUCCESS;
     }
-    /* Host-invisible: use staging buffer for readback */
-    /* TODO: staging buffer readback for device-local memory */
-    return VK_ERROR_MEMORY_MAP_FAILED;
+    /* Host-invisible: staging buffer readback for device-local memory */
+    VulkanState* s = buffer->device->backend_data;
+
+    /* Create host-visible staging buffer */
+    VkBufferCreateInfo staging_ci = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = size,
+        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    VkBuffer staging_buf;
+    if (check(vkCreateBuffer(s->device, &staging_ci, NULL, &staging_buf), "staging create read") != VK_SUCCESS)
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+
+    VkMemoryRequirements staging_req;
+    vkGetBufferMemoryRequirements(s->device, staging_buf, &staging_req);
+    uint32_t staging_mem_type = find_memory_type(s, staging_req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (staging_mem_type == UINT32_MAX) {
+        vkDestroyBuffer(s->device, staging_buf, NULL);
+        return VK_ERROR_MEMORY_MAP_FAILED;
+    }
+
+    VkMemoryAllocateInfo staging_alloc = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = staging_req.size,
+        .memoryTypeIndex = staging_mem_type,
+    };
+    VkDeviceMemory staging_mem;
+    if (check(vkAllocateMemory(s->device, &staging_alloc, NULL, &staging_mem), "staging alloc read") != VK_SUCCESS) {
+        vkDestroyBuffer(s->device, staging_buf, NULL);
+        return VK_ERROR_OUT_OF_HOST_MEMORY;
+    }
+    vkBindBufferMemory(s->device, staging_buf, staging_mem, 0);
+
+    /* Record and submit copy command: device-local → staging */
+    VkCommandBufferAllocateInfo cb_ai = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = s->cmd_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(s->device, &cb_ai, &cmd);
+
+    VkCommandBufferBeginInfo begin_ci = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    vkBeginCommandBuffer(cmd, &begin_ci);
+
+    VkBufferCopy copy_region = { .srcOffset = offset, .dstOffset = 0, .size = size };
+    vkCmdCopyBuffer(cmd, buf->buffer, staging_buf, 1, &copy_region);
+
+    vkEndCommandBuffer(cmd);
+
+    VkFenceCreateInfo fence_ci = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    VkFence fence;
+    vkCreateFence(s->device, &fence_ci, NULL, &fence);
+
+    VkSubmitInfo submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd,
+    };
+    vkQueueSubmit(s->compute_queue, 1, &submit, fence);
+    vkWaitForFences(s->device, 1, &fence, VK_TRUE, UINT64_MAX);
+
+    /* Read from staging */
+    void* mapped;
+    vkMapMemory(s->device, staging_mem, 0, size, 0, &mapped);
+    memcpy(data, mapped, size);
+    vkUnmapMemory(s->device, staging_mem);
+
+    /* Cleanup */
+    vkDestroyFence(s->device, fence, NULL);
+    vkFreeCommandBuffers(s->device, s->cmd_pool, 1, &cmd);
+    vkFreeMemory(s->device, staging_mem, NULL);
+    vkDestroyBuffer(s->device, staging_buf, NULL);
+
+    return VK_SUCCESS;
 }
 
 static void vulkan_buffer_destroy(GpuBuffer* buffer) {

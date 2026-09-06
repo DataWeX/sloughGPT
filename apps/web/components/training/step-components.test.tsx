@@ -32,6 +32,16 @@ vi.mock('@sloughgpt/strui', () => {
     Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
       <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
     ),
+    EmptyCard: ({ title, description, icon }: any) => <div data-testid="empty-card"><div>{title}</div><div>{description}</div></div>,
+    SectionHeader: ({ title }: any) => <div data-testid="section-header">{title}</div>,
+    FoldSection: ({ heading, children }: any) => <details open><summary>{heading}</summary><div>{children}</div></details>,
+    SearchInput: ({ value, onChange, placeholder }: any) => <input value={value} onChange={onChange} placeholder={placeholder} />,
+    Spinner: () => <div data-testid="spinner" />,
+    IconFile: () => <span data-testid="icon-file" />,
+    IconUpload: () => <span data-testid="icon-upload" />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children, asChild }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <div>{children}</div>,
   }
 })
 

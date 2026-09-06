@@ -8,11 +8,12 @@ Stores input/output pairs for offline analysis.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Dict, List, Optional, Any
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import logging
+from pathlib import Path
+from typing import Any
+
 from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo.response_tracker")
@@ -33,7 +34,7 @@ class ResponseLog:
     duration_ms: float
     has_images: bool = False
     context_tokens: int = 0
-    eval_scores: Optional[Dict[str, float]] = None
+    eval_scores: dict[str, float] | None = None
 
 
 class ResponseTracker:
@@ -68,7 +69,7 @@ class ResponseTracker:
         self.log_dir = repo_root / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.current_file = self.log_dir / f"responses_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
-        self._buffer: List[ResponseLog] = []
+        self._buffer: list[ResponseLog] = []
         self._buffer_size = 1
         # MogDB persistence
         self._mogdb = None
@@ -92,7 +93,7 @@ class ResponseTracker:
         user_message: str,
         assistant_response: str,
         model: str,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         session_id: str,
         user_id: str,
         tokens_generated: int,
@@ -178,9 +179,9 @@ class ResponseTracker:
     def get_responses(
         self,
         limit: int = 100,
-        model: Optional[str] = None,
-        since: Optional[str] = None,
-    ) -> List[ResponseLog]:
+        model: str | None = None,
+        since: str | None = None,
+    ) -> list[ResponseLog]:
         """Get recent responses."""
         responses = []
 
@@ -221,7 +222,7 @@ class ResponseTracker:
         logger.info("Exported to %s", output_path, extra={"tag": "INFRA"})
         return str(output_path)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get aggregated stats."""
         responses = self.get_responses(limit=1000)
 
@@ -231,7 +232,7 @@ class ResponseTracker:
         total = len(responses)
         avg_tokens = sum(r.tokens_generated for r in responses) / total
         avg_duration = sum(r.duration_ms for r in responses) / total
-        models = set(r.model for r in responses)
+        models = {r.model for r in responses}
 
         return {
             "total": total,
@@ -243,7 +244,7 @@ class ResponseTracker:
 
 
 # Global tracker instance
-_response_tracker: Optional[ResponseTracker] = None
+_response_tracker: ResponseTracker | None = None
 
 
 def get_response_tracker() -> ResponseTracker:
