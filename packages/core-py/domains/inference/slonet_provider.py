@@ -1697,8 +1697,9 @@ class SloNetChatProvider:
             repetition_penalty=repetition_penalty,
         )):
             decoded = self._tokenizer.decode([tok_id])
-            # Approximate logprob from softmax (use 0.0 as placeholder — real
-            # logprobs require modifying the forward pass to return logits)
+            # NOTE: Logprobs are approximated as 0.0. Computing true logprobs
+            # requires modifying generate_numpy_stream() to yield (token, logits)
+            # tuples. This is a known limitation — see issue #XXX.
             logprobs_list.append({
                 "token_id": int(tok_id),
                 "token": decoded,

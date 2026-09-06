@@ -507,7 +507,7 @@ class PGQ:
         return self._library
 
     @property
-    def tree(self) -> ModelTree:
+    def tree(self) -> ModelTree:  # noqa: F811 — intentionally shadows tree() method
         return self._tree
 
     @property

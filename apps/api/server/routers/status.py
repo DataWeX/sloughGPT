@@ -41,13 +41,17 @@ class StatusRouter:
             Checks that critical subsystems are initialized.
             """
             checks = {}
+            import logging
+            _log = logging.getLogger("slo.status")
+
             # Check database connectivity
             try:
                 from domains.feedback.database import get_feedback_db
 
                 db = get_feedback_db()
                 checks["database"] = db is not None
-            except Exception:
+            except Exception as exc:
+                _log.warning("Readiness check: database unavailable: %s", exc)
                 checks["database"] = False
 
             # Check inference engine
@@ -56,7 +60,8 @@ class StatusRouter:
 
                 engine = get_engine()
                 checks["inference"] = engine is not None
-            except Exception:
+            except Exception as exc:
+                _log.warning("Readiness check: inference engine unavailable: %s", exc)
                 checks["inference"] = False
 
             ready = all(checks.values()) if checks else True

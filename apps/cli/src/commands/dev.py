@@ -1075,7 +1075,7 @@ def _cmd_api_and_web(args):
         if server_js.is_file():
             web_proc = subprocess.Popen(
                 ["node", "server.js"],
-                cwd=str(server_js.parent),
+                cwd=str(server_js.parent.resolve()),
                 env=web_env,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
@@ -1084,7 +1084,7 @@ def _cmd_api_and_web(args):
         else:
             web_proc = subprocess.Popen(
                 ["npm", "run", "dev"],
-                cwd=str(web_root),
+                cwd=str(web_root.resolve()),
                 env=web_env,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
