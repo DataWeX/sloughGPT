@@ -7,7 +7,8 @@ import type { Dataset } from '@/lib/dataset-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
 export function datasetLabel(ds: Dataset): string {
-  const size = ds.size != null ? `${(ds.size / 1024).toFixed(1)} KB` : ''
+  const hasSize = ds.size != null && Number.isFinite(ds.size) && ds.size > 0
+  const size = hasSize ? `${(ds.size / 1024).toFixed(1)} KB` : ''
   const parts: string[] = [ds.name]
 
   if (ds.type === 'vlm' && ds.vlm_metadata) {

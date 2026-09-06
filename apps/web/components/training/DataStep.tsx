@@ -49,17 +49,25 @@ const POPULAR_HF = [
   { id: 'HuggingFaceH4/smollm-corpus', label: 'SmolLM Corpus' },
 ]
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number | undefined | null): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return 'Unknown size'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
+  const hasSize = dataset.size != null && Number.isFinite(dataset.size) && dataset.size > 0
+  const hasSamples = dataset.samples != null && dataset.samples > 0
+  const hasTags = dataset.tags && dataset.tags.length > 0
+  const hasVlm = dataset.vlm_metadata != null
+  const createdDate = dataset.created_at ? new Date(dataset.created_at) : null
+  const isValidDate = createdDate && !Number.isNaN(createdDate.getTime())
+
   return (
-    <div className="space-y-1.5 max-w-[220px]">
-      <div className="font-medium text-foreground">{dataset.name}</div>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="space-y-1.5 max-w-[240px]">
+      <div className="font-medium text-foreground text-[11px]">{dataset.name}</div>
+      <div className="flex flex-wrap gap-1">
         {dataset.source && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
             {dataset.source}
@@ -71,25 +79,37 @@ function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
           </Badge>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
-        {dataset.samples != null && dataset.samples > 0 && (
+      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
+        {hasSamples && (
           <>
             <span>Samples</span>
-            <span className="text-right font-numeric">{dataset.samples.toLocaleString()}</span>
+            <span className="text-right font-numeric">{dataset.samples!.toLocaleString()}</span>
           </>
         )}
         <span>Size</span>
         <span className="text-right font-numeric">{formatSize(dataset.size)}</span>
-        {dataset.tags && dataset.tags.length > 0 && (
+        {isValidDate && (
+          <>
+            <span>Created</span>
+            <span className="text-right">{createdDate!.toLocaleDateString()}</span>
+          </>
+        )}
+        {hasTags && (
           <>
             <span>Tags</span>
-            <span className="text-right">{dataset.tags.slice(0, 2).join(', ')}</span>
+            <span className="text-right truncate max-w-[120px]">{dataset.tags!.slice(0, 3).join(', ')}</span>
           </>
         )}
       </div>
-      {dataset.vlm_metadata && (
+      {hasVlm && (
         <div className="text-[10px] text-muted-foreground border-t border-border/30 pt-1">
-          {dataset.vlm_metadata.image_count} images · {dataset.vlm_metadata.type}
+          {dataset.vlm_metadata!.image_count.toLocaleString()} images · {dataset.vlm_metadata!.type}
+          {dataset.vlm_metadata!.auto_captioned && ' · auto-captioned'}
+        </div>
+      )}
+      {!hasSize && !hasSamples && (
+        <div className="text-[10px] text-muted-foreground/60 italic">
+          No size data available — preview for details
         </div>
       )}
     </div>
