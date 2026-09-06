@@ -8,6 +8,7 @@ Auto-detects model architecture from tensor names.
 from __future__ import annotations
 
 import logging
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -63,28 +64,32 @@ class GGUFExportConfig:
         self.architecture = architecture
 
 
-class TensorMapping:
+class TensorMapping(ABC):
     """Base class for tensor name mappings."""
 
     def __init__(self, name: str, gguf_type: str = "llama"):
         self.name = name
         self.gguf_type = gguf_type
 
+    @abstractmethod
     def get_tensor_map(self) -> Dict[str, str]:
         """Return dict mapping model tensor names to GGUF tensor names."""
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def get_block_prefix(self) -> str:
         """Return the prefix for transformer block tensors."""
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def has_rope(self) -> bool:
         """Return True if this architecture uses RoPE."""
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def has_position_embeddings(self) -> bool:
         """Return True if this architecture uses position embeddings."""
-        raise NotImplementedError
+        ...
 
     def get_special_tensors(self) -> Dict[str, str]:
         """Return any special tensor mappings."""

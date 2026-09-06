@@ -771,8 +771,8 @@ class SloNetChatProvider:
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
             get_event_buffer().record("MODEL", f"loaded {model_id} ({n_layer} layers)")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to record model load event: %s", exc)
 
         return instance
 
@@ -1344,8 +1344,8 @@ class SloNetChatProvider:
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
             get_event_buffer().record("MODEL", f"unloaded {self._model_id}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to record model unload event: %s", exc)
         return True
 
     def num_parameters(self) -> int:

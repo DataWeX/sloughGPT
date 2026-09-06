@@ -29,6 +29,7 @@ def _get_executor_stats() -> dict[str, Any] | None:
             "total_tracked": len(ex._jobs),
         }
     except Exception:
+        logger.debug("TrainingExecutor stats unavailable", exc_info=True)
         return None
 
 
@@ -40,6 +41,7 @@ def _get_process_guard_status() -> dict[str, Any] | None:
         ctrl = get_models_controller()
         return ctrl.get_process_guard_status()
     except Exception:
+        logger.debug("ProcessGuard status unavailable", exc_info=True)
         return None
 
 
@@ -54,6 +56,7 @@ def _get_mps_monitor_info() -> dict[str, Any] | None:
             "locked_to_cpu": mon.is_locked_to_cpu(),
         }
     except Exception:
+        logger.debug("MPS monitor info unavailable", exc_info=True)
         return None
 
 
@@ -82,6 +85,7 @@ def _is_model_loading() -> bool:
         uptime = (datetime.now() - _health_start_time).total_seconds()
         return uptime < 90
     except Exception:
+        logger.debug("Model loading check failed", exc_info=True)
         return False
 
 

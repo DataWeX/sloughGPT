@@ -327,7 +327,8 @@ class StartupOrchestrator:
                 from domains.infrastructure.lifecycle import StartupProfile
 
                 profile_enum = StartupProfile.FULL
-            except Exception:
+            except Exception as exc:
+                logger.warning("StartupProfile import failed: %s", exc, extra={"tag": "START"})
                 profile_enum = None
 
         # Run sequential phases via lifecycle manager

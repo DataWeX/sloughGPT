@@ -162,7 +162,7 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
       prevMessageCountRef.current = messages.length
       prevLastContentLenRef.current = lastContentLen
       return () => cancelAnimationFrame(rafRef.current)
-    }, [messages, isNearBottom])
+    }, [messages, isNearBottom, autoScroll])
 
     // Scroll to bottom on initial load
     useEffect(() => {

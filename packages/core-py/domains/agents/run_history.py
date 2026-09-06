@@ -1,9 +1,9 @@
 """
-Agent Run History — file-backed persistence for orchestration run records.
+Agent Run History — MogDB-backed persistence for orchestration run records.
 
 Each orchestration run stores the goal, per-task status, logs, final response,
-and timestamps. A run is written as a single JSON file under
-``data/agent_runs/`` so history survives restarts and is queryable.
+and timestamps. Runs are stored in a MogDB collection under
+``data/mogdb/agent_runs`` so history survives restarts and is queryable.
 
 Usage:
     from domains.agents.run_history import get_agent_run_store
@@ -19,7 +19,7 @@ Usage:
 
 from __future__ import annotations
 
-import json
+import datetime
 import logging
 import os
 import threading
@@ -30,10 +30,12 @@ logger = logging.getLogger("slo.agents.runs")
 
 RUNS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agent_runs")
 
+_db = None
+_collection = None
+
 
 def _now_iso() -> str:
     """Return current UTC time as an ISO 8601 string."""
-    import datetime
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
@@ -47,23 +49,48 @@ def _new_run_id() -> str:
     return f"run_{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}_{_id_counter:06d}"
 
 
-class AgentRunStore:
-    """File-backed store for orchestration run history.
+def _get_collection(db_path: Optional[str] = None):
+    global _db, _collection
+    if _collection is not None:
+        return _collection
+    if db_path is None:
+        from domains.shared import find_repo_root
+        repo = find_repo_root(os.path.dirname(__file__))
+        db_path = os.path.join(repo, "data", "mogdb", "agent_runs")
+    from mogdb import MogDB
+    _db = MogDB(db_path)
+    _collection = _db.collection("runs")
+    return _collection
 
-    Each run is persisted as ``{RUNS_DIR}/{run_id}.json``. Writes are guarded
-    by a process-level lock so concurrent SSE streams do not corrupt files.
+
+def set_mogdb_path(db_path: str) -> None:
+    """Override the default MogDB path (used by tests)."""
+    global _db, _collection
+    from mogdb import MogDB
+    _db = MogDB(db_path)
+    _collection = _db.collection("runs")
+
+
+def reset_mogdb() -> None:
+    """Reset the module-level MogDB singletons (used by tests)."""
+    global _db, _collection
+    _db = None
+    _collection = None
+
+
+class AgentRunStore:
+    """MogDB-backed store for orchestration run history.
+
+    Each run is stored as a document with ``_id == run_id``. Writes are guarded
+    by a process-level lock so concurrent SSE streams do not corrupt state.
     """
 
-    def __init__(self, directory: str = RUNS_DIR, max_runs: int = 200):
-        self._dir = directory
+    def __init__(self, db_path: Optional[str] = None, max_runs: int = 200):
         self._max_runs = max_runs
         self._lock = threading.RLock()
-        os.makedirs(self._dir, exist_ok=True)
+        self._col = _get_collection(db_path)
 
     # ── Path helpers ─────────────────────────────────────────────────────
-
-    def _path(self, run_id: str) -> str:
-        return os.path.join(self._dir, f"{run_id}.json")
 
     def _safe_id(self, run_id: str) -> bool:
         return bool(run_id) and run_id.replace("_", "").replace("-", "").isalnum()
@@ -74,6 +101,7 @@ class AgentRunStore:
         """Record a new run in ``running`` state and return its id."""
         run_id = _new_run_id()
         record = {
+            "_id": run_id,
             "id": run_id,
             "goal": goal,
             "context": context,
@@ -87,57 +115,78 @@ class AgentRunStore:
             "error": "",
             "logs": [f"[{_now_iso()}] Started: {goal}"],
         }
-        self._save(run_id, record)
+        self._col.insert_one(record)
         self._prune()
         return run_id
 
     def append_log(self, run_id: str, message: str) -> None:
         """Append a log line to an existing run (no-op if run is gone)."""
         with self._lock:
-            record = self._load(run_id)
-            if record is None:
+            existing = self._col.find_one({"_id": run_id})
+            if existing is None:
                 return
-            record.setdefault("logs", []).append(f"[{_now_iso()}] {message}")
-            self._save(run_id, record)
+            logs = existing.get("logs", [])
+            logs.append(f"[{_now_iso()}] {message}")
+            self._col.update_one({"_id": run_id}, {"$set": {"logs": logs}})
 
     def set_tasks(self, run_id: str, tasks: List[Dict[str, Any]]) -> None:
         """Set the planned task list and refresh task counts."""
         with self._lock:
-            record = self._load(run_id)
-            if record is None:
+            existing = self._col.find_one({"_id": run_id})
+            if existing is None:
                 return
-            record["tasks"] = list(tasks)
-            record["completed_count"] = sum(1 for t in tasks if t.get("status") == "completed")
-            record["failed_count"] = sum(1 for t in tasks if t.get("status") == "failed")
-            self._save(run_id, record)
+            completed = sum(1 for t in tasks if t.get("status") == "completed")
+            failed = sum(1 for t in tasks if t.get("status") == "failed")
+            self._col.update_one(
+                {"_id": run_id},
+                {"$set": {
+                    "tasks": list(tasks),
+                    "completed_count": completed,
+                    "failed_count": failed,
+                }},
+            )
 
     def complete(self, run_id: str, response: str, tasks: Optional[List[Dict[str, Any]]] = None) -> None:
         """Mark a run as completed with its final response."""
         with self._lock:
-            record = self._load(run_id)
-            if record is None:
+            existing = self._col.find_one({"_id": run_id})
+            if existing is None:
                 return
-            if tasks is not None:
-                record["tasks"] = list(tasks)
-            record["completed_count"] = sum(1 for t in record["tasks"] if t.get("status") == "completed")
-            record["failed_count"] = sum(1 for t in record["tasks"] if t.get("status") == "failed")
-            record["response"] = response
-            record["status"] = "completed"
-            record["finished_at"] = _now_iso()
-            record.setdefault("logs", []).append(f"[{_now_iso()}] Completed")
-            self._save(run_id, record)
+            run_tasks = list(tasks) if tasks is not None else existing.get("tasks", [])
+            completed = sum(1 for t in run_tasks if t.get("status") == "completed")
+            failed = sum(1 for t in run_tasks if t.get("status") == "failed")
+            logs = existing.get("logs", [])
+            logs.append(f"[{_now_iso()}] Completed")
+            self._col.update_one(
+                {"_id": run_id},
+                {"$set": {
+                    "tasks": run_tasks,
+                    "completed_count": completed,
+                    "failed_count": failed,
+                    "response": response,
+                    "status": "completed",
+                    "finished_at": _now_iso(),
+                    "logs": logs,
+                }},
+            )
 
     def fail(self, run_id: str, error: str) -> None:
         """Mark a run as failed with an error message."""
         with self._lock:
-            record = self._load(run_id)
-            if record is None:
+            existing = self._col.find_one({"_id": run_id})
+            if existing is None:
                 return
-            record["error"] = error
-            record["status"] = "failed"
-            record["finished_at"] = _now_iso()
-            record.setdefault("logs", []).append(f"[{_now_iso()}] Failed: {error}")
-            self._save(run_id, record)
+            logs = existing.get("logs", [])
+            logs.append(f"[{_now_iso()}] Failed: {error}")
+            self._col.update_one(
+                {"_id": run_id},
+                {"$set": {
+                    "error": error,
+                    "status": "failed",
+                    "finished_at": _now_iso(),
+                    "logs": logs,
+                }},
+            )
 
     # ── Queries ──────────────────────────────────────────────────────────
 
@@ -145,64 +194,34 @@ class AgentRunStore:
         """Return a single run record, or None if it does not exist."""
         if not self._safe_id(run_id):
             return None
-        return self._load(run_id)
+        doc = self._col.find_one({"_id": run_id})
+        if doc is None:
+            return None
+        return dict(doc)
 
     def list_runs(self, limit: int = 20) -> List[Dict[str, Any]]:
         """Return run records sorted newest-first, truncated to ``limit``."""
-        runs = []
-        for fname in sorted(os.listdir(self._dir), reverse=True):
-            if not fname.endswith(".json"):
-                continue
-            run_id = fname[:-5]
-            record = self._load(run_id)
-            if record is not None:
-                runs.append(record)
-            if len(runs) >= limit:
-                break
-        return runs
+        docs = self._col.find({}, sort=[("_id", -1)], limit=limit)
+        return [dict(d) for d in docs]
 
     def clear(self) -> int:
         """Delete all run records; returns the number removed."""
-        removed = 0
         with self._lock:
-            for fname in os.listdir(self._dir):
-                if fname.endswith(".json"):
-                    try:
-                        os.remove(os.path.join(self._dir, fname))
-                        removed += 1
-                    except OSError:
-                        pass
+            all_docs = self._col.find({})
+            removed = len(all_docs) if isinstance(all_docs, list) else sum(1 for _ in all_docs)
+            self._col.delete_many({})
         return removed
 
     # ── Internals ────────────────────────────────────────────────────────
 
-    def _save(self, run_id: str, record: Dict[str, Any]) -> None:
-        path = self._path(run_id)
-        tmp = f"{path}.tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(record, f, ensure_ascii=False)
-        os.replace(tmp, path)
-
-    def _load(self, run_id: str) -> Optional[Dict[str, Any]]:
-        path = self._path(run_id)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, ValueError):
-            return None
-
     def _prune(self) -> None:
-        """Delete oldest run files beyond ``max_runs`` to bound disk usage."""
+        """Delete oldest run records beyond ``max_runs`` to bound disk usage."""
         with self._lock:
-            files = sorted(
-                (f for f in os.listdir(self._dir) if f.endswith(".json")),
-                reverse=True,
-            )
-            for stale in files[self._max_runs:]:
-                try:
-                    os.remove(os.path.join(self._dir, stale))
-                except OSError:
-                    pass
+            all_docs = self._col.find({}, sort=[("_id", -1)])
+            ids = [d["_id"] for d in all_docs]
+            stale = ids[self._max_runs:]
+            if stale:
+                self._col.delete_many({"_id": {"$in": stale}})
 
 
 _default_store: Optional[AgentRunStore] = None

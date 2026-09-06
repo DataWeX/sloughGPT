@@ -61,9 +61,9 @@ interface ChatScreenProps {
   onReact?: (messageId: string, emoji: string) => void
   onPin?: (messageId: string) => void
   temperature?: number
-  contextLayers?: unknown[]
+  contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
   noteMap?: Record<string, string>
-  onAddNote?: (messageId: string, note: string) => void
+  onAddNote?: (messageId: string) => void
   selectionMode?: boolean
   selectedMessageIds?: Set<string>
   onToggleSelection?: (messageId: string) => void
@@ -72,7 +72,7 @@ interface ChatScreenProps {
 }
 
 export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
-  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength }, ref) {
+  function ChatScreen({ messages, loading, sessionLoading, health, suggestions, toolEvents, ragVerification, onRefreshHealth, onCopy, onRegenerate, onThumbsUp, onThumbsDown, onEdit, searchQuery, onSuggestionClick, className, model, isBookmarked, onBookmark, onDelete, onSaveToKnowledge, collapsibleLength, onReact, onPin, noteMap, onAddNote, selectionMode, selectedMessageIds, onToggleSelection, hasThread, onThread }, ref) {
     const isOffline = health === 'offline'
     const hasModel = health !== null && health !== 'offline' && health.model_loaded
     const [emptyFading, setEmptyFading] = useState(false)
@@ -247,6 +247,12 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
                 onDelete={onDelete}
                 onSaveToKnowledge={onSaveToKnowledge}
                 collapsibleLength={collapsibleLength}
+                onReact={onReact ? (emoji) => onReact(message.id, emoji) : undefined}
+                onPin={onPin}
+                hasNote={!!noteMap?.[message.id]}
+                onAddNote={onAddNote ? () => onAddNote(message.id) : undefined}
+                hasThread={typeof hasThread === 'function' ? hasThread(message.id) : hasThread}
+                onThread={onThread}
               />
               </React.Fragment>
             )

@@ -338,8 +338,8 @@ class DownloadManager:
             try:
                 from domains.infrastructure.event_buffer import get_event_buffer
                 get_event_buffer().record("DOWNLOAD", f"{model_id} cancelled")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record download cancel event: %s", exc)
             return {"status": "cancelled", "model_id": model_id}
         except Exception as e:
             self._set_progress(
@@ -353,8 +353,8 @@ class DownloadManager:
             try:
                 from domains.infrastructure.event_buffer import get_event_buffer
                 get_event_buffer().record("ERROR", f"download {model_id} failed: {str(e)[:40]}")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record download error event: %s", exc)
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
     async def _download_worker(self, model_id: str, total_bytes_hint: int, cancel_event: Optional[threading.Event] = None):
@@ -377,8 +377,8 @@ class DownloadManager:
                 elif total_bytes_hint > 1e6:
                     size_str = f" ({total_bytes_hint / 1e6:.0f}MB)"
             get_event_buffer().record("DOWNLOAD", f"{model_id} started{size_str}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to record download start event: %s", exc)
 
         def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
             try:

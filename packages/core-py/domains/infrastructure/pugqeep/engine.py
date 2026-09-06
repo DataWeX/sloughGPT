@@ -526,7 +526,7 @@ class SubprocessProcess:
                 try:
                     child_w.send(_MSG_READY)
                 except Exception:
-                    pass
+                    logger.warning("Failed to send READY message to parent pipe")
 
                 result = self.proc.fn(*self.proc.args, **self.proc.kwargs)
 
@@ -545,11 +545,11 @@ class SubprocessProcess:
                         child_w.send(("stdout", stdout_capture.getvalue() if stdout_capture else ""))
                         child_w.send(("stderr", stderr_capture.getvalue() if stderr_capture else ""))
                     except Exception:
-                        pass
+                        logger.warning("Failed to send captured output to parent pipe")
                 try:
                     child_w.close()
                 except Exception:
-                    pass
+                    logger.warning("Failed to close child pipe")
 
         start_method = self.config.start_method or "fork"
         ctx = multiprocessing.get_context(start_method)
@@ -606,7 +606,7 @@ class SubprocessProcess:
             try:
                 conn.close()
             except Exception:
-                pass
+                logger.warning("Failed to close parent pipe in reader thread")
 
     def monitor(self) -> None:
         if self._process is not None:

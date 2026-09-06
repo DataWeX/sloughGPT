@@ -1226,8 +1226,10 @@ class LocalBackend(GenerateBackend):
                                    getattr(self._model_ref, "past_key_values", None)
                         if captured is not None:
                             _pkv_holder[0] = captured
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        import logging
+                        logging.getLogger("slo.model_server").debug(
+                            "KV cache capture failed: %s", exc)
             except Exception as e:
                 _error.append(e)
 

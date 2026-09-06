@@ -1135,8 +1135,8 @@ class SloughGPTTrainer:
             epochs = self.config.epochs
             max_steps = self.config.max_steps or "unlimited"
             get_event_buffer().record("TRAIN", f"started epochs={epochs} max_steps={max_steps}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to record training start event: %s", exc)
 
         for epoch in range(self.current_epoch, self.config.epochs):
             self.current_epoch = epoch
@@ -1321,8 +1321,8 @@ class SloughGPTTrainer:
             from domains.infrastructure.event_buffer import get_event_buffer
             final_loss_str = f"{final_loss:.4f}" if final_loss is not None else "n/a"
             get_event_buffer().record("TRAIN", f"completed step={self.global_step} loss={final_loss_str}")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to record training completion event: %s", exc)
         checkpoint_name = ""
         model_path = ""
         # Prefer best model path (set on eval improvement) over last checkpoint

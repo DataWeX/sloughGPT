@@ -708,8 +708,10 @@ class _CPUBackend(_Accelerator):
                     if line.startswith("MemTotal:"):
                         kb = int(line.split()[1])
                         return (kb / (1024 ** 2)) * 0.5
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.gpu").debug(
+                "Failed to read /proc/meminfo for GPU memory fallback: %s", exc)
 
         # Fallback 2: sysctl (macOS / BSD)
         try:
@@ -720,8 +722,10 @@ class _CPUBackend(_Accelerator):
             )
             if result.returncode == 0:
                 return int(result.stdout.strip()) / (1024 ** 3) * 0.5
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.gpu").debug(
+                "Failed to read sysctl hw.memsize for GPU memory fallback: %s", exc)
 
         # Fallback 3: wmic (Windows)
         try:

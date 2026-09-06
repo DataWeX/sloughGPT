@@ -31,6 +31,12 @@ export interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  onReact?: (emoji: string) => void
+  onPin?: (messageId: string) => void
+  hasNote?: boolean
+  onAddNote?: () => void
+  hasThread?: boolean
+  onThread?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
 }
 
@@ -66,6 +72,12 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onSaveToKnowledge,
   collapsibleLength = 0,
+  onReact,
+  onPin,
+  hasNote,
+  onAddNote,
+  hasThread,
+  onThread,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -98,12 +110,18 @@ export const MessageBubble = memo(function MessageBubble({
       content={content}
       role={role}
       isBookmarked={isBookmarked}
+      isPinned={false}
+      hasNote={hasNote}
+      hasThread={hasThread}
       onCopy={onCopy}
       onEdit={onEdit ? () => setIsEditing(true) : undefined}
       onBookmark={onBookmark}
+      onPin={onPin}
       onRegenerate={showActions ? onRegenerate : undefined}
       onDelete={onDelete}
       onSaveToKnowledge={onSaveToKnowledge}
+      onAddNote={onAddNote}
+      onThread={onThread}
     >
     <div
       id={messageId ? `msg-${messageId}` : undefined}
@@ -191,6 +209,7 @@ export const MessageBubble = memo(function MessageBubble({
           onBookmark={onBookmark}
           onDelete={onDelete}
           onSaveToKnowledge={onSaveToKnowledge}
+          onReact={onReact ? (messageId, emoji) => onReact(emoji) : undefined}
         />
       )}
 
