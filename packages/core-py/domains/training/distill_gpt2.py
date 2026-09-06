@@ -23,6 +23,8 @@ import numpy as np
 
 from domains.infrastructure.arch_config import ArchConfig, build_arch
 from domains.infrastructure.numpy_forward import forward_fast, pre_extract_weights
+from domains.infrastructure.numpy_ops import softmax as _softmax
+from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
 from domains.training.slonet import (
     SloAdam, SloTransformer, export_to_sou, tensor, cross_entropy,
 )
@@ -139,28 +141,12 @@ def _teacher_forward(rw: dict, arch: ArchConfig, token_ids: List[int]) -> np.nda
     return forward_fast(rw, arch, token_ids)
 
 
-def _softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
-    x_max = x.max(axis=axis, keepdims=True)
-    e_x = np.exp(x - x_max)
-    return e_x / e_x.sum(axis=axis, keepdims=True)
-
-
-def _kl_div_loss(student_log_probs: np.ndarray, teacher_probs: np.ndarray) -> float:
-    """KL divergence: sum(teacher * (log(teacher) - student_log_probs))."""
-    teacher_safe = np.where(teacher_probs < 1e-15, 1e-15, teacher_probs)
-    log_teacher = np.log(teacher_safe)
-    loss = teacher_probs * (log_teacher - student_log_probs)
-    return float(loss.sum(axis=-1).mean())
-
-
 def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
-    """Cross-entropy loss."""
-    # logits: (batch, vocab), targets: (batch,)
+    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
     log_probs = logits - logits.max(axis=-1, keepdims=True)
     log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
     batch_size = targets.shape[0]
-    loss = -log_probs[np.arange(batch_size), targets].mean()
-    return float(loss)
+    return float(-log_probs[np.arange(batch_size), targets].mean())
 
 
 def _compute_perplexity(loss: float) -> float:

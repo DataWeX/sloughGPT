@@ -11,6 +11,8 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from .state import REPO_ROOT, CHECKPOINTS_DIR, TURBO_DIR, SOU_MAGIC
 
 logger = logging.getLogger("slo.training")
@@ -201,3 +203,11 @@ def describe_checkpoint(ckpt: dict) -> str:
         parts.append(f"[{model_type}]")
 
     return " ".join(parts) + "."
+
+
+def cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
+    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
+    log_probs = logits - logits.max(axis=-1, keepdims=True)
+    log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
+    batch_size = targets.shape[0]
+    return float(-log_probs[np.arange(batch_size), targets].mean())

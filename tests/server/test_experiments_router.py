@@ -179,9 +179,10 @@ class TestGetExperimentRuns:
     def test_runs_with_json_files(self, client, mock_db):
         create = client.post("/experiments", json={"name": "json_test"})
         exp_id = create.json()["data"]["id"]
-        metrics_col = mock_db["metrics"]
-        metrics_col.insert_one({"experiment_id": exp_id, "metric": "loss", "value": 0.5})
-        metrics_col.insert_one({"experiment_id": exp_id, "metric": "loss", "value": 0.3})
+        # Access metrics collection through the mock to create the store
+        metrics_store = mock_db.setdefault("metrics", [])
+        metrics_store.append({"experiment_id": exp_id, "metric": "loss", "value": 0.5})
+        metrics_store.append({"experiment_id": exp_id, "metric": "loss", "value": 0.3})
         resp = client.get(f"/experiments/{exp_id}/runs")
         assert resp.json()["data"]["runs"] == 2
 
@@ -261,42 +262,20 @@ class TestExperimentData:
         resp = client.get("/experiments/invalid..id/data")
         assert resp.status_code == 400
 
-    def test_data_reads_logged_metrics_and_params(self, client, experiments_router):
-        import os, json
+    def test_data_reads_logged_metrics_and_params(self, client, mock_db):
         e_id = "readback_123"
-        log_dir = experiments_router.EXPERIMENTS_DIR
-        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
-        params_file = os.path.join(log_dir, f"{e_id}_params.jsonl")
-        os.makedirs(log_dir, exist_ok=True)
-        try:
-            with open(metrics_file, "w") as f:
-                f.write(json.dumps({"metric": "loss", "value": 0.5, "step": 1}) + "\n")
-            with open(params_file, "w") as f:
-                f.write(json.dumps({"param": "lr", "value": 0.001}) + "\n")
-            resp = client.get(f"/experiments/{e_id}/data")
-            data = resp.json()["data"]
-            assert data["metrics"][0]["value"] == 0.5
-            assert data["params"][0]["value"] == 0.001
-        finally:
-            for p in (metrics_file, params_file):
-                if os.path.exists(p):
-                    os.remove(p)
+        mock_db.setdefault("metrics", []).append({"experiment_id": e_id, "metric": "loss", "value": 0.5, "step": 1})
+        mock_db.setdefault("params", []).append({"experiment_id": e_id, "param": "lr", "value": 0.001})
+        resp = client.get(f"/experiments/{e_id}/data")
+        data = resp.json()["data"]
+        assert data["metrics"][0]["value"] == 0.5
+        assert data["params"][0]["value"] == 0.001
 
-    def test_data_skips_corrupt_json_lines(self, client):
-        import os
-        from apps.api.server.routers import experiments as exp_mod
+    def test_data_skips_corrupt_json_lines(self, client, mock_db):
         e_id = "corrupt_123"
-        log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
-        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
-        os.makedirs(log_dir, exist_ok=True)
-        try:
-            with open(metrics_file, "w") as f:
-                f.write("not valid json\n")
-            resp = client.get(f"/experiments/{e_id}/data")
-            assert resp.json()["data"]["metrics"] == []
-        finally:
-            if os.path.exists(metrics_file):
-                os.remove(metrics_file)
+        mock_db.setdefault("metrics", []).append({"experiment_id": e_id, "_invalid": True})
+        resp = client.get(f"/experiments/{e_id}/data")
+        assert resp.json()["data"]["metrics"] == []
 
 
 class TestCompleteExperimentEdges:
