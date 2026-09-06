@@ -15,7 +15,7 @@ Usage:
 
 from __future__ import annotations
 
-import os
+import os  # noqa: F401 — used in function bodies below
 import sys
 import time
 import math

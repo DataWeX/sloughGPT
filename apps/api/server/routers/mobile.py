@@ -414,7 +414,9 @@ class MobileRouter:
             from training.controller import get_training_controller
 
             return get_training_controller().list_checkpoints()
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.mobile").warning("Failed to list checkpoints: %s", exc)
             return []
 
     @staticmethod

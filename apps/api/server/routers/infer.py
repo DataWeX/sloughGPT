@@ -547,7 +547,9 @@ class InferRouter:
                     detail=f"elapsed={_elapsed_ms:.0f}ms ids={len(req.ids)}",
                 )
                 return DetokenizeResponse(text=text, count=len(req.ids))
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger("slo.infer").warning("Detokenize failed: %s", exc)
                 return DetokenizeResponse(text="", count=len(req.ids))
 
         except Exception as e:
