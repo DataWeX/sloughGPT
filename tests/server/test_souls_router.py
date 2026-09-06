@@ -64,6 +64,7 @@ class TestListSouls:
         assert body["meta"]["current_soul"] == "sage"
 
     @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("apps.api.server.routers.souls._list_souls_cache", None)
     def test_list_souls_empty(self, mock_get_mgr, client):
         mgr = MagicMock()
         mgr.list_souls.return_value = []

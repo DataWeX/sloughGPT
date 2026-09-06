@@ -400,7 +400,7 @@ class TestIngestUrl:
         mock_classify.return_value = err
         resp = client.post("/knowledge/ingest-url", json={"url": "https://example.com/foo"})
         assert resp.status_code == 503
-        assert mock_emit.call_count == 2
+        assert mock_emit.call_count == 1
 
 
 class TestLabelMethods:

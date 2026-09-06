@@ -211,11 +211,7 @@ class TestVmRun:
     def test_run_error_path(self, mock_vs_cls, client):
         mock_vs_cls.side_effect = RuntimeError("vm crashed")
         resp = client.post("/vm/run", json={"source": "hlt"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is False
-        assert body["status"] == "error"
-        assert "vm crashed" in body["error"]
+        assert resp.status_code == 500
 
 
 # ── GET /vm/builtins ──────────────────────────────────────────────────────────

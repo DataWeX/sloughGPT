@@ -102,12 +102,14 @@ class TestUnknownRoute:
 
 class TestInvalidRequests:
     def test_generate_missing_payload_422(self):
-        response = client.post("/inference/generate", json={})
-        assert response.status_code == 422
+        with patch("state.model", object()):
+            response = client.post("/inference/generate", json={})
+            assert response.status_code == 422
 
     def test_generate_no_prompt_422(self):
-        response = client.post("/inference/generate")
-        assert response.status_code == 422
+        with patch("state.model", object()):
+            response = client.post("/inference/generate")
+            assert response.status_code == 422
 
 
 class TestProvidersEndpoints:

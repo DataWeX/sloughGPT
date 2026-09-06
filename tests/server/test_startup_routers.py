@@ -378,7 +378,7 @@ class TestModelLoadedGuard:
     def test_build_guard_missing_slnc_returns_none(self):
         cfg = ServerConfig()
         with patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
+             patch("domains.infrastructure.model_resolver.get_model_dir",
                    return_value=Path("/nonexistent-dir")) as mock_dir, \
              patch("os.path.exists", return_value=False):
             assert _build_guard_for_model(cfg, "gpt2") is None
@@ -390,7 +390,7 @@ class TestModelLoadedGuard:
         with patch("config.get_process_guard_enabled", return_value=True), \
              patch("domains.infrastructure.process_guard.ProcessGuard",
                    return_value=guard) as mock_pg, \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
+             patch("domains.infrastructure.model_resolver.get_model_dir",
                    return_value=Path("/fake/slnc-dir")), \
              patch("os.path.exists", return_value=True), \
              patch("domains.infrastructure.process_guard.resolve_memory_limit_mb",
@@ -633,7 +633,7 @@ class TestTryLazyGuardAutoload:
         mod = self._import()
         with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
              patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
+             patch("domains.infrastructure.model_resolver.get_model_dir",
                    return_value=Path("/missing")), \
              patch("os.path.exists", return_value=False):
             assert mod._try_lazy_guard_autoload(ServerConfig(autoload_model="gpt2")) is False
@@ -642,7 +642,7 @@ class TestTryLazyGuardAutoload:
         mod = self._import()
         with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
              patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
+             patch("domains.infrastructure.model_resolver.get_model_dir",
                    return_value=Path("/fake")), \
              patch("os.path.exists", return_value=True), \
              patch("domains.inference.slonet_provider.SloNetChatProvider",
@@ -653,7 +653,7 @@ class TestTryLazyGuardAutoload:
         mod = self._import()
         with patch.dict("sys.modules", {"state": MagicMock(model=None)}), \
              patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
+             patch("domains.infrastructure.model_resolver.get_model_dir",
                    return_value=Path("/fake")), \
              patch("os.path.exists", return_value=True), \
              patch("domains.inference.slonet_provider.SloNetChatProvider") as mock_provider, \
@@ -669,7 +669,7 @@ class TestTryLazyGuardAutoload:
         provider = MagicMock()
         with patch.dict("sys.modules", {"state": state}), \
              patch("config.get_process_guard_enabled", return_value=True), \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
+             patch("domains.infrastructure.model_resolver.get_model_dir",
                    return_value=Path("/fake")), \
              patch("os.path.exists", return_value=True), \
              patch("domains.inference.slonet_provider.SloNetChatProvider",

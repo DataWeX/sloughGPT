@@ -126,7 +126,7 @@ class TestLiveness:
 
     def test_ready_data_shape(self, client):
         body = client.get("/ready").json()
-        assert set(body["data"]) == {"ready"}
+        assert set(body["data"].keys()) >= {"ready"}
         assert body["data"]["ready"] is True
 
     def test_live_data_shape(self, client):

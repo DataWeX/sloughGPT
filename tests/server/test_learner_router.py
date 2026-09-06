@@ -35,14 +35,9 @@ class TestLearnSearch:
         data = resp.json()["data"]
         assert data["tokens_ingested"] == 100
 
-    @patch("domains.learner.get_learner")
-    def test_search_empty_query(self, mock_get_learner, client):
-        learner = mock_get_learner.return_value
-        learner.search_and_learn.return_value = {"tokens_ingested": 0, "new_facts": 0, "rejected": 0, "filter_stats": {}}
-        learner.status.return_value = {}
+    def test_search_empty_query(self, client):
         resp = client.post("/learn/search", json={"query": ""})
-        assert resp.status_code == 200
-        learner.search_and_learn.assert_called_once_with("", 5)
+        assert resp.status_code == 422
 
     @patch("domains.learner.get_learner")
     def test_search_rejected_facts(self, mock_get_learner, client):

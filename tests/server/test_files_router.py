@@ -166,10 +166,10 @@ class TestIngestFile:
         resp = client.post("/files/nonexistent/ingest")
         assert resp.status_code == 404
 
-    @patch("domains.learner.knowledge.get_knowledge_memory")
-    def test_ingest_existing_file(self, mock_get_mem, client):
-        mem = mock_get_mem.return_value
-        mem.add_fact.return_value = True
+    @patch("domains.cognitive.rag_service.get_rag_service")
+    def test_ingest_existing_file(self, mock_get_rag, client):
+        rag = mock_get_rag.return_value
+        rag.add_document.return_value = ["chunk1"]
         upload = client.post("/files/upload", files={
             "file": ("ingest.txt", b"some content for knowledge base", "text/plain"),
         })
@@ -284,10 +284,10 @@ class TestGetFileDetail:
 
 
 class TestIngestChunking:
-    @patch("domains.learner.knowledge.get_knowledge_memory")
-    def test_ingest_chunks_long_text(self, mock_get_mem, client):
-        mem = mock_get_mem.return_value
-        mem.add_fact.return_value = True
+    @patch("domains.cognitive.rag_service.get_rag_service")
+    def test_ingest_chunks_long_text(self, mock_get_rag, client):
+        rag = mock_get_rag.return_value
+        rag.add_document.return_value = ["chunk1", "chunk2", "chunk3"]
         long_text = ("This is a long sentence that continues. "
                      "And another one follows it. And a third. ") * 20
         upload = client.post("/files/upload", files={
@@ -296,10 +296,12 @@ class TestIngestChunking:
         file_id = upload.json()["id"]
         resp = client.post(f"/files/{file_id}/ingest")
         assert resp.status_code == 200
-        assert mem.add_fact.call_count >= 1
+        assert resp.json()["facts_stored"] >= 1
 
-    @patch("domains.learner.knowledge.get_knowledge_memory")
-    def test_ingest_empty_text_zero_facts(self, mock_get_mem, client):
+    @patch("domains.cognitive.rag_service.get_rag_service")
+    def test_ingest_empty_text_zero_facts(self, mock_get_rag, client):
+        rag = mock_get_rag.return_value
+        rag.add_document.return_value = []
         upload = client.post("/files/upload", files={
             "file": ("empty_ingest.txt", b"", "text/plain"),
         })

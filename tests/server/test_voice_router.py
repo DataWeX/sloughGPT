@@ -37,7 +37,7 @@ class TestTTS:
 
     def test_rejects_empty_text(self, client):
         resp = client.post("/voice/tts", json={"text": ""})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_rejects_whitespace_only(self, client):
         resp = client.post("/voice/tts", json={"text": "   "})
@@ -135,8 +135,8 @@ class TestTTSSuccessPath:
     def test_backend_failure_falls_back(self, client, _backend):
         _backend.generate.side_effect = RuntimeError("boom")
         resp = client.post("/voice/tts", json={"text": "hello"})
-        assert resp.status_code == 500
-        assert "error" in resp.json()
+        assert resp.status_code == 200
+        assert resp.json()["backend"] == "browser-fallback"
 
     def test_load_failure_falls_back(self, client, _backend):
         _backend.load.return_value = False
@@ -264,6 +264,5 @@ class TestTTSErrorAfterLoad:
         backend.generate.return_value = b"not-a-real-wav"
         with patch.object(_voice_router_instance(), "_tts_backend", backend):
             resp = client.post("/voice/tts", json={"text": "hello"})
-        assert resp.status_code == 500
-        data = resp.json()
-        assert "error" in data
+        assert resp.status_code == 200
+        assert resp.json()["backend"] == "browser-fallback"

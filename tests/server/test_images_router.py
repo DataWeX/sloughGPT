@@ -148,11 +148,9 @@ class TestGenerateImage:
         resp = client.post("/images/generate", json={"prompt": "test"})
         assert resp.status_code == 500
 
-    @patch.object(ImagesRouter, "_generate_image", return_value=b"fake_png")
-    @patch.object(ImagesRouter, "_save_image", return_value="/data/gallery/abc.png")
-    def test_empty_prompt_accepted(self, mock_save, mock_gen, client):
+    def test_empty_prompt_rejected(self, client):
         resp = client.post("/images/generate", json={"prompt": ""})
-        assert resp.status_code == 200
+        assert resp.status_code == 422
 
     def test_empty_body_rejected(self, client):
         resp = client.post("/images/generate", json={})

@@ -1006,7 +1006,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
     if not model_type:
         return False
     try:
-        from domains.infrastructure.safetensors_loader import _get_model_dir
+        from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
@@ -1135,7 +1135,7 @@ def _build_guard_for_model(cfg, model_type: str):
         if not get_process_guard_enabled():
             return None
         from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-        from domains.infrastructure.safetensors_loader import _get_model_dir
+        from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         slnc_path = str(_get_model_dir(model_type) / "model.slnc")
         if not os.path.exists(slnc_path):
@@ -1597,7 +1597,7 @@ def _make_engine_restart_fn(cfg):
             return None
 
         try:
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
             slnc_path = _get_model_dir(model_type) / "model.slnc"
             if not slnc_path.exists():

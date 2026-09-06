@@ -32,9 +32,10 @@ def _mock_eval_result():
 
 
 class TestRunEval:
-    """GET /lora-eval/run"""
+    """POST /lora-eval/run"""
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_baseline_only_no_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -42,16 +43,18 @@ class TestRunEval:
         mock_get_eval.return_value = evaluator
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = False
+        mock_path_instance.resolve.return_value = "data/user_adapters/best_aggregated.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        resp = client.get("/lora-eval/run", params={"soul": "assistant"})
+        resp = client.post("/lora-eval/run", params={"soul": "assistant"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
         assert "baseline" in data
         assert data["baseline"]["perplexity"] == 12.5
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_compared_with_adapter(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -65,9 +68,10 @@ class TestRunEval:
 
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = True
+        mock_path_instance.resolve.return_value = "data/user_adapters/best_aggregated.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        resp = client.get(
+        resp = client.post(
             "/lora-eval/run",
             params={"adapter_path": "data/user_adapters/best_aggregated.npz", "soul": "assistant"},
         )
@@ -83,14 +87,14 @@ class TestRunEval:
     def test_evaluator_import_error_returns_500(self, mock_get_eval):
         mock_get_eval.side_effect = ImportError("no module")
 
-        resp = client.get("/lora-eval/run")
+        resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_internal_error_returns_500(self, mock_get_eval):
         mock_get_eval.side_effect = RuntimeError("evaluator broken")
 
-        resp = client.get("/lora-eval/run")
+        resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
@@ -99,10 +103,11 @@ class TestRunEval:
         evaluator.run.side_effect = RuntimeError("run failed")
         mock_get_eval.return_value = evaluator
 
-        resp = client.get("/lora-eval/run")
+        resp = client.post("/lora-eval/run")
         assert resp.status_code == 500
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_adapter_path_not_found_falls_back(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -111,14 +116,16 @@ class TestRunEval:
 
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = False
+        mock_path_instance.resolve.return_value = "data/user_adapters/best_aggregated.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        resp = client.get("/lora-eval/run")
+        resp = client.post("/lora-eval/run")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_soul_param_passed_to_run(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -126,13 +133,15 @@ class TestRunEval:
         mock_get_eval.return_value = evaluator
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = False
+        mock_path_instance.resolve.return_value = "data/user_adapters/best_aggregated.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        client.get("/lora-eval/run", params={"soul": "friendly"})
+        client.post("/lora-eval/run", params={"soul": "friendly"})
         for call in evaluator.run.call_args_list:
             assert call.kwargs.get("soul_name") == "friendly"
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_default_adapter_path_used(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -140,9 +149,10 @@ class TestRunEval:
         mock_get_eval.return_value = evaluator
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = False
+        mock_path_instance.resolve.return_value = "data/user_adapters/best_aggregated.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        client.get("/lora-eval/run", params={"soul": "assistant"})
+        client.post("/lora-eval/run", params={"soul": "assistant"})
         assert mock_path_cls.call_args.args[0] == "data/user_adapters/best_aggregated.npz"
 
 
@@ -314,9 +324,10 @@ class TestAggregate:
 
 
 class TestRunEvalCompareFailure:
-    """GET /lora-eval/run — comparison failure falls back to baseline_only"""
+    """POST /lora-eval/run — comparison failure falls back to baseline_only"""
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_adapter_exists_but_compare_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -324,15 +335,17 @@ class TestRunEvalCompareFailure:
         mock_get_eval.return_value = evaluator
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = True
+        mock_path_instance.resolve.return_value = "data/user_adapters/x.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        resp = client.get("/lora-eval/run", params={"adapter_path": "x.npz"})
+        resp = client.post("/lora-eval/run", params={"adapter_path": "x.npz"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
         assert "note" in data
 
-    @patch("pathlib.Path")
+    @patch("apps.api.server.routers.lora_eval._ADAPTER_BASE", "data/user_adapters")
+    @patch("apps.api.server.routers.lora_eval.Path")
     @patch("domains.feedback.lora_eval.get_lora_evaluator")
     def test_adapter_exists_but_second_run_raises_returns_baseline(self, mock_get_eval, mock_path_cls):
         evaluator = MagicMock()
@@ -340,9 +353,10 @@ class TestRunEvalCompareFailure:
         mock_get_eval.return_value = evaluator
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = True
+        mock_path_instance.resolve.return_value = "data/user_adapters/x.npz"
         mock_path_cls.return_value = mock_path_instance
 
-        resp = client.get("/lora-eval/run", params={"adapter_path": "x.npz"})
+        resp = client.post("/lora-eval/run", params={"adapter_path": "x.npz"})
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "baseline_only"
 
@@ -350,8 +364,8 @@ class TestRunEvalCompareFailure:
 class TestLoraEvalMethods:
     """405s for disallowed methods"""
 
-    def test_run_post_is_405(self):
-        resp = client.post("/lora-eval/run")
+    def test_run_get_is_405(self):
+        resp = client.get("/lora-eval/run")
         assert resp.status_code == 405
 
     def test_history_post_is_405(self):

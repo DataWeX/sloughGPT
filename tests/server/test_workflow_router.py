@@ -242,8 +242,7 @@ class TestWorkflowStartConfigPassthrough:
         mock_get_wf.return_value = wf
 
         resp = client.post("/workflow/start", json={"aggregate_interval_minutes": -5})
-        assert resp.status_code == 200
-        assert resp.json()["data"]["config"]["aggregate_interval_minutes"] == -5
+        assert resp.status_code == 422
 
     @patch(WF_TARGET)
     def test_config_passthrough_zero(self, mock_get_wf):
@@ -251,8 +250,7 @@ class TestWorkflowStartConfigPassthrough:
         mock_get_wf.return_value = wf
 
         resp = client.post("/workflow/start", json={"prune_interval_minutes": 0})
-        assert resp.status_code == 200
-        assert resp.json()["data"]["config"]["prune_interval_minutes"] == 0
+        assert resp.status_code == 422
 
     @patch(WF_TARGET)
     def test_config_assigned_to_workflow(self, mock_get_wf):

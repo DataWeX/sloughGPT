@@ -104,16 +104,10 @@ class TestInfer:
         resp = client.post("/infer", json={})
         assert resp.status_code == 422
 
-    def test_empty_prompt_accepted(self, client):
-        """Empty prompt is valid per schema (no min_length constraint)."""
-        with patch("state.model") as mock_model, \
-             patch("domains.models.provider.get_provider") as mock_prov:
-            provider = AsyncMock()
-            provider.chat.return_value = ""
-            mock_prov.return_value = provider
-            mock_model.model_id = "m"
-            resp = client.post("/infer", json={"prompt": ""})
-            assert resp.status_code == 200
+    def test_empty_prompt_rejected(self, client):
+        """Empty prompt is rejected (min_length=1 on schema)."""
+        resp = client.post("/infer", json={"prompt": ""})
+        assert resp.status_code == 422
 
 
 class TestInferTokenize:
@@ -124,10 +118,9 @@ class TestInferTokenize:
         assert data["count"] > 0
         assert len(data["tokens"]) == data["count"]
 
-    def test_tokenizes_empty_string(self, client):
+    def test_tokenizes_empty_string_rejected(self, client):
         resp = client.post("/infer/tokenize", json={"text": ""})
-        assert resp.status_code == 200
-        assert resp.json()["count"] == 0
+        assert resp.status_code == 422
 
     def test_token_ids_are_integers(self, client):
         resp = client.post("/infer/tokenize", json={"text": "abc"})

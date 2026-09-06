@@ -95,12 +95,12 @@ class TestHealth:
         assert resp.json()["data"]["model_loaded"] is False
 
     @patch("apps.api.server.routers.health.get_health_controller")
-    def test_health_controller_error_returns_500(self, mock_get_ctrl, client):
+    def test_health_controller_error_returns_fallback_200(self, mock_get_ctrl, client):
         ctrl = MagicMock()
         ctrl.get_basic_health.side_effect = RuntimeError("health controller down")
         mock_get_ctrl.return_value = ctrl
         resp = client.get("/health")
-        assert resp.status_code == 500
+        assert resp.status_code == 200
 
 
 class TestLiveness:
@@ -384,7 +384,8 @@ class TestHealthStream:
             with client.stream("GET", "/health/stream") as resp:
                 assert resp.status_code == 200
                 body = resp.read()
-                assert b"data:" not in body
+                assert b'"phase": "ERROR"' in body
+                assert b'"error": "boom"' in body
 
 
 class TestHealthMethodCoverage:

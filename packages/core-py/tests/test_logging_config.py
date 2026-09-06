@@ -228,7 +228,7 @@ class TestLogFormatterJSON:
         output = fmt.format(record)
         data = json.loads(output)
         assert data["msg"] == "hello"
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["logger"] == "slo.test"
         assert "ts" in data
 
@@ -242,7 +242,7 @@ class TestLogFormatterJSON:
         fmt = LogFormatter(fmt="json", colors=False)
         record = _make_record(request_id="xyz-789")
         data = json.loads(fmt.format(record))
-        assert data["request_id"] == "xyz-789"
+        assert data["corr"] == "xyz-789"
 
     def test_context_in_output(self):
         fmt = LogFormatter(fmt="json", colors=False)
@@ -479,6 +479,6 @@ class TestStdlibIntegration:
 
         test_output = output.getvalue()
         data = json.loads(test_output)
-        assert data["request_id"] == "req-42"
+        assert data["corr"] == "req-42"
 
         logging.getLogger().removeHandler(test_handler)

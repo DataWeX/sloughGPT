@@ -234,27 +234,25 @@ class TestDetailedHealth:
 
 class TestIsAppReady:
     def test_ready_when_lifecycle_running(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = True
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr):
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "running"}):
+            assert _is_app_ready() is True
+
+    def test_ready_when_phase_ready(self):
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "ready"}):
             assert _is_app_ready() is True
 
     def test_not_ready_when_lifecycle_not_running(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = False
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr):
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "initializing"}):
             assert _is_app_ready() is False
 
     def test_ready_on_import_error(self):
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", side_effect=ImportError):
+        with patch.dict("sys.modules", {"startup_progress": None}):
             assert _is_app_ready() is True
 
 
 class TestGetModelInfoReadyGate:
     def test_model_info_false_before_ready(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = False
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr), \
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "initializing"}), \
              patch("controllers.health._get_model_info_with_registry",
                    return_value=(True, "gpt2", {})):
             loaded, model_type = _get_model_info()
@@ -262,9 +260,7 @@ class TestGetModelInfoReadyGate:
             assert model_type == "gpt2"
 
     def test_model_info_true_after_ready(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = True
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr), \
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "running"}), \
              patch("controllers.health._get_model_info_with_registry",
                    return_value=(True, "gpt2", {})):
             loaded, model_type = _get_model_info()

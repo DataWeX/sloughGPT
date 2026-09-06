@@ -181,17 +181,22 @@ class TestInferConfig:
     def test_infers_layer_count(self, ctrl):
         import numpy as np
         state_dict = {
-            "blocks.0.norm1.weight": np.zeros((64,)),
-            "blocks.1.norm1.weight": np.zeros((64,)),
-            "blocks.2.norm1.weight": np.zeros((64,)),
+            "tok_emb.weight": np.zeros((1000, 64), dtype=np.float32),
+            "blocks.0.attn_norm.weight": np.zeros((64,)),
+            "blocks.1.attn_norm.weight": np.zeros((64,)),
+            "blocks.2.attn_norm.weight": np.zeros((64,)),
             "blocks.0.attn.q_proj.weight": np.zeros((64, 64)),
         }
         config = ctrl._infer_config(state_dict)
         assert config["n_embed"] == 64
         assert config["n_layer"] == 3
 
-    def test_empty_state_dict_returns_empty(self, ctrl):
-        assert ctrl._infer_config({}) == {}
+    def test_empty_state_dict_returns_defaults(self, ctrl):
+        config = ctrl._infer_config({})
+        assert config["vocab_size"] == 256
+        assert config["n_embed"] == 128
+        assert config["n_layer"] == 1
+        assert config["block_size"] == 128
 
 
 class TestListAvailableModels:
