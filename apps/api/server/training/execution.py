@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from typing import Any
 
 from domains.mobile.notifications import get_notification_service
@@ -78,7 +79,7 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
     except ManifestError as e:
         raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
-    job_id = f"job_{len(training_jobs) + 1}"
+    job_id = f"job_{uuid.uuid4().hex[:8]}"
     job: dict[str, Any] = {
         "id": job_id,
         "name": request.name,

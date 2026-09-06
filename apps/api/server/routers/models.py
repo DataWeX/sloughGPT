@@ -364,7 +364,12 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.current")
 
-    async def list_hf_models(self, q: str | None = None) -> dict:
+    async def list_hf_models(
+        self,
+        q: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
         """List HuggingFace available models with actual sizes and cache status."""
         try:
             ctrl = get_models_controller()
@@ -407,6 +412,10 @@ class ModelsRouter:
                                 all_model_ids.append(cached_id)
                     except Exception:
                         logger.debug("Failed to scan HF cache", exc_info=True)
+
+                total = len(all_model_ids)
+                page_ids = all_model_ids[offset:offset + limit]
+
                 size_results: dict[str, float | None] = {}
                 cached_results: dict[str, bool] = {}
 
@@ -416,9 +425,9 @@ class ModelsRouter:
                 from domains.infrastructure.resource_manager import get_resource_manager
 
                 rm = get_resource_manager()
-                max_workers = min(max(len(all_model_ids), rm.inference_pool_size * 2), 16)
+                max_workers = min(max(len(page_ids), rm.inference_pool_size * 2), 16)
                 with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                    futures = {pool.submit(_compute_one, mid): mid for mid in all_model_ids}
+                    futures = {pool.submit(_compute_one, mid): mid for mid in page_ids}
                     for future in as_completed(futures):
                         try:
                             mid, size_gb, cached = future.result()
@@ -432,7 +441,7 @@ class ModelsRouter:
                             size_results[mid] = None
                             cached_results[mid] = False
 
-                for mid in all_model_ids:
+                for mid in page_ids:
                     size_gb = size_results.get(mid)
                     models_out.append(
                         {
@@ -446,10 +455,10 @@ class ModelsRouter:
                         }
                     )
 
-                return models_out
+                return models_out, total
 
-            models = await asyncio.to_thread(_build_list)
-            return success_response(data=models, meta={"q": q})
+            models, total = await asyncio.to_thread(_build_list)
+            return success_response(data=models, meta={"q": q, "total": total, "limit": limit, "offset": offset})
         except Exception as e:
             classify_and_raise(e, source="models.hf_list")
 
