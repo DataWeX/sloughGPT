@@ -104,7 +104,7 @@ class TestCleanupStreamState:
     @patch("domains.training.runtime_protocol.get_training_runtime")
     @patch("domains.training.stream.update_job")
     def test_sets_running_false(self, mock_update, mock_runtime):
-        mock_runtime.return_value = {}
+        mock_runtime.return_value.get.return_value = None
         state = {"running": True}
         finish_fn = MagicMock()
         cleanup_stream_state("t1", {}, state, finish_fn)
@@ -113,7 +113,7 @@ class TestCleanupStreamState:
     @patch("domains.training.runtime_protocol.get_training_runtime")
     @patch("domains.training.stream.update_job")
     def test_updates_non_terminal_job(self, mock_update, mock_runtime):
-        mock_runtime.return_value = {"status": "running", "error": None}
+        mock_runtime.return_value.get.return_value = {"status": "running", "error": None}
         state = {"running": True}
         finish_fn = MagicMock()
         cleanup_stream_state("t1", {}, state, finish_fn)
@@ -122,7 +122,7 @@ class TestCleanupStreamState:
     @patch("domains.training.runtime_protocol.get_training_runtime")
     @patch("domains.training.stream.update_job")
     def test_skips_terminal_job(self, mock_update, mock_runtime):
-        mock_runtime.return_value = {"status": "completed"}
+        mock_runtime.return_value.get.return_value = {"status": "completed"}
         state = {"running": True}
         finish_fn = MagicMock()
         cleanup_stream_state("t1", {}, state, finish_fn)
@@ -131,7 +131,7 @@ class TestCleanupStreamState:
     @patch("domains.training.runtime_protocol.get_training_runtime")
     @patch("domains.training.stream.update_job")
     def test_skips_when_no_job(self, mock_update, mock_runtime):
-        mock_runtime.return_value = None
+        mock_runtime.return_value.get.return_value = None
         state = {"running": True}
         finish_fn = MagicMock()
         cleanup_stream_state("t1", {}, state, finish_fn)
@@ -140,7 +140,7 @@ class TestCleanupStreamState:
     @patch("domains.training.runtime_protocol.get_training_runtime")
     @patch("domains.training.stream.update_job")
     def test_custom_status_and_error(self, mock_update, mock_runtime):
-        mock_runtime.return_value = {"status": "running"}
+        mock_runtime.return_value.get.return_value = {"status": "running"}
         state = {"running": True}
         finish_fn = MagicMock()
         cleanup_stream_state("t1", {}, state, finish_fn, status="cancelled", error="user cancel")
