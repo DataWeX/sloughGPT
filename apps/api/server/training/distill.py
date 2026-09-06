@@ -12,7 +12,8 @@ from typing import Any
 
 from domains.shared import find_repo_root
 from domains.training.executor import get_training_executor
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from .helpers import _finish_job
@@ -23,9 +24,14 @@ logger = logging.getLogger("slo")
 
 router = APIRouter(tags=["training-distill"])
 
+_MAX_DATA_READ_BYTES = 200_000  # 200 KB max for distillation data
+
 
 @router.post("/training/distill")
-async def start_distillation(request: DistillStartRequest):
+async def start_distillation(
+    request: DistillStartRequest,
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
     """Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model."""
     import uuid
 
@@ -47,7 +53,16 @@ async def start_distillation(request: DistillStartRequest):
             "E_BAD_REQUEST",
             status_code=400,
         )
-    data_str = Path(input_file).read_text(encoding="utf-8")
+
+    file_size = Path(input_file).stat().st_size
+    if file_size > _MAX_DATA_READ_BYTES:
+        raise_error(
+            f"Dataset too large for distillation ({file_size} bytes). Max {_MAX_DATA_READ_BYTES} bytes.",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
+
+    data_str = Path(input_file).read_text(encoding="utf-8", errors="replace")
     if not data_str.strip():
         raise_error("Training data is empty", "E_BAD_REQUEST", status_code=400)
     out_stem = request.name or f"distill_{job_id}"

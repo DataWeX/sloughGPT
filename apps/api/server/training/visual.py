@@ -12,7 +12,8 @@ from typing import Any
 
 from domains.shared import find_repo_root
 from domains.training.executor import get_training_executor
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from .helpers import _finish_job
@@ -25,7 +26,10 @@ router = APIRouter(tags=["training-visual"])
 
 
 @router.post("/training/visual-start")
-async def start_visual_training(request: VisualTrainRequest):
+async def start_visual_training(
+    request: VisualTrainRequest,
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
     """Start a vision-language model (VLM) fine-tune on a visual dataset.
 
     Uses the video trainer's VideoCaptionTrainer on an image-caption
