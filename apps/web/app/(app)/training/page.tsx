@@ -51,7 +51,7 @@ export default function TrainingPage() {
   const test = useTestDialog()
   const [manualTab, setManualTab] = useState<ManualTab>('train')
   const [pipelineStep, setPipelineStep] = useState<'data' | 'configure' | 'train' | 'results'>('data')
-  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
+  const [completedSteps, setCompletedSteps] = useState<Set<'data' | 'configure' | 'train' | 'results'>>(new Set())
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
