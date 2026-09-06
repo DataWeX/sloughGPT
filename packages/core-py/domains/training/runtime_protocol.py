@@ -7,8 +7,11 @@ startup.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional, Protocol
 import threading
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingRuntimeProtocol(Protocol):
@@ -46,11 +49,18 @@ def get_training_runtime() -> TrainingRuntimeProtocol:
 class _NoOpRuntime:
     """Stub runtime that does nothing — used before the real runtime is injected."""
 
+    def __init__(self):
+        logger.warning(
+            "Using _NoOpRuntime — training jobs will not be persisted. "
+            "Ensure TrainingRuntime is injected at startup."
+        )
+
     def register(self, job_id, job, cancel_event=None, config=None):
-        pass
+        logger.warning("NoOpRuntime.register(%s) — job discarded", job_id)
 
     def get(self, job_id):
+        logger.debug("NoOpRuntime.get(%s) — returning None", job_id)
         return None
 
     def sync(self, job_id):
-        pass
+        logger.debug("NoOpRuntime.sync(%s) — no-op", job_id)

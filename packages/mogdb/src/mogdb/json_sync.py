@@ -85,8 +85,14 @@ class SyncableCollection:
         if self._col.count() > 0:
             return
         try:
-            with open(self._json_path) as f:
-                data = json.load(f)
+            # Try gzip first, then plain JSON
+            if self._json_path.suffix == ".gz":
+                import gzip
+                with gzip.open(self._json_path, "rt", encoding="utf-8") as f:
+                    data = json.load(f)
+            else:
+                with open(self._json_path) as f:
+                    data = json.load(f)
             if isinstance(data, list) and data:
                 self._col.insert_many(data)
                 logger.debug("bootstrapped %d docs from %s", len(data), self._json_path.name)
@@ -96,19 +102,36 @@ class SyncableCollection:
     def _sync_to_json(self) -> None:
         """Write all collection documents to the JSON file atomically."""
         docs = self._col.find()
-        tmp_path = self._json_path.with_suffix(".json.tmp")
-        try:
-            with open(tmp_path, "w") as f:
-                json.dump(docs, f, indent=2, default=str)
-            tmp_path.replace(self._json_path)
-        except OSError as e:
-            logger.warning("failed to sync %s to JSON: %s", self._col.name, e)
-        finally:
-            if tmp_path.exists():
-                try:
-                    tmp_path.unlink()
-                except OSError:
-                    pass
+        # Use .json.gz for compressed files, .json for plain
+        if self._json_path.suffix == ".gz":
+            tmp_path = self._json_path.with_suffix(".json.gz.tmp")
+            try:
+                import gzip
+                with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
+                    json.dump(docs, f, indent=2, default=str)
+                tmp_path.replace(self._json_path)
+            except OSError as e:
+                logger.warning("failed to sync %s to JSON: %s", self._col.name, e)
+            finally:
+                if tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except OSError:
+                        pass
+        else:
+            tmp_path = self._json_path.with_suffix(".json.tmp")
+            try:
+                with open(tmp_path, "w") as f:
+                    json.dump(docs, f, indent=2, default=str)
+                tmp_path.replace(self._json_path)
+            except OSError as e:
+                logger.warning("failed to sync %s to JSON: %s", self._col.name, e)
+            finally:
+                if tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except OSError:
+                        pass
 
     def _on_write(self) -> None:
         """Called after every write operation to sync to JSON."""

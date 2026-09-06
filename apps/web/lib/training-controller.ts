@@ -226,7 +226,7 @@ export const trainingJobsController = {
 
   async getTrainingLog(): Promise<string[]> {
     const data = await apiGet<{ lines: string[] }>('/training/log')
-    return data.lines ?? []
+    return data?.lines ?? []
   },
 
   async resumeTraining(): Promise<{ success: boolean }> {
@@ -243,7 +243,7 @@ export const trainingJobsController = {
 
   async list(): Promise<TrainingJob[]> {
     const data = await apiGet<TrainingJob[] | { jobs: TrainingJob[] }>('/training/jobs')
-    return Array.isArray(data) ? data : data.jobs || []
+    return Array.isArray(data) ? data : data?.jobs ?? []
   },
 
   async listCheckpoints(): Promise<Checkpoint[]> {
@@ -253,7 +253,7 @@ export const trainingJobsController = {
 
   async listBuilds(): Promise<TrainingBuild[]> {
     const data = await apiGet<{ builds: TrainingBuild[] }>('/training/builds')
-    return data.builds || []
+    return data?.builds ?? []
   },
 
   async listFineTuned(): Promise<FineTunedModel[]> {
@@ -372,7 +372,7 @@ export const trainingJobsController = {
 
   async recoverable(): Promise<RecoverableJob[]> {
     const data = await apiGet<{ jobs: RecoverableJob[] }>('/recovery/recoverable')
-    return data.jobs || []
+    return data?.jobs ?? []
   },
 
   async recover(id: string): Promise<TrainingStatus> {
@@ -381,7 +381,7 @@ export const trainingJobsController = {
 
   async listWebhooks(): Promise<Webhook[]> {
     const data = await apiGet<{ webhooks: Webhook[] }>('/training/webhooks')
-    return data.webhooks || []
+    return data?.webhooks ?? []
   },
 
   async createWebhook(url: string, events: string[]): Promise<Webhook> {
@@ -399,14 +399,21 @@ export const trainingJobsController = {
   async getWebhookRetryQueue(): Promise<{ retries: Array<{
     delivery_id: string; webhook_id: string; event: string; attempt_count: number; next_retry_at: number
   }> }> {
-    return apiGet('/training/webhooks/retry-queue')
+    const data = await apiGet<{ retries?: Array<{
+      delivery_id: string; webhook_id: string; event: string; attempt_count: number; next_retry_at: number
+    }> }>('/training/webhooks/retry-queue')
+    return { retries: data?.retries ?? [] }
   },
 
   async getWebhookDeadLetters(limit: number = 50): Promise<{ dead_letters: Array<{
     delivery_id: string; webhook_id: string; event: string; error: string | null;
     status_code: number | null; attempt_count: number; dead_lettered_at: string
   }> }> {
-    return apiGet(`/training/webhooks/dead-letters?limit=${limit}`)
+    const data = await apiGet<{ dead_letters?: Array<{
+      delivery_id: string; webhook_id: string; event: string; error: string | null;
+      status_code: number | null; attempt_count: number; dead_lettered_at: string
+    }> }>(`/training/webhooks/dead-letters?limit=${limit}`)
+    return { dead_letters: data?.dead_letters ?? [] }
   },
 
   // Recovery
@@ -428,7 +435,7 @@ export const trainingJobsController = {
   }>> {
     const qs = limit ? `?limit=${limit}` : ''
     const data = await apiGet<{ deliveries: Array<{ id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string }> }>(`/training/webhooks/${webhookId}/deliveries${qs}`)
-    return data.deliveries || []
+    return data?.deliveries ?? []
   },
 
   // Training status

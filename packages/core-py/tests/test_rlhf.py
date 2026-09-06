@@ -1,4 +1,4 @@
-"""Tests for domains/training/rlhf.py (RLHFConfig, RLHFMetric, RewardModel, _as_array, create_rlhf_trainer)."""
+"""Tests for domains/training/rlhf.py (RLHFConfig, RLHFMetric, RewardModel, PPOTrainer, _as_array, create_rlhf_trainer)."""
 
 import numpy as np
 import pytest
@@ -8,17 +8,40 @@ from domains.training.rlhf import (
     RLHFConfig,
     RLHFMetric,
     RewardModel,
+    ValueHead,
+    PPOTrainer,
     _as_array,
+    _compute_gae,
+    _get_logprobs,
     create_rlhf_trainer,
 )
 
 
 class FakeBaseModel:
+    """A fake model that returns fixed-shape tensors for testing."""
     def __init__(self, output):
         self.output = output
 
     def __call__(self, input_ids):
         return self.output
+
+
+class FakeTransformerModel:
+    """A fake transformer that behaves like SloTransformer for testing."""
+    def __init__(self, vocab_size: int = 32, hidden: int = 16, seq_len: int = 8):
+        self.vocab_size = vocab_size
+        self.hidden = hidden
+        self.seq_len = seq_len
+        self.embed = SloLinear(vocab_size, hidden)
+        self.head = SloLinear(hidden, vocab_size)
+
+    def __call__(self, input_ids):
+        arr = _as_array(input_ids)
+        B = arr.shape[0] if arr.ndim > 0 else 1
+        # Simple embedding projection
+        x = Tensor(np.random.randn(B, self.seq_len, self.hidden).astype(np.float32))
+        logits = self.head.forward(x)
+        return (logits, None)
 
 
 def make_tensor(shape, dtype=np.float32):
@@ -60,6 +83,8 @@ class TestRLHFConfig:
         assert c.gen_max_length == 512
         assert c.gen_temperature == 1.0
         assert c.gen_top_p == 0.9
+        assert c.target_kl == 0.02
+        assert c.kl_coef == 0.1
 
     def test_custom(self):
         c = RLHFConfig(ppo_epochs=2, clip_epsilon=0.3, use_ref_model=False,
@@ -96,6 +121,61 @@ class TestAsArray:
         out = _as_array(7)
         assert isinstance(out, np.ndarray)
         assert out.ndim == 0
+
+
+# ---------------------------------------------------------------------------
+# _compute_gae
+# ---------------------------------------------------------------------------
+
+class TestComputeGAE:
+    def test_basic(self):
+        rewards = np.array([1.0, 1.0, 1.0], dtype=np.float32)
+        values = np.array([0.0, 0.5, 0.5, 0.0], dtype=np.float32)
+        dones = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        adv, ret = _compute_gae(rewards, values, dones, gamma=0.99, lam=0.95)
+        assert adv.shape == (3,)
+        assert ret.shape == (3,)
+        # After done, no further accumulation
+        assert adv[2] == pytest.approx(rewards[2] + 0.0 - values[2], abs=0.01)
+
+    def test_no_discount(self):
+        rewards = np.array([1.0, 2.0], dtype=np.float32)
+        values = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+        dones = np.array([0.0, 0.0], dtype=np.float32)
+        adv, ret = _compute_gae(rewards, values, dones, gamma=1.0, lam=1.0)
+        # With gamma=1, lam=1: GAE = sum of future rewards - value
+        assert adv[0] == pytest.approx(3.0, abs=0.01)
+        assert adv[1] == pytest.approx(2.0, abs=0.01)
+
+    def test_all_done(self):
+        rewards = np.array([1.0], dtype=np.float32)
+        values = np.array([0.0, 0.0], dtype=np.float32)
+        dones = np.array([1.0], dtype=np.float32)
+        adv, ret = _compute_gae(rewards, values, dones, gamma=0.99, lam=0.95)
+        assert adv[0] == pytest.approx(1.0, abs=0.01)
+
+
+# ---------------------------------------------------------------------------
+# _get_logprobs
+# ---------------------------------------------------------------------------
+
+class TestGetLogprobs:
+    def test_tuple_output(self):
+        model = FakeBaseModel((Tensor(np.random.randn(1, 4, 8).astype(np.float32)), None))
+        lp = _get_logprobs(model, np.array([[1, 2, 3, 4]], dtype=np.int64))
+        assert lp.shape == (1, 4, 8)
+        # Should be valid log-probs (sums close to 0 in log space)
+        assert np.all(lp <= 0)
+
+    def test_raw_output(self):
+        model = FakeBaseModel(Tensor(np.random.randn(1, 4, 8).astype(np.float32)))
+        lp = _get_logprobs(model, np.array([[1, 2, 3, 4]], dtype=np.int64))
+        assert lp.shape == (1, 4, 8)
+
+    def test_batch(self):
+        model = FakeBaseModel(Tensor(np.random.randn(2, 3, 10).astype(np.float32)))
+        lp = _get_logprobs(model, np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int64))
+        assert lp.shape == (2, 3, 10)
 
 
 # ---------------------------------------------------------------------------
@@ -179,19 +259,158 @@ class TestRewardForward:
 
 
 # ---------------------------------------------------------------------------
+# ValueHead
+# ---------------------------------------------------------------------------
+
+class TestValueHead:
+    def test_output_shape(self):
+        base = FakeBaseModel(make_tensor((2, 4, 8)))
+        vh = ValueHead(base)
+        val = vh(np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int32))
+        assert val.data.shape == (2,)
+
+    def test_lazy_head(self):
+        base = FakeBaseModel(make_tensor((1, 3, 8)))
+        vh = ValueHead(base)
+        assert vh.head is None
+        vh(np.array([[1, 2, 3]], dtype=np.int32))
+        assert vh.head is not None
+
+    def test_call_delegates(self):
+        base = FakeBaseModel(make_tensor((1, 3, 8)))
+        vh = ValueHead(base)
+        val = vh(np.array([[1, 2, 3]], dtype=np.int32))
+        assert val.data.shape == (1,)
+
+
+# ---------------------------------------------------------------------------
+# PPOTrainer
+# ---------------------------------------------------------------------------
+
+class TestPPOTrainerInit:
+    def test_default_config(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm)
+        assert trainer.policy is base
+        assert trainer.reward_model is rm
+        assert isinstance(trainer.config, RLHFConfig)
+
+    def test_custom_config(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        rm = RewardModel(base)
+        cfg = RLHFConfig(ppo_epochs=8)
+        trainer = PPOTrainer(base, rm, config=cfg)
+        assert trainer.config.ppo_epochs == 8
+
+    def test_ref_model(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        ref = FakeBaseModel(make_tensor((1, 4, 8)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm, ref_model=ref)
+        assert trainer.ref_model is ref
+
+
+class TestCollectRollout:
+    def test_output_keys(self):
+        base = FakeBaseModel(Tensor(np.random.randn(2, 4, 8).astype(np.float32)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm)
+        obs = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int64)
+        rollout = trainer.collect_rollout(obs, obs)
+        assert "obs" in rollout
+        assert "logprobs" in rollout
+        assert "values" in rollout
+        assert "advantages" in rollout
+        assert "returns" in rollout
+        assert "rewards" in rollout
+
+    def test_shapes(self):
+        base = FakeBaseModel(Tensor(np.random.randn(2, 4, 8).astype(np.float32)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm)
+        obs = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int64)
+        rollout = trainer.collect_rollout(obs, obs)
+        assert rollout["logprobs"].shape == (2, 4, 8)
+        assert rollout["rewards"].shape == (2,)
+
+
+class TestPPOUpdate:
+    def test_returns_metrics(self):
+        base = FakeBaseModel(Tensor(np.random.randn(2, 4, 8).astype(np.float32)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm, config=RLHFConfig(ppo_epochs=1, num_mini_batches=1))
+        obs = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int64)
+        rollout = trainer.collect_rollout(obs, obs)
+        metrics = trainer.update(rollout)
+        assert "policy_loss" in metrics
+        assert "value_loss" in metrics
+        assert "entropy" in metrics
+        assert "kl_divergence" in metrics
+        assert "mean_reward" in metrics
+        assert "epochs_run" in metrics
+
+    def test_metrics_are_finite(self):
+        base = FakeBaseModel(Tensor(np.random.randn(2, 4, 8).astype(np.float32)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm, config=RLHFConfig(ppo_epochs=1, num_mini_batches=1))
+        obs = np.array([[1, 2, 3, 4], [5, 6, 7, 8]], dtype=np.int64)
+        rollout = trainer.collect_rollout(obs, obs)
+        metrics = trainer.update(rollout)
+        for k, v in metrics.items():
+            if isinstance(v, float):
+                assert np.isfinite(v), f"metric {k} is not finite: {v}"
+
+    def test_multi_epoch(self):
+        base = FakeBaseModel(Tensor(np.random.randn(4, 4, 8).astype(np.float32)))
+        rm = RewardModel(base)
+        trainer = PPOTrainer(base, rm, config=RLHFConfig(ppo_epochs=3, num_mini_batches=2, target_kl=0.0))
+        obs = np.array([[1, 2, 3, 4]] * 4, dtype=np.int64)
+        rollout = trainer.collect_rollout(obs, obs)
+        metrics = trainer.update(rollout)
+        assert metrics["epochs_run"] == 3
+
+    def test_early_stopping(self):
+        base = FakeBaseModel(Tensor(np.random.randn(4, 4, 8).astype(np.float32)))
+        rm = RewardModel(base)
+        # Set target_kl very low to trigger early stopping
+        trainer = PPOTrainer(base, rm, config=RLHFConfig(ppo_epochs=10, num_mini_batches=1, target_kl=0.001))
+        obs = np.array([[1, 2, 3, 4]] * 4, dtype=np.int64)
+        rollout = trainer.collect_rollout(obs, obs)
+        metrics = trainer.update(rollout)
+        # May or may not early stop depending on KL, but should complete
+        assert "early_stopped" in metrics
+
+
+# ---------------------------------------------------------------------------
 # create_rlhf_trainer
 # ---------------------------------------------------------------------------
 
 class TestCreateRlhfTrainer:
-    def test_default_config(self):
-        c = create_rlhf_trainer()
-        assert isinstance(c, RLHFConfig)
+    def test_returns_trainer(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        trainer = create_rlhf_trainer(policy_model=base)
+        assert isinstance(trainer, PPOTrainer)
 
-    def test_returns_provided_config(self):
-        config = RLHFConfig(ppo_epochs=7)
-        assert create_rlhf_trainer(config=config) is config
+    def test_default_config(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        trainer = create_rlhf_trainer(policy_model=base)
+        assert isinstance(trainer.config, RLHFConfig)
+
+    def test_custom_config(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        cfg = RLHFConfig(ppo_epochs=7)
+        trainer = create_rlhf_trainer(policy_model=base, config=cfg)
+        assert trainer.config.ppo_epochs == 7
 
     def test_accepts_models(self):
-        c = create_rlhf_trainer(policy_model=object(), value_model=object(),
-                                ref_model=object(), device="cuda")
-        assert isinstance(c, RLHFConfig)
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        ref = FakeBaseModel(make_tensor((1, 4, 8)))
+        trainer = create_rlhf_trainer(policy_model=base, value_model=base, ref_model=ref)
+        assert trainer.policy is base
+        assert trainer.ref_model is ref
+
+    def test_reward_model_created(self):
+        base = FakeBaseModel(make_tensor((1, 4, 8)))
+        trainer = create_rlhf_trainer(policy_model=base)
+        assert isinstance(trainer.reward_model, RewardModel)

@@ -136,7 +136,7 @@ export const sessionController = {
     const data = opts
       ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`, undefined, { signal: opts.signal, silent: opts.silent })
       : await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`)
-    return data.messages || []
+    return data?.messages ?? []
   },
 
   async getInspector(sessionId: string): Promise<SessionInspector> {

@@ -106,8 +106,8 @@ export function useWebhooks(): UseWebhooksReturn {
         trainingJobsController.getWebhookDeadLetters(),
         trainingJobsController.webhookStats(),
       ])
-      setRetryQueue(retries.retries ?? [])
-      setDeadLetters(deads.dead_letters ?? [])
+      setRetryQueue(retries?.retries ?? [])
+      setDeadLetters(deads?.dead_letters ?? [])
       setStats(statsResult)
     } catch {
       // ignore
@@ -140,8 +140,8 @@ export function useWebhooks(): UseWebhooksReturn {
           trainingJobsController.webhookStats(),
         ])
         if (active) {
-          setRetryQueue(retries.retries ?? [])
-          setDeadLetters(deads.dead_letters ?? [])
+          setRetryQueue(retries?.retries ?? [])
+          setDeadLetters(deads?.dead_letters ?? [])
           setStats(statsResult)
         }
       } catch {

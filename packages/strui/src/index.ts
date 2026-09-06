@@ -23,8 +23,7 @@ export { Badge, badgeVariants, type BadgeProps } from './components/ui/badge'
 // Card
 export { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription, cardVariants } from './components/ui/card'
 
-// ActionCard — card with title + actions header
-export { ActionCard, type ActionCardProps } from './components/ui/action-card'
+// ActionCard — card with title + actions header (exported from composed)
 
 // Input
 export { Input, inputFieldClassName, type InputProps } from './components/ui/input'

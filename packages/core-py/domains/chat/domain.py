@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
-import json
 import logging
 import time
 from pathlib import Path
@@ -206,47 +205,45 @@ class ChatDomain:
         tokens_generated: int,
         duration_ms: int,
     ) -> None:
-        """Log response to file."""
-        import datetime
-        from datetime import timezone
-
-        entry = {
-            "timestamp": datetime.datetime.now(timezone.utc).isoformat(),
-            "user_message": user_message[:500],
-            "assistant_response": assistant_response[:1000],
-            "model": model,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "session_id": session_id,
-            "user_id": user_id,
-            "tokens_generated": tokens_generated,
-            "duration_ms": duration_ms,
-        }
-
-        log_file = self.log_dir / f"responses_{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
-
-        with open(log_file, "a") as f:
-            f.write(json.dumps(entry) + "\n")
+        """Log response via ResponseTracker (MogDB + JSONL)."""
+        try:
+            from domains.feedback.response_tracker import get_response_tracker
+            get_response_tracker().log(
+                user_message=user_message[:500],
+                assistant_response=assistant_response[:1000],
+                model=model,
+                config={"temperature": temperature, "max_tokens": max_tokens},
+                session_id=session_id,
+                user_id=user_id,
+                tokens_generated=tokens_generated,
+                duration_ms=float(duration_ms),
+            )
+        except Exception as e:
+            logger.warning("Failed to log response via ResponseTracker: %s", e)
 
     def get_recent_responses(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get recent logged responses."""
-        import datetime
-        from datetime import timezone
-
-        responses = []
-        log_file = self.log_dir / f"responses_{datetime.datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
-
-        if not log_file.exists():
-            return responses
-
-        with open(log_file) as f:
-            for line in f:
-                try:
-                    responses.append(json.loads(line))
-                except (json.JSONDecodeError, ValueError):
-                    continue
-
-        return responses[-limit:]
+        """Get recent logged responses from MogDB."""
+        try:
+            from domains.feedback.response_tracker import get_response_tracker
+            responses = get_response_tracker().get_responses(limit=limit)
+            return [
+                {
+                    "timestamp": r.timestamp,
+                    "user_message": r.user_message,
+                    "assistant_response": r.assistant_response,
+                    "model": r.model,
+                    "temperature": r.temperature,
+                    "max_tokens": r.max_tokens,
+                    "session_id": r.session_id,
+                    "user_id": r.user_id,
+                    "tokens_generated": r.tokens_generated,
+                    "duration_ms": r.duration_ms,
+                }
+                for r in responses
+            ]
+        except Exception as e:
+            logger.warning("Failed to get responses from MogDB: %s", e)
+            return []
 
     def get_stats(self) -> Dict[str, Any]:
         """Get response statistics."""

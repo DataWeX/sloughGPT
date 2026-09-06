@@ -54,7 +54,7 @@ export default function ModelDetailPage() {
         apiGet<{ logs: string[] }>('/models/logs?limit=10').catch(() => ({ logs: [] })),
       ])
       setHealth(h)
-      setModelLogs(logsRes.logs)
+      setModelLogs(logsRes?.logs ?? [])
       const m = models.find(m => m.id === modelId || m.name === modelId)
       if (m) {
         setModel(m)

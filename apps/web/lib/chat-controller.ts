@@ -142,7 +142,7 @@ export const chatController = {
   async getSuggestions(): Promise<{ text: string; icon: string }[]> {
     try {
       const data = await apiGet<{ suggestions?: { text: string; icon: string }[] }>('/chat/suggestions')
-      return data.suggestions || []
+      return data?.suggestions ?? []
     } catch (err) {
       _log.debug('Failed to fetch suggestions', { error: err instanceof Error ? err.message : String(err) })
       return []

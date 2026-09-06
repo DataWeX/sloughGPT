@@ -372,7 +372,29 @@ class _Param:
 
 class _LogitsObj:
     def __init__(self, data):
-        self.data = data
+        self.data = np.asarray(data)
+        self.requires_grad = False
+        self.grad = None
+        self._consumers = []
+
+    def view(self, *shape):
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            shape = tuple(shape[0])
+        elif len(shape) == 1 and isinstance(shape[0], int):
+            shape = (shape[0],)
+        else:
+            shape = tuple(shape)
+        new_data = self.data.reshape(shape)
+        return _LogitsObj(new_data)
+
+    def reshape(self, *shape):
+        return _LogitsObj(self.data.reshape(*shape))
+
+    def __getitem__(self, key):
+        return _LogitsObj(self.data[key])
+
+    def backward(self):
+        pass
 
 
 class _StubSloTransformer:
@@ -400,31 +422,19 @@ class _StubAdam:
 
 class TestLoadGpt2Numpy:
     def test_success(self, monkeypatch, tmp_path):
-        fake_st = types.ModuleType("safetensors")
+        import domains.infrastructure.slnc.parser as _parser_mod
 
-        class _SafeOpen:
-            def __init__(self, path, framework):
-                self._data = {"wte": np.zeros((2, 2)), "ln_f": np.zeros((2,))}
+        class _FakeSLNCParser:
+            def __init__(self, path):
+                self._path = path
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *exc):
-                return False
-
-            def keys(self):
-                return list(self._data.keys())
-
-            def get_tensor(self, key):
-                return self._data[key]
-
-        fake_st.safe_open = _SafeOpen
-        monkeypatch.setitem(sys.modules, "safetensors", fake_st)
+            def get_weights_dict_parallel(self):
+                return {"wte": np.zeros((2, 2)), "ln_f": np.zeros((2,))}
 
         base = tmp_path / "home"
         snap = base / ".cache/huggingface/hub/models--gpt2/snapshots/1234"
         snap.mkdir(parents=True)
-        (snap / "model.safetensors").write_text("fake")
+        (snap / "model.slnc").write_text("fake")
         (snap / "tokenizer.json").write_text(
             json.dumps({"model": {"vocab": {"a": 0, "b": 1}}})
         )
@@ -432,6 +442,7 @@ class TestLoadGpt2Numpy:
         monkeypatch.setattr(dg.Path, "home", staticmethod(lambda: base))
         monkeypatch.setattr(dg, "build_arch", lambda *a, **k: "ARCH")
         monkeypatch.setattr(dg, "pre_extract_weights", lambda arch, w: {"extracted": w})
+        monkeypatch.setattr(_parser_mod, "SLNCParser", _FakeSLNCParser)
 
         rw, arch, vocab = _load_gpt2_numpy()
         assert arch == "ARCH"
@@ -453,34 +464,20 @@ class TestLoadGpt2Numpy:
             _load_gpt2_numpy()
 
     def test_missing_tokenizer_raises(self, monkeypatch, tmp_path):
-        fake_st = types.ModuleType("safetensors")
+        import domains.infrastructure.slnc.parser as _parser_mod
 
-        class _SafeOpen:
-            def __init__(self, path, framework):
-                self._data = {"wte": np.zeros((2, 2))}
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *exc):
-                return False
-
-            def keys(self):
-                return list(self._data.keys())
-
-            def get_tensor(self, key):
-                return self._data[key]
-
-        fake_st.safe_open = _SafeOpen
-        monkeypatch.setitem(sys.modules, "safetensors", fake_st)
+        class _FakeSLNCParser:
+            def __init__(self, path):
+                pass
+            def get_weights_dict_parallel(self):
+                return {"wte": np.zeros((2, 2))}
 
         base = tmp_path / "home"
         snap = base / ".cache/huggingface/hub/models--gpt2/snapshots/1234"
         snap.mkdir(parents=True)
-        (snap / "model.safetensors").write_text("fake")
+        (snap / "model.slnc").write_text("fake")
         monkeypatch.setattr(dg.Path, "home", staticmethod(lambda: base))
-        monkeypatch.setattr(dg, "build_arch", lambda *a, **k: "ARCH")
-        monkeypatch.setattr(dg, "pre_extract_weights", lambda arch, w: {"extracted": w})
+        monkeypatch.setattr(_parser_mod, "SLNCParser", _FakeSLNCParser)
 
         with pytest.raises(RuntimeError, match="tokenizer.json"):
             _load_gpt2_numpy()

@@ -44,13 +44,13 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
   const fetchBuilds = useCallback(async () => {
     try {
       const data = await trainingJobsController.listBuilds()
-      setBuilds(data)
+      setBuilds(data ?? [])
     } catch (e) { logger.warning('Could not checkpoints builds fetch', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingBuilds(false) }
   }, [])
 
   const fetchJobs = useCallback(async () => {
-    try { setJobs(await trainingJobsController.list()) }
+    try { setJobs((await trainingJobsController.list()) ?? []) }
     catch (e) { logger.warning('Could not checkpoints jobs fetch', { exception: String(e instanceof Error ? e.message : e) }) }
     finally { setLoadingJobs(false) }
   }, [])

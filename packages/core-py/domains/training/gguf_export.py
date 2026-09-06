@@ -258,6 +258,10 @@ class GPT2Mapping(TensorMapping):
     def has_position_embeddings(self) -> bool:
         return True
 
+    def get_fused_qkv_keys(self) -> List[Tuple[str, str]]:
+        """GPT-2 uses fused c_attn.weight (Q/K/V concatenated on dim 0)."""
+        return [("attn.c_attn.weight", "gpt2")]
+
     def get_block_mapping(self, n_layers: int = 100) -> Dict[str, str]:
         mapping = {}
         for i in range(n_layers):
@@ -982,46 +986,72 @@ def export_to_gguf_q4_k_m(model, output_path, tokenizer=None, architecture=None)
 
 
 def quantize_gguf(input_path: str, output_path: str, quantization: str = "Q4_K_M") -> str:
-    """Quantize GGUF file using llama.cpp."""
-    try:
-        import subprocess
-        import shutil
+    """Quantize GGUF file using llama.cpp.
 
-        llama_quantize = shutil.which("llama-quantize")
-        if llama_quantize is None:
-            logger.warning("llama-quantize not found. Install llama.cpp",
-                extra={"tag": "TRAIN"},)
-            return input_path
+    Returns the quantized output path on success.
+    Raises RuntimeError if llama-quantize is missing or quantization fails.
+    """
+    import subprocess
+    import shutil
 
-        result = subprocess.run(
-            [llama_quantize, input_path, output_path, quantization],
-            capture_output=True, text=True
+    llama_quantize = shutil.which("llama-quantize")
+    if llama_quantize is None:
+        raise RuntimeError(
+            "llama-quantize not found. Install llama.cpp to enable quantization."
         )
-        if result.returncode == 0:
-            logger.info("Quantized: %s -> %s", input_path, output_path,
-                extra={"tag": "TRAIN"},)
-            return output_path
-        else:
-            logger.error("Quantization failed: %s", result.stderr,
-                extra={"tag": "TRAIN"},)
-            return input_path
-    except Exception as e:
-        logger.error("Quantization error: %s", e,
-            extra={"tag": "TRAIN"},)
-        return input_path
+
+    result = subprocess.run(
+        [llama_quantize, input_path, output_path, quantization],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"llama-quantize failed (exit {result.returncode}): {result.stderr}"
+        )
+
+    logger.info("Quantized: %s -> %s", input_path, output_path, extra={"tag": "TRAIN"})
+    return output_path
 
 
 def get_model_info_gguf(gguf_path: str) -> Dict[str, Any]:
-    """Get metadata from GGUF file."""
+    """Get metadata from GGUF file.
+
+    Reads architecture, vocab_size, context_length, n_layer, n_embed, n_head,
+    and other fields written by ``export_to_gguf``.
+    """
+    info: Dict[str, Any] = {
+        "path": gguf_path,
+        "file_size_mb": round(Path(gguf_path).stat().st_size / (1024 * 1024), 2),
+    }
     try:
         from gguf import GGUFReader
         reader = GGUFReader(gguf_path)
-        return {
-            "path": gguf_path,
-            "file_size_mb": round(Path(gguf_path).stat().st_size / (1024 * 1024), 2),
-        }
-    except Exception:
-        return {}
+        for field in reader.fields.values():
+            if not field.parts:
+                continue
+            name = field.name
+            parts = list(field.parts)
+            if len(parts) == 1:
+                val = parts[0]
+            else:
+                val = parts
+            # Map common GGUF keys
+            key_map = {
+                "architecture": "architecture",
+                "context_length": "context_length",
+                "embedding_length": "n_embed",
+                "block_count": "n_layer",
+                "head_count": "n_head",
+                "head_count_kv": "n_head_kv",
+                "vocab_size": "vocab_size",
+            }
+            out_key = key_map.get(name, name)
+            info[out_key] = val
+    except ImportError:
+        info["note"] = "gguf module not installed — only file size available"
+    except Exception as e:
+        info["note"] = f"Could not read GGUF metadata: {e}"
+    return info
 
 
 def estimate_memory_requirements(

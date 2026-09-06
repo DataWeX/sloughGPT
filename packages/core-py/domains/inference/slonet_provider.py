@@ -550,9 +550,12 @@ class SloNetChatProvider:
             plan = build_load_plan(weights_dict, n_layer, config)
             loader = DirectWeightLoader._from_plan(parser, plan, weights_dict)
             result = loader.load(model)
-            _t_weights = _t_model + result.timing.get("direct", 0)
-            _t_convert = _t_weights + result.timing.get("direct", 0)
-            _t_load = _t_convert + result.timing.get("fused_qkv", 0) + result.timing.get("tied_synth", 0)
+            _t_direct = result.timing.get("direct", 0)
+            _t_fused = result.timing.get("fused_qkv", 0)
+            _t_synth = result.timing.get("tied_synth", 0)
+            _t_weights = _t_model + _t_direct
+            _t_convert = _t_weights + _t_fused
+            _t_load = _t_convert + _t_synth
             del loader, weights_dict, plan
         except Exception as e:
             logger.debug("DirectWeightLoader failed, falling back to load_into_model: %s", e, extra={"tag": "INF"})

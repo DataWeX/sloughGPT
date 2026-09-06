@@ -123,9 +123,9 @@ def extract_pairs_from_logs(
     model: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """
-    Extract (user_msg, assistant_msg) pairs from response log JSONL files.
+    Extract (user_msg, assistant_msg) pairs from MogDB response logs.
 
-    Each line is a JSON object with user_message, assistant_response, model, etc.
+    Falls back to JSONL files if MogDB is unavailable.
 
     Args:
         limit: Maximum number of pairs to return.
@@ -134,15 +134,55 @@ def extract_pairs_from_logs(
 
     Returns:
         List of dicts with keys: user_msg, assistant_msg, session_id, model.
-        Newest first (file order).
+        Newest first.
     """
+    seen_hashes: set = set()
+    pairs: List[Dict[str, str]] = []
+
+    # Try MogDB first
+    try:
+        from domains.feedback.response_tracker import get_response_tracker
+        tracker = get_response_tracker()
+        if tracker._coll is not None:
+            query = {}
+            if model:
+                query["model"] = model
+
+            docs = tracker._coll.find(query)
+            for entry in docs:
+                if len(pairs) >= limit:
+                    break
+
+                user_msg = (entry.get("user_message") or "").strip()
+                assistant_msg = (entry.get("assistant_response") or "").strip()
+
+                if len(user_msg) < min_length or len(assistant_msg) < min_length:
+                    continue
+
+                pair_hash = hash(f"{user_msg[:100]}::{assistant_msg[:100]}")
+                if pair_hash in seen_hashes:
+                    continue
+                seen_hashes.add(pair_hash)
+
+                pairs.append({
+                    "user_msg": user_msg,
+                    "assistant_msg": assistant_msg,
+                    "session_id": entry.get("session_id", ""),
+                    "model": entry.get("model", ""),
+                })
+
+            if pairs:
+                logger.info("Extracted %d pairs from MogDB", len(pairs), extra={"tag": "TRAIN"})
+                return pairs
+
+    except Exception as e:
+        logger.warning("MogDB read failed, falling back to JSONL: %s", e)
+
+    # Fallback: read from JSONL files
     if not _RESPONSE_LOGS_DIR.exists():
         logger.info("Response logs directory not found: %s", _RESPONSE_LOGS_DIR,
             extra={"tag": "TRAIN"},)
         return []
-
-    seen_hashes: set = set()
-    pairs: List[Dict[str, str]] = []
 
     # Get log files, newest first
     log_files = sorted(

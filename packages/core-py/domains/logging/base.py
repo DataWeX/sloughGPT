@@ -278,6 +278,14 @@ class Logger(ABC):
         exc_str = f"{type(exc).__name__}: {exc}"
         self.error(msg, exception=exc_str, **ctx)
 
+    def step(self, msg: str, **ctx: Any) -> None:
+        """Log a step/action.  Override in CLILogger for ANSI formatting."""
+        self.info(msg, **ctx)
+
+    def success(self, msg: str, **ctx: Any) -> None:
+        """Log a success.  Override in CLILogger for ANSI formatting."""
+        self.info(msg, **ctx)
+
     def hide_cursor(self) -> None:
         """Hide the terminal cursor.  Override in CLILogger for ANSI output."""
 

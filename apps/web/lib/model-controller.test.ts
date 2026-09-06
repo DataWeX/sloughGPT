@@ -130,10 +130,10 @@ describe('modelController', () => {
     expect(result.engine).toBe('slo')
   })
 
-  it('getEngineStatus returns default on error', async () => {
+  it('getEngineStatus returns null on error', async () => {
     apiClient.apiGet.mockRejectedValue(new Error('fail'))
     const result = await modelController.getEngineStatus()
-    expect(result.engine).toBe('unknown')
+    expect(result).toBeNull()
   })
 
   it('reloadEngine posts reload', async () => {

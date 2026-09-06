@@ -91,12 +91,12 @@ export interface BookResult {
 export const datasetController = {
   async list(): Promise<Dataset[]> {
     const data = await apiGet<{ datasets: Dataset[] }>('/datasets')
-    return data.datasets || []
+    return data?.datasets ?? []
   },
 
   async search(query: string): Promise<Dataset[]> {
     const data = await apiGet<{ results: Dataset[] }>(`/datasets/search?q=${encodeURIComponent(query)}`)
-    return data.results || []
+    return data?.results ?? []
   },
 
   async get(id: string): Promise<Dataset | null> {

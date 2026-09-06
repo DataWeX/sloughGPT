@@ -271,12 +271,12 @@ export const modelController = {
     return apiPost(`/models/download/${encodeURIComponent(modelId)}/verify`)
   },
 
-  async getEngineStatus(): Promise<{ engine: string; version: string; models_loaded: number; uptime_s: number; memory_usage_mb: number }> {
+  async getEngineStatus(): Promise<{ engine: string; version: string; models_loaded: number; uptime_s: number; memory_usage_mb: number } | null> {
     try {
       return await apiGet('/models/engine/status')
     } catch (e) {
       _log.warning('Could not get engine status', { exception: String(e) })
-      return { engine: 'unknown', version: '0.0.0', models_loaded: 0, uptime_s: 0, memory_usage_mb: 0 }
+      return null
     }
   },
 

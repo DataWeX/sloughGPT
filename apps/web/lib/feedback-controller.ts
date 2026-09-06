@@ -31,16 +31,22 @@ export const feedbackController = {
   },
 
   async getFeedbackStats(): Promise<FeedbackStats & { quality_trend: { thumbs_up_ratio: number } }> {
-    const data = await apiGet<{
-      thumbs_up?: number
-      thumbs_down?: number
-      total?: number
-      up_ratio?: number
-    }>('/feedback/stats/summary')
-    const thumbsUp = data.thumbs_up ?? 0
-    const thumbsDown = data.thumbs_down ?? 0
-    const total = data.total ?? 0
-    const ratio = data.up_ratio ?? (total > 0 ? thumbsUp / total : 0)
+    const [summary, metaStats] = await Promise.all([
+      apiGet<{
+        thumbs_up?: number
+        thumbs_down?: number
+        total?: number
+        up_ratio?: number
+      }>('/feedback/stats/summary').catch(() => ({} as Record<string, never>)),
+      apiGet<{
+        current_weights?: Record<string, unknown>
+        history_length?: number
+      }>('/meta-weights/stats').catch(() => ({} as Record<string, never>)),
+    ])
+    const thumbsUp = summary.thumbs_up ?? 0
+    const thumbsDown = summary.thumbs_down ?? 0
+    const total = summary.total ?? 0
+    const ratio = summary.up_ratio ?? (total > 0 ? thumbsUp / total : 0)
     return {
       db_stats: {
         conversations: 0,
@@ -50,11 +56,11 @@ export const feedbackController = {
         thumbs_down: thumbsDown,
         ratio,
       },
-      current_weights: {
+      current_weights: (metaStats.current_weights as Record<string, number>) ?? {
         temperature: 0.7,
         repetition_penalty: 1.1,
       },
-      history_length: 0,
+      history_length: metaStats.history_length ?? 0,
       quality_trend: { thumbs_up_ratio: ratio },
     }
   },

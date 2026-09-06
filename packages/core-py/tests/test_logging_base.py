@@ -333,6 +333,46 @@ class TestChildLogger:
         child.info("msg")
         assert parent.records[0].logger == "slo.api.inference"
 
+    def test_child_step_delegates_to_info(self):
+        parent = CollectorLogger("slo.cli")
+        child = parent.child("build")
+        child.step("Building...")
+        assert len(parent.records) == 1
+        assert parent.records[0].level == LogLevel.INFO
+        assert parent.records[0].message == "Building..."
+
+    def test_child_success_delegates_to_info(self):
+        parent = CollectorLogger("slo.cli")
+        child = parent.child("build")
+        child.success("Done!")
+        assert len(parent.records) == 1
+        assert parent.records[0].level == LogLevel.INFO
+        assert parent.records[0].message == "Done!"
+
+
+# ── Logger.step / Logger.success ────────────────────────────────────────
+
+
+class TestLoggerStepSuccess:
+    def test_step_emits_info(self):
+        log = CollectorLogger("slo.test")
+        log.step("processing")
+        assert len(log.records) == 1
+        assert log.records[0].level == LogLevel.INFO
+        assert log.records[0].message == "processing"
+
+    def test_success_emits_info(self):
+        log = CollectorLogger("slo.test")
+        log.success("complete")
+        assert len(log.records) == 1
+        assert log.records[0].level == LogLevel.INFO
+        assert log.records[0].message == "complete"
+
+    def test_step_passes_context(self):
+        log = CollectorLogger("slo.test")
+        log.step("running", file="data.csv")
+        assert log.records[0].context == {"file": "data.csv"}
+
 
 # ── CompositeLogger ─────────────────────────────────────────────────────
 

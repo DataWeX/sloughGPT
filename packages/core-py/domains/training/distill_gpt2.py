@@ -583,6 +583,11 @@ def distill_gpt2_to_slo(
             y_tensor = tensor(y_np.tolist())
             s_logits, _ = student.forward(x_tensor, y_tensor)
 
+            # Normalize to object with .data attribute
+            if not hasattr(s_logits, 'data'):
+                from domains.training.slonet import Tensor as _Tensor
+                s_logits = _Tensor(np.asarray(s_logits, dtype=np.float32))
+
             # Keep s_logits as Tensor for autograd — reshape to 2D (batch*seq, vocab)
             if s_logits.data.ndim == 3:
                 s_logits_2d = s_logits.view(-1, s_logits.data.shape[-1])
@@ -644,17 +649,17 @@ def distill_gpt2_to_slo(
                 if hasattr(p, 'grad'):
                     p.grad = None
 
-            epoch_loss += float(total_loss)
+            epoch_loss += float(total_loss.data)
             epoch_steps += 1
             step += 1
 
             if step % config.log_interval == 0:
                 avg = epoch_loss / epoch_steps
                 logger.info("step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
-                            step, total_steps, float(total_loss), float(hard_loss), float(soft_loss),
+                            step, total_steps, float(total_loss.data), float(hard_loss.data), float(soft_loss.data),
                             extra={"tag": "TRAIN"})
                 if on_step:
-                    on_step(step, float(total_loss), epoch)
+                    on_step(step, float(total_loss.data), epoch)
 
             # Eval
             if step % config.eval_interval == 0 and epoch_steps > 0:

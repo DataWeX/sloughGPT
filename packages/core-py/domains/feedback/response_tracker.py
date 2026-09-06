@@ -82,8 +82,8 @@ class ResponseTracker:
             db_path = str(repo_root / "data" / "response_mogdb")
             self._mogdb = MogDB(db_path)
             self._coll = self._mogdb.collection("responses")
-            # Create TTL index on timestamp (auto-expire after 30 days)
-            self._coll.create_ttl_index("timestamp", expire_after_seconds=30 * 24 * 3600)
+            # Create TTL index on expires_at (numeric epoch) for auto-expiry
+            self._coll.create_ttl_index("expires_at", expire_after_seconds=30 * 24 * 3600)
         except Exception as e:
             logger.warning("Failed to initialize MogDB for response logs: %s", e)
 
@@ -150,9 +150,12 @@ class ResponseTracker:
         # Write to MogDB
         if self._coll is not None:
             try:
+                import time
+                now = time.time()
                 for entry in self._buffer:
                     self._coll.insert_one({
                         "timestamp": entry.timestamp,
+                        "expires_at": now,  # Numeric epoch for TTL
                         "user_message": entry.user_message,
                         "assistant_response": entry.assistant_response,
                         "model": entry.model,

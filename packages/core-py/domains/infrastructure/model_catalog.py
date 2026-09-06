@@ -49,11 +49,13 @@ class ModelCatalog:
 
     def __init__(self, db_path: str | Path = _DEFAULT_DB_PATH):
         from mogdb import MogDB
-        self._db = MogDB(str(db_path))
+        # Add JSON sync directory for human-readable backup
+        sync_dir = str(Path(db_path).parent / "model_catalog_json")
+        self._db = MogDB(str(db_path), sync_dir=sync_dir)
         self._models = self._db.collection("models")
         # Unique index on model_id
         self._models.create_index("model_id", unique=True)
-        logger.info("ModelCatalog: opened at %s", db_path)
+        logger.info("ModelCatalog: opened at %s (sync: %s)", db_path, sync_dir)
 
     def add(
         self,
@@ -159,21 +161,32 @@ class ModelCatalog:
         )
 
     def record_inference(self, model_id: str) -> None:
-        """Record that an inference was served."""
-        self._models.update_one(
+        """Record that an inference was served.
+
+        Uses find_one_and_update for atomic read-modify-write.
+        """
+        now = time.time()
+        doc = self._models.find_one_and_update(
             {"model_id": model_id},
             {"$set": {
-                "last_used": time.time(),
-                "updated_at": time.time(),
+                "last_used": now,
+                "updated_at": now,
+                "inference_count": {"$inc": 1},
             }},
-            # Note: MogDB doesn't have $inc, so we read-modify-write
+            return_document="after",
         )
-        doc = self._models.find_one({"model_id": model_id})
-        if doc:
-            self._models.update_one(
-                {"model_id": model_id},
-                {"$set": {"inference_count": doc.get("inference_count", 0) + 1}},
-            )
+        # Fallback if $inc isn't supported: read-modify-write
+        if doc is None:
+            doc = self._models.find_one({"model_id": model_id})
+            if doc:
+                self._models.update_one(
+                    {"model_id": model_id},
+                    {"$set": {
+                        "inference_count": doc.get("inference_count", 0) + 1,
+                        "last_used": now,
+                        "updated_at": now,
+                    }},
+                )
 
     def get(self, model_id: str) -> dict | None:
         """Get a model by ID."""
@@ -212,23 +225,67 @@ class ModelCatalog:
         return self._models.count()
 
     def stats(self) -> dict:
-        """Catalog statistics."""
-        all_models = self.list_all()
-        loaded = [m for m in all_models if m.get("status") == "loaded"]
-        available = [m for m in all_models if m.get("status") == "available"]
-        errors = [m for m in all_models if m.get("status") == "error"]
-        total_params = sum(m.get("parameters", 0) for m in loaded)
-        total_inferences = sum(m.get("inference_count", 0) for m in all_models)
+        """Catalog statistics using server-side aggregation."""
+        try:
+            # Use MogDB aggregation pipeline
+            pipeline = [
+                {"$group": {
+                    "_id": "$status",
+                    "count": {"$sum": 1},
+                    "total_params": {"$sum": "$parameters"},
+                    "total_inferences": {"$sum": "$inference_count"},
+                    "sources": {"$addToSet": "$source"},
+                }},
+            ]
+            results = self._models.aggregate(pipeline)
 
-        return {
-            "total": len(all_models),
-            "loaded": len(loaded),
-            "available": len(available),
-            "errors": len(errors),
-            "total_parameters": total_params,
-            "total_inferences": total_inferences,
-            "sources": list(set(m.get("source", "unknown") for m in all_models)),
-        }
+            stats = {
+                "total": 0,
+                "loaded": 0,
+                "available": 0,
+                "errors": 0,
+                "total_parameters": 0,
+                "total_inferences": 0,
+                "sources": set(),
+            }
+
+            for group in results:
+                status = group["_id"]
+                count = group["count"]
+                stats["total"] += count
+                stats["total_parameters"] += group.get("total_params", 0)
+                stats["total_inferences"] += group.get("total_inferences", 0)
+                stats["sources"].update(group.get("sources", []))
+
+                if status == "loaded":
+                    stats["loaded"] = count
+                elif status == "available":
+                    stats["available"] = count
+                elif status == "error":
+                    stats["errors"] = count
+
+            stats["sources"] = list(stats["sources"])
+            return stats
+
+        except Exception as e:
+            # Fallback to client-side aggregation if pipeline fails
+            logger.debug("Aggregation failed, using fallback: %s", e)
+            all_models = self.list_all()
+            loaded = [m for m in all_models if m.get("status") == "loaded"]
+            available = [m for m in all_models if m.get("status") == "available"]
+            errors = [m for m in all_models if m.get("status") == "error"]
+            total_params = sum(m.get("parameters", 0) for m in loaded)
+            total_inferences = sum(m.get("inference_count", 0) for m in all_models)
+
+            return {
+                "total": len(all_models),
+                "loaded": len(loaded),
+                "available": len(available),
+                "errors": len(errors),
+                "total_parameters": total_params,
+                "total_inferences": total_inferences,
+                "sources": list({m.get("source", "unknown") for m in all_models}),
+            }
 
     def sync_from_disk(self, cache_dirs: list[str | Path] | None = None) -> int:
         """Scan cache directories and catalog any .slnc files found.

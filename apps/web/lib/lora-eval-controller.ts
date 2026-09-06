@@ -41,7 +41,7 @@ export const loraEvalController = {
   async getHistory(limit = 10): Promise<LoraEvalResult[]> {
     const data = await apiGet<{ results?: LoraEvalResult[] } | LoraEvalResult[]>(`/lora-eval/history?limit=${limit}`)
     if (Array.isArray(data)) return data
-    return data.results ?? []
+    return data?.results ?? []
   },
 
   async aggregate(topK = 10, minFeedback = 5, outputName = 'best_aggregated'): Promise<LoraAggregationResult> {

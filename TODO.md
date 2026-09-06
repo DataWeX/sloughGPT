@@ -57,15 +57,15 @@
 - [x] `data/knowledge/entries.json` → MogDB collection
 - [x] `data/knowledge/visited.json` → MogDB collection
 - [x] `data/rag_store/documents.jsonl` → MogDB collection
-- [ ] `data/response_logs/*.jsonl` → MogDB collection (TTL-indexed)
-- [ ] `data/model_catalog/` → MogDB collection
+- [x] `data/response_logs/*.jsonl` → MogDB collection (TTL-indexed, fixed timestamp bug)
+- [x] `data/model_catalog/` → MogDB collection (already uses MogDB, added JSON sync + fixed race condition)
 
 ### Performance Optimization
 - [x] Add batch write support to `SyncableCollection` for high-throughput scenarios
 - [x] Implement lazy JSON sync (async background thread)
-- [ ] Add compression for JSON sync files
-- [ ] Benchmark MogDB vs file-based performance
-- [ ] Add query caching to hot paths (KB router, health endpoints)
+- [x] Add compression for JSON sync files (gzip support)
+- [x] Benchmark MogDB vs file-based performance (13 benchmark tests)
+- [x] Add query caching to hot paths (KB router, health endpoints)
 
 ### Data Migration Tools
 - [x] Create `scripts/migrate_legacy_json.py` to import existing JSON files into MogDB
