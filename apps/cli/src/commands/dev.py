@@ -47,6 +47,7 @@ class StatusBlock:
         except (OSError, FileNotFoundError):
             pass
         self._non_tty_logged = False
+        self._update_count = 0
 
     def _write(self, text: str) -> None:
         if self._tty:
@@ -58,6 +59,8 @@ class StatusBlock:
 
     def update(self, *lines: str) -> None:
         """Update the block with new lines, clearing previous output if TTY."""
+        self._update_count += 1
+
         if self._is_tty and self._lines:
             n = len(self._lines)
             # Move up n lines, clear each
@@ -75,6 +78,7 @@ class StatusBlock:
                 self._write(line + "\n")
             self._tty.flush()
         elif not self._non_tty_logged:
+            # Only log once to avoid double printing when TTY unavailable
             for line in lines:
                 self._log.info(line)
             self._non_tty_logged = True
