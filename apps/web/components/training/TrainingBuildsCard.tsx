@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingBuild } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -25,6 +26,7 @@ export function TrainingBuildsCard({ addToast }: Props) {
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [page, setPage] = useState(0)
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const PAGE_SIZE = 10
 
   const fetchBuilds = useCallback(async () => {
@@ -161,7 +163,7 @@ export function TrainingBuildsCard({ addToast }: Props) {
                       {loadingModel === b.name ? 'Loading...' : 'Load'}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void handleDownload(b.name)}>Download</Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(b.name)}>Delete</Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPendingDelete(b.name)}>Delete</Button>
                   </div>
                 </div>
               ))}
@@ -180,6 +182,14 @@ export function TrainingBuildsCard({ addToast }: Props) {
           </>
         )}
       </CardContent>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => { if (!open) setPendingDelete(null) }}
+        title="Delete this build?"
+        description={`"${pendingDelete}" will be permanently removed. This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete); setPendingDelete(null) }}
+      />
     </Card>
   )
 }

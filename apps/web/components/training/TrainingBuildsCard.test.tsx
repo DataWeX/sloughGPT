@@ -21,6 +21,14 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
   Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
 }))
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, title }: any) => open ? (
+    <div role="dialog">
+      <p>{title}</p>
+      <button onClick={onConfirm}>Confirm</button>
+    </div>
+  ) : null,
+}))
 
 import { TrainingBuildsCard } from './TrainingBuildsCard'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -78,6 +86,8 @@ describe('TrainingBuildsCard', () => {
     await waitFor(() => { expect(screen.getByText('build-1')).toBeDefined() })
     const deletes = screen.getAllByText('Delete')
     fireEvent.click(deletes[0])
+    await waitFor(() => { expect(screen.getByRole('dialog')).toBeDefined() })
+    fireEvent.click(screen.getByText('Confirm'))
     await waitFor(() => {
       expect(trainingJobsController.deleteCheckpoint).toHaveBeenCalledWith('build-1')
     })

@@ -34,6 +34,14 @@ vi.mock('@sloughgpt/strui', () => {
     ),
   }
 })
+vi.mock('@/components/ConfirmDialog', () => ({
+  ConfirmDialog: ({ open, onConfirm, title }: any) => open ? (
+    <div role="dialog">
+      <p>{title}</p>
+      <button onClick={onConfirm}>Confirm</button>
+    </div>
+  ) : null,
+}))
 
 import { trainingJobsController } from '@/lib/training-controller'
 
@@ -82,6 +90,8 @@ describe('SessionTrainingCard', () => {
       expect(screen.getByRole('button', { name: 'Train from Sessions' })).toBeDefined()
     })
     fireEvent.click(screen.getByRole('button', { name: 'Train from Sessions' }))
+    await waitFor(() => { expect(screen.getByRole('dialog')).toBeDefined() })
+    fireEvent.click(screen.getByText('Confirm'))
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith(
         expect.stringContaining('Trained from 1 sessions'), 'success'
@@ -121,6 +131,8 @@ describe('SessionTrainingCard', () => {
     fireEvent.click(screen.getByText('Select all'))
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Train from Sessions' })).toBeDefined() })
     fireEvent.click(screen.getByRole('button', { name: 'Train from Sessions' }))
+    await waitFor(() => { expect(screen.getByRole('dialog')).toBeDefined() })
+    fireEvent.click(screen.getByText('Confirm'))
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith(
         expect.stringContaining('Session training failed'), 'error'

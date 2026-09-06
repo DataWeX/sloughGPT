@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle, Button, Checkbox } from '@sloughgpt/strui'
 import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -13,6 +14,7 @@ export function SessionTrainingCard({ addToast }: Props) {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [training, setTraining] = useState(false)
+  const [pendingTrain, setPendingTrain] = useState(false)
   const [pairCounts, setPairCounts] = useState<Record<string, number>>({})
 
   const fetchSessions = useCallback(async () => {
@@ -155,12 +157,21 @@ export function SessionTrainingCard({ addToast }: Props) {
             <span className="text-muted-foreground">
               {selected.size} sessions, ~{totalPairs} pairs
             </span>
-            <Button size="sm" onClick={() => void handleTrain()} disabled={training}>
+            <Button size="sm" onClick={() => setPendingTrain(true)} disabled={training}>
               {training ? 'Training...' : 'Train from Sessions'}
             </Button>
           </div>
         )}
       </CardContent>
+      <ConfirmDialog
+        open={pendingTrain}
+        onOpenChange={setPendingTrain}
+        title="Start training?"
+        description={`This will train a model from ${selected.size} sessions (~${totalPairs} pairs). This may take a while.`}
+        confirmLabel="Start training"
+        destructive={false}
+        onConfirm={() => { setPendingTrain(false); void handleTrain() }}
+      />
     </Card>
   )
 }
