@@ -6,6 +6,7 @@ Extracted from execution.py to keep each module focused.
 from __future__ import annotations
 
 import logging
+import random as _random
 import threading
 from pathlib import Path
 from typing import Any
@@ -16,9 +17,11 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
+from .controller import get_training_controller
 from .helpers import _finish_job
 from .jobs import training_jobs
 from .schemas import DistillStartRequest
+from .webhooks import notify_training_event
 
 logger = logging.getLogger("slo")
 
@@ -290,10 +293,61 @@ async def start_distillation(
                 epoch_losses[-1] if epoch_losses else 0,
                 extra={"tag": "TRAIN"},
             )
+            # Controller integration
+            try:
+                get_training_controller().complete()
+            except Exception as e:
+                logger.debug("Training controller complete failed: %s", e)
+            # Webhook notification
+            try:
+                notify_training_event(
+                    "training.completed",
+                    {
+                        "job_id": job_id,
+                        "type": "distill",
+                        "checkpoint": str(ckpt_path),
+                        "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
+                    },
+                )
+            except Exception as e:
+                logger.debug("Training completion webhook failed: %s", e)
+            # Push notification
+            try:
+                from domains.mobile.notifications import get_notification_service
+
+                get_notification_service().send_notification_sync(
+                    title="Distillation Complete",
+                    body=f"Student model saved: {ckpt_path.name} (loss: {epoch_losses[-1]:.4f})" if epoch_losses else "Distillation complete",
+                )
+            except Exception as e:
+                logger.debug("Training completion push notification failed: %s", e)
 
         except Exception as e:
             logger.exception("Distillation job %s failed", job_id, extra={"tag": "TRAIN"})
             _finish_job(job_id, "failed", str(e))
+            # Controller integration
+            try:
+                get_training_controller().fail(str(e))
+            except Exception as exc:
+                logger.debug("Training controller fail failed: %s", exc)
+            # Webhook notification
+            try:
+                notify_training_event(
+                    "training.failed",
+                    {"job_id": job_id, "type": "distill", "error": str(e)},
+                )
+            except Exception as exc:
+                logger.debug("Training failure webhook failed: %s", exc)
+            # Push notification
+            try:
+                from domains.mobile.notifications import get_notification_service
+
+                get_notification_service().send_notification_sync(
+                    title="Distillation Failed",
+                    body=f"Error: {str(e)[:100]}",
+                )
+            except Exception as exc:
+                logger.debug("Training failure push notification failed: %s", exc)
 
     executor = get_training_executor()
     executor.submit(_run_distill, job_id)
