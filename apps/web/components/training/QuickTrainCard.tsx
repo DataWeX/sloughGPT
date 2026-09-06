@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, memo, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/lib/formatDuration'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -187,14 +187,17 @@ export const QuickTrainCard = memo(function QuickTrainCard({
             {experiments.length > 0 && (
               <div className="flex flex-col gap-1">
                 <Label htmlFor="turbo-experiment" variant="uppercase">Experiment</Label>
-                <select id="turbo-experiment" value={selectedExperimentId}
-                  onChange={e => setSelectedExperimentId(e.target.value)}
-                  className="h-8 text-xs font-mono rounded-md border border-border bg-background px-2">
-                  <option value="">None</option>
-                  {experiments.map(exp => (
-                    <option key={exp.id} value={exp.id}>{exp.name || exp.id}</option>
-                  ))}
-                </select>
+                <Select value={selectedExperimentId} onValueChange={setSelectedExperimentId}>
+                  <SelectTrigger id="turbo-experiment" className="h-8 text-xs font-mono" aria-label="Experiment">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {experiments.map(exp => (
+                      <SelectItem key={exp.id} value={exp.id}>{exp.name || exp.id}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
             <Button size="sm" onClick={start} disabled={!datasets.selectedDataset || starting}>

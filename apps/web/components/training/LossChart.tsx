@@ -144,7 +144,7 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
             }}
             labelStyle={{ color: 'hsl(var(--foreground))' }}
             labelFormatter={(label) => `Step ${label}`}
-            formatter={(value: any, name: any) => [Number(value).toFixed(4), name]}
+            formatter={(value: number | string, name: string) => [Number(value).toFixed(4), name]}
           />
           {showLegend && <Legend />}
           {hasTrain && (

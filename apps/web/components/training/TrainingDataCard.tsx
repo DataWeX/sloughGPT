@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingPair, type TrainingDataStats } from '@/lib/training-controller'
 
 interface Props {
@@ -179,14 +179,14 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <select
-                      value={p.quality}
-                      onChange={e => void handleUpdateQuality(p.id, Number(e.target.value))}
-                      className="h-7 rounded border bg-background px-1 text-xs"
-                      aria-label="Quality rating"
-                    >
-                      {[1, 2, 3, 4, 5].map(q => <option key={q} value={q}>{q}</option>)}
-                    </select>
+                    <Select value={String(p.quality)} onValueChange={v => void handleUpdateQuality(p.id, Number(v))}>
+                      <SelectTrigger className="h-7 w-14 text-xs" aria-label="Quality rating">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map(q => <SelectItem key={q} value={String(q)}>{q}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                     <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(p.id)} aria-label={`Delete training pair ${p.id.slice(0, 8)}`}>
                       Delete
                     </Button>
