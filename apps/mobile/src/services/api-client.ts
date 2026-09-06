@@ -102,6 +102,11 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  if (method === 'GET' && !body) {
+    const cached = cache.get<T>(path);
+    if (cached !== undefined) return cached;
+  }
+
   const baseUrl = await getApiUrl();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -144,7 +149,14 @@ async function request<T>(
       const text = await res.text();
       if (!text) return undefined as T;
       const raw = JSON.parse(text);
-      return unwrap<T>(raw);
+      const result = unwrap<T>(raw);
+
+      if (method === 'GET') {
+        const ttl = LONG_TTL_PATHS.find(([re]) => re.test(path))?.[1];
+        cache.set(path, result, ttl);
+      }
+
+      return result;
     } catch (err) {
       clearTimeout(timer);
 
