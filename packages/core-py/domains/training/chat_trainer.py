@@ -17,12 +17,14 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
-
-from domains.training.slonet import (
-    SloAdam, SloTransformer, export_to_sou, tensor,
-)
-from domains.training.quality_scorer import score_batch
 from domains.training.pair_extractor import extract_pairs_from_sessions
+from domains.training.quality_scorer import score_batch
+from domains.training.slonet import (
+    SloAdam,
+    SloTransformer,
+    export_to_sou,
+    tensor,
+)
 
 logger = logging.getLogger("slo.training.chat_trainer")
 

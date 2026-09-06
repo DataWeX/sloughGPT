@@ -8,18 +8,18 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .state import (
-    _state,
-    _turbo_lock,
-    _turbo_cancel_event,
-    _turbo_pause_event,
-    _turbo_state,
-    CHECKPOINTS_DIR,
-    TURBO_DIR,
-    REPO_ROOT,
-)
 from .helpers import _finite_payload, log_experiment_metric, resolve_dataset_path
 from .runtime_protocol import update_job
+from .state import (
+    CHECKPOINTS_DIR,
+    REPO_ROOT,
+    TURBO_DIR,
+    _state,
+    _turbo_cancel_event,
+    _turbo_lock,
+    _turbo_pause_event,
+    _turbo_state,
+)
 
 logger = logging.getLogger("slo.training")
 
@@ -99,7 +99,7 @@ def start_turbo_training(config: dict) -> dict:
         })
 
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
         _mgr = get_cancel_manager()
         _cm_op_id = _mgr.register(
             op_type=OpType.TRAINING,

@@ -6,7 +6,6 @@ Device detection and environment setup for training/inference.
 from __future__ import annotations
 
 
-
 def get_optimal_device() -> str:
     """Auto-detect best available device (degrades to CPU).
 

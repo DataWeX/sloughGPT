@@ -10,11 +10,11 @@ import struct
 import time
 from pathlib import Path
 
-from .state import CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, VALID_CKPT_NAME
 from .helpers import (
-    read_slo_json_header,
     describe_checkpoint,
+    read_slo_json_header,
 )
+from .state import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR, VALID_CKPT_NAME
 
 logger = logging.getLogger("slo.training")
 
@@ -225,8 +225,8 @@ async def delete_checkpoint(name: str) -> list[str]:
 
 
 async def load_checkpoint(name: str) -> dict:
-    from domains.training.slonet import import_from_sou
     from domains.models.provider import SloTransformerProvider, register_provider
+    from domains.training.slonet import import_from_sou
 
     cp = await asyncio.to_thread(find_checkpoint, name)
     if cp is None:
@@ -310,9 +310,10 @@ async def export_all_metrics() -> dict:
 
 
 async def export_checkpoint_mobile(name: str) -> dict:
+    import base64
+
     import numpy as np
     from domains.training.slonet import import_from_sou
-    import base64
 
     def _find_ckpt():
         for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):

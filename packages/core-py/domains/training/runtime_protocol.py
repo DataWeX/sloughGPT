@@ -8,8 +8,8 @@ startup.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Protocol
 import threading
+from typing import Any, Dict, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 

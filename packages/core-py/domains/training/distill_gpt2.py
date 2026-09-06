@@ -17,16 +17,19 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
-
 from domains.infrastructure.arch_config import ArchConfig, build_arch
 from domains.infrastructure.numpy_forward import forward_fast, pre_extract_weights
 from domains.infrastructure.numpy_ops import softmax as _softmax
 from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
 from domains.training.slonet import (
-    SloAdam, SloTransformer, export_to_sou, tensor, cross_entropy,
+    SloAdam,
+    SloTransformer,
+    cross_entropy,
+    export_to_sou,
+    tensor,
 )
 
 logger = logging.getLogger(__name__)
@@ -632,7 +635,6 @@ def distill_gpt2_to_slo(
             step += 1
 
             if step % config.log_interval == 0:
-                epoch_loss / epoch_steps
                 logger.info("step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
                             step, total_steps, float(total_loss.data), float(hard_loss.data), float(soft_loss.data),
                             extra={"tag": "TRAIN"})

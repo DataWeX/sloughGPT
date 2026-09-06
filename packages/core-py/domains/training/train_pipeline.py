@@ -22,16 +22,17 @@ Eval semantics: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 
 from __future__ import annotations
 
+import logging
 import math
 import os
-import logging
 import threading
 import time
 import warnings
-import numpy as np
-from pathlib import Path
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+
+import numpy as np
 
 if TYPE_CHECKING:
     from domains.training.tracking import ExperimentTracker
@@ -40,11 +41,11 @@ try:
     from domains.models import SloughGPTModel
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
-from domains.training.trainer_protocol import TrainResult
-from domains.training.quality_scorer import compute_data_quality
 from domains.training.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
+from domains.training.lora import LoRAConfig, apply_lora_to_model
+from domains.training.quality_scorer import compute_data_quality
 from domains.training.slonet import load_checkpoint_npz
-from domains.training.lora import apply_lora_to_model, LoRAConfig
+from domains.training.trainer_protocol import TrainResult
 
 logger = logging.getLogger("slo.trainer")
 
