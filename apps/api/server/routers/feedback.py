@@ -44,7 +44,8 @@ class FeedbackRouter:
 
     def _register_routes(self):
         self.router.add_api_route(
-            "/workflow-record", self.record_feedback_workflow, methods=["POST"]
+            "/workflow-record", self.record_feedback_workflow, methods=["POST"],
+            response_model=FeedbackResponse,
         )
         self.router.add_api_route(
             "", self.record_feedback, methods=["POST"], response_model=FeedbackResponse
@@ -130,8 +131,7 @@ class FeedbackRouter:
             safe_audit_log(
                 "feedback.record", resource=req.message_id, detail=f"rating={req.rating}"
             )
-            resp_data = FeedbackResponse(**feedback).model_dump()
-            return resp_data
+            return FeedbackResponse(**feedback).model_dump()
         except Exception as e:
             logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
             classify_and_raise(e, source="feedback.record")
