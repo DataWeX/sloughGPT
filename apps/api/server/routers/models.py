@@ -417,8 +417,11 @@ class ModelsRouter:
                             mid, size_gb, cached = future.result()
                             size_results[mid] = size_gb
                             cached_results[mid] = cached
-                        except Exception:
+                        except Exception as exc:
                             mid = futures[future]
+                            import logging
+                            logging.getLogger("slo.models").debug(
+                                "Size computation failed for %s: %s", mid, exc)
                             size_results[mid] = None
                             cached_results[mid] = False
 

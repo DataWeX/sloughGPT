@@ -3,7 +3,10 @@ from __future__ import annotations
 import re
 import unittest
 
-from apps.cli.src.cli import _train_export_stem_slug, _train_export_default_stem
+from apps.cli.src.utils.helpers import (
+    train_export_stem_slug as _train_export_stem_slug,
+    train_export_default_stem as _train_export_default_stem,
+)
 
 
 class TestTrainExportStem(unittest.TestCase):
