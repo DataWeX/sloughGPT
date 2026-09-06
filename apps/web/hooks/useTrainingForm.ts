@@ -28,9 +28,9 @@ export interface TrainingPreset {
 }
 
 export const BUILT_IN_PRESETS: TrainingPreset[] = [
-  { name: 'Quick test', description: 'Fast iteration, minimal training', method: 'distill', epochs: 3, lr: 1e-3, batchSize: 32 },
-  { name: 'Personality', description: 'Train character traits from conversations', method: 'distill', epochs: 20, lr: 5e-4, batchSize: 16 },
-  { name: 'Fine-tune LoRA', description: 'Adapt an existing model with LoRA', method: 'finetune', epochs: 10, lr: 2e-4, batchSize: 8, useLoRA: true },
+  { name: 'Quick test', description: 'Fast iteration, minimal training', method: 'distill', epochs: 3, lr: 5e-4, batchSize: 32 },
+  { name: 'Personality', description: 'Train character traits from conversations', method: 'distill', epochs: 20, lr: 3e-4, batchSize: 16 },
+  { name: 'Fine-tune LoRA', description: 'Adapt an existing model with LoRA', method: 'finetune', epochs: 10, lr: 1e-4, batchSize: 8, useLoRA: true },
   { name: 'Native small', description: 'Tiny transformer from scratch (~150K)', method: 'native', epochs: 100, lr: 3e-4, batchSize: 16, nativeEmbed: 128, nativeLayers: 2, nativeHeads: 4, nativeBlockSize: 128 },
   { name: 'Native large', description: 'Best quality from scratch (~1M)', method: 'native', epochs: 300, lr: 1e-4, batchSize: 8, nativeEmbed: 256, nativeLayers: 4, nativeHeads: 8, nativeBlockSize: 256 },
 ]

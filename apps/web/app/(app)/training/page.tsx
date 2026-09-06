@@ -19,6 +19,7 @@ import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingSummaryCard } from '@/components/training/TrainingSummaryCard'
 import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
+import { TrainingTipsCard } from '@/components/training/TrainingTipsCard'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
 import { QuickTrainCard } from '@/components/training/QuickTrainCard'
 import { APILogsCard } from '@/components/training/APILogsCard'
@@ -258,6 +259,8 @@ export default function TrainingPage() {
         <TrainingSummaryCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
 
         <TrainingHealthCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
+
+        <TrainingTipsCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
 
         {session.trainingRunning && (
           <TrainingLiveChart
