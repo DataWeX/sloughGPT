@@ -192,7 +192,7 @@ class TrainerConfig:
     gradient_accumulation_steps: int = 1
     epochs: int = 10
     max_steps: Optional[int] = None
-    learning_rate: float = 1e-3
+    learning_rate: float = 3e-4
     weight_decay: float = 0.01
     max_grad_norm: float = 1.0
 
@@ -217,7 +217,7 @@ class TrainerConfig:
     eval_interval: int = 100
 
     # Early stopping (0 = disabled; stop if no improvement for N evals)
-    early_stopping_patience: int = 0
+    early_stopping_patience: int = 5
 
     # Device — SloNet training is pure numpy and always runs on the CPU.
     device: str = "cpu"
@@ -225,6 +225,41 @@ class TrainerConfig:
     def __post_init__(self):
         if self.device == "auto":
             self.device = "cpu"
+
+        # Validate hyperparameters
+        if self.learning_rate <= 0:
+            raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
+        if self.epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {self.epochs}")
+        if self.batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.n_embed < 1:
+            raise ValueError(f"n_embed must be >= 1, got {self.n_embed}")
+        if self.n_layer < 1:
+            raise ValueError(f"n_layer must be >= 1, got {self.n_layer}")
+        if self.n_head < 1:
+            raise ValueError(f"n_head must be >= 1, got {self.n_head}")
+        if self.block_size < 8:
+            raise ValueError(f"block_size must be >= 8, got {self.block_size}")
+        if self.dropout < 0 or self.dropout > 1:
+            raise ValueError(f"dropout must be 0-1, got {self.dropout}")
+        if self.weight_decay < 0:
+            raise ValueError(f"weight_decay must be >= 0, got {self.weight_decay}")
+        if self.max_grad_norm <= 0:
+            raise ValueError(f"max_grad_norm must be > 0, got {self.max_grad_norm}")
+        if self.warmup_steps < 0:
+            raise ValueError(f"warmup_steps must be >= 0, got {self.warmup_steps}")
+        if self.min_lr < 0:
+            raise ValueError(f"min_lr must be >= 0, got {self.min_lr}")
+        if self.n_head > self.n_embed:
+            raise ValueError(f"n_head ({self.n_head}) must be <= n_embed ({self.n_embed})")
+        if self.block_size > self.n_embed * 4:
+            import warnings
+            warnings.warn(
+                f"block_size ({self.block_size}) > 4*n_embed ({self.n_embed*4}) may cause instability",
+                UserWarning,
+                stacklevel=2,
+            )
 
 
 # =============================================================================
@@ -588,7 +623,7 @@ class SloughGPTTrainer:
         dropout: float = 0.1,
         batch_size: int = 32,
         epochs: int = 10,
-        lr: float = 1e-3,
+        lr: float = 3e-4,
         max_steps: Optional[int] = None,
         gradient_accumulation_steps: int = 1,
         max_grad_norm: float = 1.0,
@@ -765,7 +800,7 @@ class SloughGPTTrainer:
         )
 
     def _create_scheduler(self):
-        """Create learning rate scheduler."""
+        """Create learning rate scheduler with adaptive defaults."""
         from domains.training.lr_schedulers import create_scheduler
 
         if self.config.max_steps:
@@ -776,12 +811,25 @@ class SloughGPTTrainer:
             )
             total_steps = steps_per_epoch * self.config.epochs
 
+        # Adaptive learning rate based on model size
+        param_count = sum(p.numel() for p in self.model.parameters())
+        if param_count < 1_000_000:  # < 1M params: small model
+            max_lr = self.config.learning_rate
+            min_lr = self.config.min_lr
+        elif param_count < 10_000_000:  # 1M-10M params: medium model
+            max_lr = self.config.learning_rate * 0.5
+            min_lr = self.config.min_lr * 0.5
+        else:  # > 10M params: large model
+            max_lr = self.config.learning_rate * 0.25
+            min_lr = self.config.min_lr * 0.25
+
         return create_scheduler(
             self.optimizer,
             scheduler_type=self.config.scheduler_type,
             total_steps=total_steps,
             warmup_steps=self.config.warmup_steps,
-            min_lr=self.config.min_lr,
+            min_lr=min_lr,
+            max_lr=max_lr,
         )
 
     @property
@@ -1245,6 +1293,24 @@ class SloughGPTTrainer:
                         self._best_model_path = self._last_checkpoint_path
                     else:
                         self._patience_counter += 1
+
+                    # Train loss plateau detection (independent of eval loss)
+                    if hasattr(self, '_recent_train_losses'):
+                        self._recent_train_losses.append(float(metrics["loss"]))
+                        if len(self._recent_train_losses) > 10:
+                            self._recent_train_losses.pop(0)
+                        # Check if train loss has plateaued (std dev < 0.001 over last 10 evals)
+                        if len(self._recent_train_losses) >= 5:
+                            import numpy as _np
+                            _std = float(_np.std(self._recent_train_losses[-10:]))
+                            if _std < 0.001:
+                                logger.info(
+                                    "Train loss plateau detected (std=%.6f over last %d evals)",
+                                    _std, min(len(self._recent_train_losses), 10),
+                                    extra={"tag": "TRAIN"},
+                                )
+                    else:
+                        self._recent_train_losses = [float(metrics["loss"])]
 
                     # Early stopping
                     if (
