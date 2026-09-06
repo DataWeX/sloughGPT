@@ -74,9 +74,9 @@
 - [x] Add CLI command `slo db status` to show collection stats
 
 ### Documentation
-- [ ] Update README.md with MogDB usage examples
-- [ ] Document `SyncableCollection` API
-- [ ] Add migration guide for developers
+- [x] Update README.md with MogDB usage examples
+- [x] Document `SyncableCollection` API (in docs/mogdb-guide.md)
+- [x] Add migration guide for developers (in docs/mogdb-guide.md)
 
 ---
 
