@@ -122,77 +122,70 @@ class TestStatusBlock:
         import io
         from commands.dev import StatusBlock
 
-        tty_file = io.StringIO()
-
         logger = MagicMock()
         logger._lock = __import__('threading').Lock()
         logger._colors = False
+        logger.cursor_up = MagicMock()
+        logger.clear_line = MagicMock()
 
-        block = StatusBlock.__new__(StatusBlock)
-        block._log = logger
-        block._lines = []
-        block._tty = tty_file
-        block._is_tty = True
-        block._non_tty_logged = False
+        stream = MagicMock()
+        stream.isatty.return_value = True
+        logger._stream = stream
+
+        block = StatusBlock(logger)
+        assert block._is_tty is True
 
         block.update("  SloughGPT", "  API: starting")
 
-        output = tty_file.getvalue()
-        assert "SloughGPT" in output
-        assert "API: starting" in output
-        assert "\n" in output
+        assert logger.info.call_count == 2
+        calls = [c[0][0] for c in logger.info.call_args_list]
+        assert "  SloughGPT" in calls
+        assert "  API: starting" in calls
 
     def test_update_clears_previous_on_tty(self):
-        import io
         from commands.dev import StatusBlock
-
-        tty_file = io.StringIO()
 
         logger = MagicMock()
         logger._lock = __import__('threading').Lock()
         logger._colors = False
+        logger.cursor_up = MagicMock()
+        logger.clear_line = MagicMock()
 
-        block = StatusBlock.__new__(StatusBlock)
-        block._log = logger
-        block._lines = []
-        block._tty = tty_file
-        block._is_tty = True
-        block._non_tty_logged = False
+        stream = MagicMock()
+        stream.isatty.return_value = True
+        logger._stream = stream
 
+        block = StatusBlock(logger)
         block.update("  Line 1", "  Line 2")
         assert len(block._lines) == 2
 
         block.update("  New Line 1")
 
-        output = tty_file.getvalue()
-        # Should contain ANSI escape codes for cursor movement and clearing
-        assert "\033[" in output
-        assert "Line 1" in output
-        assert "New Line 1" in output
+        # Should have called cursor_up and clear_line to clear previous lines
+        assert logger.cursor_up.called
+        assert logger.clear_line.called
+        assert len(block._lines) == 1
 
     def test_first_update_no_clear(self):
-        import io
         from commands.dev import StatusBlock
-
-        tty_file = io.StringIO()
 
         logger = MagicMock()
         logger._lock = __import__('threading').Lock()
         logger._colors = False
+        logger.cursor_up = MagicMock()
+        logger.clear_line = MagicMock()
 
-        block = StatusBlock.__new__(StatusBlock)
-        block._log = logger
-        block._lines = []
-        block._tty = tty_file
-        block._is_tty = True
-        block._non_tty_logged = False
+        stream = MagicMock()
+        stream.isatty.return_value = True
+        logger._stream = stream
 
+        block = StatusBlock(logger)
         block.update("  Only line")
 
-        output = tty_file.getvalue()
-        assert "Only line" in output
-        # First update should not have clear escape codes
-        assert "\033[2K" not in output
+        # First update should not call cursor_up or clear_line
+        assert not logger.cursor_up.called
+        assert not logger.clear_line.called
+        assert len(block._lines) == 1
 
     def test_non_tty_uses_info(self):
         import threading
@@ -210,22 +203,35 @@ class TestStatusBlock:
         block.update("  Line 1", "  Line 2")
         assert logger.info.call_count == 2
 
+    def test_non_tty_prints_only_once(self):
+        from commands.dev import StatusBlock
+
+        logger = MagicMock()
+        logger._stream = MagicMock()
+        logger._stream.isatty.return_value = False
+        logger._lock = __import__('threading').Lock()
+        logger._colors = False
+
+        block = StatusBlock(logger)
+        block.update("  Line 1")
+        assert logger.info.call_count == 1
+
+        # Second update should NOT print again
+        block.update("  Line 2")
+        assert logger.info.call_count == 1
+
     def test_line_count_tracking(self):
         import threading
         from commands.dev import StatusBlock
 
+        logger = MagicMock()
         stream = MagicMock()
         stream.isatty.return_value = True
-        stream.write = MagicMock()
-        stream.flush = MagicMock()
-
-        logger = MagicMock()
         logger._stream = stream
         logger._lock = threading.Lock()
         logger._colors = False
-        logger.save_position = MagicMock()
-        logger.restore_position = MagicMock()
-        logger.clear_lines = MagicMock()
+        logger.cursor_up = MagicMock()
+        logger.clear_line = MagicMock()
 
         block = StatusBlock(logger)
         block.update("a", "b", "c")

@@ -178,6 +178,18 @@ class AuthRouter:
         sec = get_security_settings()
         return sec.valid_api_keys, sec.jwt_expiration_hours, get_jwt_auth(), get_audit_logger()
 
+    @staticmethod
+    def _validate_api_key(api_key: str, env_keys: frozenset[str]) -> bool:
+        """Validate API key against both env keys and MogDB-stored keys."""
+        if api_key in env_keys:
+            return True
+        try:
+            from routers.api_keys import ApiKeyManager
+            mgr = ApiKeyManager()
+            return mgr.validate(api_key)
+        except Exception:
+            return False
+
     def _get_current_user(self, authorization: str | None = Header(None)) -> dict:
         if not authorization or not authorization.startswith("Bearer "):
             raise_error(
@@ -317,7 +329,7 @@ class AuthRouter:
             """
             valid_keys, exp_hours, jwt_auth, audit_logger = self._get_auth_deps()
             client_ip = request.client.host if request.client else "unknown"
-            if token_request.api_key not in valid_keys:
+            if not self._validate_api_key(token_request.api_key, valid_keys):
                 audit_logger.log(
                     "auth_failed",
                     client_ip,

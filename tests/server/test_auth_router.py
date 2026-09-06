@@ -13,6 +13,9 @@ from apps.api.server.routers.auth import AuthRouter
 
 @pytest.fixture
 def router():
+    from apps.api.server.routers import auth as _auth_mod
+    _auth_mod._register_limiter._attempts.clear()
+    _auth_mod._login_limiter._attempts.clear()
     return AuthRouter()
 
 
@@ -44,7 +47,7 @@ class TestRegister:
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
         resp = client.post("/auth/register", json={
-            "username": "alice", "email": "a@b.com", "password": "secret",
+            "username": "alice", "email": "a@b.com", "password": "secret123",
         })
         assert resp.status_code == 200
         data = resp.json()
@@ -53,7 +56,7 @@ class TestRegister:
     def test_rejects_duplicate_username(self, router, client):
         router._users.find_one = MagicMock(return_value={"_id": "uid1", "username": "alice"})
         resp = client.post("/auth/register", json={
-            "username": "alice", "email": "a@b.com", "password": "secret",
+            "username": "alice", "email": "a@b.com", "password": "secret123",
         })
         assert resp.status_code == 409
 
@@ -65,7 +68,7 @@ class TestRegister:
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
         resp = client.post("/auth/register", json={
-            "username": "bob", "email": "a@b.com", "password": "secret",
+            "username": "bob", "email": "a@b.com", "password": "secret123",
         })
         assert resp.status_code == 200  # email not gated; username is the unique key
 
@@ -82,7 +85,7 @@ class TestRegister:
         router._hash_password = MagicMock(return_value="v1:abc:def")
         router._get_auth_deps = MagicMock(return_value=(["key"], 24, jwt, MagicMock()))
         resp = client.post("/auth/register", json={
-            "username": "carol", "email": "c@b.com", "password": "p",
+            "username": "carol", "email": "c@b.com", "password": "secret123",
         })
         assert resp.json()["token"] == "reg_token"
 
@@ -94,7 +97,7 @@ class TestRegister:
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
         resp = client.post("/auth/register", json={
-            "username": "dave", "email": "d@b.com", "password": "p",
+            "username": "dave", "email": "d@b.com", "password": "secret123",
         })
         assert set(resp.json()["user"].keys()) == {"id", "username", "email"}
 
@@ -107,7 +110,7 @@ class TestRegister:
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
         client.post("/auth/register", json={
-            "username": "erin", "email": "e@b.com", "password": "p",
+            "username": "erin", "email": "e@b.com", "password": "secret123",
         })
         assert len(saved) == 1
         stored = next(iter(saved.values()))
@@ -143,7 +146,7 @@ class TestLogin:
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
         resp = client.post("/auth/login", json={
-            "username": "alice", "password": "secret",
+            "username": "alice", "password": "secret123",
         })
         assert resp.status_code == 200
         assert resp.json()["user"]["username"] == "alice"
@@ -172,7 +175,7 @@ class TestLogin:
         router._save_user = MagicMock()
         router._get_auth_deps = MagicMock(return_value=
             (["key"], 24, _make_jwt_mock(), MagicMock()))
-        resp = client.post("/auth/login", json={"username": "alice", "password": "secret"})
+        resp = client.post("/auth/login", json={"username": "alice", "password": "secret123"})
         assert resp.status_code == 200
         router._save_user.assert_called_once()
 

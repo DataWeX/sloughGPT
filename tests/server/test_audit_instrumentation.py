@@ -50,10 +50,12 @@ def souls_client():
 
 
 @pytest.fixture
-def auto_train_client(tmp_path):
+def auto_train_client(tmp_path, monkeypatch):
     rtr = AutoTrainRouter()
     rtr.CHECKPOINTS_DIR = tmp_path / "checkpoints"
     rtr.CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
+    import domains.training.service as _svc
+    monkeypatch.setattr(_svc, "CHECKPOINTS_DIR", rtr.CHECKPOINTS_DIR)
     app = FastAPI()
     register_all_handlers(app)
     app.state.checkpoint_dir = rtr.CHECKPOINTS_DIR
@@ -414,7 +416,7 @@ class TestTrainingRouterAudit:
 
     @patch("apps.api.server.training.router.get_training_executor")
     @patch("apps.api.server.training.router.get_training_controller")
-    @patch("apps.api.server.training.router.resolve_training_inputs")
+    @patch("apps.api.server.training.execution.resolve_training_inputs")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_training_logs_event(
         self, mock_logger, mock_resolve, mock_ctrl, mock_executor, training_router_client
@@ -885,14 +887,14 @@ class TestUserAdaptersAudit:
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
-        resp = user_adapters_client.post("/user-adapters/user1/update", json={"rating": "positive"})
+        resp = user_adapters_client.post("/user-adapters/user1/update", json={"rating": "thumbs_up"})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
         args, kwargs = logger.log.call_args
         assert args[0] == "adapter.update"
         assert kwargs["resource"] == "user1"
-        assert kwargs["detail"] == "rating=positive"
+        assert kwargs["detail"] == "rating=thumbs_up"
 
     @patch("domains.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")

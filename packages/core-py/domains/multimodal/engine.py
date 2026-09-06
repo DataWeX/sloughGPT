@@ -1369,7 +1369,7 @@ def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size
     total_loss = 0.0
     count = 0
 
-    for img, cap in zip(images, caps):
+    for i, (img, cap) in enumerate(zip(images, caps)):
         try:
             tokens = engine.text.encode(cap)
             if len(tokens) < 3:
