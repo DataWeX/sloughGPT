@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
+import { ActionCard, Button, Skeleton } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingBuild } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -97,14 +97,12 @@ export function TrainingBuildsCard({ addToast }: Props) {
   const typeCounts = builds.reduce((acc, b) => { acc[b.build_type] = (acc[b.build_type] || 0) + 1; return acc }, {} as Record<string, number>)
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Builds ({builds.length})</CardTitle>
-          <Button size="sm" variant="ghost" onClick={() => void fetchBuilds()}>Refresh</Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <ActionCard
+      title={`Builds (${builds.length})`}
+      actions={<Button size="sm" variant="ghost" onClick={() => void fetchBuilds()}>Refresh</Button>}
+      testId="training-builds"
+      contentClassName="space-y-3"
+    >
         {loading ? (
           <div className="space-y-2">
             <Skeleton className="h-4 w-32" />
@@ -171,15 +169,14 @@ export function TrainingBuildsCard({ addToast }: Props) {
             )}
           </>
         )}
-      </CardContent>
-      <ConfirmDialog
-        open={pendingDelete !== null}
-        onOpenChange={(open) => { if (!open) setPendingDelete(null) }}
-        title="Delete this build?"
-        description={`"${pendingDelete}" will be permanently removed. This cannot be undone.`}
-        confirmLabel="Delete"
-        onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete); setPendingDelete(null) }}
-      />
-    </Card>
+        <ConfirmDialog
+          open={pendingDelete !== null}
+          onOpenChange={(open) => { if (!open) setPendingDelete(null) }}
+          title="Delete this build?"
+          description={`"${pendingDelete}" will be permanently removed. This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={() => { if (pendingDelete) void handleDelete(pendingDelete); setPendingDelete(null) }}
+        />
+    </ActionCard>
   )
 }

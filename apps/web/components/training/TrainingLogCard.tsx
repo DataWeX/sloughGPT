@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
+import { ActionCard, Button, Skeleton, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { trainingJobsController } from '@/lib/training-controller'
 
 const POLL_INTERVAL_MS = 5000
@@ -65,31 +65,32 @@ export const TrainingLogCard = memo(function TrainingLogCard({
   }, [lines])
 
   return (
-    <Card className={className}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Training logs</CardTitle>
-          <div className="flex items-center gap-2">
-            {expanded && trainingRunning && (
-              <span className="text-[10px] text-muted-foreground animate-pulse">live</span>
-            )}
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                if (!expanded) {
-                  void fetchLogsLoading()
-                }
-                setExpanded(!expanded)
-              }}
-            >
-              {expanded ? 'Hide' : 'Show'}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
+    <ActionCard
+      title="Training logs"
+      className={className}
+      actions={
+        <>
+          {expanded && trainingRunning && (
+            <span className="text-[10px] text-muted-foreground animate-pulse">live</span>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              if (!expanded) {
+                void fetchLogsLoading()
+              }
+              setExpanded(!expanded)
+            }}
+          >
+            {expanded ? 'Hide' : 'Show'}
+          </Button>
+        </>
+      }
+      testId="training-log"
+    >
       {expanded && (
-        <CardContent>
+        <>
           {loading ? (
             <div className="space-y-1">
               <Skeleton className="h-3 w-full" />
@@ -127,8 +128,8 @@ export const TrainingLogCard = memo(function TrainingLogCard({
           >
             Refresh
           </Button>
-        </CardContent>
+        </>
       )}
-    </Card>
+    </ActionCard>
   )
 })

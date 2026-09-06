@@ -82,7 +82,6 @@ export function DatasetInsightsCard({ preview, loading }: DatasetInsightsCardPro
             chips={insights.langEntries.slice(0, 5).map(([lang, count]) => ({
               children: `${lang} (${count})`,
             }))}
-            maxVisible={5}
           />
         </div>
       )}

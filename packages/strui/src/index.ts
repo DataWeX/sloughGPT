@@ -177,7 +177,7 @@ export { VersionInspector, type VersionInspectorProps, type FeatureVersionEntry 
 export { ActionCard, type ActionCardProps } from './components/composed/action-card'
 export { InsightsCard, type InsightsCardProps, type InsightsCardDetail } from './components/composed/insights-card'
 export { MetricsCard, type MetricsCardProps } from './components/composed/metrics-card'
-export { ChipGroup, type ChipGroupProps, type ChipItem } from './components/composed/chip-group'
+export { ChipGroup, type ChipGroupProps } from './components/composed/chip-group'
 
 // === AI components (non-overlapping) ===
 export { MessageBubble, type MessageBubbleProps } from './components/ai/message-bubble'
