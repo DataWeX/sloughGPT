@@ -85,7 +85,7 @@ class TokenizeResponse(BaseModel):
 class DetokenizeRequest(BaseModel):
     """Detokenization request."""
 
-    ids: list[int]
+    ids: list[int] = Field(..., max_length=10000)
     model: str | None = None
 
 

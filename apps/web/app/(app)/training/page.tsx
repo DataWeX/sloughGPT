@@ -29,6 +29,7 @@ import { TrainingBuildsCard } from '@/components/training/TrainingBuildsCard'
 import { TrainingDataCard } from '@/components/training/TrainingDataCard'
 import { SessionTrainingCard } from '@/components/training/SessionTrainingCard'
 import { TrainingLogCard } from '@/components/training/TrainingLogCard'
+import { TrainingLiveChart } from '@/components/training/TrainingLiveChart'
 import { TrainingHistoryView } from '@/components/training/TrainingHistoryView'
 import { TrainingAnalyticsCard } from '@/components/training/TrainingAnalyticsCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
@@ -257,6 +258,19 @@ export default function TrainingPage() {
         <TrainingSummaryCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
 
         <TrainingHealthCard checkpoints={checkpoints.checkpoints} loading={checkpoints.loadingCheckpoints} />
+
+        {session.trainingRunning && (
+          <TrainingLiveChart
+            lossHistory={session.lossHistory}
+            progress={session.progress}
+            epoch={session.epoch}
+            totalEpochs={session.totalEpochs}
+            globalStep={session.globalStep}
+            totalSteps={session.totalSteps}
+            stepsPerSec={session.stepsPerSec}
+            eta={session.eta}
+          />
+        )}
 
         <TrainingLogCard trainingRunning={session.trainingRunning} />
 
