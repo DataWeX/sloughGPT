@@ -161,11 +161,12 @@ class TestControllerSearch:
     regression (names instead of full summaries) can only be caught here."""
 
     def _make_controller(self, tmp_path: Path) -> DatasetsController:
-        datasets_dir = tmp_path / "datasets"
-        (datasets_dir / "shakespeare").mkdir(parents=True)
-        (datasets_dir / "shakespeare" / "input.txt").write_text("To be or not to be.\n")
-        (datasets_dir / "poetry").mkdir(parents=True)
-        (datasets_dir / "poetry" / "input.txt").write_text("Roses are red.\n")
+        # DatasetsController reads from repo_root/data (datasets_dir).
+        data_dir = tmp_path / "data"
+        (data_dir / "shakespeare").mkdir(parents=True)
+        (data_dir / "shakespeare" / "input.txt").write_text("To be or not to be.\n")
+        (data_dir / "poetry").mkdir(parents=True)
+        (data_dir / "poetry" / "input.txt").write_text("Roses are red.\n")
         return DatasetsController(repo_root=tmp_path)
 
     def test_search_returns_full_dataset_summaries(self, tmp_path):

@@ -234,6 +234,9 @@ packages/apps/apps/
 # Server-side model artifacts
 apps/api/server/models/
 
+# Generated sample config written by the config loader when defaults.yaml is absent
+apps/api/server/config/
+
 # Android build artifacts
 apps/mobile/android/.gradle/
 apps/mobile/android/.kotlin/

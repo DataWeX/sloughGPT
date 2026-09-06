@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Depends
 
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate, ConversationResponse
+from schemas.feedback import FeedbackRequest, FeedbackResponse, FeedbackStats, ConversationCreate, ConversationUpdate
 from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 from controllers.feedback import get_feedback_controller
 
@@ -35,12 +35,12 @@ class FeedbackRouter:
 
     def _register_routes(self):
         self.router.add_api_route("/workflow-record", self.record_feedback_workflow, methods=["POST"])
-        self.router.add_api_route("", self.record_feedback, methods=["POST"], response_model=FeedbackResponse)
-        self.router.add_api_route("/stats/summary", self.get_feedback_stats, methods=["GET"], response_model=FeedbackStats)
-        self.router.add_api_route("/conversations", self.create_conversation, methods=["POST"], response_model=ConversationResponse)
-        self.router.add_api_route("/conversations", self.list_conversations, methods=["GET"], response_model=list[ConversationResponse])
-        self.router.add_api_route("/conversations/{conv_id}", self.get_conversation, methods=["GET"], response_model=ConversationResponse)
-        self.router.add_api_route("/conversations/{conv_id}", self.update_conversation, methods=["PATCH"], response_model=ConversationResponse)
+        self.router.add_api_route("", self.record_feedback, methods=["POST"])
+        self.router.add_api_route("/stats/summary", self.get_feedback_stats, methods=["GET"])
+        self.router.add_api_route("/conversations", self.create_conversation, methods=["POST"])
+        self.router.add_api_route("/conversations", self.list_conversations, methods=["GET"])
+        self.router.add_api_route("/conversations/{conv_id}", self.get_conversation, methods=["GET"])
+        self.router.add_api_route("/conversations/{conv_id}", self.update_conversation, methods=["PATCH"])
         self.router.add_api_route("/conversations/{conv_id}", self.delete_conversation, methods=["DELETE"])
         self.router.add_api_route("/{message_id}", self.get_feedback, methods=["GET"])
 
@@ -121,7 +121,7 @@ class FeedbackRouter:
         """List all conversations sorted by most recent first."""
         try:
             ctrl = get_feedback_controller()
-            return ctrl.list_conversations(limit=limit)
+            return success_response(data=ctrl.list_conversations(limit=limit))
         except Exception as e:
             classify_and_raise(e, source="feedback.list_conversations")
 
@@ -132,7 +132,7 @@ class FeedbackRouter:
             conv = ctrl.get_conversation(conv_id)
             if not conv:
                 raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
-            return conv
+            return success_response(data=conv if isinstance(conv, dict) else conv.model_dump())
         except Exception as e:
             classify_and_raise(e, source="feedback.get_conversation")
 
@@ -144,7 +144,7 @@ class FeedbackRouter:
             if not conv:
                 raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
             safe_audit_log("feedback.conversation_update", resource=conv_id)
-            return conv
+            return success_response(data=conv if isinstance(conv, dict) else conv.model_dump())
         except Exception as e:
             classify_and_raise(e, source="feedback.update_conversation")
 
@@ -165,7 +165,7 @@ class FeedbackRouter:
             feedback = ctrl.get_feedback(message_id)
             if not feedback:
                 raise_error("Feedback not found", "E_NOT_FOUND", status_code=404)
-            return feedback
+            return success_response(data=feedback)
         except Exception as e:
             classify_and_raise(e, source="feedback.get_feedback")
 

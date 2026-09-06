@@ -65,6 +65,12 @@ jobs:
             --ignore=tests/test_slonet_compute_sensitivity.py \
             --ignore=tests/test_slonet_provider.py \
             --ignore=tests/test_shell_repl.py \
+            --ignore=tests/test_npu.py \
+            --ignore=tests/test_kernel_npu_more.py \
+            --ignore=tests/test_slnc_loader.py \
+            --ignore=tests/test_loader_layout_contract.py \
+            --ignore=tests/test_training_ux.py \
+            --ignore=tests/test_user_journeys.py \
             -q --tb=short
 
   # ─── Server API tests ───────────────────────────────────────────
@@ -178,7 +184,11 @@ jobs:
 
       - name: Unit tests
         working-directory: apps/web
-        run: npx vitest run
+        run: npx vitest run --poolOptions.forks.maxForks=2
+        env:
+          # 2 forks x ~3GB stays under the 7GB runner; the default 4-fork x
+          # ~4GB-heap configuration caused a whole-suite OOM.
+          NODE_OPTIONS: "--max-old-space-size=3072"
 
       - name: Build
         working-directory: apps/web

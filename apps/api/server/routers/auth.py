@@ -39,6 +39,10 @@ class _AuthRateLimiter:
         self._attempts[key].append(now)
         return True
 
+    def reset(self) -> None:
+        """Clear all tracked attempts (used between isolated tests)."""
+        self._attempts.clear()
+
 _login_limiter = _AuthRateLimiter(max_attempts=5, window_seconds=300)
 _register_limiter = _AuthRateLimiter(max_attempts=3, window_seconds=600)
 
