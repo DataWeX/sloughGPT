@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useEffect, useCallback, memo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingPair, type TrainingDataStats } from '@/lib/training-controller'
 
@@ -18,6 +18,8 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
   const [total, setTotal] = useState(0)
   const limit = 20
 
+  const activeRef = useRef(true)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -26,48 +28,28 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
         trainingJobsController.getTrainingStats(),
         trainingJobsController.listTrainingPairs({ limit, offset: page * limit, search: search || undefined }),
       ])
-      setStats(statsResult)
-      setPairs(pairsResult.pairs ?? [])
-      setTotal(pairsResult.total ?? 0)
+      if (activeRef.current) {
+        setStats(statsResult)
+        setPairs(pairsResult.pairs ?? [])
+        setTotal(pairsResult.total ?? 0)
+      }
     } catch {
-      addToast('Failed to load training data', 'error')
-      setError('Could not load training data')
-      setStats(null)
-      setPairs([])
+      if (activeRef.current) {
+        addToast('Failed to load training data', 'error')
+        setError('Could not load training data')
+        setStats(null)
+        setPairs([])
+      }
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
   }, [page, search, addToast])
 
   useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const [statsResult, pairsResult] = await Promise.all([
-          trainingJobsController.getTrainingStats(),
-          trainingJobsController.listTrainingPairs({ limit, offset: page * limit, search: search || undefined }),
-        ])
-        if (active) {
-          setStats(statsResult)
-          setPairs(pairsResult.pairs ?? [])
-          setTotal(pairsResult.total ?? 0)
-        }
-      } catch {
-        if (active) {
-          addToast('Failed to load training data', 'error')
-          setError('Could not load training data')
-          setStats(null)
-          setPairs([])
-        }
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [page, search, addToast])
+    activeRef.current = true
+    void fetchData()
+    return () => { activeRef.current = false }
+  }, [fetchData])
 
   const handleSearch = useCallback(() => {
     setPage(0)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle, Button, Checkbox } from '@sloughgpt/strui'
 import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -17,43 +17,25 @@ export function SessionTrainingCard({ addToast }: Props) {
   const [pendingTrain, setPendingTrain] = useState(false)
   const [pairCounts, setPairCounts] = useState<Record<string, number>>({})
 
+  const activeRef = useRef(true)
+
   const fetchSessions = useCallback(async () => {
     setLoading(true)
     try {
       const data = await trainingJobsController.listChatSessions()
-      setSessions(data)
+      if (activeRef.current) setSessions(data)
     } catch {
-      addToast('Could not load chat sessions', 'error')
+      if (activeRef.current) addToast('Could not load chat sessions', 'error')
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
   }, [addToast])
 
   useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      try {
-        const data = await trainingJobsController.listChatSessions()
-        if (active) setSessions(data)
-      } catch {
-        if (active) addToast('Could not load chat sessions', 'error')
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [addToast])
-
-  const fetchPairs = useCallback(async (sessionId: string) => {
-    try {
-      const result = await trainingJobsController.getSessionPairs(sessionId)
-      setPairCounts(prev => ({ ...prev, [sessionId]: result.count }))
-    } catch {
-      addToast('Could not load pair count', 'error')
-    }
-  }, [addToast])
+    activeRef.current = true
+    void fetchSessions()
+    return () => { activeRef.current = false }
+  }, [fetchSessions])
 
   useEffect(() => {
     let active = true

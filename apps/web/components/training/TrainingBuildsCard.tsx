@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingBuild } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
@@ -29,36 +29,26 @@ export function TrainingBuildsCard({ addToast }: Props) {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const PAGE_SIZE = 10
 
+  const activeRef = useRef(true)
+
   const fetchBuilds = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const result = await trainingJobsController.listBuilds()
-      setBuilds(result ?? [])
+      if (activeRef.current) setBuilds(result ?? [])
     } catch {
-      setBuilds([])
-      setError('Could not load builds')
+      if (activeRef.current) { setBuilds([]); setError('Could not load builds') }
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      try {
-        const result = await trainingJobsController.listBuilds()
-        if (active) setBuilds(result ?? [])
-      } catch {
-        if (active) setBuilds([])
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [])
+    activeRef.current = true
+    void fetchBuilds()
+    return () => { activeRef.current = false }
+  }, [fetchBuilds])
 
   const handleLoad = useCallback(async (name: string, buildType: string) => {
     setLoadingModel(name)

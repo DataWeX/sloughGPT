@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
@@ -25,36 +25,26 @@ export function FineTunedModelsCard({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
 
+  const activeRef = useRef(true)
+
   const fetchModels = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const list = await trainingJobsController.listFineTuned()
-      setModels(list)
+      if (activeRef.current) setModels(list)
     } catch (e) {
-      setError(extractErrorMessage(e, 'Could not load models'))
+      if (activeRef.current) setError(extractErrorMessage(e, 'Could not load models'))
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const list = await trainingJobsController.listFineTuned()
-        if (active) setModels(list)
-      } catch (e) {
-        if (active) setError(extractErrorMessage(e, 'Could not load models'))
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [])
+    activeRef.current = true
+    void fetchModels()
+    return () => { activeRef.current = false }
+  }, [fetchModels])
 
   const handleLoad = async (name: string) => {
     setLoadingName(name)

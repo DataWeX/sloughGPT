@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,36 +19,26 @@ export function RecoveryCard({ addToast }: Props) {
   const [recovering, setRecovering] = useState<string | null>(null)
   const [pendingAbandon, setPendingAbandon] = useState<string | null>(null)
 
+  const activeRef = useRef(true)
+
   const fetchRecoverable = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const result = await trainingJobsController.recoverable()
-      setJobs(result ?? [])
+      if (activeRef.current) setJobs(result ?? [])
     } catch {
-      setJobs([])
-      setError('Could not load recoverable jobs')
+      if (activeRef.current) { setJobs([]); setError('Could not load recoverable jobs') }
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      try {
-        const result = await trainingJobsController.recoverable()
-        if (active) setJobs(result ?? [])
-      } catch {
-        if (active) setJobs([])
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    void load()
-    return () => { active = false }
-  }, [])
+    activeRef.current = true
+    void fetchRecoverable()
+    return () => { activeRef.current = false }
+  }, [fetchRecoverable])
 
   const handleRecover = useCallback(async (id: string) => {
     setRecovering(id)
