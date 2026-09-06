@@ -1236,8 +1236,12 @@ class DevDashboard:
 
                     display.update(rendered)
                     time.sleep(0.08)
-        except Exception:
+        except KeyboardInterrupt:
             pass
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.tui").debug("Dashboard error: %s", e, exc_info=True)
+            print(f"\n  Dashboard error: {e}")
 
     def _render_help_overlay(self, w: int) -> str:
         """Render keyboard help as a centered panel replacing the log panel."""

@@ -739,6 +739,15 @@ class StartupOrchestrator:
         except Exception as e:
             logger.warning("ResourceManager init: %s", e, extra={"tag": "START"})
 
+        # Warn if auth is disabled
+        import os
+        if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
+            logger.warning(
+                "Auth disabled (SLO_AUTH_REQUIRED=false) — all endpoints are accessible without credentials. "
+                "Set SLO_AUTH_REQUIRED=true for production.",
+                extra={"tag": "START"},
+            )
+
     async def _phase_ready(self):
         """Mark server as ready — happens after all synchronous phases complete."""
         STARTUP_PHASE.update(phase="ready", step=9, total=9, message="Server ready")

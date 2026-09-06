@@ -710,8 +710,12 @@ def run(group: Group, args: Optional[List[str]] = None):
             group.callback(**main_kwargs)
         except SystemExit:
             raise
-        except Exception:
-            pass
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.cli").debug("Group callback error: %s", e, exc_info=True)
+            _p(f"\n  Error: {e}")
 
     cmd_name = remaining[0]
     cmd_args = remaining[1:]
