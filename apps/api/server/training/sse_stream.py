@@ -252,11 +252,11 @@ def stop_all_training() -> dict:
     try:
         from domains.training.service import (
             get_cancel_event,
+            get_pgq,
+            get_state,
             get_turbo_cancel_event,
             get_turbo_pause_event,
-            get_pgq,
             get_turbo_state,
-            get_state,
         )
 
         ev = get_cancel_event()

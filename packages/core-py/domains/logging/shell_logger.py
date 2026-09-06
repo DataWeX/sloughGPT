@@ -63,3 +63,7 @@ class ShellLogger(Logger):
                 self._stream.flush()
             except (OSError, ValueError):
                 pass
+
+    def _format_record(self, record: LogRecord) -> str:
+        """Format a LogRecord and return the string (does not emit)."""
+        return self._formatter.format_oop(record)
