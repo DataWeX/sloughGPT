@@ -210,10 +210,10 @@ async def run_assembly(
         try:
             try:
                 vs.cpu.run(max_steps=req.max_steps)
-            except (InsFault, MemFault):
+            except (InsFault, MemFault) as exc:
                 # A runaway program (fetch beyond loaded code, stack/memory
                 # fault) halts cleanly, matching X86VirtualSystem.run().
-                pass
+                logger.debug("VM execution fault: %s", exc)
         finally:
             vs._syscall._sys_write = original_write
             vs._syscall._sys_train_start = original_train_start

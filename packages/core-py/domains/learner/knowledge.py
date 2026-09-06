@@ -510,7 +510,7 @@ class KnowledgeMemory:
             inner = asyncio.new_event_loop()
             try:
                 box["result"] = inner.run_until_complete(coro)
-            except BaseException as e:  # noqa: BLE001 - propagated to caller
+            except Exception as e:
                 box["error"] = e
             finally:
                 inner.close()

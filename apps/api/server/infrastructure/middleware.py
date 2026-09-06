@@ -72,6 +72,7 @@ def _model_ready() -> bool:
             return False
         return getattr(provider, "_model", None) is not None
     except Exception:
+        logger.debug("Model loaded check failed", exc_info=True)
         return False
 
 
@@ -82,6 +83,7 @@ def _get_startup_phase() -> dict:
 
         return STARTUP_PHASE
     except Exception:
+        logger.debug("Startup phase lookup failed", exc_info=True)
         return {"phase": "unknown", "step": 0, "total": 9, "message": "Starting..."}
 
 

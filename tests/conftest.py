@@ -25,6 +25,32 @@ if _s_root not in sys.path:
     sys.path.append(_s_root)
 
 
+def build_test_app(*routers):
+    """Build a FastAPI app with exception handlers registered."""
+    from fastapi import FastAPI
+    from fastapi.exceptions import RequestValidationError
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+    from schemas.common import raise_error
+
+    app = FastAPI()
+    for r in routers:
+        app.include_router(r)
+
+    @app.exception_handler(raise_error.__class__)
+    async def _handle_app_error(request, exc):
+        return exc.to_http_response()
+
+    @app.exception_handler(RequestValidationError)
+    async def _handle_validation(request, exc):
+        return raise_error(str(exc), "E_BAD_REQUEST", status_code=422).to_http_response()
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _handle_starlette(request, exc):
+        return raise_error(str(exc.detail), f"E_{exc.status_code}", status_code=exc.status_code).to_http_response()
+
+    return app
+
+
 @pytest.fixture
 def api_base_url() -> str:
     """Base URL for API tests."""

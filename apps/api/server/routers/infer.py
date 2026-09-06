@@ -214,8 +214,8 @@ class InferRouter:
                     "E_MEMORY_PRESSURE",
                     status_code=503,
                 )
-        except ImportError:
-            pass
+        except ImportError as exc:
+            logger.debug("Memory pressure guard unavailable: %s", exc)
 
         from domains.models.provider import get_provider
 
@@ -298,8 +298,8 @@ class InferRouter:
                     )
 
                 return StreamingResponse(error_stream(), media_type="text/event-stream")
-        except ImportError:
-            pass
+        except ImportError as exc:
+            logger.debug("Memory pressure guard unavailable: %s", exc)
 
         try:
             if self._get_model() is None:

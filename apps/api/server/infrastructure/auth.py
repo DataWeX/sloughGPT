@@ -258,6 +258,7 @@ class AuditLogger:
             handler.setFormatter(logging.Formatter("%(message)s"))
             self._handler = handler
         except Exception:
+            logger.debug("Audit log handler setup failed", exc_info=True)
             self._handler = None
 
     def log(

@@ -47,6 +47,7 @@ class ModelInterface(ABC):
 
     @abstractmethod
     def load(self, path: str, device: str = "cpu", **kwargs) -> "ModelInterface":
+        """Load model weights from path onto device. Returns self for chaining."""
         pass
 
     @abstractmethod
@@ -59,40 +60,49 @@ class ModelInterface(ABC):
         top_p: Optional[float] = None,
         **kwargs,
     ) -> np.ndarray:
+        """Autoregressively generate tokens. Returns array of shape (batch, seq_len + max_new_tokens)."""
         pass
 
     @abstractmethod
     def forward(
         self, input_ids: np.ndarray, targets: Optional[np.ndarray] = None, **kwargs
     ) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+        """Forward pass. Returns (logits, loss). Loss is None if targets not provided."""
         pass
 
     @abstractmethod
     def state_dict(self) -> Dict[str, np.ndarray]:
+        """Return model state as dict of named weight arrays."""
         pass
 
     @abstractmethod
     def load_state_dict(self, state_dict: Dict[str, np.ndarray], **kwargs) -> None:
+        """Load model state from dict of named weight arrays."""
         pass
 
     @abstractmethod
     def num_parameters(self) -> int:
+        """Total number of trainable parameters."""
         pass
 
     @abstractmethod
     def config(self) -> Dict[str, Any]:
+        """Model configuration dict (vocab_size, n_layer, n_embd, etc.)."""
         pass
 
     @abstractmethod
     def to(self, device: str) -> "ModelInterface":
+        """Move model to device. Returns self for chaining."""
         pass
 
     @abstractmethod
     def eval(self) -> "ModelInterface":
+        """Set model to evaluation mode. Returns self for chaining."""
         pass
 
     @abstractmethod
     def train_mode(self) -> "ModelInterface":
+        """Set model to training mode. Returns self for chaining."""
         pass
 
 

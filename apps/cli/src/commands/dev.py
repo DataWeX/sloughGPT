@@ -13,7 +13,6 @@ from pathlib import Path
 from collections import deque
 
 from domains.logging import get_global
-from domains.logging.cli_logger import _is_tty
 from domains.shared import find_server_python
 from utils.formatting import format_time
 
@@ -32,34 +31,34 @@ _LOG_BUF = 500  # max lines kept per panel
 class StatusBlock:
     """Manages in-place updating of a block of status lines.
 
-    Uses the logger's cursor methods for TTY-aware cursor manipulation.
-    Falls back to logging only once if not a TTY.
+    Uses the logger's cursor methods (CLILogger) for TTY-aware cursor manipulation.
+    Falls back to simple logging if cursor methods are unavailable.
     """
 
     def __init__(self, logger):
         self._log = logger
         self._lines: list[str] = []
-        self._is_tty = _is_tty(logger._stream) if hasattr(logger, '_stream') else False
-        self._non_tty_logged = False
+        self._has_cursor = hasattr(logger, 'cursor_up') and hasattr(logger, 'clear_line')
+        self._printed = False
 
     def update(self, *lines: str) -> None:
-        """Update the block with new lines, clearing previous output if TTY."""
-        if self._is_tty and self._lines:
+        """Update the block with new lines, clearing previous output if possible."""
+        if self._has_cursor and self._lines:
+            # Clear previous lines using logger's cursor methods
             n = len(self._lines)
-            # Move up n lines and clear each
             for _ in range(n):
                 self._log.cursor_up(1)
                 self._log.clear_line()
-
-        self._lines = list(lines)
-
-        if self._is_tty:
-            for line in lines:
-                self._log.emit(LogRecord(level=LogLevel.INFO, msg=line))
-        elif not self._non_tty_logged:
+            self._lines = list(lines)
             for line in lines:
                 self._log.info(line)
-            self._non_tty_logged = True
+        elif not self._printed:
+            # First time: print the block
+            self._lines = list(lines)
+            for line in lines:
+                self._log.info(line)
+            self._printed = True
+        # If already printed and no cursor support, don't print again
 
 
 def _kill_port(port: int):
@@ -917,10 +916,10 @@ def _cmd_api_and_web(args):
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     web_status = "ok (reusing)" if web_reused else "starting"
-    _status_printed = False
 
     def _update_status():
-        nonlocal _status_printed
+        # Only print status when TTY cursor manipulation works
+        # Otherwise print once at the end when both services are ready
         api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
         web_color = _A.GREEN if "ok" in web_status else _A.YELLOW
         status.update(
@@ -928,9 +927,6 @@ def _cmd_api_and_web(args):
             f"  API: http://{args.host}:{api_port}  {ansi_c(api_status, api_color, log._colors)}",
             f"  Web: http://localhost:{web_port}  {ansi_c(web_status, web_color, log._colors)}",
         )
-        _status_printed = True
-
-    _update_status()
 
     # ── Build env with model overrides ──────────────────────────
     env = os.environ.copy()
