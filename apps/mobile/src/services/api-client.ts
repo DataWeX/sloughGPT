@@ -154,6 +154,8 @@ async function request<T>(
       if (method === 'GET') {
         const ttl = LONG_TTL_PATHS.find(([re]) => re.test(path))?.[1];
         cache.set(path, result, ttl);
+      } else if (method !== 'GET') {
+        cache.invalidate(path.split('/').slice(0, 3).join('/'));
       }
 
       return result;
