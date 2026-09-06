@@ -7,9 +7,9 @@ setup(
     package_dir={"": "src"},
     entry_points={
         "console_scripts": [
-            "planner = app_planner.core:cli_main",
-            "notes = app_planner.core:cli_main",
-            "kanban = app_planner.kanban:cli_main",
+            "planner = app_planner.cli:cli_main",
+            "notes = app_planner.cli:cli_main",
+            "kanban = app_planner.cli:cli_main",
             "sync-notes-to-board = app_planner.sync:cli_main",
         ],
     },

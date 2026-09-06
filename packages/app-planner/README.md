@@ -1,12 +1,14 @@
 # app-planner
 
-Local-first notes + kanban toolchain, delivered as one CLI. Four commands —
-`planner`, `notes`, `kanban`, `sync-notes-to-board` — share a single config
-module (`app_planner.config`) so they always resolve the same stores and stay in
-step with each other. Pure Python stdlib: no external dependencies, no servers.
+Unified notes + kanban CLI. One entry point (`app-planner`) with subcommands for
+both notes and board operations. Note mutations auto-sync to the kanban board by
+default. Pure Python stdlib: no external dependencies, no servers.
 
 ## Philosophy
 
+- **One CLI.** Notes and kanban share one command tree under `app_planner.cli`.
+  `planner`, `notes`, `kanban`, and `sync-notes-to-board` all resolve to the
+  same entry point.
 - **One source of truth.** Data locations, storage backend, and the
   status <-> column mapping live in `app_planner/config.py`, not scattered across
   commands. Every tool reads the same answer.
@@ -18,7 +20,7 @@ step with each other. Pure Python stdlib: no external dependencies, no servers.
   plain `file`. `APP_PLANNER_BACKEND` overrides when set.
 - **Status and column are the same fact.** Notes store a status; cards live in
   a column. `sync` reconciles both directions — missing cards are created and
-  out-of-step cards are moved.
+  out-of-step cards are moved. Use `--no-sync` to skip auto-sync on mutations.
 
 ## Install
 
@@ -30,34 +32,67 @@ pip install -e packages/app-planner        # editable, console scripts auto-inst
 
 ```bash
 # Notes
-notes new "Fix boot order" --tags kernel,os --status wip
-notes list --today
-notes show <short-id>
-notes edit <short-id> --status done --body "Completed: ..."
-notes search "keyword"
+app-planner new "Fix boot order" --tags kernel,os --status wip
+app-planner list --today
+app-planner show <short-id>
+app-planner edit <short-id> --status done --body "Completed: ..."
+app-planner search "keyword"
 
 # Kanban
-kanban board                          # ASCII board, grouped by column
-kanban add "Ship v2.0" --column in_progress --tags release
-kanban move <card-id> done
+app-planner board                          # ASCII board, grouped by column
+app-planner add "Ship v2.0" --column in_progress --tags release
+app-planner move <card-id> done
 
-# Keep notes and board in sync (adds missing cards, moves stale columns)
-sync-notes-to-board
+# Sync notes to board explicitly
+app-planner sync
 
 # Local web UI (stdlib HTTP server, embedded SPA)
-planner gui
+app-planner gui
 ```
 
 ## Commands
 
-| Command | Entry point | Purpose |
-|---------|-------------|---------|
-| `planner` | `app_planner.core:cli_main` | Notes CLI. Subcommands: `new`, `list`, `show`, `edit`, `delete`/`rm`, `search`, `today`, `export`, `tags`, `status`, `timeline`, `sprint` |
-| `planner gui` | `app_planner.gui:main` | Local web interface for notes + board (`--host --port --no-open --sync`) |
-| `planner sync` | `app_planner.sync:cli_main` | Sync notes -> board (`--quiet` for one-line summary) |
-| `notes` | `app_planner.core:cli_main` | Alias for `planner` |
-| `kanban` | `app_planner.kanban:cli_main` | Board CLI. Subcommands: `init`, `add`, `list`, `show`, `edit`, `move`, `delete`, `board`, `note`, `columns`, `column-add/rename/rm`, `archive`, `search`, `stats` |
-| `sync-notes-to-board` | `app_planner.sync:cli_main` | Alias for `planner sync` |
+| Command | Purpose |
+|---------|---------|
+| `new` | Create a note |
+| `list` | List notes |
+| `show <id>` | Show a note |
+| `edit <id>` | Edit a note |
+| `delete` / `rm` | Delete a note |
+| `search <query>` | Search notes |
+| `today` | Show today's notes |
+| `export` | Export all notes |
+| `tags` | List all tags |
+| `status` | Status summary |
+| `timeline` | Show notes grouped by day |
+| `sprint <name>` | Sprint operations |
+| `init` | Initialize a new board |
+| `add` | Add a card |
+| `cards` | List cards |
+| `card <id>` | Show card details |
+| `edit-card <id>` | Edit a card |
+| `move <id> <column>` | Move card to another column |
+| `block <card> <blocker>` | Block a card by another card |
+| `unblock <card> <blocker>` | Unblock a card |
+| `blocked` | List blocked cards |
+| `delete-card` / `rm-card` | Delete a card |
+| `board` | Show ASCII kanban board |
+| `note add <card> <text>` | Add note to a card |
+| `note list <card>` | List notes on a card |
+| `note delete <card> <id>` | Delete note from a card |
+| `columns` | List columns |
+| `column-add <name>` | Add a column |
+| `column-rename <old> <new>` | Rename a column |
+| `column-rm <name>` | Remove a column |
+| `archive` | Archive (delete) all done cards |
+| `search-cards <query>` | Search cards |
+| `stats` | Board statistics |
+| `export-board` | Export board to JSON |
+| `import-board <file>` | Import board from JSON |
+| `sync` | Sync notes to board |
+| `gui` | Launch web GUI |
+
+Global options: `--backend {file,mogdb}`, `--notes-dir`, `--board-dir`, `--no-sync`
 
 ## Configuration
 
@@ -68,7 +103,7 @@ Resolution order, first match wins:
 | 1 | Explicit CLI flag (`--notes-dir`, `--board-dir`, `--backend`) |
 | 2 | Environment: `APP_PLANNER_NOTES_DIR`, `APP_PLANNER_BOARD_DIR`, `APP_PLANNER_BACKEND` |
 | 3 | Repo root: nearest ancestor containing `.kanban/board.json` -> `<root>/.dev-notes`, `<root>/.kanban` |
-| 4 | User config: `~/.config/dev-notes`, `~/.config/kanban` |
+| 4 | User config fallback: `~/.config/dev-notes`, `~/.config/kanban` |
 
 ## Status <-> column mapping
 
@@ -113,7 +148,7 @@ added, updated, total = sync_notes_to_board(notes, board)
 
 ## Web GUI
 
-`planner gui` serves a zero-dependency single-page app on `127.0.0.1:8787`
+`app-planner gui` serves a zero-dependency single-page app on `127.0.0.1:8787`
 (`ThreadingHTTPServer` + embedded HTML/CSS/JS, no external assets). If the
 requested port is taken it steps to the next free port and reports the change;
 `--port 0` asks the kernel for an ephemeral port.
@@ -126,7 +161,7 @@ requested port is taken it steps to the next free port and reports the change;
 
 ```bash
 cd packages/app-planner
-python3 -m pytest tests/        # 127 tests: config (16), sync (8), gui (38), core (34), kanban (31)
+PYTHONPATH=packages/app-planner/src:packages/mogdb/src python3 -m pytest tests/ -p no:anyio
 ```
 
 The package is installed editable (`__editable__.app-planner-*.pth` points at

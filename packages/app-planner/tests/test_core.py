@@ -327,7 +327,7 @@ def test_sprint_list_and_report(cli_env, capsys):
 
 
 def test_kanban_and_sync_dispatch(cli_env):
-    for cmd in ("kanban", "sync", "gui"):
+    for cmd in ("sync", "gui", "board"):
         with pytest.raises(SystemExit) as exc:
             cli_main([cmd, "--help"])
         assert exc.value.code == 0

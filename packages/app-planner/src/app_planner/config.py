@@ -43,6 +43,15 @@ COLUMN_TO_STATUS = {
 
 STATUSES = ["open", "wip", "done", "blocked", "review", "todo"]
 
+STATUS_ICONS = {
+    "open": "\u25cb",
+    "wip": "\u25d0",
+    "done": "\u25cf",
+    "blocked": "\u2715",
+    "review": "\u25c8",
+    "todo": "\u25cb",
+}
+
 
 def _walk_for_board(start: Path) -> Path | None:
     """Return the nearest ancestor of *start* containing ``.kanban/board.json``."""
