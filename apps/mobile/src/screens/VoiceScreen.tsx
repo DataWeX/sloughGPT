@@ -120,7 +120,7 @@ export function VoiceScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           <YStack padding={16} gap={12}>
               {/* TTS Status */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={10}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={15} fontWeight="600" color={colors.text}>TTS Status</Text>
                   <StatusBadge label={status?.tts_available ? 'Available' : 'Offline'} variant={status?.tts_available ? 'success' : 'error'} />
@@ -148,7 +148,7 @@ export function VoiceScreen() {
               </YStack>
 
               {/* Test TTS */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Test TTS</Text>
                 <RNTextInput
                   value={inputText}
@@ -178,7 +178,7 @@ export function VoiceScreen() {
               </YStack>
 
               {/* About */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={6}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>About</Text>
                 <Text fontSize={13} color={colors.textMuted} lineHeight={18}>
                   Voice synthesis converts text to speech using server-side TTS models. Generated audio can be played back or shared.

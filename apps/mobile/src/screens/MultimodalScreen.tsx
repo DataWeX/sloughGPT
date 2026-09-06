@@ -158,7 +158,7 @@ export function MultimodalScreen() {
         return (
           <YStack gap={10}>
             {/* Engine Status */}
-            <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+            <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <XStack justifyContent="space-between" alignItems="center">
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Vision Engine</Text>
                 <StatusBadge label={status?.engine.trained ? 'Trained' : 'Untrained'} variant={status?.engine.trained ? 'success' : 'default'} />
@@ -180,7 +180,7 @@ export function MultimodalScreen() {
             </YStack>
 
             {/* DPO */}
-            <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+            <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <XStack justifyContent="space-between" alignItems="center">
                 <Text fontSize={15} fontWeight="600" color={colors.text}>DPO Training</Text>
                 <StatusBadge label={status?.dpo.running ? 'Running' : 'Idle'} variant={status?.dpo.running ? 'warning' : 'default'} />
@@ -194,7 +194,7 @@ export function MultimodalScreen() {
             </YStack>
 
             {/* Video */}
-            <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+            <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <XStack justifyContent="space-between" alignItems="center">
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Video Training</Text>
                 <StatusBadge label={status?.video.training ? 'Training' : 'Idle'} variant={status?.video.training ? 'warning' : 'default'} />
@@ -217,7 +217,7 @@ export function MultimodalScreen() {
       case 'vision':
         return (
           <YStack gap={10}>
-            <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+            <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <Text fontSize={15} fontWeight="600" color={colors.text}>Train on Image</Text>
               <Text fontSize={12} color={colors.textMuted}>Upload an image to train the vision model. The model learns to describe images.</Text>
               <RNTextInput
@@ -240,7 +240,7 @@ export function MultimodalScreen() {
       case 'audio':
         return (
           <YStack gap={10}>
-            <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+            <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <Text fontSize={15} fontWeight="600" color={colors.text}>Transcribe Audio</Text>
               <Text fontSize={12} color={colors.textMuted}>{isRecording ? 'Recording... tap to stop and transcribe.' : 'Tap to record audio. Tap again to stop and transcribe.'}</Text>
               <Pressable onPress={handleTranscribe}>
@@ -261,7 +261,7 @@ export function MultimodalScreen() {
       case 'generate':
         return (
           <YStack gap={10}>
-            <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+            <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
               <Text fontSize={15} fontWeight="600" color={colors.text}>Generate Image</Text>
               <RNTextInput
                 value={genPrompt}

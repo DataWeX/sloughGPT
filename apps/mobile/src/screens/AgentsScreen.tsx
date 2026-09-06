@@ -121,7 +121,7 @@ export function AgentsScreen() {
   };
 
   const renderAgent = ({item}: {item: Agent}) => (
-    <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+    <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
       <XStack justifyContent="space-between" alignItems="center">
         <YStack flex={1} gap={2}>
           <Text fontSize={15} fontWeight="600" color={colors.text}>{item.name}</Text>
@@ -211,7 +211,7 @@ export function AgentsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
             showCreate ? (
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={1} borderColor={colors.primary} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={1} borderColor={colors.primary} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>New Agent</Text>
                 <RNTextInput
                   value={newName}
@@ -270,7 +270,7 @@ export function AgentsScreen() {
 
       {/* Execution Result */}
       {execResult && (
-        <YStack position="absolute" bottom={0} left={0} right={0} padding={16} backgroundColor={colors.white} borderTopWidth={1} borderTopColor={colors.border} gap={6}>
+        <YStack position="absolute" bottom={0} left={0} right={0} padding={16} backgroundColor={colors.card} borderTopWidth={1} borderTopColor={colors.border} gap={6}>
           <XStack justifyContent="space-between" alignItems="center">
             <Text fontSize={13} fontWeight="600" color={colors.text}>{execResult.agent} result</Text>
             <Pressable onPress={() => setExecResult(null)}>

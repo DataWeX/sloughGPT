@@ -192,14 +192,17 @@ class LearnerRouter:
         """Force an immediate training step on accumulated data."""
         import time as _time
 
-        _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        try:
+            _t0 = _time.monotonic()
+            from domains.learner import get_learner
 
-        learner = get_learner()
-        status = learner.train_now()
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("learner.train", detail=f"elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={**status, "elapsed_ms": round(_elapsed_ms, 1)})
+            learner = get_learner()
+            status = learner.train_now()
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("learner.train", detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={**status, "elapsed_ms": round(_elapsed_ms, 1)})
+        except Exception as e:
+            classify_and_raise(e, source="learner.train")
 
     @staticmethod
     def learn_deploy(
@@ -208,16 +211,19 @@ class LearnerRouter:
         """Export the learner's SloTransformer as a deployable .soul file."""
         import time as _time
 
-        _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        try:
+            _t0 = _time.monotonic()
+            from domains.learner import get_learner
 
-        learner = get_learner()
-        result = learner.deploy(name=name)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log(
-            "learner.deploy", resource=name or "default", detail=f"elapsed={_elapsed_ms:.0f}ms"
-        )
-        return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
+            learner = get_learner()
+            result = learner.deploy(name=name)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log(
+                "learner.deploy", resource=name or "default", detail=f"elapsed={_elapsed_ms:.0f}ms"
+            )
+            return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
+        except Exception as e:
+            classify_and_raise(e, source="learner.deploy")
 
     @staticmethod
     def learn_evaluate(
@@ -226,14 +232,17 @@ class LearnerRouter:
         """Evaluate the learner on provided text or ring buffer test split."""
         import time as _time
 
-        _t0 = _time.monotonic()
-        from domains.learner import get_learner
+        try:
+            _t0 = _time.monotonic()
+            from domains.learner import get_learner
 
-        learner = get_learner()
-        result = learner.evaluate(text=text)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
-        safe_audit_log("learner.evaluate", detail=f"elapsed={_elapsed_ms:.0f}ms")
-        return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
+            learner = get_learner()
+            result = learner.evaluate(text=text)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log("learner.evaluate", detail=f"elapsed={_elapsed_ms:.0f}ms")
+            return success_response(data={**result, "elapsed_ms": round(_elapsed_ms, 1)})
+        except Exception as e:
+            classify_and_raise(e, source="learner.evaluate")
 
     @staticmethod
     def learn_status() -> dict:

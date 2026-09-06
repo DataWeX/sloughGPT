@@ -112,7 +112,7 @@ export function ModelDetailScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           <YStack padding={16} gap={12}>
               {/* Status */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={10}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Model Info</Text>
                   <StatusBadge label={isLoaded ? 'Loaded' : 'Not Loaded'} variant={isLoaded ? 'success' : 'default'} />
@@ -142,7 +142,7 @@ export function ModelDetailScreen() {
               </YStack>
 
               {/* Actions */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Actions</Text>
                 <XStack gap={8}>
                   {!isLoaded ? (
@@ -171,7 +171,7 @@ export function ModelDetailScreen() {
 
               {/* Tags */}
               {model?.tags && model.tags.length > 0 && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={6}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Tags</Text>
                   <XStack gap={4} flexWrap="wrap">
                     {model.tags.map(tag => (
@@ -183,7 +183,7 @@ export function ModelDetailScreen() {
 
               {/* Benchmark Results */}
               {benchmark && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Benchmark Results</Text>
                   <XStack gap={12}>
                     {[
@@ -203,7 +203,7 @@ export function ModelDetailScreen() {
 
               {/* Server Health */}
               {health && (
-                <YStack padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4}>
+                <YStack padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4}>
                   <XStack justifyContent="space-between" alignItems="center">
                     <Text fontSize={13} color={colors.textMuted}>Server</Text>
                     <StatusBadge label={health.status} variant={health.status === 'healthy' ? 'success' : 'error'} />

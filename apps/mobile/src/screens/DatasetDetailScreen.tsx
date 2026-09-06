@@ -106,7 +106,7 @@ export function DatasetDetailScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           <YStack padding={16} gap={12}>
               {/* Info */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Dataset Info</Text>
                   <StatusBadge label={dataset?.format || 'unknown'} variant="info" />
@@ -130,7 +130,7 @@ export function DatasetDetailScreen() {
               </YStack>
 
               {/* Stats */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Statistics</Text>
                 <XStack gap={8}>
                   {[
@@ -148,7 +148,7 @@ export function DatasetDetailScreen() {
 
               {/* Preview */}
               {preview && preview.rows && preview.rows.length > 0 && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Preview</Text>
                   <YStack padding={8} borderRadius={6} backgroundColor={colors.background}>
                     {preview.rows.slice(0, 5).map((row, i) => (
@@ -164,7 +164,7 @@ export function DatasetDetailScreen() {
               )}
 
               {/* Actions */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Actions</Text>
                 <Pressable onPress={handleDelete} disabled={deleting}>
                   <XStack padding={10} borderRadius={8} backgroundColor={colors.error} alignItems="center" justifyContent="center" gap={6}>

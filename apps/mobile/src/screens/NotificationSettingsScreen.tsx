@@ -160,7 +160,7 @@ export function NotificationSettingsScreen() {
                   borderRadius={10}
                   borderWidth={0.5}
                   borderColor={colors.border}
-                  backgroundColor={colors.white}
+                  backgroundColor={colors.card}
                   alignItems="center"
                   justifyContent="space-between">
                   <YStack gap={2}>
@@ -191,7 +191,7 @@ export function NotificationSettingsScreen() {
                         borderRadius={10}
                         borderWidth={0.5}
                         borderColor={colors.border}
-                        backgroundColor={colors.white}
+                        backgroundColor={colors.card}
                         alignItems="center"
                         justifyContent="space-between">
                         <YStack gap={1} flex={1}>
@@ -221,7 +221,7 @@ export function NotificationSettingsScreen() {
                     borderRadius={10}
                     borderWidth={0.5}
                     borderColor={colors.border}
-                    backgroundColor={colors.white}
+                    backgroundColor={colors.card}
                     alignItems="center"
                     justifyContent="space-between">
                     <YStack gap={1} flex={1}>
@@ -262,7 +262,7 @@ export function NotificationSettingsScreen() {
                   Recent History
                 </Text>
                 {history.length === 0 ? (
-                  <XStack padding={16} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} justifyContent="center">
+                  <XStack padding={16} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} justifyContent="center">
                     <Text fontSize={13} color={colors.textMuted}>No notifications yet</Text>
                   </XStack>
                 ) : (
@@ -273,7 +273,7 @@ export function NotificationSettingsScreen() {
                       borderRadius={10}
                       borderWidth={0.5}
                       borderColor={colors.border}
-                      backgroundColor={colors.white}
+                      backgroundColor={colors.card}
                       gap={10}
                       alignItems="flex-start">
                       <YStack

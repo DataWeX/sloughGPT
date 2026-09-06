@@ -117,22 +117,22 @@ export function FeedbackScreen() {
             <YStack gap={12} marginBottom={16}>
               {/* Stats Cards */}
               <XStack gap={8}>
-                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
+                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
                   <Text fontSize={22} fontWeight="700" color={colors.text}>{stats?.total ?? 0}</Text>
                   <Text fontSize={11} color={colors.textMuted}>Total</Text>
                 </YStack>
-                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
+                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
                   <Text fontSize={22} fontWeight="700" color={colors.success}>{stats?.thumbs_up ?? 0}</Text>
                   <Text fontSize={11} color={colors.textMuted}>Positive</Text>
                 </YStack>
-                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
+                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
                   <Text fontSize={22} fontWeight="700" color={colors.error}>{stats?.thumbs_down ?? 0}</Text>
                   <Text fontSize={11} color={colors.textMuted}>Negative</Text>
                 </YStack>
               </XStack>
 
               {/* Positive Rate */}
-              <YStack padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4}>
+              <YStack padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={13} fontWeight="500" color={colors.text}>Approval Rate</Text>
                   <Text fontSize={18} fontWeight="700" color={colors.primary}>{positiveRate}%</Text>
@@ -140,7 +140,7 @@ export function FeedbackScreen() {
               </YStack>
 
               {/* Workflow Status */}
-              <YStack padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Workflow</Text>
                   <StatusBadge
@@ -197,7 +197,7 @@ export function FeedbackScreen() {
           }
           renderItem={({item}) => (
             <YStack
-              backgroundColor={colors.white}
+              backgroundColor={colors.card}
               borderRadius={8}
               padding={12}
               marginBottom={8}
