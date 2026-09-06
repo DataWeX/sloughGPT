@@ -70,6 +70,8 @@ class SyncableCollection:
         self._last_sync = 0.0
         self._lazy_timer: Optional[threading.Timer] = None
         self._shutdown = False
+        self._batch_depth = 0  # Track nested batch() context depth
+        self._batch_had_writes = False  # Track if batch had any writes
 
         # Bootstrap: if JSON exists but collection is empty, load from JSON
         self._bootstrap_from_json()
@@ -134,7 +136,13 @@ class SyncableCollection:
                         pass
 
     def _on_write(self) -> None:
-        """Called after every write operation to sync to JSON."""
+        """Called after every write operation to sync to JSON.
+
+        Skipped if inside a ``batch()`` context — sync happens on batch exit.
+        """
+        if self._batch_depth > 0:
+            self._batch_had_writes = True
+            return
         if self._sync_mode == "lazy":
             self._mark_dirty()
         else:
@@ -319,15 +327,15 @@ class _BatchContext:
 
     def __init__(self, syncable: SyncableCollection):
         self._syncable = syncable
-        self._write_count = 0
 
     def __enter__(self):
+        self._syncable._batch_depth += 1
+        self._syncable._batch_had_writes = False
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is None and self._write_count > 0:
+        self._syncable._batch_depth -= 1
+        if exc_type is None and self._syncable._batch_had_writes:
+            self._syncable._batch_had_writes = False
             self._syncable._on_write()
         return False
-
-    def _count_write(self) -> None:
-        self._write_count += 1
