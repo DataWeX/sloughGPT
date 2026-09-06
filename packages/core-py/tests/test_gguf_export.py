@@ -241,23 +241,28 @@ class TestRegisterArchitecture:
 
 
 class TestMappingBase:
-    def test_base_raises(self):
-        m = TensorMapping("base", "llama")
-        with pytest.raises(NotImplementedError):
-            m.get_tensor_map()
-        with pytest.raises(NotImplementedError):
-            m.get_block_prefix()
-        with pytest.raises(NotImplementedError):
-            m.has_rope()
-        with pytest.raises(NotImplementedError):
-            m.has_position_embeddings()
+    def test_base_cannot_instantiate(self):
+        with pytest.raises(TypeError):
+            TensorMapping("base", "llama")
 
     def test_base_special_tensors_default(self):
-        m = TensorMapping("base", "llama")
+        class _DummyMapping(TensorMapping):
+            def get_tensor_map(self): return {}
+            def get_block_prefix(self): return ""
+            def has_rope(self): return False
+            def has_position_embeddings(self): return False
+
+        m = _DummyMapping("base", "llama")
         assert m.get_special_tensors() == {}
 
     def test_base_fused_qkv_default(self):
-        m = TensorMapping("base", "llama")
+        class _DummyMapping(TensorMapping):
+            def get_tensor_map(self): return {}
+            def get_block_prefix(self): return ""
+            def has_rope(self): return False
+            def has_position_embeddings(self): return False
+
+        m = _DummyMapping("base", "llama")
         assert m.get_fused_qkv_keys() == []
 
 

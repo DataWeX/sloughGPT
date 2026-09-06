@@ -119,7 +119,8 @@ class PushNotificationService:
         try:
             for doc in self._dev_col.find({}):
                 token = doc["token"]
-                self._devices[token] = DeviceToken(**{k: v for k, v in doc.items() if k != "_id"})
+                clean = {k: v for k, v in doc.items() if not k.startswith("_")}
+                self._devices[token] = DeviceToken(**clean)
         except Exception as e:
             logger.warning("Failed to load devices: %s", e, extra={"tag": "MODEL"})
 

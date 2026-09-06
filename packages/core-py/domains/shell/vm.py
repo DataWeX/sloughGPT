@@ -8827,7 +8827,9 @@ class X86SyscallHandler:
         # Re-assemble with correct org so data labels resolve to the right addresses
         try:
             code = X86Assembler().assemble(source, org=base)
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.vm").warning("Assembly failed: %s", exc)
             return -1
 
         # Load code at base address

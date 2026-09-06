@@ -757,7 +757,10 @@ def _matmul(a, b):
     if _use_acc:
         try:
             result = acc.matmul(a_data, b_data)
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.training").warning(
+                "GPU matmul failed, falling back to CPU: %s", exc)
             result = np.matmul(a_data, b_data)
     else:
         result = np.matmul(a_data, b_data)

@@ -1,6 +1,5 @@
 """Tests for domains.mobile.notifications: device tokens and Expo push service."""
 
-import sys
 import time
 
 import pytest
@@ -10,14 +9,18 @@ from domains.mobile.notifications import (
     NotificationPayload,
     PushNotificationService,
     get_notification_service,
+    set_mogdb_path,
+    reset_mogdb,
 )
 
 
 @pytest.fixture
-def service(tmp_path, monkeypatch):
-    monkeypatch.setattr("domains.mobile.notifications._DEVICES_FILE", tmp_path / "devices.json")
-    monkeypatch.setattr("domains.mobile.notifications._HISTORY_FILE", tmp_path / "history.json")
-    return PushNotificationService()
+def service(tmp_path):
+    db_path = str(tmp_path / "mogdb")
+    set_mogdb_path(db_path)
+    svc = PushNotificationService(db_path=db_path)
+    yield svc
+    reset_mogdb()
 
 
 class TestDataclasses:
@@ -50,13 +53,6 @@ class TestRegisterUnregister:
         device = service._devices["tok-123"]
         assert device.platform == "android"
         assert device.topics == ["training"]
-
-    def test_register_persists_to_disk(self, service, tmp_path):
-        service.register_device("tok-123", "ios", user_id="alice")
-        assert (tmp_path / "devices.json").exists()
-        content = (tmp_path / "devices.json").read_text()
-        assert '"tok-123"' in content
-        assert '"alice"' in content
 
     def test_unregister_existing(self, service):
         service.register_device("tok-123", "ios")
@@ -132,7 +128,7 @@ def fake_httpx(monkeypatch):
 
     def make(responses):
         store["client"] = FakeHttpx(responses)
-        monkeypatch.setitem(sys.modules, "httpx", store["client"])
+        monkeypatch.setitem(__import__("sys").modules, "httpx", store["client"])
 
     make._store = store
     return make
@@ -265,22 +261,30 @@ class TestHistoryAndCleanup:
 
 
 class TestPersistence:
-    def test_load_roundtrip(self, service, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.mobile.notifications._DEVICES_FILE", tmp_path / "devices.json")
-        monkeypatch.setattr("domains.mobile.notifications._HISTORY_FILE", tmp_path / "history.json")
-        service.register_device("tok-123", "ios", user_id="alice", topics=["chat"])
-        service.send_notification(NotificationPayload(title="t", body="b"))
-        reloaded = PushNotificationService()
-        assert "tok-123" in reloaded._devices
-        assert reloaded._devices["tok-123"].user_id == "alice"
-        assert len(reloaded._history) == 1
+    def test_load_roundtrip(self, tmp_path):
+        db_path = str(tmp_path / "mogdb")
+        set_mogdb_path(db_path)
+        try:
+            svc = PushNotificationService(db_path=db_path)
+            svc.register_device("tok-123", "ios", user_id="alice", topics=["chat"])
+            svc.send_notification(NotificationPayload(title="t", body="b"))
+            reset_mogdb()
+            reloaded = PushNotificationService(db_path=db_path)
+            assert "tok-123" in reloaded._devices
+            assert reloaded._devices["tok-123"].user_id == "alice"
+            assert len(reloaded._history) == 1
+        finally:
+            reset_mogdb()
 
-    def test_load_corrupt_file_ignored(self, tmp_path, monkeypatch):
-        (tmp_path / "devices.json").write_text("{not json")
-        monkeypatch.setattr("domains.mobile.notifications._DEVICES_FILE", tmp_path / "devices.json")
-        monkeypatch.setattr("domains.mobile.notifications._HISTORY_FILE", tmp_path / "history.json")
-        service = PushNotificationService()
-        assert service._devices == {}
+    def test_load_empty_db(self, tmp_path):
+        db_path = str(tmp_path / "mogdb_empty")
+        set_mogdb_path(db_path)
+        try:
+            service = PushNotificationService(db_path=db_path)
+            assert service._devices == {}
+            assert service._history == []
+        finally:
+            reset_mogdb()
 
 
 class TestSingleton:

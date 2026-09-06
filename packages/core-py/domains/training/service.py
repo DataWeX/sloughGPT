@@ -244,7 +244,8 @@ def read_slo_json_header(path: Path) -> dict:
             json_len = struct.unpack("<I", f.read(4))[0]
             header = f.read(json_len)
             return json.loads(header.decode())
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to parse checkpoint header %s: %s", path, exc)
         return {}
 
 
@@ -405,7 +406,8 @@ def load_lora_soul(name: str) -> dict | None:
             try:
                 st = fp.stat()
                 return _load_soul_from_path(fp, st)
-            except Exception:
+            except Exception as exc:
+                logger.debug("Failed to load LoRA soul %s: %s", fp.name, exc)
                 continue
     return None
 

@@ -168,7 +168,10 @@ def _is_app_ready() -> bool:
         return STARTUP_PHASE.get("phase") in ("running", "ready")
     except Exception:
         logger.debug("Startup phase check failed", exc_info=True)
-        return True() -> tuple[bool, str | None]:
+        return True
+
+
+def _get_model_info() -> tuple[bool, str | None]:
     """Get model info from registry, controller, or server_state."""
     loaded, model_type, _ = _get_model_info_with_registry()
     if loaded and not _is_app_ready():

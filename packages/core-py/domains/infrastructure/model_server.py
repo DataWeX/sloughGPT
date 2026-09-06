@@ -866,7 +866,7 @@ def _schedule_gc() -> None:
 # selected at request time, so a dead guard transparently falls back to local
 # generation without restarting the server.
 
-class GenerateBackend:
+class GenerateBackend(ABC):
     """Base class for token generation backends.
 
     Subclasses implement ``generate()`` (non-streaming) and
@@ -874,6 +874,7 @@ class GenerateBackend:
     backend is selected for the current request.
     """
 
+    @abstractmethod
     def generate(
         self,
         prompt: str,
@@ -885,8 +886,9 @@ class GenerateBackend:
         **kwargs: Any,
     ) -> dict:
         """Non-streaming generation.  Returns {"text": str, "tokens_generated": int}."""
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def generate_stream(
         self,
         prompt: str,
@@ -899,7 +901,7 @@ class GenerateBackend:
         **kwargs: Any,
     ) -> GeneratorType[str, None, dict]:
         """Streaming generation.  Yields tokens, returns final result dict."""
-        raise NotImplementedError
+        ...
 
     @property
     def alive(self) -> bool:

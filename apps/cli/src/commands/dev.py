@@ -935,8 +935,10 @@ def _cmd_api_and_web(args):
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     web_status = "ok (reusing)" if web_reused else "starting"
+    _status_printed = False
 
     def _update_status():
+        nonlocal _status_printed
         api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
         web_color = _A.GREEN if "ok" in web_status else _A.YELLOW
         status.update(
@@ -944,6 +946,7 @@ def _cmd_api_and_web(args):
             f"  API: http://{args.host}:{api_port}  {ansi_c(api_status, api_color, log._colors)}",
             f"  Web: http://localhost:{web_port}  {ansi_c(web_status, web_color, log._colors)}",
         )
+        _status_printed = True
 
     _update_status()
 
@@ -1151,14 +1154,9 @@ def _cmd_api_and_web(args):
     # ── Ready ────────────────────────────────────────────────────
     web_url = f"http://localhost:{web_port}"
     api_url = f"http://{args.host}:{api_port}"
-
-    status.update(
-        ansi_c("  SloughGPT", _A.BOLD, log._colors),
-        f"  API: {api_url}  {ansi_c('ok', _A.GREEN, log._colors)}",
-        f"  Web: {web_url}  {ansi_c('ok', _A.GREEN, log._colors)}",
-        "",
-        f"  Press Ctrl+C to stop",
-    )
+    api_status = "ok"
+    web_status = "ok"
+    _update_status()
 
     # ── Auto-open browser ────────────────────────────────────────
     def _open_browser():

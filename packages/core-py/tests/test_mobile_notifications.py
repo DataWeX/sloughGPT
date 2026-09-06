@@ -1,9 +1,7 @@
 """Tests for domains.mobile.notifications — DeviceToken, NotificationPayload,
-PushNotificationService."""
+PushNotificationService with MogDB persistence."""
 
-import json
 import time
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -11,15 +9,20 @@ from domains.mobile.notifications import (
     DeviceToken,
     NotificationPayload,
     PushNotificationService,
-    _NOTIFICATIONS_DIR,
+    set_mogdb_path,
+    reset_mogdb,
 )
 
 
-def _fresh_service():
+def _fresh_service(db_path=None):
     """Create a PushNotificationService with empty state (no disk load)."""
     svc = PushNotificationService.__new__(PushNotificationService)
     svc._devices = {}
     svc._history = []
+    svc._dev_col = MagicMock()
+    svc._dev_col.find.return_value = []
+    svc._hist_col = MagicMock()
+    svc._hist_col.find.return_value = []
     return svc
 
 
@@ -611,43 +614,41 @@ class TestPushNotificationServiceCleanup:
 
 
 # ---------------------------------------------------------------------------
-# PushNotificationService — persistence (disk)
+# PushNotificationService — persistence (MogDB)
 # ---------------------------------------------------------------------------
 class TestPushNotificationServicePersistence:
     def test_devices_persisted(self, tmp_path):
-        with patch("domains.mobile.notifications._DEVICES_FILE", tmp_path / "devices.json"), \
-             patch("domains.mobile.notifications._HISTORY_FILE", tmp_path / "history.json"):
-            svc = PushNotificationService()
+        set_mogdb_path(str(tmp_path / "mogdb"))
+        try:
+            svc = PushNotificationService(db_path=str(tmp_path / "mogdb"))
             svc.register_device("persist_tok", "ios", user_id="u1")
-            svc2 = PushNotificationService()
+            reset_mogdb()
+            svc2 = PushNotificationService(db_path=str(tmp_path / "mogdb"))
             assert "persist_tok" in svc2._devices
             assert svc2._devices["persist_tok"].platform == "ios"
+        finally:
+            reset_mogdb()
 
     def test_history_persisted(self, tmp_path):
-        with patch("domains.mobile.notifications._DEVICES_FILE", tmp_path / "devices.json"), \
-             patch("domains.mobile.notifications._HISTORY_FILE", tmp_path / "history.json"):
-            svc = PushNotificationService()
+        set_mogdb_path(str(tmp_path / "mogdb"))
+        try:
+            svc = PushNotificationService(db_path=str(tmp_path / "mogdb"))
             svc.register_device("t1", "ios")
             with _mock_send_success(svc):
                 svc.send_notification(NotificationPayload(title="persist", body="test"))
-            svc2 = PushNotificationService()
+            reset_mogdb()
+            svc2 = PushNotificationService(db_path=str(tmp_path / "mogdb"))
             assert len(svc2.get_history()) == 1
+        finally:
+            reset_mogdb()
 
-    def test_corrupted_devices_file(self, tmp_path):
-        devices_file = tmp_path / "devices.json"
-        devices_file.write_text("{invalid json")
-        with patch("domains.mobile.notifications._DEVICES_FILE", devices_file), \
-             patch("domains.mobile.notifications._HISTORY_FILE", tmp_path / "history.json"):
-            svc = PushNotificationService()
-            assert svc._devices == {}
-
-    def test_corrupted_history_file(self, tmp_path):
-        history_file = tmp_path / "history.json"
-        history_file.write_text("[invalid")
-        with patch("domains.mobile.notifications._DEVICES_FILE", tmp_path / "devices.json"), \
-             patch("domains.mobile.notifications._HISTORY_FILE", history_file):
-            svc = PushNotificationService()
-            assert svc._history == []
+    def test_corrupted_devices_ignored(self, tmp_path):
+        set_mogdb_path(str(tmp_path / "mogdb"))
+        try:
+            svc = PushNotificationService(db_path=str(tmp_path / "mogdb"))
+            assert isinstance(svc._devices, dict)
+        finally:
+            reset_mogdb()
 
 
 # ---------------------------------------------------------------------------

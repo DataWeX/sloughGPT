@@ -546,11 +546,12 @@ class KnowledgeMemory:
             self._migrate_from_json_topics()
 
     def _init_mogdb(self) -> None:
-        """Initialize MogDB for visited hashes persistence."""
+        """Initialize MogDB for visited hashes and entries persistence."""
         try:
             from mogdb import MogDB
             self._mogdb = MogDB(_KNOWLEDGE_DB_PATH)
             self._visited_col = self._mogdb.collection("visited")
+            self._entries_col = self._mogdb.collection("entries")
             logger.debug("Initialized MogDB for knowledge at %s", _KNOWLEDGE_DB_PATH)
         except Exception as e:
             logger.warning("Failed to initialize MogDB for knowledge: %s, using JSON fallback", e)
@@ -606,44 +607,76 @@ class KnowledgeMemory:
             logger.warning("Failed to save visited to JSON: %s", e)
 
     def _save_entries(self):
-        """Persist all vector entries to JSON for restart survival.
-
-        An emptied store is persisted as ``[]`` when a file already exists,
-        so ``clear_all`` survives a restart. The file is only left untouched
-        when nothing has ever been persisted (avoids creating an empty file
-        for a never-used store).
-        """
+        """Persist all vector entries to MogDB (and JSON fallback) for restart survival."""
         try:
             entries = getattr(self._vector_store, '_entries', None)
-            if not entries and not ENTRIES_PATH.exists():
+            if not entries:
+                # Check if any MogDB entries exist before clearing
+                if self._entries_col is not None:
+                    existing = self._entries_col.find({})
+                    if existing:
+                        self._entries_col.drop()
+                elif ENTRIES_PATH.exists():
+                    ENTRIES_PATH.write_text("[]")
                 return
+
             data = []
             for eid, entry in (entries or {}).items():
                 data.append({
+                    "_id": entry.id,
                     "id": entry.id,
                     "vector": entry.vector,
                     "text": entry.text,
                     "metadata": dict(entry.metadata) if entry.metadata else {},
                 })
+
+            # Save to MogDB
+            if self._entries_col is not None:
+                try:
+                    self._entries_col.drop()
+                    if data:
+                        self._entries_col.insert_many(data)
+                except Exception as e:
+                    logger.warning("Failed to save entries to MogDB: %s", e, extra={"tag": "INF"})
+
+            # Also save to legacy JSON for backward compatibility
             ENTRIES_PATH.write_text(json.dumps(data))
         except Exception as e:
             logger.warning("Failed to save entries: %s", e, extra={"tag": "INF"})
 
     def _load_entries(self):
-        """Load persisted entries into vector store on init."""
-        if not ENTRIES_PATH.exists():
+        """Load persisted entries into vector store on init (MogDB first, JSON fallback)."""
+        data = None
+
+        # Try MogDB first
+        if self._entries_col is not None:
+            try:
+                docs = self._entries_col.find({})
+                if docs:
+                    data = docs
+                    logger.debug("Loaded %s entries from MogDB", len(data))
+            except Exception as e:
+                logger.warning("Failed to load entries from MogDB: %s, trying JSON fallback", e)
+
+        # Fallback: load from legacy JSON file
+        if data is None and ENTRIES_PATH.exists():
+            try:
+                data = json.loads(ENTRIES_PATH.read_text())
+                if data:
+                    logger.debug("Loaded %s entries from JSON fallback", len(data))
+            except Exception as e:
+                logger.warning("Failed to load entries from JSON: %s", e)
+
+        if not data:
             return
+
         try:
             from domains.inference.vector_store import VectorEntry
-            data = json.loads(ENTRIES_PATH.read_text())
-            if not data:
-                return
-            # Skip entries with wrong dimension
             expected_dim = self._vector_store.dimension
             entries = []
             skipped = 0
             for d in data:
-                vec = d["vector"]
+                vec = d.get("vector", [])
                 if len(vec) != expected_dim:
                     skipped += 1
                     continue
