@@ -79,6 +79,27 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
     except ManifestError as e:
         raise_error(str(e), "E_BAD_REQUEST", status_code=400)
 
+    # Pre-flight dataset validation
+    from pathlib import Path as _P
+
+    _data_path = _P(data_path_str)
+    if not _data_path.exists():
+        raise_error(f"Dataset not found: {data_path_str}", "E_BAD_REQUEST", status_code=400)
+    if _data_path.is_file():
+        _size = _data_path.stat().st_size
+        if _size == 0:
+            raise_error("Dataset file is empty (0 bytes)", "E_BAD_REQUEST", status_code=400)
+        if _size < 100:
+            raise_error(f"Dataset file is too small ({_size} bytes). Need at least 100 bytes.", "E_BAD_REQUEST", status_code=400)
+    elif _data_path.is_dir():
+        _files = list(_data_path.rglob("*"))
+        _data_files = [f for f in _files if f.is_file() and f.suffix in (".jsonl", ".json", ".txt", ".csv", ".parquet")]
+        if len(_data_files) == 0:
+            raise_error(f"No data files found in directory (expected .jsonl, .json, .txt, .csv, or .parquet)", "E_BAD_REQUEST", status_code=400)
+        _total_size = sum(f.stat().st_size for f in _data_files)
+        if _total_size < 100:
+            raise_error(f"Total dataset size too small ({_total_size} bytes across {len(_data_files)} files)", "E_BAD_REQUEST", status_code=400)
+
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     job: dict[str, Any] = {
         "id": job_id,
