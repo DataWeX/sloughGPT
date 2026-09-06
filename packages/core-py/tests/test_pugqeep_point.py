@@ -110,6 +110,34 @@ class TestPointNbytes:
                   params={"data_b64": base64.b64encode(data).decode()})
         assert p.nbytes() == len(data)
 
+    def test_block_q4(self):
+        n_blocks, bs = 4, 32
+        mins = np.zeros(n_blocks, dtype=np.float32)
+        scales = np.ones(n_blocks, dtype=np.float32)
+        packed = np.zeros(n_blocks * bs // 2, dtype=np.uint8)
+        p = Point(identity="q4", function_type="block_q4",
+                  params={"mins": mins, "scales": scales, "packed": packed,
+                          "n_elements": n_blocks * bs, "n_blocks": n_blocks, "block_size": bs})
+        assert p.nbytes() == mins.nbytes + scales.nbytes + packed.nbytes
+
+    def test_block_q8(self):
+        n_blocks, bs = 4, 32
+        mins = np.zeros(n_blocks, dtype=np.float32)
+        scales = np.ones(n_blocks, dtype=np.float32)
+        values = np.zeros(n_blocks * bs, dtype=np.uint8)
+        p = Point(identity="q8", function_type="block_q8",
+                  params={"mins": mins, "scales": scales, "values": values,
+                          "n_elements": n_blocks * bs, "n_blocks": n_blocks, "block_size": bs})
+        assert p.nbytes() == mins.nbytes + scales.nbytes + values.nbytes
+
+    def test_block_q4_missing_params(self):
+        p = Point(identity="q4", function_type="block_q4", params={})
+        assert p.nbytes() == 0
+
+    def test_block_q8_missing_params(self):
+        p = Point(identity="q8", function_type="block_q8", params={})
+        assert p.nbytes() == 0
+
 
 # ── to_bytes / from_bytes round-trip ─────────────────────────────────
 

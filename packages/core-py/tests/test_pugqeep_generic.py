@@ -74,6 +74,24 @@ class TestCompressionStrategyDefaults:
                               "assignments": np.zeros(8, dtype=np.uint8)})
         assert strategy.nbytes(point) == point.nbytes()
 
+    def test_nbytes_block_q4(self):
+        strategy = ClusterStrategy()
+        mins = np.zeros(4, dtype=np.float32)
+        scales = np.ones(4, dtype=np.float32)
+        packed = np.zeros(64, dtype=np.uint8)
+        point = Point(identity="q4", function_type="block_q4",
+                      params={"mins": mins, "scales": scales, "packed": packed})
+        assert strategy.nbytes(point) == point.nbytes()
+
+    def test_nbytes_block_q8(self):
+        strategy = ClusterStrategy()
+        mins = np.zeros(4, dtype=np.float32)
+        scales = np.ones(4, dtype=np.float32)
+        values = np.zeros(128, dtype=np.uint8)
+        point = Point(identity="q8", function_type="block_q8",
+                      params={"mins": mins, "scales": scales, "values": values})
+        assert strategy.nbytes(point) == point.nbytes()
+
 
 class TestClusterStrategy:
     def test_compress_decompress(self):
