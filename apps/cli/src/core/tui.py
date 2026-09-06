@@ -866,6 +866,7 @@ class DevDashboard:
         self._info: dict = info or {}
         if "Theme" not in self._info:
             self._info["Theme"] = "Default"
+        self._restarting = False
         if self._restarting:
             self._info["Status"] = "RESTARTING"
         elif "Status" in self._info:
@@ -875,7 +876,6 @@ class DevDashboard:
         self._frame = 0
         self._startup_phase = True
         self._on_restart = on_restart
-        self._restarting = False
 
         # scroll support: scroll offset per tab (0 = latest)
         self._scroll_offsets: dict[str, int] = {t.id: 0 for t in self._tabs}
