@@ -155,7 +155,17 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
 
       if (reconnect && reconnectCount < maxReconnects) {
         reconnectCount++
-        const delay = Math.min(maxReconnectMs, baseReconnectMs * Math.pow(2, reconnectCount - 1))
+        // Detect connection refused / fetch failures during cold start.
+        // Use a longer initial delay to avoid hammering a dead server.
+        const isConnRefused = err instanceof Error && (
+          err.message.includes('Failed to fetch') ||
+          err.message.includes('ECONNREFUSED') ||
+          err.message.includes('NetworkError')
+        )
+        const effectiveBase = isConnRefused && reconnectCount <= 3
+          ? Math.max(baseReconnectMs, 5000)
+          : baseReconnectMs
+        const delay = Math.min(maxReconnectMs, effectiveBase * Math.pow(2, reconnectCount - 1))
         reconnectTimer = setTimeout(connect, delay)
       } else {
         onClose?.()

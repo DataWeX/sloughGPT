@@ -140,7 +140,7 @@ async def exec_command_stream(req: ShellExecRequest, request: Request, auth_user
             logger.warning("Shell stream exec error: %s", e, extra={"tag": "SHELL"})
             error_type = type(e).__name__
             is_conn = isinstance(e, (ConnectionError, OSError)) and "connect" in str(e).lower()
-            is_timeout = isinstance(e, (TimeoutError,) or ())
+            is_timeout = isinstance(e, TimeoutError)
             hint = ""
             if is_conn:
                 hint = " Is the API server running? Use 'api start'."

@@ -107,13 +107,17 @@ class TestComponentException:
     def test_is_exception(self):
         assert issubclass(ComponentException, Exception)
 
+    def test_is_app_error(self):
+        from domains.infrastructure.errors import AppError
+        assert issubclass(ComponentException, AppError)
+
     def test_message(self):
         e = ComponentException("bad config")
         assert str(e) == "bad config"
 
-    def test_empty_message(self):
+    def test_empty_message_uses_code(self):
         e = ComponentException("")
-        assert str(e) == ""
+        assert str(e) == "E_COMPONENT"
 
     def test_raise_and_catch(self):
         with pytest.raises(ComponentException):
@@ -128,10 +132,6 @@ class TestComponentException:
             except ComponentException as ce:
                 assert isinstance(ce.__cause__, ValueError)
 
-    def test_args(self):
-        e = ComponentException("msg", "extra")
-        assert e.args == ("msg", "extra")
-
     def test_is_subclass_of_exception(self):
         assert issubclass(ComponentException, Exception)
 
@@ -143,17 +143,9 @@ class TestComponentException:
         with pytest.raises(Exception):
             raise ComponentException("generic")
 
-    def test_no_args(self):
-        e = ComponentException()
-        assert str(e) == ""
-
-    def test_numeric_message(self):
-        e = ComponentException(42)
-        assert str(e) == "42"
-
-    def test_none_message(self):
-        e = ComponentException(None)
-        assert str(e) == "None"
+    def test_default_code(self):
+        e = ComponentException("x")
+        assert e.code == "E_COMPONENT"
 
     def test_catch_specific_then_generic(self):
         caught = False
@@ -444,13 +436,17 @@ class TestDomainException:
     def test_is_exception(self):
         assert issubclass(DomainException, Exception)
 
+    def test_is_app_error(self):
+        from domains.infrastructure.errors import AppError
+        assert issubclass(DomainException, AppError)
+
     def test_message(self):
         e = DomainException("domain error")
         assert str(e) == "domain error"
 
-    def test_empty_message(self):
+    def test_empty_message_uses_code(self):
         e = DomainException("")
-        assert str(e) == ""
+        assert str(e) == "E_DOMAIN"
 
     def test_raise_and_catch(self):
         with pytest.raises(DomainException):
@@ -465,10 +461,6 @@ class TestDomainException:
             except DomainException as de:
                 assert isinstance(de.__cause__, ValueError)
 
-    def test_args(self):
-        e = DomainException("msg", "extra")
-        assert e.args == ("msg", "extra")
-
     def test_repr(self):
         e = DomainException("test")
         assert "DomainException" in repr(e)
@@ -477,9 +469,9 @@ class TestDomainException:
         with pytest.raises(Exception):
             raise DomainException("generic")
 
-    def test_numeric_message(self):
-        e = DomainException(42)
-        assert str(e) == "42"
+    def test_default_code(self):
+        e = DomainException("x")
+        assert e.code == "E_DOMAIN"
 
     def test_multiple_causes(self):
         try:

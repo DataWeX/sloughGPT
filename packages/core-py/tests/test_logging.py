@@ -368,7 +368,7 @@ class TestConsoleLogger:
         output = stream.getvalue().strip()
         data = json.loads(output)
         assert data["msg"] == "test msg"
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["logger"] == "slo.test"
 
     def test_human_format_no_colors(self):
@@ -416,7 +416,7 @@ class TestConsoleLogger:
         log.emit(record)
         output = stream.getvalue()
         data = json.loads(output)
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["msg"] == "test"
 
 
@@ -553,7 +553,7 @@ class TestShellLogger:
         log = ShellLogger("slo.shell", level=LogLevel.DEBUG, stream=stream, colors=False)
         log.info("msg")
         output = stream.getvalue()
-        assert "INFO" in output
+        assert "INF" in output
 
     def test_context_in_output(self):
         stream = StringIO()
@@ -799,6 +799,7 @@ class TestConfigContextVars:
         ctx = get_log_context()
         assert ctx["a"] == 1
         assert ctx["b"] == 2
+        clear_log_context()
 
     def test_log_context_returns_copy(self):
         clear_log_context()
@@ -807,6 +808,7 @@ class TestConfigContextVars:
         ctx2 = get_log_context()
         ctx1["y"] = 2
         assert "y" not in ctx2
+        clear_log_context()
 
     def test_clear_log_context(self):
         set_log_context(a=1)
@@ -820,6 +822,7 @@ class TestConfigContextVars:
         ctx = get_log_context()
         assert ctx["a"] == 1
         assert ctx["b"] == 2
+        clear_log_context()
 
 
 # ── LogFormatter ──────────────────────────────────────────────────────────
@@ -853,7 +856,7 @@ class TestLogFormatter:
         )
         output = fmt.format(record)
         data = json.loads(output)
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["msg"] == "test msg"
 
     def test_json_format_with_error_code(self):
@@ -865,7 +868,7 @@ class TestLogFormatter:
         record.error_code = "E_MODEL_OOM"
         output = fmt.format(record)
         data = json.loads(output)
-        assert data["level"] == "ERROR"
+        assert data["lvl"] == "ERROR"
         assert data["msg"] == "oom"
 
 

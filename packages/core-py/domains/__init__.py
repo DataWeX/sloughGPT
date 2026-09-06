@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional, Protocol, runtime_checkable
 
 from .chat.domain import ChatDomain, get_chat_domain
 from .benchmark.domain import BenchmarkDomain, get_benchmark_domain
+from .infrastructure.errors import AppError
 
 # Companion is in companion.py (not companion/)
 from .companion import get_companion, CompanionSystem
@@ -30,8 +31,11 @@ class BaseComponent:
     async def shutdown(self) -> None:
         self.is_initialized = False
 
-class ComponentException(Exception):
-    pass
+class ComponentException(AppError):
+    """Component-level error — raised by domain components (cache, deployment, etc.)."""
+    code: str = "E_COMPONENT"
+    http_status: int = 500
+    user_message: str = "A component error occurred."
 
 
 # --- Cognitive domain shared types ---
@@ -96,9 +100,11 @@ class BaseDomain:
     def __init__(self, domain_name: str) -> None:
         self.domain_name = domain_name
 
-class DomainException(Exception):
+class DomainException(AppError):
     """Base exception for domain errors."""
-    pass
+    code: str = "E_DOMAIN"
+    http_status: int = 400
+    user_message: str = "A domain error occurred."
 
 
 

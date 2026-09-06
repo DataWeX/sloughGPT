@@ -12,15 +12,19 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error
+from schemas.common import success_response, raise_error
 from domains.billing.token_service import (
     get_token_billing_service,
     Tier,
 )
+
+logger = logging.getLogger("slo.routers.tokens")
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])
 
@@ -41,15 +45,23 @@ class CheckRequest(BaseModel):
 
 @router.get("/balance")
 async def get_balance(auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    account = service.get_balance(auth_user["id"])
-    return account.to_dict()
+    try:
+        service = get_token_billing_service()
+        account = service.get_balance(auth_user["id"])
+        return success_response(data=account.to_dict())
+    except Exception as e:
+        logger.error("Failed to get balance: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_BALANCE", status_code=500)
 
 
 @router.get("/usage/summary")
 async def get_usage_summary(auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    return service.get_usage_summary(auth_user["id"])
+    try:
+        service = get_token_billing_service()
+        return success_response(data=service.get_usage_summary(auth_user["id"]))
+    except Exception as e:
+        logger.error("Failed to get usage summary: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_USAGE", status_code=500)
 
 
 @router.get("/usage/history")
@@ -58,16 +70,24 @@ async def get_usage_history(
     offset: int = Query(0, ge=0),
     auth_user: dict = Depends(require_auth_if_enabled),
 ):
-    service = get_token_billing_service()
-    records = service.get_usage_history(auth_user["id"], limit=limit, offset=offset)
-    return {"records": [r.to_dict() for r in records]}
+    try:
+        service = get_token_billing_service()
+        records = service.get_usage_history(auth_user["id"], limit=limit, offset=offset)
+        return success_response(data={"records": [r.to_dict() for r in records]})
+    except Exception as e:
+        logger.error("Failed to get usage history: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_HISTORY", status_code=500)
 
 
 @router.post("/topup")
 async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    account = service.add_credits(auth_user["id"], request.amount)
-    return account.to_dict()
+    try:
+        service = get_token_billing_service()
+        account = service.add_credits(auth_user["id"], request.amount)
+        return success_response(data=account.to_dict(), message=f"Added {request.amount} credits")
+    except Exception as e:
+        logger.error("Failed to topup credits: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_TOPUP", status_code=500)
 
 
 @router.post("/upgrade")
@@ -81,21 +101,29 @@ async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(requir
             status_code=400,
         )
 
-    service = get_token_billing_service()
-    account = service.upgrade_tier(auth_user["id"], tier)
-    return account.to_dict()
+    try:
+        service = get_token_billing_service()
+        account = service.upgrade_tier(auth_user["id"], tier)
+        return success_response(data=account.to_dict(), message=f"Upgraded to {tier.value}")
+    except Exception as e:
+        logger.error("Failed to upgrade tier: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_UPGRADE", status_code=500)
 
 
 @router.post("/check")
 async def check_tokens(request: CheckRequest, auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    account = service.get_balance(auth_user["id"])
-    total_tokens = request.input_tokens + request.output_tokens
-    can_afford = account.can_afford(total_tokens)
-    return {
-        "canAfford": can_afford,
-        "totalTokens": total_tokens,
-        "balance": account.balance,
-        "dailyRemaining": max(0, account.daily_limit - account.daily_used),
-        "monthlyRemaining": max(0, account.monthly_limit - account.monthly_used),
-    }
+    try:
+        service = get_token_billing_service()
+        account = service.get_balance(auth_user["id"])
+        total_tokens = request.input_tokens + request.output_tokens
+        can_afford = account.can_afford(total_tokens)
+        return success_response(data={
+            "canAfford": can_afford,
+            "totalTokens": total_tokens,
+            "balance": account.balance,
+            "dailyRemaining": max(0, account.daily_limit - account.daily_used),
+            "monthlyRemaining": max(0, account.monthly_limit - account.monthly_used),
+        })
+    except Exception as e:
+        logger.error("Failed to check tokens: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_CHECK", status_code=500)

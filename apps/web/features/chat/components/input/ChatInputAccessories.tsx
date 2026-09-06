@@ -18,7 +18,7 @@ interface ChatInputAccessoriesProps {
   onPDFAnalysis?: (analysis: string, filename: string) => void
   onPDFError?: (error: string) => void
   onCodeBlock?: () => void
-  textareaRef?: React.RefObject<HTMLTextAreaElement>
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
   value?: string
   onChange?: (value: string) => void
 }

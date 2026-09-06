@@ -28,7 +28,8 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from schemas.common import error_response, set_correlation_id
+from schemas.common import error_response
+from domains.infrastructure.correlation import set_correlation_id
 from domains.logging.config import set_request_id
 
 logger = logging.getLogger("slo.middleware")

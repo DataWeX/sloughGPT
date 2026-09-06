@@ -179,19 +179,21 @@ def resolve_dataset_path(dataset_id: str) -> str:
     """Resolve a dataset ID to a data file path. Raises ValueError on invalid input."""
     if not _VALID_DATASET_ID.match(dataset_id):
         raise ValueError(f"Invalid dataset ID: {dataset_id!r}")
-    ds_candidate = (REPO_ROOT / "datasets" / dataset_id).resolve()
-    allowed_base = (REPO_ROOT / "datasets").resolve()
-    if not str(ds_candidate).startswith(str(allowed_base)):
-        raise ValueError("Path traversal detected")
-    if not ds_candidate.exists():
-        return ""
-    for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
-        candidate = ds_candidate / name
-        if candidate.exists():
-            return str(candidate)
-    txt_files = list(ds_candidate.glob("*.txt"))
-    if txt_files:
-        return str(txt_files[0])
+    # Search multiple locations for the dataset
+    for base_name in ("datasets", "data/datasets", "data"):
+        ds_candidate = (REPO_ROOT / base_name / dataset_id).resolve()
+        allowed_base = (REPO_ROOT / base_name).resolve()
+        if not str(ds_candidate).startswith(str(allowed_base)):
+            continue
+        if not ds_candidate.exists():
+            continue
+        for name in ("corpus.jsonl", "input.txt", "train.txt", "text.txt"):
+            candidate = ds_candidate / name
+            if candidate.exists():
+                return str(candidate)
+        txt_files = list(ds_candidate.glob("*.txt"))
+        if txt_files:
+            return str(txt_files[0])
     return ""
 
 
@@ -718,6 +720,9 @@ def start_turbo_training(config: dict) -> dict:
     if not data_path:
         raise ValueError("No data_path or dataset_id provided")
 
+    # Store resolved data_path back so run_turbo_worker can find it
+    config["data_path"] = data_path
+
     resume = False
     resume_path = ""
     checkpoint_name = config.get("checkpoint_name")
@@ -949,6 +954,8 @@ def run_turbo_worker(config: dict) -> None:
             get_training_runtime().sync(job_id)
         _finish_cm("failed", str(e))
         logger.warning("Turbo training failed: %s", e)
+    finally:
+        _state.running = False
 
 
 # ── From-sessions training (business logic extracted from auto_train router) ──

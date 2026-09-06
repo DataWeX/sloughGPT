@@ -215,8 +215,6 @@ class ErrorsRouter:
     async def ingest_frontend_logs(self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Ingest frontend logs through the core logging pipeline."""
         try:
-            import logging
-
             user_id = (auth_user or {}).get("id") or (auth_user or {}).get("username") or "anonymous"
 
             for entry in batch.logs:
@@ -485,7 +483,6 @@ class ErrorsRouter:
     async def get_opencode_log(self) -> dict:
         """Get opencode CLI and UI error logs."""
         try:
-            import os
             home = os.path.expanduser("~")
             entries: list[dict] = []
 
@@ -542,6 +539,6 @@ _error_count_since_clear = _errors_instance._error_count_since_clear
 _dedup_map = _errors_instance._dedup_map
 
 
-def clear_errors() -> dict:
-    """clear_errors."""
-    return _errors_instance.clear_errors()
+async def clear_errors() -> dict:
+    """clear_errors — async backward-compat re-export."""
+    return await _errors_instance.clear_errors()

@@ -156,7 +156,7 @@ class CLILogger(Logger):
         self._colors = _color_enabled(self._stream) if colors is None else colors
         self._cursor_hidden = False
         from .config import LogFormatter
-        self._formatter = LogFormatter(fmt="cli", colors=self._colors)
+        self._formatter = LogFormatter(fmt="human", colors=self._colors)
 
     # ── Cursor lifecycle ─────────────────────────────────────────────────
 

@@ -255,7 +255,7 @@ class TestSetupProvidersWiring:
         mock_provider.set_server = MagicMock()
 
         try:
-            with patch("domains.infrastructure.safetensors_loader._get_model_dir", return_value=tmp_path):
+            with patch("domains.infrastructure.model_resolver.get_model_dir", return_value=tmp_path):
                 with patch("domains.inference.slonet_provider.SloNetChatProvider") as mock_cls:
                     mock_cls.from_slnc.return_value = mock_provider
                     setup_providers()

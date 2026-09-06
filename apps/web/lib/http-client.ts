@@ -319,6 +319,7 @@ export class CircuitBreaker {
   private _successCount = 0
   private _lastFailureAt = 0
   private _halfOpenAttempts = 0
+  private _createdAt = Date.now()
 
   constructor(private opts: Partial<CircuitBreakerOptions> = {}) {}
 
@@ -356,6 +357,12 @@ export class CircuitBreaker {
   }
 
   recordFailure() {
+    // During the first 15s after creation (cold start grace period),
+    // don't count failures toward the circuit breaker threshold.
+    // The backend may still be loading modules / models.
+    const GRACE_MS = 15_000
+    if (Date.now() - this._createdAt < GRACE_MS) return
+
     this._failureCount++
     this._lastFailureAt = Date.now()
     const threshold = this.opts.failureThreshold ?? DEFAULT_CB_FAILURE_THRESHOLD

@@ -24,7 +24,7 @@ import numpy as np
 from domains.infrastructure.arch_config import ArchConfig, build_arch
 from domains.infrastructure.numpy_forward import forward_fast, pre_extract_weights
 from domains.training.slonet import (
-    SloAdam, SloTransformer, export_to_sou, tensor,
+    SloAdam, SloTransformer, export_to_sou, tensor, cross_entropy,
 )
 
 logger = logging.getLogger(__name__)
@@ -583,39 +583,60 @@ def distill_gpt2_to_slo(
             y_tensor = tensor(y_np.tolist())
             s_logits, _ = student.forward(x_tensor, y_tensor)
 
-            # Convert to numpy
-            if hasattr(s_logits, 'data'):
-                s_np = s_logits.data
+            # Keep s_logits as Tensor for autograd — reshape to 2D (batch*seq, vocab)
+            if s_logits.data.ndim == 3:
+                s_logits_2d = s_logits.view(-1, s_logits.data.shape[-1])
             else:
-                s_np = np.array(s_logits)
-            if s_np.ndim == 3:
-                s_np = s_np.reshape(-1, s_np.shape[-1])
+                s_logits_2d = s_logits
 
             # Truncate to min length
             t_flat = teacher_logits.reshape(-1, teacher_logits.shape[-1])
-            min_len = min(s_np.shape[0], t_flat.shape[0])
-            s_np = s_np[:min_len]
+            min_len = min(s_logits_2d.data.shape[0], t_flat.shape[0])
+            s_logits_trunc = s_logits_2d[:min_len]
             t_flat = t_flat[:min_len]
             y_flat = y_np.reshape(-1)[:min_len]
 
-            # --- Distillation loss ---
-            # Soft loss: KL(student/T || teacher/T)
-            s_soft = _softmax(s_np / config.temperature)
-            t_soft = _softmax(t_flat / config.temperature)
-            soft_loss = _kl_div_loss(
-                np.log(np.where(s_soft < 1e-15, 1e-15, s_soft)),
-                t_soft,
-            ) * (config.temperature ** 2)
+            # --- Distillation loss (autograd-preserving) ---
+            T = config.temperature
 
-            # Hard loss: CE(student, ground truth)
-            hard_loss = _cross_entropy_loss(s_np, y_flat)
+            # Soft loss: KL(teacher || student) with temperature scaling
+            # Compute in numpy but attach backward to s_logits_trunc
+            s_data = s_logits_trunc.data
+            s_scaled = s_data / T
+            s_log_softmax = s_scaled - s_scaled.max(axis=-1, keepdims=True)
+            s_log_softmax = s_log_softmax - np.log(np.exp(s_log_softmax).sum(axis=-1, keepdims=True))
+            t_scaled = t_flat / T
+            t_softmax = _softmax(t_scaled)
+            # KL divergence: sum(teacher * (log(teacher) - student_log_probs))
+            kl_per_token = (t_softmax * (np.log(np.where(t_softmax < 1e-15, 1e-15, t_softmax)) - s_log_softmax)).sum(axis=-1)
+            soft_loss_val = float(kl_per_token.mean() * (T ** 2))
 
-            # Combined
+            # Create soft loss Tensor with backward through s_logits_trunc
+            from domains.training.slonet import Tensor as _Tensor
+            soft_loss = _Tensor(soft_loss_val, requires_grad=True, _children=(s_logits_trunc,))
+            if s_logits_trunc.requires_grad:
+                s_logits_trunc._consumers.append(soft_loss)
+            _n = s_data.shape[0]
+            _t_softmax = t_softmax.copy()
+            def _soft_bk(g):
+                if s_logits_trunc.requires_grad:
+                    # d(soft_loss)/d(s_logits) = -(1/T) * t_softmax (for KL w.r.t. student logits)
+                    grad_val = -(_t_softmax / T) * g / _n
+                    if s_logits_trunc.grad is None:
+                        s_logits_trunc.grad = _Tensor(grad_val, _copy=False)
+                    else:
+                        s_logits_trunc.grad.data += grad_val
+            soft_loss._backward_fn = _soft_bk
+
+            # Hard loss: CE(student, ground truth) — uses slonet's autograd-preserving cross_entropy
+            y_tensor_trunc = tensor(y_flat.tolist())
+            hard_loss = cross_entropy(s_logits_trunc, y_tensor_trunc)
+
+            # Combined — keep as Tensor for autograd
             total_loss = config.alpha * hard_loss + config.beta * soft_loss
 
             # --- Backward ---
-            loss_tensor = tensor([total_loss], requires_grad=True)
-            loss_tensor.backward()
+            total_loss.backward()
             optimizer.step(student.parameters())
 
             # Zero grads
@@ -623,17 +644,17 @@ def distill_gpt2_to_slo(
                 if hasattr(p, 'grad'):
                     p.grad = None
 
-            epoch_loss += total_loss
+            epoch_loss += float(total_loss)
             epoch_steps += 1
             step += 1
 
             if step % config.log_interval == 0:
                 avg = epoch_loss / epoch_steps
                 logger.info("step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
-                            step, total_steps, total_loss, hard_loss, soft_loss,
+                            step, total_steps, float(total_loss), float(hard_loss), float(soft_loss),
                             extra={"tag": "TRAIN"})
                 if on_step:
-                    on_step(step, total_loss, epoch)
+                    on_step(step, float(total_loss), epoch)
 
             # Eval
             if step % config.eval_interval == 0 and epoch_steps > 0:

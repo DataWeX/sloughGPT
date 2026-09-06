@@ -134,9 +134,15 @@ def create_rlhf_trainer(
         device: Device to use
 
     Returns:
-        RLHFConfig with the provided models
+        RLHFConfig with the provided models attached
     """
     config = config or RLHFConfig()
+    # Attach models to config so callers can access them downstream.
+    # TODO: Implement actual PPO training loop (currently a stub).
+    config.policy_model = policy_model
+    config.value_model = value_model
+    config.ref_model = ref_model
+    config.device = device
     return config
 
 

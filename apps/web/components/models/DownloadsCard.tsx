@@ -36,7 +36,7 @@ export default function DownloadsCard() {
   const fetchDownloads = useCallback(async () => {
     try {
       const result = await modelController.listDownloads()
-      setDownloads(result.downloads)
+      setDownloads(result.downloads ?? [])
     } catch (err) {
       addToast(extractErrorMessage(err, 'Could not load downloads'), 'error')
     } finally {
@@ -50,7 +50,7 @@ export default function DownloadsCard() {
       setLoading(true)
       try {
         const result = await modelController.listDownloads()
-        if (active) setDownloads(result.downloads)
+        if (active) setDownloads(result.downloads ?? [])
       } catch {
         if (active) {
           addToast('Could not load downloads', 'error')

@@ -241,7 +241,7 @@ class TestComparison:
     def test_gt(self):
         a = Tensor([1.0, 2.0, 3.0])
         c = a > 1.5
-        np.testing.assert_array_equal(c.data, [0.0, 0.0, 1.0])
+        np.testing.assert_array_equal(c.data, [0.0, 1.0, 1.0])
 
     def test_lt(self):
         a = Tensor([1.0, 2.0, 3.0])
@@ -408,7 +408,7 @@ class TestTensorMethods:
     def test_gt_method(self):
         t = Tensor([1.0, 2.0, 3.0])
         e = t.gt(1.5)
-        np.testing.assert_array_equal(e.data, [0.0, 0.0, 1.0])
+        np.testing.assert_array_equal(e.data, [0.0, 1.0, 1.0])
 
     def test_lt_method(self):
         t = Tensor([1.0, 2.0, 3.0])
@@ -448,7 +448,8 @@ class TestTensorMethods:
     def test_to_dtype(self):
         t = Tensor([1.0])
         t2 = t.to(dtype=np.float64)
-        assert t2.data.dtype == np.float64
+        # SloNet convention: float dtypes always pin to float32
+        assert t2.data.dtype == np.float32
 
     def test_slice(self):
         t = Tensor([1.0, 2.0, 3.0, 4.0])

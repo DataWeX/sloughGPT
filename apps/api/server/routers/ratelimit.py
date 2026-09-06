@@ -17,8 +17,8 @@ class _RateLimiter:
         self._history: dict = defaultdict(list)
 
     def is_allowed(self, key: str) -> bool:
+        """Check if a request from key is within rate limits."""
         try:
-            """is_allowed."""
             now = time.time()
             window = 60.0
             self._history[key] = [t for t in self._history[key] if now - t < window]
@@ -26,20 +26,18 @@ class _RateLimiter:
                 return False
             self._history[key].append(now)
             return True
-
         except Exception as e:
             classify_and_raise(e, source="ratelimit.is_allowed")
+
     def get_wait_time(self, key: str) -> float:
+        """Get seconds until the key can make another request."""
         try:
-            """get_wait_time."""
             now = time.time()
             window = 60.0
             self._history[key] = [t for t in self._history[key] if now - t < window]
             if len(self._history[key]) < self.requests_per_minute:
                 return 0.0
             return max(0.0, window - (now - self._history[key][0]))
-
-
         except Exception as e:
             classify_and_raise(e, source="ratelimit.get_wait_time")
 class RatelimitRouter:

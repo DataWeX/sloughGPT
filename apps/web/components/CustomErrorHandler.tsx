@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { IconAlert, IconRefresh, IconCopy, IconX, IconChevronLeft } from '@sloughgpt/strui'
+import { IconAlert, IconRefresh, IconCopy, IconChevronLeft } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
 import { reportError } from '@/lib/error-reporter'
+import { extractErrorMessage, formatStackTrace, getErrorType } from '@/lib/error-utils'
 
 interface CustomErrorHandlerProps {
   error: Error & { digest?: string }
@@ -16,19 +17,24 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
   const [showDetails, setShowDetails] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const errorMessage = extractErrorMessage(error, 'No error message')
+  const errorType = getErrorType(error)
+  const stackFrames = formatStackTrace(error.stack)
+  const digest = (error as { digest?: string }).digest
+
   useEffect(() => {
     addGlobalError(error, 'CustomErrorHandler')
-    reportError(error.message, 'error-boundary', {
+    reportError(errorMessage, 'error-boundary', {
       stack: error.stack,
-      metadata: { name: error.name, digest: error.digest },
+      metadata: { name: error.name, digest },
     })
   }, [error])
 
   const errorDetails = {
-    message: error.message,
+    message: errorMessage,
     name: error.name,
+    digest,
     stack: error.stack,
-    digest: error.digest,
     timestamp: new Date().toISOString(),
     url: typeof window !== 'undefined' ? window.location.href : 'unknown',
     userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'unknown',
@@ -44,16 +50,16 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
     }
   }
 
-  const isNetworkError = error.message.includes('fetch') ||
-                         error.message.includes('network') ||
-                         error.message.includes('ECONNREFUSED') ||
-                         error.message.includes('Could not fetch')
+  const isNetworkError = errorMessage.toLowerCase().includes('fetch') ||
+                         errorMessage.toLowerCase().includes('network') ||
+                         errorMessage.toLowerCase().includes('econnrefused') ||
+                         errorMessage.toLowerCase().includes('could not fetch')
 
-  const isAuthError = error.message.includes('401') ||
-                      error.message.includes('Unauthorized')
+  const isAuthError = errorMessage.includes('401') ||
+                      errorMessage.toLowerCase().includes('unauthorized')
 
-  const isNotFoundError = error.message.includes('404') ||
-                          error.message.includes('Not Found')
+  const isNotFoundError = errorMessage.includes('404') ||
+                          errorMessage.toLowerCase().includes('not found')
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -64,20 +70,25 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
               <IconAlert className="h-5 w-5 text-destructive" />
             </div>
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-base">
+              <CardTitle className="text-base flex items-center gap-2">
                 {isNetworkError ? 'Connection Error' :
                  isAuthError ? 'Authentication Error' :
                  isNotFoundError ? 'Page Not Found' :
                  'Something went wrong'}
+                {errorType && (
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">
+                    {errorType}
+                  </span>
+                )}
               </CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                {error.message.slice(0, 80)}
+              <p className="text-sm text-muted-foreground mt-0.5 break-words">
+                {errorMessage}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
             >
               {showDetails ? 'Hide' : 'Details'}
             </button>
@@ -85,21 +96,49 @@ export function CustomErrorHandler({ error, reset }: CustomErrorHandlerProps) {
         </CardHeader>
         <CardContent className="space-y-4">
           {showDetails && (
-            <div className="rounded-md bg-muted p-3 text-xs font-mono space-y-2 max-h-48 overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Error Details</span>
-                <button
-                  type="button"
-                  onClick={copyToClipboard}
-                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <IconCopy className="h-3 w-3" />
-                  {copied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <pre className="whitespace-pre-wrap break-all text-muted-foreground">
-                {error.stack || error.message}
-              </pre>
+            <div className="rounded-md bg-muted p-3 text-xs font-mono space-y-3 max-h-64 overflow-y-auto">
+              {digest && (
+                <div>
+                  <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Digest</span>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground mt-0.5">{digest}</pre>
+                </div>
+              )}
+              {stackFrames.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Stack Trace</span>
+                    <button
+                      type="button"
+                      onClick={copyToClipboard}
+                      className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <IconCopy className="h-3 w-3" />
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground mt-1">
+                    {stackFrames.map((frame, i) => (
+                      <div key={i}>{frame}</div>
+                    ))}
+                  </pre>
+                </div>
+              )}
+              {error.stack && stackFrames.length === 0 && (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Raw Stack</span>
+                    <button
+                      type="button"
+                      onClick={copyToClipboard}
+                      className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <IconCopy className="h-3 w-3" />
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all text-muted-foreground mt-1">{error.stack}</pre>
+                </div>
+              )}
             </div>
           )}
 

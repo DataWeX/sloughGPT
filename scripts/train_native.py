@@ -21,7 +21,7 @@ config = TrainerConfig(
 )
 
 trainer = SloughGPTTrainer(
-    data_path='datasets/api_conversations/input.txt',
+    data_path='data/datasets/tinyshakespeare/input.txt',
     config=config,
     soul_name='sloughgpt-v1',
 )

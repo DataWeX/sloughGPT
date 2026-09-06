@@ -236,9 +236,12 @@ class DashboardRouter:
 
     async def dashboard_events(self, n: int = 20) -> dict:
         """Return the last N dashboard events as JSON."""
-        from domains.infrastructure.event_buffer import get_event_buffer
-        events = get_event_buffer().recent(n)
-        return success_response(data={"events": events, "count": len(events)})
+        try:
+            from domains.infrastructure.event_buffer import get_event_buffer
+            events = get_event_buffer().recent(n)
+            return success_response(data={"events": events, "count": len(events)})
+        except Exception as e:
+            classify_and_raise(e, source="dashboard.events")
 
 
 router = DashboardRouter().router

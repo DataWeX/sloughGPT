@@ -242,7 +242,17 @@ export const modelController = {
 
   async listDownloads(): Promise<{ downloads: Array<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }>; count: number }> {
     try {
-      return await apiGet('/models/downloads')
+      const raw = await apiGet<unknown>('/models/downloads')
+      const d = raw as Record<string, unknown>
+      if (d && typeof d === 'object' && Array.isArray((d as { downloads?: unknown }).downloads)) {
+        const arr = (d as { downloads: Array<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }> }).downloads
+        return { downloads: arr, count: arr.length }
+      }
+      if (d && typeof d === 'object' && !Array.isArray(d)) {
+        const downloads = Object.values(d).filter((v): v is { model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number } => v != null && typeof v === 'object' && 'model_id' in (v as object))
+        return { downloads, count: downloads.length }
+      }
+      return { downloads: [], count: 0 }
     } catch (e) {
       _log.warning('Could not list downloads', { exception: String(e) })
       return { downloads: [], count: 0 }

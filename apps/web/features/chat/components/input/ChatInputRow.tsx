@@ -19,7 +19,7 @@ interface ChatInputRowProps {
   loading: boolean
   disabled: boolean
   placeholder: string
-  textareaRef: RefObject<HTMLTextAreaElement>
+  textareaRef: RefObject<HTMLTextAreaElement | null>
   onImage: (dataUrl: string) => void
   onTranscript: (text: string) => void
   onAudioRecorded?: (blob: Blob) => void

@@ -1157,6 +1157,13 @@ class SloughGPTTrainer:
                 len(self.train_data) // self.config.block_size // self.config.batch_size
             )
 
+            if steps_per_epoch == 0:
+                raise ValueError(
+                    f"Training data too small for block_size={self.config.block_size} "
+                    f"and batch_size={self.config.batch_size}: only {len(self.train_data)} "
+                    f"samples available, need at least {self.config.block_size * self.config.batch_size}"
+                )
+
             if on_progress and steps_per_epoch > 0:
                 _emit_progress(steps_per_epoch=steps_per_epoch, train_loss=None)
 

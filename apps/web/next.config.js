@@ -6,6 +6,7 @@ const isExport = process.env.NEXT_EXPORT === '1'
 const nextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../../'),
   reactStrictMode: true,
+  productionBrowserSourceMaps: true,
   ...(isProd && !isExport && { output: 'standalone' }),
   ...(isExport && { output: 'export', images: { unoptimized: true }, trailingSlash: true }),
   onDemandEntries: {

@@ -15,11 +15,10 @@ passed explicitly — callers never need to thread it manually.
 from __future__ import annotations
 
 import logging
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
+from domains.infrastructure.correlation import get_correlation_id
 from pydantic import BaseModel, Field
-
-from domains.infrastructure.correlation import get_correlation_id, set_correlation_id
 
 _audit_logger = logging.getLogger("audit")
 
@@ -38,8 +37,8 @@ class StandardResponse(BaseModel, Generic[T]):
 
     status: str = "success"
     data: T = Field(default_factory=dict)
-    message: Optional[str] = None
-    meta: Optional[dict[str, Any]] = None
+    message: str | None = None
+    meta: dict[str, Any] | None = None
 
 
 def success_response(
@@ -137,9 +136,8 @@ def raise_error(
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
-    Maps router error codes to the AppError subclass hierarchy so the
-    existing exception_handlers.py catches and formats the response
-    with the correct HTTP status.
+    Uses the unified ERROR_REGISTRY from domains.infrastructure.errors to
+    resolve the correct AppError subclass and HTTP status for each code.
 
     Args:
         message: Human-readable error description.
@@ -150,33 +148,25 @@ def raise_error(
     Raises:
         AppError (or subclass) — never returns.
     """
-    # Lazy import to avoid circular dependency at module load time
     from domains.infrastructure.errors import (
+        ERROR_REGISTRY,
         AppError,
-        NotFoundError,
-        ValidationError as AppValidationError,
-        AuthError,
-        ResourceExhaustedError,
-        ConfigError,
+        ErrorCode,
     )
 
-    # Map router error codes → AppError subclasses + HTTP status
-    _code_map: dict[str, tuple[type[AppError], int]] = {
-        "E_NOT_FOUND":        (NotFoundError, 404),
-        "E_VAL_REQUEST":      (AppValidationError, 422),
-        "E_VAL_FIELD":        (AppValidationError, 422),
-        "E_BAD_REQUEST":      (AppValidationError, 400),
-        "E_AUTH_MISSING":     (AuthError, 401),
-        "E_AUTH_FORBIDDEN":   (AuthError, 403),
-        "E_INFRA_BUSY":       (ResourceExhaustedError, 409),
-        "E_INFRA_RATE_LIMIT": (ResourceExhaustedError, 429),
-        "E_INFRA_TIMEOUT":    (ResourceExhaustedError, 408),
-        "E_INFRA_STARTUP":    (ConfigError, 503),
-        "E_INFRA_REGISTRY":   (ConfigError, 503),
-        "E_DOMAIN":           (AppError, status_code or 400),
-    }
+    # Look up in the unified registry
+    try:
+        ec = ErrorCode(code)
+        class_name, default_status, _recoverable, _user_msg = ERROR_REGISTRY[ec]
+    except (ValueError, KeyError):
+        # Unknown code — fall back to generic AppError
+        class_name = "AppError"
+        default_status = status_code or 400
 
-    exc_cls, default_status = _code_map.get(code, (AppError, status_code or 400))
+    # Import the correct class dynamically
+    import domains.infrastructure.errors as _err_mod
+    exc_cls = getattr(_err_mod, class_name, AppError)
+
     http_status = status_code or default_status
 
     raise exc_cls(
@@ -193,7 +183,7 @@ def safe_audit_log(
     resource: str = "",
     detail: str = "",
     user: str = "anonymous",
-    extra: Optional[dict] = None,
+    extra: dict | None = None,
     **kwargs: Any,
 ) -> None:
     """Log an audit event without crashing on failure.
@@ -222,12 +212,17 @@ def safe_audit_log(
 
 
 def classify_and_raise(e: Exception, source: str = "router") -> None:
-    """Classify an exception, emit an error event, and raise AppError.
+    """Classify an exception and raise the corresponding AppError.
 
-    Replaces the repeated ``classify_exception + emit_error_event + raise_error``
-    blocks across router files.  Uses the unified ``raise_error()`` path so every
-    error goes through the ``AppError`` hierarchy and the global exception handlers
-    convert it to the correct HTTP response.
+    This is the canonical error handling pattern for router endpoints:
+
+        try:
+            ...
+        except Exception as e:
+            classify_and_raise(e, source="router.chat")
+
+    The exception handler (NOT this function) emits the EventBus event.
+    This avoids double emission.
 
     Args:
         e: The caught exception.
@@ -237,11 +232,11 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
         AppError (or subclass) — never returns.
     """
     from domains.infrastructure.errors import AppError as _AppError
+    from domains.infrastructure.errors import classify_exception
     try:
-        from domains.infrastructure.errors import classify_exception, emit_error_event
         err = classify_exception(e)
-        emit_error_event(err, source=source)
-        # If already an AppError, re-raise directly (its code may not be in _code_map)
+        # Set source for EventBus emission in the exception handler
+        err.source = source
         if isinstance(err, _AppError):
             raise err
         raise_error(err.user_message, err.code, status_code=err.http_status, details=err.details)

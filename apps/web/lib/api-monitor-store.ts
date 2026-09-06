@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import { trackEvent } from '@/lib/dev-log'
 
-export type ApiStatus = 'connected' | 'connecting' | 'offline' | 'reloading'
+export type ApiStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
 
 export interface ConnectionDiagnostic {
   /** The endpoint that failed */

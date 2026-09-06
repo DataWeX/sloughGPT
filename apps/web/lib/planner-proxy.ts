@@ -8,6 +8,8 @@ import { NextResponse } from "next/server";
 const PLANNER_API_BASE =
   process.env.PLANNER_API_BASE ?? "http://127.0.0.1:8787";
 
+export const PLANNER_URL = PLANNER_API_BASE;
+
 export interface PlannerProxyInit {
   method?: string;
   body?: string;

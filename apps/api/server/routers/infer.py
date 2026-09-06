@@ -205,6 +205,10 @@ class InferRouter:
             classify_and_raise(e, source="infer")
 
     async def infer_stream(self, req: InferRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> AsyncGenerator[str, None]:
+        """Stream generated tokens as SSE.
+
+        Yields standard envelope: {stream, phase, status, data: {token}, meta}.
+        """
         # Block streaming inference under memory pressure
         try:
             from domains.infrastructure.memory_pressure import get_memory_pressure_monitor, PressureLevel
@@ -218,10 +222,6 @@ class InferRouter:
             pass
 
         try:
-            """Stream generated tokens as SSE.
-
-            Yields standard envelope: {stream, phase, status, data: {token}, meta}.
-            """
             if self._get_model() is None:
                 async def error_stream() -> AsyncIterator[str]:
                     """error_stream."""

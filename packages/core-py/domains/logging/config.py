@@ -384,10 +384,53 @@ class LogFormatter(logging.Formatter):
     def _format_custom(self, record) -> str:
         """Format a custom base.LogRecord (non-standard logging).
 
-        Produces two lines when context or logger name are present:
+        Respects self._fmt ('json', 'human', 'slo'). When json,
+        produces a single-line JSON object. When human/slo, produces
+        two lines when context or logger name are present:
             Line 1: timestamp level [tag] message
             Line 2:     logger_name k=v k=v
         """
+        if self._fmt == "json":
+            return self._format_custom_json(record)
+        return self._format_custom_human(record)
+
+    def _format_custom_json(self, record) -> str:
+        """JSON format for custom base.LogRecord."""
+        from .base import LogLevel as _LogLevel
+
+        _level_name_map = {
+            _LogLevel.DEBUG: "DEBUG",
+            _LogLevel.INFO: "INFO",
+            _LogLevel.WARNING: "WARNING",
+            _LogLevel.ERROR: "ERROR",
+            _LogLevel.CRITICAL: "CRITICAL",
+        }
+
+        entry: dict[str, Any] = {
+            "v": 1,
+            "ts": datetime.fromtimestamp(record.timestamp, tz=timezone.utc).isoformat(timespec="milliseconds"),
+            "lvl": _level_name_map.get(record.level, "UNKNOWN"),
+            "op": getattr(record, "tag", None) or record.logger or "unknown",
+            "msg": record.message,
+            "logger": record.logger or "",
+        }
+
+        ctx = record.context or {}
+        rid = ctx.get("request_id")
+        if rid:
+            entry["corr"] = rid
+
+        if record.exception:
+            entry["exception"] = record.exception
+
+        non_request_ctx = {k: v for k, v in ctx.items() if k != "request_id"}
+        if non_request_ctx:
+            entry["ctx"] = non_request_ctx
+
+        return json.dumps(entry, default=str, ensure_ascii=False)
+
+    def _format_custom_human(self, record) -> str:
+        """Human/slo format for custom base.LogRecord."""
         from .base import LogLevel as _LogLevel
         parts = []
         c = self._colors
@@ -421,6 +464,11 @@ class LogFormatter(logging.Formatter):
 
         # Message
         parts.append(record.message)
+
+        # Error code
+        error_code = getattr(record, "error_code", None)
+        if error_code:
+            parts.append(f"[{error_code}]")
 
         # Request ID
         rid = record.context.get("request_id") if record.context else None
@@ -564,7 +612,7 @@ class LogFormatter(logging.Formatter):
 
 # ── Aliases ────────────────────────────────────────────────────────────────
 
-LogFormatter = SloFormatter
+SloFormatter = LogFormatter
 
 
 # ── slo.log v1 JSON formatter ─────────────────────────────────────────

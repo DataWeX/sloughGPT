@@ -1076,3 +1076,180 @@ class TestTrainingSessionsHandler:
         train_events = [e for e in events if e.get("phase") == "TRAIN"]
         assert train_events[0]["stream"] == "auto-train"
         assert train_events[0]["status"] == "working"
+
+
+# ── Training Pipeline Integration Tests ───────────────────────────────
+
+class TestTrainingDataPathValidation:
+    """Tests for data_path validation in training_handler."""
+
+    def test_empty_data_path_returns_failed(self):
+        """training_handler returns failed when data_path is empty."""
+        events, enqueue = _collect_events(None)
+        task = _make_task({"data_path": ""}, enqueue=enqueue)
+        result = asyncio.run(training_handler(task))
+        assert result["status"] == "failed"
+        assert "Data file not found" in result["error"] or "not found" in result["error"]
+
+    def test_missing_data_path_returns_failed(self):
+        """training_handler returns failed when data_path is missing from payload."""
+        events, enqueue = _collect_events(None)
+        task = _make_task({}, enqueue=enqueue)
+        result = asyncio.run(training_handler(task))
+        assert result["status"] == "failed"
+        assert "Data file not found" in result["error"] or "not found" in result["error"]
+
+    def test_empty_data_path_sends_error_event(self):
+        """training_handler sends SSE error event when data_path is empty."""
+        events, enqueue = _collect_events(None)
+        task = _make_task({"data_path": ""}, enqueue=enqueue)
+        asyncio.run(training_handler(task))
+        error_events = [e for e in events if e.get("status") == "error"]
+        assert len(error_events) > 0
+        assert "not found" in error_events[0].get("message", "").lower()
+
+    def test_valid_data_path_proceeds(self, tmp_path, monkeypatch):
+        """training_handler proceeds when data_path is valid."""
+        captured, FakeConfig, FakeTrainer = _make_fake_trainer_class(monkeypatch)
+        import domains.training.train_pipeline as tp
+        monkeypatch.setattr(tp, "TrainerConfig", FakeConfig)
+        monkeypatch.setattr(tp, "SloughGPTTrainer", FakeTrainer)
+
+        dummy = tmp_path / "data.txt"
+        dummy.write_text("hello world " * 100)
+
+        events, enqueue = _collect_events(None)
+        task = _make_task(
+            {"data_path": str(dummy), "checkpoint_dir": str(tmp_path / "ckpts"),
+             "n_embed": 16, "n_layer": 1, "n_head": 2,
+             "block_size": 16, "epochs": 1},
+            enqueue=enqueue,
+        )
+        result = asyncio.run(training_handler(task))
+        assert result.get("success") is True
+        assert captured["data_path"] == str(dummy)
+
+
+class TestCheckpointPruning:
+    """Tests for _prune_stale_checkpoints behavior."""
+
+    def test_prune_keeps_max_checkpoints(self, tmp_path, monkeypatch):
+        """During training, max_checkpoints newest files are kept."""
+        import domains.training.train_pipeline as tp
+
+        config = tp.TrainerConfig(
+            checkpoint_dir=str(tmp_path),
+            max_checkpoints=3,
+        )
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = None
+
+        for i in range(5):
+            f = tmp_path / f"ckpt_{i}.soul"
+            f.write_text(f"checkpoint {i}")
+            os.utime(f, (i, i))
+
+        trainer._prune_stale_checkpoints(keep_final=False)
+
+        remaining = list(tmp_path.glob("*.soul"))
+        assert len(remaining) == 3
+
+    def test_prune_final_keeps_one(self, tmp_path, monkeypatch):
+        """On final save, only the newest checkpoint is kept."""
+        import domains.training.train_pipeline as tp
+
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = str(tmp_path / "final.soul")
+
+        for i in range(4):
+            f = tmp_path / f"ckpt_{i}.soul"
+            f.write_text(f"checkpoint {i}")
+            os.utime(f, (i, i))
+
+        final = tmp_path / "final.soul"
+        final.write_text("final checkpoint")
+        os.utime(final, (10, 10))
+
+        trainer._prune_stale_checkpoints(keep_final=True)
+
+        remaining = list(tmp_path.glob("*.soul"))
+        assert len(remaining) == 1
+        assert final in remaining
+
+    def test_prune_final_rewires_best_model_path(self, tmp_path):
+        """After final prune, _best_model_path points to final checkpoint."""
+        import domains.training.train_pipeline as tp
+
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        old_best = str(tmp_path / "old_best.soul")
+        trainer._best_model_path = old_best
+        trainer._last_checkpoint_path = str(tmp_path / "final.soul")
+
+        for i in range(3):
+            f = tmp_path / f"ckpt_{i}.soul"
+            f.write_text(f"checkpoint {i}")
+            os.utime(f, (i, i))
+
+        final = tmp_path / "final.soul"
+        final.write_text("final checkpoint")
+        os.utime(final, (10, 10))
+
+        trainer._prune_stale_checkpoints(keep_final=True)
+
+        assert trainer._best_model_path == str(final)
+
+    def test_prune_empty_dir_no_crash(self, tmp_path):
+        """Pruning an empty directory doesn't crash."""
+        import domains.training.train_pipeline as tp
+
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path))
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = None
+
+        trainer._prune_stale_checkpoints(keep_final=False)
+        assert list(tmp_path.glob("*.soul")) == []
+
+    def test_prune_nonexistent_dir_no_crash(self, tmp_path):
+        """Pruning a nonexistent directory doesn't crash."""
+        import domains.training.train_pipeline as tp
+
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path / "nonexistent"))
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = None
+
+        trainer._prune_stale_checkpoints(keep_final=False)
+
+    def test_prune_cleans_meta_files(self, tmp_path):
+        """Pruning removes associated .meta.json files."""
+        import domains.training.train_pipeline as tp
+
+        config = tp.TrainerConfig(checkpoint_dir=str(tmp_path), max_checkpoints=1)
+        trainer = tp.SloughGPTTrainer.__new__(tp.SloughGPTTrainer)
+        trainer.config = config
+        trainer._best_model_path = None
+        trainer._last_checkpoint_path = None
+
+        for i in range(3):
+            f = tmp_path / f"ckpt_{i}.soul"
+            f.write_text(f"checkpoint {i}")
+            meta = tmp_path / f"ckpt_{i}.soul.meta.json"
+            meta.write_text(f'{{"name": "ckpt_{i}"}}')
+            os.utime(f, (i, i))
+
+        trainer._prune_stale_checkpoints(keep_final=False)
+
+        remaining_soul = list(tmp_path.glob("*.soul"))
+        remaining_meta = list(tmp_path.glob("*.meta.json"))
+        assert len(remaining_soul) == 1
+        assert len(remaining_meta) == 1

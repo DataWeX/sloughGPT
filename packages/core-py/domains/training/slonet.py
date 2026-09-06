@@ -6689,7 +6689,7 @@ class WarmupCosineScheduler(SloLRScheduler):
 
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
-            warmup_factor = float(self.last_epoch) / float(max(1, self.warmup_steps))
+            warmup_factor = float(self.last_epoch + 1) / float(max(1, self.warmup_steps))
             return [base_lr * warmup_factor for base_lr in self.base_lrs]
         progress = float(self.last_epoch - self.warmup_steps) / float(
             max(1, self.total_steps - self.warmup_steps)

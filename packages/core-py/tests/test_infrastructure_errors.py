@@ -24,7 +24,7 @@ from domains.infrastructure.errors import (
 class TestAppError:
     def test_default_code(self):
         e = AppError("boom")
-        assert e.code == "general.error"
+        assert e.code == "E_INTERNAL"
 
     def test_custom_code(self):
         e = AppError("boom", code="custom.code")
@@ -130,24 +130,24 @@ class TestConcreteErrors:
 
     def test_model_error(self):
         e = ModelError("oom")
-        assert e.code == "model.error"
+        assert e.code == "E_MODEL_ERROR"
 
     def test_model_oom_error(self):
         e = ModelOOMError("out of memory")
-        assert e.code == "model.oom"
+        assert e.code == "E_MODEL_OOM"
         assert e.recoverable is True
 
     def test_model_timeout_error(self):
         e = ModelTimeoutError("timed out")
-        assert e.code == "model.timeout"
+        assert e.code == "E_MODEL_TIMEOUT"
 
     def test_task_error(self):
         e = TaskError("task failed")
-        assert e.code == "task.error"
+        assert e.code == "E_TASK_ERROR"
 
     def test_resource_exhausted_error(self):
         e = ResourceExhaustedError("no resources")
-        assert e.code == "resource.exhausted"
+        assert e.code == "E_RATE_LIMITED"
 
     def test_not_found_error(self):
         e = NotFoundError("not found")

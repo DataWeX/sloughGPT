@@ -39,6 +39,10 @@ from .config import RestartPolicy
 
 logger = logging.getLogger("slo.pugqeep.engine")
 
+# TaskFuture is an alias for concurrent.futures.Future, re-exported for
+# backwards compatibility with code that imports it from pugqeep.engine.
+TaskFuture = Future
+
 _MSG_READY = "__READY__"
 _MSG_HEARTBEAT = "__HEARTBEAT__"
 _MSG_ERROR = "__ERROR__"

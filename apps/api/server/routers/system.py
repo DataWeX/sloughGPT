@@ -16,8 +16,6 @@ from typing import AsyncGenerator
 
 logger = logging.getLogger("slo.routers.system")
 
-logger = logging.getLogger("slo.api.system")
-
 
 class SystemRouter:
     def __init__(self):

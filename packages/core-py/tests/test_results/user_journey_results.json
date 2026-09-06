@@ -1,1 +1,232 @@
-[]
+[
+  {
+    "test": "dashboard_loads",
+    "passed": true,
+    "detail": "len=529"
+  },
+  {
+    "test": "dashboard_has_nav",
+    "passed": true,
+    "detail": "links=25"
+  },
+  {
+    "test": "nav_chat",
+    "passed": true,
+    "detail": "len=913"
+  },
+  {
+    "test": "nav_training",
+    "passed": true,
+    "detail": "len=188"
+  },
+  {
+    "test": "nav_datasets",
+    "passed": true,
+    "detail": "len=1497"
+  },
+  {
+    "test": "nav_models",
+    "passed": true,
+    "detail": "len=1092"
+  },
+  {
+    "test": "nav_agents",
+    "passed": true,
+    "detail": "len=7054"
+  },
+  {
+    "test": "nav_souls",
+    "passed": true,
+    "detail": "len=292"
+  },
+  {
+    "test": "nav_knowledge",
+    "passed": true,
+    "detail": "len=20669"
+  },
+  {
+    "test": "nav_monitoring",
+    "passed": true,
+    "detail": "len=813"
+  },
+  {
+    "test": "nav_settings",
+    "passed": true,
+    "detail": "len=3374"
+  },
+  {
+    "test": "nav_planner",
+    "passed": true,
+    "detail": "len=248"
+  },
+  {
+    "test": "nav_benchmark",
+    "passed": true,
+    "detail": "len=594"
+  },
+  {
+    "test": "nav_tokenizer",
+    "passed": true,
+    "detail": "len=208"
+  },
+  {
+    "test": "nav_errors",
+    "passed": true,
+    "detail": "len=816"
+  },
+  {
+    "test": "nav_security",
+    "passed": true,
+    "detail": "len=821"
+  },
+  {
+    "test": "nav_shell",
+    "passed": true,
+    "detail": "len=345"
+  },
+  {
+    "test": "nav_feedback",
+    "passed": true,
+    "detail": "len=649"
+  },
+  {
+    "test": "nav_files",
+    "passed": true,
+    "detail": "len=345"
+  },
+  {
+    "test": "nav_adapters",
+    "passed": true,
+    "detail": "len=597"
+  },
+  {
+    "test": "chat_loads",
+    "passed": true,
+    "detail": "len=890"
+  },
+  {
+    "test": "chat_has_input",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "chat_type_message",
+    "passed": true,
+    "detail": "val=Hello test message"
+  },
+  {
+    "test": "training_loads",
+    "passed": true,
+    "detail": "len=1242"
+  },
+  {
+    "test": "training_job_detail_loads",
+    "passed": true,
+    "detail": "len=361"
+  },
+  {
+    "test": "training_job_detail_back_link",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "settings_loads",
+    "passed": true,
+    "detail": "len=2735"
+  },
+  {
+    "test": "planner_loads",
+    "passed": true,
+    "detail": "len=248"
+  },
+  {
+    "test": "models_loads",
+    "passed": true,
+    "detail": "len=1092"
+  },
+  {
+    "test": "monitoring_loads",
+    "passed": true,
+    "detail": "len=816"
+  },
+  {
+    "test": "knowledge_loads",
+    "passed": true,
+    "detail": "len=20718"
+  },
+  {
+    "test": "datasets_loads",
+    "passed": true,
+    "detail": "len=1448"
+  },
+  {
+    "test": "datasets_import_button",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_import_dialog_opens",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_radio_exists",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_radio_clicks",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_input_fills",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_import_success",
+    "passed": true,
+    "detail": "body_snippet=tapod/titanic, uciml/iris, rounakbanik/pokemon\n\nRequires Kaggle CLI installed and authenticated (kaggle config)\n\nDataset Name\nImporting...\nCancel Import\nImporting...\nClose\nNo model loaded.\nlive\n0 reqs"
+  },
+  {
+    "test": "redirect__companion",
+    "passed": true,
+    "detail": "/companion -> /souls, len=292"
+  },
+  {
+    "test": "redirect__evaluate",
+    "passed": true,
+    "detail": "/evaluate -> /benchmark, len=572"
+  },
+  {
+    "test": "redirect__memory",
+    "passed": true,
+    "detail": "/memory -> /knowledge, len=20669"
+  },
+  {
+    "test": "redirect__collections",
+    "passed": true,
+    "detail": "/collections -> /datasets, len=1448"
+  },
+  {
+    "test": "redirect__self-train",
+    "passed": true,
+    "detail": "/self-train -> /training, len=208"
+  },
+  {
+    "test": "redirect__admin",
+    "passed": true,
+    "detail": "/admin -> /settings, len=2709"
+  },
+  {
+    "test": "redirect__images",
+    "passed": true,
+    "detail": "/images -> /files, len=345"
+  },
+  {
+    "test": "redirect__session",
+    "passed": true,
+    "detail": "/session -> /shell, len=890"
+  }
+]

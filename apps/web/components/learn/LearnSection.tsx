@@ -217,7 +217,7 @@ export function LearnSection() {
 
       {tab === 'knowledge' && (
         <ActionCard
-          title="Knowledge ({knowledge.length})"
+          title={`Knowledge (${knowledge.length})`}
           actions={
             <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
               <IconRefresh className={cn('h-4 w-4', loadingKnowledge ? 'animate-spin' : '')} />

@@ -688,19 +688,19 @@ def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:
     fmt = config.format
 
     if fmt == "sou" or fmt == "all":
-        path = export_to_sou(model, output_path, tokenizer)
+        path = export_to_sou(model, output_path, soul_profile=tokenizer)
         results.append(path)
 
     if fmt == "gguf_q4_k_m" or fmt == "all":
-        path = export_to_gguf_q4_k_m(model, output_path, n_ctx=config.n_ctx)
+        path = export_to_gguf_q4_k_m(model, output_path, tokenizer=tokenizer)
         results.append(path)
 
     if fmt == "gguf_fp16" or fmt == "all":
-        path = export_to_gguf_fp16(model, output_path, n_ctx=config.n_ctx)
+        path = export_to_gguf_fp16(model, output_path, tokenizer=tokenizer)
         results.append(path)
 
     if not results:
-        path = export_to_sou(model, output_path, tokenizer)
+        path = export_to_sou(model, output_path, soul_profile=tokenizer)
         results.append(path)
 
     return results

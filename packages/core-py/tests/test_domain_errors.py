@@ -15,21 +15,23 @@ class TestDomainExceptions:
     def test_base_exception(self):
         e = SloughGPTDomainError("fail")
         assert str(e) == "fail"
-        assert e.http_status == 500
-        assert e.code == "domain_error"
+        assert e.http_status == 400
+        assert e.code == "E_DOMAIN"
 
     def test_invalid_input(self):
         e = InvalidGenerationInputError("bad")
         assert e.http_status == 422
-        assert e.code == "invalid_generation_input"
+        assert e.code == "E_VAL_FIELD"
 
     def test_empty_prompt(self):
         e = EmptyPromptError()
         assert "must not be empty" in str(e)
-        assert e.code == "empty_prompt"
+        assert e.code == "E_VAL_FIELD"
 
     def test_hierarchy(self):
-        assert issubclass(InvalidGenerationInputError, SloughGPTDomainError)
+        from domains.infrastructure.errors import ValidationError, AppError
+        assert issubclass(InvalidGenerationInputError, ValidationError)
+        assert issubclass(InvalidGenerationInputError, AppError)
         assert issubclass(EmptyPromptError, InvalidGenerationInputError)
 
 

@@ -167,12 +167,8 @@ class DiagonalFisherEstimator:
             if batch_count >= accumulation_steps:
                 break
 
-        # Normalize
+        # Normalize — EMA already weights observations, no additional division needed
         for name in self.fisher_accum:
-            if self.num_observations > 0:
-                self.fisher_accum[name] /= self.num_observations
-
-            # Add small constant for numerical stability
             self.fisher_accum[name] += 1e-8
 
         return self.fisher_accum
