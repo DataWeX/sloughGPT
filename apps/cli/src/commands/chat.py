@@ -31,9 +31,7 @@ def cmd_chat(args):
         try:
             r = requests.get(f"{base_url}/health", timeout=3)
             return r.status_code == 200
-        except RequestsConnectionError:
-            return False
-        except Exception:
+        except requests.RequestException:
             return False
 
     def try_load_model(model_id: str) -> bool:

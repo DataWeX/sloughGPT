@@ -386,7 +386,7 @@ def _poll_fallback_dashboard(host: str, port: int, interval: float, output_json:
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     raw = json.loads(resp.read())
                     snapshot["data"][key] = raw.get("data", raw) if key == "health" else raw.get("data", {}).get("events", [])
-            except Exception:
+            except (urllib.error.URLError, OSError, ValueError):
                 pass
         try:
             req = urllib.request.Request(f"http://{host}:{port}/health/detailed")
@@ -394,7 +394,7 @@ def _poll_fallback_dashboard(host: str, port: int, interval: float, output_json:
                 raw = json.loads(resp.read())
                 data = raw.get("data", raw)
                 snapshot["data"]["recent_errors"] = data.get("recent_errors", [])
-        except Exception:
+        except (urllib.error.URLError, OSError, ValueError):
             pass
         if output_json:
             click.echo(json.dumps(snapshot))
@@ -556,7 +556,7 @@ def logs(tail, request_id, level, since, tag, path, search, errors_only, output_
             log.hide_cursor()
         try:
             _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
-        except Exception:
+        except (urllib.error.URLError, OSError, ValueError):
             try:
                 _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
             except KeyboardInterrupt:

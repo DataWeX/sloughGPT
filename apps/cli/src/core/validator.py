@@ -143,7 +143,7 @@ class Doctor:
                     f"{free_gb:.1f} GB free (critical)",
                     "Free up disk space before training",
                 )
-        except Exception:
+        except OSError:
             self.result.add_warn("Disk", "Could not determine free space")
 
     def _check_accelerator(self):
@@ -155,7 +155,7 @@ class Doctor:
                 self.result.add_pass("Accelerator", f"{acc.name}")
             else:
                 self.result.add_pass("Accelerator", "CPU (numpy)")
-        except Exception:
+        except (ImportError, AttributeError):
             self.result.add_warn("Accelerator", "Could not probe")
 
     def _check_api_server(self):
@@ -167,7 +167,7 @@ class Doctor:
                 self.result.add_pass("API Server", "Running on :8000")
             else:
                 self.result.add_warn("API Server", f"Status {r.status_code}")
-        except Exception:
+        except requests.RequestException:
             self.result.add_warn(
                 "API Server",
                 "Not reachable",

@@ -36,7 +36,7 @@ def chat_wait_for_health(base_url: str, timeout_sec: float = 45.0) -> bool:
             r = requests.get(url, timeout=2)
             if r.status_code == 200:
                 return True
-        except Exception:
+        except requests.RequestException:
             pass
         time.sleep(0.25)
     return False
@@ -94,7 +94,7 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
         r = requests.get(f"{base_url}/health", timeout=3)
         if r.status_code == 200:
             return base_url, None
-    except Exception:
+    except requests.RequestException:
         pass
 
     if not auto_start:
@@ -162,7 +162,7 @@ def ensure_server(host: str = "127.0.0.1", port: int = 8000, auto_start: bool = 
                         source="api.server",
                         message=line,
                     ))
-            except Exception:
+            except (AttributeError, OSError):
                 # LogBuffer unavailable — discard silently
                 pass
     threading.Thread(target=_log_stderr, daemon=True).start()

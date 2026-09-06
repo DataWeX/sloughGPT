@@ -271,7 +271,7 @@ def _cmd_models_download(args):
         try:
             mgr = get_download_manager()
             mgr.cancel(args.model_id)
-        except Exception:
+        except (OSError, AttributeError):
             pass
     except Exception as e:
         log.error(f"Download failed: {e}")

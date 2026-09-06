@@ -37,7 +37,7 @@ def cmd_system(args):
             from domains.infrastructure.resource_manager import get_resource_manager
             rm = get_resource_manager()
             cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
-        except Exception:
+        except (ImportError, AttributeError):
             cores = str(psutil.cpu_count())
         log.key_value("Cores", cores)
         log.key_value("Usage", f"{psutil.cpu_percent()}%")

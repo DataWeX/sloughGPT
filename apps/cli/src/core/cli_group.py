@@ -164,7 +164,7 @@ class SmartGroup(click.Group):
         try:
             from core.version import format_version_display
             version = format_version_display()
-        except Exception:
+        except (ImportError, AttributeError):
             version = "dev"
 
         _p(f"\n  {_c('SloughGPT', _BOLD + _CYAN)} {_c(f'({version})', _DIM)}\n")
@@ -339,5 +339,5 @@ class SmartGroup(click.Group):
                 stats = json.loads(_USAGE_FILE.read_text())
             stats[cmd_path] = stats.get(cmd_path, 0) + 1
             _USAGE_FILE.write_text(json.dumps(stats, indent=2))
-        except Exception:
+        except (OSError, ValueError):
             pass

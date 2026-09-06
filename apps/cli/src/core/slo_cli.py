@@ -41,7 +41,7 @@ def _record_usage(cmd_name: str) -> None:
             data = json.loads(_USAGE_PATH.read_text())
         data[cmd_name] = data.get(cmd_name, 0) + 1
         _USAGE_PATH.write_text(json.dumps(data, indent=2))
-    except Exception:
+    except (OSError, ValueError):
         pass
 
 
@@ -503,7 +503,7 @@ def _format_help(group: Group, ctx: Context) -> str:
     try:
         from core.version import format_version_display
         version = format_version_display()
-    except Exception:
+    except (ImportError, AttributeError):
         version = "dev"
 
     lines.append(f"\n  {_c('SloughGPT', _BOLD + _CYAN)} {_c(f'({version})', _DIM)}\n")
@@ -683,7 +683,7 @@ def run(group: Group, args: Optional[List[str]] = None):
         try:
             from core.version import format_version_display
             echo(format_version_display())
-        except Exception:
+        except (ImportError, AttributeError):
             echo("sloughgpt v0.3.0")
         return
 
