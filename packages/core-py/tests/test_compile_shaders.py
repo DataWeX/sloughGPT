@@ -173,7 +173,8 @@ class TestCompileSpirv:
 
         assert result is True
 
-    def test_failure(self, tmp_path, capsys):
+    def test_failure(self, tmp_path, caplog):
+        import logging
         wgsl = tmp_path / "bad.wgsl"
         out = tmp_path / "bad.spv"
 
@@ -181,12 +182,12 @@ class TestCompileSpirv:
         mock_result.returncode = 1
         mock_result.stderr = "parse error at line 3"
 
-        with patch("domains.infrastructure.gpu.compile_shaders.subprocess.run", return_value=mock_result):
-            result = compile_spirv("/usr/bin/naga", wgsl, out)
+        with caplog.at_level(logging.ERROR, logger="slo.gpu.compile_shaders"):
+            with patch("domains.infrastructure.gpu.compile_shaders.subprocess.run", return_value=mock_result):
+                result = compile_spirv("/usr/bin/naga", wgsl, out)
 
         assert result is False
-        captured = capsys.readouterr()
-        assert "SPIR-V FAILED" in captured.out
+        assert "SPIR-V FAILED" in caplog.text
 
     def test_passes_correct_command(self, tmp_path):
         wgsl = tmp_path / "shader.wgsl"

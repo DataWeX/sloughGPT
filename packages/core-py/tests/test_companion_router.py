@@ -119,7 +119,7 @@ class TestResetCompanion:
         client = TestClient(_app())
         resp = client.delete("/companion/")
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "ok"
+        assert resp.json()["data"]["reset"] is True
         mock_create.assert_called_once()
 
 

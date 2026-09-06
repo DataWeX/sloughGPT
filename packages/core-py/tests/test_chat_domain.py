@@ -6,6 +6,7 @@ import json
 import time
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
 from domains.chat.domain import (
     ChatRequest,
@@ -82,19 +83,22 @@ class TestBuildPrompt:
 
 class TestChatDomain:
     def test_log_and_recent(self, tmp_path):
-        domain = ChatDomain(log_dir=str(tmp_path / "logs"))
-        domain._log(
-            user_message="hello",
-            assistant_response="world",
-            model="gpt2",
-            temperature=0.8,
-            max_tokens=256,
-            session_id="s1",
-            user_id="u1",
-            tokens_generated=5,
-            duration_ms=100,
-        )
-        recent = domain.get_recent_responses()
+        from domains.feedback.response_tracker import ResponseTracker
+        tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
+        with patch("domains.feedback.response_tracker.get_response_tracker", return_value=tracker):
+            domain = ChatDomain(log_dir=str(tmp_path / "logs"))
+            domain._log(
+                user_message="hello",
+                assistant_response="world",
+                model="gpt2",
+                temperature=0.8,
+                max_tokens=256,
+                session_id="s1",
+                user_id="u1",
+                tokens_generated=5,
+                duration_ms=100,
+            )
+            recent = domain.get_recent_responses()
         assert len(recent) == 1
         assert recent[0]["user_message"] == "hello"
         assert recent[0]["model"] == "gpt2"

@@ -3,7 +3,7 @@
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 from domains.chat.domain import (
     ChatDomain,
     ChatRequest,
@@ -285,8 +285,11 @@ class TestBuildPrompt:
 
 class TestLoggingRoundTrip:
     def test_log_writes_jsonl(self, tmp_path):
-        domain = ChatDomain(log_dir=str(tmp_path / "logs"))
-        domain._log("user msg", "assistant resp", "gpt2", 0.8, 256, "s1", "u1", 10, 50)
+        from domains.feedback.response_tracker import ResponseTracker
+        tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
+        with patch("domains.feedback.response_tracker.get_response_tracker", return_value=tracker):
+            domain = ChatDomain(log_dir=str(tmp_path / "logs"))
+            domain._log("user msg", "assistant resp", "gpt2", 0.8, 256, "s1", "u1", 10, 50)
 
         log_files = list((tmp_path / "logs").glob("responses_*.jsonl"))
         assert len(log_files) == 1
@@ -300,8 +303,11 @@ class TestLoggingRoundTrip:
         assert entry["user_id"] == "u1"
 
     def test_log_truncates_user_message_500(self, tmp_path):
-        domain = ChatDomain(log_dir=str(tmp_path / "logs"))
-        domain._log("A" * 600, "short", "m", 0.5, 100, "s", "u", 0, 0)
+        from domains.feedback.response_tracker import ResponseTracker
+        tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
+        with patch("domains.feedback.response_tracker.get_response_tracker", return_value=tracker):
+            domain = ChatDomain(log_dir=str(tmp_path / "logs"))
+            domain._log("A" * 600, "short", "m", 0.5, 100, "s", "u", 0, 0)
         responses = domain.get_recent_responses()
         assert len(responses[0]["user_message"]) == 500
 
