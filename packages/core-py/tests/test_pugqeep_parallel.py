@@ -5,7 +5,8 @@ import time
 import numpy as np
 import pytest
 
-from domains.infrastructure.pugqeep.model_tree import ModelTree, decompress_tree
+from domains.infrastructure.pugqeep.model_tree import ModelTree
+from domains.infrastructure.pugqeep.tree import decompress_tree
 from domains.infrastructure.pugqeep.library import PointLibrary
 from domains.infrastructure.pugqeep.facade import PGQ
 
