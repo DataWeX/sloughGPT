@@ -1589,6 +1589,21 @@ class SloughGPTTrainer:
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
 
+        # Auto-compress checkpoint into pugqeep Points for efficient inference
+        try:
+            from domains.training.executor import compress_checkpoint
+            result = compress_checkpoint(output_path, n_clusters=16)
+            if result:
+                logger.info(
+                    "Compressed %s: %.1fx ratio (%d points)",
+                    output_path,
+                    result.get("compression_ratio", 0),
+                    result.get("point_count", 0),
+                    extra={"tag": "TRAIN"},
+                )
+        except Exception as exc:
+            logger.debug("Pugqeep compression skipped: %s", exc, extra={"tag": "TRAIN"})
+
     def generate(self, prompt: str, max_tokens: int = 200, temperature: float = 0.8) -> str:
         """Generate text."""
         self.model.eval()
