@@ -1,6 +1,5 @@
 'use client'
 
-import { useMemo } from 'react'
 import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { CompanionTraits } from '@/lib/companion-controller'
 
@@ -33,13 +32,14 @@ function personalityType(traits: CompanionTraits): string {
 }
 
 export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCardProps) {
-  const numericValues = useMemo(() => (Object.values(traits ?? {}) as unknown[]).filter((v): v is number => typeof v === 'number'), [traits])
-  const { dominant, weakest, spread } = useMemo(() => traitBalance(traits!), [traits])
-  const type = useMemo(() => personalityType(traits!), [traits])
-
   if (!traits) return null
+
+  const numericValues = (Object.values(traits) as unknown[]).filter((v): v is number => typeof v === 'number')
   if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
-  const avg = numericValues.length > 0 ? numericValues.reduce((s, v) => s + v, 0) / numericValues.length : 0
+
+  const { dominant, weakest, spread } = traitBalance(traits)
+  const type = personalityType(traits)
+  const avg = numericValues.reduce((s, v) => s + v, 0) / numericValues.length
 
   return (
     <Card data-testid="companion-insights">
