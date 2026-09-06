@@ -15,7 +15,7 @@ from apps.api.server.routers.experiments import ExperimentsRouter
 @pytest.fixture(autouse=True)
 def mock_db():
     with patch("apps.api.server.routers.experiments._get_db") as mock_get:
-        store = []
+        stores = {}
 
         class FakeDeleteResult:
             def __init__(self, n):
@@ -24,30 +24,33 @@ def mock_db():
                 return self.deleted_count > 0
 
         def make_col(name):
+            store = stores.setdefault(name, [])
             col = MagicMock()
             col.find.return_value = store
-            col.count.return_value = len(store)
+            col.count.side_effect = lambda q=None: len(
+                [d for d in store if not q or all(d.get(k) == v for k, v in q.items())]
+            )
             col.find_one.side_effect = lambda q: next(
                 (d for d in store if d.get("experiment_id") == q.get("experiment_id")), None
             )
             col.insert_one.side_effect = lambda doc: store.append(doc)
-            col.delete_one.side_effect = lambda q: (
-                FakeDeleteResult(1) if store.remove(next(d for d in store if d.get("experiment_id") == q.get("experiment_id"))) is None
-                else FakeDeleteResult(0)
-            ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store) else FakeDeleteResult(0)
             col.delete_many.side_effect = lambda q: (
                 FakeDeleteResult(
                     len([store.remove(d) for d in list(store) if d.get("experiment_id") == q.get("experiment_id")])
                 ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
                 else FakeDeleteResult(0)
             )
+            col.delete_one.side_effect = lambda q: (
+                FakeDeleteResult(1) if store.remove(next(d for d in store if d.get("experiment_id") == q.get("experiment_id"))) is None
+                else FakeDeleteResult(0)
+            ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store) else FakeDeleteResult(0)
             return col
 
         mock_db = MagicMock()
         mock_db.collection.side_effect = make_col
         mock_get.return_value = mock_db
-        yield store
-        store.clear()
+        yield stores
+        stores.clear()
 
 
 @pytest.fixture
@@ -173,21 +176,13 @@ class TestGetExperimentRuns:
         assert resp.status_code == 200
         assert resp.json()["data"]["runs"] == 0
 
-    def test_runs_with_json_files(self, client, tmp_path):
-        from apps.api.server.routers.experiments import ExperimentsRouter
-        r = ExperimentsRouter()
-        r.EXPERIMENTS_DIR = tmp_path / "experiments2"
-        _app = FastAPI()
-        register_all_handlers(_app)
-        _app.include_router(r.router)
-        c = TestClient(_app, raise_server_exceptions=False)
-
-        create = c.post("/experiments", json={"name": "json_test"})
+    def test_runs_with_json_files(self, client, mock_db):
+        create = client.post("/experiments", json={"name": "json_test"})
         exp_id = create.json()["data"]["id"]
-        exp_dir = r.EXPERIMENTS_DIR / exp_id
-        (exp_dir / "run_1.json").write_text('{"loss": 0.5}')
-        (exp_dir / "run_2.json").write_text('{"loss": 0.3}')
-        resp = c.get(f"/experiments/{exp_id}/runs")
+        metrics_col = mock_db["metrics"]
+        metrics_col.insert_one({"experiment_id": exp_id, "metric": "loss", "value": 0.5})
+        metrics_col.insert_one({"experiment_id": exp_id, "metric": "loss", "value": 0.3})
+        resp = client.get(f"/experiments/{exp_id}/runs")
         assert resp.json()["data"]["runs"] == 2
 
     def test_runs_nonexistent_experiment(self, client):
