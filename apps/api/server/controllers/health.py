@@ -322,6 +322,7 @@ def _get_kv_session_info() -> dict[str, Any]:
             return stats
         return {"enabled": False}
     except Exception:
+        logger.debug("KV session stats unavailable", exc_info=True)
         return {"enabled": False}
 
 
@@ -381,6 +382,7 @@ def _get_resource_allocation() -> dict[str, Any]:
             "process_guard_concurrent": rm.process_guard_concurrent,
         }
     except Exception:
+        logger.debug("Resource allocation unavailable", exc_info=True)
         return {}
 
 
@@ -391,6 +393,7 @@ def _get_memory_pressure_stats() -> dict[str, Any]:
 
         return get_memory_pressure_monitor().stats()
     except Exception:
+        logger.debug("Memory pressure stats unavailable", exc_info=True)
         return {}
 
 
@@ -438,6 +441,7 @@ def _get_process_info() -> dict[str, Any]:
             logger.debug("GC gen tracking failed: %s", e)
         return info
     except Exception:
+        logger.debug("Process info unavailable", exc_info=True)
         return {}
 
 
@@ -532,7 +536,7 @@ class HealthController:
             if idle_info:
                 result["idle"] = idle_info
         except Exception:
-            pass
+            logger.debug("Idle manager status unavailable", exc_info=True)
 
         # Memory pressure stats (so clients know why inference may be blocked)
         result["memory_pressure"] = _get_memory_pressure_stats()
@@ -620,6 +624,7 @@ class HealthController:
 
             versions = _version_info()
         except Exception:
+            logger.debug("Version info unavailable", exc_info=True)
             versions = {}
 
         result = {
