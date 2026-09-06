@@ -138,7 +138,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
     }, [messages.length])
 
     return (
-      <div className={cn("flex flex-col", className)}>
+      <div className={cn("flex flex-col flex-1 min-h-0", className)}>
         {isOffline && (
           <SystemBanner
             type="offline"
@@ -201,7 +201,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         <div
           ref={scrollRef}
           id="chat-messages"
-          className="mx-auto w-full max-w-3xl space-y-1.5 sm:space-y-2 px-4 sm:px-6 pb-4 overflow-y-auto"
+          className="mx-auto w-full max-w-3xl space-y-1.5 sm:space-y-2 px-4 sm:px-6 pb-4"
           role="feed"
           aria-label="Message history"
           aria-busy={loading}

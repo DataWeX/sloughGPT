@@ -8,6 +8,7 @@ import pytest
 
 import domains.infrastructure.numpy_engine as numpy_engine
 import domains.infrastructure.pugqeep.model_tree as model_tree_module
+import domains.infrastructure.pugqeep.tree as tree_module
 from domains.infrastructure.pugqeep.model_tree import ModelTree
 from domains.infrastructure.pugqeep.tree import (
     save_library,
@@ -354,7 +355,7 @@ def test_queue_load_model(monkeypatch):
     q = ModelQueue()
     lib = PointLibrary(name="fake_points")
     tree = ModelTree("fake", lib)
-    monkeypatch.setattr(model_tree_module, "load_model_to_points", lambda *a, **k: tree)
+    monkeypatch.setattr(tree_module, "load_model_to_points", lambda *a, **k: tree)
 
     loaded = q.load_model("fake")
     assert loaded is tree
