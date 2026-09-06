@@ -51,19 +51,64 @@ if _server_parent not in _sys.path:
 def _model_ready() -> bool:
     """True when a model is actually materialized and ready for inference.
 
-    Checks both server_state.model (direct load) and the provider's _model
-    attribute.  For lazy-guard providers, the model lives on the provider
-    (not the SloNetServer) until first use, so we must check the provider
-    directly.
+    Checks three sources because the lazy-guard autoload path stores the
+    provider in the core ``ServerState`` singleton but leaves
+    ``state.__dict__["model"]`` as ``None`` (module ``__setattr__`` is a
+    no-op in CPython — writes go to ``__dict__`` directly).
+
+    1. ``state.model`` — set by eager-load paths.
+    2. ``state.provider._model`` — set when eager load materializes weights.
+    3. Core ``ServerState.model.get()`` — set by the lazy-guard path.
     """
     import state as server_state
 
     if server_state.model is not None:
         return True
     provider = server_state.provider
-    if provider is None:
-        return False
-    return getattr(provider, "_model", None) is not None
+    if provider is not None and getattr(provider, "_model", None) is not None:
+        return True
+    # Lazy-guard path: provider lives in the core ServerState singleton
+    # but state.__dict__["model"] stays None.
+    from domains.infrastructure.server_state import get_server_state
+
+    core_model = get_server_state().model.get()
+    return core_model is not None
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate: ~4 chars per token for English text."""
+    return max(1, len(text) // 4)
+
+
+def _trim_messages_to_budget(
+    messages: list[dict[str, Any]], max_context: int, max_new_tokens: int
+) -> list[dict[str, Any]]:
+    """Trim oldest non-system messages to fit within context budget.
+
+    Budget = max_context - max_new_tokens (reserved for generation).
+    Preserves system messages, trims oldest user/assistant pairs first.
+    """
+    budget = max_context - max_new_tokens
+    system_msgs = [m for m in messages if m.get("role") == "system"]
+    non_system = [m for m in messages if m.get("role") != "system"]
+
+    system_tokens = sum(_estimate_tokens(m.get("content", "")) for m in system_msgs)
+    remaining = budget - system_tokens
+
+    if remaining <= 0:
+        return system_msgs
+
+    kept: list[dict[str, Any]] = []
+    total = 0
+    for msg in reversed(non_system):
+        msg_tokens = _estimate_tokens(msg.get("content", ""))
+        if total + msg_tokens > remaining:
+            break
+        kept.append(msg)
+        total += msg_tokens
+
+    kept.reverse()
+    return system_msgs + kept
 
 
 _memory_pressure_cache: str | None = None
@@ -1863,6 +1908,22 @@ class InferenceRouter:
                         },
                     )
                     try:
+                        # Enforce context window budget
+                        _orig_count = len(provider_messages)
+                        provider_messages = _trim_messages_to_budget(
+                            provider_messages,
+                            cfg.gen_config.max_context_length,
+                            req.max_tokens,
+                        )
+                        _trimmed = _orig_count - len(provider_messages)
+                        if _trimmed:
+                            logger.info(
+                                "CHAT_CONTEXT_TRIM corr=%s trimmed=%d msgs_keep=%d budget=%d",
+                                corr_id,
+                                _trimmed,
+                                len(provider_messages),
+                                cfg.gen_config.max_context_length - req.max_tokens,
+                            )
                         try:
                             _control_check_interval = 0.1  # Check for controls every 100ms
                             _last_control_check = time.time()
@@ -2440,6 +2501,10 @@ class InferenceRouter:
                 repetition_penalty=req.repetition_penalty,
                 user_message=user_msg,
                 user_id=req.user_id or "default",
+            )
+            # Enforce context window budget before delegating to domain
+            messages = _trim_messages_to_budget(
+                messages, cfg.gen_config.max_context_length, req.max_tokens
             )
             result = await asyncio.wait_for(
                 chat_domain.respond(
