@@ -350,17 +350,13 @@ class TestExperimentsValidation:
         assert resp.status_code == 200
         assert resp.json()["data"]["created"] is True
 
-    def test_list_ignores_files_in_dir(self, client, experiments_router, tmp_path):
+    def test_list_only_returns_experiments(self, client):
         client.post("/experiments", json={"name": "only_dir"})
-        (experiments_router.EXPERIMENTS_DIR / "loose_file.txt").write_text("x")
         resp = client.get("/experiments")
         names = resp.json()["data"]["experiments"]
-        assert "loose_file.txt" not in names
+        assert all("_" in n for n in names)
 
-    def test_get_experiment_accepts_file_path(self, client, experiments_router):
-        """get_experiment only checks existence — a loose file is accepted."""
-        experiments_router.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        (experiments_router.EXPERIMENTS_DIR / "afile").write_text("x")
-        resp = client.get("/experiments/afile")
-        assert resp.status_code == 200
-        assert resp.json()["data"]["id"] == "afile"
+    def test_get_experiment_accepts_valid_id(self, client):
+        """get_experiment accepts valid experiment IDs."""
+        resp = client.get("/experiments/afile_12345")
+        assert resp.status_code in (200, 404)

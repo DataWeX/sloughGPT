@@ -155,6 +155,16 @@ def run_turbo_worker(config: dict) -> None:
 
     job_id = _turbo_state.get("job_id", "")
     data_path = config.get("data_path", "")
+
+    if not data_path:
+        dataset_id = config.get("dataset_id")
+        if dataset_id:
+            data_path = resolve_dataset_path(dataset_id)
+        if not data_path:
+            update_job(job_id, status="error", error="No data_path or dataset_id provided")
+            _finish_cm("error", "No data_path or dataset_id provided")
+            return
+
     output_dir = config.get("output_dir", str(TURBO_DIR))
     resume = config.get("resume", False)
     resume_path = config.get("resume_path", "")

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, memo } from 'react'
+import { memo } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle, IconCheck } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
@@ -75,6 +75,10 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   checkpoints,
   onTest,
   addToast,
+  step,
+  onStepChange,
+  completedSteps,
+  onStepComplete,
 }: {
   form: TrainingFormState
   datasets: UseTrainingDatasetsReturn
@@ -82,18 +86,15 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   checkpoints: UseTrainingCheckpointsReturn
   onTest: () => void
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
-}) {
-  const [step, setStep] = useState<StepId>('data')
-  const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set())
-
-  const completeStep = (id: StepId) => setCompletedSteps(prev => new Set(prev).add(id))
-
+  step: StepId
+  onStepChange: (step: StepId) => void
+  completedSteps: Set<StepId>
+  onStepComplete: (id: StepId) => void
+}}) {
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const isTurbo = session.method === 'turbo' && session.trainingRunning
   const isTraining = (session.trainingRunning || !!runningJob) && !isTurbo
 
-  // Derive display values from the best available source:
-  // session data (from polling) takes priority; fall back to runningJob data.
   const displayProgress = session.progress || runningJob?.progress || 0
   const displayLoss = session.loss ?? runningJob?.loss ?? runningJob?.train_loss ?? null
   const displayEpoch = session.epoch || runningJob?.current_epoch || 0
@@ -111,17 +112,17 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   const stepIdx = STEPS.findIndex(s => s.id === step)
 
   const advance = () => {
-    completeStep(step)
+    onStepComplete(step)
     const next = STEPS[stepIdx + 1]
-    if (next) setStep(next.id)
+    if (next) onStepChange(next.id)
   }
 
   const goBack = () => {
     const prev = STEPS[stepIdx - 1]
-    if (prev) setStep(prev.id)
+    if (prev) onStepChange(prev.id)
   }
 
-  const goToTrain = () => setStep('train')
+  const goToTrain = () => onStepChange('train')
 
   const stepProps = { form, datasets, checkpoints, onNext: advance, onBack: goBack, addToast }
 
@@ -219,8 +220,8 @@ export const TrainingPipeline = memo(function TrainingPipeline({
                 )}
                 <Button size="sm" variant="ghost" onClick={() => {
                   session.resetTraining()
-                  setStep('results')
-                  completeStep('train')
+                  onStepChange('results')
+                  onStepComplete('train')
                 }}>View results</Button>
               </div>
             </div>

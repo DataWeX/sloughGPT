@@ -50,6 +50,8 @@ export default function TrainingPage() {
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
   const [manualTab, setManualTab] = useState<ManualTab>('train')
+  const [pipelineStep, setPipelineStep] = useState<'data' | 'configure' | 'train' | 'results'>('data')
+  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set())
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
 
@@ -297,6 +299,10 @@ export default function TrainingPage() {
                   checkpoints={checkpoints}
                   onTest={() => test.setTestDialogOpen(true)}
                   addToast={addToast}
+                  step={pipelineStep}
+                  onStepChange={setPipelineStep}
+                  completedSteps={completedSteps}
+                  onStepComplete={(id) => setCompletedSteps(prev => new Set(prev).add(id))}
                 />
 
                 {/* Fast train (turbo) */}

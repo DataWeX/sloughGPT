@@ -39,6 +39,7 @@ from .state import (  # noqa: F401
 from .helpers import (  # noqa: F401
     _finite_payload,
     _VALID_DATASET_ID,
+    cross_entropy_loss,
     log_experiment_metric,
     log_experiment_param,
     parse_subtitle_text,
