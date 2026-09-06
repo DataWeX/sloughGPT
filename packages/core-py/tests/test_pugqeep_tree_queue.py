@@ -8,8 +8,8 @@ import pytest
 
 import domains.infrastructure.numpy_engine as numpy_engine
 import domains.infrastructure.pugqeep.model_tree as model_tree_module
-from domains.infrastructure.pugqeep.model_tree import (
-    ModelTree,
+from domains.infrastructure.pugqeep.model_tree import ModelTree
+from domains.infrastructure.pugqeep.tree import (
     save_library,
     load_library,
     load_from_points,
