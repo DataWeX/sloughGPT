@@ -151,7 +151,8 @@ class ImagesRouter:
 
         try:
             font = ImageFont.load_default()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Font loading failed: %s", exc)
             font = None
         draw.text((width // 2 - 50, height - 50), prompt[:20], fill="#333", font=font)
 

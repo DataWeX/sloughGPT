@@ -187,7 +187,8 @@ class AuthRouter:
             from routers.api_keys import ApiKeyManager
             mgr = ApiKeyManager()
             return mgr.validate(api_key)
-        except Exception:
+        except Exception as exc:
+            logger.debug("API key validation error: %s", exc)
             return False
 
     def _get_current_user(self, authorization: str | None = Header(None)) -> dict:

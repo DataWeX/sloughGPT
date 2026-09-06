@@ -1007,7 +1007,8 @@ class ModelsRouter:
                 from domains.infrastructure.quant_core.wrapper import HAS_AVX2
 
                 report["avx2_enabled"] = bool(HAS_AVX2)
-            except Exception:
+            except Exception as exc:
+                logger.debug("AVX2 detection failed: %s", exc)
                 report["avx2_enabled"] = False
 
             safe_audit_log(

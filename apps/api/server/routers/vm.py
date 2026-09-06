@@ -193,7 +193,8 @@ async def run_assembly(
                 try:
                     data = bytes(vs.cpu._read8(buf_addr + i) for i in range(written))
                     training_result = data.decode("utf-8", errors="replace")
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Training result decoding failed: %s", exc)
                     training_result = None
             return written
 
