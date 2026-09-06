@@ -150,7 +150,8 @@ class TestMemoryConfigSetEnabled:
         mc = MemoryConfig()
         for i in range(10):
             mc.set_enabled(i % 2 == 0)
-        assert mc.enabled is True
+        # Last iteration: i=9, 9 % 2 == 1, so enabled=False
+        assert mc.enabled is False
 
 
 class TestMemoryConfigSetArchiveRetention:

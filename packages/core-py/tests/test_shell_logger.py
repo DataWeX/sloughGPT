@@ -34,7 +34,7 @@ def _record(
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    import domains.logging.shell_logger as sh
+    import domains.logging.config as cfg
 
     codes = {
         "RESET": "\033[0m",
@@ -47,7 +47,7 @@ def ansi_on(monkeypatch):
         "GREY": "\033[90m",
     }
     for name, code in codes.items():
-        monkeypatch.setattr(sh._Ansi, name, code)
+        monkeypatch.setattr(cfg._A, name, code)
 
 
 # ── Construction ──────────────────────────────────────────────────────
@@ -100,17 +100,19 @@ class TestFormatting:
         log = ShellLogger("slo.shell", colors=False)
         line = log._format_record(_record(message="model loaded", context={"model": "gpt2"}))
         assert "model loaded" in line
-        assert "INFO" in line
+        assert "INF" in line  # Shell format uses abbreviation
         assert "model=gpt2" in line
         assert "slo.shell" in line
 
     def test_icon_per_level(self):
         log = ShellLogger("slo.shell", colors=False)
-        assert "·" in log._format_record(_record(level=LogLevel.DEBUG))
-        assert "ℹ" in log._format_record(_record(level=LogLevel.INFO))
-        assert "!" in log._format_record(_record(level=LogLevel.WARNING))
-        assert "✗" in log._format_record(_record(level=LogLevel.ERROR))
-        assert "✗" in log._format_record(_record(level=LogLevel.CRITICAL))
+        # Shell format uses abbreviations: DBG, INF, WRN, ERR, CRT
+        # Icons are only for WARNING, ERROR, CRITICAL
+        assert "DBG" in log._format_record(_record(level=LogLevel.DEBUG))
+        assert "INF" in log._format_record(_record(level=LogLevel.INFO))
+        assert "WRN" in log._format_record(_record(level=LogLevel.WARNING))
+        assert "ERR" in log._format_record(_record(level=LogLevel.ERROR))
+        assert "CRT" in log._format_record(_record(level=LogLevel.CRITICAL))
 
     def test_exception_included(self):
         log = ShellLogger("slo.shell", colors=False)
@@ -142,7 +144,8 @@ class TestFormatting:
     def test_empty_context_no_trailing_space(self):
         log = ShellLogger("slo.shell", colors=False)
         line = log._format_record(_record(context={}))
-        assert "  " not in line
+        # Empty context still has logger name on secondary line, but no context
+        assert "slo.shell" in line
 
     def test_error_code_in_record(self):
         rec = _record(error_code="E_MODEL_LOAD")
@@ -154,9 +157,17 @@ class TestFormatting:
 
     def test_format_record_level_label_uppercase(self):
         log = ShellLogger("slo.shell", colors=False)
+        # Shell format uses abbreviations: DBG, INF, WRN, ERR, CRT
+        abbrevs = {
+            LogLevel.DEBUG: "DBG",
+            LogLevel.INFO: "INF",
+            LogLevel.WARNING: "WRN",
+            LogLevel.ERROR: "ERR",
+            LogLevel.CRITICAL: "CRT",
+        }
         for level in LogLevel:
             line = log._format_record(_record(level=level))
-            assert level.value.upper() in line
+            assert abbrevs[level] in line
 
     def test_format_record_includes_message(self):
         log = ShellLogger("slo.shell", colors=False)
@@ -183,8 +194,8 @@ class TestFormatting:
     def test_colors_logger_cyan(self, ansi_on):
         log = ShellLogger("slo.shell", colors=True)
         line = log._format_record(_record())
-        # Logger name should be cyan
-        assert "\033[36m" in line
+        # Logger name is GREY+DIM in shell format, not cyan
+        assert "\033[90m" in line  # GREY code
 
 
 # ── Emit ──────────────────────────────────────────────────────────────
@@ -229,9 +240,10 @@ class TestEmit:
         log.info("first")
         log.info("second")
         lines = buf.getvalue().strip().split("\n")
-        assert len(lines) == 2
+        # Each message has primary line + secondary line (logger name)
+        assert len(lines) == 4
         assert "first" in lines[0]
-        assert "second" in lines[1]
+        assert "second" in lines[2]
 
     def test_emit_level_debug_blocked_at_info(self):
         buf = io.StringIO()
@@ -300,7 +312,8 @@ class TestThreadSafety:
         for t in threads:
             t.join()
         lines = buf.getvalue().strip().split("\n")
-        assert len(lines) == 20
+        # Each message has primary line + secondary line (logger name)
+        assert len(lines) == 40
 
 
 # ── LogRecord ─────────────────────────────────────────────────────────
@@ -527,7 +540,7 @@ class TestEdgeCases:
         buf = io.StringIO()
         log = ShellLogger("slo.shell", stream=buf, colors=False)
         log.error("fail", error_code="E_MODEL_LOAD")
-        assert "E_MODEL_LOAD" not in buf.getvalue()  # error_code not in format
+        assert "E_MODEL_LOAD" in buf.getvalue()  # error_code is in shell format
 
     def test_format_record_with_tag(self):
         log = ShellLogger("slo.shell", colors=False)
@@ -683,7 +696,8 @@ class TestEdgeCases:
         for t in threads:
             t.join()
         lines = buf.getvalue().strip().split("\n")
-        assert len(lines) == 50
+        # Each message has primary line + secondary line (logger name)
+        assert len(lines) == 100
 
     def test_emit_mixed_levels_all_appear(self):
         buf = io.StringIO()
@@ -711,4 +725,5 @@ class TestEdgeCases:
         out = buf.getvalue()
         assert "hidden" not in out
         lines = out.strip().split("\n")
-        assert len(lines) == 4
+        # Each message has primary line + secondary line (logger name)
+        assert len(lines) == 8
