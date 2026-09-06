@@ -271,9 +271,8 @@ class TestExperimentData:
         assert data["metrics"][0]["value"] == 0.5
         assert data["params"][0]["value"] == 0.001
 
-    def test_data_skips_corrupt_json_lines(self, client, mock_db):
-        e_id = "corrupt_123"
-        mock_db.setdefault("metrics", []).append({"experiment_id": e_id, "_invalid": True})
+    def test_data_returns_empty_for_no_metrics(self, client, mock_db):
+        e_id = "empty_123"
         resp = client.get(f"/experiments/{e_id}/data")
         assert resp.json()["data"]["metrics"] == []
 

@@ -23,6 +23,7 @@ from domains.training.slonet import (
 )
 from domains.training.quality_scorer import score_batch
 from domains.training.pair_extractor import extract_pairs_from_sessions
+from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
 
 logger = logging.getLogger("slo.training.chat_trainer")
 
@@ -104,14 +105,6 @@ def _format_pairs_text(pairs: List[Dict[str, str]]) -> str:
     for pair in pairs:
         parts.append(f"User: {pair['user_msg']}\nAssistant: {pair['assistant_msg']}\n\n")
     return "".join(parts)
-
-
-def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
-    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
-    log_probs = logits - logits.max(axis=-1, keepdims=True)
-    log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
-    batch_size = targets.shape[0]
-    return float(-log_probs[np.arange(batch_size), targets].mean())
 
 
 @dataclass

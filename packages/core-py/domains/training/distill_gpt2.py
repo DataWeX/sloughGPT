@@ -141,14 +141,6 @@ def _teacher_forward(rw: dict, arch: ArchConfig, token_ids: List[int]) -> np.nda
     return forward_fast(rw, arch, token_ids)
 
 
-def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
-    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
-    log_probs = logits - logits.max(axis=-1, keepdims=True)
-    log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
-    batch_size = targets.shape[0]
-    return float(-log_probs[np.arange(batch_size), targets].mean())
-
-
 def _compute_perplexity(loss: float) -> float:
     """Compute perplexity from cross-entropy loss: ppl = exp(loss)."""
     return float(np.exp(loss))
