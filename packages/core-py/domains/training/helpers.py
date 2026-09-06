@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from .state import REPO_ROOT, CHECKPOINTS_DIR, TURBO_DIR, SOU_MAGIC
+from .state import REPO_ROOT, SOU_MAGIC
 
 logger = logging.getLogger("slo.training")
 

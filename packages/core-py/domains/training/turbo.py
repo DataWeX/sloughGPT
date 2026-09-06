@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from .state import (
-    TrainingState,
     _state,
     _turbo_lock,
     _turbo_cancel_event,
@@ -151,7 +150,6 @@ def start_turbo_training(config: dict) -> dict:
 
 def run_turbo_worker(config: dict) -> None:
     from domains.training.train_pipeline import SloughGPTTrainer
-    from domains.training.runtime_protocol import get_training_runtime
 
     job_id = _turbo_state.get("job_id", "")
     data_path = config.get("data_path", "")

@@ -5,7 +5,6 @@ Device detection and environment setup for training/inference.
 
 from __future__ import annotations
 
-from typing import Optional
 
 
 def get_optimal_device() -> str:

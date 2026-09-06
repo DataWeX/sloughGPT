@@ -23,7 +23,6 @@ from domains.training.slonet import (
 )
 from domains.training.quality_scorer import score_batch
 from domains.training.pair_extractor import extract_pairs_from_sessions
-from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
 
 logger = logging.getLogger("slo.training.chat_trainer")
 

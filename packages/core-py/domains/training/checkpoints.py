@@ -10,9 +10,8 @@ import struct
 import time
 from pathlib import Path
 
-from .state import CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, VALID_CKPT_NAME, SOU_MAGIC
+from .state import CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, VALID_CKPT_NAME
 from .helpers import (
-    _finite_payload,
     read_slo_json_header,
     describe_checkpoint,
 )
