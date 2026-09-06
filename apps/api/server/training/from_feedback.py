@@ -12,7 +12,9 @@ from pathlib import Path
 
 from domains.shared import find_repo_root
 from domains.training.executor import get_training_executor
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
 from .controller import get_training_controller
@@ -25,14 +27,25 @@ logger = logging.getLogger("slo")
 router = APIRouter(tags=["training-feedback"])
 
 
+class FromFeedbackRequest(BaseModel):
+    """Request schema for training from feedback data."""
+
+    epochs: int = Field(default=3, ge=1, le=1000, description="Number of training epochs")
+    learning_rate: float = Field(default=1e-4, gt=0, le=1.0, description="Learning rate")
+    batch_size: int = Field(default=16, ge=1, le=512, description="Batch size")
+
+
 @router.post("/training/from-feedback")
-async def train_from_feedback(req: dict | None = None):
+async def train_from_feedback(
+    req: FromFeedbackRequest | None = None,
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
     """Train a model from collected feedback data."""
     import uuid
 
-    epochs = (req or {}).get("epochs", 3)
-    learning_rate = (req or {}).get("learning_rate", 1e-4)
-    batch_size = (req or {}).get("batch_size", 16)
+    epochs = req.epochs if req else 3
+    learning_rate = req.learning_rate if req else 1e-4
+    batch_size = req.batch_size if req else 16
 
     try:
         from domains.feedback.training import FeedbackTrainer

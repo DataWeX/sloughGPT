@@ -42,6 +42,7 @@ interface UseStreamingPipelineReturn {
   regenerate: (fromMessageId?: string) => Promise<void>
   stop: () => void
   isStreaming: boolean
+  isReconnecting: boolean
   streamingMessageId: string | null
   toolEvents: ToolCallEvent[]
 }
@@ -154,6 +155,7 @@ export function useStreamingPipeline({
   onRagVerification,
 }: StreamingPipelineOptions): UseStreamingPipelineReturn {
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null)
   const [toolEvents, setToolEvents] = useState<ToolCallEvent[]>([])
   const abortRef = useRef<AbortController | null>(null)
@@ -175,6 +177,7 @@ export function useStreamingPipeline({
     accumulatorRef.current?.cancel()
     trackEvent('stream_stopped')
     setIsStreaming(false)
+    setIsReconnecting(false)
     setStreamingMessageId(null)
     setToolEvents([])
   }, [])
@@ -252,6 +255,7 @@ export function useStreamingPipeline({
         },
         onComplete: () => {
           acc.cancel()
+          setIsReconnecting(false)
           trackEvent('stream_completed', { message_id: assistantMsg.id })
           setMessages(prev => prev.map(m =>
             m.id === assistantMsg.id && !m.content
@@ -261,6 +265,19 @@ export function useStreamingPipeline({
         },
         onError: (status, text) => {
           acc.cancel()
+
+          const isRetryable = status === 408 || status === 429 || status === 502 || status === 503 || status === 504 || status === 0
+          if (isRetryable) {
+            trackEvent('stream_reconnecting', { status })
+            setIsReconnecting(true)
+            setMessages(prev => prev.map(m =>
+              m.id === assistantMsg.id
+                ? { ...m, content: m.content || 'Reconnecting...' }
+                : m
+            ))
+            return
+          }
+
           trackEvent('stream_error', { error: text || 'Stream failed' })
           setMessages(prev => prev.map(m =>
             m.id === assistantMsg.id
@@ -273,6 +290,7 @@ export function useStreamingPipeline({
       if (err instanceof DOMException && err.name === 'AbortError') return
       trackEvent('stream_error', { error: String(err) })
       _log.error('Stream error', { error: String(err) })
+      setIsReconnecting(false)
       setMessages(prev => prev.map(m =>
         m.id === assistantMsg.id
           ? { ...m, content: `(error: ${String(err)})`, isError: true }
@@ -281,6 +299,7 @@ export function useStreamingPipeline({
     } finally {
       acc.cancel()
       setIsStreaming(false)
+      setIsReconnecting(false)
       setStreamingMessageId(null)
       abortRef.current = null
       accumulatorRef.current = null
@@ -395,6 +414,7 @@ export function useStreamingPipeline({
     regenerate,
     stop,
     isStreaming,
+    isReconnecting,
     streamingMessageId,
     toolEvents,
   }
