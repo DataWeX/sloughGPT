@@ -81,6 +81,46 @@ class TextDataset:
         return x, y
 
 
+def validate_training_data(text: str, min_chars: int = 200) -> None:
+    """Validate training data before training starts.
+
+    Args:
+        text: The training text corpus.
+        min_chars: Minimum character count required.
+
+    Raises:
+        ValueError: If data is invalid or insufficient.
+    """
+    if not text:
+        raise ValueError("Training data is empty")
+
+    if len(text) < min_chars:
+        raise ValueError(
+            f"Training data too short: {len(text)} chars (minimum {min_chars})"
+        )
+
+    # Check for binary/non-printable content
+    printable_ratio = sum(1 for c in text[:1000] if c.isprintable() or c in '\n\r\t') / min(1000, len(text))
+    if printable_ratio < 0.8:
+        raise ValueError(
+            f"Training data appears to be binary (only {printable_ratio:.0%} printable characters)"
+        )
+
+    # Check for sufficient diversity
+    unique_chars = len(set(text))
+    if unique_chars < 10:
+        raise ValueError(
+            f"Training data lacks diversity: only {unique_chars} unique characters"
+        )
+
+    # Check for minimum token count (rough estimate: 1 token ~ 4 chars)
+    estimated_tokens = len(text) // 4
+    if estimated_tokens < 50:
+        raise ValueError(
+            f"Training data too short for training: ~{estimated_tokens} tokens (minimum ~50)"
+        )
+
+
 def prepare_data(data_path, block_size=128, tokenizer=None):
     """Prepare training data from a text file or multiple datasets with ratios.
 
@@ -157,9 +197,12 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         vocab_size = tokenizer.vocab_size
         stoi = dict(tokenizer.stoi)
         itos = dict(tokenizer.itos)
+        validate_training_data(text)
         logger.info("Data: %d tokens, vocab %d (tokenized)", len(data), vocab_size,
             extra={"tag": "TRAIN"},)
         return data, vocab_size, stoi, itos
+
+    validate_training_data(text)
 
     chars = sorted(set(text))
     stoi = {c: i for i, c in enumerate(chars)}
