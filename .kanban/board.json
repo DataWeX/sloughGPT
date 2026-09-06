@@ -8347,7 +8347,7 @@
       "id": "20260831_100000_tui-linux-fixes",
       "title": "TUI LiveDisplay + Linux Metrics Fixes",
       "description": "3 fixes: zero-newline cursor positioning, Linux /proc metrics, web restart cwd",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "tui",

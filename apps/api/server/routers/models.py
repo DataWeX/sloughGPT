@@ -1269,8 +1269,11 @@ class ModelsRouter:
                 try:
                     health = await asyncio.to_thread(provider.health)
                     metrics = health.get("metrics", {})
-                except Exception:
-                    health = {"type": "error"}
+                except Exception as exc:
+                    import logging
+                    logging.getLogger("slo.models").warning(
+                        "Provider health check failed: %s", exc)
+                    health = {"type": "error", "error": str(exc)}
             return success_response(
                 data={
                     "enabled": is_client,
