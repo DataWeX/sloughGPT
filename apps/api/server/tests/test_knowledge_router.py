@@ -6,6 +6,7 @@ from test_support import get_test_client
 def _cleanup(client):
     """Clear all knowledge items via the singleton's clear_all."""
     from domains.learner.knowledge import get_knowledge_memory
+
     get_knowledge_memory().clear_all()
 
 
@@ -31,11 +32,15 @@ def test_add_and_list_knowledge():
     client = get_test_client()
     _cleanup(client)
 
-    add = client.post("/knowledge", json={"content": "Test fact one", "topic": "test", "source": "manual"})
+    add = client.post(
+        "/knowledge", json={"content": "Test fact one", "topic": "test", "source": "manual"}
+    )
     assert add.status_code == 200
     assert _data(add)["status"] == "stored"
 
-    add2 = client.post("/knowledge", json={"content": "Test fact two", "topic": "code", "source": "manual"})
+    add2 = client.post(
+        "/knowledge", json={"content": "Test fact two", "topic": "code", "source": "manual"}
+    )
     assert add2.status_code == 200
 
     resp = client.get("/knowledge")
@@ -118,12 +123,15 @@ def test_batch_ingest():
     client = get_test_client()
     _cleanup(client)
 
-    resp = client.post("/knowledge/batch", json={
-        "items": [
-            {"content": "Batch item A", "source": "test"},
-            {"content": "Batch item B"},
-        ]
-    })
+    resp = client.post(
+        "/knowledge/batch",
+        json={
+            "items": [
+                {"content": "Batch item A", "source": "test"},
+                {"content": "Batch item B"},
+            ]
+        },
+    )
     assert resp.status_code == 200
     data = _data(resp)
     assert data["stored"] >= 1
@@ -152,12 +160,15 @@ def test_get_context():
 
 def test_search_files():
     client = get_test_client()
-    resp = client.post("/knowledge/search-files", json={
-        "query": "def function",
-        "path": "routers",
-        "top_k": 3,
-        "extensions": ["py"],
-    })
+    resp = client.post(
+        "/knowledge/search-files",
+        json={
+            "query": "def function",
+            "path": "routers",
+            "top_k": 3,
+            "extensions": ["py"],
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert "results" in body
@@ -168,10 +179,13 @@ def test_search_files():
 def test_check_duplicate_unique():
     client = get_test_client()
     _cleanup(client)
-    resp = client.post("/knowledge/check-duplicate", json={
-        "content": "Completely unique content that does not exist anywhere",
-        "threshold": 0.85,
-    })
+    resp = client.post(
+        "/knowledge/check-duplicate",
+        json={
+            "content": "Completely unique content that does not exist anywhere",
+            "threshold": 0.85,
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert body["is_duplicate"] is False
@@ -184,10 +198,13 @@ def test_check_duplicate_after_add():
 
     client.post("/knowledge", json={"content": "Python is a programming language", "topic": "code"})
 
-    resp = client.post("/knowledge/check-duplicate", json={
-        "content": "Python is a programming language",
-        "threshold": 0.85,
-    })
+    resp = client.post(
+        "/knowledge/check-duplicate",
+        json={
+            "content": "Python is a programming language",
+            "threshold": 0.85,
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert body["is_duplicate"] is True
@@ -197,9 +214,12 @@ def test_check_duplicate_after_add():
 def test_categorize():
     client = get_test_client()
     _cleanup(client)
-    resp = client.post("/knowledge/categorize", json={
-        "content": "The neural network was trained on MNIST using gradient descent",
-    })
+    resp = client.post(
+        "/knowledge/categorize",
+        json={
+            "content": "The neural network was trained on MNIST using gradient descent",
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert "topic" in body
@@ -217,18 +237,22 @@ def test_knowledge_gaps_empty():
     assert "total_facts" in body
     assert isinstance(body["gaps"], list)
 
+
 def test_bulk_ingest():
     client = get_test_client()
     _cleanup(client)
 
-    resp = client.post("/knowledge/bulk-ingest", json={
-        "items": [
-            "Quantum entanglement enables instantaneous correlations between particles regardless of distance",
-            "Photosynthesis converts light energy into chemical energy in plants through chlorophyll",
-        ],
-        "topic": "test_bulk",
-        "source": "test",
-    })
+    resp = client.post(
+        "/knowledge/bulk-ingest",
+        json={
+            "items": [
+                "Quantum entanglement enables instantaneous correlations between particles regardless of distance",
+                "Photosynthesis converts light energy into chemical energy in plants through chlorophyll",
+            ],
+            "topic": "test_bulk",
+            "source": "test",
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert body["added"] >= 1
@@ -242,23 +266,29 @@ def test_bulk_ingest_dedup():
     client = get_test_client()
     _cleanup(client)
 
-    client.post("/knowledge/bulk-ingest", json={
-        "items": [
-            "Quantum entanglement enables instantaneous correlations between particles regardless of distance",
-            "Photosynthesis converts light energy into chemical energy in plants through chlorophyll",
-        ],
-        "topic": "test",
-        "dedup_threshold": 0.999,
-    })
+    client.post(
+        "/knowledge/bulk-ingest",
+        json={
+            "items": [
+                "Quantum entanglement enables instantaneous correlations between particles regardless of distance",
+                "Photosynthesis converts light energy into chemical energy in plants through chlorophyll",
+            ],
+            "topic": "test",
+            "dedup_threshold": 0.999,
+        },
+    )
 
-    resp = client.post("/knowledge/bulk-ingest", json={
-        "items": [
-            "Quantum entanglement enables instantaneous correlations between particles regardless of distance",
-            "The mitochondria is the powerhouse of the cell producing ATP energy",
-        ],
-        "topic": "test",
-        "dedup_threshold": 0.999,
-    })
+    resp = client.post(
+        "/knowledge/bulk-ingest",
+        json={
+            "items": [
+                "Quantum entanglement enables instantaneous correlations between particles regardless of distance",
+                "The mitochondria is the powerhouse of the cell producing ATP energy",
+            ],
+            "topic": "test",
+            "dedup_threshold": 0.999,
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert body["added"] >= 1
@@ -269,16 +299,22 @@ def test_add_returns_duplicate_status():
     _cleanup(client)
 
     long_fact = "Machine learning is a subset of artificial intelligence that enables systems to learn from data and improve over time without being explicitly programmed"
-    resp1 = client.post("/knowledge", json={
-        "content": long_fact,
-        "topic": "ml",
-    })
+    resp1 = client.post(
+        "/knowledge",
+        json={
+            "content": long_fact,
+            "topic": "ml",
+        },
+    )
     assert _data(resp1)["status"] == "stored"
 
-    resp2 = client.post("/knowledge", json={
-        "content": long_fact,
-        "topic": "ml",
-    })
+    resp2 = client.post(
+        "/knowledge",
+        json={
+            "content": long_fact,
+            "topic": "ml",
+        },
+    )
     body = _data(resp2)
     assert body["status"] in ("duplicate", "stored")
 
@@ -293,11 +329,14 @@ def test_stats_with_many_facts_terminates():
     _cleanup(client)
 
     for i in range(250):
-        resp = client.post("/knowledge", json={
-            "content": f"Fact number {i} about vector search and retrieval",
-            "topic": "bulk" if i % 2 == 0 else "misc",
-            "source": "regression",
-        })
+        resp = client.post(
+            "/knowledge",
+            json={
+                "content": f"Fact number {i} about vector search and retrieval",
+                "topic": "bulk" if i % 2 == 0 else "misc",
+                "source": "regression",
+            },
+        )
         assert resp.status_code == 200
 
     resp = client.get("/knowledge/stats")

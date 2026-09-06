@@ -1,5 +1,4 @@
 """Tests for images router endpoints."""
-import pytest
 
 from tests.test_support import get_test_client
 
@@ -47,32 +46,44 @@ class TestGenerateImage:
         assert body["prompt"] == "a blue sky"
 
     def test_generate_cartoon_style(self):
-        resp = client.post("/images/generate", json={
-            "prompt": "a cat",
-            "style": "cartoon",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "a cat",
+                "style": "cartoon",
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["style"] == "cartoon"
 
     def test_generate_watercolor(self):
-        resp = client.post("/images/generate", json={
-            "prompt": "mountain lake",
-            "style": "watercolor",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "mountain lake",
+                "style": "watercolor",
+            },
+        )
         assert resp.status_code == 200
 
     def test_generate_sketch(self):
-        resp = client.post("/images/generate", json={
-            "prompt": "portrait",
-            "style": "sketch",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "portrait",
+                "style": "sketch",
+            },
+        )
         assert resp.status_code == 200
 
     def test_generate_fantasy(self):
-        resp = client.post("/images/generate", json={
-            "prompt": "magical forest",
-            "style": "fantasy",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "magical forest",
+                "style": "fantasy",
+            },
+        )
         assert resp.status_code == 200
 
     def test_generate_has_id(self):
@@ -84,10 +95,13 @@ class TestGenerateImage:
         assert resp.status_code == 422
 
     def test_generate_invalid_style(self):
-        resp = client.post("/images/generate", json={
-            "prompt": "test",
-            "style": "nonexistent",
-        })
+        resp = client.post(
+            "/images/generate",
+            json={
+                "prompt": "test",
+                "style": "nonexistent",
+            },
+        )
         assert resp.status_code == 422
 
     def test_gallery_after_generation(self):
@@ -100,6 +114,7 @@ class TestGenerateImage:
 class TestHexToRgb:
     def test_hex_conversion(self):
         from routers.images import hex_to_rgb
+
         assert hex_to_rgb("#ff0000") == (255, 0, 0)
         assert hex_to_rgb("#00ff00") == (0, 255, 0)
         assert hex_to_rgb("#0000ff") == (0, 0, 255)

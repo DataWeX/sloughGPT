@@ -48,13 +48,15 @@ async def _domain_error_handler(request: Request, exc: Exception) -> JSONRespons
     actual error attributes instead of hardcoding them.
     """
     cid = _corr_id(request)
-    code = getattr(exc, 'code', 'E_DOMAIN')
-    http_status = getattr(exc, 'http_status', status.HTTP_400_BAD_REQUEST)
-    user_message = getattr(exc, 'user_message', str(exc) or 'Domain error')
+    code = getattr(exc, "code", "E_DOMAIN")
+    http_status = getattr(exc, "http_status", status.HTTP_400_BAD_REQUEST)
+    user_message = getattr(exc, "user_message", str(exc) or "Domain error")
 
     logger.warning(
         "%s on %s %s",
-        str(exc), request.method, request.url.path,
+        str(exc),
+        request.method,
+        request.url.path,
         extra={"tag": "REQ", "context": {"corr": cid, "code": code, "status": http_status}},
     )
     return JSONResponse(
@@ -68,32 +70,39 @@ async def _validation_error_handler(request: Request, exc: ValidationError) -> J
     errors = exc.errors()
     cid = _corr_id(request)
     logger.warning(
-        "Validation failed on %s", request.url.path,
+        "Validation failed on %s",
+        request.url.path,
         extra={"tag": "REQ", "context": {"corr": cid, "fields": len(errors), "status": 422}},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=error_response(
-            "Validation failed", "E_VAL_FIELD",
+            "Validation failed",
+            "E_VAL_FIELD",
             details={"errors": errors},
         ),
     )
 
 
-async def _request_validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def _request_validation_error_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
     """Catch FastAPI request validation errors."""
     errors = exc.errors()
     # Pydantic v2 may include bytes in error detail (raw request body) — convert for JSON safety
     _safe = json.loads(json.dumps(errors, default=str))
     cid = _corr_id(request)
     logger.warning(
-        "Request validation failed on %s %s", request.method, request.url.path,
+        "Request validation failed on %s %s",
+        request.method,
+        request.url.path,
         extra={"tag": "REQ", "context": {"corr": cid, "errors": len(_safe), "status": 422}},
     )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=error_response(
-            "Request validation failed", "E_VAL_REQUEST",
+            "Request validation failed",
+            "E_VAL_REQUEST",
             details={"errors": _safe},
         ),
     )
@@ -117,8 +126,14 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
 
     log_fn = logger.error if h.status_code >= 500 else logger.warning
     log_fn(
-        "HTTP %d on %s %s", h.status_code, request.method, request.url.path,
-        extra={"tag": "REQ", "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code}},
+        "HTTP %d on %s %s",
+        h.status_code,
+        request.method,
+        request.url.path,
+        extra={
+            "tag": "REQ",
+            "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code},
+        },
     )
     return JSONResponse(
         status_code=h.status_code,
@@ -137,6 +152,7 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
     # Classify into the error taxonomy
     try:
         from domains.infrastructure.errors import classify_exception, emit_error_event
+
         classified = classify_exception(exc)
         classified.source = f"{request.method} {request.url.path}"
         emit_error_event(classified, source=classified.source)
@@ -144,7 +160,10 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
         classified = None
 
     logger.exception(
-        "Unhandled error on %s %s [%s]", request.method, request.url.path, cid,
+        "Unhandled error on %s %s [%s]",
+        request.method,
+        request.url.path,
+        cid,
         extra={"tag": "REQ", "context": {"corr": cid, "status": 500}},
     )
 
@@ -178,6 +197,7 @@ def register_app_error_handler(app: FastAPI):
             # SINGLE EventBus emission point for all AppErrors
             try:
                 from domains.infrastructure.errors import emit_error_event
+
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
             except Exception as e:
                 logger.debug("Error event emission failed: %s", e)
@@ -215,13 +235,21 @@ def register_all_handlers(app: FastAPI):
             # SINGLE EventBus emission — classify_and_raise() does NOT emit
             try:
                 from domains.infrastructure.errors import emit_error_event
+
                 emit_error_event(exc, source=f"{request.method} {request.url.path}")
             except Exception as e:
                 logger.debug("Error event emission failed: %s", e)
             log_fn = logger.error if exc.http_status >= 500 else logger.warning
             log_fn(
-                "%s [%s] on %s %s", exc.code, exc.message, request.method, request.url.path,
-                extra={"tag": "REQ", "context": {"corr": cid, "code": exc.code, "status": exc.http_status}},
+                "%s [%s] on %s %s",
+                exc.code,
+                exc.message,
+                request.method,
+                request.url.path,
+                extra={
+                    "tag": "REQ",
+                    "context": {"corr": cid, "code": exc.code, "status": exc.http_status},
+                },
             )
             return JSONResponse(
                 status_code=exc.http_status,
@@ -239,6 +267,7 @@ def register_all_handlers(app: FastAPI):
     # Domain errors (legacy hierarchy — now extends AppError, kept for safety)
     try:
         from domains.errors import SloughGPTDomainError
+
         app.add_exception_handler(SloughGPTDomainError, _domain_error_handler)
     except ImportError:
         pass

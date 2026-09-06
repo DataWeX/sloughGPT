@@ -1,4 +1,5 @@
 """Tests for files router endpoints."""
+
 from io import BytesIO
 
 import pytest

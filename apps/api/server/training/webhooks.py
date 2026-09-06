@@ -14,14 +14,14 @@ import logging
 import threading
 import time
 import uuid
-from pathlib import Path
-from typing import Any
 from dataclasses import dataclass, field
 from datetime import datetime
-import httpx
+from pathlib import Path
+from typing import Any
 
-from mogdb import MogDB
+import httpx
 from domains.shared import find_repo_root
+from mogdb import MogDB
 
 logger = logging.getLogger("slo.webhooks")
 
@@ -89,7 +89,9 @@ class WebhookStore:
             self._db = MogDB(str(self.db_path))
             self._webhooks = self._db.collection("webhooks")
         except Exception:
-            logger.warning("WebhookStore: failed to open MogDB at %s, operating in degraded mode", self.db_path)
+            logger.warning(
+                "WebhookStore: failed to open MogDB at %s, operating in degraded mode", self.db_path
+            )
 
     @staticmethod
     def _doc_to_webhook(doc: dict[str, Any]) -> Webhook:
@@ -263,24 +265,38 @@ class WebhookStore:
                     delivery.success = 200 <= response.status_code < 300
 
                     if delivery.success:
-                        logger.info("Webhook %s delivered successfully (attempt %d)", webhook_id, attempt + 1, extra={"tag": "TRAIN"})
+                        logger.info(
+                            "Webhook %s delivered successfully (attempt %d)",
+                            webhook_id,
+                            attempt + 1,
+                            extra={"tag": "TRAIN"},
+                        )
                         break
 
                     last_error = f"HTTP {response.status_code}"
                     logger.warning(
                         "Webhook %s delivery failed (attempt %d/%d): %s",
-                        webhook_id, attempt + 1, retries, last_error,
+                        webhook_id,
+                        attempt + 1,
+                        retries,
+                        last_error,
                         extra={"tag": "TRAIN"},
                     )
 
             except Exception as e:
                 last_error = str(e)
-                logger.warning("Webhook %s delivery failed (attempt %d/%d): %s",
-                               webhook_id, attempt + 1, retries, e, extra={"tag": "TRAIN"})
+                logger.warning(
+                    "Webhook %s delivery failed (attempt %d/%d): %s",
+                    webhook_id,
+                    attempt + 1,
+                    retries,
+                    e,
+                    extra={"tag": "TRAIN"},
+                )
 
             # Exponential backoff between attempts
             if attempt < retries - 1:
-                delay = min(self._retry_base_delay * (2 ** attempt), self._max_retry_delay)
+                delay = min(self._retry_base_delay * (2**attempt), self._max_retry_delay)
                 await asyncio.sleep(delay)
 
         if not delivery.success:
@@ -291,8 +307,18 @@ class WebhookStore:
             else:
                 delivery.dead_letter = True
                 self._add_dead_letter(delivery)
-                logger.error("Webhook %s moved to dead letter queue after %d attempts", webhook_id, retries, extra={"tag": "TRAIN"})
-            logger.error("Webhook %s delivery failed after %d attempts", webhook_id, retries, extra={"tag": "TRAIN"})
+                logger.error(
+                    "Webhook %s moved to dead letter queue after %d attempts",
+                    webhook_id,
+                    retries,
+                    extra={"tag": "TRAIN"},
+                )
+            logger.error(
+                "Webhook %s delivery failed after %d attempts",
+                webhook_id,
+                retries,
+                extra={"tag": "TRAIN"},
+            )
 
         self._add_delivery(delivery)
         return delivery
@@ -307,7 +333,7 @@ class WebhookStore:
     ) -> None:
         """Queue a failed delivery for background retry."""
         next_retry_delay = min(
-            self._retry_base_delay * (2 ** delivery.attempt_count),
+            self._retry_base_delay * (2**delivery.attempt_count),
             self._max_retry_delay,
         )
         next_retry_at = datetime.now().timestamp() + next_retry_delay
@@ -326,24 +352,29 @@ class WebhookStore:
         self._retry_queue.append(retry_entry)
         logger.info(
             "Webhook %s queued for retry in %.1fs (attempt %d/%d)",
-            webhook_id, next_retry_delay, delivery.attempt_count, self._dead_letter_max_attempts,
+            webhook_id,
+            next_retry_delay,
+            delivery.attempt_count,
+            self._dead_letter_max_attempts,
             extra={"tag": "TRAIN"},
         )
 
     def _add_dead_letter(self, delivery: WebhookDelivery) -> None:
         """Add a permanently failed delivery to the dead letter queue."""
-        self._dead_letters.append({
-            "delivery_id": delivery.id,
-            "webhook_id": delivery.webhook_id,
-            "event": delivery.event,
-            "error": delivery.error,
-            "status_code": delivery.status_code,
-            "attempt_count": delivery.attempt_count,
-            "dead_lettered_at": datetime.now().isoformat(),
-        })
+        self._dead_letters.append(
+            {
+                "delivery_id": delivery.id,
+                "webhook_id": delivery.webhook_id,
+                "event": delivery.event,
+                "error": delivery.error,
+                "status_code": delivery.status_code,
+                "attempt_count": delivery.attempt_count,
+                "dead_lettered_at": datetime.now().isoformat(),
+            }
+        )
         # Trim dead letter queue
         if len(self._dead_letters) > self._max_log_size:
-            self._dead_letters = self._dead_letters[-self._max_log_size:]
+            self._dead_letters = self._dead_letters[-self._max_log_size :]
 
     async def process_retry_queue(self) -> int:
         """Process pending retries. Returns number of retries attempted."""
@@ -382,7 +413,12 @@ class WebhookStore:
                 )
                 processed += 1
             except Exception as e:
-                logger.warning("Retry failed for delivery %s: %s", entry["delivery_id"], e, extra={"tag": "TRAIN"})
+                logger.warning(
+                    "Retry failed for delivery %s: %s",
+                    entry["delivery_id"],
+                    e,
+                    extra={"tag": "TRAIN"},
+                )
 
         return processed
 
@@ -516,7 +552,9 @@ async def notify_training_event(
         logger.debug("No webhooks registered for event: %s", event)
         return []
 
-    logger.info("Sending %s to %d webhook(s)", event, len(matching_webhooks), extra={"tag": "TRAIN"})
+    logger.info(
+        "Sending %s to %d webhook(s)", event, len(matching_webhooks), extra={"tag": "TRAIN"}
+    )
 
     deliveries = []
     for webhook in matching_webhooks:

@@ -9,20 +9,20 @@ import json
 import logging
 import os
 import time
-from typing import List, Optional
 from pathlib import Path
 from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from pydantic import BaseModel, Field
 from domains.multimodal import get_multimodal_manager
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.multimodal")
 
 
 # ── Schemas ────────────────────────────────────────────────────────
+
 
 class DPOTriggerRequest(BaseModel):
     max_pairs: int = Field(6, ge=1, le=50)
@@ -52,8 +52,8 @@ class VisualDatasetRequest(BaseModel):
 
 # ── Router Class ──────────────────────────────────────────────────
 
-class MultimodalRouter:
 
+class MultimodalRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/multimodal", tags=["multimodal"])
 
@@ -116,7 +116,9 @@ class MultimodalRouter:
         self.router.add_api_route("/generate-image", self.generate_image, methods=["POST"])
         self.router.add_api_route("/visual-dataset", self.create_visual_dataset, methods=["POST"])
         self.router.add_api_route("/checkpoints", self.list_checkpoints, methods=["GET"])
-        self.router.add_api_route("/checkpoints/{name}/load", self.load_checkpoint, methods=["POST"])
+        self.router.add_api_route(
+            "/checkpoints/{name}/load", self.load_checkpoint, methods=["POST"]
+        )
         self.router.add_api_route("/checkpoints/{name}", self.delete_checkpoint, methods=["DELETE"])
         self.router.add_api_route("/reset", self.reset, methods=["POST"])
 
@@ -143,6 +145,7 @@ class MultimodalRouter:
     def _get_active_model_and_tokenizer():
         try:
             import state as server_state
+
             return server_state.model, server_state.tokenizer
         except Exception as exc:
             logger.debug("Model/state unavailable for multimodal: %s", exc)
@@ -155,13 +158,21 @@ class MultimodalRouter:
             """status."""
             mgr = self._get_initialized_manager()
             if mgr is None:
-                return success_response(data={
-                    "engine": {"status": "not_initialized"},
-                    "learning": {"images_learned": 0},
-                    "batch": {"running": False, "job_id": None, "total": 0, "completed": 0, "errors": 0},
-                    "video_training": {},
-                    "dpo": {"status": "idle"},
-                })
+                return success_response(
+                    data={
+                        "engine": {"status": "not_initialized"},
+                        "learning": {"images_learned": 0},
+                        "batch": {
+                            "running": False,
+                            "job_id": None,
+                            "total": 0,
+                            "completed": 0,
+                            "errors": 0,
+                        },
+                        "video_training": {},
+                        "dpo": {"status": "idle"},
+                    }
+                )
             caps = mgr.capabilities
             engine = getattr(mgr, "_multimodal_engine", None)
             learning = getattr(mgr, "_learning_count", 0)
@@ -181,73 +192,99 @@ class MultimodalRouter:
             with self._bg_lock:
                 bg = dict(self._background_job)
 
-            return success_response(data={
-                "engine": {
-                    "speech_to_text": caps.speech_to_text,
-                    "image_caption": caps.image_caption,
-                    "speech_model": caps.speech_model,
-                    "vision_model": caps.vision_model,
-                    "status": "trained" if trained else ("learning" if learning > 0 else "ready"),
-                },
-                "learning": {
-                    "images_learned": learning,
-                    "trained": trained,
-                    "vocab_size": vocab_size,
-                    "replay_buffer_size": buf.size if buf else 0,
-                    "learning_method": "contrastive + self-training",
-                    "caption_history": history[-50:],
-                    "unique_captions": unique,
-                    "diversity_ratio": round(unique / max(len(history), 1), 3),
-                    "accuracy_history": [round(a, 2) for a in accuracy_history[-50:]],
-                    "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
-                    "last_accuracy": round(accuracy_history[-1], 2) if accuracy_history else 0.0,
-                },
-                "batch": {
-                    "running": bg["running"],
-                    "job_id": bg["job_id"],
-                    "total": bg["total"],
-                    "completed": bg["completed"],
-                    "errors": bg["errors"],
-                    "progress_pct": round(bg["completed"] / max(bg["total"], 1) * 100, 1) if bg["total"] > 0 else 0,
-                    "current_caption": bg["current_caption"],
-                    "current_image": bg["current_image"],
-                },
-                "dpo": dpo,
-                "video": video,
-            })
+            return success_response(
+                data={
+                    "engine": {
+                        "speech_to_text": caps.speech_to_text,
+                        "image_caption": caps.image_caption,
+                        "speech_model": caps.speech_model,
+                        "vision_model": caps.vision_model,
+                        "status": "trained"
+                        if trained
+                        else ("learning" if learning > 0 else "ready"),
+                    },
+                    "learning": {
+                        "images_learned": learning,
+                        "trained": trained,
+                        "vocab_size": vocab_size,
+                        "replay_buffer_size": buf.size if buf else 0,
+                        "learning_method": "contrastive + self-training",
+                        "caption_history": history[-50:],
+                        "unique_captions": unique,
+                        "diversity_ratio": round(unique / max(len(history), 1), 3),
+                        "accuracy_history": [round(a, 2) for a in accuracy_history[-50:]],
+                        "mean_accuracy": round(
+                            sum(accuracy_history) / max(len(accuracy_history), 1), 2
+                        ),
+                        "last_accuracy": round(accuracy_history[-1], 2)
+                        if accuracy_history
+                        else 0.0,
+                    },
+                    "batch": {
+                        "running": bg["running"],
+                        "job_id": bg["job_id"],
+                        "total": bg["total"],
+                        "completed": bg["completed"],
+                        "errors": bg["errors"],
+                        "progress_pct": round(bg["completed"] / max(bg["total"], 1) * 100, 1)
+                        if bg["total"] > 0
+                        else 0,
+                        "current_caption": bg["current_caption"],
+                        "current_image": bg["current_image"],
+                    },
+                    "dpo": dpo,
+                    "video": video,
+                }
+            )
 
         # ── Training ───────────────────────────────────────────────────────
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.status")
-    async def train_on_image(self, file: UploadFile = File(...), label: Optional[str] = Form(None), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def train_on_image(
+        self,
+        file: UploadFile = File(...),
+        label: str | None = Form(None),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """train_on_image."""
         if not file.content_type or not file.content_type.startswith("image/"):
             raise_error("Only image files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
         try:
             contents = await file.read()
-            from PIL import Image
             import io
+
+            from PIL import Image
+
             img = Image.open(io.BytesIO(contents)).convert("RGB")
             caption = await asyncio.to_thread(mgr.caption_image, img, ground_truth=label)
-            safe_audit_log("multimodal.train", resource="image", detail="single", supervised=label is not None and label.strip() != "", accuracy=caption.accuracy)
-            return success_response(data={
-                "status": "ok",
-                "caption": caption.text,
-                "confidence": caption.confidence,
-                "images_learned": getattr(mgr, "_learning_count", 0),
-                "accuracy": caption.accuracy,
-                "supervised": label is not None and label.strip() != "",
-            })
+            safe_audit_log(
+                "multimodal.train",
+                resource="image",
+                detail="single",
+                supervised=label is not None and label.strip() != "",
+                accuracy=caption.accuracy,
+            )
+            return success_response(
+                data={
+                    "status": "ok",
+                    "caption": caption.text,
+                    "confidence": caption.confidence,
+                    "images_learned": getattr(mgr, "_learning_count", 0),
+                    "accuracy": caption.accuracy,
+                    "supervised": label is not None and label.strip() != "",
+                }
+            )
         except Exception as e:
             logger.warning("Multimodal caption failed: %s", e)
             classify_and_raise(e, source="multimodal_caption")
 
     async def train_batch(
         self,
-        files: Optional[List[UploadFile]] = File(None),
-        dataset_path: Optional[str] = Form(None),
+        files: list[UploadFile] | None = File(None),
+        dataset_path: str | None = Form(None),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """train_batch."""
@@ -259,11 +296,19 @@ class MultimodalRouter:
         image_paths = []
         if dataset_path:
             import glob
+
             dataset_path = os.path.expanduser(dataset_path)
             resolved_path = Path(dataset_path).resolve()
             _REPO_ROOT = Path(__file__).resolve().parents[4]
-            allowed_bases = {_REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
-            if not any(resolved_path == base or str(resolved_path).startswith(str(base) + "/") for base in allowed_bases):
+            allowed_bases = {
+                _REPO_ROOT / "data",
+                Path.home() / "Pictures",
+                Path.home() / "Downloads",
+            }
+            if not any(
+                resolved_path == base or str(resolved_path).startswith(str(base) + "/")
+                for base in allowed_bases
+            ):
                 raise_error(f"Directory not in allowed paths: {dataset_path}", "E_AUTH_FORBIDDEN")
 
             def _scan_dataset():
@@ -290,16 +335,31 @@ class MultimodalRouter:
         job_id = f"batch_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         with self._bg_lock:
             self._background_job.update(
-                job_id=job_id, running=True, total=len(image_paths),
-                completed=0, errors=0, current_caption="", current_image="",
-                started_at=datetime.datetime.now().isoformat(), finished_at=None,
+                job_id=job_id,
+                running=True,
+                total=len(image_paths),
+                completed=0,
+                errors=0,
+                current_caption="",
+                current_image="",
+                started_at=datetime.datetime.now().isoformat(),
+                finished_at=None,
             )
         asyncio.create_task(self._run_batch_training(mgr, image_paths))
-        safe_audit_log("multimodal.train", resource=job_id, detail="batch", total_images=len(image_paths), dataset_path=dataset_path or "")
-        return success_response(data={"status": "started", "job_id": job_id, "total_images": len(image_paths)})
+        safe_audit_log(
+            "multimodal.train",
+            resource=job_id,
+            detail="batch",
+            total_images=len(image_paths),
+            dataset_path=dataset_path or "",
+        )
+        return success_response(
+            data={"status": "started", "job_id": job_id, "total_images": len(image_paths)}
+        )
 
     async def _run_batch_training(self, mgr, image_sources: list):
         import time as _time
+
         _batch_t0 = _time.monotonic()
         loop = asyncio.get_event_loop()
         for src in image_sources:
@@ -310,8 +370,10 @@ class MultimodalRouter:
                 is_upload = isinstance(src, tuple) and src[0] == "upload"
                 if is_upload:
                     contents = await src[1].read()
-                    from PIL import Image
                     import io
+
+                    from PIL import Image
+
                     img = Image.open(io.BytesIO(contents)).convert("RGB")
                     name = src[1].filename or "upload"
                     caption = await loop.run_in_executor(None, mgr.caption_image, img)
@@ -338,12 +400,19 @@ class MultimodalRouter:
             _completed = self._background_job["completed"]
             _errors = self._background_job["errors"]
         _batch_elapsed_ms = (_time.monotonic() - _batch_t0) * 1000
-        safe_audit_log("multimodal.train.complete", resource=_job_id, detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={_completed} errors={_errors}")
+        safe_audit_log(
+            "multimodal.train.complete",
+            resource=_job_id,
+            detail=f"elapsed={_batch_elapsed_ms:.0f}ms completed={_completed} errors={_errors}",
+        )
 
-    async def train_video(self, req: VideoTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def train_video(
+        self, req: VideoTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """train_video."""
             import time as _time
+
             _t0 = _time.monotonic()
             with self._video_training_lock:
                 if self._video_training_state["status"] == "running":
@@ -365,13 +434,20 @@ class MultimodalRouter:
             def _run():
                 try:
                     from domains.training.video_trainer import VideoCaptionTrainer
+
                     trainer = VideoCaptionTrainer(max_frames=8, lr=req.learning_rate)
                     result = trainer.train(
-                        data_path=req.data_path, epochs=req.epochs, batch_size=req.batch_size,
-                        lr=req.learning_rate, output_dir=req.output_dir, progress_callback=_progress,
+                        data_path=req.data_path,
+                        epochs=req.epochs,
+                        batch_size=req.batch_size,
+                        lr=req.learning_rate,
+                        output_dir=req.output_dir,
+                        progress_callback=_progress,
                     )
                     with self._video_training_lock:
-                        self._video_training_state["status"] = "completed" if result.get("status") == "completed" else "error"
+                        self._video_training_state["status"] = (
+                            "completed" if result.get("status") == "completed" else "error"
+                        )
                         self._video_training_state["result"] = result
                 except Exception as e:
                     with self._video_training_lock:
@@ -379,29 +455,58 @@ class MultimodalRouter:
                         self._video_training_state["error"] = str(e)
 
             from domains.training.executor import get_training_executor
+
             executor = get_training_executor()
             executor.submit(_run, f"vtrain_{job_id}")
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("multimodal.train", resource=req.data_path or job_id, detail=f"video elapsed={_elapsed_ms:.0f}ms", epochs=req.epochs, batch_size=req.batch_size)
-            return success_response(data={"status": "started", "job_id": job_id, "data_path": req.data_path})
+            safe_audit_log(
+                "multimodal.train",
+                resource=req.data_path or job_id,
+                detail=f"video elapsed={_elapsed_ms:.0f}ms",
+                epochs=req.epochs,
+                batch_size=req.batch_size,
+            )
+            return success_response(
+                data={"status": "started", "job_id": job_id, "data_path": req.data_path}
+            )
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.train_video")
-    async def video_infer(self, req: VideoInferRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def video_infer(
+        self, req: VideoInferRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """video_infer."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
+
             checkpoints = list_video_checkpoints()
             if not checkpoints:
-                checkpoints = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                checkpoints = list_video_checkpoints(
+                    str(Path(__file__).resolve().parents[4] / "models" / "video-training")
+                )
             if not checkpoints:
-                raise_error("No trained video model. Train via /multimodal/train-video first.", "E_BAD_REQUEST")
+                raise_error(
+                    "No trained video model. Train via /multimodal/train-video first.",
+                    "E_BAD_REQUEST",
+                )
             latest = checkpoints[0]
             trainer = VideoCaptionTrainer()
             await asyncio.to_thread(trainer.load_checkpoint, latest["path"])
             t0 = time.time()
-            text = await asyncio.to_thread(trainer.generate, video_path=req.video_path, max_len=req.max_len, temperature=req.temperature)
-            return success_response(data={"text": text, "checkpoint": latest["name"], "elapsed_ms": round((time.time() - t0) * 1000, 1)})
+            text = await asyncio.to_thread(
+                trainer.generate,
+                video_path=req.video_path,
+                max_len=req.max_len,
+                temperature=req.temperature,
+            )
+            return success_response(
+                data={
+                    "text": text,
+                    "checkpoint": latest["name"],
+                    "elapsed_ms": round((time.time() - t0) * 1000, 1),
+                }
+            )
         except HTTPException as e:
             classify_and_raise(e, source="multimodal.video_infer")
         except Exception as e:
@@ -410,7 +515,9 @@ class MultimodalRouter:
 
     # ── DPO ────────────────────────────────────────────────────────────
 
-    async def trigger_dpo(self, req: DPOTriggerRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def trigger_dpo(
+        self, req: DPOTriggerRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """trigger_dpo."""
         model, tokenizer = self._get_active_model_and_tokenizer()
         if model is None or tokenizer is None:
@@ -422,7 +529,10 @@ class MultimodalRouter:
             self._dpo_state["result"] = None
         try:
             from domains.feedback.hf_dpo import HFDPOTrainer
-            trainer = HFDPOTrainer(model=model, tokenizer=tokenizer, learning_rate=req.learning_rate)
+
+            trainer = HFDPOTrainer(
+                model=model, tokenizer=tokenizer, learning_rate=req.learning_rate
+            )
             t0 = time.time()
             result = trainer.train(max_pairs=req.max_pairs)
             elapsed = time.time() - t0
@@ -435,33 +545,53 @@ class MultimodalRouter:
                     self._dpo_state["accepted_count"] += 1
                 elif result["status"] == "rejected":
                     self._dpo_state["rejected_count"] += 1
-            safe_audit_log("multimodal.dpo", resource="hf-model", detail=result["status"], steps=result.get("steps", 0), pairs_trained=result.get("pairs_trained", 0))
-            return success_response(data={
-                "status": result["status"], "steps": result.get("steps", 0),
-                "avg_loss": result.get("avg_loss"), "ppl_before": result.get("ppl_before"),
-                "ppl_after": result.get("ppl_after"), "ppl_delta_pct": result.get("ppl_delta_pct"),
-                "pairs_trained": result.get("pairs_trained", 0), "elapsed_seconds": round(elapsed, 1),
-            })
+            safe_audit_log(
+                "multimodal.dpo",
+                resource="hf-model",
+                detail=result["status"],
+                steps=result.get("steps", 0),
+                pairs_trained=result.get("pairs_trained", 0),
+            )
+            return success_response(
+                data={
+                    "status": result["status"],
+                    "steps": result.get("steps", 0),
+                    "avg_loss": result.get("avg_loss"),
+                    "ppl_before": result.get("ppl_before"),
+                    "ppl_after": result.get("ppl_after"),
+                    "ppl_delta_pct": result.get("ppl_delta_pct"),
+                    "pairs_trained": result.get("pairs_trained", 0),
+                    "elapsed_seconds": round(elapsed, 1),
+                }
+            )
         except Exception as e:
             with self._dpo_lock:
                 self._dpo_state["status"] = "error"
-                self._dpo_state["result"] = {"error": "DPO training failed", "error_type": type(e).__name__}
+                self._dpo_state["result"] = {
+                    "error": "DPO training failed",
+                    "error_type": type(e).__name__,
+                }
             logger.warning("Multimodal DPO failed: %s", e)
             classify_and_raise(e, source="multimodal_dpo")
 
     # ── Analysis ──────────────────────────────────────────────────────
 
-    async def analyze_image(self, file: UploadFile = File(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def analyze_image(
+        self, file: UploadFile = File(...), auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """analyze_image."""
         import time as _time
+
         _t0 = _time.monotonic()
         if not file.content_type or not file.content_type.startswith("image/"):
             raise_error("Only image files accepted", "E_BAD_REQUEST")
         mgr = self._ensure_initialized()
         try:
             contents = await file.read()
-            from PIL import Image
             import io
+
+            from PIL import Image
+
             img = Image.open(io.BytesIO(contents)).convert("RGB")
             cap = await asyncio.to_thread(mgr.caption_image, img)
             learning = getattr(mgr, "_learning_count", 0)
@@ -469,14 +599,22 @@ class MultimodalRouter:
             buf = getattr(mgr, "_replay_buffer", None)
             accuracy_history = getattr(mgr, "_accuracy_history", [])
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            return success_response(data={
-                "caption": cap.text, "confidence": cap.confidence, "tags": cap.tags or [],
-                "accuracy": cap.accuracy, "supervised": cap.accuracy > 0,
-                "images_learned": learning, "trained": getattr(engine, "_trained", False) if engine else False,
-                "replay_buffer_size": buf.size if buf else 0,
-                "mean_accuracy": round(sum(accuracy_history) / max(len(accuracy_history), 1), 2),
-                "elapsed_ms": round(_elapsed_ms, 1),
-            })
+            return success_response(
+                data={
+                    "caption": cap.text,
+                    "confidence": cap.confidence,
+                    "tags": cap.tags or [],
+                    "accuracy": cap.accuracy,
+                    "supervised": cap.accuracy > 0,
+                    "images_learned": learning,
+                    "trained": getattr(engine, "_trained", False) if engine else False,
+                    "replay_buffer_size": buf.size if buf else 0,
+                    "mean_accuracy": round(
+                        sum(accuracy_history) / max(len(accuracy_history), 1), 2
+                    ),
+                    "elapsed_ms": round(_elapsed_ms, 1),
+                }
+            )
         except Exception as e:
             logger.warning("Multimodal analyze image failed: %s", e)
             classify_and_raise(e, source="multimodal_analyze_image")
@@ -488,20 +626,24 @@ class MultimodalRouter:
         mgr = self._ensure_initialized()
         try:
             contents = await file.read()
-            from PIL import Image
             import io
+
+            from PIL import Image
+
             img = Image.open(io.BytesIO(contents)).convert("RGB")
             objects = mgr.detect_objects(img)
-            return success_response(data={
-                "objects": [
-                    {
-                        "label": obj.label,
-                        "bbox": obj.bbox,
-                        "confidence": obj.confidence,
-                    }
-                    for obj in objects
-                ]
-            })
+            return success_response(
+                data={
+                    "objects": [
+                        {
+                            "label": obj.label,
+                            "bbox": obj.bbox,
+                            "confidence": obj.confidence,
+                        }
+                        for obj in objects
+                    ]
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="multimodal_detect_objects")
 
@@ -515,32 +657,52 @@ class MultimodalRouter:
     ) -> dict:
         """analyze_pdf."""
         import tempfile
+
         from domains.inference.pdf_vlm import PDFVLMProcessor
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
         try:
             processor = PDFVLMProcessor(max_pages=10)
             if per_page:
-                results = await asyncio.to_thread(processor.analyze_pages, tmp_path, question=question, max_new_tokens=max_new_tokens)
+                results = await asyncio.to_thread(
+                    processor.analyze_pages,
+                    tmp_path,
+                    question=question,
+                    max_new_tokens=max_new_tokens,
+                )
                 text = "\n\n".join(f"--- Page {r['page']} ---\n{r['text']}" for r in results)
             else:
-                text = await asyncio.to_thread(processor.analyze, tmp_path, question=question, max_new_tokens=max_new_tokens)
-            return success_response(data={
-                "analysis": text, "filename": file.filename, "pages_analyzed": 10,
-                "method": "vlm" if processor._get_vlm() is not None else "text_extract",
-            })
+                text = await asyncio.to_thread(
+                    processor.analyze, tmp_path, question=question, max_new_tokens=max_new_tokens
+                )
+            return success_response(
+                data={
+                    "analysis": text,
+                    "filename": file.filename,
+                    "pages_analyzed": 10,
+                    "method": "vlm" if processor._get_vlm() is not None else "text_extract",
+                }
+            )
         except Exception as e:
             logger.warning("Multimodal analyze PDF failed: %s", e)
             classify_and_raise(e, source="multimodal_analyze_pdf")
         finally:
             await asyncio.to_thread(os.unlink, tmp_path)
 
-    async def process_video(self, file: UploadFile = File(...), num_frames: int = Form(16), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def process_video(
+        self,
+        file: UploadFile = File(...),
+        num_frames: int = Form(16),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """process_video."""
         try:
-            from domains.multimodal.video import VideoProcessor
             import tempfile
+
+            from domains.multimodal.video import VideoProcessor
+
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
                 tmp.write(await file.read())
                 tmp_path = tmp.name
@@ -551,11 +713,20 @@ class MultimodalRouter:
                 engine = getattr(mgr, "_multimodal_engine", None)
                 if engine is None:
                     raise_error("Multimodal engine not initialized", "E_INTERNAL", status_code=500)
-                video_embedding = await asyncio.to_thread(processor.encode_video, frames, engine.vision)
+                video_embedding = await asyncio.to_thread(
+                    processor.encode_video, frames, engine.vision
+                )
                 first_frame = frames[0].reshape(1, 224, 224, 3)
-                caption = await asyncio.to_thread(engine.generate, first_frame, max_len=20, temperature=0.8)
-                return success_response(data={"caption": caption.text, "num_frames": len(frames),
-                        "video_embedding_shape": list(video_embedding.data.shape)})
+                caption = await asyncio.to_thread(
+                    engine.generate, first_frame, max_len=20, temperature=0.8
+                )
+                return success_response(
+                    data={
+                        "caption": caption.text,
+                        "num_frames": len(frames),
+                        "video_embedding_shape": list(video_embedding.data.shape),
+                    }
+                )
             finally:
                 await asyncio.to_thread(os.unlink, tmp_path)
         except Exception as e:
@@ -564,9 +735,15 @@ class MultimodalRouter:
 
     # ── Speech ────────────────────────────────────────────────────────
 
-    async def transcribe_audio(self, file: UploadFile = File(...), language: str = Form("en"), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def transcribe_audio(
+        self,
+        file: UploadFile = File(...),
+        language: str = Form("en"),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """transcribe_audio."""
         import time as _time
+
         _t0 = _time.monotonic()
         if not file.content_type or not file.content_type.startswith("audio/"):
             raise_error("Only audio files accepted", "E_BAD_REQUEST")
@@ -577,77 +754,127 @@ class MultimodalRouter:
             audio_data = await file.read()
             result = await asyncio.to_thread(mgr.recognize_speech, audio_data, language=language)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            return success_response(data={"text": result.text, "confidence": result.confidence,
-                    "language": result.language or language, "duration": result.duration, "elapsed_ms": round(_elapsed_ms, 1)})
+            return success_response(
+                data={
+                    "text": result.text,
+                    "confidence": result.confidence,
+                    "language": result.language or language,
+                    "duration": result.duration,
+                    "elapsed_ms": round(_elapsed_ms, 1),
+                }
+            )
         except Exception as e:
             logger.warning("Multimodal transcribe failed: %s", e)
             classify_and_raise(e, source="multimodal_transcribe")
 
-    async def synthesize_speech(self, text: str = Form(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def synthesize_speech(
+        self, text: str = Form(...), auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """synthesize_speech."""
         import time as _time
+
         _t0 = _time.monotonic()
         try:
+            import base64
+            import io
+            import wave
+
+            import numpy as np
             from domains.multimodal.tts import TTSEngine
-            import base64, io, wave, numpy as np
+
             if self._tts is None:
                 self._tts = TTSEngine()
             tts = self._tts
             waveform = await asyncio.to_thread(tts.text_to_waveform, text)
             buffer = io.BytesIO()
-            with wave.open(buffer, 'wb') as wf:
+            with wave.open(buffer, "wb") as wf:
                 wf.setnchannels(1)
                 wf.setsampwidth(2)
                 wf.setframerate(tts.sample_rate)
                 wf.writeframes((waveform * 32767).astype(np.int16).tobytes())
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            return success_response(data={"audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
-                    "text": text, "duration_sec": len(waveform) / tts.sample_rate, "elapsed_ms": round(_elapsed_ms, 1)})
+            return success_response(
+                data={
+                    "audio": f"data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+                    "text": text,
+                    "duration_sec": len(waveform) / tts.sample_rate,
+                    "elapsed_ms": round(_elapsed_ms, 1),
+                }
+            )
         except Exception as e:
             logger.warning("Multimodal TTS failed: %s", e)
             classify_and_raise(e, source="multimodal_tts")
 
     # ── Generation ────────────────────────────────────────────────────
 
-    async def generate_image(self, prompt: str = Form(...), steps: int = Form(20),
-                            guidance_scale: float = Form(7.5), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def generate_image(
+        self,
+        prompt: str = Form(...),
+        steps: int = Form(20),
+        guidance_scale: float = Form(7.5),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """generate_image."""
         try:
+            import base64
+            import io
+
+            import numpy as np
             from domains.multimodal.diffusion import LatentDiffusionModel
-            from domains.multimodal.vae import SloVAE
             from domains.multimodal.text_encoder import TextEncoder
-            import base64, io, numpy as np
+            from domains.multimodal.vae import SloVAE
             from PIL import Image
+
             if self._vae is None:
                 self._vae = SloVAE(latent_dim=64)
                 self._diffusion = LatentDiffusionModel(latent_dim=64)
                 self._text_encoder = TextEncoder(vocab_size=4096, embed_dim=256)
             text_embeddings = await asyncio.to_thread(self._text_encoder.encode_text, [prompt])
-            latents = await asyncio.to_thread(self._diffusion.sample, text_embeddings, num_steps=steps, guidance_scale=guidance_scale)
+            latents = await asyncio.to_thread(
+                self._diffusion.sample,
+                text_embeddings,
+                num_steps=steps,
+                guidance_scale=guidance_scale,
+            )
             image_np = await asyncio.to_thread(self._vae.decode, latents)
             image_np = np.clip(image_np[0].transpose(1, 2, 0), 0, 1)
             image_np = (image_np * 255).astype(np.uint8)
             img = Image.fromarray(image_np)
             buffer = io.BytesIO()
             img.save(buffer, format="PNG")
-            return success_response(data={"image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
-                    "prompt": prompt, "steps": steps})
+            return success_response(
+                data={
+                    "image": f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}",
+                    "prompt": prompt,
+                    "steps": steps,
+                }
+            )
         except Exception as e:
             logger.warning("Multimodal generate image failed: %s", e)
             classify_and_raise(e, source="multimodal_generate_image")
 
     # ── Dataset ───────────────────────────────────────────────────────
 
-    async def create_visual_dataset(self, req: VisualDatasetRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def create_visual_dataset(
+        self, req: VisualDatasetRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """create_visual_dataset."""
             import time as _time
+
             _t0 = _time.monotonic()
             image_dir = Path(req.image_dir).resolve()
             _REPO_ROOT = Path(__file__).resolve().parents[4]
-            allowed_bases = {_REPO_ROOT / "data", Path.home() / "Pictures", Path.home() / "Downloads"}
-            if not any(image_dir == base or str(image_dir).startswith(str(base) + "/") for base in allowed_bases):
-                        raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
+            allowed_bases = {
+                _REPO_ROOT / "data",
+                Path.home() / "Pictures",
+                Path.home() / "Downloads",
+            }
+            if not any(
+                image_dir == base or str(image_dir).startswith(str(base) + "/")
+                for base in allowed_bases
+            ):
+                raise_error(f"Directory not in allowed paths: {req.image_dir}", "E_AUTH_FORBIDDEN")
 
             extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
             datasets_dir = Path(__file__).resolve().parents[4] / "data"
@@ -671,6 +898,7 @@ class MultimodalRouter:
                 except Exception as exc:
                     auto_captioned = False
                     logger.debug("Auto-caption init failed: %s", exc)
+
             def _build_dataset():
                 entries = 0
                 with open(output_path, "w") as f:
@@ -689,14 +917,27 @@ class MultimodalRouter:
 
             entries = await asyncio.to_thread(_build_dataset)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("multimodal.visual_dataset", resource=req.name, detail=f"entries={entries} auto_caption={auto_captioned} elapsed={_elapsed_ms:.0f}ms")
-            return success_response(data={"status": "created", "dataset": req.name, "path": str(output_path),
-                    "entries": entries, "auto_captioned": auto_captioned, "elapsed_ms": round(_elapsed_ms, 1)})
+            safe_audit_log(
+                "multimodal.visual_dataset",
+                resource=req.name,
+                detail=f"entries={entries} auto_caption={auto_captioned} elapsed={_elapsed_ms:.0f}ms",
+            )
+            return success_response(
+                data={
+                    "status": "created",
+                    "dataset": req.name,
+                    "path": str(output_path),
+                    "entries": entries,
+                    "auto_captioned": auto_captioned,
+                    "elapsed_ms": round(_elapsed_ms, 1),
+                }
+            )
 
         # ── Checkpoints ──────────────────────────────────────────────────
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.create_visual_dataset")
+
     async def list_checkpoints(self):
         try:
             """list_checkpoints."""
@@ -706,7 +947,9 @@ class MultimodalRouter:
                 def _list():
                     ckpts = list_video_checkpoints()
                     if not ckpts:
-                        ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                        ckpts = list_video_checkpoints(
+                            str(Path(__file__).resolve().parents[4] / "models" / "video-training")
+                        )
                     return ckpts
 
                 return await asyncio.to_thread(_list)
@@ -716,7 +959,10 @@ class MultimodalRouter:
 
         except Exception as e:
             classify_and_raise(e, source="multimodal.list_checkpoints")
-    async def load_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def load_checkpoint(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """load_checkpoint."""
         try:
             from domains.training.video_trainer import VideoCaptionTrainer, list_video_checkpoints
@@ -724,7 +970,9 @@ class MultimodalRouter:
             def _find_checkpoint():
                 ckpts = list_video_checkpoints()
                 if not ckpts:
-                    ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                    ckpts = list_video_checkpoints(
+                        str(Path(__file__).resolve().parents[4] / "models" / "video-training")
+                    )
                 return [c for c in ckpts if c["name"] == name]
 
             match = await asyncio.to_thread(_find_checkpoint)
@@ -740,7 +988,9 @@ class MultimodalRouter:
             logger.warning("Multimodal load checkpoint failed: %s", e)
             classify_and_raise(e, source="multimodal_load_checkpoint")
 
-    async def delete_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_checkpoint(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """delete_checkpoint."""
         try:
             from domains.training.video_trainer import list_video_checkpoints
@@ -748,7 +998,9 @@ class MultimodalRouter:
             def _find_and_delete():
                 ckpts = list_video_checkpoints()
                 if not ckpts:
-                    ckpts = list_video_checkpoints(str(Path(__file__).resolve().parents[4] / "models" / "video-training"))
+                    ckpts = list_video_checkpoints(
+                        str(Path(__file__).resolve().parents[4] / "models" / "video-training")
+                    )
                 match = [c for c in ckpts if c["name"] == name]
                 if not match:
                     return False
@@ -785,9 +1037,10 @@ class MultimodalRouter:
             safe_audit_log("multimodal.reset", resource="all")
             return success_response(data={"status": "ok", "message": "Multimodal engine reset"})
 
-
         except Exception as e:
             classify_and_raise(e, source="multimodal.reset")
+
+
 # ── Module-level exports ──────────────────────────────────────────
 
 multimodal_router = MultimodalRouter()

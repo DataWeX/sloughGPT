@@ -165,9 +165,7 @@ class TrainingErrorHandler(DomainErrorHandler):
     ) -> dict[str, Any]:
         # Enrich with training-specific recovery suggestions
         if isinstance(error, TaskError):
-            error.user_message = (
-                "Training task failed. Check GPU memory and dataset integrity."
-            )
+            error.user_message = "Training task failed. Check GPU memory and dataset integrity."
         return super().handle(error, request, context)
 
 
@@ -189,9 +187,7 @@ class InferenceErrorHandler(DomainErrorHandler):
                 "Try a smaller model, reduce max_tokens, or lower batch size."
             )
         elif isinstance(error, ModelTimeoutError):
-            error.details["suggestion"] = (
-                "Try a shorter prompt or reduce max_tokens."
-            )
+            error.details["suggestion"] = "Try a shorter prompt or reduce max_tokens."
         return super().handle(error, request, context)
 
 
@@ -448,14 +444,11 @@ def create_default_error_handler() -> APIErrorHandler:
         Configured APIErrorHandler with training, inference, auth,
         resource, and validation handlers.
     """
-    return APIErrorHandler().register(
-        TrainingErrorHandler()
-    ).register(
-        InferenceErrorHandler()
-    ).register(
-        AuthErrorHandler()
-    ).register(
-        ResourceErrorHandler()
-    ).register(
-        ValidationErrorHandler()
+    return (
+        APIErrorHandler()
+        .register(TrainingErrorHandler())
+        .register(InferenceErrorHandler())
+        .register(AuthErrorHandler())
+        .register(ResourceErrorHandler())
+        .register(ValidationErrorHandler())
     )

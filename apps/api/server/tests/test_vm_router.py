@@ -3,15 +3,17 @@ Tests for the VM router endpoints.
 
 Tests the /vm/run, /vm/builtins, and /vm/info endpoints.
 """
-import sys
+
 import os
+import sys
 
 # Ensure the server directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
-from apps.api.server.main import app
 from routers.vm import router as vm_router
+
+from apps.api.server.main import app
 
 app.include_router(vm_router)
 client = TestClient(app)
@@ -197,7 +199,9 @@ HLT"""
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["training_result"] is not None, "expected result JSON read back from guest memory"
+        assert data["training_result"] is not None, (
+            "expected result JSON read back from guest memory"
+        )
         assert "final_loss" in data["training_result"]
         assert "1.5" in data["training_result"]
 

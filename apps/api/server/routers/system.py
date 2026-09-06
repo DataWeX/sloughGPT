@@ -1,18 +1,19 @@
 """
 System Router - Host metrics, system information, lifecycle status, and output stream.
 """
-from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+
 import asyncio
 import logging
-import psutil
 import platform
 import threading
 import time
+from collections.abc import AsyncGenerator
 
-from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
+import psutil
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from typing import AsyncGenerator
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.system")
 
@@ -30,26 +31,38 @@ class SystemRouter:
         self.router.add_api_route("/info", self.get_info, methods=["GET"])
         self.router.add_api_route("/disk", self.get_disk, methods=["GET"])
         self.router.add_api_route("/lifecycle", self.get_lifecycle_status, methods=["GET"])
-        self.router.add_api_route("/stream", self.stream_output, methods=["GET"], response_model=None)
+        self.router.add_api_route(
+            "/stream", self.stream_output, methods=["GET"], response_model=None
+        )
         self.router.add_api_route("/output", self.tail_output, methods=["GET"])
         self.router.add_api_route("/executor", self.get_executor_status, methods=["GET"])
         self.router.add_api_route("/executor/{job_id}", self.get_executor_job, methods=["GET"])
-        self.router.add_api_route("/executor/{job_id}/result", self.get_executor_job_result, methods=["GET"])
+        self.router.add_api_route(
+            "/executor/{job_id}/result", self.get_executor_job_result, methods=["GET"]
+        )
         self.router.add_api_route("/executor/purge", self.purge_executor_jobs, methods=["POST"])
-        self.router.add_api_route("/executor/{job_id}/cancel", self.cancel_executor_job, methods=["POST"])
-        self.router.add_api_route("/inference-pool", self.get_inference_pool_status, methods=["GET"])
+        self.router.add_api_route(
+            "/executor/{job_id}/cancel", self.cancel_executor_job, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/inference-pool", self.get_inference_pool_status, methods=["GET"]
+        )
 
     async def get_metrics(self) -> dict:
         """Get system metrics (cached for 2s)."""
         try:
             now = time.monotonic()
             with self._metrics_lock:
-                if self._metrics_cache["data"] is not None and (now - self._metrics_cache["ts"]) <= self._METRICS_TTL:
+                if (
+                    self._metrics_cache["data"] is not None
+                    and (now - self._metrics_cache["ts"]) <= self._METRICS_TTL
+                ):
                     return success_response(data=self._metrics_cache["data"])
 
             def _sample():
                 try:
                     from domains.infrastructure.resource_manager import get_resource_manager
+
                     rm = get_resource_manager()
                     logical = rm.topology.logical_cores
                     physical = rm.topology.physical_cores
@@ -82,6 +95,7 @@ class SystemRouter:
             def _read():
                 try:
                     from domains.infrastructure.resource_manager import get_resource_manager
+
                     rm = get_resource_manager()
                     cpu_count = rm.topology.logical_cores
                 except Exception as exc:
@@ -106,7 +120,7 @@ class SystemRouter:
             import asyncio
 
             def _read():
-                disk = psutil.disk_usage('/')
+                disk = psutil.disk_usage("/")
                 return {
                     "total_gb": disk.total / (1024**3),
                     "used_gb": disk.used / (1024**3),
@@ -122,12 +136,15 @@ class SystemRouter:
         """Get the current lifecycle manager state."""
         try:
             from domains.infrastructure.lifecycle import get_lifecycle_manager
+
             mgr = get_lifecycle_manager()
             return success_response(data=mgr.get_results())
         except Exception as exc:
             classify_and_raise(exc, source="system.lifecycle")
 
-    async def stream_output(self, request: Request, tail: int = Query(50, ge=0, le=500)) -> AsyncGenerator[str, None]:
+    async def stream_output(
+        self, request: Request, tail: int = Query(50, ge=0, le=500)
+    ) -> AsyncGenerator[str, None]:
         try:
             """SSE stream of all server output (logs, training progress, etc.).
 
@@ -159,12 +176,16 @@ class SystemRouter:
 
         except Exception as e:
             classify_and_raise(e, source="system.stream_output")
+
     async def tail_output(self, n: int = Query(100, ge=1, le=1000)) -> dict:
         """Get last N lines of server output."""
         try:
             from domains.infrastructure.output_buffer import get_server_buffer
+
             buf = get_server_buffer()
-            return success_response(data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq})
+            return success_response(
+                data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq}
+            )
         except Exception as e:
             classify_and_raise(e, source="system.tail_output")
 
@@ -172,21 +193,26 @@ class SystemRouter:
         """Get TrainingExecutor pool status and job list."""
         try:
             from domains.training.executor import _instance
+
             if _instance is None:
-                return success_response(data={
-                    "initialized": False,
-                    "active_jobs": 0,
-                    "max_workers": 0,
-                    "total_tracked": 0,
-                    "jobs": [],
-                })
-            return success_response(data={
-                "initialized": True,
-                "active_jobs": _instance.active_count(),
-                "max_workers": _instance._max_workers,
-                "total_tracked": len(_instance._jobs),
-                "jobs": _instance.list_jobs(),
-            })
+                return success_response(
+                    data={
+                        "initialized": False,
+                        "active_jobs": 0,
+                        "max_workers": 0,
+                        "total_tracked": 0,
+                        "jobs": [],
+                    }
+                )
+            return success_response(
+                data={
+                    "initialized": True,
+                    "active_jobs": _instance.active_count(),
+                    "max_workers": _instance._max_workers,
+                    "total_tracked": len(_instance._jobs),
+                    "jobs": _instance.list_jobs(),
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="system.executor_status")
 
@@ -194,6 +220,7 @@ class SystemRouter:
         """Get metadata for a single training job by ID."""
         try:
             from domains.training.executor import _instance
+
             if _instance is None:
                 raise_error("executor not initialized", "E_INFRA_STARTUP")
             status = _instance.status(job_id)
@@ -207,6 +234,7 @@ class SystemRouter:
         """Get shape/dtype summary for a completed job's trained weights."""
         try:
             from domains.training.executor import _instance
+
             if _instance is None:
                 raise_error("executor not initialized", "E_INFRA_STARTUP")
             summary = _instance.result_summary(job_id)
@@ -227,20 +255,30 @@ class SystemRouter:
         """Remove completed/failed/cancelled jobs older than max_age_s."""
         try:
             from domains.training.executor import _instance
+
             if _instance is None:
                 return success_response(data={"purged": 0})
             purged = _instance.purge_completed(max_age_s=max_age_s)
-            safe_audit_log("executor.purge", resource="executor", detail=f"purged={purged} max_age_s={max_age_s}")
+            safe_audit_log(
+                "executor.purge",
+                resource="executor",
+                detail=f"purged={purged} max_age_s={max_age_s}",
+            )
             return success_response(data={"purged": purged})
         except Exception as e:
             classify_and_raise(e, source="system.executor_purge")
 
-    async def cancel_executor_job(self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def cancel_executor_job(
+        self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Request cancellation for a training job."""
         try:
             from domains.training.executor import _instance
+
             if _instance is None:
-                return success_response(data={"cancelled": False, "reason": "executor not initialized"})
+                return success_response(
+                    data={"cancelled": False, "reason": "executor not initialized"}
+                )
             cancelled = _instance.cancel(job_id)
             safe_audit_log("executor.cancel", resource=job_id, detail=f"cancelled={cancelled}")
             return success_response(data={"cancelled": cancelled})
@@ -251,12 +289,15 @@ class SystemRouter:
         """Retrieve the InferencePool worker pool status."""
         try:
             from infrastructure.inference_pool import InferencePool
+
             pool = await InferencePool.get_instance()
-            return success_response(data={
-                "initialized": True,
-                "max_workers": pool._max_workers,
-                "queue_timeout": pool._queue_timeout,
-            })
+            return success_response(
+                data={
+                    "initialized": True,
+                    "max_workers": pool._max_workers,
+                    "queue_timeout": pool._queue_timeout,
+                }
+            )
         except Exception as exc:
             classify_and_raise(exc, source="system.inference_pool")
 

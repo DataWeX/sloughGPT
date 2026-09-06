@@ -165,6 +165,7 @@ def raise_error(
 
     # Import the correct class dynamically
     import domains.infrastructure.errors as _err_mod
+
     exc_cls = getattr(_err_mod, class_name, AppError)
 
     http_status = status_code or default_status
@@ -201,12 +202,15 @@ def safe_audit_log(
     """
     try:
         from infrastructure.auth import get_audit_logger
+
         merged = {**(extra or {}), **kwargs} if kwargs else extra
         get_audit_logger().log(action, user=user, resource=resource, detail=detail, extra=merged)
     except Exception:
         _audit_logger.info(
             "audit:%s resource=%s detail=%s %s",
-            action, resource, detail,
+            action,
+            resource,
+            detail,
             " ".join(f"{k}={v}" for k, v in (extra or kwargs).items()) if (extra or kwargs) else "",
         )
 
@@ -233,6 +237,7 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     """
     from domains.infrastructure.errors import AppError as _AppError
     from domains.infrastructure.errors import classify_exception
+
     try:
         err = classify_exception(e)
         # Set source for EventBus emission in the exception handler
@@ -245,6 +250,8 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     except Exception:
         _audit_logger.warning(
             "classify_and_raise fallback: source=%s error=%s",
-            source, e, exc_info=True,
+            source,
+            e,
+            exc_info=True,
         )
         raise_error(str(e), "E_DOMAIN", status_code=500)

@@ -12,20 +12,17 @@ import time
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
-
+from domains.shared import find_repo_root
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter, Depends
-
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
-from .jobs import training_jobs
-from .schemas import LoraFinetuneRequest, LoadAdapterRequest
 from .controller import get_training_controller
-from .webhooks import notify_training_event
 from .helpers import _finish_job, _run_async
-from domains.training.executor import get_training_executor
-from domains.shared import find_repo_root
+from .jobs import training_jobs
+from .schemas import LoadAdapterRequest, LoraFinetuneRequest
+from .webhooks import notify_training_event
 
 logger = logging.getLogger("slo")
 
@@ -33,7 +30,9 @@ router = APIRouter(tags=["training-lora"])
 
 
 @router.post("/training/lora-finetune")
-async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+async def start_lora_finetune(
+    request: LoraFinetuneRequest, auth_user: dict = Depends(require_auth_if_enabled)
+):
     """LoRA fine-tuning on .slnc models using SloNet numpy autograd (no PyTorch)."""
     import uuid
 
@@ -47,7 +46,11 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
         if alt_path.is_file():
             model_path = alt_path
         else:
-            raise_error(f"Model not found: {request.model_path}. Provide a .slnc file path.", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                f"Model not found: {request.model_path}. Provide a .slnc file path.",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
     # Validate dataset
     repo_root = find_repo_root(Path(__file__).resolve())
     datasets_dir = repo_root / "datasets"
@@ -60,7 +63,11 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                 data_path = p
                 break
     if data_path is None:
-        raise_error(f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.", "E_BAD_REQUEST", status_code=400)
+        raise_error(
+            f"Dataset not found: {request.dataset}. Use POST /datasets/import/local first.",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
     model_stem = model_path.stem
     dataset_name = request.dataset.strip() if request.dataset else data_path.stem
 
@@ -99,17 +106,24 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     # Audit trail
     try:
         from infrastructure.auth import get_audit_logger
+
         get_audit_logger().log(
             "training.start",
             resource=dataset_name,
             detail="lora",
-            extra={"job_id": job_id, "model": model_stem, "rank": request.rank, "epochs": request.epochs},
+            extra={
+                "job_id": job_id,
+                "model": model_stem,
+                "rank": request.rank,
+                "epochs": request.epochs,
+            },
         )
     except Exception as e:
         logger.warning("Audit log failed for LoRA training start %s: %s", job_id, e)
 
     # Webhook notification
     try:
+
         async def notify_async():
             await notify_training_event(
                 "training.started",
@@ -134,12 +148,16 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
     # Register with runtime for consistency
     try:
         from .runtime import get_training_runtime
-        get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, request.model_dump())
+
+        get_training_runtime().register(
+            job_id, training_jobs[job_id], cancel_event, request.model_dump()
+        )
     except Exception as e:
         logger.warning("Training runtime registration failed for %s: %s", job_id, e)
 
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
             label=str(request.model_dump().get("dataset") or job_id),
@@ -153,7 +171,7 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
 
     def run_lora_finetune(job_id_: str = job_id):
         try:
-            from domains.training.hf_lora_finetune import HFLoraTrainer, HFLoraConfig
+            from domains.training.hf_lora_finetune import HFLoraConfig, HFLoraTrainer
 
             start_time = time.time()
 
@@ -168,16 +186,22 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                 if loss is not None:
                     rec["train_loss"] = float(loss)
                     rec["loss"] = float(loss)
-                    rec.setdefault("loss_history", []).append({
-                        "step": rec["global_step"],
-                        "value": float(loss),
-                        "type": "train",
-                    })
+                    rec.setdefault("loss_history", []).append(
+                        {
+                            "step": rec["global_step"],
+                            "value": float(loss),
+                            "type": "train",
+                        }
+                    )
                 rec["elapsed_s"] = elapsed
                 step = rec["global_step"]
                 if step > 0 and elapsed > 0:
                     rec["steps_per_sec"] = step / elapsed
-                    epochs_left = max(0, (rec.get("epochs", 1) - rec["current_epoch"]) / max(rec["current_epoch"], 1))
+                    epochs_left = max(
+                        0,
+                        (rec.get("epochs", 1) - rec["current_epoch"])
+                        / max(rec["current_epoch"], 1),
+                    )
                     rec["eta_s"] = elapsed * epochs_left
                 # Compute progress from epochs
                 total_epochs = rec.get("epochs", 1)
@@ -214,24 +238,27 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
                 get_training_controller().complete()
                 return
 
-            training_jobs[job_id].update({
-                "progress": 100,
-                "current_epoch": result.epochs_completed or request.epochs,
-                "loss": result.final_loss,
-                "train_loss": result.final_loss,
-                "result": {
-                    "adapter_path": result.model_path,
-                    "total_steps": result.total_steps,
-                    "final_loss": result.final_loss,
-                    "epochs_completed": result.epochs_completed,
-                },
-                "checkpoint": result.model_path,
-            })
+            training_jobs[job_id].update(
+                {
+                    "progress": 100,
+                    "current_epoch": result.epochs_completed or request.epochs,
+                    "loss": result.final_loss,
+                    "train_loss": result.final_loss,
+                    "result": {
+                        "adapter_path": result.model_path,
+                        "total_steps": result.total_steps,
+                        "final_loss": result.final_loss,
+                        "epochs_completed": result.epochs_completed,
+                    },
+                    "checkpoint": result.model_path,
+                }
+            )
             _finish_job(job_id, "completed")
 
             # Sync runtime
             try:
                 from .runtime import get_training_runtime
+
                 get_training_runtime().sync(job_id)
             except Exception as e:
                 logger.warning("Training runtime sync failed for %s: %s", job_id, e)
@@ -240,13 +267,15 @@ async def start_lora_finetune(request: LoraFinetuneRequest, auth_user: dict = De
 
             logger.info(
                 "LoRA fine-tune complete: %s loss=%.4f",
-                result.model_path, result.final_loss or 0,
+                result.model_path,
+                result.final_loss or 0,
                 extra={"tag": "TRAIN"},
             )
 
             # Webhook notification
             try:
-                _run_async(notify_training_event(
+                _run_async(
+                    notify_training_event(
                         "training.completed",
                         {
                             "job_id": job_id,
@@ -295,12 +324,14 @@ async def load_adapter(request: LoadAdapterRequest):
 
     # Find the ProcessGuard — stored in the models controller (adopted during autoload)
     from domains.infrastructure.server_state import get_server_state
+
     provider = get_server_state().model.get()
     if provider is None:
         raise_error("No model loaded — load a model first", "E_BAD_REQUEST", status_code=400)
 
     try:
         from domains.training.lora import load_lora_adapter
+
         load_lora_adapter(provider, str(adapter_path), merge=request.merge)
     except Exception as e:
         raise_error(f"Failed to load adapter: {e}", "E_BAD_REQUEST", status_code=400)
@@ -317,12 +348,14 @@ async def load_adapter(request: LoadAdapterRequest):
 async def unload_adapter():
     """Unload the active LoRA adapter, reverting to base weights."""
     from domains.infrastructure.server_state import get_server_state
+
     provider = get_server_state().model.get()
     if provider is None:
         raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
 
     try:
         from domains.training.lora import unload_lora_adapter
+
         unload_lora_adapter(provider)
     except Exception as e:
         raise_error(f"Failed to unload adapter: {e}", "E_BAD_REQUEST", status_code=400)

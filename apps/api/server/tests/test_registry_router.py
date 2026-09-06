@@ -1,6 +1,7 @@
 """Tests for the /registry router (model registry proxy)."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from test_support import get_test_client
 
 
@@ -34,7 +35,10 @@ def _make_registry():
 
 class TestRegistryListModels:
     def test_list_models(self):
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=_make_registry()):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            return_value=_make_registry(),
+        ):
             client = get_test_client()
             resp = client.get("/registry/models")
             assert resp.status_code == 200
@@ -55,7 +59,10 @@ class TestRegistryListModels:
 
 class TestRegistryGetModel:
     def test_get_model_found(self):
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=_make_registry()):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            return_value=_make_registry(),
+        ):
             client = get_test_client()
             resp = client.get("/registry/models/m1")
             assert resp.status_code == 200
@@ -63,7 +70,10 @@ class TestRegistryGetModel:
             assert data["model_id"] == "m1"
 
     def test_get_model_not_found(self):
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=_make_registry()):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            return_value=_make_registry(),
+        ):
             client = get_test_client()
             resp = client.get("/registry/models/nonexistent")
             assert resp.status_code == 404
@@ -71,7 +81,10 @@ class TestRegistryGetModel:
 
 class TestRegistryBest:
     def test_best_model(self):
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=_make_registry()):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            return_value=_make_registry(),
+        ):
             client = get_test_client()
             resp = client.get("/registry/best")
             assert resp.status_code == 200
@@ -82,7 +95,10 @@ class TestRegistryBest:
 
 class TestRegistryStats:
     def test_stats(self):
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=_make_registry()):
+        with patch(
+            "domains.infrastructure.model_registry.get_model_registry",
+            return_value=_make_registry(),
+        ):
             client = get_test_client()
             resp = client.get("/registry/stats")
             assert resp.status_code == 200

@@ -1,16 +1,17 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for auth router — login, register, me, token, verify, refresh.
 
 Uses a temporary MogDB instance per test for user storage isolation.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from unittest.mock import MagicMock, patch
 
-from routers.auth import AuthRouter, set_auth_router, reset_auth_router, _get_auth_deps
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from routers.auth import AuthRouter, _get_auth_deps, reset_auth_router, set_auth_router
 
 
 @pytest.fixture(autouse=True)
@@ -44,15 +45,18 @@ def mock_auth_deps():
 
 # ── POST /auth/register ────────────────────────────────────────────────────
 
-class TestRegister:
 
+class TestRegister:
     def test_register_creates_user(self, _isolated_auth):
         client, _ = _isolated_auth
-        resp = client.post("/auth/register", json={
-            "username": "alice",
-            "email": "alice@example.com",
-            "password": "secret123",
-        })
+        resp = client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "email": "alice@example.com",
+                "password": "secret123",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["token"] == "mock-jwt-token"
@@ -62,26 +66,35 @@ class TestRegister:
 
     def test_register_duplicate_username_returns_409(self, _isolated_auth):
         client, _ = _isolated_auth
-        client.post("/auth/register", json={
-            "username": "bob",
-            "email": "bob@example.com",
-            "password": "secret123",
-        })
-        resp = client.post("/auth/register", json={
-            "username": "bob",
-            "email": "bob2@example.com",
-            "password": "other456",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "bob",
+                "email": "bob@example.com",
+                "password": "secret123",
+            },
+        )
+        resp = client.post(
+            "/auth/register",
+            json={
+                "username": "bob",
+                "email": "bob2@example.com",
+                "password": "other456",
+            },
+        )
         assert resp.status_code == 409
         assert "already exists" in resp.text
 
     def test_register_persists_password_hash(self, _isolated_auth):
         client, auth = _isolated_auth
-        resp = client.post("/auth/register", json={
-            "username": "carol",
-            "email": "carol@example.com",
-            "password": "mypassword",
-        })
+        resp = client.post(
+            "/auth/register",
+            json={
+                "username": "carol",
+                "email": "carol@example.com",
+                "password": "mypassword",
+            },
+        )
         uid = resp.json()["user"]["id"]
         user = auth.users_collection.find_one({"_id": uid})
         assert user is not None
@@ -90,19 +103,25 @@ class TestRegister:
 
 # ── POST /auth/login ───────────────────────────────────────────────────────
 
-class TestLogin:
 
+class TestLogin:
     def test_login_valid_credentials(self, _isolated_auth):
         client, _ = _isolated_auth
-        client.post("/auth/register", json={
-            "username": "dave",
-            "email": "dave@example.com",
-            "password": "pass123",
-        })
-        resp = client.post("/auth/login", json={
-            "username": "dave",
-            "password": "pass123",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "dave",
+                "email": "dave@example.com",
+                "password": "pass123",
+            },
+        )
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "dave",
+                "password": "pass123",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["token"] == "mock-jwt-token"
@@ -110,38 +129,50 @@ class TestLogin:
 
     def test_login_wrong_password(self, _isolated_auth):
         client, _ = _isolated_auth
-        client.post("/auth/register", json={
-            "username": "dave",
-            "email": "dave@example.com",
-            "password": "pass123",
-        })
-        resp = client.post("/auth/login", json={
-            "username": "dave",
-            "password": "wrongpass",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "dave",
+                "email": "dave@example.com",
+                "password": "pass123",
+            },
+        )
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "dave",
+                "password": "wrongpass",
+            },
+        )
         assert resp.status_code == 401
         assert "Invalid" in resp.text
 
     def test_login_nonexistent_user(self, _isolated_auth):
         client, _ = _isolated_auth
-        resp = client.post("/auth/login", json={
-            "username": "nonexistent",
-            "password": "pass123",
-        })
+        resp = client.post(
+            "/auth/login",
+            json={
+                "username": "nonexistent",
+                "password": "pass123",
+            },
+        )
         assert resp.status_code == 401
 
 
 # ── GET /auth/me ───────────────────────────────────────────────────────────
 
-class TestMe:
 
+class TestMe:
     def test_me_with_valid_token(self, _isolated_auth):
         client, auth = _isolated_auth
-        reg = client.post("/auth/register", json={
-            "username": "eve",
-            "email": "eve@example.com",
-            "password": "pass",
-        }).json()
+        reg = client.post(
+            "/auth/register",
+            json={
+                "username": "eve",
+                "email": "eve@example.com",
+                "password": "pass",
+            },
+        ).json()
 
         uid = reg["user"]["id"]
         user = auth.users_collection.find_one({"_id": uid})
@@ -180,8 +211,8 @@ class TestMe:
 
 # ── POST /auth/token ───────────────────────────────────────────────────────
 
-class TestCreateToken:
 
+class TestCreateToken:
     def test_token_with_valid_api_key(self, _isolated_auth):
         client, _ = _isolated_auth
         resp = client.post("/auth/token", json={"api_key": "test-api-key"})
@@ -230,8 +261,8 @@ def _get_auth_deps_helper():
 
 # ── POST /auth/verify ──────────────────────────────────────────────────────
 
-class TestVerify:
 
+class TestVerify:
     def test_verify_valid_token(self, _isolated_auth):
         client, _ = _isolated_auth
         resp = client.post("/auth/verify", headers={"Authorization": "Bearer valid-token"})
@@ -257,8 +288,8 @@ class TestVerify:
 
 # ── POST /auth/refresh ────────────────────────────────────────────────────
 
-class TestRefresh:
 
+class TestRefresh:
     def test_refresh_valid_token(self, _isolated_auth):
         client, _ = _isolated_auth
         resp = client.post("/auth/refresh", headers={"Authorization": "Bearer valid-token"})

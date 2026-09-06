@@ -1,18 +1,18 @@
 """
 Feedback Schemas - Data models for feedback
 """
+
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
 
 
 class FeedbackRequest(BaseModel):
     message_id: str
     rating: str = Field(..., description="thumbs_up or thumbs_down")
-    session_id: Optional[str] = None
-    message_content: Optional[str] = None
-    context: Optional[str] = None
-    user_message: Optional[str] = None
-    assistant_response: Optional[str] = None
+    session_id: str | None = None
+    message_content: str | None = None
+    context: str | None = None
+    user_message: str | None = None
+    assistant_response: str | None = None
 
     @field_validator("rating")
     @classmethod
@@ -39,13 +39,13 @@ class FeedbackStats(BaseModel):
 
 class ConversationCreate(BaseModel):
     name: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class ConversationUpdate(BaseModel):
-    name: Optional[str] = None
-    pinned: Optional[bool] = None
-    starred: Optional[bool] = None
+    name: str | None = None
+    pinned: bool | None = None
+    starred: bool | None = None
 
 
 class ConversationResponse(BaseModel):

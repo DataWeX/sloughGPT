@@ -1,4 +1,5 @@
 """Tests for the /collections router."""
+
 from test_support import get_test_client
 
 
@@ -20,7 +21,9 @@ class TestCollectionsRouter:
         assert resp.status_code == 200
 
     def test_create_pipeline(self):
-        resp = self.client.post("/collections/create", json={"name": "test-pipeline", "sources": []})
+        resp = self.client.post(
+            "/collections/create", json={"name": "test-pipeline", "sources": []}
+        )
         assert resp.status_code in (200, 201, 400, 422)
 
     def test_run_pipeline_not_found(self):

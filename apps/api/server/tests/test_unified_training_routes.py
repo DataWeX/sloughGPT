@@ -7,13 +7,11 @@ and response forwarded unchanged.
 
 from __future__ import annotations
 
-import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_app_error_handler
 from training.router import router
 
@@ -34,7 +32,11 @@ def _reset():
 
 class TestTrainingLog:
     def test_delegates_to_core_service(self):
-        with patch("domains.training.service.get_log", new_callable=AsyncMock, return_value=["line1", "line2"]):
+        with patch(
+            "domains.training.service.get_log",
+            new_callable=AsyncMock,
+            return_value=["line1", "line2"],
+        ):
             resp = client.get("/training/log")
 
         assert resp.status_code == 200
@@ -61,7 +63,10 @@ class TestTrainingTurboStart:
     def test_turbo_start_returns_started(self):
         request_body = {"epochs": 5, "n_embed": 64}
 
-        with patch("domains.training.service.start_turbo_training", return_value={"job_id": "t1", "data_path": "/tmp/data"}):
+        with patch(
+            "domains.training.service.start_turbo_training",
+            return_value={"job_id": "t1", "data_path": "/tmp/data"},
+        ):
             with patch("domains.training.service.run_turbo_worker"):
                 resp = client.post("/training/turbo-start", json=request_body)
 
@@ -74,7 +79,11 @@ class TestTrainingTurboStart:
 
 class TestTrainingCheckpoints:
     def test_list_checkpoints(self):
-        with patch("domains.training.service.list_checkpoints", new_callable=AsyncMock, return_value=[{"name": "v1.soul"}]):
+        with patch(
+            "domains.training.service.list_checkpoints",
+            new_callable=AsyncMock,
+            return_value=[{"name": "v1.soul"}],
+        ):
             resp = client.get("/training/checkpoints")
 
         assert resp.status_code == 200
@@ -82,28 +91,44 @@ class TestTrainingCheckpoints:
         assert len(body["data"]) == 1
 
     def test_delete_checkpoint(self):
-        with patch("domains.training.service.delete_checkpoint", new_callable=AsyncMock, return_value=["old.soul"]):
+        with patch(
+            "domains.training.service.delete_checkpoint",
+            new_callable=AsyncMock,
+            return_value=["old.soul"],
+        ):
             resp = client.delete("/training/checkpoints/old.soul")
 
         assert resp.status_code == 200
         assert resp.json()["data"]["deleted"] == ["old.soul"]
 
     def test_load_checkpoint(self):
-        with patch("domains.training.service.load_checkpoint", new_callable=AsyncMock, return_value={"name": "v1.soul", "vocab_size": 100}):
+        with patch(
+            "domains.training.service.load_checkpoint",
+            new_callable=AsyncMock,
+            return_value={"name": "v1.soul", "vocab_size": 100},
+        ):
             resp = client.post("/training/checkpoints/v1.soul/load")
 
         assert resp.status_code == 200
         assert resp.json()["data"]["vocab_size"] == 100
 
     def test_checkpoint_info(self):
-        with patch("domains.training.service.checkpoint_info", new_callable=AsyncMock, return_value={"name": "v1.soul", "loss": 0.42}):
+        with patch(
+            "domains.training.service.checkpoint_info",
+            new_callable=AsyncMock,
+            return_value={"name": "v1.soul", "loss": 0.42},
+        ):
             resp = client.get("/training/checkpoints/v1.soul/info")
 
         assert resp.status_code == 200
         assert resp.json()["data"]["loss"] == 0.42
 
     def test_download_checkpoint(self):
-        with patch("domains.training.service.download_checkpoint_path", new_callable=AsyncMock, return_value="/fake/path.soul"):
+        with patch(
+            "domains.training.service.download_checkpoint_path",
+            new_callable=AsyncMock,
+            return_value="/fake/path.soul",
+        ):
             with patch("fastapi.responses.FileResponse") as mock_fr:
                 mock_fr.return_value = MagicMock(status_code=200)
                 resp = client.get("/training/checkpoints/v1.soul/download")
@@ -116,7 +141,11 @@ class TestTrainingCheckpoints:
 
 class TestTrainingMetricsExport:
     def test_delegates_to_core_service(self):
-        with patch("domains.training.service.get_all_checkpoint_data", new_callable=AsyncMock, return_value=[{"name": "v1.soul"}]):
+        with patch(
+            "domains.training.service.get_all_checkpoint_data",
+            new_callable=AsyncMock,
+            return_value=[{"name": "v1.soul"}],
+        ):
             resp = client.get("/training/metrics/export")
 
         assert resp.status_code == 200
@@ -155,7 +184,10 @@ class TestFromSessionsStart:
     def test_from_sessions_start_returns_success(self):
         request_body = {"epochs": 3}
 
-        with patch("domains.training.service.start_from_sessions_training", return_value={"method": "from-sessions", "epochs": 3}):
+        with patch(
+            "domains.training.service.start_from_sessions_training",
+            return_value={"method": "from-sessions", "epochs": 3},
+        ):
             resp = client.post("/training/from-sessions-start", json=request_body)
 
         assert resp.status_code == 200

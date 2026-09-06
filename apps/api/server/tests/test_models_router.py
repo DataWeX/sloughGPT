@@ -1,18 +1,18 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for models router — list, current, hf, cache-usage, export-formats.
 
 Only registers the models router to avoid pulling in heavy dependencies.
 """
 
-import os
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from routers.models import router as models_router
 
 app = FastAPI()
@@ -37,6 +37,7 @@ def fake_cache_dir():
     blob_file.write_text("x" * 1024 * 1024)  # 1 MB blob
     yield tmp
     import shutil
+
     shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -76,8 +77,8 @@ def mock_controller():
 
 # ── GET /models ────────────────────────────────────────────────────────────
 
-class TestListModels:
 
+class TestListModels:
     def test_list_includes_loaded_model(self, mock_controller):
         resp = client.get("/models")
         assert resp.status_code == 200
@@ -159,8 +160,8 @@ class TestListModels:
 
 # ── GET /models/current ────────────────────────────────────────────────────
 
-class TestCurrentModel:
 
+class TestCurrentModel:
     def test_current_returns_loaded(self, mock_controller):
         resp = client.get("/models/current")
         assert resp.status_code == 200
@@ -175,8 +176,8 @@ class TestCurrentModel:
 
 # ── GET /models/hf ─────────────────────────────────────────────────────────
 
-class TestHFModels:
 
+class TestHFModels:
     def test_hf_returns_all(self, mock_controller):
         resp = client.get("/models/hf")
         assert resp.status_code == 200
@@ -197,8 +198,8 @@ class TestHFModels:
 
 # ── GET /models/cache-usage ────────────────────────────────────────────────
 
-class TestCacheUsage:
 
+class TestCacheUsage:
     def test_cache_usage(self, mock_controller, fake_cache_dir):
         with patch("routers.models._hf_cache_dir", fake_cache_dir):
             resp = client.get("/models/cache-usage")
@@ -225,8 +226,8 @@ class TestCacheUsage:
 
 # ── GET /models/export/formats ────────────────────────────────────────────
 
-class TestExportFormats:
 
+class TestExportFormats:
     def test_export_formats(self, mock_controller):
         resp = client.get("/models/export/formats")
         assert resp.status_code == 200
@@ -246,8 +247,8 @@ class TestExportFormats:
 
 # ── POST /models/load ───────────────────────────────────────────────────────
 
-class TestLoadModel:
 
+class TestLoadModel:
     LOADED = {
         "status": "loaded",
         "model_id": "gpt2",
@@ -312,8 +313,8 @@ class TestLoadModel:
 
 # ── POST /models/unload ─────────────────────────────────────────────────────
 
-class TestUnloadModel:
 
+class TestUnloadModel:
     def test_unload_records_event_with_model_id(self, mock_controller):
         mock_controller._current_model = "Qwen/Qwen2.5-0.5B-Instruct"
         ss = MagicMock()
@@ -327,8 +328,12 @@ class TestUnloadModel:
         registry = MagicMock()
         registry.default_id = "Qwen/Qwen2.5-0.5B-Instruct"
         ss = MagicMock()
-        with patch("domains.infrastructure.server_state.get_server_state", return_value=ss), \
-             patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry):
+        with (
+            patch("domains.infrastructure.server_state.get_server_state", return_value=ss),
+            patch(
+                "domains.infrastructure.model_registry.get_model_registry", return_value=registry
+            ),
+        ):
             resp = client.post("/models/unload")
         assert resp.status_code == 200
         ss.record_model_event.assert_called_once_with("unload", "Qwen/Qwen2.5-0.5B-Instruct")
@@ -336,11 +341,14 @@ class TestUnloadModel:
 
 # ── GET/POST /models/process-guard ────────────────────────────────────────
 
-class TestProcessGuard:
 
+class TestProcessGuard:
     def test_get_returns_status(self, mock_controller):
         mock_controller.get_process_guard_status.return_value = {
-            "enabled": False, "active": False, "model_id": None, "health": None,
+            "enabled": False,
+            "active": False,
+            "model_id": None,
+            "health": None,
         }
         resp = client.get("/models/process-guard")
         assert resp.status_code == 200
@@ -350,7 +358,9 @@ class TestProcessGuard:
 
     def test_get_when_enabled_and_active(self, mock_controller):
         mock_controller.get_process_guard_status.return_value = {
-            "enabled": True, "active": True, "model_id": "gpt2",
+            "enabled": True,
+            "active": True,
+            "model_id": "gpt2",
             "health": {"alive": True, "memory_mb": 512, "restarts": 0},
         }
         resp = client.get("/models/process-guard")
@@ -362,7 +372,10 @@ class TestProcessGuard:
 
     def test_enable_calls_controller(self, mock_controller):
         mock_controller.set_process_guard_enabled.return_value = {
-            "enabled": True, "active": False, "model_id": "gpt2", "health": None,
+            "enabled": True,
+            "active": False,
+            "model_id": "gpt2",
+            "health": None,
         }
         resp = client.post("/models/process-guard", json={"enabled": True})
         assert resp.status_code == 200
@@ -372,7 +385,10 @@ class TestProcessGuard:
 
     def test_disable_calls_controller(self, mock_controller):
         mock_controller.set_process_guard_enabled.return_value = {
-            "enabled": False, "active": False, "model_id": None, "health": None,
+            "enabled": False,
+            "active": False,
+            "model_id": None,
+            "health": None,
         }
         resp = client.post("/models/process-guard", json={"enabled": False})
         assert resp.status_code == 200

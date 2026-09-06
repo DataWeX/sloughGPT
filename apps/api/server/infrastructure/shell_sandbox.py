@@ -1,42 +1,90 @@
-'use strict'
+"use strict"
 
+import logging
 import re
 import shlex
-import logging
-from typing import Optional
 
 logger = logging.getLogger("slo.infra.shell_sandbox")
 
 # Commands that are never allowed in the shell endpoint
-_BLOCKED_COMMANDS = frozenset({
-    "rm", "rmdir", "dd", "mkfs", "format",
-    "shutdown", "reboot", "halt", "poweroff", "init",
-    "su", "sudo", "passwd", "chown", "chmod", "chroot",
-    "mount", "umount", "fdisk", "parted",
-    "iptables", "ip6tables", "nft", "ufw",
-    "curl", "wget", "nc", "ncat", "netcat", "socat",
-    "python", "python3", "perl", "ruby", "node", "php",
-    "pip", "pip3", "npm", "npx", "yarn",
-    "eval", "exec", "source",
-    "fork", "nohup", "disown",
-    "crontab", "at", "batch",
-    "docker", "podman", "kubectl", "helm",
-    "ssh", "scp", "rsync", "telnet", "ftp", "sftp",
-})
+_BLOCKED_COMMANDS = frozenset(
+    {
+        "rm",
+        "rmdir",
+        "dd",
+        "mkfs",
+        "format",
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff",
+        "init",
+        "su",
+        "sudo",
+        "passwd",
+        "chown",
+        "chmod",
+        "chroot",
+        "mount",
+        "umount",
+        "fdisk",
+        "parted",
+        "iptables",
+        "ip6tables",
+        "nft",
+        "ufw",
+        "curl",
+        "wget",
+        "nc",
+        "ncat",
+        "netcat",
+        "socat",
+        "python",
+        "python3",
+        "perl",
+        "ruby",
+        "node",
+        "php",
+        "pip",
+        "pip3",
+        "npm",
+        "npx",
+        "yarn",
+        "eval",
+        "exec",
+        "source",
+        "fork",
+        "nohup",
+        "disown",
+        "crontab",
+        "at",
+        "batch",
+        "docker",
+        "podman",
+        "kubectl",
+        "helm",
+        "ssh",
+        "scp",
+        "rsync",
+        "telnet",
+        "ftp",
+        "sftp",
+    }
+)
 
 # Patterns that indicate dangerous operations
 _DANGEROUS_PATTERNS = [
-    r">\s*/",           # Redirect to root paths
-    r">\s*/etc",        # Write to /etc
-    r">\s*/var",        # Write to /var
-    r">\s*/usr",        # Write to /usr
-    r">\s*/tmp",        # Write to /tmp (less dangerous but still suspicious)
-    r"\|\s*sh\b",       # Pipe to shell
-    r"\|\s*bash\b",     # Pipe to bash
-    r"`.*`",            # Backtick execution
-    r"\$\(.*\)",        # Subshell execution
-    r"169\.254\.",      # AWS metadata
-    r"metadata\.google", # GCP metadata
+    r">\s*/",  # Redirect to root paths
+    r">\s*/etc",  # Write to /etc
+    r">\s*/var",  # Write to /var
+    r">\s*/usr",  # Write to /usr
+    r">\s*/tmp",  # Write to /tmp (less dangerous but still suspicious)
+    r"\|\s*sh\b",  # Pipe to shell
+    r"\|\s*bash\b",  # Pipe to bash
+    r"`.*`",  # Backtick execution
+    r"\$\(.*\)",  # Subshell execution
+    r"169\.254\.",  # AWS metadata
+    r"metadata\.google",  # GCP metadata
 ]
 
 _DANGEROUS_RE = [re.compile(p) for p in _DANGEROUS_PATTERNS]
@@ -44,6 +92,7 @@ _DANGEROUS_RE = [re.compile(p) for p in _DANGEROUS_PATTERNS]
 
 class ShellSecurityError(Exception):
     """Raised when a command fails security checks."""
+
     pass
 
 

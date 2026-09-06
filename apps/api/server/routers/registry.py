@@ -5,9 +5,11 @@ Previously used an in-memory dict that lost data on restart and was disconnected
 from the actual model serving layer. Now delegates to get_model_registry() so all
 registry operations reflect the real state of loaded models.
 """
-from fastapi import APIRouter
-from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
+
 import time as _time
+
+from fastapi import APIRouter
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 
 class RegistryRouter:
@@ -19,12 +21,15 @@ class RegistryRouter:
 
     def _register_routes(self):
         self.router.add_api_route(path="/models", endpoint=self.list_models, methods=["GET"])
-        self.router.add_api_route(path="/models/{model_id}", endpoint=self.get_model, methods=["GET"])
+        self.router.add_api_route(
+            path="/models/{model_id}", endpoint=self.get_model, methods=["GET"]
+        )
         self.router.add_api_route(path="/best", endpoint=self.get_best_model, methods=["GET"])
         self.router.add_api_route(path="/stats", endpoint=self.get_registry_stats, methods=["GET"])
 
     def _get_registry(self):
         from domains.infrastructure.model_registry import get_model_registry
+
         return get_model_registry()
 
     async def list_models(self) -> dict:
@@ -34,7 +39,11 @@ class RegistryRouter:
             reg = self._get_registry()
             models = reg.list_models()
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("registry.list", resource="models", detail=f"elapsed={_elapsed_ms:.0f}ms count={len(models)}")
+            safe_audit_log(
+                "registry.list",
+                resource="models",
+                detail=f"elapsed={_elapsed_ms:.0f}ms count={len(models)}",
+            )
             return success_response(data={"models": models, "count": len(models)})
         except Exception as e:
             classify_and_raise(e, source="registry.list")
@@ -61,7 +70,9 @@ class RegistryRouter:
             reg = self._get_registry()
             health = reg.health_summary()
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("registry.best", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms")
+            safe_audit_log(
+                "registry.best", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
+            )
             return success_response(data=health)
         except Exception as e:
             classify_and_raise(e, source="registry.best")
@@ -73,7 +84,9 @@ class RegistryRouter:
             reg = self._get_registry()
             health = reg.health_summary()
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms")
+            safe_audit_log(
+                "registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
+            )
             return success_response(data=health)
         except Exception as e:
             classify_and_raise(e, source="registry.stats")

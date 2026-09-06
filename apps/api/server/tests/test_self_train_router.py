@@ -1,8 +1,9 @@
 """Tests for the /self-train router (start/stop/status)."""
 
-from unittest.mock import patch, MagicMock
-from test_support import get_test_client
+from unittest.mock import MagicMock, patch
+
 import state as server_state
+from test_support import get_test_client
 
 
 def _data(resp):

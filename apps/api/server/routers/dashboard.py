@@ -15,11 +15,10 @@ import asyncio
 import json
 import logging
 import time
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-
 from schemas.common import success_response
 
 logger = logging.getLogger("slo.dashboard")
@@ -32,6 +31,7 @@ def _get_active_processes() -> dict:
     # Training jobs
     try:
         from training.jobs import training_jobs
+
         for job_id, job in training_jobs.items():
             status = job.get("status", "unknown")
             if status in ("running", "queued", "starting"):
@@ -56,6 +56,7 @@ def _get_active_processes() -> dict:
         logger.debug("Failed to collect training processes: %s", e)
     try:
         import state as server_state
+
         proc = server_state._self_train_proc
         if proc is not None:
             ret = proc.poll()
@@ -80,7 +81,8 @@ def _get_active_processes() -> dict:
 
     # Auto-train turbo
     try:
-        from domains.training.service import get_turbo_state, get_turbo_lock
+        from domains.training.service import get_turbo_lock, get_turbo_state
+
         with get_turbo_lock():
             turbo = dict(get_turbo_state())
         turbo_status = turbo.get("status", "idle")
@@ -107,6 +109,7 @@ def _get_active_processes() -> dict:
     # Active downloads
     try:
         from domains.infrastructure.download_manager import get_download_manager
+
         mgr = get_download_manager()
         downloads = mgr.list_downloads()
         for model_id, dl in downloads.items():
@@ -145,8 +148,8 @@ def _get_active_processes() -> dict:
 def _get_health_summary() -> dict:
     """Fast health summary from existing sources."""
     try:
-        import state as server_state
         import psutil
+        import state as server_state
 
         model_loaded = server_state.model is not None or server_state.provider is not None
         model_type = getattr(server_state, "model_type", None) or ""
@@ -173,8 +176,13 @@ def _get_health_summary() -> dict:
             "memory_percent": round(mem.percent, 1),
             "memory_used_mb": round(mem.used / 1024 / 1024),
         }
-    except Exception:
-        return {"model_loaded": False, "error": "health unavailable"}
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("slo.dashboard").warning(
+            "Health data collection failed: %s", exc, exc_info=True
+        )
+        return {"model_loaded": False, "error": f"health unavailable: {exc}"}
 
 
 def _build_snapshot() -> dict:
@@ -218,10 +226,19 @@ class DashboardRouter:
                     yield "data: " + json.dumps(snapshot, default=str) + "\n\n"
                 except Exception as e:
                     logger.warning("Dashboard snapshot failed: %s", e)
-                    yield "data: " + json.dumps({
-                        "stream": "dashboard", "phase": "ERROR", "status": "error",
-                        "data": {"error": str(e)}, "message": str(e),
-                    }) + "\n\n"
+                    yield (
+                        "data: "
+                        + json.dumps(
+                            {
+                                "stream": "dashboard",
+                                "phase": "ERROR",
+                                "status": "error",
+                                "data": {"error": str(e)},
+                                "message": str(e),
+                            }
+                        )
+                        + "\n\n"
+                    )
                 await asyncio.sleep(self.SNAPSHOT_INTERVAL)
 
         return StreamingResponse(
@@ -238,6 +255,7 @@ class DashboardRouter:
         """Return the last N dashboard events as JSON."""
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
+
             events = get_event_buffer().recent(n)
             return success_response(data={"events": events, "count": len(events)})
         except Exception as e:

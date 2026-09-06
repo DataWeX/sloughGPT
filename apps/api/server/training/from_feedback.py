@@ -10,16 +10,15 @@ import threading
 import time
 from pathlib import Path
 
+from domains.shared import find_repo_root
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter
-
 from schemas.common import raise_error
 
-from .jobs import training_jobs
 from .controller import get_training_controller
-from .webhooks import notify_training_event
 from .helpers import _finish_job, _run_async
-from domains.training.executor import get_training_executor
-from domains.shared import find_repo_root
+from .jobs import training_jobs
+from .webhooks import notify_training_event
 
 logger = logging.getLogger("slo")
 
@@ -73,7 +72,8 @@ async def train_from_feedback(req: dict | None = None):
 
         # Register with CancelManager
         try:
-            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
             _mgr = get_cancel_manager()
             op_id = _mgr.register(
                 op_type=OpType.TRAINING,
@@ -83,7 +83,9 @@ async def train_from_feedback(req: dict | None = None):
             _mgr.start(op_id)
             training_jobs[jid]["_cancel_manager_op_id"] = op_id
         except Exception as exc:
-            logger.warning("CancelManager registration failed for feedback training %s: %s", jid, exc)
+            logger.warning(
+                "CancelManager registration failed for feedback training %s: %s", jid, exc
+            )
 
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")
@@ -109,17 +111,27 @@ async def train_from_feedback(req: dict | None = None):
                 )
 
                 def on_progress(info: dict) -> None:
-                    training_jobs[jid]["progress"] = min(99, int((info.get("progress_percent", 0))))
-                    training_jobs[jid]["current_epoch"] = int(info.get("epoch", training_jobs[jid].get("current_epoch", 0)))
+                    training_jobs[jid]["progress"] = min(99, int(info.get("progress_percent", 0)))
+                    training_jobs[jid]["current_epoch"] = int(
+                        info.get("epoch", training_jobs[jid].get("current_epoch", 0))
+                    )
                     tl = info.get("train_loss")
                     if tl is not None:
                         training_jobs[jid]["train_loss"] = float(tl)
-                        training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("global_step", 0), "value": float(tl), "type": "train"})
+                        training_jobs[jid].setdefault("loss_history", []).append(
+                            {
+                                "step": info.get("global_step", 0),
+                                "value": float(tl),
+                                "type": "train",
+                            }
+                        )
                     el = info.get("eval_loss")
                     if el is not None:
                         training_jobs[jid]["eval_loss"] = float(el)
                         training_jobs[jid]["loss"] = float(el)
-                        training_jobs[jid].setdefault("loss_history", []).append({"step": info.get("global_step", 0), "value": float(el), "type": "eval"})
+                        training_jobs[jid].setdefault("loss_history", []).append(
+                            {"step": info.get("global_step", 0), "value": float(el), "type": "eval"}
+                        )
 
                 result = trainer.train(on_progress=on_progress)
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
@@ -133,7 +145,6 @@ async def train_from_feedback(req: dict | None = None):
 
                 # Trigger webhook notification (fire and forget)
                 try:
-
                     _run_async(
                         notify_training_event(
                             "training.completed",
@@ -156,7 +167,6 @@ async def train_from_feedback(req: dict | None = None):
 
                 # Trigger webhook notification
                 try:
-
                     _run_async(
                         notify_training_event(
                             "training.failed",

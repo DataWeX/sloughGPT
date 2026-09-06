@@ -4,11 +4,11 @@ Companion Router - AI Companion endpoints
 Uses MogDB as the storage engine with automatic JSON sync.
 Presets are stored in MogDB and synced to JSON for human readability.
 """
+
 import logging
 import os
 import time as _time
 from pathlib import Path
-from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -20,6 +20,7 @@ logger = logging.getLogger("slo.routers.companion")
 
 def _get_db():
     from mogdb import MogDB
+
     repo_root = Path(__file__).resolve().parents[4]
     db_path = os.path.join(repo_root, "data", "companion_mogdb")
     sync_path = os.path.join(repo_root, "data", "companion_json")
@@ -28,6 +29,7 @@ def _get_db():
 
 class SetPersonalityRequest(BaseModel):
     """Set companion personality (full replacement)."""
+
     name: str = Field(default="Friend", max_length=100)
     warmth: float = Field(default=0.7, ge=0.0, le=1.0)
     curiosity: float = Field(default=0.6, ge=0.0, le=1.0)
@@ -38,12 +40,13 @@ class SetPersonalityRequest(BaseModel):
 
 class PatchPersonalityRequest(BaseModel):
     """Partial update to companion personality (only provided fields are updated)."""
-    name: Optional[str] = Field(default=None, max_length=100)
-    warmth: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    curiosity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    creativity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    humor: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+    name: str | None = Field(default=None, max_length=100)
+    warmth: float | None = Field(default=None, ge=0.0, le=1.0)
+    curiosity: float | None = Field(default=None, ge=0.0, le=1.0)
+    creativity: float | None = Field(default=None, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    humor: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class PresetInfo(BaseModel):
@@ -62,7 +65,7 @@ class PresetCreateRequest(BaseModel):
     system_prompt: str = Field(default="", max_length=2000)
 
 
-def _load_presets() -> List[dict]:
+def _load_presets() -> list[dict]:
     """Load presets from MogDB."""
     db = _get_db()
     col = db.collection("presets")
@@ -76,10 +79,34 @@ def _seed_default_presets() -> None:
     if col.count() > 0:
         return
     defaults = [
-        {"id": "warm", "name": "Warm Friend", "description": "Caring and supportive", "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3}, "system_prompt": "You are a warm, caring friend."},
-        {"id": "curious", "name": "Curious Friend", "description": "Interested in everything", "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3}, "system_prompt": "You are a deeply curious friend."},
-        {"id": "playful", "name": "Playful Friend", "description": "Fun and humorous", "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8}, "system_prompt": "You are a playful, fun-loving friend."},
-        {"id": "balanced", "name": "Balanced Friend", "description": "Well-rounded", "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5}, "system_prompt": "You are a balanced, well-rounded friend."},
+        {
+            "id": "warm",
+            "name": "Warm Friend",
+            "description": "Caring and supportive",
+            "traits": {"warmth": 0.9, "curiosity": 0.6, "humor": 0.3},
+            "system_prompt": "You are a warm, caring friend.",
+        },
+        {
+            "id": "curious",
+            "name": "Curious Friend",
+            "description": "Interested in everything",
+            "traits": {"warmth": 0.6, "curiosity": 0.9, "humor": 0.3},
+            "system_prompt": "You are a deeply curious friend.",
+        },
+        {
+            "id": "playful",
+            "name": "Playful Friend",
+            "description": "Fun and humorous",
+            "traits": {"warmth": 0.7, "curiosity": 0.5, "humor": 0.8},
+            "system_prompt": "You are a playful, fun-loving friend.",
+        },
+        {
+            "id": "balanced",
+            "name": "Balanced Friend",
+            "description": "Well-rounded",
+            "traits": {"warmth": 0.7, "curiosity": 0.6, "humor": 0.5},
+            "system_prompt": "You are a balanced, well-rounded friend.",
+        },
     ]
     for p in defaults:
         col.insert_one(p)
@@ -87,9 +114,10 @@ def _seed_default_presets() -> None:
 
 class ChatRequest(BaseModel):
     """Chat with companion."""
+
     message: str = Field(..., min_length=1, max_length=10000)
-    user_name: Optional[str] = Field(default=None, max_length=100)
-    user_mood: Optional[str] = Field(default=None, max_length=100)
+    user_name: str | None = Field(default=None, max_length=100)
+    user_mood: str | None = Field(default=None, max_length=100)
     include_system_prompt: bool = True
     max_tokens: int = Field(default=256, ge=1, le=4096, description="Max tokens to generate")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
@@ -97,6 +125,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     """Companion response."""
+
     response: str
     system_prompt: str
     elapsed_ms: float = 0.0
@@ -126,6 +155,7 @@ class CompanionRouter:
         """Get or create companion."""
         if self._companion is None:
             from domains.companion import get_companion
+
             self._companion = get_companion()
         return self._companion
 
@@ -142,13 +172,16 @@ class CompanionRouter:
         try:
             self._companion = None
             from domains.companion import reset_companion
+
             reset_companion()
             safe_audit_log("companion.reset")
             return success_response(data={"reset": True})
         except Exception as e:
             classify_and_raise(e, source="companion.reset")
 
-    async def set_personality(self, req: SetPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def set_personality(
+        self, req: SetPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Set companion personality (full replacement)."""
         try:
             companion = self._get_companion()
@@ -163,7 +196,9 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.set_personality")
 
-    async def patch_personality(self, req: PatchPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def patch_personality(
+        self, req: PatchPersonalityRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Partial update to companion personality."""
         try:
             companion = self._get_companion()
@@ -184,7 +219,9 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.patch_personality")
 
-    async def use_preset(self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def use_preset(
+        self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Apply a preset personality."""
         try:
             db = _get_db()
@@ -210,7 +247,9 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.get_prompt")
 
-    async def chat(self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> ChatResponse:
+    async def chat(
+        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> ChatResponse:
         """Chat with the companion."""
         try:
             companion = self._get_companion()
@@ -223,7 +262,10 @@ class CompanionRouter:
                 temperature=req.temperature,
             )
             _chat_elapsed_ms = (_time.monotonic() - _chat_start) * 1000
-            safe_audit_log("companion.chat", detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}")
+            safe_audit_log(
+                "companion.chat",
+                detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}",
+            )
 
             return ChatResponse(
                 response=response_text,
@@ -242,7 +284,9 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.presets")
 
-    async def create_preset(self, req: PresetCreateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def create_preset(
+        self, req: PresetCreateRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Create a new companion preset."""
         try:
             db = _get_db()
@@ -263,7 +307,9 @@ class CompanionRouter:
         except Exception as e:
             classify_and_raise(e, source="companion.create_preset")
 
-    async def delete_preset(self, preset_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_preset(
+        self, preset_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete a companion preset."""
         try:
             db = _get_db()

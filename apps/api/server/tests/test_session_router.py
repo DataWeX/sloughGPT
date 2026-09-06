@@ -1,18 +1,21 @@
 """Tests for the /session router — context, messages, inspector."""
 
-from test_support import get_test_client, _data
+from test_support import _data, get_test_client
 
 
 def test_set_and_get_session_context():
     client = get_test_client()
     sid = "test_session_001"
 
-    resp = client.post(f"/session/{sid}/context", json={
-        "messages": [
-            {"role": "user", "content": "hello"},
-            {"role": "assistant", "content": "hi there"},
-        ]
-    })
+    resp = client.post(
+        f"/session/{sid}/context",
+        json={
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi there"},
+            ]
+        },
+    )
     assert resp.status_code == 200
     body = _data(resp)
     assert body["message_count"] == 2
@@ -46,9 +49,9 @@ def test_session_inspector():
     client = get_test_client()
     sid = "test_session_inspector"
 
-    client.post(f"/session/{sid}/context", json={
-        "messages": [{"role": "user", "content": "inspect me"}]
-    })
+    client.post(
+        f"/session/{sid}/context", json={"messages": [{"role": "user", "content": "inspect me"}]}
+    )
 
     resp = client.get(f"/session/{sid}/inspector")
     assert resp.status_code == 200

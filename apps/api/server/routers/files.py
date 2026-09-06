@@ -5,20 +5,17 @@ File metadata is stored in MogDB and synced to JSON for human readability.
 """
 
 import asyncio
-import io
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
-from typing import Optional
-import re
 
-from fastapi import APIRouter, UploadFile, File, Form, Query, Depends
-from pydantic import BaseModel
-
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from pydantic import BaseModel
+from schemas.common import raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.files")
 
@@ -77,6 +74,7 @@ class IngestResponse(BaseModel):
 
 def _get_db():
     from mogdb import MogDB
+
     repo_root = Path(__file__).resolve().parents[4]
     db_path = os.path.join(repo_root, "data", "uploads_mogdb")
     sync_path = os.path.join(repo_root, "data", "uploads_json")
@@ -122,9 +120,7 @@ class FilesRouter:
         self.router.add_api_route(
             "/{file_id}", self.get_file, methods=["GET"], response_model=FileDetail
         )
-        self.router.add_api_route(
-            "/{file_id}", self.delete_file, methods=["DELETE"]
-        )
+        self.router.add_api_route("/{file_id}", self.delete_file, methods=["DELETE"])
         self.router.add_api_route(
             "/{file_id}/ingest", self.ingest_file, methods=["POST"], response_model=IngestResponse
         )
@@ -164,17 +160,19 @@ class FilesRouter:
             # Clear and rewrite
             col.delete_many({})
             for fid, m in meta.items():
-                col.insert_one({
-                    "file_id": fid,
-                    "filename": m.get("filename", ""),
-                    "original_name": m.get("original_name", ""),
-                    "extension": m.get("extension", ""),
-                    "size_bytes": m.get("size_bytes", 0),
-                    "chars": m.get("chars", 0),
-                    "pages": m.get("pages", 1),
-                    "uploaded_at": m.get("uploaded_at", 0.0),
-                    "tags": m.get("tags", []),
-                })
+                col.insert_one(
+                    {
+                        "file_id": fid,
+                        "filename": m.get("filename", ""),
+                        "original_name": m.get("original_name", ""),
+                        "extension": m.get("extension", ""),
+                        "size_bytes": m.get("size_bytes", 0),
+                        "chars": m.get("chars", 0),
+                        "pages": m.get("pages", 1),
+                        "uploaded_at": m.get("uploaded_at", 0.0),
+                        "tags": m.get("tags", []),
+                    }
+                )
         except Exception as e:
             logger.warning("Failed to save metadata to MogDB: %s", e)
 
@@ -185,8 +183,7 @@ class FilesRouter:
         await asyncio.to_thread(self._save_metadata, meta)
 
     def _file_id(self, filename: str) -> str:
-        import re
-        safe_name = re.sub(r'[^\w\-]', '_', filename)
+        safe_name = re.sub(r"[^\w\-]", "_", filename)
         return f"{int(time.time())}_{safe_name}"
 
     # ── Endpoints ──
@@ -195,7 +192,7 @@ class FilesRouter:
         self,
         sort: str = Query("uploaded_at", description="Sort field"),
         order: str = Query("desc", description="asc or desc"),
-        tag: Optional[str] = Query(None, description="Filter by tag"),
+        tag: str | None = Query(None, description="Filter by tag"),
     ) -> dict:
         """List all uploaded files with metadata."""
         meta = await self._async_load_metadata()
@@ -208,14 +205,16 @@ class FilesRouter:
                 continue
             if tag and tag not in m.get("tags", []):
                 continue
-            items.append(FileItem(
-                id=fid,
-                filename=m["filename"],
-                extension=m.get("extension", ""),
-                size_bytes=m.get("size_bytes", 0),
-                uploaded_at=m.get("uploaded_at", 0.0),
-                tags=m.get("tags", []),
-            ))
+            items.append(
+                FileItem(
+                    id=fid,
+                    filename=m["filename"],
+                    extension=m.get("extension", ""),
+                    size_bytes=m.get("size_bytes", 0),
+                    uploaded_at=m.get("uploaded_at", 0.0),
+                    tags=m.get("tags", []),
+                )
+            )
         reverse = order.lower() != "asc"
         items.sort(key=lambda x: getattr(x, sort, 0), reverse=reverse)
         return FileListResponse(files=items, total=len(items))
@@ -241,6 +240,7 @@ class FilesRouter:
         def _write_file():
             with open(file_path, "wb") as f:
                 f.write(contents)
+
         await asyncio.to_thread(_write_file)
 
         try:
@@ -261,7 +261,9 @@ class FilesRouter:
         }
         await self._async_save_metadata(meta)
 
-        safe_audit_log("file.upload", resource=fid, detail=f"filename={file.filename}, size={len(contents)}")
+        safe_audit_log(
+            "file.upload", resource=fid, detail=f"filename={file.filename}, size={len(contents)}"
+        )
         return UploadResponse(
             id=fid,
             filename=file.filename,
@@ -273,7 +275,7 @@ class FilesRouter:
     async def search_files(
         self,
         q: str = Query(..., min_length=1, description="Search query"),
-        tag: Optional[str] = Query(None, description="Filter by tag"),
+        tag: str | None = Query(None, description="Filter by tag"),
     ) -> dict:
         """Search uploaded files by name substring match."""
         query = q.lower()
@@ -290,14 +292,16 @@ class FilesRouter:
                 continue
             if tag and tag not in m.get("tags", []):
                 continue
-            items.append(FileItem(
-                id=fid,
-                filename=m.get("original_name", m["filename"]),
-                extension=m.get("extension", ""),
-                size_bytes=m.get("size_bytes", 0),
-                uploaded_at=m.get("uploaded_at", 0.0),
-                tags=m.get("tags", []),
-            ))
+            items.append(
+                FileItem(
+                    id=fid,
+                    filename=m.get("original_name", m["filename"]),
+                    extension=m.get("extension", ""),
+                    size_bytes=m.get("size_bytes", 0),
+                    uploaded_at=m.get("uploaded_at", 0.0),
+                    tags=m.get("tags", []),
+                )
+            )
         items.sort(key=lambda x: x.uploaded_at, reverse=True)
         return FileListResponse(files=items, total=len(items))
 
@@ -324,7 +328,9 @@ class FilesRouter:
             text=text,
         )
 
-    async def delete_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_file(
+        self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete a file and its metadata."""
         meta = await self._async_load_metadata()
         if file_id not in meta:
@@ -340,7 +346,9 @@ class FilesRouter:
         safe_audit_log("file.delete", resource=file_id)
         return success_response(data={"deleted": file_id})
 
-    async def ingest_file(self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def ingest_file(
+        self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Ingest file content into the RAG/knowledge store."""
         meta = await self._async_load_metadata()
         if file_id not in meta:
@@ -359,15 +367,22 @@ class FilesRouter:
         facts_stored = 0
         try:
             from domains.cognitive.rag_service import get_rag_service
+
             rag = get_rag_service()
             chunk_ids = rag.add_document(
                 content=text,
-                metadata={"source": "file", "file_id": file_id, "filename": m.get("original_name", m["filename"])},
+                metadata={
+                    "source": "file",
+                    "file_id": file_id,
+                    "filename": m.get("original_name", m["filename"]),
+                },
             )
             facts_stored = len(chunk_ids)
         except Exception as e:
             logger.warning("RAG ingest failed for file %s: %s", file_id, e)
-        safe_audit_log("file.ingest", resource=file_id, detail=f"chars={len(text)} facts={facts_stored}")
+        safe_audit_log(
+            "file.ingest", resource=file_id, detail=f"chars={len(text)} facts={facts_stored}"
+        )
         return IngestResponse(
             id=file_id,
             filename=m.get("original_name", m["filename"]),

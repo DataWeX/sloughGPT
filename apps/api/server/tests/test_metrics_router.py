@@ -1,10 +1,10 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for metrics router — /metrics and /metrics/prometheus.
 """
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
-
+from fastapi.testclient import TestClient
 from routers.metrics import router as metrics_router
 
 app = FastAPI()
@@ -20,7 +20,6 @@ def _data(resp):
 
 
 class TestMetrics:
-
     def test_get_metrics_structure(self):
         resp = client.get("/metrics")
         assert resp.status_code == 200
@@ -38,7 +37,6 @@ class TestMetrics:
 
 
 class TestPrometheus:
-
     def test_prometheus_initial(self):
         resp = client.get("/metrics/prometheus")
         assert resp.status_code == 200

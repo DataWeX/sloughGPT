@@ -4,6 +4,7 @@ Error logging router — accepts frontend JS errors for server-side monitoring.
 Uses MogDB as the storage engine with automatic JSON sync.
 Errors are stored in a capped MogDB collection and synced to JSON.
 """
+
 import asyncio
 import hashlib
 import json
@@ -14,7 +15,6 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
 
 from domains.infrastructure.output_buffer import get_server_buffer
 from domains.logging.base import LogTag
@@ -36,24 +36,26 @@ _ERROR_SYNC_PATH = os.path.join(_REPO_ROOT, "data", "errors_json")
 
 def _get_error_db():
     from mogdb import MogDB
+
     return MogDB(_ERROR_DB_PATH, sync_dir=_ERROR_SYNC_PATH)
 
 
 # ── Pydantic models ──────────────────────────────────────────────────────
 
+
 class ErrorEntry(BaseModel):
     message: str = Field(max_length=5000)
     source: str = Field(default="web", max_length=100)
-    stack: Optional[str] = Field(default=None, max_length=20000)
-    url: Optional[str] = Field(default=None, max_length=2000)
-    line: Optional[int] = None
-    col: Optional[int] = None
-    timestamp: Optional[str] = None
-    metadata: Optional[dict] = None
+    stack: str | None = Field(default=None, max_length=20000)
+    url: str | None = Field(default=None, max_length=2000)
+    line: int | None = None
+    col: int | None = None
+    timestamp: str | None = None
+    metadata: dict | None = None
 
 
 class ErrorBatch(BaseModel):
-    errors: List[ErrorEntry] = Field(max_length=100)
+    errors: list[ErrorEntry] = Field(max_length=100)
 
 
 class FrontendLogEntry(BaseModel):
@@ -61,15 +63,16 @@ class FrontendLogEntry(BaseModel):
     logger: str = Field(default="web", max_length=100)
     message: str = Field(default="", max_length=5000)
     timestamp: float = 0.0
-    context: Optional[dict] = None
-    exception: Optional[str] = Field(default=None, max_length=20000)
+    context: dict | None = None
+    exception: str | None = Field(default=None, max_length=20000)
 
 
 class FrontendLogBatch(BaseModel):
-    logs: List[FrontendLogEntry] = Field(max_length=100)
+    logs: list[FrontendLogEntry] = Field(max_length=100)
 
 
 # ── Router class ─────────────────────────────────────────────────────────
+
 
 class ErrorsRouter:
     """OOP router for error-logging endpoints."""
@@ -98,7 +101,9 @@ class ErrorsRouter:
         self.router.add_api_route("/clear", self.clear_errors, methods=["DELETE"])
         self.router.add_api_route("/unread", self.unread_count, methods=["GET"])
         self.router.add_api_route("/log", self.get_opencode_log, methods=["GET"])
-        self.router.add_api_route("/stream", self.error_stream, methods=["GET"], response_model=None)
+        self.router.add_api_route(
+            "/stream", self.error_stream, methods=["GET"], response_model=None
+        )
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -132,13 +137,18 @@ class ErrorsRouter:
             logger.warning("failed to clear mogdb errors: %s", e)
 
     def _fingerprint(self, message: str) -> str:
-        normalized = re.sub(r'\d+', 'N', message.lower())
-        normalized = re.sub(r'[a-f0-9]{8,}', 'ID', normalized)
+        normalized = re.sub(r"\d+", "N", message.lower())
+        normalized = re.sub(r"[a-f0-9]{8,}", "ID", normalized)
         return hashlib.sha256(normalized.encode()).hexdigest()[:12]
 
     # ── Route handlers ──────────────────────────────────────────────────
 
-    async def log_errors(self, batch: ErrorBatch, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def log_errors(
+        self,
+        batch: ErrorBatch,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Log one or more client-side JavaScript errors for server-side monitoring."""
         try:
             now_ts = datetime.now(timezone.utc)
@@ -155,9 +165,11 @@ class ErrorsRouter:
                     fp = self._fingerprint(message)
 
                     last_seen = self._dedup_map.get(fp)
-                    if (fp not in batch_fps
-                            and last_seen is not None
-                            and (now_epoch - last_seen) < self._DEDUP_WINDOW_S):
+                    if (
+                        fp not in batch_fps
+                        and last_seen is not None
+                        and (now_epoch - last_seen) < self._DEDUP_WINDOW_S
+                    ):
                         for rec in reversed(self._error_buffer):
                             if rec.get("fingerprint") == fp:
                                 rec["count"] = rec.get("count", 1) + 1
@@ -189,8 +201,15 @@ class ErrorsRouter:
                     self._error_count_since_clear += 1
                     records_to_persist.append(error_record)
 
-                    is_extension = any(x in (entry.url or "") for x in ("chrome-extension://", "moz-extension://", "extension://"))
-                    is_vague = entry.message in ("error", "Script error.", "Non-Error promise rejection")
+                    is_extension = any(
+                        x in (entry.url or "")
+                        for x in ("chrome-extension://", "moz-extension://", "extension://")
+                    )
+                    is_vague = entry.message in (
+                        "error",
+                        "Script error.",
+                        "Non-Error promise rejection",
+                    )
                     log_fn = logger.debug if (is_extension or is_vague) else logger.error
                     log_fn(
                         "CLIENT ERROR [%s] %s | %s:%s %s",
@@ -212,10 +231,14 @@ class ErrorsRouter:
         except Exception as e:
             classify_and_raise(e, source="errors.log")
 
-    async def ingest_frontend_logs(self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def ingest_frontend_logs(
+        self, batch: FrontendLogBatch, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Ingest frontend logs through the core logging pipeline."""
         try:
-            user_id = (auth_user or {}).get("id") or (auth_user or {}).get("username") or "anonymous"
+            user_id = (
+                (auth_user or {}).get("id") or (auth_user or {}).get("username") or "anonymous"
+            )
 
             for entry in batch.logs:
                 context: dict = {}
@@ -228,7 +251,11 @@ class ErrorsRouter:
                 tag = raw_tag if raw_tag and raw_tag in LogTag._value2member_map_ else "WEB"
                 context["user"] = user_id
                 level = getattr(logging, entry.level.upper(), logging.INFO)
-                logger_name = f"slo.web.{entry.logger}" if entry.logger and not entry.logger.startswith("slo.") else entry.logger or "slo.web"
+                logger_name = (
+                    f"slo.web.{entry.logger}"
+                    if entry.logger and not entry.logger.startswith("slo.")
+                    else entry.logger or "slo.web"
+                )
 
                 _log = logging.getLogger(logger_name)
                 _log.log(
@@ -250,13 +277,15 @@ class ErrorsRouter:
                 end = max(0, total - offset)
                 errors = list(reversed(self._error_buffer[start:end]))
                 unread_count = self._error_count_since_clear
-            return success_response(data={
-                "errors": errors,
-                "unread_count": unread_count,
-                "total": total,
-                "offset": offset,
-                "limit": limit,
-            })
+            return success_response(
+                data={
+                    "errors": errors,
+                    "unread_count": unread_count,
+                    "total": total,
+                    "offset": offset,
+                    "limit": limit,
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="errors.recent")
 
@@ -297,6 +326,7 @@ class ErrorsRouter:
             for h in range(hours):
                 t = now.replace(minute=0, second=0, microsecond=0)
                 from datetime import timedelta
+
                 t = t - timedelta(hours=h)
                 key = t.strftime("%Y-%m-%dT%H:00")
                 buckets[key] = 0
@@ -463,10 +493,19 @@ class ErrorsRouter:
                             generate._last_yield = _time.time()
 
             except Exception as e:
-                yield "data: " + json.dumps({
-                    "stream": "errors", "phase": "ERROR", "status": "error",
-                    "data": {"error": str(e)}, "message": str(e),
-                }) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "stream": "errors",
+                            "phase": "ERROR",
+                            "status": "error",
+                            "data": {"error": str(e)},
+                            "message": str(e),
+                        }
+                    )
+                    + "\n\n"
+                )
             finally:
                 buf.unsubscribe("error-stream")
 
@@ -489,38 +528,46 @@ class ErrorsRouter:
             cli_log_path = os.path.join(home, ".opencode-error-log.json")
             try:
                 if os.path.exists(cli_log_path):
+
                     def _read_cli_log():
                         with open(cli_log_path) as f:
                             return json.load(f)
+
                     data = await asyncio.to_thread(_read_cli_log)
                     for rec in data:
-                        entries.append({
-                            "timestamp": rec.get("timestamp", ""),
-                            "command": rec.get("command", ""),
-                            "category": "cli",
-                            "pattern": rec.get("pattern", ""),
-                            "snippet": rec.get("snippet", ""),
-                            "cwd": rec.get("cwd", ""),
-                        })
+                        entries.append(
+                            {
+                                "timestamp": rec.get("timestamp", ""),
+                                "command": rec.get("command", ""),
+                                "category": "cli",
+                                "pattern": rec.get("pattern", ""),
+                                "snippet": rec.get("snippet", ""),
+                                "cwd": rec.get("cwd", ""),
+                            }
+                        )
             except Exception as e:
                 logger.warning("failed to read cli log: %s", e)
 
             ui_log_path = os.path.join(home, ".opencode-ui-error-log.json")
             try:
                 if os.path.exists(ui_log_path):
+
                     def _read_ui_log():
                         with open(ui_log_path) as f:
                             return json.load(f)
+
                     data = await asyncio.to_thread(_read_ui_log)
                     for rec in data:
-                        entries.append({
-                            "timestamp": rec.get("timestamp", ""),
-                            "command": rec.get("command", ""),
-                            "category": rec.get("category", "unknown"),
-                            "pattern": rec.get("pattern", ""),
-                            "snippet": rec.get("snippet", ""),
-                            "cwd": rec.get("cwd", ""),
-                        })
+                        entries.append(
+                            {
+                                "timestamp": rec.get("timestamp", ""),
+                                "command": rec.get("command", ""),
+                                "category": rec.get("category", "unknown"),
+                                "pattern": rec.get("pattern", ""),
+                                "snippet": rec.get("snippet", ""),
+                                "cwd": rec.get("cwd", ""),
+                            }
+                        )
             except Exception as e:
                 logger.warning("failed to read ui log: %s", e)
 

@@ -4,15 +4,14 @@ All tests use a temporary MogDB instance per test to ensure isolation.
 The autouse fixture injects a fresh FeedbackController backed by a temp
 directory, and resets the global singleton on teardown.
 """
-import pytest
-import tempfile
-import shutil
 
+import pytest
 from controllers.feedback import (
     FeedbackController,
-    set_feedback_controller,
     reset_feedback_controller,
+    set_feedback_controller,
 )
+
 from tests.test_support import get_test_client
 
 
@@ -20,6 +19,7 @@ from tests.test_support import get_test_client
 def _isolated_feedback_controller(tmp_path):
     """Create a FeedbackController backed by a temp MogDB, inject it, clean up."""
     import routers.feedback as fb_mod
+
     fb_mod._feedback_stats_cache = None
     db_path = str(tmp_path / "feedback_mogdb")
     controller = FeedbackController(tmp_path, db_path=db_path)
@@ -33,48 +33,63 @@ client = get_test_client()
 
 class TestRecordFeedbackWorkflow:
     def test_record_workflow_feedback(self):
-        resp = client.post("/feedback/workflow-record", json={
-            "conversation_id": "test-conv-1",
-            "rating": "thumbs_up",
-            "assistant_response": "test response",
-            "user_message": "test question",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "conversation_id": "test-conv-1",
+                "rating": "thumbs_up",
+                "assistant_response": "test response",
+                "user_message": "test question",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
         assert body["data"]["workflow_active"] is True
 
     def test_record_workflow_feedback_down(self):
-        resp = client.post("/feedback/workflow-record", json={
-            "conversation_id": "test-conv-2",
-            "rating": "thumbs_down",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "conversation_id": "test-conv-2",
+                "rating": "thumbs_down",
+            },
+        )
         assert resp.status_code == 200
 
     def test_record_workflow_feedback_invalid_rating(self):
-        resp = client.post("/feedback/workflow-record", json={
-            "conversation_id": "test-conv-3",
-            "rating": "invalid",
-        })
+        resp = client.post(
+            "/feedback/workflow-record",
+            json={
+                "conversation_id": "test-conv-3",
+                "rating": "invalid",
+            },
+        )
         assert resp.status_code == 422
 
 
 class TestRecordFeedback:
     def test_record_feedback(self):
-        resp = client.post("/feedback", json={
-            "message_id": "msg-test-1",
-            "rating": "thumbs_up",
-            "session_id": "sess-test",
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "message_id": "msg-test-1",
+                "rating": "thumbs_up",
+                "session_id": "sess-test",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "recorded"
 
     def test_record_feedback_down(self):
-        resp = client.post("/feedback", json={
-            "message_id": "msg-test-2",
-            "rating": "thumbs_down",
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "message_id": "msg-test-2",
+                "rating": "thumbs_down",
+            },
+        )
         assert resp.status_code == 200
 
     def test_record_feedback_missing_message_id(self):
@@ -82,10 +97,13 @@ class TestRecordFeedback:
         assert resp.status_code == 422
 
     def test_record_feedback_returns_id_and_timestamp(self):
-        resp = client.post("/feedback", json={
-            "message_id": "msg-ts-1",
-            "rating": "thumbs_up",
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "message_id": "msg-ts-1",
+                "rating": "thumbs_up",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["feedback_id"].startswith("fb_")
@@ -120,11 +138,14 @@ class TestGetFeedback:
         assert resp.status_code == 404
 
     def test_get_feedback_after_record(self):
-        client.post("/feedback", json={
-            "message_id": "lookup-msg",
-            "rating": "thumbs_down",
-            "session_id": "sess-lookup",
-        })
+        client.post(
+            "/feedback",
+            json={
+                "message_id": "lookup-msg",
+                "rating": "thumbs_down",
+                "session_id": "sess-lookup",
+            },
+        )
         resp = client.get("/feedback/lookup-msg")
         assert resp.status_code == 200
         body = resp.json()
@@ -135,10 +156,13 @@ class TestGetFeedback:
 
 class TestConversations:
     def test_create_conversation(self):
-        resp = client.post("/feedback/conversations", json={
-            "name": "Test Conversation",
-            "session_id": "sess-123",
-        })
+        resp = client.post(
+            "/feedback/conversations",
+            json={
+                "name": "Test Conversation",
+                "session_id": "sess-123",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["name"] == "Test Conversation"
@@ -154,18 +178,24 @@ class TestConversations:
         assert resp.status_code == 404
 
     def test_create_then_get_conversation(self):
-        create_resp = client.post("/feedback/conversations", json={
-            "name": "Get Test Conv",
-        })
+        create_resp = client.post(
+            "/feedback/conversations",
+            json={
+                "name": "Get Test Conv",
+            },
+        )
         conv_id = create_resp.json()["id"]
         get_resp = client.get(f"/feedback/conversations/{conv_id}")
         assert get_resp.status_code == 200
         assert get_resp.json()["name"] == "Get Test Conv"
 
     def test_update_conversation(self):
-        create_resp = client.post("/feedback/conversations", json={
-            "name": "Update Test",
-        })
+        create_resp = client.post(
+            "/feedback/conversations",
+            json={
+                "name": "Update Test",
+            },
+        )
         conv_id = create_resp.json()["id"]
         resp = client.patch(f"/feedback/conversations/{conv_id}", json={"name": "Updated"})
         assert resp.status_code == 200

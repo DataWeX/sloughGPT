@@ -14,15 +14,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
-
-from infrastructure.auth import require_auth_if_enabled
-from schemas.common import success_response, raise_error
 from domains.billing.token_service import (
-    get_token_billing_service,
     Tier,
+    get_token_billing_service,
 )
+from fastapi import APIRouter, Depends, Query
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import raise_error, success_response
 
 logger = logging.getLogger("slo.routers.tokens")
 
@@ -34,7 +33,7 @@ class TopUpRequest(BaseModel):
 
 
 class UpgradeRequest(BaseModel):
-    tier: str = Field(..., pattern=r'^(free|basic|pro|enterprise)$', description="Target tier")
+    tier: str = Field(..., pattern=r"^(free|basic|pro|enterprise)$", description="Target tier")
 
 
 class CheckRequest(BaseModel):
@@ -117,13 +116,15 @@ async def check_tokens(request: CheckRequest, auth_user: dict = Depends(require_
         account = service.get_balance(auth_user["id"])
         total_tokens = request.input_tokens + request.output_tokens
         can_afford = account.can_afford(total_tokens)
-        return success_response(data={
-            "canAfford": can_afford,
-            "totalTokens": total_tokens,
-            "balance": account.balance,
-            "dailyRemaining": max(0, account.daily_limit - account.daily_used),
-            "monthlyRemaining": max(0, account.monthly_limit - account.monthly_used),
-        })
+        return success_response(
+            data={
+                "canAfford": can_afford,
+                "totalTokens": total_tokens,
+                "balance": account.balance,
+                "dailyRemaining": max(0, account.daily_limit - account.daily_used),
+                "monthlyRemaining": max(0, account.monthly_limit - account.monthly_used),
+            }
+        )
     except Exception as e:
         logger.error("Failed to check tokens: %s", e, extra={"tag": "TOKENS"})
         raise_error(str(e), "E_TOKENS_CHECK", status_code=500)

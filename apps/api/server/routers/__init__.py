@@ -6,8 +6,10 @@ All router imports are deferred to ``get_all_routers()`` to avoid pulling in
 heavy dependencies (JAX, sentence-transformers, PyTorch) at module-load time.
 This cuts API cold-start from ~100s to ~8s.
 """
+
 import logging
 from typing import List, Optional
+
 from fastapi import APIRouter
 
 logger = logging.getLogger("slo.routers")
@@ -16,13 +18,14 @@ __all__ = [
     "get_all_routers",
 ]
 
-_cached_routers: Optional[List[APIRouter]] = None
+_cached_routers: list[APIRouter] | None = None
 
 
-def _try_import_router(module_name: str, attribute: str = "router") -> Optional[APIRouter]:
+def _try_import_router(module_name: str, attribute: str = "router") -> APIRouter | None:
     """Import a single router module, returning None on failure."""
     try:
         import importlib
+
         mod = importlib.import_module(f".{module_name}", package=__name__)
         return getattr(mod, attribute)
     except Exception:
@@ -30,7 +33,7 @@ def _try_import_router(module_name: str, attribute: str = "router") -> Optional[
         return None
 
 
-def get_all_routers() -> List[APIRouter]:
+def get_all_routers() -> list[APIRouter]:
     """Get all routers for main.py to include.
 
     Imports are deferred to first call to avoid 90s+ cold-start from
@@ -45,22 +48,47 @@ def get_all_routers() -> List[APIRouter]:
     # Note: "health" and "status" are registered directly in main.py
     # pre-lifespan (needed during model load). Do NOT list them here.
     _router_names = [
-        "auth", "auto_train", "models", "inference",
-        "feedback", "kb", "agents", "system",
-        "souls", "config",
-        "security", "metrics", "datasets",
-        "ratelimit", "workflow", "experiments",
+        "auth",
+        "auto_train",
+        "models",
+        "inference",
+        "feedback",
+        "kb",
+        "agents",
+        "system",
+        "souls",
+        "config",
+        "security",
+        "metrics",
+        "datasets",
+        "ratelimit",
+        "workflow",
+        "experiments",
         "benchmark",
-        "user_adapters", "vector", "registry",
-        "session", "meta_weights", "lora_eval",
-        "companion", "multimodal", "tokenizer",
-        "learner", "self_train",
+        "user_adapters",
+        "vector",
+        "registry",
+        "session",
+        "meta_weights",
+        "lora_eval",
+        "companion",
+        "multimodal",
+        "tokenizer",
+        "learner",
+        "self_train",
         "token_tree",
-        "errors", "mobile",
-        "images", "files", "voice", "infer",
-        "vm", "memory", "docstore",
+        "errors",
+        "mobile",
+        "images",
+        "files",
+        "voice",
+        "infer",
+        "vm",
+        "memory",
+        "docstore",
         "collections",
-        "shell", "world_render",
+        "shell",
+        "world_render",
         "tokens",
         "feeds",
     ]

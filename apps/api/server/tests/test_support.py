@@ -21,6 +21,7 @@ os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 # Disable rate limiting for tests to avoid 429s when running the full suite.
 try:
     from infrastructure.rate_limit_middleware import RateLimitMiddleware as _RLM
+
     if _RLM is not None:
         _orig_dispatch = _RLM.dispatch
 
@@ -37,18 +38,17 @@ def _ensure_routers_registered():
     from main import app
 
     # Check if benchmark router is already registered (proxy for "all routers")
-    has_routers = any(
-        hasattr(r, "path") and r.path.startswith("/benchmark")
-        for r in app.routes
-    )
+    has_routers = any(hasattr(r, "path") and r.path.startswith("/benchmark") for r in app.routes)
     if has_routers:
         return
 
     from routers import get_all_routers
+
     for r in get_all_routers():
         app.include_router(r)
     try:
         from training.router import router as training_router
+
         app.include_router(training_router)
     except Exception:
         pass
@@ -61,6 +61,7 @@ def get_test_client():
     """Create a TestClient with all routes registered."""
     from fastapi.testclient import TestClient
     from main import app
+
     return TestClient(app)
 
 

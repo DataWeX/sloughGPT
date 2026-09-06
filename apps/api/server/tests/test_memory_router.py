@@ -6,6 +6,7 @@ from test_support import get_test_client
 def _cleanup():
     """Clear all stored memory via the knowledge singleton."""
     from domains.learner.knowledge import get_knowledge_memory
+
     get_knowledge_memory().clear_all()
 
 
@@ -38,7 +39,9 @@ def test_store_then_list_returns_item():
     client = get_test_client()
     _cleanup()
 
-    add = client.post("/memory/store", json={"content": "Memory fact alpha", "topic": "test", "source": "api"})
+    add = client.post(
+        "/memory/store", json={"content": "Memory fact alpha", "topic": "test", "source": "api"}
+    )
     assert add.status_code == 200
     assert _d(add)["stored"] is True
 
@@ -58,7 +61,10 @@ def test_store_empty_content_rejected():
 def test_search_returns_matching_results():
     client = get_test_client()
     _cleanup()
-    client.post("/memory/store", json={"content": "The user prefers dark mode interfaces", "topic": "pref", "source": "api"})
+    client.post(
+        "/memory/store",
+        json={"content": "The user prefers dark mode interfaces", "topic": "pref", "source": "api"},
+    )
 
     resp = client.get("/memory/search", params={"q": "dark mode"})
     assert resp.status_code == 200
@@ -79,7 +85,10 @@ def test_remember_persists_turn():
 
     resp = client.post(
         "/memory/remember",
-        json={"user_message": "Tell me about machine learning", "assistant_response": "Machine learning learns patterns from data. Gradient descent is the optimizer."},
+        json={
+            "user_message": "Tell me about machine learning",
+            "assistant_response": "Machine learning learns patterns from data. Gradient descent is the optimizer.",
+        },
     )
     assert resp.status_code == 200
     assert _d(resp)["stored"] is True
@@ -96,7 +105,9 @@ def test_config_toggle_off_disables_store():
     assert off.status_code == 200
     assert _d(off)["enabled"] is False
 
-    stored = client.post("/memory/store", json={"content": "Should be skipped", "topic": "test", "source": "api"})
+    stored = client.post(
+        "/memory/store", json={"content": "Should be skipped", "topic": "test", "source": "api"}
+    )
     assert stored.status_code == 200
     assert _d(stored)["stored"] is False
 
@@ -120,8 +131,16 @@ def test_config_get_returns_snapshot():
     assert resp.status_code == 200
     body = _d(resp)
     assert isinstance(body, dict)
-    for key in ("enabled", "min_chars", "max_facts", "store_path", "sync_remember",
-                "consolidation_threshold", "maintenance_interval_minutes", "archive_retention_days"):
+    for key in (
+        "enabled",
+        "min_chars",
+        "max_facts",
+        "store_path",
+        "sync_remember",
+        "consolidation_threshold",
+        "maintenance_interval_minutes",
+        "archive_retention_days",
+    ):
         assert key in body
     assert isinstance(body["archive_retention_days"], (int, float))
 
@@ -144,7 +163,9 @@ def test_config_clamps_negative_retention_to_zero():
 def test_delete_item_removes_entry():
     client = get_test_client()
     _cleanup()
-    add = client.post("/memory/store", json={"content": "Deletable fact", "topic": "test", "source": "api"})
+    add = client.post(
+        "/memory/store", json={"content": "Deletable fact", "topic": "test", "source": "api"}
+    )
     item_id = _d(client.get("/memory/list"))["items"][0]["id"]
 
     resp = client.delete(f"/memory/{item_id}")

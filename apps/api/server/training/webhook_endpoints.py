@@ -5,16 +5,13 @@ from __future__ import annotations
 import json
 import logging
 
-from pydantic import BaseModel
-
 from fastapi import APIRouter
-
-from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel
 from schemas.common import raise_error
 
 from .webhooks import (
-    get_webhook_store,
     TRAINING_EVENTS,
+    get_webhook_store,
 )
 
 logger = logging.getLogger("slo")
@@ -60,7 +57,11 @@ async def register_webhook(
         raise_error("URL must start with http:// or https://", "E_BAD_REQUEST", status_code=400)
     invalid_events = [e for e in events_list if e not in TRAINING_EVENTS]
     if invalid_events:
-        raise_error(f"Invalid events: {invalid_events}. Available: {TRAINING_EVENTS}", "E_BAD_REQUEST", status_code=400)
+        raise_error(
+            f"Invalid events: {invalid_events}. Available: {TRAINING_EVENTS}",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
     store = get_webhook_store()
     webhook_id = store.register(
         url=url,
@@ -74,6 +75,7 @@ async def register_webhook(
 
     try:
         from infrastructure.auth import get_audit_logger
+
         get_audit_logger().log(
             "training.webhook.register",
             resource=url,
@@ -166,6 +168,7 @@ async def unregister_webhook(webhook_id: str):
 
     try:
         from infrastructure.auth import get_audit_logger
+
         get_audit_logger().log("training.webhook.delete", resource=webhook_id)
     except Exception as e:
         logger.warning("Audit log failed for webhook deletion %s: %s", webhook_id, e)

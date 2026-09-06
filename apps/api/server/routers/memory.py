@@ -4,15 +4,14 @@ Thin HTTP wrapper over ``domains.memory.memory_service`` (endpoints are
 adapters; all logic lives in core). Exposed so frontends and integrations can
 manage the memory store the chat loop writes to automatically.
 """
-import logging
-from typing import Optional
 
-from fastapi import APIRouter, Query, Depends
-from pydantic import BaseModel, Field
+import logging
 
 from domains.memory.memory_service import get_memory_service
+from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, safe_audit_log, success_response, classify_and_raise
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.memory")
 
@@ -35,16 +34,26 @@ class RememberRequest(BaseModel):
 class ConfigRequest(BaseModel):
     """Body for POST /memory/config."""
 
-    enabled: Optional[bool] = Field(default=None, description="Master switch for the memory layer.")
-    archive_retention_days: Optional[float] = Field(default=None, description="Retention window in days for archive pruning; 0 prunes everything.")
+    enabled: bool | None = Field(default=None, description="Master switch for the memory layer.")
+    archive_retention_days: float | None = Field(
+        default=None,
+        description="Retention window in days for archive pruning; 0 prunes everything.",
+    )
 
 
 class UpdateRequest(BaseModel):
     """Body for PATCH /memory/{item_id}."""
 
     content: str = Field(..., min_length=1, description="New fact text.")
-    topic: Optional[str] = Field(default=None, description="Optional new topic label; keeps existing when omitted.")
-    importance: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Optional importance score in [0, 1]; keeps existing when omitted.")
+    topic: str | None = Field(
+        default=None, description="Optional new topic label; keeps existing when omitted."
+    )
+    importance: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional importance score in [0, 1]; keeps existing when omitted.",
+    )
 
 
 class MemoryRouter:
@@ -53,46 +62,88 @@ class MemoryRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/memory", tags=["memory"])
         self.router.add_api_route(
-            "/stats", self.stats, methods=["GET"], response_model=dict,
+            "/stats",
+            self.stats,
+            methods=["GET"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/list", self.list_memory, methods=["GET"], response_model=dict,
+            "/list",
+            self.list_memory,
+            methods=["GET"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/search", self.search, methods=["GET"], response_model=dict,
+            "/search",
+            self.search,
+            methods=["GET"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/store", self.store, methods=["POST"], response_model=dict,
+            "/store",
+            self.store,
+            methods=["POST"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/remember", self.remember, methods=["POST"], response_model=dict,
+            "/remember",
+            self.remember,
+            methods=["POST"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/config", self.set_config, methods=["POST"], response_model=dict,
+            "/config",
+            self.set_config,
+            methods=["POST"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/config", self.get_config, methods=["GET"], response_model=dict,
+            "/config",
+            self.get_config,
+            methods=["GET"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/clear", self.clear, methods=["POST"], response_model=dict,
+            "/clear",
+            self.clear,
+            methods=["POST"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/consolidate", self.consolidate, methods=["POST"], response_model=dict,
+            "/consolidate",
+            self.consolidate,
+            methods=["POST"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/archive", self.archive, methods=["GET"], response_model=dict,
+            "/archive",
+            self.archive,
+            methods=["GET"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/archive/stats", self.archive_stats, methods=["GET"], response_model=dict,
+            "/archive/stats",
+            self.archive_stats,
+            methods=["GET"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/archive/prune", self.archive_prune, methods=["POST"], response_model=dict,
+            "/archive/prune",
+            self.archive_prune,
+            methods=["POST"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/{item_id}", self.delete_item, methods=["DELETE"], response_model=dict,
+            "/{item_id}",
+            self.delete_item,
+            methods=["DELETE"],
+            response_model=dict,
         )
         self.router.add_api_route(
-            "/{item_id}", self.update_item, methods=["PATCH"], response_model=dict,
+            "/{item_id}",
+            self.update_item,
+            methods=["PATCH"],
+            response_model=dict,
         )
 
     def _service(self):
@@ -111,7 +162,9 @@ class MemoryRouter:
 
     def list_memory(
         self,
-        limit: int = Query(default=50, ge=1, le=1000, description="Maximum number of items to return"),
+        limit: int = Query(
+            default=50, ge=1, le=1000, description="Maximum number of items to return"
+        ),
     ) -> dict:
         """List stored memory items, most recent first."""
         try:
@@ -142,24 +195,34 @@ class MemoryRouter:
             source = req.source or "api"
             stored = self._service().store(content, topic, source)
             safe_audit_log("memory.store", resource=topic, detail=f"stored={stored}")
-            return success_response(data={"stored": stored, "content": content, "topic": topic, "source": source})
+            return success_response(
+                data={"stored": stored, "content": content, "topic": topic, "source": source}
+            )
         except Exception as e:
             classify_and_raise(e, source="memory.store")
 
-    def remember(self, req: RememberRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def remember(
+        self, req: RememberRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Persist one completed turn as durable memory."""
         try:
             user_message = req.user_message.strip()
             assistant_response = req.assistant_response.strip()
             if not user_message or not assistant_response:
-                raise_error("user_message and assistant_response are required", "E_BAD_REQUEST", status_code=400)
+                raise_error(
+                    "user_message and assistant_response are required",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
             stored = self._service().remember(user_message, assistant_response)
             reason = "stored" if stored else "skipped (disabled, too short, or nothing new)"
             return success_response(data={"stored": stored, "reason": reason})
         except Exception as e:
             classify_and_raise(e, source="memory.remember")
 
-    def set_config(self, req: ConfigRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def set_config(
+        self, req: ConfigRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Update runtime memory settings."""
         try:
             svc = self._service()
@@ -167,7 +230,11 @@ class MemoryRouter:
                 svc.set_enabled(req.enabled)
             if req.archive_retention_days is not None:
                 svc.set_archive_retention(req.archive_retention_days)
-            safe_audit_log("memory.config", resource="memory", detail=f"enabled={req.enabled} retention={req.archive_retention_days}")
+            safe_audit_log(
+                "memory.config",
+                resource="memory",
+                detail=f"enabled={req.enabled} retention={req.archive_retention_days}",
+            )
             return success_response(data=svc.config_snapshot())
         except Exception as e:
             classify_and_raise(e, source="memory.set_config")
@@ -190,14 +257,18 @@ class MemoryRouter:
         except Exception as e:
             classify_and_raise(e, source="memory.delete")
 
-    def update_item(self, item_id: str, req: UpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def update_item(
+        self, item_id: str, req: UpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Edit a stored memory item's text (and optionally its topic/importance)."""
         try:
             if not item_id or not item_id.strip():
                 raise_error("item_id is required", "E_BAD_REQUEST", status_code=400)
             if not req.content or not req.content.strip():
                 raise_error("content is required", "E_BAD_REQUEST", status_code=400)
-            updated = self._service().update(item_id.strip(), req.content, topic=req.topic, importance=req.importance)
+            updated = self._service().update(
+                item_id.strip(), req.content, topic=req.topic, importance=req.importance
+            )
             safe_audit_log("memory.update", resource=item_id, detail=f"updated={updated}")
             return success_response(data={"updated": 1 if updated else 0, "duplicate": not updated})
         except Exception as e:
@@ -211,11 +282,15 @@ class MemoryRouter:
             return success_response(data={"cleared": removed})
         except Exception as e:
             classify_and_raise(e, source="memory.clear")
-    def consolidate(self, threshold: Optional[float] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    def consolidate(
+        self, threshold: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Merge near-duplicate facts, keeping the longest in each cluster."""
         try:
             from domains.memory.consolidation import plan_consolidation
             from domains.memory.memory_config import MemoryConfig
+
             svc = self._service()
             if threshold is None:
                 threshold = MemoryConfig.get().consolidation_threshold
@@ -223,15 +298,22 @@ class MemoryRouter:
             facts = svc.list_all(limit=5000)
             plan = plan_consolidation(facts, threshold=threshold)
             removed = svc.delete(plan["remove_ids"]) if plan["remove_ids"] else 0
-            safe_audit_log("memory.consolidate", resource="all", detail=f"removed={removed}, kept={len(plan['keep_ids'])}")
-            return success_response(data={"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold})
+            safe_audit_log(
+                "memory.consolidate",
+                resource="all",
+                detail=f"removed={removed}, kept={len(plan['keep_ids'])}",
+            )
+            return success_response(
+                data={"removed": removed, "kept": len(plan["keep_ids"]), "threshold": threshold}
+            )
         except Exception as e:
             classify_and_raise(e, source="memory.consolidate")
 
-    def archive(self, limit: Optional[int] = None) -> dict:
+    def archive(self, limit: int | None = None) -> dict:
         """Return recent task-backed provenance archive records, newest first."""
         try:
             from domains.memory.task_memory import list_archive
+
             if limit is None:
                 limit = 20
             limit = max(1, min(int(limit), 1000))
@@ -244,14 +326,18 @@ class MemoryRouter:
         """Summarize the task-backed provenance archive."""
         try:
             from domains.memory.task_memory import archive_stats
+
             return success_response(data=archive_stats())
         except Exception as e:
             classify_and_raise(e, source="memory.archive_stats")
 
-    def archive_prune(self, retain_days: Optional[float] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def archive_prune(
+        self, retain_days: float | None = None, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete archive records older than the retention window."""
         try:
             from domains.memory.task_memory import prune_archive
+
             removed = prune_archive(retain_days=retain_days)
             safe_audit_log("memory.archive_prune", resource="archive", detail=f"pruned={removed}")
             return success_response(data={"pruned": removed})

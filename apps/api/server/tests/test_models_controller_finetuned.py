@@ -70,9 +70,11 @@ def test_load_model_path_compiles_and_registers(tmp_path):
     cfg_model.enable_process_guard = False
     ctrl = _controller(tmp_path)
     _FakeCompiler.calls.clear()
-    with patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler), \
-         patch("config.ServerConfig.from_env", return_value=cfg_model), \
-         patch("domains.models.provider.setup_providers") as setup:
+    with (
+        patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler),
+        patch("config.ServerConfig.from_env", return_value=cfg_model),
+        patch("domains.models.provider.setup_providers") as setup,
+    ):
         result = ctrl.load_model_path(str(d), "cpu")
     assert result["status"] == "loaded"
     assert result["model_id"] == "gpt2"
@@ -95,9 +97,11 @@ def test_load_model_path_reuses_existing_slnc(tmp_path):
     cfg_model.enable_process_guard = False
     ctrl = _controller(tmp_path)
     _FakeCompiler.calls.clear()
-    with patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler), \
-         patch("config.ServerConfig.from_env", return_value=cfg_model), \
-         patch("domains.models.provider.setup_providers") as setup:
+    with (
+        patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler),
+        patch("config.ServerConfig.from_env", return_value=cfg_model),
+        patch("domains.models.provider.setup_providers") as setup,
+    ):
         result = ctrl.load_model_path(str(d), "cpu")
     assert result["status"] == "loaded"
     assert _FakeCompiler.calls == []  # existing .slnc skipped compilation
@@ -117,9 +121,11 @@ def test_load_model_path_falls_back_to_dir_name_without_base(tmp_path):
     cfg_model.quant_mode = "symmetric"
     cfg_model.enable_process_guard = False
     ctrl = _controller(tmp_path)
-    with patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler), \
-         patch("config.ServerConfig.from_env", return_value=cfg_model), \
-         patch("domains.models.provider.setup_providers") as setup:
+    with (
+        patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler),
+        patch("config.ServerConfig.from_env", return_value=cfg_model),
+        patch("domains.models.provider.setup_providers") as setup,
+    ):
         result = ctrl.load_model_path(str(d), "cpu")
     assert result["status"] == "loaded"
     _, kwargs = setup.call_args
@@ -138,10 +144,12 @@ def test_load_model_path_unregisters_stale_registry_default(tmp_path):
     ctrl = _controller(tmp_path)
     registry = MagicMock()
     registry.default_id = "Qwen/Qwen2.5-0.5B-Instruct"
-    with patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler), \
-         patch("config.ServerConfig.from_env", return_value=cfg_model), \
-         patch("domains.models.provider.setup_providers"), \
-         patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry):
+    with (
+        patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler),
+        patch("config.ServerConfig.from_env", return_value=cfg_model),
+        patch("domains.models.provider.setup_providers"),
+        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+    ):
         result = ctrl.load_model_path(str(d), "cpu")
     assert result["status"] == "loaded"
     assert result["model_id"] == "gpt2"
@@ -160,10 +168,12 @@ def test_load_model_path_keeps_registry_when_default_matches(tmp_path):
     ctrl = _controller(tmp_path)
     registry = MagicMock()
     registry.default_id = "gpt2"
-    with patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler), \
-         patch("config.ServerConfig.from_env", return_value=cfg_model), \
-         patch("domains.models.provider.setup_providers"), \
-         patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry):
+    with (
+        patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler),
+        patch("config.ServerConfig.from_env", return_value=cfg_model),
+        patch("domains.models.provider.setup_providers"),
+        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+    ):
         result = ctrl.load_model_path(str(d), "cpu")
     assert result["status"] == "loaded"
     registry.unregister.assert_not_called()
@@ -191,10 +201,12 @@ def test_unload_model_uses_registry_default_when_controller_never_loaded(tmp_pat
     ctrl = _controller(tmp_path)
     registry = MagicMock()
     registry.default_id = "Qwen/Qwen2.5-0.5B-Instruct"
-    with patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry), \
-         patch("domains.models.provider.clear_providers") as clear, \
-         patch("state.model", new=MagicMock()), \
-         patch("state.tokenizer", new=MagicMock()):
+    with (
+        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+        patch("domains.models.provider.clear_providers") as clear,
+        patch("state.model", new=MagicMock()),
+        patch("state.tokenizer", new=MagicMock()),
+    ):
         result = ctrl.unload_model()
     assert result["status"] == "unloaded"
     assert result["model_id"] == "Qwen/Qwen2.5-0.5B-Instruct"
@@ -213,9 +225,11 @@ def test_load_model_path_provider_failure_returns_error(tmp_path):
     cfg_model.quant_mode = "symmetric"
     cfg_model.enable_process_guard = False
     ctrl = _controller(tmp_path)
-    with patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler), \
-         patch("config.ServerConfig.from_env", return_value=cfg_model), \
-         patch("domains.models.provider.setup_providers", side_effect=RuntimeError("boom")):
+    with (
+        patch("domains.infrastructure.slnc.compiler.SLNCCompiler", _FakeCompiler),
+        patch("config.ServerConfig.from_env", return_value=cfg_model),
+        patch("domains.models.provider.setup_providers", side_effect=RuntimeError("boom")),
+    ):
         result = ctrl.load_model_path(str(d), "cpu")
     assert result["status"] == "error"
     assert "boom" in result["error"]
@@ -232,14 +246,16 @@ def test_load_hf_model_publishes_to_state_and_server_state():
     cfg.quantize_slonet = False
     cfg.quant_bits = 8
     cfg.quant_mode = "symmetric"
-    with patch("config.ServerConfig.from_env", return_value=cfg), \
-         patch.object(ModelsController, "_build_process_guard", return_value=None), \
-         patch("domains.models.provider.setup_providers"), \
-         patch("domains.models.provider.get_provider", return_value=provider), \
-         patch("domains.infrastructure.server_state.get_server_state") as core, \
-         patch("state.model", new=MagicMock()), \
-         patch("state.provider", new=MagicMock()), \
-         patch("state.model_type", new=MagicMock()):
+    with (
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch.object(ModelsController, "_build_process_guard", return_value=None),
+        patch("domains.models.provider.setup_providers"),
+        patch("domains.models.provider.get_provider", return_value=provider),
+        patch("domains.infrastructure.server_state.get_server_state") as core,
+        patch("state.model", new=MagicMock()),
+        patch("state.provider", new=MagicMock()),
+        patch("state.model_type", new=MagicMock()),
+    ):
         result = ctrl._load_hf_model("Qwen/Qwen2.5-0.5B-Instruct", "cpu")
         assert result["model_id"] == "Qwen/Qwen2.5-0.5B-Instruct"
         assert state.model is provider
@@ -257,11 +273,13 @@ def test_load_hf_model_provider_failure_does_not_publish():
     cfg.quantize_slonet = False
     cfg.quant_bits = 8
     cfg.quant_mode = "symmetric"
-    with patch("config.ServerConfig.from_env", return_value=cfg), \
-         patch.object(ModelsController, "_build_process_guard", return_value=None), \
-         patch("domains.models.provider.setup_providers", side_effect=RuntimeError("boom")), \
-         patch("domains.infrastructure.server_state.get_server_state") as core, \
-         patch("state.model_type", new=MagicMock()):
+    with (
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch.object(ModelsController, "_build_process_guard", return_value=None),
+        patch("domains.models.provider.setup_providers", side_effect=RuntimeError("boom")),
+        patch("domains.infrastructure.server_state.get_server_state") as core,
+        patch("state.model_type", new=MagicMock()),
+    ):
         try:
             ctrl._load_hf_model("gpt2", "cpu")
             raise AssertionError("expected _load_hf_model to raise")
@@ -284,14 +302,16 @@ def test_load_hf_model_stale_provider_not_published():
     cfg.quantize_slonet = False
     cfg.quant_bits = 8
     cfg.quant_mode = "symmetric"
-    with patch("config.ServerConfig.from_env", return_value=cfg), \
-         patch.object(ModelsController, "_build_process_guard", return_value=None), \
-         patch("domains.models.provider.setup_providers"), \
-         patch("domains.models.provider.get_provider", return_value=stale), \
-         patch("domains.infrastructure.server_state.get_server_state") as core, \
-         patch("state.model", new=MagicMock()), \
-         patch("state.provider", new=MagicMock()), \
-         patch("state.model_type", new=MagicMock()):
+    with (
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch.object(ModelsController, "_build_process_guard", return_value=None),
+        patch("domains.models.provider.setup_providers"),
+        patch("domains.models.provider.get_provider", return_value=stale),
+        patch("domains.infrastructure.server_state.get_server_state") as core,
+        patch("state.model", new=MagicMock()),
+        patch("state.provider", new=MagicMock()),
+        patch("state.model_type", new=MagicMock()),
+    ):
         try:
             ctrl._load_hf_model("gpt2", "cpu")
             raise AssertionError("expected _load_hf_model to raise")

@@ -10,17 +10,14 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
-
+from domains.shared import find_repo_root
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter
-
 from schemas.common import raise_error
 
-from .schemas import VisualTrainRequest
-from .jobs import training_jobs
 from .helpers import _finish_job
-from domains.training.executor import get_training_executor
-from domains.shared import find_repo_root
+from .jobs import training_jobs
+from .schemas import VisualTrainRequest
 
 logger = logging.getLogger("slo")
 
@@ -35,6 +32,7 @@ async def start_visual_training(request: VisualTrainRequest):
     dataset, running stage-1 connector tuning then stage-2 full fine-tune.
     """
     import uuid
+
     job_id = str(uuid.uuid4())[:8]
 
     datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
@@ -46,7 +44,9 @@ async def start_visual_training(request: VisualTrainRequest):
     data_path_str = str(data_path)
 
     out_stem = request.name or f"vlm_{job_id}"
-    output_dir = find_repo_root(Path(__file__).resolve()) / "models" / "video-training" / "checkpoints"
+    output_dir = (
+        find_repo_root(Path(__file__).resolve()) / "models" / "video-training" / "checkpoints"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     job: dict[str, Any] = {
@@ -70,7 +70,8 @@ async def start_visual_training(request: VisualTrainRequest):
 
     # Register with CancelManager
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         _mgr = get_cancel_manager()
         op_id = _mgr.register(
             op_type=OpType.TRAINING,
@@ -116,7 +117,9 @@ async def start_visual_training(request: VisualTrainRequest):
                 loss = info.get("loss")
                 if loss is not None:
                     rec["loss"] = float(loss)
-                    rec.setdefault("loss_history", []).append({"step": rec["global_step"], "value": float(loss), "type": "train"})
+                    rec.setdefault("loss_history", []).append(
+                        {"step": rec["global_step"], "value": float(loss), "type": "train"}
+                    )
 
             trainer = VideoCaptionTrainer(config)
             result = trainer.train(on_progress=on_progress)
@@ -125,12 +128,14 @@ async def start_visual_training(request: VisualTrainRequest):
                 _finish_job(job_id_, "cancelled")
                 return
 
-            training_jobs[job_id_].update({
-                "progress": 100,
-                "status": "completed",
-                "loss": result.get("final_loss"),
-                "result": result,
-            })
+            training_jobs[job_id_].update(
+                {
+                    "progress": 100,
+                    "status": "completed",
+                    "loss": result.get("final_loss"),
+                    "result": result,
+                }
+            )
             _finish_job(job_id_, "completed")
             logger.info("Visual training complete: job %s", job_id_, extra={"tag": "TRAIN"})
 

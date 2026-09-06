@@ -8,6 +8,7 @@ def _reset_rate_limiter():
     """Reset the rate limiter before every test so the full suite doesn't 429."""
     try:
         from main import app
+
         # Walk the ASGI middleware stack to find RateLimitMiddleware and reset it.
         current = getattr(app, "middleware_stack", None) or getattr(app, "_middleware_stack", None)
         while current is not None:

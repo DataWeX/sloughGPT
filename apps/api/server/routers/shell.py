@@ -12,25 +12,22 @@ import json
 import logging
 import threading
 import time as _time
-from typing import Optional
-
-from fastapi import APIRouter, Request, Depends
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-
-from infrastructure.auth import require_auth_if_enabled
-from infrastructure.shell_sandbox import validate_command, ShellSecurityError
 
 from domains.shell.io import MemoryIO
 from domains.shell.repl import ShellREPL
 from domains.shell.runtime import DaitRuntime
-from schemas.common import raise_error, safe_audit_log, classify_and_raise
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+from infrastructure.auth import require_auth_if_enabled
+from infrastructure.shell_sandbox import ShellSecurityError, validate_command
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log
 
 logger = logging.getLogger("slo.api.shell")
 
 router = APIRouter(prefix="/shell", tags=["shell"])
 
-_repl: Optional[ShellREPL] = None
+_repl: ShellREPL | None = None
 _repl_lock = threading.Lock()
 
 
@@ -54,7 +51,9 @@ def _get_repl() -> ShellREPL:
 class ShellExecRequest(BaseModel):
     """Request to execute a shell command."""
 
-    command: str = Field(..., min_length=1, max_length=10000, description="Shell command to execute")
+    command: str = Field(
+        ..., min_length=1, max_length=10000, description="Shell command to execute"
+    )
     timeout_ms: int = Field(30000, ge=100, le=120000, description="Execution timeout in ms")
 
 
@@ -66,7 +65,9 @@ class ShellExecResponse(BaseModel):
     elapsed_ms: float = Field(..., description="Execution time in milliseconds")
 
 
-def _sse_line(stream: str, phase: str, status: str, data: dict, meta: dict = None, message: str = "") -> str:
+def _sse_line(
+    stream: str, phase: str, status: str, data: dict, meta: dict = None, message: str = ""
+) -> str:
     """Build a standard SSE data line."""
     envelope = {
         "stream": stream,
@@ -105,7 +106,9 @@ async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_
 
     elapsed = (_time.monotonic() - t0) * 1000
 
-    safe_audit_log("shell.exec", resource=req.command[:80], detail=f"exit={exit_code} elapsed={elapsed:.0f}ms")
+    safe_audit_log(
+        "shell.exec", resource=req.command[:80], detail=f"exit={exit_code} elapsed={elapsed:.0f}ms"
+    )
 
     return ShellExecResponse(
         output=output,
@@ -115,7 +118,9 @@ async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_
 
 
 @router.post("/exec/stream")
-async def exec_command_stream(req: ShellExecRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)):
+async def exec_command_stream(
+    req: ShellExecRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
+):
     """Execute a shell command with SSE streaming output.
 
     Yields lines as they are produced, then a completion event.
@@ -146,10 +151,15 @@ async def exec_command_stream(req: ShellExecRequest, request: Request, auth_user
                 hint = " Is the API server running? Use 'api start'."
             elif is_timeout:
                 hint = " Request timed out."
-            yield _sse_line("shell", "STREAMING", "error", {
-                "error": f"{error_type}: {e}{hint}",
-                "error_type": error_type,
-            })
+            yield _sse_line(
+                "shell",
+                "STREAMING",
+                "error",
+                {
+                    "error": f"{error_type}: {e}{hint}",
+                    "error_type": error_type,
+                },
+            )
             return
 
         # Yield output lines
@@ -158,10 +168,20 @@ async def exec_command_stream(req: ShellExecRequest, request: Request, auth_user
                 yield _sse_line("shell", "STREAMING", "working", {"line": line, "index": i})
 
         elapsed = (_time.monotonic() - t0) * 1000
-        safe_audit_log("shell.exec_stream", resource=req.command[:80], detail=f"exit={exit_code} elapsed={elapsed:.0f}ms lines={len(output_lines)}")
-        yield _sse_line("shell", "STREAMING", "complete", {
-            "exit_code": exit_code,
-            "lines": len(output_lines),
-        }, meta={"elapsed_ms": round(elapsed, 2)})
+        safe_audit_log(
+            "shell.exec_stream",
+            resource=req.command[:80],
+            detail=f"exit={exit_code} elapsed={elapsed:.0f}ms lines={len(output_lines)}",
+        )
+        yield _sse_line(
+            "shell",
+            "STREAMING",
+            "complete",
+            {
+                "exit_code": exit_code,
+                "lines": len(output_lines),
+            },
+            meta={"elapsed_ms": round(elapsed, 2)},
+        )
 
     return StreamingResponse(generate(), media_type="text/event-stream")

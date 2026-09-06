@@ -7,32 +7,33 @@ documented under *Checkpoint vocabulary* in ``docs/policies/CONTRIBUTING.md``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, Tuple, Dict
+from typing import Any
 
 from .schemas import TrainDatasetRef
 
 
-def _repo_root() -> "Path":
+def _repo_root() -> Path:
     from pathlib import Path
+
     from domains.shared.utils import find_repo_root
+
     return find_repo_root(Path(__file__).resolve())
 
 
 def resolve_training_inputs(
-    dataset: Optional[str],
-    manifest_uri: Optional[str],
-    dataset_ref: Optional[TrainDatasetRef],
-) -> Tuple[str, str, Optional[Dict[str, Any]], str]:
+    dataset: str | None,
+    manifest_uri: str | None,
+    dataset_ref: TrainDatasetRef | None,
+) -> tuple[str, str, dict[str, Any] | None, str]:
     """
     Returns (data_path_str, out_stem, manifest_meta | None, source_kind).
 
     source_kind is ``legacy`` | ``manifest`` | ``ref``.
     """
-    from pathlib import Path
 
     from domains.training.dataset_manifest import ManifestError, resolve_training_data_path
 
-    manifest_meta: Optional[Dict[str, Any]] = None
+    manifest_meta: dict[str, Any] | None = None
 
     if dataset_ref is not None:
         ref = dataset_ref

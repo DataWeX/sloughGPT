@@ -1,16 +1,17 @@
 """
 LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
+
 import asyncio
 import logging
 import re
 from pathlib import Path
+
 from fastapi import APIRouter, Depends, Query
-
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
-_VALID_ADAPTER_PATH = re.compile(r'^[\w\-/]+\.npz$')
+_VALID_ADAPTER_PATH = re.compile(r"^[\w\-/]+\.npz$")
 _ADAPTER_BASE = Path("data/user_adapters").resolve()
 
 
@@ -44,12 +45,21 @@ class LoraEvalRouter:
             - saves results to eval history
         """
         if not _VALID_ADAPTER_PATH.match(adapter_path):
-            raise_error(f"Invalid adapter path: {adapter_path!r}", code="E_VAL_REQUEST", details={"adapter_path": adapter_path})
+            raise_error(
+                f"Invalid adapter path: {adapter_path!r}",
+                code="E_VAL_REQUEST",
+                details={"adapter_path": adapter_path},
+            )
         resolved = Path(adapter_path).resolve()
         if not str(resolved).startswith(str(_ADAPTER_BASE)):
-            raise_error(f"Adapter path must be under data/user_adapters/: {adapter_path!r}", code="E_VAL_REQUEST", details={"adapter_path": adapter_path})
+            raise_error(
+                f"Adapter path must be under data/user_adapters/: {adapter_path!r}",
+                code="E_VAL_REQUEST",
+                details={"adapter_path": adapter_path},
+            )
         try:
             import time as _time
+
             from domains.feedback.lora_eval import get_lora_evaluator
 
             evaluator = get_lora_evaluator()
@@ -60,28 +70,42 @@ class LoraEvalRouter:
 
             try:
                 if await asyncio.to_thread(Path(adapter_file).exists):
-                    with_adapter = evaluator.run(adapter_path=adapter_file, soul_name=soul, save=True)
+                    with_adapter = evaluator.run(
+                        adapter_path=adapter_file, soul_name=soul, save=True
+                    )
                     delta = evaluator.compare(baseline, with_adapter)
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000
-                    safe_audit_log("lora_eval.run_eval", resource=soul or "default", detail=f"elapsed={_elapsed_ms:.0f}ms")
-                    return success_response(data={
-                        "status": "compared",
-                        "baseline": baseline.to_dict(),
-                        "with_adapter": with_adapter.to_dict(),
-                        "delta": delta,
-                        "report": evaluator.compare_with_report(baseline, with_adapter),
-                        "elapsed_ms": round(_elapsed_ms, 1),
-                    })
+                    safe_audit_log(
+                        "lora_eval.run_eval",
+                        resource=soul or "default",
+                        detail=f"elapsed={_elapsed_ms:.0f}ms",
+                    )
+                    return success_response(
+                        data={
+                            "status": "compared",
+                            "baseline": baseline.to_dict(),
+                            "with_adapter": with_adapter.to_dict(),
+                            "delta": delta,
+                            "report": evaluator.compare_with_report(baseline, with_adapter),
+                            "elapsed_ms": round(_elapsed_ms, 1),
+                        }
+                    )
             except Exception as e:
                 logging.getLogger("slo.lora_eval").warning("Adapter comparison failed: %s", e)
 
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("lora_eval.run_eval", resource=soul or "default", detail=f"baseline_only elapsed={_elapsed_ms:.0f}ms")
-            return success_response(data={
-                "status": "baseline_only",
-                "baseline": baseline.to_dict(),
-                "note": "No adapter found — run aggregate first",
-            })
+            safe_audit_log(
+                "lora_eval.run_eval",
+                resource=soul or "default",
+                detail=f"baseline_only elapsed={_elapsed_ms:.0f}ms",
+            )
+            return success_response(
+                data={
+                    "status": "baseline_only",
+                    "baseline": baseline.to_dict(),
+                    "note": "No adapter found — run aggregate first",
+                }
+            )
         except Exception as e:
             logging.getLogger("slo.lora_eval").warning("LoRA eval run failed: %s", e)
             classify_and_raise(e, source="lora_eval_run")
@@ -104,6 +128,7 @@ class LoraEvalRouter:
         """
         try:
             from domains.feedback.lora_eval import get_lora_evaluator
+
             evaluator = get_lora_evaluator()
             results = evaluator.get_history(limit=limit)
             return success_response(data={"results": [r.to_dict() for r in results]})
@@ -135,33 +160,46 @@ class LoraEvalRouter:
                 run_eval=run_eval,
             )
 
-            safe_audit_log("adapter.eval.aggregate", resource=output_name, user_count=result.get("user_count", 0), total_feedback=result.get("total_feedback", 0))
+            safe_audit_log(
+                "adapter.eval.aggregate",
+                resource=output_name,
+                user_count=result.get("user_count", 0),
+                total_feedback=result.get("total_feedback", 0),
+            )
 
             if "error" in result:
                 return success_response(data={"status": "no_adapters", "message": result["error"]})
 
             eval_result = result.get("eval", {})
             if "error" not in eval_result:
-                return success_response(data={
-                    "status": "aggregated_with_eval",
+                return success_response(
+                    data={
+                        "status": "aggregated_with_eval",
+                        "output_path": result["output_path"],
+                        "user_count": result["user_count"],
+                        "total_feedback": result["total_feedback"],
+                        "eval": {
+                            "verdict": eval_result.get("delta", {}).get("verdict", "unknown"),
+                            "perplexity_delta": eval_result.get("delta", {}).get(
+                                "perplexity_delta"
+                            ),
+                            "bleu_delta": eval_result.get("delta", {}).get("bleu_delta"),
+                            "throughput_delta": eval_result.get("delta", {}).get(
+                                "throughput_delta"
+                            ),
+                            "report": eval_result.get("report", ""),
+                        },
+                    }
+                )
+
+            return success_response(
+                data={
+                    "status": "aggregated_no_eval",
                     "output_path": result["output_path"],
                     "user_count": result["user_count"],
                     "total_feedback": result["total_feedback"],
-                    "eval": {
-                        "verdict": eval_result.get("delta", {}).get("verdict", "unknown"),
-                        "perplexity_delta": eval_result.get("delta", {}).get("perplexity_delta"),
-                        "bleu_delta": eval_result.get("delta", {}).get("bleu_delta"),
-                        "throughput_delta": eval_result.get("delta", {}).get("throughput_delta"),
-                        "report": eval_result.get("report", ""),
-                    },
-                })
-
-            return success_response(data={
-                "status": "aggregated_no_eval",
-                "output_path": result["output_path"],
-                "user_count": result["user_count"],
-                "total_feedback": result["total_feedback"],
-            })
+                }
+            )
         except Exception as e:
             logging.getLogger("slo.lora_eval").warning("LoRA eval aggregate failed: %s", e)
             classify_and_raise(e, source="lora_eval_aggregate")

@@ -17,17 +17,16 @@ import json
 import logging
 import threading
 import time
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from starlette.responses import StreamingResponse
-
-from schemas.common import success_response
 
 logger = logging.getLogger("slo")
 
 # Re-export SSE helpers (available in API layer)
-from infrastructure.sse_fallback import sse_event, sse_error  # noqa: E402
+from infrastructure.sse_fallback import sse_error  # noqa: E402
 
 
 def build_training_sse_response(
@@ -78,7 +77,7 @@ def build_training_sse_response(
         def _enqueue(event_str: str) -> None:
             loop.call_soon_threadsafe(queue.put_nowait, event_str)
 
-        from domains.infrastructure.task_queue import Task, Priority, get_task_queue
+        from domains.infrastructure.task_queue import Priority, Task, get_task_queue
 
         tq = get_task_queue()
         await tq.start()
@@ -93,12 +92,15 @@ def build_training_sse_response(
         task.metadata["enqueue"] = _enqueue
 
         task_id = await tq.enqueue(task)
-        logger.info("Training task enqueued: %s (type=%s)", task_id, task_type, extra={"tag": "TRAIN"})
+        logger.info(
+            "Training task enqueued: %s (type=%s)", task_id, task_type, extra={"tag": "TRAIN"}
+        )
 
         # Register with CancelManager
         cm_op_id: str | None = None
         try:
-            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
             _mgr = get_cancel_manager()
             cm_op_id = _mgr.register(
                 op_type=OpType.TRAINING,
@@ -111,6 +113,7 @@ def build_training_sse_response(
 
         # Register with TrainingRuntime
         from training.runtime import get_training_runtime
+
         runtime_job = {
             "id": task_id,
             "name": task_name,
@@ -134,8 +137,8 @@ def build_training_sse_response(
 
         # Import service helpers (core layer, zero HTTP deps)
         from domains.training.service import (
-            process_training_completion,
             cleanup_stream_state,
+            process_training_completion,
         )
 
         state_dict: dict[str, Any] = {"running": True}
@@ -145,7 +148,10 @@ def build_training_sse_response(
                 if cm_op_id:
                     try:
                         from domains.infrastructure.cancel_manager import get_cancel_manager
-                        get_cancel_manager().finish(cm_op_id, error=error if status != "complete" else "")
+
+                        get_cancel_manager().finish(
+                            cm_op_id, error=error if status != "complete" else ""
+                        )
                     except Exception as exc:
                         logger.debug("CancelManager.finish failed: %s", exc)
 
@@ -156,7 +162,13 @@ def build_training_sse_response(
                 while True:
                     if time.time() > deadline:
                         logger.error("Training SSE timed out after 1 hour", extra={"tag": "TRAIN"})
-                        yield sse_error(task_name, "TIMEOUT", "Training SSE stream timed out", code="E_TIMEOUT", http_status=408)
+                        yield sse_error(
+                            task_name,
+                            "TIMEOUT",
+                            "Training SSE stream timed out",
+                            code="E_TIMEOUT",
+                            http_status=408,
+                        )
                         _finish_cm("failed", "SSE timeout")
                         return
                     if await request.is_disconnected():
@@ -164,7 +176,9 @@ def build_training_sse_response(
                         cancel_event.set()
                         state_dict["running"] = False
                         _finish_cm("cancelled", "client disconnected")
-                        logger.info("Client disconnected from %s stream", task_name, extra={"tag": "TRAIN"})
+                        logger.info(
+                            "Client disconnected from %s stream", task_name, extra={"tag": "TRAIN"}
+                        )
                         return
                     remaining = heartbeat_interval - (time.time() - last_yield)
                     if remaining <= 0:
@@ -181,7 +195,9 @@ def build_training_sse_response(
                         try:
                             ev = json.loads(event[6:])
                             if ev.get("status") in ("complete", "error"):
-                                process_training_completion(ev, task_id, config, checkpoints_dir, _finish_cm)
+                                process_training_completion(
+                                    ev, task_id, config, checkpoints_dir, _finish_cm
+                                )
                                 break
                         except json.JSONDecodeError:
                             pass
@@ -196,17 +212,26 @@ def build_training_sse_response(
             except TimeoutError:
                 logger.error("Training SSE queue timed out", extra={"tag": "TRAIN"})
                 _finish_cm("failed", "SSE queue timeout")
-                yield sse_error(task_name, "TIMEOUT", "No training progress for 60 seconds", code="E_TIMEOUT", http_status=408)
+                yield sse_error(
+                    task_name,
+                    "TIMEOUT",
+                    "No training progress for 60 seconds",
+                    code="E_TIMEOUT",
+                    http_status=408,
+                )
             except Exception as e:
                 logger.error("Training SSE stream error: %s", e, extra={"tag": "TRAIN"})
                 _finish_cm("failed", str(e))
-                yield sse_error(task_name, "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500)
+                yield sse_error(
+                    task_name, "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500
+                )
             finally:
                 cleanup_stream_state(task_id, config, state_dict, _finish_cm)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     import asyncio as _asyncio
+
     return _asyncio.ensure_future(_build())
 
 
@@ -217,7 +242,8 @@ def stop_all_training() -> dict:
     It delegates to CancelManager which tracks all active operations.
     """
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
     except Exception as e:
         logger.warning("CancelManager.cancel_all failed: %s", e)
@@ -225,6 +251,7 @@ def stop_all_training() -> dict:
     # Also signal legacy auto_train globals if they exist
     try:
         import routers.auto_train as at
+
         if getattr(at, "_auto_train_cancel_event", None) is not None:
             at._auto_train_cancel_event.set()
         if hasattr(at, "_turbo_cancel_event"):
@@ -251,13 +278,15 @@ def stop_all_training() -> dict:
 def cancel_from_sessions() -> dict:
     """Cancel from-sessions training specifically."""
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
     except Exception as e:
         logger.warning("CancelManager.cancel_all failed: %s", e)
 
     try:
         import routers.auto_train as at
+
         if getattr(at, "_auto_train_cancel_event", None) is not None:
             at._auto_train_cancel_event.set()
         at.state.running = False

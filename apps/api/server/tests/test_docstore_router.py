@@ -7,10 +7,9 @@ bulk import, and sort/limit listing.
 """
 
 import pytest
-
-from test_support import get_test_client
 from mogdb import MogDB
 from routers import docstore
+from test_support import get_test_client
 
 client = get_test_client()
 
@@ -36,7 +35,9 @@ def test_put_then_get_round_trip():
     session = {
         "id": "s1",
         "name": "Hello",
-        "messages": [{"id": "m1", "role": "user", "content": "hi", "timestamp": "2024-01-01T00:00:00.000Z"}],
+        "messages": [
+            {"id": "m1", "role": "user", "content": "hi", "timestamp": "2024-01-01T00:00:00.000Z"}
+        ],
         "createdAt": "2024-01-01T00:00:00.000Z",
         "updatedAt": "2024-01-01T00:00:00.000Z",
         "synced": False,
@@ -74,8 +75,13 @@ def test_put_replaces_existing_document():
 
 
 def test_put_overwrites_removed_fields():
-    client.put("/docstore/bookmarks/b1", json={"id": "b1", "content": "a", "role": "user", "timestamp": 1})
-    client.put("/docstore/bookmarks/b1", json={"id": "b1", "content": "b", "role": "assistant", "timestamp": 2})
+    client.put(
+        "/docstore/bookmarks/b1", json={"id": "b1", "content": "a", "role": "user", "timestamp": 1}
+    )
+    client.put(
+        "/docstore/bookmarks/b1",
+        json={"id": "b1", "content": "b", "role": "assistant", "timestamp": 2},
+    )
     data = _data(client.get("/docstore/bookmarks/b1"))
     assert data == {"id": "b1", "content": "b", "role": "assistant", "timestamp": 2}
 
@@ -84,7 +90,9 @@ def test_put_overwrites_removed_fields():
 
 
 def test_patch_merges_into_existing_doc():
-    client.put("/docstore/sessions/s1", json={"id": "s1", "name": "Old", "synced": False, "pinned": False})
+    client.put(
+        "/docstore/sessions/s1", json={"id": "s1", "name": "Old", "synced": False, "pinned": False}
+    )
     patch = client.patch("/docstore/sessions/s1", json={"name": "New", "synced": True})
     assert patch.status_code == 200
     assert _data(patch) == {"modified": 1}
@@ -130,8 +138,26 @@ def test_delete_collection_clears_all():
 
 def test_bulk_import():
     docs = [
-        {"id": "p1", "name": "Summarize", "prompt": "sum", "icon": "", "category": "a", "createdAt": 1, "updatedAt": 1, "description": ""},
-        {"id": "p2", "name": "Translate", "prompt": "tr", "icon": "", "category": "b", "createdAt": 2, "updatedAt": 2, "description": ""},
+        {
+            "id": "p1",
+            "name": "Summarize",
+            "prompt": "sum",
+            "icon": "",
+            "category": "a",
+            "createdAt": 1,
+            "updatedAt": 1,
+            "description": "",
+        },
+        {
+            "id": "p2",
+            "name": "Translate",
+            "prompt": "tr",
+            "icon": "",
+            "category": "b",
+            "createdAt": 2,
+            "updatedAt": 2,
+            "description": "",
+        },
     ]
     resp = client.post("/docstore/prompts/bulk", json={"docs": docs})
     assert resp.status_code == 200
@@ -143,7 +169,9 @@ def test_bulk_import():
 
 def test_bulk_import_overwrites_existing():
     client.put("/docstore/knowledge/k1", json={"id": "k1", "content": "old", "timestamp": 0})
-    resp = client.post("/docstore/knowledge/bulk", json={"docs": [{"id": "k1", "content": "new", "timestamp": 1}]})
+    resp = client.post(
+        "/docstore/knowledge/bulk", json={"docs": [{"id": "k1", "content": "new", "timestamp": 1}]}
+    )
     assert _data(resp) == {"imported": 1}
     data = _data(client.get("/docstore/knowledge/k1"))
     assert data["content"] == "new"
@@ -170,7 +198,10 @@ def test_list_returns_empty_array():
 
 def test_list_sort_and_limit():
     for i in range(3):
-        client.put("/docstore/pendingMessages/p%d" % i, json={"id": "p%d" % i, "content": str(i), "createdAt": "2024-01-0%d" % (i + 1)})
+        client.put(
+            "/docstore/pendingMessages/p%d" % i,
+            json={"id": "p%d" % i, "content": str(i), "createdAt": "2024-01-0%d" % (i + 1)},
+        )
     listed = _data(client.get("/docstore/pendingMessages?sort=createdAt&dir=-1&limit=2"))
     assert [d["id"] for d in listed] == ["p2", "p1"]
 
@@ -178,13 +209,16 @@ def test_list_sort_and_limit():
 # ── collection whitelist ───────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("method,path", [
-    ("get", "/docstore/unknown"),
-    ("put", "/docstore/unknown/x"),
-    ("patch", "/docstore/unknown/x"),
-    ("delete", "/docstore/unknown/x"),
-    ("post", "/docstore/unknown/bulk"),
-])
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("get", "/docstore/unknown"),
+        ("put", "/docstore/unknown/x"),
+        ("patch", "/docstore/unknown/x"),
+        ("delete", "/docstore/unknown/x"),
+        ("post", "/docstore/unknown/bulk"),
+    ],
+)
 def test_unknown_collection_rejected(method, path):
     resp = client.request(method, path, json={} if method in ("put", "patch", "post") else None)
     body = resp.json()

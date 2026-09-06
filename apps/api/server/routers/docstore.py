@@ -17,33 +17,34 @@ Collections:
     errors
 """
 
-import os
 import logging
+import os
 from pathlib import Path as PathLib
-from typing import Any, Dict, Optional
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Path, Query
-
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
 from mogdb import MogDB
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.docstore")
 
-COLLECTIONS = frozenset({
-    "sessions",
-    "pendingMessages",
-    "knowledge",
-    "bookmarks",
-    "prompts",
-    "drafts",
-    "kv",
-    "errors",
-})
+COLLECTIONS = frozenset(
+    {
+        "sessions",
+        "pendingMessages",
+        "knowledge",
+        "bookmarks",
+        "prompts",
+        "drafts",
+        "kv",
+        "errors",
+    }
+)
 
 _DEFAULT_PATH = str(PathLib(__file__).resolve().parents[4] / "data" / "docstore")
 
-_db: Optional[MogDB] = None
+_db: MogDB | None = None
 
 
 def _get_db() -> MogDB:
@@ -63,7 +64,7 @@ def _collection(name: str) -> Any:
     return _get_db().collection(name)
 
 
-def _strip_meta(doc: Dict[str, Any]) -> Dict[str, Any]:
+def _strip_meta(doc: dict[str, Any]) -> dict[str, Any]:
     """Return *doc* without MogDB-internal fields (``_id``/``_created``/``_updated``)."""
     return {k: v for k, v in doc.items() if not k.startswith("_")}
 
@@ -85,7 +86,7 @@ class DocStoreRouter:
         self.router.add_api_route("/{collection}/{doc_id}", self.patch_doc, methods=["PATCH"])
         self.router.add_api_route("/{collection}/{doc_id}", self.delete_doc, methods=["DELETE"])
 
-    def _validate(self, collection: str) -> Optional[dict]:
+    def _validate(self, collection: str) -> dict | None:
         """Return an error response dict for an unknown collection, else ``None``."""
         if collection not in COLLECTIONS:
             raise_error(
@@ -98,11 +99,11 @@ class DocStoreRouter:
     def list_docs(
         self,
         collection: str = Path(...),
-        sort: Optional[str] = Query(default=None, description="Field to sort by"),
+        sort: str | None = Query(default=None, description="Field to sort by"),
         direction: int = Query(
             default=-1, ge=-1, le=1, alias="dir", description="Sort direction: 1 or -1"
         ),
-        limit: Optional[int] = Query(default=None, gt=0, description="Max results"),
+        limit: int | None = Query(default=None, gt=0, description="Max results"),
     ) -> dict:
         """List all documents in a collection, optionally sorted/limited."""
         try:
@@ -134,7 +135,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
-        body: Dict[str, Any] = Body(...),
+        body: dict[str, Any] = Body(...),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Upsert a document: replace it if it exists, otherwise insert."""
@@ -153,8 +154,15 @@ class DocStoreRouter:
         except Exception as e:
             logger.warning(
                 "docstore.put failed: collection=%s doc_id=%s error=%s",
-                collection, doc_id, str(e)[:200],
-                extra={"tag": "DOCSTORE", "collection": collection, "doc_id": doc_id, "error": str(e)[:200]},
+                collection,
+                doc_id,
+                str(e)[:200],
+                extra={
+                    "tag": "DOCSTORE",
+                    "collection": collection,
+                    "doc_id": doc_id,
+                    "error": str(e)[:200],
+                },
             )
             classify_and_raise(e, source="docstore.put")
 
@@ -162,7 +170,7 @@ class DocStoreRouter:
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
-        body: Dict[str, Any] = Body(...),
+        body: dict[str, Any] = Body(...),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Merge fields into an existing document (no-op if it does not exist)."""
@@ -196,7 +204,9 @@ class DocStoreRouter:
         except Exception as e:
             classify_and_raise(e, source="docstore.delete")
 
-    def clear_collection(self, collection: str = Path(...), auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def clear_collection(
+        self, collection: str = Path(...), auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete every document in a collection."""
         try:
             err = self._validate(collection)
@@ -211,7 +221,7 @@ class DocStoreRouter:
     def bulk_put(
         self,
         collection: str = Path(...),
-        body: Dict[str, Any] = Body(...),
+        body: dict[str, Any] = Body(...),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Upsert many documents in one request."""

@@ -23,12 +23,11 @@ This router just exposes manager methods as HTTP endpoints:
 - ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
 """
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
-
 from domains.training.token_tree_manager import get_token_tree_manager
+from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 
 class TrainTreeRequest(BaseModel):
@@ -110,9 +109,12 @@ class TokenTreeRouter:
     ) -> dict:
         """Return a paged slice of the current tree's vocabulary."""
         try:
-            return success_response(data=get_token_tree_manager().vocab_entries(
-                offset=offset, limit=limit,
-            ))
+            return success_response(
+                data=get_token_tree_manager().vocab_entries(
+                    offset=offset,
+                    limit=limit,
+                )
+            )
         except Exception as e:
             classify_and_raise(e, source="token_tree.vocab")
 
@@ -139,7 +141,9 @@ class TokenTreeRouter:
         except Exception as e:
             classify_and_raise(e, source="token_tree.saved")
 
-    def save_tree(self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def save_tree(
+        self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Save the current tree under a name in the save directory."""
         try:
             return success_response(data=get_token_tree_manager().save(req.name))
@@ -148,7 +152,9 @@ class TokenTreeRouter:
         except Exception as e:
             classify_and_raise(e, source="token_tree.save")
 
-    def load_tree(self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def load_tree(
+        self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Load a saved tree and make it the current tree."""
         try:
             return success_response(data=get_token_tree_manager().load(req.name))
@@ -159,7 +165,9 @@ class TokenTreeRouter:
         except Exception as e:
             classify_and_raise(e, source="token_tree.load")
 
-    def delete_saved_tree(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def delete_saved_tree(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete a saved tree's sidecar files."""
         try:
             deleted = get_token_tree_manager().delete_saved(name)
@@ -172,7 +180,9 @@ class TokenTreeRouter:
         except Exception as e:
             classify_and_raise(e, source="token_tree.delete")
 
-    def train_tree(self, req: TrainTreeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def train_tree(
+        self, req: TrainTreeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Train a token tree on the provided corpus."""
         try:
             mgr = get_token_tree_manager()
@@ -185,21 +195,23 @@ class TokenTreeRouter:
                     embed_dim=req.embed_dim,
                 )
             else:
-                tree = mgr.get_tree(
-                    vocab_size=req.vocab_size, embed_dim=req.embed_dim
-                )
+                tree = mgr.get_tree(vocab_size=req.vocab_size, embed_dim=req.embed_dim)
             stats = tree.stats()
-            return success_response(data={
-                "status": "trained",
-                "vocab_size": stats["vocab_size"],
-                "embedding_points": stats["embedding_points"],
-                "embedding_compression_ratio": stats["embedding_compression_ratio"],
-                "embed_dim": stats["embed_dim"],
-            })
+            return success_response(
+                data={
+                    "status": "trained",
+                    "vocab_size": stats["vocab_size"],
+                    "embedding_points": stats["embedding_points"],
+                    "embedding_compression_ratio": stats["embedding_compression_ratio"],
+                    "embed_dim": stats["embed_dim"],
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="token_tree.train")
 
-    def similar(self, req: SimilarRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def similar(
+        self, req: SimilarRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Return ranked nearest-neighbor tokens for a query token."""
         try:
             data = get_token_tree_manager().similar(req.token, top_k=req.top_k)
@@ -209,12 +221,12 @@ class TokenTreeRouter:
         except Exception as e:
             classify_and_raise(e, source="token_tree.similar")
 
-    def embedding(self, req: EmbeddingRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def embedding(
+        self, req: EmbeddingRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Inspect a token's generated embedding vector."""
         try:
-            data = get_token_tree_manager().embedding_info(
-                req.token, top_k=req.top_k
-            )
+            data = get_token_tree_manager().embedding_info(req.token, top_k=req.top_k)
             return success_response(data=data)
         except KeyError as e:
             raise_error(f"Token not in vocabulary: {e}", "E_NOT_FOUND", status_code=404)
@@ -223,28 +235,36 @@ class TokenTreeRouter:
         except Exception as e:
             classify_and_raise(e, source="token_tree.embedding")
 
-    def encode(self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def encode(
+        self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Encode text into token ids by walking the tree."""
         try:
             return success_response(data=get_token_tree_manager().encode(req.text))
         except Exception as e:
             classify_and_raise(e, source="token_tree.encode")
 
-    def path(self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def path(
+        self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Trace the encoder's greedy trie walk over text."""
         try:
             return success_response(data=get_token_tree_manager().path(req.text))
         except Exception as e:
             classify_and_raise(e, source="token_tree.path")
 
-    def decode(self, req: TokenIdsRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def decode(
+        self, req: TokenIdsRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Decode a list of token ids back to text."""
         try:
             return success_response(data=get_token_tree_manager().decode(req.ids))
         except Exception as e:
             classify_and_raise(e, source="token_tree.decode")
 
-    def lineage(self, req: LineageRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def lineage(
+        self, req: LineageRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Render a token's merge lineage down to character leaves."""
         try:
             data = get_token_tree_manager().lineage(req.token)
@@ -260,13 +280,17 @@ class TokenTreeRouter:
     ) -> dict:
         """Return an embedding-matrix overview for the current tree."""
         try:
-            return success_response(data=get_token_tree_manager().matrix_summary(
-                top_k=top_k,
-            ))
+            return success_response(
+                data=get_token_tree_manager().matrix_summary(
+                    top_k=top_k,
+                )
+            )
         except Exception as e:
             classify_and_raise(e, source="token_tree.matrix")
 
-    def compare(self, req: CompareTreesRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    def compare(
+        self, req: CompareTreesRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Diff two saved trees without changing the current tree."""
         try:
             data = get_token_tree_manager().compare(req.a, req.b, top_n=req.top_k)

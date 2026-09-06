@@ -1,6 +1,6 @@
 """Tests for feeds router — RSS and JSON Feed generation."""
+
 import json
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,7 +13,7 @@ def client():
     from fastapi import FastAPI
     from infrastructure.exception_handlers import register_app_error_handler
     from routers.feeds import router as feeds_router
-    
+
     app = FastAPI()
     app.include_router(feeds_router)
     register_app_error_handler(app)
@@ -25,9 +25,39 @@ def sample_journal(tmp_path):
     """Create a sample journal file for testing."""
     journal = tmp_path / "notes.journal.jsonl"
     entries = [
-        {"op": "insert", "data": {"id": "1", "title": "Note 1", "body": "Body 1", "tags": "training,ml", "status": "done", "created_at": "2026-09-01T10:00:00Z"}},
-        {"op": "insert", "data": {"id": "2", "title": "Note 2", "body": "Body 2", "tags": "infra", "status": "open", "created_at": "2026-09-02T10:00:00Z"}},
-        {"op": "insert", "data": {"id": "3", "title": "Note 3", "body": "Body 3", "tags": "training", "status": "done", "created_at": "2026-09-03T10:00:00Z"}},
+        {
+            "op": "insert",
+            "data": {
+                "id": "1",
+                "title": "Note 1",
+                "body": "Body 1",
+                "tags": "training,ml",
+                "status": "done",
+                "created_at": "2026-09-01T10:00:00Z",
+            },
+        },
+        {
+            "op": "insert",
+            "data": {
+                "id": "2",
+                "title": "Note 2",
+                "body": "Body 2",
+                "tags": "infra",
+                "status": "open",
+                "created_at": "2026-09-02T10:00:00Z",
+            },
+        },
+        {
+            "op": "insert",
+            "data": {
+                "id": "3",
+                "title": "Note 3",
+                "body": "Body 3",
+                "tags": "training",
+                "status": "done",
+                "created_at": "2026-09-03T10:00:00Z",
+            },
+        },
     ]
     journal.write_text("\n".join(json.dumps(e) for e in entries))
     return journal
@@ -102,30 +132,53 @@ class TestJSONFeed:
 class TestFeedHelpers:
     def test_parse_journal_missing_file(self):
         from routers.feeds import _parse_journal
+
         with patch("routers.feeds.NOTES_JOURNAL", Path("/nonexistent")):
             result = _parse_journal()
         assert result == []
 
     def test_filter_notes_empty(self):
         from routers.feeds import _filter_notes
+
         result = _filter_notes([], tag="test")
         assert result == []
 
     def test_md_to_html(self):
         from routers.feeds import _md_to_html
+
         result = _md_to_html("# Title")
         assert "<h1>Title</h1>" in result
 
     def test_build_rss_xml_structure(self):
         from routers.feeds import _build_rss_xml
-        notes = [{"id": "1", "title": "Test", "body": "Body", "tags": "tag1", "status": "open", "created_at": "2026-09-01T00:00:00Z"}]
+
+        notes = [
+            {
+                "id": "1",
+                "title": "Test",
+                "body": "Body",
+                "tags": "tag1",
+                "status": "open",
+                "created_at": "2026-09-01T00:00:00Z",
+            }
+        ]
         xml = _build_rss_xml(notes)
         assert "<item>" in xml
         assert "Test" in xml
 
     def test_build_json_feed_structure(self):
         from routers.feeds import _build_json_feed
-        notes = [{"id": "1", "title": "Test", "body": "Body", "tags": "tag1", "status": "open", "created_at": "2026-09-01T00:00:00Z"}]
+
+        notes = [
+            {
+                "id": "1",
+                "title": "Test",
+                "body": "Body",
+                "tags": "tag1",
+                "status": "open",
+                "created_at": "2026-09-01T00:00:00Z",
+            }
+        ]
         feed = _build_json_feed(notes)
         assert feed["version"] == "https://jsonfeed.org/version/1.1"
         assert len(feed["items"]) == 1

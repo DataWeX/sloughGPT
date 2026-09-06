@@ -10,15 +10,14 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from domains.shared import find_repo_root
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter
-
 from schemas.common import raise_error
 
+from .helpers import _finish_job
 from .jobs import training_jobs
 from .schemas import DistillStartRequest
-from .helpers import _finish_job
-from domains.training.executor import get_training_executor
-from domains.shared import find_repo_root
 
 logger = logging.getLogger("slo")
 
@@ -29,6 +28,7 @@ router = APIRouter(tags=["training-distill"])
 async def start_distillation(request: DistillStartRequest):
     """Knowledge distillation: teach a compact SloNet LSTM student from a teacher HF model."""
     import uuid
+
     job_id = str(uuid.uuid4())[:8]
 
     datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
@@ -42,7 +42,11 @@ async def start_distillation(request: DistillStartRequest):
         candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
         input_file = next((c for c in candidates if c.exists()), None)
     if not input_file or not Path(input_file).exists():
-        raise_error("No training data file (input.txt/corpus.jsonl) in dataset", "E_BAD_REQUEST", status_code=400)
+        raise_error(
+            "No training data file (input.txt/corpus.jsonl) in dataset",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
     data_str = Path(input_file).read_text(encoding="utf-8")
     if not data_str.strip():
         raise_error("Training data is empty", "E_BAD_REQUEST", status_code=400)
@@ -67,7 +71,8 @@ async def start_distillation(request: DistillStartRequest):
     training_jobs[job_id]["_cancel_event"] = cancel_event
 
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
             label=str(request.name or f"distill-{job_id}"),
@@ -83,12 +88,15 @@ async def start_distillation(request: DistillStartRequest):
         """Background thread that runs distillation."""
         try:
             training_jobs[job_id_]["status"] = "running"
-            import numpy as np
             import random as _random
+
+            import numpy as np
+
             _random.seed(42)
             np.random.seed(42)
 
             from domains.infrastructure.model_registry import get_model_registry
+
             registry = get_model_registry()
             server = registry.get(request.teacher_model) if registry else None
 
@@ -100,9 +108,12 @@ async def start_distillation(request: DistillStartRequest):
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
                 from domains.infrastructure.server_state import get_server_state
+
                 provider = get_server_state().model.get()
-                if (provider is not None
-                        and getattr(provider, "model_id", None) == request.teacher_model):
+                if (
+                    provider is not None
+                    and getattr(provider, "model_id", None) == request.teacher_model
+                ):
                     slonet_provider = provider
                     teacher_model = getattr(provider, "_get_model", lambda: None)()
                     if teacher_model is not None:
@@ -143,8 +154,8 @@ async def start_distillation(request: DistillStartRequest):
             inputs_list = []
             targets_list = []
             for i in range(0, len(token_ids) - block_size, block_size // 2):
-                x = token_ids[i:i + block_size]
-                y = token_ids[i + 1:i + block_size + 1]
+                x = token_ids[i : i + block_size]
+                y = token_ids[i + 1 : i + block_size + 1]
                 if len(x) == block_size and len(y) == block_size:
                     inputs_list.append(x)
                     targets_list.append(y)
@@ -161,16 +172,21 @@ async def start_distillation(request: DistillStartRequest):
             # Create teacher inputs wrapper
             class _TeacherWrapper:
                 """Expose a teacher forward pass to the DistillationTrainer."""
+
                 def __init__(self, model, tokenizer, slonet=False):
                     self._model = model
                     self._tokenizer = tokenizer
                     self._slonet = slonet
+
                 def parameters(self):
                     return []
+
                 def eval(self):
                     pass
+
                 def __call__(self, x):
                     import numpy as np
+
                     if isinstance(x, np.ndarray):
                         if self._slonet:
                             logits_t, _ = self._model.forward(x.astype(np.int64), None)
@@ -179,9 +195,12 @@ async def start_distillation(request: DistillStartRequest):
                         raise RuntimeError("Torch teacher models are not supported — use SloNet")
                     return np.zeros((x.shape[0], vocab_size), dtype=np.float32)
 
-            teacher_wrapper = _TeacherWrapper(teacher_model, teacher_tokenizer, slonet=slonet_provider is not None)
+            teacher_wrapper = _TeacherWrapper(
+                teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
+            )
 
-            from domains.training.distillation import DistillationTrainer, DistillationConfig
+            from domains.training.distillation import DistillationConfig, DistillationTrainer
+
             distill_cfg = DistillationConfig(
                 temperature=request.temperature,
                 alpha=request.alpha,
@@ -200,7 +219,7 @@ async def start_distillation(request: DistillStartRequest):
                 epoch_loss = 0.0
                 n_batches = 0
                 for start in range(0, n_samples, batch_size):
-                    batch_idx = indices[start:start + batch_size]
+                    batch_idx = indices[start : start + batch_size]
                     bx = inputs_np[batch_idx]
                     by = targets_np[batch_idx]
 
@@ -222,30 +241,40 @@ async def start_distillation(request: DistillStartRequest):
 
             from domains.training.slonet import export_to_sou
 
-            export_to_sou(student, str(ckpt_path), metadata={
-                "model_type": "slonet_distill",
-                "teacher": request.teacher_model,
-                "distill_temperature": request.temperature,
-                "epochs": request.epochs,
-                "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
-                "embed_dim": request.embed_dim,
-                "n_layers": request.n_layers,
-                "vocab_size": vocab_size,
-                "stoi": stoi,
-                "itos": itos,
-            })
+            export_to_sou(
+                student,
+                str(ckpt_path),
+                metadata={
+                    "model_type": "slonet_distill",
+                    "teacher": request.teacher_model,
+                    "distill_temperature": request.temperature,
+                    "epochs": request.epochs,
+                    "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
+                    "embed_dim": request.embed_dim,
+                    "n_layers": request.n_layers,
+                    "vocab_size": vocab_size,
+                    "stoi": stoi,
+                    "itos": itos,
+                },
+            )
 
-            training_jobs[job_id].update({
-                "progress": 100,
-                "loss": float(epoch_losses[-1]) if epoch_losses else None,
-                "checkpoint": str(ckpt_path),
-                "loss_history": [
-                    {"step": i, "value": v, "type": "train"}
-                    for i, v in enumerate(epoch_losses)
-                ],
-            })
+            training_jobs[job_id].update(
+                {
+                    "progress": 100,
+                    "loss": float(epoch_losses[-1]) if epoch_losses else None,
+                    "checkpoint": str(ckpt_path),
+                    "loss_history": [
+                        {"step": i, "value": v, "type": "train"} for i, v in enumerate(epoch_losses)
+                    ],
+                }
+            )
             _finish_job(job_id, "completed")
-            logger.info("Distillation complete: %s loss=%.4f", ckpt_path, epoch_losses[-1] if epoch_losses else 0, extra={"tag": "TRAIN"})
+            logger.info(
+                "Distillation complete: %s loss=%.4f",
+                ckpt_path,
+                epoch_losses[-1] if epoch_losses else 0,
+                extra={"tag": "TRAIN"},
+            )
 
         except Exception as e:
             logger.exception("Distillation job %s failed", job_id, extra={"tag": "TRAIN"})

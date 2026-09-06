@@ -7,7 +7,6 @@ runtime enable/disable toggle.
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import state
 from controllers.models import ModelsController
 
 
@@ -31,9 +30,16 @@ class _FakeGuard:
         self.stopped = True
 
     def health(self):
-        return {"alive": self.alive, "requests_served": 0, "restart_count": 0,
-                "max_restarts": 3, "exhausted": False, "memory_mb": 128,
-                "memory_limit_mb": 4096, "over_limit": False}
+        return {
+            "alive": self.alive,
+            "requests_served": 0,
+            "restart_count": 0,
+            "max_restarts": 3,
+            "exhausted": False,
+            "memory_mb": 128,
+            "memory_limit_mb": 4096,
+            "over_limit": False,
+        }
 
 
 def test_adopt_process_guard_sets_current_model(tmp_path):
@@ -103,16 +109,20 @@ def test_status_model_id_falls_back_to_registry_default(tmp_path):
     ctrl = _controller(tmp_path)
     registry = MagicMock()
     registry.default_id = "Qwen/Qwen2.5-0.5B-Instruct"
-    with patch("config.get_process_guard_enabled", return_value=True), \
-         patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry):
+    with (
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+    ):
         status = ctrl.get_process_guard_status()
     assert status["model_id"] == "Qwen/Qwen2.5-0.5B-Instruct"
 
 
 def test_status_model_id_falls_back_to_server_state(tmp_path):
     ctrl = _controller(tmp_path)
-    with patch("config.get_process_guard_enabled", return_value=True), \
-         patch("state.model_type", "native-soul"):
+    with (
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("state.model_type", "native-soul"),
+    ):
         status = ctrl.get_process_guard_status()
     assert status["model_id"] == "native-soul"
 
@@ -121,8 +131,10 @@ def test_disable_stops_adopted_guard(tmp_path):
     ctrl = _controller(tmp_path)
     guard = _FakeGuard(alive=True)
     ctrl.adopt_process_guard(guard, "gpt2")
-    with patch("config.set_process_guard_enabled") as set_enabled, \
-         patch("config.get_process_guard_enabled", return_value=False):
+    with (
+        patch("config.set_process_guard_enabled") as set_enabled,
+        patch("config.get_process_guard_enabled", return_value=False),
+    ):
         status = ctrl.set_process_guard_enabled(False)
     set_enabled.assert_called_once_with(False)
     assert guard.stopped is True
@@ -143,10 +155,12 @@ def test_enable_builds_guard_for_autoloaded_model(tmp_path):
         built_for.append(model_id)
         return fake_guard
 
-    with patch("config.set_process_guard_enabled"), \
-         patch("config.get_process_guard_enabled", return_value=True), \
-         patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry), \
-         patch.object(ModelsController, "_build_process_guard", new=_fake_build):
+    with (
+        patch("config.set_process_guard_enabled"),
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+        patch.object(ModelsController, "_build_process_guard", new=_fake_build),
+    ):
         status = ctrl.set_process_guard_enabled(True)
     assert built_for == ["Qwen/Qwen2.5-0.5B-Instruct"]
     assert status["active"] is True
@@ -165,12 +179,17 @@ def test_build_process_guard_uses_config_not_undefined_var(tmp_path):
     cfg.process_guard_memory_limit_mb = 0.0
     fake_guard = _FakeGuard(alive=True)
     slnc_dir = Path("/tmp") / "models--Fake--Model" / "model.slnc"
-    with patch("config.get_process_guard_enabled", return_value=True), \
-         patch("config.ServerConfig.from_env", return_value=cfg), \
-         patch("domains.infrastructure.process_guard.ProcessGuard", return_value=fake_guard) as pg_cls, \
-         patch("domains.infrastructure.safetensors_loader._get_model_dir",
-               return_value=slnc_dir.parent), \
-         patch("os.path.exists", return_value=True):
+    with (
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch(
+            "domains.infrastructure.process_guard.ProcessGuard", return_value=fake_guard
+        ) as pg_cls,
+        patch(
+            "domains.infrastructure.safetensors_loader._get_model_dir", return_value=slnc_dir.parent
+        ),
+        patch("os.path.exists", return_value=True),
+    ):
         guard = ctrl._build_process_guard("Fake/Model")
     assert guard is fake_guard
     _, kwargs = pg_cls.call_args
@@ -213,13 +232,16 @@ def test_build_process_guard_propagates_guard_to_provider_server(tmp_path):
     cfg.process_guard_memory_limit_mb = 0.0
     rebuilt_guard = _FakeGuard(alive=True)
     try:
-        with patch("config.get_process_guard_enabled", return_value=True), \
-             patch("config.ServerConfig.from_env", return_value=cfg), \
-             patch("domains.infrastructure.process_guard.ProcessGuard",
-                   return_value=rebuilt_guard), \
-             patch("domains.infrastructure.safetensors_loader._get_model_dir",
-                   return_value=Path("/tmp/models--Fake--Model")), \
-             patch("os.path.exists", return_value=True):
+        with (
+            patch("config.get_process_guard_enabled", return_value=True),
+            patch("config.ServerConfig.from_env", return_value=cfg),
+            patch("domains.infrastructure.process_guard.ProcessGuard", return_value=rebuilt_guard),
+            patch(
+                "domains.infrastructure.safetensors_loader._get_model_dir",
+                return_value=Path("/tmp/models--Fake--Model"),
+            ),
+            patch("os.path.exists", return_value=True),
+        ):
             guard = ctrl._build_process_guard("Fake/Model")
         assert guard is rebuilt_guard
         assert server.guard is rebuilt_guard
@@ -231,7 +253,9 @@ def test_server_config_parses_memory_limit_env():
     """SLO_PROCESS_GUARD_MEMORY_LIMIT_MB must feed ServerConfig so the
     operator can override the auto-sized guard memory limit."""
     import os
+
     from config import ServerConfig
+
     with patch.dict(os.environ, {"SLO_PROCESS_GUARD_MEMORY_LIMIT_MB": "15000"}):
         cfg = ServerConfig.from_env()
     assert cfg.process_guard_memory_limit_mb == 15000.0

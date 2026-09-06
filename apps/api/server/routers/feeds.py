@@ -13,11 +13,11 @@ Endpoints:
 
 Generates RSS 2.0 and JSON Feed from the dev notes journal.
 """
+
 import json
 import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
-from typing import Optional
 from pathlib import Path
 
 from fastapi import APIRouter, Query
@@ -40,7 +40,7 @@ def _parse_journal() -> list[dict]:
     if not NOTES_JOURNAL.exists():
         return notes
 
-    with open(NOTES_JOURNAL, "r") as f:
+    with open(NOTES_JOURNAL) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -49,17 +49,19 @@ def _parse_journal() -> list[dict]:
                 entry = json.loads(line)
                 if entry.get("op") == "insert":
                     note = entry.get("data", {})
-                    notes.append({
-                        "id": note.get("id", ""),
-                        "title": note.get("title", "Untitled"),
-                        "body": note.get("body", ""),
-                        "tags": note.get("tags", ""),
-                        "status": note.get("status", "open"),
-                        "created_at": note.get("created_at", ""),
-                        "updated_at": note.get("updated_at", ""),
-                        "sprint": note.get("sprint", ""),
-                        "gh": note.get("gh", ""),
-                    })
+                    notes.append(
+                        {
+                            "id": note.get("id", ""),
+                            "title": note.get("title", "Untitled"),
+                            "body": note.get("body", ""),
+                            "tags": note.get("tags", ""),
+                            "status": note.get("status", "open"),
+                            "created_at": note.get("created_at", ""),
+                            "updated_at": note.get("updated_at", ""),
+                            "sprint": note.get("sprint", ""),
+                            "gh": note.get("gh", ""),
+                        }
+                    )
             except Exception as e:
                 logger.warning("Failed to parse journal line: %s", e)
     return notes
@@ -67,26 +69,20 @@ def _parse_journal() -> list[dict]:
 
 def _filter_notes(
     notes: list[dict],
-    tag: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: Optional[int] = None,
+    tag: str | None = None,
+    status: str | None = None,
+    limit: int | None = None,
 ) -> list[dict]:
     """Filter notes by tag, status, and limit."""
     filtered = notes
 
     if tag:
         tag_lower = tag.lower()
-        filtered = [
-            n for n in filtered
-            if tag_lower in n["tags"].lower()
-        ]
+        filtered = [n for n in filtered if tag_lower in n["tags"].lower()]
 
     if status:
         status_lower = status.lower()
-        filtered = [
-            n for n in filtered
-            if n["status"].lower() == status_lower
-        ]
+        filtered = [n for n in filtered if n["status"].lower() == status_lower]
 
     # Sort by created_at descending (newest first)
     filtered.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -105,7 +101,9 @@ def _build_rss_xml(notes: list[dict], title: str = "sloughGPT Dev Notes") -> str
     # Channel metadata
     ET.SubElement(channel, "title").text = title
     ET.SubElement(channel, "link").text = f"{_BASE_URL}/feeds/rss.xml"
-    ET.SubElement(channel, "description").text = f"Development notes for sloughGPT — {len(notes)} notes"
+    ET.SubElement(
+        channel, "description"
+    ).text = f"Development notes for sloughGPT — {len(notes)} notes"
     ET.SubElement(channel, "language").text = "en-us"
     ET.SubElement(channel, "lastBuildDate").text = datetime.now(timezone.utc).strftime(
         "%a, %d %b %Y %H:%M:%S +0000"
@@ -124,9 +122,7 @@ def _build_rss_xml(notes: list[dict], title: str = "sloughGPT Dev Notes") -> str
         if created:
             try:
                 dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                ET.SubElement(item, "pubDate").text = dt.strftime(
-                    "%a, %d %b %Y %H:%M:%S +0000"
-                )
+                ET.SubElement(item, "pubDate").text = dt.strftime("%a, %d %b %Y %H:%M:%S +0000")
             except (ValueError, TypeError):
                 pass  # Skip malformed date — pubDate omitted from feed
 
@@ -175,6 +171,7 @@ def _build_json_feed(notes: list[dict], title: str = "sloughGPT Dev Notes") -> d
 def _md_to_html(text: str) -> str:
     """Minimal markdown to HTML conversion for note bodies."""
     import re
+
     text = text.strip()
     # Headers
     text = re.sub(r"^### (.+)$", r"<h3>\1</h3>", text, flags=re.MULTILINE)
@@ -203,9 +200,11 @@ class FeedsRouter:
 
     async def rss_feed(
         self,
-        tag: Optional[str] = Query(None, description="Filter by tag"),
-        status: Optional[str] = Query(None, description="Filter by status (open/wip/done/blocked/review/todo)"),
-        limit: Optional[int] = Query(None, description="Limit to N most recent notes"),
+        tag: str | None = Query(None, description="Filter by tag"),
+        status: str | None = Query(
+            None, description="Filter by status (open/wip/done/blocked/review/todo)"
+        ),
+        limit: int | None = Query(None, description="Limit to N most recent notes"),
     ) -> Response:
         """RSS 2.0 feed of dev notes.
 
@@ -232,9 +231,11 @@ class FeedsRouter:
 
     async def json_feed(
         self,
-        tag: Optional[str] = Query(None, description="Filter by tag"),
-        status: Optional[str] = Query(None, description="Filter by status (open/wip/done/blocked/review/todo)"),
-        limit: Optional[int] = Query(None, description="Limit to N most recent notes"),
+        tag: str | None = Query(None, description="Filter by tag"),
+        status: str | None = Query(
+            None, description="Filter by status (open/wip/done/blocked/review/todo)"
+        ),
+        limit: int | None = Query(None, description="Limit to N most recent notes"),
     ) -> Response:
         """JSON Feed 1.1 of dev notes.
 

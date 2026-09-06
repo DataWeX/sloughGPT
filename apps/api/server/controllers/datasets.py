@@ -1,11 +1,12 @@
 """
 Datasets Controller - Business logic for dataset management
 """
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+
 import json
 import logging
 import shutil
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,9 @@ class DatasetsController:
         self.data_dir = repo_root / "data" / "features"
         self.datasets_dir = repo_root / "data"
 
-    def list_datasets(self, q: Optional[str] = None, dataset_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_datasets(
+        self, q: str | None = None, dataset_type: str | None = None
+    ) -> list[dict[str, Any]]:
         """List available datasets"""
         # Use datasets/ directory primarily
         datasets_dir = self.datasets_dir
@@ -39,7 +42,11 @@ class DatasetsController:
             corpus_file = d / "corpus.jsonl"
 
             has_corpus = corpus_file.exists()
-            size = corpus_file.stat().st_size if has_corpus else (input_file.stat().st_size if input_file.exists() else 0)
+            size = (
+                corpus_file.stat().st_size
+                if has_corpus
+                else (input_file.stat().st_size if input_file.exists() else 0)
+            )
             num_samples = 0
             if has_corpus and size < 1_000_000:
                 try:
@@ -69,7 +76,9 @@ class DatasetsController:
                 "size": size,
                 "num_samples": num_samples,
                 "samples": num_samples,
-                "description": self._describe_dataset(d, [], size) if (corpus_file.exists() or input_file.exists()) else "",
+                "description": self._describe_dataset(d, [], size)
+                if (corpus_file.exists() or input_file.exists())
+                else "",
             }
 
             # Attach Visual metadata if present
@@ -89,7 +98,7 @@ class DatasetsController:
 
         return datasets
 
-    def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+    def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset details"""
         path = self.datasets_dir / dataset_id
         if not path.exists():
@@ -102,7 +111,7 @@ class DatasetsController:
             "exists": True,
         }
 
-    def get_dataset_stats(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+    def get_dataset_stats(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset statistics matching the frontend DatasetStats interface."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
@@ -130,9 +139,9 @@ class DatasetsController:
 
         if sample_file.exists():
             try:
-                with open(sample_file, "r", encoding="utf-8", errors="replace") as f:
+                with open(sample_file, encoding="utf-8", errors="replace") as f:
                     raw = f.read()
-                lines_list = [l.strip() for l in raw.split("\n") if l.strip()]
+                lines_list = [line.strip() for line in raw.split("\n") if line.strip()]
                 total_chars = len(raw)
                 sample_preview = lines_list[:5]
 
@@ -141,6 +150,7 @@ class DatasetsController:
                         is_jsonl = True
                         try:
                             import json
+
                             obj = json.loads(line)
                             if "messages" in obj or "conversations" in obj:
                                 is_messages = True
@@ -201,12 +211,12 @@ class DatasetsController:
             return f"Dataset with {size_str} of data."
 
         try:
-            with open(sample_file, "r", encoding="utf-8", errors="replace") as f:
+            with open(sample_file, encoding="utf-8", errors="replace") as f:
                 sample = f.read(2000)
         except Exception:
             return f"Dataset with {size_str} of data."
 
-        lines = [l.strip() for l in sample.split("\n") if l.strip()]
+        lines = [line.strip() for line in sample.split("\n") if line.strip()]
         word_count = len(sample.split())
 
         # Detect format
@@ -218,6 +228,7 @@ class DatasetsController:
             if line.startswith("{"):
                 try:
                     import json
+
                     obj = json.loads(line)
                     if "messages" in obj or "conversations" in obj:
                         is_messages = True
@@ -244,7 +255,7 @@ class DatasetsController:
 
         return " ".join(parts) + "."
 
-    def search_datasets(self, q: str) -> List[Dict[str, Any]]:
+    def search_datasets(self, q: str) -> list[dict[str, Any]]:
         """Search datasets by name — returns full dataset summaries.
 
         Args:
@@ -260,7 +271,7 @@ class DatasetsController:
         """
         return self.list_datasets(q=q)
 
-    def create_dataset(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
+    def create_dataset(self, name: str, description: str | None = None) -> dict[str, Any]:
         """Create a new dataset"""
         path = self.datasets_dir / name
         path.mkdir(parents=True, exist_ok=True)
@@ -273,7 +284,7 @@ class DatasetsController:
             "path": str(path),
         }
 
-    def update_dataset(self, dataset_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_dataset(self, dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """Update dataset metadata. Renames directory if name changes, persists description."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
@@ -298,12 +309,14 @@ class DatasetsController:
             if meta_path.exists():
                 try:
                     import json as _json
-                    with open(meta_path, "r") as f:
+
+                    with open(meta_path) as f:
                         meta = _json.load(f)
                 except Exception:
                     pass
             meta["description"] = new_desc
             import json as _json
+
             with open(meta_path, "w") as f:
                 _json.dump(meta, f, indent=2)
 
@@ -322,7 +335,7 @@ class DatasetsController:
         shutil.rmtree(path)
         return True
 
-    def add_data(self, dataset_id: str, data: List[str]) -> Optional[int]:
+    def add_data(self, dataset_id: str, data: list[str]) -> int | None:
         """Append data rows to a dataset's corpus file"""
         # Existing implementation unchanged (kept for context)
         path = self.datasets_dir / dataset_id
@@ -343,12 +356,13 @@ class DatasetsController:
         versions_dir.mkdir(parents=True, exist_ok=True)
         return versions_dir
 
-    def create_version_snapshot(self, dataset_id: str) -> Optional[str]:
+    def create_version_snapshot(self, dataset_id: str) -> str | None:
         """Create a timestamped snapshot of the current dataset files.
 
         Returns the version name (timestamp) or None if the dataset does not exist.
         """
         from datetime import datetime, timezone
+
         path = self.datasets_dir / dataset_id
         if not path.exists():
             return None
@@ -363,7 +377,7 @@ class DatasetsController:
                 shutil.copy2(src, version_path / fname)
         return timestamp
 
-    def list_versions(self, dataset_id: str) -> List[str]:
+    def list_versions(self, dataset_id: str) -> list[str]:
         """List all version timestamps for a dataset, newest first."""
         versions_dir = self._ensure_versions_dir(dataset_id)
         if not versions_dir.exists():
@@ -387,7 +401,7 @@ class DatasetsController:
                 shutil.copy2(src, path / fname)
         return True
 
-    def preview_dataset(self, dataset_id: str, limit: int = 10) -> Optional[dict]:
+    def preview_dataset(self, dataset_id: str, limit: int = 10) -> dict | None:
         """Return a preview of dataset contents (first N rows)."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
@@ -404,7 +418,7 @@ class DatasetsController:
         samples = []
         total_count = 0
         with open(data_file) as f:
-            for i, line in enumerate(f):
+            for line in f:
                 line = line.strip()
                 if not line:
                     continue
@@ -422,20 +436,25 @@ class DatasetsController:
                     convs = obj.get("conversations", [])
                     human = next((c["value"] for c in convs if c.get("from") == "human"), "")
                     gpt = next((c["value"] for c in convs if c.get("from") == "gpt"), "")
-                    samples.append({
-                        "path": img_path,
-                        "language": "visual",
-                        "content": f"[IMG: {img_path}] Q: {human} A: {gpt[:120]}" + ("..." if len(gpt) > 120 else ""),
-                        "size": len(gpt),
-                    })
+                    samples.append(
+                        {
+                            "path": img_path,
+                            "language": "visual",
+                            "content": f"[IMG: {img_path}] Q: {human} A: {gpt[:120]}"
+                            + ("..." if len(gpt) > 120 else ""),
+                            "size": len(gpt),
+                        }
+                    )
                 else:
                     text = obj.get("text", obj.get("content", ""))
-                    samples.append({
-                        "path": "",
-                        "language": "text",
-                        "content": text[:200] + ("..." if len(text) > 200 else ""),
-                        "size": len(text),
-                    })
+                    samples.append(
+                        {
+                            "path": "",
+                            "language": "text",
+                            "content": text[:200] + ("..." if len(text) > 200 else ""),
+                            "size": len(text),
+                        }
+                    )
 
         return {
             "dataset_id": dataset_id,
@@ -445,7 +464,7 @@ class DatasetsController:
             "languages": {"visual": total_count} if is_visual else {"text": total_count},
         }
 
-    def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Optional[Path]:
+    def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Path | None:
         """Export a dataset as a file. Returns path to export file or None."""
         path = self.datasets_dir / dataset_id
         if not path.exists():
@@ -465,7 +484,7 @@ class DatasetsController:
         return export_path
 
 
-_datasets_controller: Optional[DatasetsController] = None
+_datasets_controller: DatasetsController | None = None
 
 
 def get_datasets_controller() -> DatasetsController:

@@ -1,22 +1,25 @@
 """
 Health Controller - Business logic for system health
 """
+
 import json
 import logging
 import time
-from typing import Dict, Any, Tuple, Optional
-import psutil
 from datetime import datetime
+from typing import Any, Optional
+
+import psutil
 
 logger = logging.getLogger(__name__)
 
 _health_start_time = datetime.now()
 
 
-def _get_executor_stats() -> Optional[Dict[str, Any]]:
+def _get_executor_stats() -> dict[str, Any] | None:
     """Get TrainingExecutor pool stats if available."""
     try:
-        from domains.training.executor import get_training_executor, _instance
+        from domains.training.executor import _instance, get_training_executor
+
         if _instance is None:
             return None
         ex = get_training_executor()
@@ -29,20 +32,22 @@ def _get_executor_stats() -> Optional[Dict[str, Any]]:
         return None
 
 
-def _get_process_guard_status() -> Optional[Dict[str, Any]]:
+def _get_process_guard_status() -> dict[str, Any] | None:
     """Get ProcessGuard status from the ModelsController if available."""
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         return ctrl.get_process_guard_status()
     except Exception:
         return None
 
 
-def _get_mps_monitor_info() -> Optional[Dict[str, Any]]:
+def _get_mps_monitor_info() -> dict[str, Any] | None:
     """Get MPS GPU memory monitor status if available."""
     try:
         from domains.infrastructure.mps_monitor import get_mps_monitor
+
         mon = get_mps_monitor()
         return {
             "usage": round(mon.get_usage(), 3),
@@ -63,11 +68,13 @@ def _is_model_loading() -> bool:
     try:
         # Check if ModelLoader has a load in progress
         from domains.infrastructure.model_loader import ModelLoader
+
         if ModelLoader.is_loading():
             return True
 
         # Fallback: time-based heuristic
         import state as server_state
+
         if server_state.model is not None:
             return False
         if server_state.provider is not None:
@@ -78,10 +85,11 @@ def _is_model_loading() -> bool:
         return False
 
 
-def _get_mogdb_health() -> Optional[Dict[str, Any]]:
+def _get_mogdb_health() -> dict[str, Any] | None:
     """Check MogDB storage health: disk usage, journal sizes, write latency."""
     try:
         from pathlib import Path
+
         from domains.shared import find_repo_root
 
         data_root = find_repo_root(Path(__file__).resolve()) / "data"
@@ -102,8 +110,10 @@ def _get_mogdb_health() -> Optional[Dict[str, Any]]:
                 total_size += size
 
         # Write latency test: write a tiny doc and measure time
-        import tempfile, time
+        import time
+
         from mogdb import MogDB
+
         test_path = data_root / "_health_check_mogdb"
         try:
             db = MogDB(str(test_path))
@@ -117,6 +127,7 @@ def _get_mogdb_health() -> Optional[Dict[str, Any]]:
             elapsed_ms = -1
         finally:
             import shutil
+
             if test_path.exists():
                 shutil.rmtree(test_path, ignore_errors=True)
 
@@ -148,12 +159,13 @@ def _is_app_ready() -> bool:
     """
     try:
         from startup_progress import STARTUP_PHASE
+
         return STARTUP_PHASE.get("phase") in ("running", "ready")
     except Exception:
         return True
 
 
-def _get_model_info() -> Tuple[bool, Optional[str]]:
+def _get_model_info() -> tuple[bool, str | None]:
     """Get model info from registry, controller, or server_state."""
     loaded, model_type, _ = _get_model_info_with_registry()
     if loaded and not _is_app_ready():
@@ -161,13 +173,14 @@ def _get_model_info() -> Tuple[bool, Optional[str]]:
     return loaded, model_type
 
 
-def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]]:
+def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
     """Get model info and registry health in a single query."""
-    registry_health: Dict[str, Any] = {}
+    registry_health: dict[str, Any] = {}
 
     # Check ModelRegistry first (most authoritative)
     try:
         from domains.infrastructure.model_registry import get_model_registry
+
         registry = get_model_registry()
         registry_health = registry.health_summary()
         if registry_health.get("healthy") and registry_health.get("default_model"):
@@ -178,6 +191,7 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
     # Fallback: check models controller
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         current = ctrl.get_current_model()
         if current:
@@ -188,6 +202,7 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
     # Fallback: check server_state (used by autoload in lifespan)
     try:
         import state as server_state
+
         if server_state.model is not None:
             return True, server_state.model_type, registry_health
         if server_state.provider is not None:
@@ -198,7 +213,7 @@ def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]
     return False, None, registry_health
 
 
-def _get_model_device() -> Optional[str]:
+def _get_model_device() -> str | None:
     """Resolve the active model's device string for health reporting.
 
     Order: models controller first (authoritative — it holds the resolved
@@ -211,6 +226,7 @@ def _get_model_device() -> Optional[str]:
     """
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         current = ctrl.get_current_model()
         if current and current.get("device"):
@@ -219,6 +235,7 @@ def _get_model_device() -> Optional[str]:
         pass
     try:
         from domains.infrastructure.model_registry import get_model_registry
+
         registry = get_model_registry()
         health = registry.health_summary()
         if health.get("healthy"):
@@ -230,10 +247,11 @@ def _get_model_device() -> Optional[str]:
     return None
 
 
-def _get_lifecycle_info() -> Dict[str, Any]:
+def _get_lifecycle_info() -> dict[str, Any]:
     """Get lifecycle phase and profile info from the lifecycle manager."""
     try:
         from domains.infrastructure.lifecycle import get_lifecycle_manager
+
         mgr = get_lifecycle_manager()
         return {
             "phase": mgr.phase.value,
@@ -251,10 +269,11 @@ def _get_lifecycle_info() -> Dict[str, Any]:
         }
 
 
-def _get_inference_stats() -> Dict[str, Any]:
+def _get_inference_stats() -> dict[str, Any]:
     """Get inference stats from models controller"""
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         return ctrl.get_inference_stats()
     except ImportError:
@@ -263,23 +282,24 @@ def _get_inference_stats() -> Dict[str, Any]:
         return {}
 
 
-def _get_quantization_info() -> Dict[str, Any]:
+def _get_quantization_info() -> dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
         from domains.models.provider import get_provider
+
         provider = get_provider("slonet-native")
         if provider is None:
             provider = get_provider("slonet")
         if provider is None:
             provider = get_provider("hf-default")
-        if provider is not None and hasattr(provider, 'quantization_report'):
+        if provider is not None and hasattr(provider, "quantization_report"):
             return provider.quantization_report()
         return {}
     except Exception:
         return {}
 
 
-def _get_kv_session_info() -> Dict[str, Any]:
+def _get_kv_session_info() -> dict[str, Any]:
     """Get cross-turn KV cache session stats from the active provider.
 
     Surfaces ``SloNetChatProvider.session_stats()`` (active sessions, cached
@@ -287,6 +307,7 @@ def _get_kv_session_info() -> Dict[str, Any]:
     """
     try:
         from domains.models.provider import get_provider
+
         provider = get_provider("slonet-native")
         if provider is None:
             provider = get_provider("slonet")
@@ -301,12 +322,12 @@ def _get_kv_session_info() -> Dict[str, Any]:
 
 def _build_status_message(
     model_loaded: bool,
-    model_type: Optional[str],
+    model_type: str | None,
     model_loading: bool,
-    current_soul: Optional[str],
+    current_soul: str | None,
     request_count: int,
     error_count: int,
-    lifecycle: Dict[str, Any],
+    lifecycle: dict[str, Any],
 ) -> str:
     """Build a human-readable status message incorporating lifecycle phase."""
     phase = lifecycle.get("phase", "unknown")
@@ -332,10 +353,11 @@ def _build_status_message(
     return msg
 
 
-def _get_resource_allocation() -> Dict[str, Any]:
+def _get_resource_allocation() -> dict[str, Any]:
     """Get CPU topology resource allocation."""
     try:
         from domains.infrastructure.resource_manager import get_resource_manager
+
         rm = get_resource_manager()
         return {
             "mode": rm.mode,
@@ -357,10 +379,11 @@ def _get_resource_allocation() -> Dict[str, Any]:
         return {}
 
 
-def _get_memory_pressure_stats() -> Dict[str, Any]:
+def _get_memory_pressure_stats() -> dict[str, Any]:
     """Get memory pressure monitor stats for health reporting."""
     try:
         from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+
         return get_memory_pressure_monitor().stats()
     except Exception:
         return {}
@@ -377,7 +400,7 @@ def _get_process() -> "psutil.Process":
     return _cached_process
 
 
-def _get_process_info() -> Dict[str, Any]:
+def _get_process_info() -> dict[str, Any]:
     """Compute real process metrics for the current server process.
 
     Uses psutil for file descriptors/threads/memory and the stdlib ``gc``
@@ -393,8 +416,9 @@ def _get_process_info() -> Dict[str, Any]:
     """
     try:
         import gc
+
         proc = _get_process()
-        info: Dict[str, Any] = {
+        info: dict[str, Any] = {
             "threads": proc.num_threads(),
             "process_cpu_percent": round(proc.cpu_percent(interval=None), 1),
             "process_memory_percent": round(proc.memory_percent(), 1),
@@ -418,7 +442,7 @@ class HealthController:
     _CACHE_TTL = 2.0  # seconds
 
     def __init__(self):
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._cache_time: float = 0.0
         # Warm up psutil cpu_percent — first call always returns 0.0
         try:
@@ -427,13 +451,13 @@ class HealthController:
         except Exception as e:
             logger.debug("CPU percent sampling failed: %s", e)
 
-    def get_basic_health(self) -> Dict[str, Any]:
+    def get_basic_health(self) -> dict[str, Any]:
         """Get basic health status with flow-based summary."""
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
         lifecycle = _get_lifecycle_info()
         model_loading = not model_loaded and _is_model_loading()
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "model_loaded": model_loaded,
@@ -447,15 +471,24 @@ class HealthController:
 
         # Status message from lifecycle + model state
         result["status_message"] = _build_status_message(
-            model_loaded, model_type, model_loading, None, 0, 0, lifecycle,
+            model_loaded,
+            model_type,
+            model_loading,
+            None,
+            0,
+            0,
+            lifecycle,
         )
 
         if model_loaded:
             try:
                 import state as server_state
+
                 if server_state.model is not None:
                     model = server_state.model
-                    if hasattr(model, "parameters") and callable(getattr(model, "parameters", None)):
+                    if hasattr(model, "parameters") and callable(
+                        getattr(model, "parameters", None)
+                    ):
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
                 elif server_state.provider is not None:
                     meta = server_state.provider.metadata()
@@ -485,8 +518,10 @@ class HealthController:
         # Idle manager status
         try:
             from domains.infrastructure.model_server import get_idle_manager
+
             idle_mgr = get_idle_manager()
             import state as server_state
+
             model_id = server_state.model_type or "unknown"
             idle_info = idle_mgr.get_idle_info(model_id)
             if idle_info:
@@ -499,7 +534,7 @@ class HealthController:
 
         return result
 
-    def get_detailed_health(self) -> Dict[str, Any]:
+    def get_detailed_health(self) -> dict[str, Any]:
         """Get detailed health with system metrics and GPU info (cached up to CACHE_TTL seconds)."""
         now = time.monotonic()
         if self._cache and (now - self._cache_time) < self._CACHE_TTL:
@@ -512,9 +547,10 @@ class HealthController:
         model_loading = not model_loaded and _is_model_loading()
         uptime = (datetime.now() - _health_start_time).total_seconds()
 
-        gpu_info: Dict[str, Any] = {}
+        gpu_info: dict[str, Any] = {}
         try:
             from domains.slolib.gpu import get_accelerator
+
             acc = get_accelerator()
             gpu_info = {
                 "backend": acc.name,
@@ -529,6 +565,7 @@ class HealthController:
         # Add ServerState counters if available
         try:
             from domains.infrastructure.server_state import get_server_state
+
             ss = get_server_state()
             request_count = ss.request_count
             error_count = ss.error_count
@@ -575,12 +612,15 @@ class HealthController:
         # Version info
         try:
             from version import version_info as _version_info
+
             versions = _version_info()
         except Exception:
             versions = {}
 
         result = {
-            "status": "healthy" if lifecycle.get("is_running", False) else lifecycle.get("phase", "unknown"),
+            "status": "healthy"
+            if lifecycle.get("is_running", False)
+            else lifecycle.get("phase", "unknown"),
             "uptime_seconds": uptime,
             "timestamp": datetime.now().isoformat(),
             "request_count": request_count,
@@ -624,19 +664,24 @@ class HealthController:
             "memory_pressure": _get_memory_pressure_stats(),
             "versions": versions,
             "status_message": _build_status_message(
-                model_loaded, model_type, model_loading, current_soul,
-                request_count, error_count, lifecycle,
+                model_loaded,
+                model_type,
+                model_loading,
+                current_soul,
+                request_count,
+                error_count,
+                lifecycle,
             ),
         }
         self._cache = result
         self._cache_time = now
         return result
 
-    def get_liveness(self) -> Dict[str, Any]:
+    def get_liveness(self) -> dict[str, Any]:
         """Kubernetes liveness probe"""
         return {"status": "alive"}
 
-    def get_readiness(self) -> Dict[str, Any]:
+    def get_readiness(self) -> dict[str, Any]:
         """Kubernetes readiness probe — verifies subsystems are ready to serve."""
         checks = {}
         ready = True
@@ -671,7 +716,7 @@ class HealthController:
         }
 
 
-_health_controller: Optional[HealthController] = None
+_health_controller: HealthController | None = None
 
 
 def get_health_controller() -> HealthController:

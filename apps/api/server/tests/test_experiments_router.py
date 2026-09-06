@@ -1,8 +1,5 @@
 """Tests for the /experiments router (CRUD + metric/param logging)."""
 
-import shutil
-import tempfile
-from pathlib import Path
 from test_support import get_test_client
 
 

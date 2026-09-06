@@ -6,30 +6,22 @@ Each route group is extracted into its own module; this file includes them via
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
-import time
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
-
+from domains.mobile.notifications import get_notification_service
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter, Depends
-
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
+from .controller import get_training_controller
+from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
-from .schemas import TrainingRequest, DistillStartRequest, LoraFinetuneRequest
-from .controller import get_training_controller
+from .schemas import TrainingRequest
 from .webhooks import notify_training_event
-from .helpers import _finish_job, _sloughgpt_trainer_kwds, _run_async
-from domains.training.executor import get_training_executor
-from domains.shared import find_repo_root
-from domains.mobile.notifications import get_notification_service
 
 logger = logging.getLogger("slo")
 
@@ -37,26 +29,32 @@ router = APIRouter(tags=["training-execution"])
 
 # Include legacy /train endpoints
 from .legacy import router as legacy_router
+
 router.include_router(legacy_router)
 
 # Include LoRA routes
 from .lora import router as lora_router
+
 router.include_router(lora_router)
 
 # Include distill routes
 from .distill import router as distill_router
+
 router.include_router(distill_router)
 
 # Include visual routes
 from .visual import router as visual_router
+
 router.include_router(visual_router)
 
 # Include from_feedback routes
 from .from_feedback import router as feedback_router
+
 router.include_router(feedback_router)
 
 # Include builds routes
 from .builds import router as builds_router
+
 router.include_router(builds_router)
 
 
@@ -110,11 +108,17 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
     # Audit trail — training job start (char-level fine-tune)
     try:
         from infrastructure.auth import get_audit_logger
+
         get_audit_logger().log(
             "training.start",
             resource=request.dataset.strip() if request.dataset else out_stem,
             detail="char",
-            extra={"job_id": job_id, "model": request.model, "epochs": request.epochs, "source_kind": source_kind},
+            extra={
+                "job_id": job_id,
+                "model": request.model,
+                "epochs": request.epochs,
+                "source_kind": source_kind,
+            },
         )
     except Exception as exc:
         logger.debug("audit log failed: %s", exc)
@@ -147,10 +151,12 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
     pause_event = threading.Event()
     training_jobs[job_id]["_pause_event"] = pause_event
     from .runtime import get_training_runtime
+
     get_training_runtime().register(job_id, training_jobs[job_id], cancel_event, req_snapshot)
 
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         get_cancel_manager().register(
             op_type=OpType.TRAINING,
             label=str(req_snapshot.get("name") or job_id),
@@ -192,13 +198,17 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)
-                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": float(tl), "type": "train"})
+                    rec.setdefault("loss_history", []).append(
+                        {"step": rec.get("global_step", 0), "value": float(tl), "type": "train"}
+                    )
                 el = info.get("eval_loss")
                 if el is not None:
                     fe = float(el)
                     rec["eval_loss"] = fe
                     rec["loss"] = fe
-                    rec.setdefault("loss_history", []).append({"step": rec.get("global_step", 0), "value": fe, "type": "eval"})
+                    rec.setdefault("loss_history", []).append(
+                        {"step": rec.get("global_step", 0), "value": fe, "type": "eval"}
+                    )
                 get_training_runtime().sync(jid)
 
             trainer = SloughGPTTrainer(
@@ -232,8 +242,8 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
 
             # Trigger webhook notification (fire and forget)
             try:
-
-                _run_async(notify_training_event(
+                _run_async(
+                    notify_training_event(
                         "training.completed",
                         {
                             "job_id": jid,
@@ -268,8 +278,8 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
 
             # Trigger webhook notification (fire and forget)
             try:
-
-                _run_async(notify_training_event(
+                _run_async(
+                    notify_training_event(
                         "training.failed",
                         {
                             "job_id": jid,
@@ -310,6 +320,7 @@ async def start_training(request: dict, auth_user: dict = Depends(require_auth_i
         "dataset": request.dataset,
         "epochs": request.epochs,
     }
+
 
 # ── Visual Training (delegated to visual.py) ────────────────────
 # Note: visual routes are in training/visual.py, included via router below.

@@ -4,13 +4,12 @@ Manages global training state: running, paused, idle.
 Provides unified control over all training operations.
 """
 
-import threading
-import time
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import Any, Optional, Dict
-from datetime import datetime
 import logging
+import threading
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger("slo.training")
 
@@ -38,10 +37,10 @@ class TrainingController:
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False)
 
     # Current job info
-    current_job_id: Optional[str] = field(default=None, init=False)
-    current_job_name: Optional[str] = field(default=None, init=False)
-    started_at: Optional[datetime] = field(default=None, init=False)
-    paused_at: Optional[datetime] = field(default=None, init=False)
+    current_job_id: str | None = field(default=None, init=False)
+    current_job_name: str | None = field(default=None, init=False)
+    started_at: datetime | None = field(default=None, init=False)
+    paused_at: datetime | None = field(default=None, init=False)
 
     # Statistics
     total_jobs: int = field(default=0, init=False)
@@ -87,7 +86,7 @@ class TrainingController:
         """Check if training can be stopped."""
         return self.state in (TrainingState.RUNNING, TrainingState.PAUSED)
 
-    def start(self, job_id: str, job_name: str = "training") -> Dict[str, Any]:
+    def start(self, job_id: str, job_name: str = "training") -> dict[str, Any]:
         """
         Start a new training session.
 
@@ -118,7 +117,7 @@ class TrainingController:
                 "message": "Training started",
             }
 
-    def pause(self) -> Dict[str, Any]:
+    def pause(self) -> dict[str, Any]:
         """Pause current training."""
         with self._lock:
             if not self.can_pause():
@@ -138,7 +137,7 @@ class TrainingController:
                 "paused_at": self.paused_at.isoformat(),
             }
 
-    def resume(self) -> Dict[str, Any]:
+    def resume(self) -> dict[str, Any]:
         """Resume paused training."""
         with self._lock:
             if not self.can_resume():
@@ -161,7 +160,7 @@ class TrainingController:
                 "resume_duration_seconds": resume_duration,
             }
 
-    def stop(self) -> Dict[str, Any]:
+    def stop(self) -> dict[str, Any]:
         """Stop current training."""
         with self._lock:
             if not self.can_stop():
@@ -179,7 +178,7 @@ class TrainingController:
                 "message": "Training stop requested",
             }
 
-    def complete(self) -> Dict[str, Any]:
+    def complete(self) -> dict[str, Any]:
         """Mark training as completed."""
         with self._lock:
             self._state = TrainingState.COMPLETED
@@ -194,7 +193,7 @@ class TrainingController:
                 "completed_jobs": self.completed_jobs,
             }
 
-    def fail(self, error: str = "") -> Dict[str, Any]:
+    def fail(self, error: str = "") -> dict[str, Any]:
         """Mark training as failed."""
         with self._lock:
             self._state = TrainingState.FAILED
@@ -210,7 +209,7 @@ class TrainingController:
                 "failed_jobs": self.failed_jobs,
             }
 
-    def reset(self) -> Dict[str, Any]:
+    def reset(self) -> dict[str, Any]:
         """Reset to idle state."""
         with self._lock:
             self._state = TrainingState.IDLE
@@ -225,7 +224,7 @@ class TrainingController:
                 "message": "Training controller reset",
             }
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """Get comprehensive training status."""
         with self._lock:
             return {

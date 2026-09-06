@@ -105,8 +105,9 @@ class MultimodalManager:
             try:
                 from domains.models.provider import register_provider
                 register_provider("multimodal", self._multimodal_engine)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to register multimodal engine as provider: %s", exc,
+                    extra={"tag": "MODEL"})
 
         # Pre-train on synthetic seed images in background (non-blocking)
         if self._multimodal_engine is not None and not getattr(self._multimodal_engine, '_trained', False):

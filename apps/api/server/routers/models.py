@@ -2,23 +2,29 @@
 Models Router - MVC View layer
 Uses ModelsController for business logic
 """
+
 import asyncio
-import os
 import logging
+import os
 import re
 import time
-
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import Any
+
+from controllers.models import get_models_controller
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-from pathlib import Path
-
-from schemas.models import ModelInfo, LoadModelRequest, ModelStatus
-from schemas.common import success_response, raise_error, classify_and_raise, wrap_controller_result, safe_audit_log
-from controllers.models import get_models_controller
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import (
+    classify_and_raise,
+    raise_error,
+    safe_audit_log,
+    success_response,
+    wrap_controller_result,
+)
+from schemas.models import LoadModelRequest, ModelInfo, ModelStatus
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +36,7 @@ _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "hug
 
 class ExportRequest(BaseModel):
     output_path: str = Field(default="models/exported", max_length=500)
-    format: str = Field(default="sou", pattern=r'^(sou|safetensors|onnx|gguf)$')
+    format: str = Field(default="sou", pattern=r"^(sou|safetensors|onnx|gguf)$")
     include_tokenizer: bool = True
 
 
@@ -41,13 +47,15 @@ class DownloadRequest(BaseModel):
 
 class QuantizeRequest(BaseModel):
     """Request body for POST /models/quantize."""
+
     bits: int = Field(default=8)
     mode: str = Field(default="symmetric")
 
 
 class PrecisionRequest(BaseModel):
     """Request body for POST /models/precision."""
-    mode: str = Field(default="auto", pattern=r'^(auto|fp32|fp16)$')
+
+    mode: str = Field(default="auto", pattern=r"^(auto|fp32|fp16)$")
 
 
 class ProcessGuardRequest(BaseModel):
@@ -68,30 +76,69 @@ class ModelsRouter:
         self.router.add_api_route(path="/current", endpoint=self.current_model, methods=["GET"])
         self.router.add_api_route(path="/hf", endpoint=self.list_hf_models, methods=["GET"])
         self.router.add_api_route(path="/logs", endpoint=self.get_model_logs, methods=["GET"])
-        self.router.add_api_route(path="/export", endpoint=self.export_model, methods=["POST"], tags=["models"])
-        self.router.add_api_route(path="/export/formats", endpoint=self.get_export_formats, methods=["GET"], tags=["models"])
+        self.router.add_api_route(
+            path="/export", endpoint=self.export_model, methods=["POST"], tags=["models"]
+        )
+        self.router.add_api_route(
+            path="/export/formats",
+            endpoint=self.get_export_formats,
+            methods=["GET"],
+            tags=["models"],
+        )
         self.router.add_api_route(path="/download", endpoint=self.start_download, methods=["POST"])
-        self.router.add_api_route(path="/download/{model_id:path}", endpoint=self.get_download_status, methods=["GET"])
+        self.router.add_api_route(
+            path="/download/{model_id:path}", endpoint=self.get_download_status, methods=["GET"]
+        )
         self.router.add_api_route(path="/downloads", endpoint=self.list_downloads, methods=["GET"])
-        self.router.add_api_route(path="/download/{model_id:path}/cancel", endpoint=self.cancel_download, methods=["POST"])
-        self.router.add_api_route(path="/download/{model_id:path}/verify", endpoint=self.verify_download, methods=["POST"])
-        self.router.add_api_route(path="/download/{model_id:path}/retry", endpoint=self.retry_download, methods=["POST"])
+        self.router.add_api_route(
+            path="/download/{model_id:path}/cancel", endpoint=self.cancel_download, methods=["POST"]
+        )
+        self.router.add_api_route(
+            path="/download/{model_id:path}/verify", endpoint=self.verify_download, methods=["POST"]
+        )
+        self.router.add_api_route(
+            path="/download/{model_id:path}/retry", endpoint=self.retry_download, methods=["POST"]
+        )
         self.router.add_api_route(path="/cache-usage", endpoint=self.cache_usage, methods=["GET"])
-        self.router.add_api_route(path="/download/qwen-gguf", endpoint=self.download_qwen_gguf, methods=["GET"])
-        self.router.add_api_route(path="/visual-load", endpoint=self.visual_model_load, methods=["POST"])
+        self.router.add_api_route(
+            path="/download/qwen-gguf", endpoint=self.download_qwen_gguf, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/visual-load", endpoint=self.visual_model_load, methods=["POST"]
+        )
         self.router.add_api_route(path="/quantize", endpoint=self.quantize_model, methods=["POST"])
-        self.router.add_api_route(path="/dequantize", endpoint=self.dequantize_model, methods=["POST"])
+        self.router.add_api_route(
+            path="/dequantize", endpoint=self.dequantize_model, methods=["POST"]
+        )
         self.router.add_api_route(path="/precision", endpoint=self.set_precision, methods=["POST"])
         self.router.add_api_route(path="/catalog", endpoint=self.get_catalog, methods=["GET"])
-        self.router.add_api_route(path="/catalog/stats", endpoint=self.get_catalog_stats, methods=["GET"])
-        self.router.add_api_route(path="/conversion-status", endpoint=self.get_conversion_status, methods=["GET"])
-        self.router.add_api_route(path="/process-guard", endpoint=self.get_process_guard, methods=["GET"])
-        self.router.add_api_route(path="/process-guard", endpoint=self.set_process_guard, methods=["POST"])
-        self.router.add_api_route(path="/engine/status", endpoint=self.get_engine_status, methods=["GET"])
-        self.router.add_api_route(path="/engine/reload", endpoint=self.reload_engine, methods=["POST"])
-        self.router.add_api_route(path="/debug/providers", endpoint=self.debug_providers, methods=["GET"])
-        self.router.add_api_route(path="/memory-cleanup", endpoint=self.memory_cleanup, methods=["POST"])
-        self.router.add_api_route(path="/memory-pressure", endpoint=self.memory_pressure, methods=["GET"])
+        self.router.add_api_route(
+            path="/catalog/stats", endpoint=self.get_catalog_stats, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/conversion-status", endpoint=self.get_conversion_status, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/process-guard", endpoint=self.get_process_guard, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/process-guard", endpoint=self.set_process_guard, methods=["POST"]
+        )
+        self.router.add_api_route(
+            path="/engine/status", endpoint=self.get_engine_status, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/engine/reload", endpoint=self.reload_engine, methods=["POST"]
+        )
+        self.router.add_api_route(
+            path="/debug/providers", endpoint=self.debug_providers, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/memory-cleanup", endpoint=self.memory_cleanup, methods=["POST"]
+        )
+        self.router.add_api_route(
+            path="/memory-pressure", endpoint=self.memory_pressure, methods=["GET"]
+        )
 
     @staticmethod
     def _audit_model_id(provider) -> str:
@@ -153,14 +200,14 @@ class ModelsRouter:
 
         # Strip cache prefix: "models--Qwen--Qwen2.5..." → "Qwen2.5..."
         if name.startswith("models--"):
-            after = name[len("models--"):]
+            after = name[len("models--") :]
             # "models--org--model" → take everything after second "--"
             idx = after.find("--")
             if idx >= 0:
-                name = after[idx + 2:]
+                name = after[idx + 2 :]
 
         # Split on common separators
-        parts = re.split(r'[/\-_]', name)
+        parts = re.split(r"[/\-_]", name)
 
         result = []
         for part in parts:
@@ -170,25 +217,25 @@ class ModelsRouter:
             if len(part) <= 3 and part.isalpha() and part.islower():
                 result.append(part.upper())
             # All lowercase letters followed by digits: "gpt2", "llama3"
-            elif re.match(r'^[a-z]+\d+$', part):
-                match = re.match(r'^([a-z]+)(\d+)$', part)
+            elif re.match(r"^[a-z]+\d+$", part):
+                match = re.match(r"^([a-z]+)(\d+)$", part)
                 if match:
                     result.append(match.group(1).upper())
                     result.append(match.group(2))
                 else:
                     result.append(part.upper())
             # Number with size suffix: "0.5B", "3B", "8B"
-            elif re.match(r'^\d+\.?\d*[a-zA-Z]$', part):
+            elif re.match(r"^\d+\.?\d*[a-zA-Z]$", part):
                 result.append(part)
             else:
                 # Normal mixed case: split at letter→digit and digit→letter boundaries
                 # But keep short digit-letter patterns together (e.g., "4e1t")
-                sub = re.sub(r'([a-zA-Z]{2,})(\d)', r'\1 \2', part)
-                sub = re.sub(r'(\d)([a-zA-Z]{2,})', r'\1 \2', sub)
+                sub = re.sub(r"([a-zA-Z]{2,})(\d)", r"\1 \2", part)
+                sub = re.sub(r"(\d)([a-zA-Z]{2,})", r"\1 \2", sub)
                 # Capitalize first letter of each sub-word
                 words = sub.split()
                 for w in words:
-                    if re.match(r'^[\d.]+$', w):
+                    if re.match(r"^[\d.]+$", w):
                         result.append(w)
                     else:
                         result.append(w[0].upper() + w[1:])
@@ -203,15 +250,17 @@ class ModelsRouter:
             if current:
                 params = int(current.get("parameters", 0) or 0)
                 vocab = int(current.get("vocab_size", 0) or 0)
-                models.append(ModelInfo(
-                    model_id=current["model_id"],
-                    status=ModelStatus.LOADED,
-                    device=current["device"],
-                    parameters=params,
-                    vocab_size=vocab,
-                    loaded_at=current.get("loaded_at"),
-                    description=self._describe_model(current["model_id"], params, loaded=True),
-                ))
+                models.append(
+                    ModelInfo(
+                        model_id=current["model_id"],
+                        status=ModelStatus.LOADED,
+                        device=current["device"],
+                        parameters=params,
+                        vocab_size=vocab,
+                        loaded_at=current.get("loaded_at"),
+                        description=self._describe_model(current["model_id"], params, loaded=True),
+                    )
+                )
             loaded_ids = {m.model_id for m in models}
             hf_models = ctrl.list_hf_models()
             for entry in hf_models:
@@ -219,15 +268,17 @@ class ModelsRouter:
                 if model_id not in loaded_ids:
                     params = int(entry.get("parameters", 0) or 0)
                     vocab = int(entry.get("vocab_size", 0) or 0)
-                    models.append(ModelInfo(
-                        model_id=model_id,
-                        status=ModelStatus.AVAILABLE,
-                        device="cpu",
-                        parameters=params,
-                        vocab_size=vocab,
-                        loaded_at=None,
-                        description=self._describe_model(model_id, params, loaded=False),
-                    ))
+                    models.append(
+                        ModelInfo(
+                            model_id=model_id,
+                            status=ModelStatus.AVAILABLE,
+                            device="cpu",
+                            parameters=params,
+                            vocab_size=vocab,
+                            loaded_at=None,
+                            description=self._describe_model(model_id, params, loaded=False),
+                        )
+                    )
             return success_response(data=[m.model_dump() for m in models])
         except Exception as e:
             classify_and_raise(e, source="models.list")
@@ -245,6 +296,7 @@ class ModelsRouter:
             _elapsed_ms = (time.monotonic() - _t0) * 1000
             try:
                 from domains.infrastructure.server_state import get_server_state
+
                 ss = get_server_state()
                 if result.get("status") == "loaded":
                     resolved_device = result.get("device") or req.device.value
@@ -254,7 +306,13 @@ class ModelsRouter:
             except Exception as e:
                 logger.warning("Failed to record model load event: %s", e)
             logger.info("Model loaded: %s (%.0fms)", req.model_id, _elapsed_ms)
-            safe_audit_log("model.load", resource=req.model_id, detail=f"{result.get('status', 'unknown')} ({_elapsed_ms:.0f}ms)", device=req.device.value, quantize=req.quantize)
+            safe_audit_log(
+                "model.load",
+                resource=req.model_id,
+                detail=f"{result.get('status', 'unknown')} ({_elapsed_ms:.0f}ms)",
+                device=req.device.value,
+                quantize=req.quantize,
+            )
             return wrap_controller_result(result)
         except Exception as e:
             classify_and_raise(e, source="models.load")
@@ -267,17 +325,23 @@ class ModelsRouter:
             if not model_id:
                 try:
                     from domains.infrastructure.model_registry import get_model_registry
+
                     model_id = get_model_registry().default_id
                 except Exception as e:
                     logger.warning("Failed to get default model_id for unload: %s", e)
             result = ctrl.unload_model()
             try:
                 from domains.infrastructure.server_state import get_server_state
+
                 ss = get_server_state()
                 ss.record_model_event("unload", model_id or "unknown")
             except Exception as e:
                 logger.warning("Failed to record model unload event: %s", e)
-            safe_audit_log("model.unload", resource=model_id or "unknown", detail=result.get("status", "unknown"))
+            safe_audit_log(
+                "model.unload",
+                resource=model_id or "unknown",
+                detail=result.get("status", "unknown"),
+            )
             return wrap_controller_result(result)
         except Exception as e:
             classify_and_raise(e, source="models.unload")
@@ -293,7 +357,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.current")
 
-    async def list_hf_models(self, q: Optional[str] = None) -> dict:
+    async def list_hf_models(self, q: str | None = None) -> dict:
         """List HuggingFace available models with actual sizes and cache status."""
         try:
             ctrl = get_models_controller()
@@ -305,13 +369,15 @@ class ModelsRouter:
                     try:
                         return is_model_cached(model_id)
                     except Exception as exc:
-                        logger.error("is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"})
+                        logger.error(
+                            "is_model_cached(%s) failed: %s", model_id, exc, extra={"tag": "MODEL"}
+                        )
                         return False
 
-                def _cache_model_id(cache_dir_name: str) -> Optional[str]:
+                def _cache_model_id(cache_dir_name: str) -> str | None:
                     if not cache_dir_name.startswith("models--"):
                         return None
-                    return cache_dir_name[len("models--"):].replace("--", "/")
+                    return cache_dir_name[len("models--") :].replace("--", "/")
 
                 models_out = []
                 seen_ids = set()
@@ -334,13 +400,14 @@ class ModelsRouter:
                                 all_model_ids.append(cached_id)
                     except Exception:
                         logger.debug("Failed to scan HF cache", exc_info=True)
-                size_results: dict[str, Optional[float]] = {}
+                size_results: dict[str, float | None] = {}
                 cached_results: dict[str, bool] = {}
 
                 def _compute_one(mid: str):
                     return mid, compute_model_size_gb(mid), _is_cached(mid)
 
                 from domains.infrastructure.resource_manager import get_resource_manager
+
                 rm = get_resource_manager()
                 max_workers = min(max(len(all_model_ids), rm.inference_pool_size * 2), 16)
                 with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -357,15 +424,17 @@ class ModelsRouter:
 
                 for mid in all_model_ids:
                     size_gb = size_results.get(mid)
-                    models_out.append({
-                        "id": mid,
-                        "name": self._model_display_name(mid),
-                        "hf_model_id": mid,
-                        "source": "huggingface",
-                        "size_mb": size_gb * 1024 if size_gb is not None else None,
-                        "size_gb": size_gb,
-                        "cached": cached_results.get(mid, False),
-                    })
+                    models_out.append(
+                        {
+                            "id": mid,
+                            "name": self._model_display_name(mid),
+                            "hf_model_id": mid,
+                            "source": "huggingface",
+                            "size_mb": size_gb * 1024 if size_gb is not None else None,
+                            "size_gb": size_gb,
+                            "cached": cached_results.get(mid, False),
+                        }
+                    )
 
                 return models_out
 
@@ -374,26 +443,35 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.hf_list")
 
-    async def get_model_logs(self, limit: int = 50, model_filter: Optional[str] = None) -> dict:
+    async def get_model_logs(self, limit: int = 50, model_filter: str | None = None) -> dict:
         """Get model request logs (for debugging/monitoring)."""
         try:
             from state import model_request_logger as _logger
+
             if _logger:
-                return success_response(data=_logger.get_logs(limit=limit, model=model_filter), meta=_logger.get_stats())
+                return success_response(
+                    data=_logger.get_logs(limit=limit, model=model_filter), meta=_logger.get_stats()
+                )
             return success_response(data=[], meta={})
         except ImportError:
             return success_response(data=[], meta={})
         except Exception as e:
             classify_and_raise(e, source="models.logs")
 
-    async def export_model(self, request: ExportRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def export_model(
+        self, request: ExportRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Export current model to file."""
-        import state as server_state
         import time
+
+        import state as server_state
+
         if server_state.model is None:
             raise_error("No model loaded", code="E_NOT_FOUND")
         try:
-            from domains.training.export import export_model as do_export, ExportConfig
+            from domains.training.export import ExportConfig
+            from domains.training.export import export_model as do_export
+
             config = ExportConfig(
                 input_path="current",
                 output_path=request.output_path,
@@ -407,8 +485,19 @@ class ModelsRouter:
             _t0 = time.monotonic()
             results = do_export(config, server_state.model, server_state.tokenizer)
             _elapsed_ms = (time.monotonic() - _t0) * 1000
-            safe_audit_log("model.export", resource=request.output_path or "unknown", detail=f"format={request.format} elapsed={_elapsed_ms:.0f}ms")
-            return success_response(data={"format": request.format, "files": results, "elapsed_ms": round(_elapsed_ms, 1)}, message="exported")
+            safe_audit_log(
+                "model.export",
+                resource=request.output_path or "unknown",
+                detail=f"format={request.format} elapsed={_elapsed_ms:.0f}ms",
+            )
+            return success_response(
+                data={
+                    "format": request.format,
+                    "files": results,
+                    "elapsed_ms": round(_elapsed_ms, 1),
+                },
+                message="exported",
+            )
         except Exception as e:
             logger.warning("Export model failed: %s", e)
             classify_and_raise(e, source="export_model")
@@ -417,11 +506,14 @@ class ModelsRouter:
         """Get list of supported export formats."""
         try:
             from domains.training.export import list_export_formats
+
             return success_response(data=list_export_formats())
         except Exception as e:
             classify_and_raise(e, source="models.export_formats")
 
-    async def start_download(self, req: DownloadRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def start_download(
+        self, req: DownloadRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         """Start downloading a model from HuggingFace Hub with progress tracking."""
         try:
             from domains.infrastructure.download_manager import get_download_manager
@@ -432,10 +524,17 @@ class ModelsRouter:
                 return success_response(data={"model_id": req.model_id}, message="already_cached")
 
             if mgr.is_downloading(req.model_id):
-                return success_response(data={"model_id": req.model_id}, message="already_downloading")
+                return success_response(
+                    data={"model_id": req.model_id}, message="already_downloading"
+                )
 
             asyncio.create_task(self._run_download(req.model_id, req.total_bytes_hint))
-            safe_audit_log("model.download", resource=req.model_id, detail="started", total_bytes_hint=req.total_bytes_hint)
+            safe_audit_log(
+                "model.download",
+                resource=req.model_id,
+                detail="started",
+                total_bytes_hint=req.total_bytes_hint,
+            )
             return success_response(data={"model_id": req.model_id}, message="started")
         except Exception as e:
             classify_and_raise(e, source="models.download_start")
@@ -443,12 +542,13 @@ class ModelsRouter:
     async def _run_download(self, model_id: str, total_bytes_hint: int):
         """Background task that runs the actual download."""
         import time as _time
-        from domains.infrastructure.download_manager import get_download_manager
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+
         from controllers.models import get_models_controller
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+        from domains.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
-        cm_op: Optional[str] = None
+        cm_op: str | None = None
         _download_t0 = _time.monotonic()
         try:
             cm = get_cancel_manager()
@@ -459,47 +559,81 @@ class ModelsRouter:
             )
             cm.start(cm_op)
         except Exception as e:
-            logger.warning("CancelManager registration failed for download %s: %s", model_id, e, extra={"tag": "MODEL"})
+            logger.warning(
+                "CancelManager registration failed for download %s: %s",
+                model_id,
+                e,
+                extra={"tag": "MODEL"},
+            )
 
         try:
             result = await mgr.download(model_id, total_bytes_hint)
             _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
 
             if result.get("status") == "complete":
-                safe_audit_log("model.download.complete", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms size={result.get('size', 0)}")
+                safe_audit_log(
+                    "model.download.complete",
+                    resource=model_id,
+                    detail=f"elapsed={_download_elapsed_ms:.0f}ms size={result.get('size', 0)}",
+                )
                 ctrl = get_models_controller()
                 try:
                     ctrl.load_model(model_id)
                 except Exception as e:
-                    logger.warning("Auto-load after download failed for %s: %s", model_id, e, extra={"tag": "MODEL"})
+                    logger.warning(
+                        "Auto-load after download failed for %s: %s",
+                        model_id,
+                        e,
+                        extra={"tag": "MODEL"},
+                    )
                 if cm_op:
                     try:
                         get_cancel_manager().finish(cm_op)
                     except Exception as exc:
-                        logger.warning("CancelManager.finish failed for download %s: %s", model_id, exc)
+                        logger.warning(
+                            "CancelManager.finish failed for download %s: %s", model_id, exc
+                        )
             elif result.get("status") == "cancelled":
                 if cm_op:
                     try:
                         get_cancel_manager().finish(cm_op, error="cancelled")
                     except Exception as exc:
-                        logger.warning("CancelManager.finish failed for cancelled download %s: %s", model_id, exc)
+                        logger.warning(
+                            "CancelManager.finish failed for cancelled download %s: %s",
+                            model_id,
+                            exc,
+                        )
             else:
-                safe_audit_log("model.download.failed", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms error={result.get('error', 'unknown')}")
+                safe_audit_log(
+                    "model.download.failed",
+                    resource=model_id,
+                    detail=f"elapsed={_download_elapsed_ms:.0f}ms error={result.get('error', 'unknown')}",
+                )
                 if cm_op:
                     try:
-                        get_cancel_manager().finish(cm_op, error=result.get("error", "download failed"))
+                        get_cancel_manager().finish(
+                            cm_op, error=result.get("error", "download failed")
+                        )
                     except Exception as exc:
-                        logger.warning("CancelManager.finish failed for failed download %s: %s", model_id, exc)
+                        logger.warning(
+                            "CancelManager.finish failed for failed download %s: %s", model_id, exc
+                        )
         except Exception as e:
             _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
-            safe_audit_log("model.download.failed", resource=model_id, detail=f"elapsed={_download_elapsed_ms:.0f}ms error={e}")
+            safe_audit_log(
+                "model.download.failed",
+                resource=model_id,
+                detail=f"elapsed={_download_elapsed_ms:.0f}ms error={e}",
+            )
             if cm_op:
                 try:
                     get_cancel_manager().finish(cm_op, error=str(e))
                 except Exception as exc:
-                    logger.warning("CancelManager.finish failed for download exception %s: %s", model_id, exc)
+                    logger.warning(
+                        "CancelManager.finish failed for download exception %s: %s", model_id, exc
+                    )
 
-    async def get_download_status(self, model_id: str) -> Dict[str, Any]:
+    async def get_download_status(self, model_id: str) -> dict[str, Any]:
         """Get download progress for a specific model."""
         try:
             from domains.infrastructure.download_manager import get_download_manager
@@ -508,12 +642,14 @@ class ModelsRouter:
             progress = mgr.get_progress(model_id)
             if progress is None:
                 cached = mgr.is_cached(model_id)
-                return success_response(data={"model_id": model_id, "cached": cached}, message="not_found")
+                return success_response(
+                    data={"model_id": model_id, "cached": cached}, message="not_found"
+                )
             return success_response(data=progress)
         except Exception as e:
             classify_and_raise(e, source="models.download_status")
 
-    async def list_downloads(self) -> Dict[str, Any]:
+    async def list_downloads(self) -> dict[str, Any]:
         """List all active and recent downloads."""
         try:
             from domains.infrastructure.download_manager import get_download_manager
@@ -524,7 +660,9 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.downloads_list")
 
-    async def cancel_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def cancel_download(
+        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         """Cancel an in-progress download."""
         try:
             from domains.infrastructure.download_manager import get_download_manager
@@ -537,16 +675,19 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.download_cancel")
 
-    async def verify_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def verify_download(
+        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         """Verify a downloaded model's weight files against Hub SHA-256 checksums.
         Returns verification result and on-disk size."""
         from domains.infrastructure.hf_hub import (
             get_cache_dir,
-            verify_model,
             list_missing_files,
+            verify_model,
         )
 
         try:
+
             def _verify():
                 cache_dir = get_cache_dir(model_id)
                 refs_main = cache_dir / "refs" / "main"
@@ -563,13 +704,16 @@ class ModelsRouter:
                     "missing_files": missing,
                     "size_on_disk": size_str,
                 }
+
             result = await asyncio.to_thread(_verify)
             return success_response(data=result)
         except Exception as e:
             logger.warning("Verify download failed (model=%s): %s", model_id, e)
             classify_and_raise(e, source="verify_download")
 
-    async def retry_download(self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def retry_download(
+        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         try:
             """Redownload a cached model (cleanup + fresh download)."""
             from domains.infrastructure.download_manager import (
@@ -591,7 +735,8 @@ class ModelsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="models.retry_download")
-    async def cache_usage(self) -> Dict[str, Any]:
+
+    async def cache_usage(self) -> dict[str, Any]:
         try:
             """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
             cache = _hf_cache_dir
@@ -616,16 +761,26 @@ class ModelsRouter:
 
             total, count = await asyncio.to_thread(_compute)
             if total == 0 and count == 0:
-                return success_response(data={"total_bytes": 0, "total_gb": 0, "model_count": 0, "cache_dir": str(cache)})
-            return success_response(data={
-                "total_bytes": total,
-                "total_gb": round(total / (1024**3), 2),
-                "model_count": count,
-                "cache_dir": str(cache),
-            })
+                return success_response(
+                    data={
+                        "total_bytes": 0,
+                        "total_gb": 0,
+                        "model_count": 0,
+                        "cache_dir": str(cache),
+                    }
+                )
+            return success_response(
+                data={
+                    "total_bytes": total,
+                    "total_gb": round(total / (1024**3), 2),
+                    "model_count": count,
+                    "cache_dir": str(cache),
+                }
+            )
 
         except Exception as e:
             classify_and_raise(e, source="models.cache_usage")
+
     async def download_qwen_gguf(self) -> dict:
         """Download Qwen2.5-0.5B-Instruct GGUF (Q4_K_M) from HuggingFace Hub.
 
@@ -646,9 +801,14 @@ class ModelsRouter:
 
         if await asyncio.to_thread(_check_cache):
             logger.info("Serving cached GGUF: %s", cached_path, extra={"tag": "MODEL"})
-            return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
+            return FileResponse(
+                str(cached_path), media_type="application/octet-stream", filename=filename
+            )
 
-        logger.info("Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...", extra={"tag": "MODEL"})
+        logger.info(
+            "Downloading Qwen GGUF from HuggingFace Hub (this may take a while)...",
+            extra={"tag": "MODEL"},
+        )
         try:
             url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
             _t0 = time.monotonic()
@@ -659,21 +819,42 @@ class ModelsRouter:
             await asyncio.to_thread(_download)
             _elapsed_ms = (time.monotonic() - _t0) * 1000
             file_size = await asyncio.to_thread(lambda: cached_path.stat().st_size)
-            safe_audit_log("model.download_gguf", resource=repo_id, detail=f"elapsed={_elapsed_ms:.0f}ms size={file_size}")
-            logger.info("GGUF downloaded and cached: %s (%.0fms)", cached_path, _elapsed_ms, extra={"tag": "MODEL"})
-            return FileResponse(str(cached_path), media_type="application/octet-stream", filename=filename)
+            safe_audit_log(
+                "model.download_gguf",
+                resource=repo_id,
+                detail=f"elapsed={_elapsed_ms:.0f}ms size={file_size}",
+            )
+            logger.info(
+                "GGUF downloaded and cached: %s (%.0fms)",
+                cached_path,
+                _elapsed_ms,
+                extra={"tag": "MODEL"},
+            )
+            return FileResponse(
+                str(cached_path), media_type="application/octet-stream", filename=filename
+            )
         except Exception as e:
             logger.warning("Download GGUF failed: %s", e)
             classify_and_raise(e, source="download_gguf")
 
-    async def visual_model_load(self, model_dir: str = "", model_id: str = "", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def visual_model_load(
+        self,
+        model_dir: str = "",
+        model_id: str = "",
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         try:
             """Load a vision / multimodal model from a local directory.
 
             ``model_dir`` — path to the model directory on disk.
             ``model_id``  — HuggingFace model identifier (used when `model_dir` is empty).
             """
-            logger.info("Visual model load requested: dir=%s, id=%s", model_dir, model_id, extra={"tag": "MODEL"})
+            logger.info(
+                "Visual model load requested: dir=%s, id=%s",
+                model_dir,
+                model_id,
+                extra={"tag": "MODEL"},
+            )
             ctrl = get_models_controller()
             if model_dir:
                 result = ctrl.load_model_path(model_dir)
@@ -685,7 +866,10 @@ class ModelsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="models.visual_model_load")
-    async def quantize_model(self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def quantize_model(
+        self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """Apply int8/int4 quantization to the currently loaded model.
 
@@ -703,7 +887,10 @@ class ModelsRouter:
             try:
                 from domains.infrastructure.quantization import Quantine
             except ImportError:
-                raise_error("Quantization not available — domains.infrastructure.quantization missing", "E_BAD_REQUEST")
+                raise_error(
+                    "Quantization not available — domains.infrastructure.quantization missing",
+                    "E_BAD_REQUEST",
+                )
             try:
                 from domains.infrastructure.quant_core.wrapper import HAS_AVX2
             except ImportError:
@@ -738,9 +925,11 @@ class ModelsRouter:
             # Walk linear layers using the appropriate walker
             if model_type == "slonet":
                 from domains.infrastructure.quantization import walk_slo_linears
+
                 layers = walk_slo_linears(model)
             else:
                 from domains.infrastructure.quantization import walk_hf_linears
+
                 layers = walk_hf_linears(model)
 
             engine = Quantine(bits=bits, mode=mode)
@@ -749,7 +938,7 @@ class ModelsRouter:
             for name, module in layers.items():
                 weight = module.weight.data
                 # Convert torch tensor to numpy if needed
-                if hasattr(weight, 'cpu'):
+                if hasattr(weight, "cpu"):
                     weight = weight.cpu().numpy().astype(np.float32).copy()
                 else:
                     weight = np.asarray(weight, dtype=np.float32).copy()
@@ -760,6 +949,7 @@ class ModelsRouter:
                     else:
                         # For HuggingFace models: monkey-patch forward with quantized path
                         from domains.infrastructure.quantization import QuantizedLinear
+
                         module._quant_info = info
                         ql = QuantizedLinear.from_linear(module, info)
                         module._ql = ql
@@ -773,6 +963,7 @@ class ModelsRouter:
                 model_path = provider._model_path
                 if model_path:
                     from pathlib import Path
+
                     p = Path(str(model_path))
                     quant_npz = p.with_suffix(p.suffix + ".quant.npz")
                     engine.save_weights(str(quant_npz), tensor_infos)
@@ -795,16 +986,26 @@ class ModelsRouter:
             # Check if AVX2 extension is available
             try:
                 from domains.infrastructure.quant_core.wrapper import HAS_AVX2
+
                 report["avx2_enabled"] = bool(HAS_AVX2)
             except Exception:
                 report["avx2_enabled"] = False
 
-            safe_audit_log("model.quantize", resource=self._audit_model_id(provider), detail=f"bits={bits} mode={mode}", bits=bits, mode=mode, layers_quantized=quantized_count, model_type=model_type)
+            safe_audit_log(
+                "model.quantize",
+                resource=self._audit_model_id(provider),
+                detail=f"bits={bits} mode={mode}",
+                bits=bits,
+                mode=mode,
+                layers_quantized=quantized_count,
+                model_type=model_type,
+            )
 
             return success_response(data=report)
 
         except Exception as e:
             classify_and_raise(e, source="models.quantize_model")
+
     async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """Reset quantized model back to float32 weights.
@@ -834,11 +1035,13 @@ class ModelsRouter:
             # Clear quantization state
             if model_type == "slonet":
                 from domains.infrastructure.quantization import walk_slo_linears
+
                 layers = walk_slo_linears(model)
                 for name, module in layers.items():
                     module._quant_info = None
             else:
                 from domains.infrastructure.quantization import walk_hf_linears
+
                 layers = walk_hf_linears(model)
                 for name, module in layers.items():
                     if hasattr(module, "_quant_info"):
@@ -853,17 +1056,27 @@ class ModelsRouter:
             # Clear the quantization engine
             provider._quant_engine = None
 
-            safe_audit_log("model.dequantize", resource=self._audit_model_id(provider), detail=f"model_type={model_type}", layers_reset=len(layers))
+            safe_audit_log(
+                "model.dequantize",
+                resource=self._audit_model_id(provider),
+                detail=f"model_type={model_type}",
+                layers_reset=len(layers),
+            )
 
-            return success_response(data={
-                "dequantized": True,
-                "model_type": model_type,
-                "layers_reset": len(layers),
-            })
+            return success_response(
+                data={
+                    "dequantized": True,
+                    "model_type": model_type,
+                    "layers_reset": len(layers),
+                }
+            )
 
         except Exception as e:
             classify_and_raise(e, source="models.dequantize_model")
-    async def set_precision(self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def set_precision(
+        self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """Switch compute precision on-the-fly without model reload.
 
@@ -879,8 +1092,8 @@ class ModelsRouter:
                 Active precision mode, benchmark results (if ``mode="auto"``),
                 and per-format timing/quality.
             """
-            from domains.slolib.gpu import get_accelerator, set_accelerator_precision
             import numpy as np
+            from domains.slolib.gpu import get_accelerator, set_accelerator_precision
 
             acc = get_accelerator()
             acc_mode = req.mode
@@ -893,6 +1106,7 @@ class ModelsRouter:
             if acc.name == "cpu":
                 # CPU path: use Quantine to select best format
                 from domains.infrastructure.quantization import Quantine
+
                 suggestion = Quantine.suggest_format()
                 result["precision"] = suggestion["format"]
                 result["bits"] = suggestion["bits"]
@@ -903,12 +1117,18 @@ class ModelsRouter:
                 # If int8/int4 selected, apply quantization
                 if suggestion["format"] in ("int8", "int4"):
                     from domains.models.provider import get_provider
+
                     provider = get_provider("slonet") or get_provider("hf-default")
                     if provider is not None:
                         model = getattr(provider, "_model", None)
                         if model is not None:
                             # Re-use existing quantize logic
-                            from domains.infrastructure.quantization import Quantine, walk_slo_linears, walk_hf_linears
+                            from domains.infrastructure.quantization import (
+                                Quantine,
+                                walk_hf_linears,
+                                walk_slo_linears,
+                            )
+
                             engine = Quantine(bits=suggestion["bits"], mode="symmetric")
                             if hasattr(model, "layers"):
                                 layers = walk_slo_linears(model)
@@ -934,31 +1154,41 @@ class ModelsRouter:
                 result["fp16_mode"] = acc._fp16_mode
                 result["reason"] = f"Accelerator {acc.name} set to {active}"
 
-            safe_audit_log("model.precision", resource=acc.name, detail=str(result.get("precision", "unknown")), mode=acc_mode)
+            safe_audit_log(
+                "model.precision",
+                resource=acc.name,
+                detail=str(result.get("precision", "unknown")),
+                mode=acc_mode,
+            )
 
             return wrap_controller_result(result)
 
         except Exception as e:
             classify_and_raise(e, source="models.set_precision")
+
     async def get_catalog(self) -> dict:
         try:
             """Get the persistent model catalog."""
             from domains.infrastructure.model_catalog import get_model_catalog
+
             catalog = get_model_catalog()
             return success_response(data=catalog.list_all())
 
         except Exception as e:
             classify_and_raise(e, source="models.get_catalog")
+
     async def get_catalog_stats(self) -> dict:
         try:
             """Get catalog statistics."""
             from domains.infrastructure.model_catalog import get_model_catalog
+
             catalog = get_model_catalog()
             return success_response(data=catalog.stats())
 
         except Exception as e:
             classify_and_raise(e, source="models.get_catalog_stats")
-    async def get_conversion_status(self, model_id: Optional[str] = None) -> dict:
+
+    async def get_conversion_status(self, model_id: str | None = None) -> dict:
         try:
             """Get model conversion/download status.
 
@@ -966,18 +1196,22 @@ class ModelsRouter:
             With model_id: returns status for that specific model.
             """
             from domains.infrastructure.conversion_tracker import get_tracker
+
             tracker = get_tracker()
 
             if model_id:
                 status = tracker.get(model_id)
                 if not status:
-                    return success_response(data={"model_id": model_id, "stage": "idle", "progress": 0})
+                    return success_response(
+                        data={"model_id": model_id, "stage": "idle", "progress": 0}
+                    )
                 return success_response(data=status)
 
             return success_response(data=tracker.get_active())
 
         except Exception as e:
             classify_and_raise(e, source="models.get_conversion_status")
+
     async def get_process_guard(self) -> dict:
         try:
             """Get ProcessGuard status.
@@ -990,7 +1224,10 @@ class ModelsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="models.get_process_guard")
-    async def set_process_guard(self, req: ProcessGuardRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def set_process_guard(
+        self, req: ProcessGuardRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """Enable or disable ProcessGuard at runtime.
 
@@ -1001,11 +1238,14 @@ class ModelsRouter:
             """
             ctrl = get_models_controller()
             result = ctrl.set_process_guard_enabled(req.enabled)
-            safe_audit_log("model.process_guard", resource="process_guard", detail=f"enabled={req.enabled}")
+            safe_audit_log(
+                "model.process_guard", resource="process_guard", detail=f"enabled={req.enabled}"
+            )
             return success_response(data=result)
 
         except Exception as e:
             classify_and_raise(e, source="models.set_process_guard")
+
     async def get_engine_status(self) -> dict:
         try:
             """Get standalone inference engine status.
@@ -1014,10 +1254,12 @@ class ModelsRouter:
             the client is connected, the model id, and the last 20 lines of stderr.
             """
             import state as server_state
+
             proc = getattr(server_state, "_inference_engine_proc", None)
             provider = getattr(server_state, "provider", None)
             stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
             from domains.infrastructure.inference_client import InferenceClient
+
             is_client = isinstance(provider, InferenceClient)
             pid = proc.pid if proc is not None else None
             alive = proc.poll() is None if proc is not None else False
@@ -1029,19 +1271,24 @@ class ModelsRouter:
                     metrics = health.get("metrics", {})
                 except Exception:
                     health = {"type": "error"}
-            return success_response(data={
-                "enabled": is_client,
-                "pid": pid,
-                "alive": alive,
-                "model_id": getattr(provider, "model_id", None) if is_client else None,
-                "health": health,
-                "metrics": metrics,
-                "stderr_tail": stderr_tail[-20:],
-            })
+            return success_response(
+                data={
+                    "enabled": is_client,
+                    "pid": pid,
+                    "alive": alive,
+                    "model_id": getattr(provider, "model_id", None) if is_client else None,
+                    "health": health,
+                    "metrics": metrics,
+                    "stderr_tail": stderr_tail[-20:],
+                }
+            )
 
         except Exception as e:
             classify_and_raise(e, source="models.get_engine_status")
-    async def reload_engine(self, req: Dict[str, Any], auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def reload_engine(
+        self, req: dict[str, Any], auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """Hot-reload the inference engine model.
 
@@ -1051,6 +1298,7 @@ class ModelsRouter:
             """
             import state as server_state
             from domains.infrastructure.inference_client import InferenceClient
+
             provider = getattr(server_state, "provider", None)
             if not isinstance(provider, InferenceClient):
                 return success_response(data={"error": "Inference engine not active"})
@@ -1059,7 +1307,11 @@ class ModelsRouter:
             result = await asyncio.to_thread(provider.reload, model_id, slnc_path)
             if result.get("type") == "reload_ok":
                 server_state.model_type = model_id
-            safe_audit_log("model.reload_engine", resource=model_id or "unknown", detail=f"result={result.get('type', 'unknown')}")
+            safe_audit_log(
+                "model.reload_engine",
+                resource=model_id or "unknown",
+                detail=f"result={result.get('type', 'unknown')}",
+            )
             return success_response(data=result)
         except Exception as e:
             classify_and_raise(e, source="models.reload_engine")
@@ -1072,45 +1324,52 @@ class ModelsRouter:
         failures.
         """
         import state as server_state
-        from domains.models.provider import list_providers, get_provider
+        from domains.models.provider import get_provider, list_providers
 
         providers = {}
         for name in list_providers():
             p = get_provider(name)
-            info: Dict[str, Any] = {
+            info: dict[str, Any] = {
                 "type": type(p).__name__,
                 "module": type(p).__module__,
             }
             # ProviderRouter-specific: show text provider name
-            if hasattr(p, '_text_name'):
+            if hasattr(p, "_text_name"):
                 info["text_provider"] = p._text_name
-            if hasattr(p, '_processors'):
+            if hasattr(p, "_processors"):
                 info["processors"] = [type(proc).__name__ for proc in p._processors]
             # SloNetChatProvider-specific
-            if hasattr(p, '_model_id'):
+            if hasattr(p, "_model_id"):
                 info["model_id"] = p._model_id
-            if hasattr(p, '_server'):
+            if hasattr(p, "_server"):
                 srv = p._server
                 info["server"] = {
                     "type": type(srv).__name__,
-                    "has_circuit_breaker": hasattr(srv, '_circuit_breaker'),
+                    "has_circuit_breaker": hasattr(srv, "_circuit_breaker"),
                 }
             providers[name] = info
 
         model_state = {
             "model": type(server_state.model).__name__ if server_state.model is not None else None,
-            "model_type": getattr(server_state, 'model_type', None),
-            "tokenizer": type(server_state.tokenizer).__name__ if getattr(server_state, 'tokenizer', None) is not None else None,
-            "provider": type(server_state.provider).__name__ if getattr(server_state, 'provider', None) is not None else None,
+            "model_type": getattr(server_state, "model_type", None),
+            "tokenizer": type(server_state.tokenizer).__name__
+            if getattr(server_state, "tokenizer", None) is not None
+            else None,
+            "provider": type(server_state.provider).__name__
+            if getattr(server_state, "provider", None) is not None
+            else None,
         }
 
         from startup_progress import STARTUP_PHASE
-        return success_response(data={
-            "providers": providers,
-            "default_provider": list_providers()[0] if "default" in list_providers() else None,
-            "model_state": model_state,
-            "startup_phase": STARTUP_PHASE.get("phase", "unknown"),
-        })
+
+        return success_response(
+            data={
+                "providers": providers,
+                "default_provider": list_providers()[0] if "default" in list_providers() else None,
+                "model_state": model_state,
+                "startup_phase": STARTUP_PHASE.get("phase", "unknown"),
+            }
+        )
 
     @staticmethod
     async def memory_cleanup(auth_user: dict = Depends(require_auth_if_enabled)):
@@ -1122,6 +1381,7 @@ class ModelsRouter:
         """
         try:
             from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+
             monitor = get_memory_pressure_monitor()
             result = monitor.force_cleanup()
             stats = monitor.stats()
@@ -1134,9 +1394,11 @@ class ModelsRouter:
         """Return current memory pressure stats (level, thresholds, counters)."""
         try:
             from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+
             monitor = get_memory_pressure_monitor()
             return success_response(data=monitor.stats())
         except Exception as exc:
             classify_and_raise(exc, source="models.memory_pressure")
+
 
 router = ModelsRouter().router

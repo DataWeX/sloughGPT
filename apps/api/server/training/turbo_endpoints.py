@@ -10,8 +10,7 @@ import logging
 import threading
 
 from fastapi import APIRouter
-
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from schemas.common import classify_and_raise, safe_audit_log, success_response
 
 from .schemas import FromSessionsRequest, TurboStartRequest
 
@@ -23,6 +22,7 @@ router = APIRouter(tags=["training-turbo"])
 @router.get("/training/turbo/status")
 async def get_turbo_status():
     from domains.training.service import get_turbo_status
+
     return get_turbo_status()
 
 
@@ -32,7 +32,7 @@ async def start_from_sessions_unified(request: dict):
     try:
         req = FromSessionsRequest(**request)
 
-        from domains.training.service import start_from_sessions_training, _state
+        from domains.training.service import _state, start_from_sessions_training
 
         config = {
             "epochs": req.epochs,
@@ -51,7 +51,13 @@ async def start_from_sessions_unified(request: dict):
             "experiment_id": req.experiment_id,
         }
         built_config = start_from_sessions_training(_state, config)
-        safe_audit_log("training.start", resource=req.soul_name or "from-sessions", detail="from-sessions", session_ids=len(req.session_ids) if req.session_ids else 0, epochs=req.epochs)
+        safe_audit_log(
+            "training.start",
+            resource=req.soul_name or "from-sessions",
+            detail="from-sessions",
+            session_ids=len(req.session_ids) if req.session_ids else 0,
+            epochs=req.epochs,
+        )
         return success_response(data=built_config, message="Training started")
 
     except Exception as e:
@@ -64,7 +70,7 @@ async def start_turbo_training_unified(request: dict):
     try:
         req = TurboStartRequest(**request)
 
-        from domains.training.service import start_turbo_training, run_turbo_worker
+        from domains.training.service import run_turbo_worker, start_turbo_training
 
         config = req.model_dump()
         job_info = await asyncio.to_thread(start_turbo_training, config)
@@ -79,9 +85,17 @@ async def start_turbo_training_unified(request: dict):
 
         logger.info(
             "Turbo training started: job_id=%s data=%s",
-            job_info["job_id"], job_info["data_path"], extra={"tag": "TRAIN"},
+            job_info["job_id"],
+            job_info["data_path"],
+            extra={"tag": "TRAIN"},
         )
-        return success_response(data={"status": "started", "job_id": job_info["job_id"], "message": "Turbo training started"})
+        return success_response(
+            data={
+                "status": "started",
+                "job_id": job_info["job_id"],
+                "message": "Turbo training started",
+            }
+        )
 
     except Exception as e:
         classify_and_raise(e, source="training.start_turbo")

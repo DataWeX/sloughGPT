@@ -1,4 +1,5 @@
 """Tests for the /user-adapters router."""
+
 from test_support import get_test_client
 
 

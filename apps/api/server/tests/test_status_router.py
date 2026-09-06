@@ -1,11 +1,10 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for status router — /status, /ready, /live endpoints.
 """
-import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
-
+from fastapi.testclient import TestClient
 from routers.status import router as status_router
 
 app = FastAPI()
@@ -21,7 +20,6 @@ def _data(resp):
 
 
 class TestStatus:
-
     def test_status_healthy(self):
         resp = client.get("/status")
         assert resp.status_code == 200
@@ -41,7 +39,6 @@ class TestStatus:
 
 
 class TestReady:
-
     def test_ready_returns_true(self):
         resp = client.get("/ready")
         assert resp.status_code == 200
@@ -50,7 +47,6 @@ class TestReady:
 
 
 class TestLive:
-
     def test_live_returns_true(self):
         resp = client.get("/live")
         assert resp.status_code == 200

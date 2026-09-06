@@ -1,11 +1,11 @@
 """
 Security Router - Audit logs and API key management
 """
-import asyncio
-from fastapi import APIRouter, Query
-from typing import Optional
 
-from schemas.common import success_response, classify_and_raise
+import asyncio
+
+from fastapi import APIRouter, Query
+from schemas.common import classify_and_raise, success_response
 
 
 class SecurityRouter:
@@ -21,17 +21,22 @@ class SecurityRouter:
 
     async def get_audit_logs(
         self,
-        limit: int = Query(default=100, ge=1, le=10000, description="Maximum number of log entries to return"),
-        event_type: Optional[str] = Query(default=None, description="Filter by event type"),
+        limit: int = Query(
+            default=100, ge=1, le=10000, description="Maximum number of log entries to return"
+        ),
+        event_type: str | None = Query(default=None, description="Filter by event type"),
         history: bool = Query(default=False, description="Read from persisted audit.log file"),
-        before: Optional[str] = Query(default=None, description="ISO-8601 cursor for pagination"),
+        before: str | None = Query(default=None, description="ISO-8601 cursor for pagination"),
     ) -> dict:
         """Get audit logs."""
         try:
             from infrastructure.auth import get_audit_logger
+
             audit_logger = get_audit_logger()
             if history:
-                logs = await asyncio.to_thread(audit_logger.file_query, limit=limit, event_type=event_type, before=before)
+                logs = await asyncio.to_thread(
+                    audit_logger.file_query, limit=limit, event_type=event_type, before=before
+                )
             else:
                 logs = audit_logger.logs[-limit:]
                 if event_type:
@@ -44,11 +49,14 @@ class SecurityRouter:
         """Get API key info (not the keys themselves)"""
         try:
             from settings import get_security_settings
+
             sec = get_security_settings()
-            return success_response(data={
-                "count": len(sec.valid_api_keys),
-                "configured": len(sec.valid_api_keys) > 0,
-            })
+            return success_response(
+                data={
+                    "count": len(sec.valid_api_keys),
+                    "configured": len(sec.valid_api_keys) > 0,
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="security.get_keys")
 

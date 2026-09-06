@@ -1,15 +1,16 @@
 """
 User Adapters Router - Per-user LoRA adapter management
 """
+
 import logging
 import threading
 import time
-from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Literal
 
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.user_adapters")
 
@@ -21,14 +22,14 @@ _list_cache_lock = threading.Lock()
 
 
 class AggregateBestRequest(BaseModel):
-    top_k: Optional[int] = 10
-    min_feedback_count: Optional[int] = 5
-    output_name: Optional[str] = "best_aggregated"
+    top_k: int | None = 10
+    min_feedback_count: int | None = 5
+    output_name: str | None = "best_aggregated"
 
 
 class AdapterUpdateRequest(BaseModel):
     rating: Literal["thumbs_up", "thumbs_down", "neutral"]
-    quality_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    quality_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class PruneAdaptersRequest(BaseModel):
@@ -45,6 +46,7 @@ class UserAdaptersRouter:
         """Get the per-user LoRA store, raising 503 if not available."""
         try:
             from domains.feedback import get_per_user_lora
+
             return get_per_user_lora()
         except ImportError:
             raise_error("Per-user LoRA not available", "E_BAD_REQUEST", status_code=503)
@@ -86,12 +88,19 @@ class UserAdaptersRouter:
             adapter = store.get_adapter(user_id)
             if adapter is None:
                 return success_response(data={"user_id": user_id, "exists": False})
-            return success_response(data={"user_id": user_id, "exists": True, "feedback_count": adapter.feedback_count})
+            return success_response(
+                data={"user_id": user_id, "exists": True, "feedback_count": adapter.feedback_count}
+            )
         except Exception as exc:
             logger.warning("Get adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.get")
 
-    async def update_adapter(self, user_id: str, req: AdapterUpdateRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def update_adapter(
+        self,
+        user_id: str,
+        req: AdapterUpdateRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Update a user's LoRA adapter with new feedback rating."""
         try:
             store = self._get_store()
@@ -103,7 +112,9 @@ class UserAdaptersRouter:
             logger.warning("Update adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.update")
 
-    async def reset_adapter(self, user_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def reset_adapter(
+        self, user_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Reset a user's LoRA adapter to its initial zero-weight state."""
         try:
             store = self._get_store()
@@ -127,7 +138,9 @@ class UserAdaptersRouter:
             logger.warning("Merge adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.merge")
 
-    async def aggregate_best(self, req: AggregateBestRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def aggregate_best(
+        self, req: AggregateBestRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Aggregate top-k best user adapters with auto-evaluation."""
         try:
             store = self._get_store()
@@ -136,28 +149,43 @@ class UserAdaptersRouter:
                 min_feedback_count=req.min_feedback_count,
                 output_name=req.output_name,
             )
-            safe_audit_log("adapter.aggregate", resource=req.output_name or "best_aggregated", user_count=result.get("user_count", 0), total_feedback=result.get("total_feedback", 0))
+            safe_audit_log(
+                "adapter.aggregate",
+                resource=req.output_name or "best_aggregated",
+                user_count=result.get("user_count", 0),
+                total_feedback=result.get("total_feedback", 0),
+            )
             eval_result = result.get("eval", {})
             if "error" not in eval_result:
-                return success_response(data={
-                    "status": "aggregated_with_eval",
-                    "output_path": result.get("output_path", ""),
-                    "user_count": result.get("user_count", 0),
-                    "total_feedback": result.get("total_feedback", 0),
-                    "eval": {
-                        "verdict": eval_result.get("delta", {}).get("verdict", "unknown"),
-                        "perplexity_delta": eval_result.get("delta", {}).get("perplexity_delta"),
-                        "bleu_delta": eval_result.get("delta", {}).get("bleu_delta"),
-                        "throughput_delta": eval_result.get("delta", {}).get("throughput_delta"),
-                        "report": eval_result.get("report", ""),
-                    },
-                })
-            return success_response(data={"status": "aggregated", "count": result.get("user_count", 0)})
+                return success_response(
+                    data={
+                        "status": "aggregated_with_eval",
+                        "output_path": result.get("output_path", ""),
+                        "user_count": result.get("user_count", 0),
+                        "total_feedback": result.get("total_feedback", 0),
+                        "eval": {
+                            "verdict": eval_result.get("delta", {}).get("verdict", "unknown"),
+                            "perplexity_delta": eval_result.get("delta", {}).get(
+                                "perplexity_delta"
+                            ),
+                            "bleu_delta": eval_result.get("delta", {}).get("bleu_delta"),
+                            "throughput_delta": eval_result.get("delta", {}).get(
+                                "throughput_delta"
+                            ),
+                            "report": eval_result.get("report", ""),
+                        },
+                    }
+                )
+            return success_response(
+                data={"status": "aggregated", "count": result.get("user_count", 0)}
+            )
         except Exception as exc:
             logger.warning("Aggregate best failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.aggregate")
 
-    async def get_quality(self, min_feedback_count: int = 3, max_age_days: Optional[int] = None) -> dict:
+    async def get_quality(
+        self, min_feedback_count: int = 3, max_age_days: int | None = None
+    ) -> dict:
         """Retrieve quality metrics report for all eligible adapters."""
         try:
             store = self._get_store()
@@ -171,7 +199,9 @@ class UserAdaptersRouter:
             logger.warning("Quality report failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.quality")
 
-    async def delete_user_adapter(self, user_id: str, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_user_adapter(
+        self, user_id: str, req: Request, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete a user's LoRA adapter."""
         try:
             store = self._get_store()
@@ -183,7 +213,12 @@ class UserAdaptersRouter:
             logger.warning("Delete adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.delete")
 
-    async def prune_low_quality_adapters(self, request: PruneAdaptersRequest, req: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def prune_low_quality_adapters(
+        self,
+        request: PruneAdaptersRequest,
+        req: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Remove adapters with too few feedback or too old."""
         try:
             store = self._get_store()
@@ -191,13 +226,25 @@ class UserAdaptersRouter:
                 min_feedback_count=request.min_feedback_count,
                 max_age_days=request.max_age_days,
             )
-            logger.info("Pruned %d low-quality adapters (min_feedback=%d, max_age=%dd)", len(deleted), request.min_feedback_count, request.max_age_days)
-            safe_audit_log("adapter.prune", resource="all", detail=f"deleted={len(deleted)}", deleted_users=deleted)
-            return success_response(data={
-                "status": "pruned",
-                "deleted_count": len(deleted),
-                "deleted_users": deleted,
-            })
+            logger.info(
+                "Pruned %d low-quality adapters (min_feedback=%d, max_age=%dd)",
+                len(deleted),
+                request.min_feedback_count,
+                request.max_age_days,
+            )
+            safe_audit_log(
+                "adapter.prune",
+                resource="all",
+                detail=f"deleted={len(deleted)}",
+                deleted_users=deleted,
+            )
+            return success_response(
+                data={
+                    "status": "pruned",
+                    "deleted_count": len(deleted),
+                    "deleted_users": deleted,
+                }
+            )
         except Exception as exc:
             logger.warning("Prune adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.prune")

@@ -4,20 +4,23 @@ Slos Router - Personality/soul management endpoints
 Encapsulates router state in ``SloRouterState`` dataclass rather than module-level
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
-from dataclasses import dataclass
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
-from typing import Optional, Any, Dict, AsyncGenerator
-from pydantic import BaseModel, Field
+
+import asyncio
+import logging
 import re
-import json, asyncio, logging
 import threading
 import time
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from typing import Any
 
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_event, sse_token, sse_error, sse_complete
+from infrastructure.sse_fallback import sse_complete, sse_token
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 # Response cache for list_souls: avoids FS glob + per-soul metadata parse.
 _list_souls_cache: tuple[float, dict] | None = None
@@ -39,6 +42,7 @@ class SloRouterState:
     Current soul tracking and model references. The real soul state
     lives in SloManager; this is a thin cache for switch operations.
     """
+
     current_soul: Any = None
     main_model: Any = None
     main_tokenizer: Any = None
@@ -46,7 +50,7 @@ class SloRouterState:
 
 class SwitchRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    checkpoint_name: Optional[str] = Field(default=None, max_length=200)
+    checkpoint_name: str | None = Field(default=None, max_length=200)
 
 
 class SloChatRequest(BaseModel):
@@ -59,9 +63,10 @@ class SloChatRequest(BaseModel):
 
 class SaveWeightsRequest(BaseModel):
     """Request body for saving trait weights."""
-    personality: Optional[Dict[str, float]] = None
-    cognition: Optional[Dict[str, float]] = None
-    emotion: Optional[Dict[str, float]] = None
+
+    personality: dict[str, float] | None = None
+    cognition: dict[str, float] | None = None
+    emotion: dict[str, float] | None = None
 
 
 class SoulsRouter:
@@ -72,7 +77,7 @@ class SoulsRouter:
     ``self.router.add_api_route(...)``.
     """
 
-    _VALID_CKPT_NAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+    _VALID_CKPT_NAME = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
     def __init__(self) -> None:
         self.state = SloRouterState()
@@ -86,9 +91,15 @@ class SoulsRouter:
         self.router.add_api_route("/weights/modes", self.get_trait_modes, methods=["GET"])
         self.router.add_api_route("/current", self.get_current_soul, methods=["GET"])
         self.router.add_api_route("/weights/snapshots", self.list_weight_snapshots, methods=["GET"])
-        self.router.add_api_route("/weights/snapshot/{name}", self.save_weight_snapshot, methods=["POST"])
-        self.router.add_api_route("/weights/snapshot/{name}/load", self.load_weight_snapshot, methods=["POST"])
-        self.router.add_api_route("/weights/snapshot/{name}", self.delete_weight_snapshot, methods=["DELETE"])
+        self.router.add_api_route(
+            "/weights/snapshot/{name}", self.save_weight_snapshot, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/weights/snapshot/{name}/load", self.load_weight_snapshot, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/weights/snapshot/{name}", self.delete_weight_snapshot, methods=["DELETE"]
+        )
         self.router.add_api_route("/stats", self.get_soul_stats, methods=["GET"])
         self.router.add_api_route("/{soul_name}", self.get_soul, methods=["GET"])
 
@@ -100,6 +111,7 @@ class SoulsRouter:
     def _get_repo_root():
         """Return the repository root (4 levels up from this file)."""
         from pathlib import Path
+
         return Path(__file__).resolve().parents[4]
 
     def _load_slough_model(self, checkpoint_path, tie_weights=True):
@@ -122,7 +134,7 @@ class SoulsRouter:
         if isinstance(sd, dict) and "tok_emb.weight" not in sd:
             sd = sd.get("weights", sd)
             if not isinstance(sd, dict):
-                sd = sd.state_dict() if hasattr(sd, 'state_dict') else {}
+                sd = sd.state_dict() if hasattr(sd, "state_dict") else {}
 
         arch = infer_arch_from_state_dict(sd)
         tie_weights = "lm_head.weight" not in sd
@@ -145,6 +157,7 @@ class SoulsRouter:
         """Load an auto-train checkpoint's weights into the main model/global state."""
         try:
             import sys
+
             main_mod = sys.modules.get("__main__")
             if main_mod is None:
                 return {"status": "no_main_module"}
@@ -153,7 +166,7 @@ class SoulsRouter:
             if checkpoints_dir is None:
                 return {"status": "no_repo_root"}
 
-            if not self._VALID_CKPT_NAME.match(checkpoint_name) or '..' in checkpoint_name:
+            if not self._VALID_CKPT_NAME.match(checkpoint_name) or ".." in checkpoint_name:
                 return {"status": "invalid_name"}
             checkpoint_file = (checkpoints_dir / checkpoint_name).resolve()
             if not str(checkpoint_file).startswith(str(checkpoints_dir.resolve())):
@@ -161,6 +174,7 @@ class SoulsRouter:
 
             # Use SloNet import for .soul files
             from domains.training.slonet import import_from_sou
+
             try:
                 soul_net = import_from_sou(str(checkpoint_file))
             except FileNotFoundError:
@@ -209,7 +223,12 @@ Be yourself — let your personality shape how you respond."""
     # Route handlers
     # ------------------------------------------------------------------
 
-    async def soul_chat(self, req: SloChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
+    async def soul_chat(
+        self,
+        req: SloChatRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> StreamingResponse:
         """Chat using a SloughGPTModel checkpoint (PyTorch-trained transformer).
 
         Loads the .soul file (PyTorch ZIP format), creates a SloughGPTModel with matching
@@ -219,9 +238,11 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             repo_root = self._get_repo_root()
-            if not self._VALID_CKPT_NAME.match(req.checkpoint_name) or '..' in req.checkpoint_name:
+            if not self._VALID_CKPT_NAME.match(req.checkpoint_name) or ".." in req.checkpoint_name:
                 raise_error("Invalid checkpoint name", code="E_VAL_REQUEST")
-            checkpoint_file = (repo_root / "models" / "auto-training" / (req.checkpoint_name + ".soul")).resolve()
+            checkpoint_file = (
+                repo_root / "models" / "auto-training" / (req.checkpoint_name + ".soul")
+            ).resolve()
             if not checkpoint_file.exists():
                 checkpoint_file = (repo_root / "models" / (req.checkpoint_name + ".soul")).resolve()
 
@@ -234,7 +255,17 @@ Be yourself — let your personality shape how you respond."""
             except FileNotFoundError:
                 raise_error(f"Checkpoint not found: {req.checkpoint_name}", code="E_NOT_FOUND")
 
-            chars = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?'-")
+            chars = list(
+                " abcdefghijklmnopqrstuvwxyz0123456789.,!?':;-/\"@#$%^&*()[]{}<>~`|\\+=_\n\r\t"
+            )
+            # Extend with uppercase and remaining ASCII if model vocab is larger
+            model_vocab = getattr(model, "vocab_size", len(chars))
+            if model_vocab > len(chars):
+                # Pad with remaining printable ASCII characters
+                all_chars = [chr(i) for i in range(32, 127)]  # printable ASCII
+                # Add common Unicode letters (basic Latin supplement)
+                all_chars += [chr(i) for i in range(192, 256)]
+                chars = all_chars[:model_vocab]
             stoi = {c: i for i, c in enumerate(chars)}
             itos = {i: c for i, c in enumerate(chars)}
 
@@ -262,6 +293,7 @@ Be yourself — let your personality shape how you respond."""
                         return
 
                     import numpy as np
+
                     seq = np.array([generated[-128:]], dtype=np.int64)
 
                     logits_arr, _ = model.forward(seq, targets=None)
@@ -297,7 +329,11 @@ Be yourself — let your personality shape how you respond."""
 
                     await asyncio.sleep(0)
 
-                safe_audit_log("soul.chat", resource=req.checkpoint_name, detail=f"chars={len(decode(generated))}")
+                safe_audit_log(
+                    "soul.chat",
+                    resource=req.checkpoint_name,
+                    detail=f"chars={len(decode(generated))}",
+                )
                 yield sse_complete("souls-chat", data={"response": decode(generated)})
 
             return StreamingResponse(stream(), media_type="text/event-stream")
@@ -309,7 +345,7 @@ Be yourself — let your personality shape how you respond."""
     async def switch_soul(
         self,
         req: SwitchRequest,
-        checkpoint_name: Optional[str] = None,
+        checkpoint_name: str | None = None,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Switch to a different soul and update ContextCore system prompt.
@@ -319,6 +355,7 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             import time as _time
+
             _switch_t0 = _time.monotonic()
             from domains.inference.slo_manager import get_slo_manager
 
@@ -330,28 +367,39 @@ Be yourself — let your personality shape how you respond."""
             if soul_info:
                 try:
                     from domains.infrastructure.context_core import get_context_core
+
                     ctx_core = get_context_core()
                     if ctx_core:
                         soul_prompt = self._build_soul_system_prompt(soul_info)
                         ctx_core.set_system_prompt(soul_prompt)
                 except Exception as e:
-                    logger.warning("Failed to update context core system prompt on soul switch: %s", e, extra={"tag": "SOUL"})
+                    logger.warning(
+                        "Failed to update context core system prompt on soul switch: %s",
+                        e,
+                        extra={"tag": "SOUL"},
+                    )
 
                 # Update PersonalityProcessor with soul traits
                 try:
                     from domains.models.provider import update_personality_traits
+
                     personality = getattr(soul_info, "personality", {})
                     if personality:
                         update_personality_traits(personality)
                 except Exception as e:
-                    logger.debug("Failed to update personality processor: %s", e, extra={"tag": "SOUL"})
+                    logger.debug(
+                        "Failed to update personality processor: %s", e, extra={"tag": "SOUL"}
+                    )
 
             # Load checkpoint into main model if requested
             if req.checkpoint_name:
-                loaded = await asyncio.to_thread(self._load_checkpoint_into_model, req.checkpoint_name)
+                loaded = await asyncio.to_thread(
+                    self._load_checkpoint_into_model, req.checkpoint_name
+                )
                 result["checkpoint_loaded"] = loaded
                 try:
                     from domains.infrastructure.server_state import get_server_state
+
                     get_server_state().record_model_event(
                         "load", req.name, f"checkpoint={req.checkpoint_name}"
                     )
@@ -361,9 +409,11 @@ Be yourself — let your personality shape how you respond."""
             if result.get("success") and soul_info and soul_info.path:
                 try:
                     from domains.core.soul import SloEngine
+
                     engine = SloEngine(device="cpu")
                     soul = engine.load_soul(soul_info.path)
                     import state as server_state
+
                     server_state.current_soul = soul
                     server_state.soul_engine = engine
                 except Exception as exc:
@@ -371,6 +421,7 @@ Be yourself — let your personality shape how you respond."""
 
             try:
                 from domains.infrastructure.server_state import get_server_state
+
                 get_server_state().record_model_event("switch", req.name)
             except Exception:
                 logger.debug("Failed to record model event", exc_info=True)
@@ -378,13 +429,21 @@ Be yourself — let your personality shape how you respond."""
             # Record dashboard event
             try:
                 from domains.infrastructure.event_buffer import get_event_buffer
+
                 detail = f" checkpoint={req.checkpoint_name}" if req.checkpoint_name else ""
                 get_event_buffer().record("SOUL", f"switched to {req.name}{detail}")
             except Exception as e:
                 logger.debug("Failed to record dashboard event: %s", e)
 
             _switch_elapsed_ms = (_time.monotonic() - _switch_t0) * 1000
-            safe_audit_log("soul.switch", resource=req.name, detail=f"elapsed={_switch_elapsed_ms:.0f}ms checkpoint_loaded" if req.checkpoint_name else f"elapsed={_switch_elapsed_ms:.0f}ms", checkpoint_name=req.checkpoint_name or "")
+            safe_audit_log(
+                "soul.switch",
+                resource=req.name,
+                detail=f"elapsed={_switch_elapsed_ms:.0f}ms checkpoint_loaded"
+                if req.checkpoint_name
+                else f"elapsed={_switch_elapsed_ms:.0f}ms",
+                checkpoint_name=req.checkpoint_name or "",
+            )
 
             return success_response(data=result)
         except Exception as e:
@@ -408,49 +467,15 @@ Be yourself — let your personality shape how you respond."""
                 return _list_souls_cache[1]
         try:
             import asyncio
+
             from domains.inference.slo_manager import get_slo_manager
+
             manager = get_slo_manager()
             souls = await asyncio.to_thread(manager.list_souls)
             current = manager.get_current_soul()
-            result = success_response(data=[
-                {
-                    "name": s.name,
-                    "path": s.path,
-                    "description": s.description,
-                    "personality": getattr(s, "personality", {}),
-                    "traits": getattr(s, "traits", []),
-                    "born_at": getattr(s, "born_at", ""),
-                    "training_dataset": getattr(s, "training_dataset", ""),
-                    "epochs_trained": getattr(s, "epochs_trained", 0),
-                    "final_train_loss": getattr(s, "final_train_loss", None),
-                    "final_val_loss": getattr(s, "final_val_loss", None),
-                    "lineage": getattr(s, "lineage", ""),
-                    "base_model": getattr(s, "base_model", ""),
-                    "version": getattr(s, "version", ""),
-                    "size_mb": getattr(s, "size_mb", 0.0),
-                    "behavior": getattr(s, "behavior", {}),
-                    "cognition": getattr(s, "cognition", {}),
-                    "emotion": getattr(s, "emotion", {}),
-                    "generation_params": getattr(s, "generation_params", {}),
-                }
-                for s in souls
-            ], meta={"current_soul": current.name if current else None})
-            with _list_souls_lock:
-                _list_souls_cache = (now, result)
-            return result
-        except Exception as e:
-            classify_and_raise(e, source="list_souls")
-
-    async def get_soul(self, soul_name: str) -> dict:
-        """Get details for a specific soul by name."""
-        try:
-            import asyncio
-            from domains.inference.slo_manager import get_slo_manager
-            manager = get_slo_manager()
-            souls = await asyncio.to_thread(manager.list_souls)
-            for s in souls:
-                if s.name == soul_name:
-                    return success_response(data={
+            result = success_response(
+                data=[
+                    {
                         "name": s.name,
                         "path": s.path,
                         "description": s.description,
@@ -469,7 +494,50 @@ Be yourself — let your personality shape how you respond."""
                         "cognition": getattr(s, "cognition", {}),
                         "emotion": getattr(s, "emotion", {}),
                         "generation_params": getattr(s, "generation_params", {}),
-                    })
+                    }
+                    for s in souls
+                ],
+                meta={"current_soul": current.name if current else None},
+            )
+            with _list_souls_lock:
+                _list_souls_cache = (now, result)
+            return result
+        except Exception as e:
+            classify_and_raise(e, source="list_souls")
+
+    async def get_soul(self, soul_name: str) -> dict:
+        """Get details for a specific soul by name."""
+        try:
+            import asyncio
+
+            from domains.inference.slo_manager import get_slo_manager
+
+            manager = get_slo_manager()
+            souls = await asyncio.to_thread(manager.list_souls)
+            for s in souls:
+                if s.name == soul_name:
+                    return success_response(
+                        data={
+                            "name": s.name,
+                            "path": s.path,
+                            "description": s.description,
+                            "personality": getattr(s, "personality", {}),
+                            "traits": getattr(s, "traits", []),
+                            "born_at": getattr(s, "born_at", ""),
+                            "training_dataset": getattr(s, "training_dataset", ""),
+                            "epochs_trained": getattr(s, "epochs_trained", 0),
+                            "final_train_loss": getattr(s, "final_train_loss", None),
+                            "final_val_loss": getattr(s, "final_val_loss", None),
+                            "lineage": getattr(s, "lineage", ""),
+                            "base_model": getattr(s, "base_model", ""),
+                            "version": getattr(s, "version", ""),
+                            "size_mb": getattr(s, "size_mb", 0.0),
+                            "behavior": getattr(s, "behavior", {}),
+                            "cognition": getattr(s, "cognition", {}),
+                            "emotion": getattr(s, "emotion", {}),
+                            "generation_params": getattr(s, "generation_params", {}),
+                        }
+                    )
             raise_error(f"Soul '{soul_name}' not found", "E_NOT_FOUND", status_code=404)
         except AppError as e:
             classify_and_raise(e, source="souls.get_soul")
@@ -495,6 +563,7 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.inference.slo_manager import get_slo_manager
+
             manager = get_slo_manager()
             weights = manager.get_trait_weights()
             return success_response(data=weights)
@@ -502,7 +571,9 @@ Be yourself — let your personality shape how you respond."""
             logger.warning("Get trait weights failed: %s", e)
             classify_and_raise(e, source="get_trait_weights")
 
-    async def save_trait_weights(self, body: SaveWeightsRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def save_trait_weights(
+        self, body: SaveWeightsRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """
         Save trait weights to the persistent config. Accepts a dict of trait
         groups (personality, cognition, emotion) with trait name → 0.0–1.0 values.
@@ -516,15 +587,23 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.context.managers import get_trait_config
+
             config = get_trait_config()
-            flat: Dict[str, float] = {}
+            flat: dict[str, float] = {}
             for group in ("personality", "cognition", "emotion"):
                 traits = getattr(body, group, None)
                 if traits:
                     for k, v in traits.items():
                         flat[k] = float(v)
             config.set_many(flat)
-            safe_audit_log("soul.weights.save", resource="traits", detail=f"traits_saved={len(flat)}", groups=[g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)])
+            safe_audit_log(
+                "soul.weights.save",
+                resource="traits",
+                detail=f"traits_saved={len(flat)}",
+                groups=[
+                    g for g in ("personality", "cognition", "emotion") if getattr(body, g, None)
+                ],
+            )
             return success_response(message="saved")
         except Exception as e:
             logger.warning("Save trait weights failed: %s", e)
@@ -549,16 +628,22 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.context.managers import (
-                get_trait_config, PersonalityManager, MemoryManager,
-                StyleManager, TaskManager,
+                MemoryManager,
+                PersonalityManager,
+                StyleManager,
+                TaskManager,
+                get_trait_config,
             )
+
             config = get_trait_config()
-            return success_response(data={
-                "personality": PersonalityManager(config).get_mode(),
-                "memory": MemoryManager(config).get_mode(),
-                "style": StyleManager(config).get_mode(),
-                "task": TaskManager(config).get_mode(),
-            })
+            return success_response(
+                data={
+                    "personality": PersonalityManager(config).get_mode(),
+                    "memory": MemoryManager(config).get_mode(),
+                    "style": StyleManager(config).get_mode(),
+                    "task": TaskManager(config).get_mode(),
+                }
+            )
         except Exception as e:
             logger.warning("Get trait modes failed: %s", e)
             classify_and_raise(e, source="get_trait_modes")
@@ -575,14 +660,19 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.inference.slo_manager import get_slo_manager
+
             manager = get_slo_manager()
             current = manager.get_current_soul()
             if current:
-                return success_response(data={
-                    "name": current.name, "path": current.path, "description": current.description,
-                    "personality": getattr(current, "personality", {}),
-                    "traits": getattr(current, "traits", []),
-                })
+                return success_response(
+                    data={
+                        "name": current.name,
+                        "path": current.path,
+                        "description": current.description,
+                        "personality": getattr(current, "personality", {}),
+                        "traits": getattr(current, "traits", []),
+                    }
+                )
             return success_response(data={"name": None})
         except Exception as e:
             logger.warning("Get current soul failed: %s", e)
@@ -600,12 +690,15 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.context.managers import get_trait_config
+
             config = get_trait_config()
             return success_response(data=config.list_snapshots())
         except Exception as e:
             classify_and_raise(e, source="list_weight_snapshots")
 
-    async def save_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def save_weight_snapshot(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """
         Save current trait weights as a named snapshot.
 
@@ -620,6 +713,7 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.context.managers import get_trait_config
+
             config = get_trait_config()
             path = config.save_snapshot(name)
             safe_audit_log("weights.snapshot.save", resource=name)
@@ -628,7 +722,9 @@ Be yourself — let your personality shape how you respond."""
             logger.warning("Save weight snapshot failed: %s", e)
             classify_and_raise(e, source="save_weight_snapshot")
 
-    async def load_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def load_weight_snapshot(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """
         Load trait weights from a named snapshot.
 
@@ -643,6 +739,7 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.context.managers import get_trait_config
+
             config = get_trait_config()
             count = config.load_snapshot(name)
             safe_audit_log("weights.snapshot.load", resource=name, detail=f"traits_loaded={count}")
@@ -651,7 +748,9 @@ Be yourself — let your personality shape how you respond."""
             logger.warning("Load weight snapshot failed: %s", e)
             classify_and_raise(e, source="load_weight_snapshot")
 
-    async def delete_weight_snapshot(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_weight_snapshot(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """
         Delete a trait weight snapshot.
 
@@ -666,6 +765,7 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.context.managers import get_trait_config
+
             config = get_trait_config()
             ok = config.delete_snapshot(name)
             safe_audit_log("weights.snapshot.delete", resource=name, detail=f"deleted={ok}")
@@ -686,6 +786,7 @@ Be yourself — let your personality shape how you respond."""
         """
         try:
             from domains.inference.slo_manager import get_slo_manager
+
             return success_response(data=get_slo_manager().get_stats())
         except Exception as e:
             logger.warning("Get soul stats failed: %s", e)

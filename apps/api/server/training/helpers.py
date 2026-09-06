@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Coroutine
+from collections.abc import Coroutine
+from typing import Any
 
 from .jobs import training_jobs
 
@@ -52,11 +53,14 @@ def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
         if error:
             job["error"] = error
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpStatus
+        from domains.infrastructure.cancel_manager import OpStatus, get_cancel_manager
+
         mgr = get_cancel_manager()
         op = mgr.get(job_id)
         if op is not None and op.status not in (
-            OpStatus.CANCELLED, OpStatus.COMPLETED, OpStatus.FAILED,
+            OpStatus.CANCELLED,
+            OpStatus.COMPLETED,
+            OpStatus.FAILED,
         ):
             mgr.finish(job_id, error=error or "")
     except Exception as exc:

@@ -4,15 +4,16 @@ Stores training jobs in MogDB (the project's embedded document database)
 for crash recovery. Jobs persist across server restarts.
 """
 
+import builtins
 import json
-import threading
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime
 import logging
+import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-from mogdb import MogDB
 from domains.shared import find_repo_root
+from mogdb import MogDB
 
 logger = logging.getLogger("slo.job_store")
 
@@ -31,7 +32,7 @@ class JobStore:
     collection journals (``jobs`` and ``job_events``).
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             db_path = str(find_repo_root(Path(__file__).resolve()) / "data" / "training_jobs.db")
         self.db_path = Path(db_path)
@@ -57,10 +58,10 @@ class JobStore:
     def _new_job_doc(
         job_id: str,
         name: str,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         dataset: str,
         now: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build the full stored document for a new job."""
         return {
             "_id": job_id,
@@ -89,15 +90,11 @@ class JobStore:
         }
 
     @staticmethod
-    def _doc_to_job(doc: Dict[str, Any]) -> Dict[str, Any]:
+    def _doc_to_job(doc: dict[str, Any]) -> dict[str, Any]:
         """Convert a stored MogDB document to the job dict returned to callers."""
-        return {
-            k: v
-            for k, v in doc.items()
-            if k not in ("_id", "_created", "_updated")
-        }
+        return {k: v for k, v in doc.items() if k not in ("_id", "_created", "_updated")}
 
-    def create(self, job_id: str, name: str, config: Dict[str, Any], dataset: str = "") -> Dict:
+    def create(self, job_id: str, name: str, config: dict[str, Any], dataset: str = "") -> dict:
         """Create a new job."""
         if not self.is_available:
             return {"id": job_id, "status": "error", "error": "Job store unavailable"}
@@ -106,18 +103,18 @@ class JobStore:
             self._jobs.insert_one(self._new_job_doc(job_id, name, config, dataset, now))
         return self.get(job_id)
 
-    def get(self, job_id: str) -> Optional[Dict]:
+    def get(self, job_id: str) -> dict | None:
         """Get a job by ID."""
         if not self.is_available:
             return None
         doc = self._jobs.find_one({"_id": job_id})
         return self._doc_to_job(doc) if doc else None
 
-    def list(self, status: Optional[str] = None, include_crashed: bool = True) -> List[Dict]:
+    def list(self, status: str | None = None, include_crashed: bool = True) -> list[dict]:
         """List all jobs, optionally filtered by status."""
         if not self.is_available:
             return []
-        query: Dict[str, Any] = {}
+        query: dict[str, Any] = {}
         if status:
             query["status"] = status
         if not include_crashed:
@@ -126,7 +123,7 @@ class JobStore:
         docs = self._jobs.find(query, sort=[("created_at", -1)])
         return [self._doc_to_job(d) for d in docs]
 
-    def update(self, job_id: str, **kwargs) -> Optional[Dict]:
+    def update(self, job_id: str, **kwargs) -> dict | None:
         """Update job fields."""
         kwargs["updated_at"] = datetime.now().isoformat()
 
@@ -144,7 +141,7 @@ class JobStore:
         progress: float,
         epoch: int = 0,
         step: int = 0,
-        loss: Optional[float] = None,
+        loss: float | None = None,
     ) -> None:
         """Update job progress."""
         self.update(
@@ -199,7 +196,7 @@ class JobStore:
         )
 
     @staticmethod
-    def is_stale_heartbeat(job: Dict, timeout_seconds: int = 300) -> bool:
+    def is_stale_heartbeat(job: dict, timeout_seconds: int = 300) -> bool:
         """Return True when a job's heartbeat is absent or older than ``timeout_seconds``.
 
         ``job`` is a store row dict (as returned by ``get`` / ``list``).
@@ -224,7 +221,7 @@ class JobStore:
             self._events.delete_many({"job_id": job_id})
             return deleted
 
-    def detect_crashed_jobs(self, timeout_seconds: int = 300) -> List[Dict]:
+    def detect_crashed_jobs(self, timeout_seconds: int = 300) -> builtins.list[dict]:
         """
         Detect jobs that may have crashed.
 
@@ -245,7 +242,7 @@ class JobStore:
         )
         return [self._doc_to_job(d) for d in docs]
 
-    def get_recoverable_jobs(self) -> List[Dict]:
+    def get_recoverable_jobs(self) -> builtins.list[dict]:
         """Get jobs that can be recovered.
 
         Returns 'interrupted' and 'failed' jobs (both are accepted by the
@@ -268,7 +265,7 @@ class JobStore:
 
         return [self._doc_to_job(d) for d in recoverable]
 
-    def log_event(self, job_id: str, event: str, data: Optional[Dict] = None) -> None:
+    def log_event(self, job_id: str, event: str, data: dict | None = None) -> None:
         """Log a job event."""
         with self._lock:
             self._events.insert_one(
@@ -280,7 +277,7 @@ class JobStore:
                 }
             )
 
-    def get_events(self, job_id: str, limit: int = 50) -> List[Dict]:
+    def get_events(self, job_id: str, limit: int = 50) -> builtins.list[dict]:
         """Get events for a job."""
         docs = self._events.find(
             {"job_id": job_id},
@@ -297,12 +294,12 @@ class JobStore:
             for doc in docs
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get job statistics."""
         with self._lock:
             docs = self._jobs.find()
 
-            stats: Dict[str, Any] = {}
+            stats: dict[str, Any] = {}
             for doc in docs:
                 status = doc.get("status", "unknown")
                 stats[status] = stats.get(status, 0) + 1
@@ -313,7 +310,7 @@ class JobStore:
 
 
 # Global store instance
-_job_store: Optional[JobStore] = None
+_job_store: JobStore | None = None
 
 
 def get_job_store() -> JobStore:

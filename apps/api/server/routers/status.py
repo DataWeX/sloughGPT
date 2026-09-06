@@ -1,10 +1,11 @@
 """
 Status Router - Overall service health and info
 """
-from fastapi import APIRouter
+
 from datetime import datetime, timezone
 
-from schemas.common import success_response, classify_and_raise
+from fastapi import APIRouter
+from schemas.common import classify_and_raise, success_response
 
 
 class StatusRouter:
@@ -22,11 +23,13 @@ class StatusRouter:
         """Return overall service health status with uptime and timestamp."""
         try:
             uptime = (datetime.now() - self._start_time).total_seconds()
-            return success_response(data={
-                "status": "healthy",
-                "uptime_seconds": uptime,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            return success_response(
+                data={
+                    "status": "healthy",
+                    "uptime_seconds": uptime,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="status.get")
 
@@ -35,26 +38,43 @@ class StatusRouter:
             """Kubernetes-style readiness probe.
 
             Returns ready=True when the service can accept traffic.
-
-            Returns:
-                Success envelope with ready: True.
+            Checks that critical subsystems are initialized.
             """
-            return success_response(data={"ready": True})
+            checks = {}
+            # Check database connectivity
+            try:
+                from domains.feedback.database import get_feedback_db
+
+                db = get_feedback_db()
+                checks["database"] = db is not None
+            except Exception:
+                checks["database"] = False
+
+            # Check inference engine
+            try:
+                from domains.inference.native.engine import get_engine
+
+                engine = get_engine()
+                checks["inference"] = engine is not None
+            except Exception:
+                checks["inference"] = False
+
+            ready = all(checks.values()) if checks else True
+            return success_response(data={"ready": ready, "checks": checks})
 
         except Exception as e:
             classify_and_raise(e, source="status.ready")
+
     async def live(self) -> dict:
         try:
             """Kubernetes-style liveness probe.
 
             Returns alive=True when the process is running and responsive.
-
-            Returns:
-                Success envelope with alive: True.
             """
             return success_response(data={"alive": True})
 
-
         except Exception as e:
             classify_and_raise(e, source="status.live")
+
+
 router = StatusRouter().router

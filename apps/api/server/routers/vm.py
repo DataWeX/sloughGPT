@@ -7,14 +7,13 @@ and returns execution results (registers, memory, output, trace).
 
 from __future__ import annotations
 
-import time
 import logging
-from typing import Optional
+import time
+
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-from pydantic import model_validator
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field, model_validator
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.vm")
 router = APIRouter(prefix="/vm", tags=["vm"])
@@ -30,15 +29,19 @@ class VMRunRequest(BaseModel):
     name, resolved via the builtin registry) must be supplied.
     """
 
-    program: Optional[str] = Field(
+    program: str | None = Field(
         None, max_length=32, description="Builtin program name (e.g. 'hello')"
     )
     source: str = Field(None, max_length=50000, description="x86 assembly source code")
     max_steps: int = Field(5000, ge=1, le=1000000, description="Max CPU steps")
-    memory_size: int = Field(0x100000, ge=0x10000, le=0x1000000, description="VM memory size in bytes")
+    memory_size: int = Field(
+        0x100000, ge=0x10000, le=0x1000000, description="VM memory size in bytes"
+    )
     role: str = Field("user", max_length=20, description="Permission role: user, admin, kernel")
     debug: bool = Field(False, description="Include register dump and trace in response")
-    keyboard_input: Optional[str] = Field(None, max_length=10000, description="Simulated keyboard input for INT 16h")
+    keyboard_input: str | None = Field(
+        None, max_length=10000, description="Simulated keyboard input for INT 16h"
+    )
 
     @model_validator(mode="after")
     def _require_program_or_source(self):
@@ -67,14 +70,14 @@ class VMRunResponse(BaseModel):
     eip: int
     eip_hex: str
     status: str
-    error: Optional[str] = None
-    trace: Optional[list[dict]] = None
-    vga_text: Optional[str] = None
-    vga_cells: Optional[list[dict]] = None
-    keyboard_buffer: Optional[str] = None
-    memory_dump: Optional[str] = None
-    training_job_id: Optional[int] = None
-    training_result: Optional[str] = None
+    error: str | None = None
+    trace: list[dict] | None = None
+    vga_text: str | None = None
+    vga_cells: list[dict] | None = None
+    keyboard_buffer: str | None = None
+    memory_dump: str | None = None
+    training_job_id: int | None = None
+    training_result: str | None = None
 
 
 class VMTrainingJobResponse(BaseModel):
@@ -84,15 +87,17 @@ class VMTrainingJobResponse(BaseModel):
     api_job_id: str
     status: str
     progress: float
-    error: Optional[str] = None
-    result: Optional[str] = None
+    error: str | None = None
+    result: str | None = None
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
 @router.post("/run", response_model=VMRunResponse)
-async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+async def run_assembly(
+    req: VMRunRequest, auth_user: dict = Depends(require_auth_if_enabled)
+) -> dict:
     """Run x86 assembly code in the sandboxed VM.
 
     Assembles the source, spawns a user process, and executes it.
@@ -101,7 +106,7 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
     t0 = time.monotonic()
 
     try:
-        from domains.shell.vm import X86VirtualSystem, InsFault, MemFault
+        from domains.shell.vm import InsFault, MemFault, X86VirtualSystem
         from domains.shell.vm_permissions import Role
     except ImportError as e:
         raise_error(f"VM module not available: {e}", "E_BAD_REQUEST", status_code=503)
@@ -109,6 +114,7 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
     if req.program:
         try:
             from vm_builtins import get_builtin
+
             req_source = get_builtin(req.program)
         except (KeyError, ImportError):
             raise_error(f"Unknown builtin program: {req.program}", "E_NOT_FOUND", status_code=404)
@@ -120,9 +126,15 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
         pid = vs.spawn("web_user", req_source)
         if pid is None:
             return VMRunResponse(
-                success=False, exit_code=-1, steps_executed=0,
-                elapsed_ms=(time.monotonic() - t0) * 1000, output="",
-                registers=[], eip=0, eip_hex="0x0", status="spawn_failed",
+                success=False,
+                exit_code=-1,
+                steps_executed=0,
+                elapsed_ms=(time.monotonic() - t0) * 1000,
+                output="",
+                registers=[],
+                eip=0,
+                eip_hex="0x0",
+                status="spawn_failed",
                 error="Failed to spawn process — assembly may have errors",
             )
 
@@ -133,9 +145,15 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
         current = vs.scheduler.current
         if current is None:
             return VMRunResponse(
-                success=False, exit_code=-1, steps_executed=0,
-                elapsed_ms=(time.monotonic() - t0) * 1000, output="",
-                registers=[], eip=0, eip_hex="0x0", status="no_process",
+                success=False,
+                exit_code=-1,
+                steps_executed=0,
+                elapsed_ms=(time.monotonic() - t0) * 1000,
+                output="",
+                registers=[],
+                eip=0,
+                eip_hex="0x0",
+                status="no_process",
                 error="No process available to run",
             )
 
@@ -155,7 +173,7 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
                 return count
             return original_write(fd, buf_addr, count)
 
-        launched_job_id: Optional[int] = None
+        launched_job_id: int | None = None
         original_train_start = vs._syscall._sys_train_start
 
         def _captured_train_start(config_addr):
@@ -165,7 +183,7 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
                 launched_job_id = job_id
             return job_id
 
-        training_result: Optional[str] = None
+        training_result: str | None = None
         original_train_get_result = vs._syscall._sys_train_get_result
 
         def _captured_train_get_result(job_id, buf_addr, buf_size):
@@ -184,7 +202,11 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
         vs._syscall._sys_train_get_result = _captured_train_get_result
         vs.cpu._trace_enabled = req.debug
         vs.cpu._trace.clear()
-        safe_audit_log("vm.run", resource="vm", detail=f"max_steps={req.max_steps} debug={req.debug} role={req.role}")
+        safe_audit_log(
+            "vm.run",
+            resource="vm",
+            detail=f"max_steps={req.max_steps} debug={req.debug} role={req.role}",
+        )
         try:
             try:
                 vs.cpu.run(max_steps=req.max_steps)
@@ -222,10 +244,22 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
         vga_cells = None
         try:
             VGA_COLORS = [
-                "#000000", "#0000AA", "#00AA00", "#00AAAA",
-                "#AA0000", "#AA00AA", "#AA5500", "#AAAAAA",
-                "#555555", "#5555FF", "#55FF55", "#55FFFF",
-                "#FF5555", "#FF55FF", "#FFFF55", "#FFFFFF",
+                "#000000",
+                "#0000AA",
+                "#00AA00",
+                "#00AAAA",
+                "#AA0000",
+                "#AA00AA",
+                "#AA5500",
+                "#AAAAAA",
+                "#555555",
+                "#5555FF",
+                "#55FF55",
+                "#55FFFF",
+                "#FF5555",
+                "#FF55FF",
+                "#FFFF55",
+                "#FFFFFF",
             ]
             cells = []
             for i in range(80 * 25):
@@ -234,11 +268,13 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
                 fg = attr & 0x0F
                 bg = (attr >> 4) & 0x07
                 char = chr(ch) if 32 <= ch < 127 else " " if ch == 0 else "?"
-                cells.append({
-                    "ch": char,
-                    "fg": VGA_COLORS[fg],
-                    "bg": VGA_COLORS[bg],
-                })
+                cells.append(
+                    {
+                        "ch": char,
+                        "fg": VGA_COLORS[fg],
+                        "bg": VGA_COLORS[bg],
+                    }
+                )
             vga_cells = cells
             # Also build plain text for backward compat
             lines = []
@@ -268,7 +304,7 @@ async def run_assembly(req: VMRunRequest, auth_user: dict = Depends(require_auth
 
         kbd_state = None
         try:
-            kbd_buf = getattr(vs.cpu, '_kbd_buffer', None)
+            kbd_buf = getattr(vs.cpu, "_kbd_buffer", None)
             if kbd_buf:
                 kbd_state = "".join(chr(b) for b in kbd_buf if 32 <= b < 127)
         except Exception as exc:
@@ -333,7 +369,9 @@ async def training_job_status(job_id: str) -> dict:
 
 
 @router.post("/training/jobs/{job_id}/stop")
-async def training_job_stop(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+async def training_job_stop(
+    job_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+) -> dict:
     """Request a stop for a running training job launched via VM syscall."""
     try:
         try:
@@ -360,6 +398,7 @@ async def list_builtins() -> dict:
     try:
         try:
             from vm_builtins import BUILTIN_PROGRAMS
+
             programs = [
                 {"name": name, "description": entry["description"], "code": entry["program"]()}
                 for name, entry in BUILTIN_PROGRAMS.items()
@@ -377,22 +416,24 @@ async def vm_info() -> dict:
     try:
         reg_names = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
         registers = {name: {"size_bits": 32, "name": name} for name in reg_names}
-        return success_response(data={
-            "isa": "x86-32",
-            "max_steps": 1000000,
-            "default_memory": 0x100000,
-            "max_memory": 0x1000000,
-            "registers": registers,
-            "features": [
-                "protected mode (32-bit)",
-                "flat memory model",
-                "ring 0 only",
-                "INT 0x80 syscalls",
-                "PIT timer",
-                "keyboard/screen I/O",
-                "process scheduling",
-                "RBAC permissions",
-            ],
-        })
+        return success_response(
+            data={
+                "isa": "x86-32",
+                "max_steps": 1000000,
+                "default_memory": 0x100000,
+                "max_memory": 0x1000000,
+                "registers": registers,
+                "features": [
+                    "protected mode (32-bit)",
+                    "flat memory model",
+                    "ring 0 only",
+                    "INT 0x80 syscalls",
+                    "PIT timer",
+                    "keyboard/screen I/O",
+                    "process scheduling",
+                    "RBAC permissions",
+                ],
+            }
+        )
     except Exception as e:
         classify_and_raise(e, source="vm.info")

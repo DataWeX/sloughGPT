@@ -4,16 +4,14 @@ Agents Router - Full CRUD for AI agent definitions with execution and orchestrat
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, Request, Depends
+from domains.api.sse_envelope import sse_complete, sse_error, sse_event
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncGenerator
-
-from domains.api.sse_envelope import sse_event, sse_complete, sse_error
-
-from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -23,7 +21,7 @@ class AgentOut(BaseModel):
     name: str
     description: str
     instructions: str = ""
-    tools: List[str] = []
+    tools: list[str] = []
     avatar: str = ""
 
 
@@ -32,16 +30,16 @@ class AgentCreate(BaseModel):
     name: str = Field(..., min_length=1)
     description: str = ""
     instructions: str = ""
-    tools: List[str] = []
+    tools: list[str] = []
     avatar: str = ""
 
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    description: Optional[str] = Field(default=None, max_length=2000)
-    instructions: Optional[str] = Field(default=None, max_length=50000)
-    tools: Optional[List[str]] = None
-    avatar: Optional[str] = Field(default=None, max_length=500)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    instructions: str | None = Field(default=None, max_length=50000)
+    tools: list[str] | None = None
+    avatar: str | None = Field(default=None, max_length=500)
 
 
 class ExecuteRequest(BaseModel):
@@ -53,7 +51,9 @@ class ExecuteRequest(BaseModel):
 class OrchestrateRequest(BaseModel):
     goal: str = Field(..., min_length=1, description="The goal for multi-agent orchestration")
     context: str = Field(default="", description="Additional context for the orchestrator")
-    agent_ids: List[str] = Field(default_factory=list, description="Specific agent IDs to use (empty = all agents)")
+    agent_ids: list[str] = Field(
+        default_factory=list, description="Specific agent IDs to use (empty = all agents)"
+    )
 
 
 class AgentsRouter:
@@ -72,11 +72,14 @@ class AgentsRouter:
         self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"])
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
         self.router.add_api_route("/{agent_id}/execute", self.execute_agent, methods=["POST"])
-        self.router.add_api_route("/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None)
+        self.router.add_api_route(
+            "/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None
+        )
 
     def _get_system(self):
         """Get the agent system singleton."""
         from domains.agents.system import get_agent_system
+
         return get_agent_system()
 
     async def list_agents(self) -> dict:
@@ -88,7 +91,9 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.list")
 
-    async def create_agent(self, req: AgentCreate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def create_agent(
+        self, req: AgentCreate, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """Create a new agent with the given name, description, tools, and instructions.
 
@@ -119,11 +124,14 @@ class AgentsRouter:
                 tools=req.tools,
                 avatar=req.avatar,
             )
-            safe_audit_log("agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or []))
+            safe_audit_log(
+                "agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or [])
+            )
             return success_response(data=AgentOut(**result).model_dump())
 
         except Exception as e:
             classify_and_raise(e, source="agents.create_agent")
+
     async def get_agent(self, agent_id: str) -> dict:
         """Get a specific agent by ID."""
         try:
@@ -134,7 +142,9 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.get")
 
-    async def update_agent(self, agent_id: str, req: AgentUpdate, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def update_agent(
+        self, agent_id: str, req: AgentUpdate, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Update an existing agent by ID with partial field changes."""
         try:
             system = self._get_system()
@@ -154,7 +164,9 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.update")
 
-    async def delete_agent(self, agent_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def delete_agent(
+        self, agent_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete an agent by its unique identifier."""
         try:
             if not await asyncio.to_thread(self._get_system().delete, agent_id):
@@ -164,7 +176,9 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.delete")
 
-    async def execute_agent(self, agent_id: str, req: ExecuteRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def execute_agent(
+        self, agent_id: str, req: ExecuteRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Execute an agent on a user request."""
         try:
             result = await self._get_system().execute(
@@ -175,14 +189,24 @@ class AgentsRouter:
             )
             if "error" in result:
                 raise_error(result["error"], "E_NOT_FOUND", status_code=404)
-            safe_audit_log("agent.execute", resource=agent_id, user_id=req.user_id or "", session_id=req.session_id or "")
+            safe_audit_log(
+                "agent.execute",
+                resource=agent_id,
+                user_id=req.user_id or "",
+                session_id=req.session_id or "",
+            )
             return result
         except Exception as e:
             classify_and_raise(e, source="agents.execute")
 
     # ── Orchestration ─────────────────────────────────────────────────────
 
-    async def orchestrate_agents(self, req: OrchestrateRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> AsyncGenerator[str, None]:
+    async def orchestrate_agents(
+        self,
+        req: OrchestrateRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> AsyncGenerator[str, None]:
         try:
             """Orchestrate multiple agents on a goal with SSE streaming.
 
@@ -201,7 +225,11 @@ class AgentsRouter:
                     orch = MultiAgentOrchestrator()
                     # Filter agents if specific IDs provided
                     if req.agent_ids:
-                        filtered = {k: v for k, v in orch.agents.items() if k in req.agent_ids or v.name in req.agent_ids}
+                        filtered = {
+                            k: v
+                            for k, v in orch.agents.items()
+                            if k in req.agent_ids or v.name in req.agent_ids
+                        }
                         if filtered:
                             orch = MultiAgentOrchestrator(agents=filtered)
                     run_id = store.start(req.goal, req.context or "")
@@ -310,7 +338,9 @@ class AgentsRouter:
                                     message=f"Failed: {task.description}",
                                 )
 
-                        events = await asyncio.gather(*[run_and_yield(tid) for tid in task_ids], return_exceptions=True)
+                        events = await asyncio.gather(
+                            *[run_and_yield(tid) for tid in task_ids], return_exceptions=True
+                        )
                         for ev in events:
                             if isinstance(ev, str):
                                 yield ev
@@ -367,16 +397,20 @@ class AgentsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="agents.orchestrate_agents")
+
     async def list_runs(self, limit: int = 20) -> dict:
         try:
             """List orchestration run history, newest first."""
             from domains.agents.run_history import get_agent_run_store
 
-            runs = await asyncio.to_thread(get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200)))
+            runs = await asyncio.to_thread(
+                get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200))
+            )
             return success_response(data={"runs": runs, "count": len(runs)})
 
         except Exception as e:
             classify_and_raise(e, source="agents.list_runs")
+
     async def get_run(self, run_id: str) -> dict:
         try:
             """Return a single orchestration run record."""
@@ -387,7 +421,8 @@ class AgentsRouter:
                 raise_error("Run not found", "E_NOT_FOUND", status_code=404)
             return success_response(data=record)
 
-
         except Exception as e:
             classify_and_raise(e, source="agents.get_run")
+
+
 router = AgentsRouter().router

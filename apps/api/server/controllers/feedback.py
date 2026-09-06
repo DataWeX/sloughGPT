@@ -5,12 +5,13 @@ Storage backed by MogDB (the project's embedded document DB).
 Conversations and feedback records are stored in indexed collections
 instead of raw JSON/JSONL files.
 """
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
-from pathlib import Path
+
+import logging
 import os
 import uuid
-import logging
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("slo.controllers.feedback")
 
@@ -19,16 +20,23 @@ def _trigger_hf_dpo():
     """Run HF DPO in background thread using the active model."""
     try:
         import state as server_state
+
         model = getattr(server_state, "model", None)
         tokenizer = getattr(server_state, "tokenizer", None)
         if model is None or tokenizer is None:
             return
         from domains.feedback.hf_dpo import HFDPOTrainer
+
         trainer = HFDPOTrainer(model=model, tokenizer=tokenizer)
         pairs = trainer.prepare_dpo_pairs()
         if len(pairs) >= 2:
             result = trainer.train(pairs=pairs)
-            logger.info("HF DPO background: %s (pairs=%d)", result.get("status"), len(pairs), extra={"tag": "INFRA"})
+            logger.info(
+                "HF DPO background: %s (pairs=%d)",
+                result.get("status"),
+                len(pairs),
+                extra={"tag": "INFRA"},
+            )
     except Exception as e:
         logger.debug("HF DPO background skipped: %s", e)
 
@@ -36,6 +44,7 @@ def _trigger_hf_dpo():
 def _get_mogdb(db_path: str):
     """Create a MogDB instance at the given path."""
     from mogdb import MogDB
+
     return MogDB(db_path)
 
 
@@ -46,7 +55,7 @@ class FeedbackController:
     instead of raw JSON/JSONL file I/O.
     """
 
-    def __init__(self, repo_root: Path, db_path: Optional[str] = None):
+    def __init__(self, repo_root: Path, db_path: str | None = None):
         self.repo_root = repo_root
         if db_path is None:
             db_path = str(repo_root / "data" / "feedback_mogdb")
@@ -75,6 +84,7 @@ class FeedbackController:
         if self._workflow is None:
             try:
                 from domains.feedback.workflow import get_feedback_workflow
+
                 self._workflow = get_feedback_workflow()
                 self._wire_model()
             except Exception as e:
@@ -85,12 +95,14 @@ class FeedbackController:
         """Set the current auto-train model on the workflow for background training."""
         try:
             from domains.training.service import get_state
+
             at_state = get_state()
             if self._workflow and at_state.student_net is not None:
                 self._workflow.set_model(at_state.student_net, at_state.student_tokenizer)
                 return
             if self._workflow:
                 import state as server_state
+
                 model = getattr(server_state, "model", None)
                 tokenizer = getattr(server_state, "tokenizer", None)
                 if model is not None and tokenizer is not None:
@@ -103,6 +115,7 @@ class FeedbackController:
         if self._lora_updater is None:
             try:
                 from domains.feedback.online_train import get_online_lora_updater
+
                 self._lora_updater = get_online_lora_updater()
             except Exception as e:
                 logger.debug("Online LoRA updater init failed: %s", e)
@@ -112,11 +125,11 @@ class FeedbackController:
         self,
         message_id: str,
         rating: str,
-        session_id: Optional[str] = None,
-        message_content: Optional[str] = None,
-        user_message: Optional[str] = None,
-        assistant_response: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        session_id: str | None = None,
+        message_content: str | None = None,
+        user_message: str | None = None,
+        assistant_response: str | None = None,
+    ) -> dict[str, Any]:
         """Record user feedback and pipe into learning systems.
 
         Args:
@@ -173,6 +186,7 @@ class FeedbackController:
         # Trigger HF DPO in background on thumbs-down
         if rating == "thumbs_down":
             from domains.training.executor import get_training_executor
+
             executor = get_training_executor()
             executor.submit(_trigger_hf_dpo, f"dpo_{feedback_id}")
 
@@ -184,7 +198,7 @@ class FeedbackController:
             "timestamp": feedback["timestamp"],
         }
 
-    def get_feedback(self, message_id: str) -> Optional[Dict[str, Any]]:
+    def get_feedback(self, message_id: str) -> dict[str, Any] | None:
         """Get feedback for a message.
 
         Args:
@@ -195,7 +209,7 @@ class FeedbackController:
         """
         return self._feedback.find_one({"message_id": message_id})
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get feedback statistics.
 
         Returns:
@@ -215,7 +229,7 @@ class FeedbackController:
             "up_ratio": thumbs_up / total if total > 0 else 0,
         }
 
-    def create_conversation(self, name: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    def create_conversation(self, name: str, session_id: str | None = None) -> dict[str, Any]:
         """Create a new conversation.
 
         Args:
@@ -240,7 +254,7 @@ class FeedbackController:
         self._conversations.insert_one(conv)
         return conv
 
-    def list_conversations(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_conversations(self, limit: int = 50) -> list[dict[str, Any]]:
         """List conversations sorted by most recently updated.
 
         Args:
@@ -254,7 +268,7 @@ class FeedbackController:
             limit=limit,
         )
 
-    def get_conversation(self, conv_id: str) -> Optional[Dict[str, Any]]:
+    def get_conversation(self, conv_id: str) -> dict[str, Any] | None:
         """Get a conversation by ID.
 
         Args:
@@ -265,7 +279,7 @@ class FeedbackController:
         """
         return self._conversations.find_one({"id": conv_id})
 
-    def update_conversation(self, conv_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_conversation(self, conv_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """Update a conversation's fields.
 
         Args:
@@ -291,7 +305,7 @@ class FeedbackController:
         self._conversations.delete_one({"id": conv_id})
 
 
-_feedback_controller: Optional[FeedbackController] = None
+_feedback_controller: FeedbackController | None = None
 
 
 def get_feedback_controller() -> FeedbackController:

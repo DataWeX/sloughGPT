@@ -3,16 +3,19 @@ Tests for the Shell router endpoints.
 
 Tests the /shell/exec endpoint.
 """
+
 import json
-import sys
 import os
+import sys
 
 # Ensure the server directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
+from routers.shell import _get_repl
+from routers.shell import router as shell_router
+
 from apps.api.server.main import app
-from routers.shell import router as shell_router, _get_repl
 
 app.include_router(shell_router)
 client = TestClient(app)

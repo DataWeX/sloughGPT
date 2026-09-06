@@ -1,4 +1,5 @@
 """Tests for the /agents router."""
+
 from test_support import get_test_client
 
 
@@ -17,7 +18,10 @@ class TestAgentsRouter:
 
     def test_create_agent(self):
         import time
-        resp = self.client.post("/agents", json={"name": f"test-agent-{int(time.time())}", "description": "test"})
+
+        resp = self.client.post(
+            "/agents", json={"name": f"test-agent-{int(time.time())}", "description": "test"}
+        )
         assert resp.status_code in (200, 201, 400, 409, 422)
 
     def test_get_agent_not_found(self):

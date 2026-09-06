@@ -4,13 +4,13 @@ Tests for the request middleware pipeline in infrastructure/middleware.py.
 Covers: correlation-ID propagation, log level mapping, timeout behaviour,
 metrics recording, and the client-extension DEBUG note.
 """
+
 import logging
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-
-from infrastructure.middleware import register_all_middleware
 from infrastructure.exception_handlers import register_app_error_handler
+from infrastructure.middleware import register_all_middleware
 
 
 def _make_app(timeout: float = 5.0) -> FastAPI:
@@ -25,16 +25,19 @@ def _make_app(timeout: float = 5.0) -> FastAPI:
     @app.get("/fail")
     async def fail():
         from starlette.responses import JSONResponse
+
         return JSONResponse({"detail": "nope"}, status_code=404)
 
     @app.post("/boom")
     async def boom():
         from starlette.responses import JSONResponse
+
         return JSONResponse({"detail": "broken"}, status_code=500)
 
     @app.get("/slow")
     async def slow():
         import asyncio
+
         await asyncio.sleep(2.0)
         return {"ok": 1}
 
@@ -71,7 +74,6 @@ def _with_capture(app, fn):
 
 
 class TestCorrelationId:
-
     def test_echoes_incoming_header(self):
         app = _make_app()
         client = TestClient(app)
@@ -104,7 +106,6 @@ class TestCorrelationId:
 
 
 class TestLogLevels:
-
     def _collect_for(self, app, method, path, headers=None):
         def run(cap):
             resp = client.request(method, path, headers=headers or {})
@@ -123,17 +124,20 @@ class TestLogLevels:
         app = _make_app()
         status, records = self._collect_for(app, "GET", "/fail")
         assert status == 404
-        assert any(r.levelno == logging.WARNING and "404 on GET /fail" in r.getMessage() for r in records)
+        assert any(
+            r.levelno == logging.WARNING and "404 on GET /fail" in r.getMessage() for r in records
+        )
 
     def test_5xx_is_error(self):
         app = _make_app()
         status, records = self._collect_for(app, "POST", "/boom")
         assert status == 500
-        assert any(r.levelno == logging.ERROR and "500 on POST /boom" in r.getMessage() for r in records)
+        assert any(
+            r.levelno == logging.ERROR and "500 on POST /boom" in r.getMessage() for r in records
+        )
 
 
 class TestTimeout:
-
     def test_slow_request_returns_504(self):
         app = _make_app(timeout=0.2)
         client = TestClient(app)
@@ -143,9 +147,9 @@ class TestTimeout:
 
 
 class TestMetrics:
-
     def test_request_recorded(self):
         from domains.infrastructure.metrics import get_metrics_collector
+
         collector = get_metrics_collector()
         before = collector._request_count.get("/ok", 0)
         app = _make_app()
@@ -155,6 +159,7 @@ class TestMetrics:
 
     def test_error_recorded(self):
         from domains.infrastructure.metrics import get_metrics_collector
+
         collector = get_metrics_collector()
         before = collector._request_errors.get("/fail", 0)
         app = _make_app()
@@ -164,6 +169,7 @@ class TestMetrics:
 
     def test_active_requests_returns_to_baseline(self):
         from domains.infrastructure.metrics import get_metrics_collector
+
         collector = get_metrics_collector()
         baseline = collector.get_active_requests()
         app = _make_app()
@@ -173,7 +179,6 @@ class TestMetrics:
 
 
 class TestClientExtensionFilter:
-
     def test_extension_origin_emits_debug_note(self):
         app = _make_app()
         client = TestClient(app)

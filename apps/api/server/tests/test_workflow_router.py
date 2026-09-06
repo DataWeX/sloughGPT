@@ -1,6 +1,7 @@
 """Tests for the /workflow router (feedback workflow management)."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from test_support import get_test_client
 
 
@@ -69,11 +70,14 @@ class TestWorkflowStartStop:
         wf = _make_workflow()
         with patch("domains.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
-            resp = client.post("/workflow/start", json={
-                "aggregate_interval_minutes": 30,
-                "prune_interval_minutes": 60,
-                "export_interval_hours": 12,
-            })
+            resp = client.post(
+                "/workflow/start",
+                json={
+                    "aggregate_interval_minutes": 30,
+                    "prune_interval_minutes": 60,
+                    "export_interval_hours": 12,
+                },
+            )
             assert resp.status_code == 200
 
     def test_stop_workflow(self):

@@ -2,18 +2,21 @@
 Session Router - Chat session management.
 Delegates to message_feedback in main.py for storage (in-process singleton).
 """
+
 import asyncio
-import json
 import logging
 import time
+from collections.abc import AsyncIterator
+from typing import Any
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any, AsyncIterator
-
-from schemas.common import success_response, classify_and_raise, safe_audit_log
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_event as _sse_event, sse_token, sse_error
+from infrastructure.sse_fallback import sse_error, sse_token
+from infrastructure.sse_fallback import sse_event as _sse_event
+from pydantic import BaseModel
+from schemas.common import classify_and_raise, safe_audit_log, success_response
+
 from config import ServerConfig
 
 logger = logging.getLogger(__name__)
@@ -22,9 +25,9 @@ cfg = ServerConfig.from_env()
 
 
 class SessionContext(BaseModel):
-    system_prompt: Optional[str] = None
-    knowledge: Optional[List[str]] = None
-    messages: Optional[List[Dict[str, Any]]] = []
+    system_prompt: str | None = None
+    knowledge: list[str] | None = None
+    messages: list[dict[str, Any]] | None = []
 
 
 class SessionRouter:
@@ -39,39 +42,62 @@ class SessionRouter:
         self._sse_error = sse_error
 
     def _register_routes(self):
-        self.router.add_api_route("/{session_id}/context", self.set_session_context, methods=["POST"])
-        self.router.add_api_route("/{session_id}/messages", self.get_session_messages, methods=["GET"])
-        self.router.add_api_route("/{session_id}/inspector", self.get_session_inspector, methods=["GET"])
-        self.router.add_api_route("/{session_id}/regenerate", self.regenerate_session, methods=["POST"])
+        self.router.add_api_route(
+            "/{session_id}/context", self.set_session_context, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/{session_id}/messages", self.get_session_messages, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/{session_id}/inspector", self.get_session_inspector, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/{session_id}/regenerate", self.regenerate_session, methods=["POST"]
+        )
 
     @staticmethod
-    def get_router_session_context(session_id: str) -> Optional[List[Dict[str, Any]]]:
+    def get_router_session_context(session_id: str) -> list[dict[str, Any]] | None:
         """Legacy helper – forwards to ``SessionCore``.
 
         Existing code (e.g., ``main.py``) still calls this function. It now
         proxies to the unified ``SessionCore`` implementation.
         """
         from domains.infrastructure.session_core import SessionCore
+
         return SessionCore.get_messages(session_id)
 
-    async def set_session_context(self, session_id: str, ctx: SessionContext, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def set_session_context(
+        self,
+        session_id: str,
+        ctx: SessionContext,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         try:
             """Set session context (messages stored for regeneration)."""
             if ctx.messages:
                 from domains.infrastructure.session_core import SessionCore
+
                 result = SessionCore.store_context(session_id, ctx.messages)
-                safe_audit_log("session.context_store", resource=session_id, detail=f"messages={len(ctx.messages)}")
+                safe_audit_log(
+                    "session.context_store",
+                    resource=session_id,
+                    detail=f"messages={len(ctx.messages)}",
+                )
                 return success_response(data=result)
-            return success_response(data={"session_id": session_id, "message_count": 0}, message="stored")
+            return success_response(
+                data={"session_id": session_id, "message_count": 0}, message="stored"
+            )
 
         except Exception as e:
             classify_and_raise(e, source="session.set_session_context")
+
     async def get_session_messages(self, session_id: str) -> dict:
         """Return stored conversation messages for a session.
 
         Used by the UI to load a chat history.
         """
         from domains.infrastructure.session_core import SessionCore
+
         try:
             msgs = SessionCore.get_messages(session_id)
             return success_response(data={"session_id": session_id, "messages": msgs})
@@ -88,12 +114,15 @@ class SessionRouter:
         """
         _inspector_start = time.time()
         try:
+
             def _fetch_messages():
                 from domains.infrastructure.session_core import SessionCore
+
                 return SessionCore.get_messages(session_id)
 
             def _fetch_feedback():
                 from domains.feedback.message_feedback import get_message_feedback
+
                 fb = get_message_feedback()
                 return fb.get_stats()
 
@@ -101,6 +130,7 @@ class SessionRouter:
                 knowledge = {"total_facts": 0, "topics": []}
                 try:
                     from domains.learner.knowledge import get_knowledge_memory
+
                     km = get_knowledge_memory()
                     knowledge["total_facts"] = km.stats().get("total_facts", 0)
                     knowledge["topics"] = [t[0] for t in km.all_topics()[:10]]
@@ -111,8 +141,14 @@ class SessionRouter:
             def _fetch_traits():
                 traits, modes = {}, {}
                 try:
-                    from domains.context.managers import (get_trait_config, PersonalityManager,
-                                                          MemoryManager, StyleManager, TaskManager)
+                    from domains.context.managers import (
+                        MemoryManager,
+                        PersonalityManager,
+                        StyleManager,
+                        TaskManager,
+                        get_trait_config,
+                    )
+
                     config = get_trait_config()
                     traits = config.all()
                     modes = {
@@ -129,6 +165,7 @@ class SessionRouter:
                 workspace = {"working_memory": [], "semantic_keys": [], "episodic_count": 0}
                 try:
                     from domains.infrastructure.context_core import get_context_core
+
                     cc = get_context_core()
                     insp = cc.get_context_inspector()
                     workspace = {
@@ -151,32 +188,37 @@ class SessionRouter:
             )
             _elapsed_ms = round((time.time() - _inspector_start) * 1000)
 
-            return success_response(data={
-                "session": {
-                    "id": session_id,
-                    "message_count": len(msgs),
-                    "messages": msgs[-10:],
-                },
-                "knowledge": knowledge,
-                "traits": traits,
-                "modes": modes,
-                "feedback": {
-                    "total": fb_stats.get("feedback_total", 0),
-                    "thumbs_up": fb_stats.get("thumbs_up", 0),
-                    "thumbs_down": fb_stats.get("thumbs_down", 0),
-                },
-                "workspace": workspace,
-                "elapsed_ms": _elapsed_ms,
-            })
+            return success_response(
+                data={
+                    "session": {
+                        "id": session_id,
+                        "message_count": len(msgs),
+                        "messages": msgs[-10:],
+                    },
+                    "knowledge": knowledge,
+                    "traits": traits,
+                    "modes": modes,
+                    "feedback": {
+                        "total": fb_stats.get("feedback_total", 0),
+                        "thumbs_up": fb_stats.get("thumbs_up", 0),
+                        "thumbs_down": fb_stats.get("thumbs_down", 0),
+                    },
+                    "workspace": workspace,
+                    "elapsed_ms": _elapsed_ms,
+                }
+            )
 
         except Exception as e:
             logger.warning("Session inspector failed: %s", e)
             classify_and_raise(e, source="session_inspector")
 
-    async def regenerate_session(self, session_id: str, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
+    async def regenerate_session(
+        self, session_id: str, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> StreamingResponse:
         try:
             """Regenerate the last assistant response for a session."""
-            from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
             _op_id = None
             try:
                 mgr = get_cancel_manager()
@@ -192,19 +234,34 @@ class SessionRouter:
                 _token_count = 0
                 try:
                     from domains.infrastructure.session_core import SessionCore
+
                     msgs = SessionCore.get_messages(session_id)
                     if not msgs:
-                        yield self._sse_error("chat", "REGENERATE", "No session context found", code="E_VAL_REQUEST", http_status=400)
+                        yield self._sse_error(
+                            "chat",
+                            "REGENERATE",
+                            "No session context found",
+                            code="E_VAL_REQUEST",
+                            http_status=400,
+                        )
                         return
 
                     from domains.models.provider import get_provider
+
                     provider = get_provider("default")
                     if provider is None:
-                        yield self._sse_error("chat", "REGENERATE", "Model not loaded", code="E_INFRA_REGISTRY", http_status=503)
+                        yield self._sse_error(
+                            "chat",
+                            "REGENERATE",
+                            "Model not loaded",
+                            code="E_INFRA_REGISTRY",
+                            http_status=503,
+                        )
                         return
 
-                    yield self._sse_event("chat", "REGENERATE", "thinking",
-                                          data={}, message="Regenerating...")
+                    yield self._sse_event(
+                        "chat", "REGENERATE", "thinking", data={}, message="Regenerating..."
+                    )
 
                     full_response = ""
                     _token_gen_start = time.time()
@@ -219,15 +276,27 @@ class SessionRouter:
                             session_id=session_id,
                         ):
                             if await request.is_disconnected():
-                                logger.info("Client disconnected from regenerate stream (request)", extra={"tag": "REQ", "context": {"session_id": session_id}})
+                                logger.info(
+                                    "Client disconnected from regenerate stream (request)",
+                                    extra={"tag": "REQ", "context": {"session_id": session_id}},
+                                )
                                 return
                             if token:
                                 if _token_count == 0:
                                     _first_token_ms = (time.time() - _token_gen_start) * 1000
                                     logger.info(
                                         "REGEN_FIRST_TOKEN corr=%s session=%s after=%.1fms",
-                                        _regen_corr_id, session_id, _first_token_ms,
-                                        extra={"tag": "REQ", "context": {"corr": _regen_corr_id, "session_id": session_id, "elapsed_ms": round(_first_token_ms, 1)}},
+                                        _regen_corr_id,
+                                        session_id,
+                                        _first_token_ms,
+                                        extra={
+                                            "tag": "REQ",
+                                            "context": {
+                                                "corr": _regen_corr_id,
+                                                "session_id": session_id,
+                                                "elapsed_ms": round(_first_token_ms, 1),
+                                            },
+                                        },
                                     )
                                 _token_gen_start = time.time()
                                 _token_count += 1
@@ -242,24 +311,66 @@ class SessionRouter:
                             if elapsed_since_token > _max_token_wait_s:
                                 logger.warning(
                                     "Regenerate stream stalled for %.1fs (limit=%.1fs) corr=%s session=%s",
-                                    elapsed_since_token, _max_token_wait_s, _regen_corr_id, session_id,
-                                    extra={"tag": "REQ", "context": {"corr": _regen_corr_id, "session_id": session_id, "elapsed_s": round(elapsed_since_token, 1), "limit_s": _max_token_wait_s}},
+                                    elapsed_since_token,
+                                    _max_token_wait_s,
+                                    _regen_corr_id,
+                                    session_id,
+                                    extra={
+                                        "tag": "REQ",
+                                        "context": {
+                                            "corr": _regen_corr_id,
+                                            "session_id": session_id,
+                                            "elapsed_s": round(elapsed_since_token, 1),
+                                            "limit_s": _max_token_wait_s,
+                                        },
+                                    },
                                 )
-                                yield self._sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s", code="MODEL_TIMEOUT", http_status=504)
+                                yield self._sse_error(
+                                    "chat",
+                                    "TIMEOUT",
+                                    f"Generation stalled for {elapsed_since_token:.0f}s",
+                                    code="MODEL_TIMEOUT",
+                                    http_status=504,
+                                )
                                 return
                         yield self._sse_token("chat", "", done=True)
                         _regen_elapsed_ms = round((time.time() - _regen_start) * 1000)
-                        safe_audit_log("session.regenerate", resource=session_id, detail=f"chars={len(full_response)} tokens={_token_count} elapsed={_regen_elapsed_ms}ms")
+                        safe_audit_log(
+                            "session.regenerate",
+                            resource=session_id,
+                            detail=f"chars={len(full_response)} tokens={_token_count} elapsed={_regen_elapsed_ms}ms",
+                        )
                         logger.info(
                             "REGEN_DONE corr=%s session=%s tokens=%d chars=%d elapsed=%dms",
-                            _regen_corr_id, session_id, _token_count, len(full_response), _regen_elapsed_ms,
-                            extra={"tag": "REQ", "context": {"corr": _regen_corr_id, "session_id": session_id, "tokens": _token_count, "chars": len(full_response), "elapsed_ms": _regen_elapsed_ms}},
+                            _regen_corr_id,
+                            session_id,
+                            _token_count,
+                            len(full_response),
+                            _regen_elapsed_ms,
+                            extra={
+                                "tag": "REQ",
+                                "context": {
+                                    "corr": _regen_corr_id,
+                                    "session_id": session_id,
+                                    "tokens": _token_count,
+                                    "chars": len(full_response),
+                                    "elapsed_ms": _regen_elapsed_ms,
+                                },
+                            },
                         )
                     except GeneratorExit:
                         return
                     except Exception as e:
-                        logger.error("Regenerate stream error: %s", e, exc_info=True, extra={"tag": "REQ"})
-                        yield self._sse_error("chat", "REGENERATE", f"Generation failed: {e}", code="E_INFRA_GENERATION", http_status=500)
+                        logger.error(
+                            "Regenerate stream error: %s", e, exc_info=True, extra={"tag": "REQ"}
+                        )
+                        yield self._sse_error(
+                            "chat",
+                            "REGENERATE",
+                            f"Generation failed: {e}",
+                            code="E_INFRA_GENERATION",
+                            http_status=500,
+                        )
                         return
 
                 except Exception as e:
@@ -274,7 +385,8 @@ class SessionRouter:
 
             return StreamingResponse(generate(), media_type="text/event-stream")
 
-
         except Exception as e:
             classify_and_raise(e, source="session.regenerate_session")
+
+
 router = SessionRouter().router

@@ -1,4 +1,5 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for the /auto-train/start-turbo + /auto-train/turbo/status endpoints.
 
@@ -11,13 +12,12 @@ the ``on_progress`` callback so the progress plumbing is exercised end to end.
 
 import threading
 import time
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
+import routers.auto_train as mod
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-import routers.auto_train as mod
 from routers.auto_train import router as auto_train_router
 
 app = FastAPI()
@@ -52,11 +52,13 @@ def _reset_turbo(tmp_path):
     ds_dir.mkdir(parents=True, exist_ok=True)
     (ds_dir / "x.txt").write_text("hello\n")
     mod._test_data_path = str(ds_dir / "x.txt")
-    with patch.object(inst, "REPO_ROOT", tmp_path), \
-         patch.object(mod, "REPO_ROOT", tmp_path), \
-         patch.object(inst, "TURBO_DIR", tmp_path / "models" / "turbo-trained"), \
-         patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "models" / "auto-training"), \
-         patch.object(inst, "LORA_DIR", tmp_path / "data" / "user_adapters"):
+    with (
+        patch.object(inst, "REPO_ROOT", tmp_path),
+        patch.object(mod, "REPO_ROOT", tmp_path),
+        patch.object(inst, "TURBO_DIR", tmp_path / "models" / "turbo-trained"),
+        patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "models" / "auto-training"),
+        patch.object(inst, "LORA_DIR", tmp_path / "data" / "user_adapters"),
+    ):
         yield
 
 
@@ -76,24 +78,31 @@ def _fake_train_result(blocker=None, error=None, cancel=False):
     def _train(**kwargs):
         on_progress = kwargs.get("on_progress")
         if on_progress is not None:
-            on_progress({
-                "global_step": 42,
-                "total_steps": 500,
-                "progress_percent": 8.4,
-                "train_loss": 2.31,
-                "learning_rate": 0.0003,
-                "steps_per_sec": 4.25,
-                "eta_s": 98,
-                "elapsed_s": 20,
-            })
+            on_progress(
+                {
+                    "global_step": 42,
+                    "total_steps": 500,
+                    "progress_percent": 8.4,
+                    "train_loss": 2.31,
+                    "learning_rate": 0.0003,
+                    "steps_per_sec": 4.25,
+                    "eta_s": 98,
+                    "elapsed_s": 20,
+                }
+            )
         if cancel:
             kwargs.get("cancel_event", threading.Event()).set()
         if blocker is not None:
             blocker.wait(timeout=5)
         if error is not None:
             raise error
-        return {"status": "ok", "final_loss": 0.5, "total_steps": 500,
-                "model_path": "/tmp/fake.soul"}
+        return {
+            "status": "ok",
+            "final_loss": 0.5,
+            "total_steps": 500,
+            "model_path": "/tmp/fake.soul",
+        }
+
     return _train
 
 
@@ -190,7 +199,10 @@ def test_checkpoints_includes_turbo_models(tmp_path):
     turbo_dir = tmp_path / "turbo"
     ckpt_dir.mkdir()
     turbo_dir.mkdir()
-    with patch.object(inst, "CHECKPOINTS_DIR", ckpt_dir), patch.object(inst, "TURBO_DIR", turbo_dir):
+    with (
+        patch.object(inst, "CHECKPOINTS_DIR", ckpt_dir),
+        patch.object(inst, "TURBO_DIR", turbo_dir),
+    ):
         _fake_turbo_soul(turbo_dir, "turbo_123.soul")
         _fake_turbo_soul(ckpt_dir, "reg_1.soul")
         body = client.get("/auto-train/checkpoints").json()
@@ -205,7 +217,10 @@ def test_checkpoints_includes_turbo_models(tmp_path):
 
 def test_checkpoint_info_resolves_turbo_dir(tmp_path):
     inst = mod._auto_train_instance
-    with patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "empty"), patch.object(inst, "TURBO_DIR", tmp_path):
+    with (
+        patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "empty"),
+        patch.object(inst, "TURBO_DIR", tmp_path),
+    ):
         _fake_turbo_soul(tmp_path, "turbo_9.soul")
         resp = client.get("/auto-train/checkpoints/turbo_9.soul/info")
         assert resp.status_code == 200
@@ -214,7 +229,10 @@ def test_checkpoint_info_resolves_turbo_dir(tmp_path):
 
 def test_checkpoint_delete_turbo(tmp_path):
     inst = mod._auto_train_instance
-    with patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "empty"), patch.object(inst, "TURBO_DIR", tmp_path):
+    with (
+        patch.object(inst, "CHECKPOINTS_DIR", tmp_path / "empty"),
+        patch.object(inst, "TURBO_DIR", tmp_path),
+    ):
         _fake_turbo_soul(tmp_path, "turbo_7.soul")
         (tmp_path / "empty").mkdir(exist_ok=True)
         resp = client.delete("/auto-train/checkpoints/turbo_7.soul")
@@ -229,7 +247,10 @@ def test_find_checkpoint_prefers_checkpoints_then_turbo(tmp_path):
     turbo_dir = tmp_path / "turbo"
     ckpt_dir.mkdir()
     turbo_dir.mkdir()
-    with patch.object(inst, "CHECKPOINTS_DIR", ckpt_dir), patch.object(inst, "TURBO_DIR", turbo_dir):
+    with (
+        patch.object(inst, "CHECKPOINTS_DIR", ckpt_dir),
+        patch.object(inst, "TURBO_DIR", turbo_dir),
+    ):
         (ckpt_dir / "dup.soul").write_bytes(b"\x00" * 5000)
         (turbo_dir / "dup.soul").write_bytes(b"\x00" * 5000)
         (turbo_dir / "only_turbo.soul").write_bytes(b"\x00" * 5000)
@@ -301,16 +322,19 @@ def test_turbo_real_training_end_to_end(tmp_path):
     data = data_dir / "data.txt"
     data.write_text("hello turbo world, this is a tiny training corpus. " * 20)
 
-    resp = client.post("/auto-train/start-turbo", json={
-        "data_path": str(data),
-        "epochs": 1,
-        "batch_size": 2,
-        "block_size": 32,
-        "n_embed": 32,
-        "n_layer": 1,
-        "n_head": 2,
-        "learning_rate": 0.001,
-    })
+    resp = client.post(
+        "/auto-train/start-turbo",
+        json={
+            "data_path": str(data),
+            "epochs": 1,
+            "batch_size": 2,
+            "block_size": 32,
+            "n_embed": 32,
+            "n_layer": 1,
+            "n_head": 2,
+            "learning_rate": 0.001,
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["data"]["status"] == "started"
 

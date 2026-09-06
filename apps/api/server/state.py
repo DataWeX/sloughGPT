@@ -16,24 +16,39 @@ Allows::
 from __future__ import annotations
 
 from typing import Any
+
 from domains.infrastructure.server_state import get_server_state
 
 # Names that map directly to ServerState AtomicRef fields
-_DIRECT_REFS = frozenset({
-    "model", "tokenizer", "model_type", "checkpoint",
-    "soul_engine", "current_soul", "gen_config", "model_request_logger",
-    "provider",
-})
+_DIRECT_REFS = frozenset(
+    {
+        "model",
+        "tokenizer",
+        "model_type",
+        "checkpoint",
+        "soul_engine",
+        "current_soul",
+        "gen_config",
+        "model_request_logger",
+        "provider",
+    }
+)
 
 # Names that map to plain attributes on ServerState
-_PLAIN_ATTRS = frozenset({
-    "torch_available", "training_active",
-})
+_PLAIN_ATTRS = frozenset(
+    {
+        "torch_available",
+        "training_active",
+    }
+)
 
 # Legacy names that no longer exist on ServerState but may be referenced
-_DEPRECATED = frozenset({
-    "autoload_skipped", "_self_train_proc",
-})
+_DEPRECATED = frozenset(
+    {
+        "autoload_skipped",
+        "_self_train_proc",
+    }
+)
 
 
 def __getattr__(name: str) -> Any:

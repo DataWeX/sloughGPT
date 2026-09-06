@@ -5,9 +5,9 @@ Uses the ``MetricsCollector`` for full request/inference tracking and
 Prometheus text exposition format.
 """
 
-from fastapi import APIRouter, Response
 from domains.infrastructure.metrics import get_metrics_collector
-from schemas.common import success_response, classify_and_raise
+from fastapi import APIRouter, Response
+from schemas.common import classify_and_raise, success_response
 
 
 class MetricsRouter:
@@ -34,19 +34,22 @@ class MetricsRouter:
         try:
             c = get_metrics_collector()
             import state as server_state
+
             model_loaded = c._model_loaded
             model_name = c._model_name
             if server_state.model is not None or server_state.provider is not None:
                 model_loaded = True
                 model_name = server_state.model_type or model_name
-            return success_response(data={
-                "uptime_seconds": f"{c._start_time}",
-                "model_loaded": model_loaded,
-                "model_name": model_name,
-                "active_requests": c._active_requests,
-                "inferences_total": c._inference_count,
-                "tokens_generated_total": c._tokens_generated,
-            })
+            return success_response(
+                data={
+                    "uptime_seconds": f"{c._start_time}",
+                    "model_loaded": model_loaded,
+                    "model_name": model_name,
+                    "active_requests": c._active_requests,
+                    "inferences_total": c._inference_count,
+                    "tokens_generated_total": c._tokens_generated,
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="metrics.get")
 

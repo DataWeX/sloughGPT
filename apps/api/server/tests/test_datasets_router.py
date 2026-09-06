@@ -1,22 +1,24 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for datasets router — CRUD, search, stats, data, preview, export, versioning.
 
 Only registers the datasets router to avoid pulling in heavy dependencies.
 """
 
+import asyncio
+import json
 import tempfile
 from pathlib import Path
-import json
-import asyncio
-import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI, HTTPException
+from unittest.mock import MagicMock, patch
 
-from routers.datasets import router as datasets_router, DatasetsRouter
+import pytest
 from controllers.datasets import DatasetsController
 from domains.infrastructure.errors import NotFoundError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from routers.datasets import DatasetsRouter
+from routers.datasets import router as datasets_router
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -121,8 +123,8 @@ def mock_controller():
 
 # ── GET /datasets ─────────────────────────────────────────────────────────
 
-class TestListDatasets:
 
+class TestListDatasets:
     def test_list_returns_datasets(self, mock_controller):
         resp = client.get("/datasets")
         assert resp.status_code == 200
@@ -141,8 +143,8 @@ class TestListDatasets:
 
 # ── GET /datasets/search ──────────────────────────────────────────────────
 
-class TestSearch:
 
+class TestSearch:
     def test_search_returns_results(self, mock_controller):
         resp = client.get("/datasets/search?q=shake")
         assert resp.status_code == 200
@@ -155,6 +157,7 @@ class TestSearch:
 
 
 # ── Controller: search_datasets returns full summaries ───────────────────
+
 
 class TestControllerSearch:
     """Direct controller test — the router mocks the controller, so a shape
@@ -197,8 +200,8 @@ class TestControllerSearch:
 
 # ── GET /datasets/{id} ───────────────────────────────────────────────────
 
-class TestGetDataset:
 
+class TestGetDataset:
     def test_get_existing(self, mock_controller):
         resp = client.get("/datasets/shakespeare")
         assert resp.status_code == 200
@@ -212,8 +215,8 @@ class TestGetDataset:
 
 # ── POST /datasets ───────────────────────────────────────────────────────
 
-class TestCreate:
 
+class TestCreate:
     def test_create(self, mock_controller):
         resp = client.post("/datasets", json={"name": "New Dataset"})
         assert resp.status_code == 200
@@ -226,8 +229,8 @@ class TestCreate:
 
 # ── PATCH /datasets/{id} ────────────────────────────────────────────────
 
-class TestUpdate:
 
+class TestUpdate:
     def test_update_existing(self, mock_controller):
         resp = client.patch("/datasets/shakespeare", json={"name": "Updated"})
         assert resp.status_code == 200
@@ -241,8 +244,8 @@ class TestUpdate:
 
 # ── DELETE /datasets/{id} ───────────────────────────────────────────────
 
-class TestDelete:
 
+class TestDelete:
     def test_delete_existing(self, mock_controller):
         mock_controller.delete_dataset.return_value = True
         resp = client.delete("/datasets/shakespeare")
@@ -257,8 +260,8 @@ class TestDelete:
 
 # ── GET /datasets/{id}/stats ────────────────────────────────────────────
 
-class TestStats:
 
+class TestStats:
     def test_stats_existing(self, mock_controller):
         resp = client.get("/datasets/shakespeare/stats")
         assert resp.status_code == 200
@@ -275,8 +278,8 @@ class TestStats:
 
 # ── POST /datasets/{id}/data ────────────────────────────────────────────
 
-class TestAppendData:
 
+class TestAppendData:
     def test_append_data(self, mock_controller):
         resp = client.post("/datasets/shakespeare/data", json={"data": ["a", "b", "c"]})
         assert resp.status_code == 200
@@ -290,8 +293,8 @@ class TestAppendData:
 
 # ── GET /datasets/{id}/preview ──────────────────────────────────────────
 
-class TestPreview:
 
+class TestPreview:
     def test_preview(self, mock_controller):
         resp = client.get("/datasets/shakespeare/preview?limit=2")
         assert resp.status_code == 200
@@ -305,8 +308,8 @@ class TestPreview:
 
 # ── POST /datasets/{id}/export ──────────────────────────────────────────
 
-class TestExport:
 
+class TestExport:
     def test_export_jsonl(self, mock_controller):
         tmp = tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False)
         tmp.write(b"{}")
@@ -342,8 +345,8 @@ class TestExport:
 
 # ── Versioning ──────────────────────────────────────────────────────────
 
-class TestVersions:
 
+class TestVersions:
     def test_create_version(self, mock_controller):
         resp = client.post("/datasets/shakespeare/versions")
         assert resp.status_code == 200
@@ -382,6 +385,7 @@ class TestVersions:
 # creates the converted dataset via the controller. A fresh router instance
 # with a temp _DATASETS_DIR keeps it off the real filesystem.
 
+
 def _make_convert_router(tmp_path, source_id, source_name="Corpus"):
     router = DatasetsRouter()
     router._DATASETS_DIR = tmp_path / "datasets"
@@ -408,7 +412,6 @@ def _read_rows(router, ds_id):
 
 
 class TestConvertToMessages:
-
     def test_convert_text_rows_wraps_in_messages(self, tmp_path):
         router, ctrl = _make_convert_router(tmp_path, "corpus")
         _write_jsonl(router, "corpus", [{"text": "hello"}, {"text": "world"}])
@@ -432,10 +435,18 @@ class TestConvertToMessages:
 
     def test_convert_keeps_existing_system_message(self, tmp_path):
         router, ctrl = _make_convert_router(tmp_path, "chat")
-        _write_jsonl(router, "chat", [{"messages": [
-            {"role": "system", "content": "You are a bot."},
-            {"role": "user", "content": "hi"},
-        ]}])
+        _write_jsonl(
+            router,
+            "chat",
+            [
+                {
+                    "messages": [
+                        {"role": "system", "content": "You are a bot."},
+                        {"role": "user", "content": "hi"},
+                    ]
+                }
+            ],
+        )
         with patch("routers.datasets.get_datasets_controller", return_value=ctrl):
             res = asyncio.run(router.convert_to_messages("chat"))["data"]
         rows = _read_rows(router, "chat-messages")

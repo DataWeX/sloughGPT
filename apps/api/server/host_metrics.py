@@ -4,20 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import platform
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def _rm_cpu_counts() -> tuple[Optional[int], Optional[int]]:
+def _rm_cpu_counts() -> tuple[int | None, int | None]:
     """Return (logical, physical) core counts from ResourceManager if available."""
     try:
         from domains.infrastructure.resource_manager import get_resource_manager
+
         rm = get_resource_manager()
         return rm.topology.logical_cores, rm.topology.physical_cores
     except Exception:
         return None, None
 
 
-def sample_host_metrics_sync() -> Dict[str, Any]:
+def sample_host_metrics_sync() -> dict[str, Any]:
     import os
 
     import psutil
@@ -47,7 +48,7 @@ def sample_host_metrics_sync() -> Dict[str, Any]:
     }
 
 
-async def sample_host_metrics_async() -> Optional[Dict[str, Any]]:
+async def sample_host_metrics_async() -> dict[str, Any] | None:
     try:
         return await asyncio.to_thread(sample_host_metrics_sync)
     except Exception:

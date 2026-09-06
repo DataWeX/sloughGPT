@@ -1,7 +1,8 @@
-import socket
 import ipaddress
 import logging
+import socket
 from urllib.parse import urlparse
+
 from schemas.common import raise_error
 
 logger = logging.getLogger("slo.infra.ssrf")
@@ -25,7 +26,9 @@ def validate_url_not_private(url: str) -> None:
     try:
         parsed = urlparse(url)
         if parsed.hostname and is_private_ip(parsed.hostname):
-            raise_error(f"URL points to a private/internal address: {url}", "E_BAD_REQUEST", status_code=400)
+            raise_error(
+                f"URL points to a private/internal address: {url}", "E_BAD_REQUEST", status_code=400
+            )
     except Exception as e:
         if "E_BAD_REQUEST" in str(e):
             raise

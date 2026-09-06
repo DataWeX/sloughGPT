@@ -1,11 +1,12 @@
 """
 Rate Limit Router - Rate limiting status and configuration
 """
-from fastapi import APIRouter, Request
+
 import time
 from collections import defaultdict
 
-from schemas.common import success_response, classify_and_raise
+from fastapi import APIRouter, Request
+from schemas.common import classify_and_raise, success_response
 
 
 class _RateLimiter:
@@ -40,6 +41,8 @@ class _RateLimiter:
             return max(0.0, window - (now - self._history[key][0]))
         except Exception as e:
             classify_and_raise(e, source="ratelimit.get_wait_time")
+
+
 class RatelimitRouter:
     """Rate Limit Router - Rate limiting status and configuration."""
 
@@ -49,17 +52,21 @@ class RatelimitRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route(path="/status", endpoint=self.get_rate_limit_status, methods=["GET"])
+        self.router.add_api_route(
+            path="/status", endpoint=self.get_rate_limit_status, methods=["GET"]
+        )
         self.router.add_api_route(path="/check", endpoint=self.check_rate_limit, methods=["GET"])
 
     async def get_rate_limit_status(self) -> dict:
         """Get current rate limit configuration"""
         try:
-            return success_response(data={
-                "requests_per_minute": self._rate_limiter.requests_per_minute,
-                "burst_size": self._rate_limiter.burst_size,
-                "enabled": True,
-            })
+            return success_response(
+                data={
+                    "requests_per_minute": self._rate_limiter.requests_per_minute,
+                    "burst_size": self._rate_limiter.burst_size,
+                    "enabled": True,
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="ratelimit.status")
 
@@ -68,10 +75,12 @@ class RatelimitRouter:
         try:
             client_ip = request.client.host if request.client else "unknown"
             allowed = self._rate_limiter.is_allowed(client_ip)
-            return success_response(data={
-                "allowed": allowed,
-                "wait_time": 0 if allowed else self._rate_limiter.get_wait_time(client_ip),
-            })
+            return success_response(
+                data={
+                    "allowed": allowed,
+                    "wait_time": 0 if allowed else self._rate_limiter.get_wait_time(client_ip),
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="ratelimit.check")
 

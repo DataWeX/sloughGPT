@@ -1,5 +1,4 @@
 """Tests for souls router endpoints."""
-import pytest
 
 from tests.test_support import get_test_client
 
@@ -51,10 +50,13 @@ class TestTraitWeights:
         assert "emotion" in data
 
     def test_save_weights(self):
-        resp = client.post("/souls/weights", json={
-            "personality": {"warmth": 0.8},
-            "cognition": {"reasoning": 0.7},
-        })
+        resp = client.post(
+            "/souls/weights",
+            json={
+                "personality": {"warmth": 0.8},
+                "cognition": {"reasoning": 0.7},
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"

@@ -19,55 +19,78 @@ Encapsulates router state in ``AutoTrainRouter`` class rather than module-level
 mutable globals.
 """
 
-from dataclasses import dataclass, field, is_dataclass, asdict
 import asyncio
-import threading
-from typing import Any, AsyncGenerator
-from pathlib import Path
-from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse, FileResponse
-
-from infrastructure.auth import require_auth_if_enabled
-from fastapi import Request
-from pydantic import BaseModel, Field
 import json
 import logging
 import math
 import re
+import threading
 import time
-
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
-
-from training.runtime import get_training_runtime
+from collections.abc import AsyncGenerator
+from dataclasses import asdict, dataclass, field, is_dataclass
+from pathlib import Path
+from typing import Any
 
 from domains.training.service import (
-    log_experiment_metric as _log_experiment_metric,
-    log_experiment_param as _log_experiment_param,
-    parse_subtitle_text as _parse_subtitle_text,
-    resolve_dataset_path as _resolve_dataset_path,
-    build_soul_prompt as _build_soul_prompt,
-    get_soul_name as _get_soul_name,
-    get_soul_traits as _get_soul_traits,
-    read_slo_json_header as _read_slo_json_header,
-    describe_checkpoint as _describe_checkpoint,
-    find_checkpoint as _service_find_checkpoint,
-    list_checkpoints as _service_list_checkpoints,
-    delete_checkpoint as _service_delete_checkpoint,
-    load_checkpoint as _service_load_checkpoint,
-    download_checkpoint_path as _service_download_checkpoint_path,
     checkpoint_info as _service_checkpoint_info,
-    get_turbo_status as _service_get_turbo_status,
-    get_log as _service_get_log,
-    export_checkpoint_mobile as _service_export_checkpoint_mobile,
-    start_turbo_training as _service_start_turbo_training,
-    run_turbo_worker as _service_run_turbo_worker,
-    start_from_sessions_training as _service_start_from_sessions_training,
-    export_all_metrics as _service_export_all_metrics,
-    process_training_completion as _service_process_completion,
+)
+from domains.training.service import (
     cleanup_stream_state as _service_cleanup_stream,
 )
-
-from infrastructure.sse_fallback import sse_event, sse_error, sse_complete
+from domains.training.service import (
+    delete_checkpoint as _service_delete_checkpoint,
+)
+from domains.training.service import (
+    download_checkpoint_path as _service_download_checkpoint_path,
+)
+from domains.training.service import (
+    export_all_metrics as _service_export_all_metrics,
+)
+from domains.training.service import (
+    export_checkpoint_mobile as _service_export_checkpoint_mobile,
+)
+from domains.training.service import (
+    find_checkpoint as _service_find_checkpoint,
+)
+from domains.training.service import (
+    get_log as _service_get_log,
+)
+from domains.training.service import (
+    get_turbo_status as _service_get_turbo_status,
+)
+from domains.training.service import (
+    list_checkpoints as _service_list_checkpoints,
+)
+from domains.training.service import (
+    load_checkpoint as _service_load_checkpoint,
+)
+from domains.training.service import (
+    parse_subtitle_text as _parse_subtitle_text,
+)
+from domains.training.service import (
+    process_training_completion as _service_process_completion,
+)
+from domains.training.service import (
+    read_slo_json_header as _read_slo_json_header,
+)
+from domains.training.service import (
+    resolve_dataset_path as _resolve_dataset_path,
+)
+from domains.training.service import (
+    run_turbo_worker as _service_run_turbo_worker,
+)
+from domains.training.service import (
+    start_from_sessions_training as _service_start_from_sessions_training,
+)
+from domains.training.service import (
+    start_turbo_training as _service_start_turbo_training,
+)
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse, StreamingResponse
+from infrastructure.auth import require_auth_if_enabled
+from infrastructure.sse_fallback import sse_error
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 
 @dataclass
@@ -150,6 +173,7 @@ except Exception as exc:
 
 try:
     from domains.infrastructure.pugqeep import PGQ
+
     _auto_train_pgq = PGQ(
         name="auto-train",
         storage_dir=REPO_ROOT / "models" / "auto-training" / ".pgq",
@@ -162,7 +186,7 @@ MAX_CHECKPOINT_DISK_MB = 500
 
 SOU_MAGIC = b"SOUL"
 
-_VALID_CKPT_NAME = re.compile(r'^[a-zA-Z0-9_\-\.]+$')
+_VALID_CKPT_NAME = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 
 
 def _enforce_checkpoint_budget():
@@ -203,39 +227,75 @@ def _enforce_checkpoint_budget():
             meta = Path(str(f) + ".meta.json")
             if meta.exists():
                 meta.unlink()
-            autotrain_logger.info("Pruned old checkpoint: %s (%.1f KB)", f.name, size / 1024, extra={"tag": "TRAIN"})
+            autotrain_logger.info(
+                "Pruned old checkpoint: %s (%.1f KB)", f.name, size / 1024, extra={"tag": "TRAIN"}
+            )
         autotrain_logger.info(
             "Checkpoint budget enforced: freed %.1f MB (budget %d MB)",
-            freed / 1024 / 1024, MAX_CHECKPOINT_DISK_MB,
+            freed / 1024 / 1024,
+            MAX_CHECKPOINT_DISK_MB,
             extra={"tag": "TRAIN"},
         )
     except Exception as e:
-        autotrain_logger.warning("Checkpoint budget enforcement failed: %s", e, extra={"tag": "TRAIN"})
+        autotrain_logger.warning(
+            "Checkpoint budget enforcement failed: %s", e, extra={"tag": "TRAIN"}
+        )
 
 
 class StartRequest(BaseModel):
-    teacher_model: str = Field(default="gpt2", description="Teacher model ID registered in the model server")
+    teacher_model: str = Field(
+        default="gpt2", description="Teacher model ID registered in the model server"
+    )
     temperature: float = Field(default=0.8, ge=0.1, le=2.0)
     soul_name: str = Field(default="assistant", min_length=1, max_length=200)
     epochs: int = Field(default=20, ge=1, le=1000)
     learning_rate: float = Field(default=3e-4, ge=1e-5, le=1.0)
     batch_size: int = Field(default=16, ge=1, le=1024, description="Chunk size for training")
-    source_text: str | None = Field(default=None, description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.")
-    checkpoint_name: str | None = Field(default=None, description="Load existing checkpoint and continue training")
-    dataset_id: str | None = Field(default=None, description="Dataset ID from /datasets to train on")
-    early_stopping_patience: int = Field(default=5, ge=0, le=100, description="Stop if no eval improvement for N evaluations (0 = disabled)")
+    source_text: str | None = Field(
+        default=None,
+        description="Custom training text (SRT, plain, or lines). If provided, train on this instead of generating from teacher.",
+    )
+    checkpoint_name: str | None = Field(
+        default=None, description="Load existing checkpoint and continue training"
+    )
+    dataset_id: str | None = Field(
+        default=None, description="Dataset ID from /datasets to train on"
+    )
+    early_stopping_patience: int = Field(
+        default=5,
+        ge=0,
+        le=100,
+        description="Stop if no eval improvement for N evaluations (0 = disabled)",
+    )
     # Native training architecture params (used when method=native)
-    n_embed: int = Field(default=128, ge=16, le=1024, description="Embedding dimension for native training")
-    n_layer: int = Field(default=4, ge=1, le=24, description="Number of transformer layers for native training")
-    n_head: int = Field(default=4, ge=1, le=64, description="Number of attention heads for native training")
-    block_size: int = Field(default=128, ge=8, le=2048, description="Context window size for native training")
-    dropout: float = Field(default=0.1, ge=0.0, le=0.9, description="Dropout rate for native training")
-    checkpoint_dir: str | None = Field(default=None, description="Override checkpoint output directory (default: models/auto-training)")
-    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
+    n_embed: int = Field(
+        default=128, ge=16, le=1024, description="Embedding dimension for native training"
+    )
+    n_layer: int = Field(
+        default=4, ge=1, le=24, description="Number of transformer layers for native training"
+    )
+    n_head: int = Field(
+        default=4, ge=1, le=64, description="Number of attention heads for native training"
+    )
+    block_size: int = Field(
+        default=128, ge=8, le=2048, description="Context window size for native training"
+    )
+    dropout: float = Field(
+        default=0.1, ge=0.0, le=0.9, description="Dropout rate for native training"
+    )
+    checkpoint_dir: str | None = Field(
+        default=None,
+        description="Override checkpoint output directory (default: models/auto-training)",
+    )
+    experiment_id: str | None = Field(
+        default=None, description="Link to an experiment — auto-logs loss/accuracy metrics"
+    )
 
 
 class TurboStartRequest(BaseModel):
-    method: str = Field(default="slonet", description="Training method: 'slonet', 'transformer', 'nanogpt', 'hf'")
+    method: str = Field(
+        default="slonet", description="Training method: 'slonet', 'transformer', 'nanogpt', 'hf'"
+    )
     data_path: str = Field(default="", description="Path to training data file")
     dataset_id: str | None = Field(default=None, description="Dataset ID to train on")
     checkpoint_name: str | None = Field(default=None, description="Resume from existing checkpoint")
@@ -250,7 +310,9 @@ class TurboStartRequest(BaseModel):
     dropout: float = Field(default=0.1, ge=0.0, le=0.9)
     n_decoder_layers: int | None = Field(default=None, description="Deprecated: use n_layer")
     max_tgt_len: int | None = Field(default=None, description="Deprecated: use block_size")
-    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
+    experiment_id: str | None = Field(
+        default=None, description="Link to an experiment — auto-logs loss/accuracy metrics"
+    )
 
 
 class FromSessionsRequest(BaseModel):
@@ -266,8 +328,12 @@ class FromSessionsRequest(BaseModel):
     min_pair_quality: float = Field(default=2.0, ge=0.0, le=5.0)
     max_pairs: int = Field(default=500, ge=10, le=10000)
     checkpoint_name: str | None = Field(default=None, description="Resume from existing checkpoint")
-    session_ids: list | None = Field(default=None, description="If provided, only train from these session IDs")
-    experiment_id: str | None = Field(default=None, description="Link to an experiment — auto-logs loss/accuracy metrics")
+    session_ids: list | None = Field(
+        default=None, description="If provided, only train from these session IDs"
+    )
+    experiment_id: str | None = Field(
+        default=None, description="Link to an experiment — auto-logs loss/accuracy metrics"
+    )
 
 
 def _load_soul_meta(ckpt_file: Path) -> dict:
@@ -282,6 +348,7 @@ def _load_soul_meta(ckpt_file: Path) -> dict:
     if ckpt_file.suffix == ".slo":
         try:
             from domains.inference.slo_format import SouParser
+
             profile = SouParser.parse(ckpt_file.read_text(encoding="utf-8"))
             return {
                 "soul_name": profile.name,
@@ -351,21 +418,37 @@ class AutoTrainRouter:
         self.router.add_api_route("/stream", self.stream, methods=["GET"], response_model=None)
         self.router.add_api_route("/checkpoints", self.list_checkpoints, methods=["GET"])
         self.router.add_api_route("/checkpoints/{name}", self.delete_checkpoint, methods=["DELETE"])
-        self.router.add_api_route("/checkpoints/{name}/load", self.load_checkpoint, methods=["POST"])
-        self.router.add_api_route("/checkpoints/{name}/download", self.download_checkpoint, methods=["GET"])
+        self.router.add_api_route(
+            "/checkpoints/{name}/load", self.load_checkpoint, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/checkpoints/{name}/download", self.download_checkpoint, methods=["GET"]
+        )
         self.router.add_api_route("/checkpoints/{name}/info", self.checkpoint_info, methods=["GET"])
-        self.router.add_api_route("/checkpoints/{name}/export-mobile", self.export_checkpoint_mobile, methods=["GET"])
+        self.router.add_api_route(
+            "/checkpoints/{name}/export-mobile", self.export_checkpoint_mobile, methods=["GET"]
+        )
         self.router.add_api_route("/log", self.auto_train_log, methods=["GET"])
-        self.router.add_api_route("/from-sessions/start", self.start_from_sessions, methods=["POST"])
-        self.router.add_api_route("/from-sessions/stream", self.stream_from_sessions, methods=["GET"], response_model=None)
-        self.router.add_api_route("/from-sessions/cancel", self.cancel_from_sessions, methods=["GET"])
+        self.router.add_api_route(
+            "/from-sessions/start", self.start_from_sessions, methods=["POST"]
+        )
+        self.router.add_api_route(
+            "/from-sessions/stream", self.stream_from_sessions, methods=["GET"], response_model=None
+        )
+        self.router.add_api_route(
+            "/from-sessions/cancel", self.cancel_from_sessions, methods=["GET"]
+        )
         self.router.add_api_route("/metrics/export", self.export_metrics, methods=["GET"])
 
-    async def start(self, req: StartRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def start(
+        self, req: StartRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """start."""
             if not req.source_text and not req.dataset_id and not req.checkpoint_name:
-                raise_error("Provide source_text, dataset_id, or checkpoint_name", code="E_VAL_REQUEST")
+                raise_error(
+                    "Provide source_text, dataset_id, or checkpoint_name", code="E_VAL_REQUEST"
+                )
 
             data_path = ""
             if req.source_text:
@@ -373,14 +456,27 @@ class AutoTrainRouter:
                 if source_lines:
 
                     def _write_src():
-                        tmp = self.REPO_ROOT / ".opencode" / "tmp" / f"autotrain_source_{int(time.time())}.txt"
+                        tmp = (
+                            self.REPO_ROOT
+                            / ".opencode"
+                            / "tmp"
+                            / f"autotrain_source_{int(time.time())}.txt"
+                        )
                         tmp.parent.mkdir(parents=True, exist_ok=True)
                         tmp.write_text("\n".join(source_lines), encoding="utf-8")
                         return tmp
 
                     tmp = await asyncio.to_thread(_write_src)
                     data_path = str(tmp)
-                    autotrain_logger.info("Wrote %d source lines to %s", len(source_lines), tmp, extra={"tag": "TRAIN", "context": {"source_lines": len(source_lines), "path": str(tmp)}})
+                    autotrain_logger.info(
+                        "Wrote %d source lines to %s",
+                        len(source_lines),
+                        tmp,
+                        extra={
+                            "tag": "TRAIN",
+                            "context": {"source_lines": len(source_lines), "path": str(tmp)},
+                        },
+                    )
             elif req.dataset_id:
                 data_path = _resolve_dataset_path(req.dataset_id)
 
@@ -394,7 +490,14 @@ class AutoTrainRouter:
                     resume = True
                     resume_path = str(ckpt_soul)
                     method = "chat-trained"
-                    autotrain_logger.info("Auto-resume from %s (SloNet)", resume_path, extra={"tag": "TRAIN", "context": {"checkpoint": resume_path, "method": method}})
+                    autotrain_logger.info(
+                        "Auto-resume from %s (SloNet)",
+                        resume_path,
+                        extra={
+                            "tag": "TRAIN",
+                            "context": {"checkpoint": resume_path, "method": method},
+                        },
+                    )
 
             self.state.config = {
                 "epochs": req.epochs,
@@ -417,14 +520,40 @@ class AutoTrainRouter:
             }
             self.state.running = True
             import state as _srv_state
+
             _srv_state.training_active = True
-            autotrain_logger.info("Auto-train configured: data_path=%s epochs=%d", data_path, req.epochs, extra={"tag": "TRAIN"})
-            safe_audit_log("training.start", resource=req.dataset_id or req.checkpoint_name or (req.soul_name if req.source_text else "inline"), detail="resume" if resume else "fresh", method=method, epochs=req.epochs, dataset_id=req.dataset_id or "", checkpoint_name=req.checkpoint_name or "")
-            return success_response(data={"status": "ready", "data_path": data_path, "epochs": req.epochs, "config": self.state.config})
+            autotrain_logger.info(
+                "Auto-train configured: data_path=%s epochs=%d",
+                data_path,
+                req.epochs,
+                extra={"tag": "TRAIN"},
+            )
+            safe_audit_log(
+                "training.start",
+                resource=req.dataset_id
+                or req.checkpoint_name
+                or (req.soul_name if req.source_text else "inline"),
+                detail="resume" if resume else "fresh",
+                method=method,
+                epochs=req.epochs,
+                dataset_id=req.dataset_id or "",
+                checkpoint_name=req.checkpoint_name or "",
+            )
+            return success_response(
+                data={
+                    "status": "ready",
+                    "data_path": data_path,
+                    "epochs": req.epochs,
+                    "config": self.state.config,
+                }
+            )
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.start")
-    async def start_turbo(self, req: TurboStartRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def start_turbo(
+        self, req: TurboStartRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """start_turbo."""
             global _turbo_state, _turbo_cancel_event
@@ -452,19 +581,33 @@ class AutoTrainRouter:
 
             autotrain_logger.info(
                 "Turbo training started in background: job_id=%s data=%s",
-                job_info["job_id"], job_info["data_path"], extra={"tag": "TRAIN"},
+                job_info["job_id"],
+                job_info["data_path"],
+                extra={"tag": "TRAIN"},
             )
-            return success_response(data={"status": "started", "job_id": job_info["job_id"], "message": "Turbo training started in background"})
+            return success_response(
+                data={
+                    "status": "started",
+                    "job_id": job_info["job_id"],
+                    "message": "Turbo training started in background",
+                }
+            )
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.start_turbo")
+
     def _run_turbo(self, config: dict) -> None:
         """Run SloughGPTTrainer on a daemon thread via service layer."""
         _service_run_turbo_worker(config)
 
     def _run_turbo_pgq(
-        self, job_id: str, tree_id: str, point_library: Any,
-        is_cancelled: Any, *, config: dict,
+        self,
+        job_id: str,
+        tree_id: str,
+        point_library: Any,
+        is_cancelled: Any,
+        *,
+        config: dict,
     ) -> dict:
         """PGQ-compatible training entry point.
 
@@ -484,6 +627,7 @@ class AutoTrainRouter:
             return success_response(data=_finite_payload(state))
         except Exception as e:
             classify_and_raise(e, source="autotrain.turbo_status")
+
     async def stop(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """stop."""
@@ -498,80 +642,134 @@ class AutoTrainRouter:
                     try:
                         _auto_train_pgq.cancel_training(job_id)
                     except Exception as exc:
-                        autotrain_logger.warning("Failed to cancel turbo training job %s: %s", job_id, exc)
+                        autotrain_logger.warning(
+                            "Failed to cancel turbo training job %s: %s", job_id, exc
+                        )
             try:
-                from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+                from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
                 get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
             except Exception as exc:
                 autotrain_logger.warning("CancelManager.cancel_all failed: %s", exc)
             if _auto_train_cancel_event is not None:
-                safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelling")
-                return success_response(data={"status": "cancelling", "message": "Cancelling auto-training"})
+                safe_audit_log(
+                    "training.stop",
+                    resource=(self.state.config or {}).get("soul_name", ""),
+                    detail="cancelling",
+                )
+                return success_response(
+                    data={"status": "cancelling", "message": "Cancelling auto-training"}
+                )
             safe_audit_log("training.stop", detail="not_running")
             return success_response(data={"status": "stopped"})
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.stop")
+
     async def pause(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """pause."""
             if _turbo_state.get("status") == "running":
                 if _turbo_pause_event.is_set():
-                    return success_response(data={"success": False, "message": "Training is already paused"})
+                    return success_response(
+                        data={"success": False, "message": "Training is already paused"}
+                    )
                 _turbo_pause_event.set()
                 with _turbo_lock:
                     _turbo_state["paused"] = True
-                safe_audit_log("training.pause", resource=(self.state.config or {}).get("soul_name", ""), detail="paused")
+                safe_audit_log(
+                    "training.pause",
+                    resource=(self.state.config or {}).get("soul_name", ""),
+                    detail="paused",
+                )
                 return success_response(data={"success": True, "message": "Training paused"})
             if _auto_train_pause_event is None:
-                return success_response(data={"success": False, "message": "No active training to pause"})
+                return success_response(
+                    data={"success": False, "message": "No active training to pause"}
+                )
             if _auto_train_pause_event.is_set():
-                return success_response(data={"success": False, "message": "Training is already paused"})
+                return success_response(
+                    data={"success": False, "message": "Training is already paused"}
+                )
             _auto_train_pause_event.set()
-            safe_audit_log("training.pause", resource=(self.state.config or {}).get("soul_name", ""), detail="paused")
+            safe_audit_log(
+                "training.pause",
+                resource=(self.state.config or {}).get("soul_name", ""),
+                detail="paused",
+            )
             return success_response(data={"success": True, "message": "Training paused"})
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.pause")
+
     async def resume(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             """resume."""
             if _turbo_state.get("status") == "running":
                 if not _turbo_pause_event.is_set():
-                    return success_response(data={"success": False, "message": "Training is not paused"})
+                    return success_response(
+                        data={"success": False, "message": "Training is not paused"}
+                    )
                 _turbo_pause_event.clear()
                 with _turbo_lock:
                     _turbo_state["paused"] = False
-                safe_audit_log("training.resume", resource=(self.state.config or {}).get("soul_name", ""), detail="resumed")
+                safe_audit_log(
+                    "training.resume",
+                    resource=(self.state.config or {}).get("soul_name", ""),
+                    detail="resumed",
+                )
                 return success_response(data={"success": True, "message": "Training resumed"})
             if _auto_train_pause_event is None:
-                return success_response(data={"success": False, "message": "No active training to resume"})
+                return success_response(
+                    data={"success": False, "message": "No active training to resume"}
+                )
             if not _auto_train_pause_event.is_set():
-                return success_response(data={"success": False, "message": "Training is not paused"})
+                return success_response(
+                    data={"success": False, "message": "Training is not paused"}
+                )
             _auto_train_pause_event.clear()
-            safe_audit_log("training.resume", resource=(self.state.config or {}).get("soul_name", ""), detail="resumed")
+            safe_audit_log(
+                "training.resume",
+                resource=(self.state.config or {}).get("soul_name", ""),
+                detail="resumed",
+            )
             return success_response(data={"success": True, "message": "Training resumed"})
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.resume")
+
     async def status(self) -> dict:
         try:
             """status."""
-            return success_response(data={"running": self.state.running, "config": self.state.config})
+            return success_response(
+                data={"running": self.state.running, "config": self.state.config}
+            )
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.status")
+
     async def stream(self, request: Request) -> AsyncGenerator[str, None]:
         try:
             """stream."""
             if not self.state.config:
                 return StreamingResponse(
-                    iter([sse_error("auto-train", "IDLE", "No training state - call /auto-train/start first", code="E_STATE_IDLE", http_status=409)]),
+                    iter(
+                        [
+                            sse_error(
+                                "auto-train",
+                                "IDLE",
+                                "No training state - call /auto-train/start first",
+                                code="E_STATE_IDLE",
+                                http_status=409,
+                            )
+                        ]
+                    ),
                     media_type="text/event-stream",
                 )
 
             import asyncio as _asyncio
-            from domains.infrastructure.task_queue import Task, Priority, get_task_queue
+
+            from domains.infrastructure.task_queue import Priority, Task, get_task_queue
 
             queue: _asyncio.Queue[str] = _asyncio.Queue()
             loop = _asyncio.get_running_loop()
@@ -602,7 +800,8 @@ class AutoTrainRouter:
             # Register with CancelManager
             _stream_cm_op_id: str | None = None
             try:
-                from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+                from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
                 _mgr = get_cancel_manager()
                 _stream_cm_op_id = _mgr.register(
                     op_type=OpType.TRAINING,
@@ -611,12 +810,19 @@ class AutoTrainRouter:
                 )
                 _mgr.start(_stream_cm_op_id)
             except Exception as e:
-                autotrain_logger.warning("CancelManager registration failed (training may be unkillable): %s", e, extra={"tag": "TRAIN"})
+                autotrain_logger.warning(
+                    "CancelManager registration failed (training may be unkillable): %s",
+                    e,
+                    extra={"tag": "TRAIN"},
+                )
 
             task_id = await tq.enqueue(task)
-            autotrain_logger.info("Training task enqueued via task queue: %s", task_id, extra={"tag": "TRAIN"})
+            autotrain_logger.info(
+                "Training task enqueued via task queue: %s", task_id, extra={"tag": "TRAIN"}
+            )
 
             from training.runtime import get_training_runtime
+
             runtime_job = {
                 "id": task_id,
                 "name": "auto-train",
@@ -646,7 +852,10 @@ class AutoTrainRouter:
                     if _stream_cm_op_id:
                         try:
                             from domains.infrastructure.cancel_manager import get_cancel_manager
-                            get_cancel_manager().finish(_stream_cm_op_id, error=error if status != "complete" else "")
+
+                            get_cancel_manager().finish(
+                                _stream_cm_op_id, error=error if status != "complete" else ""
+                            )
                         except Exception as exc:
                             autotrain_logger.debug("CancelManager.finish failed: %s", exc)
 
@@ -656,8 +865,17 @@ class AutoTrainRouter:
                 try:
                     while True:
                         if time.time() > deadline:
-                            autotrain_logger.error("Auto-train SSE timed out after 1 hour - no completion event received", extra={"tag": "TRAIN"})
-                            yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out", code="E_TIMEOUT", http_status=408)
+                            autotrain_logger.error(
+                                "Auto-train SSE timed out after 1 hour - no completion event received",
+                                extra={"tag": "TRAIN"},
+                            )
+                            yield sse_error(
+                                "auto-train",
+                                "TIMEOUT",
+                                "Training SSE stream timed out",
+                                code="E_TIMEOUT",
+                                http_status=408,
+                            )
                             _finish_cm("failed", "SSE timeout")
                             return
                         if await request.is_disconnected():
@@ -665,7 +883,9 @@ class AutoTrainRouter:
                             _auto_train_cancel_event.set()
                             self.state.running = False
                             _finish_cm("cancelled", "client disconnected")
-                            autotrain_logger.info("Client disconnected from auto-train stream", extra={"tag": "TRAIN"})
+                            autotrain_logger.info(
+                                "Client disconnected from auto-train stream", extra={"tag": "TRAIN"}
+                            )
                             return
                         remaining = heartbeat_interval - (time.time() - last_yield)
                         if remaining <= 0:
@@ -682,7 +902,9 @@ class AutoTrainRouter:
                             try:
                                 ev = json.loads(event[6:])
                                 if ev.get("status") in ("complete", "error"):
-                                    _service_process_completion(ev, task_id, self.state.config, CHECKPOINTS_DIR, _finish_cm)
+                                    _service_process_completion(
+                                        ev, task_id, self.state.config, CHECKPOINTS_DIR, _finish_cm
+                                    )
                                     break
                             except json.JSONDecodeError:
                                 pass
@@ -695,20 +917,39 @@ class AutoTrainRouter:
                             break
 
                 except TimeoutError:
-                    autotrain_logger.error("Auto-train SSE queue timed out - no event for 60s", extra={"tag": "TRAIN"})
+                    autotrain_logger.error(
+                        "Auto-train SSE queue timed out - no event for 60s", extra={"tag": "TRAIN"}
+                    )
                     _finish_cm("failed", "SSE queue timeout")
-                    yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds", code="E_TIMEOUT", http_status=408)
+                    yield sse_error(
+                        "auto-train",
+                        "TIMEOUT",
+                        "No training progress for 60 seconds",
+                        code="E_TIMEOUT",
+                        http_status=408,
+                    )
                 except Exception as e:
-                    autotrain_logger.error("Auto-train SSE stream error: %s", e, extra={"tag": "TRAIN"})
+                    autotrain_logger.error(
+                        "Auto-train SSE stream error: %s", e, extra={"tag": "TRAIN"}
+                    )
                     _finish_cm("failed", str(e))
                     if not self.state.complete_enqueued:
-                        yield sse_error("auto-train", "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500)
+                        yield sse_error(
+                            "auto-train",
+                            "FAILED",
+                            str(e),
+                            code="E_INFRA_GENERATION",
+                            http_status=500,
+                        )
                 finally:
                     _auto_train_cancel_event = None
                     _auto_train_pause_event = None
-                    _service_cleanup_stream(task_id, self.state.config, self.state.__dict__, _finish_cm)
+                    _service_cleanup_stream(
+                        task_id, self.state.config, self.state.__dict__, _finish_cm
+                    )
                     try:
                         import state as _srv_state
+
                         _srv_state.training_active = False
                     except Exception as exc:
                         autotrain_logger.debug("Failed to reset training_active: %s", exc)
@@ -717,6 +958,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.stream")
+
     async def list_checkpoints(self) -> dict:
         try:
             now = time.monotonic()
@@ -732,7 +974,10 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.list_checkpoints")
-    async def delete_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def delete_checkpoint(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             deleted = await _service_delete_checkpoint(name)
 
@@ -744,23 +989,52 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.delete_checkpoint")
-    async def load_checkpoint(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def load_checkpoint(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             data = await _service_load_checkpoint(name)
 
             autotrain_logger.info(
                 "Loaded checkpoint %s as provider (vocab=%d, params=%d)",
-                data["name"], data["vocab_size"], data["params"],
-                extra={"tag": "TRAIN", "context": {"checkpoint": data["name"], "vocab_size": data["vocab_size"], "params": data["params"]}},
+                data["name"],
+                data["vocab_size"],
+                data["params"],
+                extra={
+                    "tag": "TRAIN",
+                    "context": {
+                        "checkpoint": data["name"],
+                        "vocab_size": data["vocab_size"],
+                        "params": data["params"],
+                    },
+                },
             )
 
-            safe_audit_log("training.checkpoint.load", resource=data["name"], detail=f"vocab={data['vocab_size']} params={data['params']}")
+            safe_audit_log(
+                "training.checkpoint.load",
+                resource=data["name"],
+                detail=f"vocab={data['vocab_size']} params={data['params']}",
+            )
 
             self._checkpoints_cache = None
             return success_response(data=data, message="loaded")
         except Exception as e:
             import traceback
-            autotrain_logger.error("Failed to load checkpoint %s: %s", name, e, extra={"tag": "TRAIN", "context": {"checkpoint": name, "error": str(e), "traceback": traceback.format_exc()}})
+
+            autotrain_logger.error(
+                "Failed to load checkpoint %s: %s",
+                name,
+                e,
+                extra={
+                    "tag": "TRAIN",
+                    "context": {
+                        "checkpoint": name,
+                        "error": str(e),
+                        "traceback": traceback.format_exc(),
+                    },
+                },
+            )
             classify_and_raise(e, source="load_checkpoint")
 
     async def download_checkpoint(self, name: str) -> dict:
@@ -772,6 +1046,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.download_checkpoint")
+
     async def checkpoint_info(self, name: str) -> dict:
         try:
             info = await _service_checkpoint_info(name)
@@ -779,6 +1054,7 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.checkpoint_info")
+
     async def export_metrics(self) -> dict:
         try:
             from fastapi.responses import Response
@@ -794,7 +1070,10 @@ class AutoTrainRouter:
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.export_metrics")
-    async def export_checkpoint_mobile(self, name: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def export_checkpoint_mobile(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             data = await _service_export_checkpoint_mobile(name)
             return success_response(data=data)
@@ -807,7 +1086,10 @@ class AutoTrainRouter:
             return success_response(data={"lines": lines, "total": len(lines)})
         except Exception as e:
             classify_and_raise(e, source="autotrain.auto_train_log")
-    async def start_from_sessions(self, req: FromSessionsRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def start_from_sessions(
+        self, req: FromSessionsRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """start_from_sessions."""
             config = {
@@ -827,22 +1109,40 @@ class AutoTrainRouter:
                 "experiment_id": req.experiment_id,
             }
             built_config = _service_start_from_sessions_training(self.state, config)
-            safe_audit_log("training.start", resource=req.soul_name or "from-sessions", detail="from-sessions", session_ids=len(req.session_ids) if req.session_ids else 0, epochs=req.epochs)
+            safe_audit_log(
+                "training.start",
+                resource=req.soul_name or "from-sessions",
+                detail="from-sessions",
+                session_ids=len(req.session_ids) if req.session_ids else 0,
+                epochs=req.epochs,
+            )
             return success_response(data=built_config, message="Training started")
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.start_from_sessions")
+
     async def stream_from_sessions(self, request: Request) -> AsyncGenerator[str, None]:
         try:
             """stream_from_sessions."""
             if not self.state.config or self.state.config.get("method") != "from-sessions":
                 return StreamingResponse(
-                    iter([sse_error("auto-train", "IDLE", "No training state - call /auto-train/from-sessions/start first", code="E_STATE_IDLE", http_status=409)]),
+                    iter(
+                        [
+                            sse_error(
+                                "auto-train",
+                                "IDLE",
+                                "No training state - call /auto-train/from-sessions/start first",
+                                code="E_STATE_IDLE",
+                                http_status=409,
+                            )
+                        ]
+                    ),
                     media_type="text/event-stream",
                 )
 
             import asyncio as _asyncio
-            from domains.infrastructure.task_queue import Task, Priority, get_task_queue
+
+            from domains.infrastructure.task_queue import Priority, Task, get_task_queue
 
             queue: _asyncio.Queue[str] = _asyncio.Queue()
             loop = _asyncio.get_running_loop()
@@ -872,23 +1172,31 @@ class AutoTrainRouter:
             self.state.running = True
 
             task_id = await tq.enqueue(task)
-            autotrain_logger.info("From-sessions training task enqueued: %s", task_id, extra={"tag": "TRAIN"})
+            autotrain_logger.info(
+                "From-sessions training task enqueued: %s", task_id, extra={"tag": "TRAIN"}
+            )
 
             # Register with CancelManager
             _sess_cm_op_id: str | None = None
             try:
-                from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+                from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
                 _mgr = get_cancel_manager()
                 _sess_cm_op_id = _mgr.register(
                     op_type=OpType.TRAINING,
                     label="auto-train-sessions",
-                    cancel_fn=lambda: _auto_train_cancel_event.set() if _auto_train_cancel_event else None,
+                    cancel_fn=lambda: (
+                        _auto_train_cancel_event.set() if _auto_train_cancel_event else None
+                    ),
                 )
                 _mgr.start(_sess_cm_op_id)
             except Exception as exc:
-                autotrain_logger.warning("CancelManager registration failed for from-sessions: %s", exc)
+                autotrain_logger.warning(
+                    "CancelManager registration failed for from-sessions: %s", exc
+                )
 
             from training.runtime import get_training_runtime
+
             runtime_job = {
                 "id": task_id,
                 "name": "auto-train-sessions",
@@ -918,7 +1226,10 @@ class AutoTrainRouter:
                     if _sess_cm_op_id:
                         try:
                             from domains.infrastructure.cancel_manager import get_cancel_manager
-                            get_cancel_manager().finish(_sess_cm_op_id, error=error if status != "complete" else "")
+
+                            get_cancel_manager().finish(
+                                _sess_cm_op_id, error=error if status != "complete" else ""
+                            )
                         except Exception as exc:
                             autotrain_logger.debug("CancelManager.finish failed: %s", exc)
 
@@ -929,14 +1240,23 @@ class AutoTrainRouter:
                     while True:
                         if time.time() > deadline:
                             _finish_cm("failed", "SSE timeout")
-                            yield sse_error("auto-train", "TIMEOUT", "Training SSE stream timed out", code="E_TIMEOUT", http_status=408)
+                            yield sse_error(
+                                "auto-train",
+                                "TIMEOUT",
+                                "Training SSE stream timed out",
+                                code="E_TIMEOUT",
+                                http_status=408,
+                            )
                             return
                         if await request.is_disconnected():
                             await tq.cancel(task_id)
                             _auto_train_cancel_event.set()
                             self.state.running = False
                             _finish_cm("cancelled", "client disconnected")
-                            autotrain_logger.info("Client disconnected from from-sessions stream", extra={"tag": "TRAIN"})
+                            autotrain_logger.info(
+                                "Client disconnected from from-sessions stream",
+                                extra={"tag": "TRAIN"},
+                            )
                             return
                         remaining = heartbeat_interval - (time.time() - last_yield)
                         if remaining <= 0:
@@ -953,7 +1273,9 @@ class AutoTrainRouter:
                             try:
                                 ev = json.loads(event[6:])
                                 if ev.get("status") in ("complete", "error"):
-                                    _service_process_completion(ev, task_id, self.state.config, CHECKPOINTS_DIR, _finish_cm)
+                                    _service_process_completion(
+                                        ev, task_id, self.state.config, CHECKPOINTS_DIR, _finish_cm
+                                    )
                                     break
                             except json.JSONDecodeError:
                                 pass
@@ -967,32 +1289,58 @@ class AutoTrainRouter:
 
                 except TimeoutError:
                     _finish_cm("failed", "SSE queue timeout")
-                    yield sse_error("auto-train", "TIMEOUT", "No training progress for 60 seconds", code="E_TIMEOUT", http_status=408)
+                    yield sse_error(
+                        "auto-train",
+                        "TIMEOUT",
+                        "No training progress for 60 seconds",
+                        code="E_TIMEOUT",
+                        http_status=408,
+                    )
                 except Exception as e:
-                    autotrain_logger.error("From-sessions SSE stream error: %s", e, extra={"tag": "TRAIN"})
+                    autotrain_logger.error(
+                        "From-sessions SSE stream error: %s", e, extra={"tag": "TRAIN"}
+                    )
                     _finish_cm("failed", str(e))
                     if not self.state.complete_enqueued:
-                        yield sse_error("auto-train", "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500)
+                        yield sse_error(
+                            "auto-train",
+                            "FAILED",
+                            str(e),
+                            code="E_INFRA_GENERATION",
+                            http_status=500,
+                        )
                 finally:
                     _auto_train_cancel_event = None
-                    _service_cleanup_stream(task_id, self.state.config, self.state.__dict__, _finish_cm)
+                    _service_cleanup_stream(
+                        task_id, self.state.config, self.state.__dict__, _finish_cm
+                    )
 
             return StreamingResponse(event_generator(), media_type="text/event-stream")
 
         except Exception as e:
             classify_and_raise(e, source="autotrain.stream_from_sessions")
-    async def cancel_from_sessions(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+
+    async def cancel_from_sessions(
+        self, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """cancel_from_sessions."""
             if _auto_train_cancel_event is not None:
                 _auto_train_cancel_event.set()
             self.state.running = False
             try:
-                from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+                from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
                 get_cancel_manager().cancel_all(op_type=OpType.TRAINING)
             except Exception as exc:
-                autotrain_logger.warning("CancelManager.cancel_all failed for from-sessions: %s", exc)
-            safe_audit_log("training.stop", resource=(self.state.config or {}).get("soul_name", ""), detail="cancelled")
+                autotrain_logger.warning(
+                    "CancelManager.cancel_all failed for from-sessions: %s", exc
+                )
+            safe_audit_log(
+                "training.stop",
+                resource=(self.state.config or {}).get("soul_name", ""),
+                detail="cancelled",
+            )
             return success_response(message="Cancel signal sent")
 
         except Exception as e:
@@ -1003,17 +1351,21 @@ _auto_train_instance = AutoTrainRouter()
 router = _auto_train_instance.router
 state = _auto_train_instance.state
 
+
 def stream(request) -> dict:
     """stream."""
     return _auto_train_instance.stream(request)
+
 
 def start_from_sessions(req) -> dict:
     """start_from_sessions."""
     return _auto_train_instance.start_from_sessions(req)
 
+
 def cancel_from_sessions() -> dict:
     """cancel_from_sessions."""
     return _auto_train_instance.cancel_from_sessions()
+
 
 def stream_from_sessions(request) -> dict:
     """stream_from_sessions."""

@@ -1,6 +1,6 @@
 """Tests for the /benchmark router — metrics, quality, responses, stats, clear."""
 
-from test_support import get_test_client, _data
+from test_support import _data, get_test_client
 
 
 def test_clear_history_endpoint():

@@ -10,14 +10,13 @@ import threading
 import time
 from typing import Any
 
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter
-
 from schemas.common import raise_error
 
+from .helpers import _finish_job, _sloughgpt_trainer_kwds
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
-from .helpers import _finish_job, _sloughgpt_trainer_kwds
-from domains.training.executor import get_training_executor
 
 logger = logging.getLogger("slo")
 
@@ -34,6 +33,7 @@ async def train(request):
     """
     from domains.training.dataset_manifest import ManifestError
     from domains.training.train_pipeline import SloughGPTTrainer
+
     from .schemas import TrainRequest
 
     request = TrainRequest(**request) if isinstance(request, dict) else request
@@ -82,7 +82,8 @@ async def train(request):
 
     # Register with CancelManager
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         _mgr = get_cancel_manager()
         op_id = _mgr.register(
             op_type=OpType.TRAINING,
@@ -116,6 +117,7 @@ async def train(request):
 async def train_resolve(body) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training)."""
     from domains.training.dataset_manifest import ManifestError
+
     from .schemas import TrainResolveRequest
 
     body = TrainResolveRequest(**body) if isinstance(body, dict) else body

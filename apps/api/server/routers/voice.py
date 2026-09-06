@@ -5,18 +5,17 @@ import base64
 import io
 import logging
 import time as _time
-from typing import Optional
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response, safe_audit_log, classify_and_raise
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.voice")
 
 
 # ── TTS backend state (lazy-loaded) ─────────────────────────────────────
+
 
 class _TTSBackend:
     """Lazy-loaded TTS engine using HuggingFace transformers."""
@@ -33,6 +32,7 @@ class _TTSBackend:
             return True
         try:
             from transformers import pipeline as hf_pipeline
+
             self._model_id = "facebook/mms-tts-eng"
             self._pipeline = hf_pipeline("text-to-speech", model=self._model_id)
             self._loaded = True
@@ -47,6 +47,7 @@ class _TTSBackend:
             self._error = f"TTS model load failed: {e}"
             logger.warning("TTS: model load failed: %s", e, extra={"tag": "MODEL"})
             return False
+
     def generate(self, text: str) -> bytes:
         """Generate WAV audio bytes from text using the loaded TTS pipeline."""
         if not self._loaded:
@@ -57,8 +58,10 @@ class _TTSBackend:
             audio_array = result["audio"]
             sample_rate = result["sampling_rate"]
             import numpy as np
+
             audio_int16 = (audio_array * 32767).astype(np.int16)
             import wave
+
             buf = io.BytesIO()
             with wave.open(buf, "wb") as wf:
                 wf.setnchannels(1)
@@ -68,14 +71,16 @@ class _TTSBackend:
             buf.seek(0)
             return buf.read()
 
-
         except Exception as e:
             classify_and_raise(e, source="voice.generate")
+
+
 # ── Schema ──────────────────────────────────────────────────────────────
+
 
 class TTSRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=10000, description="Text to convert to speech")
-    voice: Optional[str] = Field(default=None, max_length=100, description="Voice identifier")
+    voice: str | None = Field(default=None, max_length=100, description="Voice identifier")
 
 
 class TTSResponse(BaseModel):
@@ -87,6 +92,7 @@ class TTSResponse(BaseModel):
 
 # ── Router ──────────────────────────────────────────────────────────────
 
+
 class VoiceRouter:
     def __init__(self):
         self._tts_backend = _TTSBackend()
@@ -94,10 +100,14 @@ class VoiceRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("/tts", self.text_to_speech, methods=["POST"], response_model=TTSResponse)
+        self.router.add_api_route(
+            "/tts", self.text_to_speech, methods=["POST"], response_model=TTSResponse
+        )
         self.router.add_api_route("/status", self.voice_status, methods=["GET"])
 
-    async def text_to_speech(self, request: TTSRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> TTSResponse:
+    async def text_to_speech(
+        self, request: TTSRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> TTSResponse:
         """Convert text to speech audio."""
         try:
             if not request.text.strip():
@@ -108,6 +118,7 @@ class VoiceRouter:
                 if self._tts_backend.load():
                     audio_bytes = await asyncio.to_thread(self._tts_backend.generate, request.text)
                     import wave
+
                     with wave.open(io.BytesIO(audio_bytes)) as wf:
                         frames = wf.getnframes()
                         sr = wf.getframerate()
@@ -115,7 +126,11 @@ class VoiceRouter:
 
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000
                     logger.info("TTS generated in %.1fms (duration=%dms)", _elapsed_ms, duration_ms)
-                    safe_audit_log("voice.tts", resource=request.text[:80], detail=f"duration={duration_ms}ms elapsed={_elapsed_ms:.0f}ms")
+                    safe_audit_log(
+                        "voice.tts",
+                        resource=request.text[:80],
+                        detail=f"duration={duration_ms}ms elapsed={_elapsed_ms:.0f}ms",
+                    )
                     return TTSResponse(
                         audio=base64.b64encode(audio_bytes).decode("utf-8"),
                         sample_rate=sr,
@@ -123,7 +138,9 @@ class VoiceRouter:
                         backend="hf-model",
                     )
             except Exception as e:
-                logger.warning("TTS generation failed, falling back to browser: %s", e, extra={"tag": "MODEL"})
+                logger.warning(
+                    "TTS generation failed, falling back to browser: %s", e, extra={"tag": "MODEL"}
+                )
 
             return TTSResponse(
                 audio="",
@@ -134,15 +151,18 @@ class VoiceRouter:
 
         except Exception as e:
             classify_and_raise(e, source="voice.text_to_speech")
+
     async def voice_status(self) -> dict:
         """Check if server-side TTS model is available."""
         try:
             available = self._tts_backend.load()
-            return success_response(data={
-                "server_tts": available,
-                "model": self._tts_backend._model_id if available else None,
-                "error": self._tts_backend._error,
-            })
+            return success_response(
+                data={
+                    "server_tts": available,
+                    "model": self._tts_backend._model_id if available else None,
+                    "error": self._tts_backend._error,
+                }
+            )
         except Exception as e:
             classify_and_raise(e, source="voice.status")
 

@@ -3,13 +3,14 @@ Workflow Router - Background task management
 
 Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 """
-import logging
-from typing import Dict, Any
-from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends
 
+import logging
+from typing import Any
+
+from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response, classify_and_raise, safe_audit_log
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.workflow")
 
@@ -36,6 +37,7 @@ class WorkflowRouter:
         """Lazy-import and return the FeedbackWorkflowManager singleton."""
         try:
             from domains.feedback import get_feedback_workflow
+
             return get_feedback_workflow()
         except ImportError:
             raise_error("Workflow module not available", "E_BAD_REQUEST", status_code=503)
@@ -43,17 +45,20 @@ class WorkflowRouter:
             logger.warning("Workflow init failed: %s", exc)
             classify_and_raise(exc, source="workflow")
 
-    async def get_workflow_status(self) -> Dict[str, Any]:
+    async def get_workflow_status(self) -> dict[str, Any]:
         """Get current workflow status and statistics."""
         try:
             return success_response(data=self._get_workflow().get_status())
         except Exception as e:
             classify_and_raise(e, source="workflow.status")
 
-    async def start_workflow(self, request: WorkflowStartRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def start_workflow(
+        self, request: WorkflowStartRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         """Start the automated feedback workflow."""
         try:
             from domains.feedback import WorkflowConfig
+
             config = WorkflowConfig(
                 aggregate_interval_minutes=request.aggregate_interval_minutes,
                 prune_interval_minutes=request.prune_interval_minutes,
@@ -63,13 +68,23 @@ class WorkflowRouter:
             workflow = self._get_workflow()
             workflow.config = config
             workflow.start()
-            safe_audit_log("workflow.start", detail=f"aggregate={request.aggregate_interval_minutes}m prune={request.prune_interval_minutes}m export={request.export_interval_hours}h")
-            logger.info("Workflow started (aggregate=%dm, prune=%dm, export=%dh)", request.aggregate_interval_minutes, request.prune_interval_minutes, request.export_interval_hours)
+            safe_audit_log(
+                "workflow.start",
+                detail=f"aggregate={request.aggregate_interval_minutes}m prune={request.prune_interval_minutes}m export={request.export_interval_hours}h",
+            )
+            logger.info(
+                "Workflow started (aggregate=%dm, prune=%dm, export=%dh)",
+                request.aggregate_interval_minutes,
+                request.prune_interval_minutes,
+                request.export_interval_hours,
+            )
             return success_response(data={"status": "started", "config": request.model_dump()})
         except Exception as e:
             classify_and_raise(e, source="workflow.start")
 
-    async def stop_workflow(self, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def stop_workflow(
+        self, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         """Stop the automated feedback workflow."""
         try:
             workflow = self._get_workflow()
@@ -80,7 +95,9 @@ class WorkflowRouter:
         except Exception as e:
             classify_and_raise(e, source="workflow.stop")
 
-    async def trigger_workflow(self, action: str, auth_user: dict = Depends(require_auth_if_enabled)) -> Dict[str, Any]:
+    async def trigger_workflow(
+        self, action: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict[str, Any]:
         """Manually trigger a workflow action (aggregate, prune, export)."""
         try:
             workflow = self._get_workflow()

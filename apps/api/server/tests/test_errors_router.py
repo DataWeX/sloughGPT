@@ -1,8 +1,9 @@
 """Tests for errors router endpoints."""
+
 import pytest
+from routers.errors import _dedup_map, _error_buffer
 
 from tests.test_support import get_test_client
-from routers.errors import _error_buffer, _error_count_since_clear, _dedup_map, clear_errors
 
 client = get_test_client()
 
@@ -19,35 +20,43 @@ def _clear_error_state():
 
 class TestLogErrors:
     def test_log_single_error(self):
-        resp = client.post("/errors/log", json={
-            "errors": [{"message": "test error", "source": "web"}]
-        })
+        resp = client.post(
+            "/errors/log", json={"errors": [{"message": "test error", "source": "web"}]}
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["logged"] == 1
 
     def test_log_multiple_errors(self):
-        resp = client.post("/errors/log", json={
-            "errors": [
-                {"message": "error 1"},
-                {"message": "error 2"},
-                {"message": "error 3"},
-            ]
-        })
+        resp = client.post(
+            "/errors/log",
+            json={
+                "errors": [
+                    {"message": "error 1"},
+                    {"message": "error 2"},
+                    {"message": "error 3"},
+                ]
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["logged"] == 3
 
     def test_log_error_with_metadata(self):
-        resp = client.post("/errors/log", json={
-            "errors": [{
-                "message": "detailed error",
-                "url": "https://example.com/page",
-                "line": 42,
-                "col": 10,
-                "stack": "Error at line 42",
-                "metadata": {"component": "ChatInput"},
-            }]
-        })
+        resp = client.post(
+            "/errors/log",
+            json={
+                "errors": [
+                    {
+                        "message": "detailed error",
+                        "url": "https://example.com/page",
+                        "line": 42,
+                        "col": 10,
+                        "stack": "Error at line 42",
+                        "metadata": {"component": "ChatInput"},
+                    }
+                ]
+            },
+        )
         assert resp.status_code == 200
 
     def test_log_empty_batch(self):
@@ -99,9 +108,7 @@ class TestGroupedErrors:
 
     def test_grouped_deduplicates(self):
         for _ in range(3):
-            client.post("/errors/log", json={
-                "errors": [{"message": "Same error message"}]
-            })
+            client.post("/errors/log", json={"errors": [{"message": "Same error message"}]})
         resp = client.get("/errors/grouped")
         groups = resp.json()["data"]["groups"]
         assert len(groups) == 1
@@ -155,21 +162,22 @@ class TestClearErrors:
 
 class TestUnreadCount:
     def test_unread_after_log(self):
-        client.post("/errors/log", json={"errors": [
-            {"message": "a"}, {"message": "b"}
-        ]})
+        client.post("/errors/log", json={"errors": [{"message": "a"}, {"message": "b"}]})
         resp = client.get("/errors/unread")
         assert resp.json()["data"]["unread_count"] == 2
 
 
 class TestFrontendLogIngest:
     def test_ingest_logs(self):
-        resp = client.post("/errors/logs/ingest", json={
-            "logs": [
-                {"level": "error", "logger": "web", "message": "frontend error"},
-                {"level": "info", "logger": "chat", "message": "chat info"},
-            ]
-        })
+        resp = client.post(
+            "/errors/logs/ingest",
+            json={
+                "logs": [
+                    {"level": "error", "logger": "web", "message": "frontend error"},
+                    {"level": "info", "logger": "chat", "message": "chat info"},
+                ]
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["ingested"] == 2
 

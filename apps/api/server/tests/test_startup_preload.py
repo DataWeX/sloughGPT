@@ -14,8 +14,7 @@ os.environ.setdefault("SLO_AUTO_WORKFLOW", "false")
 os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
 import routers
-from infrastructure.startup import _PREWARM_MODEL_LOAD_IMPORTS
-from infrastructure.startup import _preload_model_imports
+from infrastructure.startup import _PREWARM_MODEL_LOAD_IMPORTS, _preload_model_imports
 
 
 class TestPreloadModelImports:

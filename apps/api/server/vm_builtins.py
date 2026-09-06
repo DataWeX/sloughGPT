@@ -487,8 +487,14 @@ BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "factorial": {"description": "Compute 6! = 720, display the result", "program": _factorial},
     "guess": {"description": "Number guessing game (keyboard input)", "program": _guess},
     "rainbow": {"description": "Rainbow colored 'HELLO VM!' text (VGA)", "program": _rainbow},
-    "train": {"description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)", "program": _train},
-    "train-status": {"description": "Poll a training job via SYS_TRAIN_STATUS (requires ADMIN role)", "program": _train_status},
+    "train": {
+        "description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)",
+        "program": _train,
+    },
+    "train-status": {
+        "description": "Poll a training job via SYS_TRAIN_STATUS (requires ADMIN role)",
+        "program": _train_status,
+    },
 }
 
 

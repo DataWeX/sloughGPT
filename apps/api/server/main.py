@@ -27,10 +27,9 @@ import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from domains.shared import find_repo_root
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from domains.shared import find_repo_root
 
 # ── Path bootstrapping (must happen before any domain imports) ────────
 _REPO_ROOT = find_repo_root(Path(__file__).resolve())
@@ -61,7 +60,8 @@ _log_setup = setup_logging()
 logger = logging.getLogger("slo")
 logger.info(
     "Logging: level=%s log_dir=%s",
-    _log_setup["level"], _log_setup["log_dir"],
+    _log_setup["level"],
+    _log_setup["log_dir"],
     extra={"tag": "START"},
 )
 
@@ -73,7 +73,8 @@ cfg = ServerConfig.from_env()
 
 # Wire new typed config system alongside existing config for migration
 try:
-    from domains.infrastructure.config import get_config, AppConfig
+    from domains.infrastructure.config import AppConfig, get_config
+
     _new_cfg: AppConfig = get_config()
     logger.info(
         "Config: %s @ %s:%d (features=%s)",
@@ -90,6 +91,7 @@ except Exception as exc:
 # ── Lifespan ────────────────────────────────────────────────────────
 _pgq_engine = None  # PGQ core infra engine instance
 
+
 @asynccontextmanager
 async def lifespan(app_inst: FastAPI):
     """Delegate startup phases to ``StartupOrchestrator``."""
@@ -105,6 +107,7 @@ async def lifespan(app_inst: FastAPI):
         # Start PGQ core infra engine (background thread)
         try:
             from domains.infrastructure.pugqeep import PGQ
+
             _pgq_engine = PGQ("sloughgpt")
             logger.info("PGQ core engine created", extra={"tag": "START"})
         except Exception as e:
@@ -113,6 +116,7 @@ async def lifespan(app_inst: FastAPI):
         # Start auto-trainer if SLO_AUTO_TRAIN=1
         try:
             from domains.training.auto_trainer import start_auto_trainer_if_enabled
+
             start_auto_trainer_if_enabled()
         except Exception as e:
             logger.warning("AutoTrainer startup failed (non-fatal): %s", e, extra={"tag": "START"})
@@ -121,17 +125,22 @@ async def lifespan(app_inst: FastAPI):
         # Moved to background thread: importing rag_service chains through
         # rag.py → HybridRetriever and blocks the lifespan.
         import threading
+
         def _rag_init_and_ingest():
             try:
                 from domains.cognitive.rag_service import get_rag_service
+
                 _rag = get_rag_service()
                 if _rag.stats().get("total_chunks", 0) == 0:
                     try:
-                        _rag.auto_ingest_directory(str(find_repo_root(Path(__file__).resolve())), max_files=150)
+                        _rag.auto_ingest_directory(
+                            str(find_repo_root(Path(__file__).resolve())), max_files=150
+                        )
                     except Exception as e:
                         logger.debug("RAG auto-ingest failed: %s", e)
             except Exception as e:
                 logger.debug("RAG init skipped: %s", e)
+
         threading.Thread(target=_rag_init_and_ingest, daemon=True, name="rag-init").start()
 
         # Start background daemons (moved from pre-uvicorn to post-startup)
@@ -143,10 +152,12 @@ async def lifespan(app_inst: FastAPI):
         if cfg.idle_timeout_seconds > 0:
             try:
                 from domains.infrastructure.model_server import get_idle_manager
+
                 idle_mgr = get_idle_manager()
                 idle_mgr._idle_timeout_s = cfg.idle_timeout_seconds
                 logger.info(
-                    "Idle manager active: timeout=%ss", cfg.idle_timeout_seconds,
+                    "Idle manager active: timeout=%ss",
+                    cfg.idle_timeout_seconds,
                     extra={"tag": "IDLE"},
                 )
             except Exception as e:
@@ -157,6 +168,7 @@ async def lifespan(app_inst: FastAPI):
         # Stop idle manager
         try:
             from domains.infrastructure.model_server import get_idle_manager
+
             get_idle_manager().shutdown()
         except Exception as e:
             logger.warning("Idle manager shutdown failed: %s", e)
@@ -164,6 +176,7 @@ async def lifespan(app_inst: FastAPI):
         # Stop auto-trainer
         try:
             from domains.training.auto_trainer import stop_auto_trainer
+
             stop_auto_trainer()
         except (ImportError, AttributeError) as e:
             logger.debug("Auto-trainer shutdown skipped: %s", e)
@@ -201,7 +214,11 @@ def _install_stack_dump_timer() -> None:
     try:
         interval = float(os.environ.get("SLO_DUMP_STACKS_INTERVAL", "30"))
         faulthandler.dump_traceback_later(interval, repeat=True)
-        logger.info("faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1)", interval, extra={"tag": "START"})
+        logger.info(
+            "faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1)",
+            interval,
+            extra={"tag": "START"},
+        )
     except Exception as exc:
         logger.warning("faulthandler stack dump not installed: %s", exc, extra={"tag": "START"})
 
@@ -225,7 +242,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("SLO_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000").split(","),
+    allow_origins=os.environ.get(
+        "SLO_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000"
+    ).split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -239,6 +258,7 @@ app.add_middleware(
 
 # Register structured middleware from the infrastructure package.
 from infrastructure.middleware import register_all_middleware  # noqa: E402
+
 register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 
 # Register health/status routes IMMEDIATELY — before lifespan runs.
@@ -246,9 +266,10 @@ register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 # real responses from /health, /health/startup-progress, /health/summary
 # instead of connection errors.  These lightweight routers have zero
 # heavy imports.
+from routers.dashboard import router as _dashboard_router
 from routers.health import router as _health_router
 from routers.status import router as _status_router
-from routers.dashboard import router as _dashboard_router
+
 app.include_router(_health_router)
 app.include_router(_status_router)
 app.include_router(_dashboard_router)
@@ -261,6 +282,7 @@ app.include_router(_dashboard_router)
 
 # Register exception handlers.
 from infrastructure.exception_handlers import register_all_handlers  # noqa: E402
+
 register_all_handlers(app)
 
 
@@ -274,6 +296,7 @@ def get_meta_weight_manager():
     if _meta_weight_manager is None:
         try:
             from domains.feedback import get_meta_weight_manager as _get_manager
+
             _meta_weight_manager = _get_manager()
         except ImportError:
             return None
@@ -286,20 +309,22 @@ def get_meta_weight_manager():
 # package.  The re-exports below ensure zero-changes for existing callers.
 
 from config import gen_config as gen_config_reexport  # noqa: E402
+
 server_state.gen_config = gen_config_reexport
 
-from infrastructure.auth import get_jwt_auth, get_audit_logger  # noqa: E402
+from infrastructure.auth import get_audit_logger, get_jwt_auth  # noqa: E402
+
 jwt_auth = get_jwt_auth()
 audit_logger = get_audit_logger()
 
 # Security settings (kept as module-level globals for legacy imports)
 from settings import get_security_settings  # noqa: E402
+
 _sec = get_security_settings()
 JWT_SECRET = _sec.jwt_secret
 JWT_ALGORITHM = _sec.jwt_algorithm
 JWT_EXPIRATION_HOURS = _sec.jwt_expiration_hours
 VALID_API_KEYS = _sec.valid_api_keys
-
 
 
 # ── Background daemons (callable from __main__) ─────────────────────
@@ -310,7 +335,9 @@ def _start_feedback_workflow() -> None:
 
         auto_start = os.environ.get("SLO_AUTO_WORKFLOW", "true").lower() == "true"
         if not auto_start:
-            logger.info("SLO_AUTO_WORKFLOW is false; skipping workflow startup", extra={"tag": "START"})
+            logger.info(
+                "SLO_AUTO_WORKFLOW is false; skipping workflow startup", extra={"tag": "START"}
+            )
             return
 
         workflow = get_feedback_workflow()
@@ -323,6 +350,7 @@ def _start_feedback_workflow() -> None:
         # if present). No-op if no model is loaded yet.
         try:
             import state as server_state
+
             model = getattr(server_state, "model", None)
             tokenizer = getattr(server_state, "tokenizer", None)
             if model is not None and tokenizer is not None:
@@ -330,7 +358,10 @@ def _start_feedback_workflow() -> None:
         except Exception as e:
             logger.debug("Feedback workflow model wiring skipped: %s", e)
     except Exception as e:
-        logger.warning("Failed to start feedback workflow", extra={"context": {"error": str(e)}, "tag": "START"})
+        logger.warning(
+            "Failed to start feedback workflow",
+            extra={"context": {"error": str(e)}, "tag": "START"},
+        )
 
 
 def _start_health_monitor() -> None:
@@ -340,7 +371,10 @@ def _start_health_monitor() -> None:
 
         enabled = os.environ.get("SLO_HEALTH_MONITOR", "true").lower() == "true"
         if not enabled:
-            logger.info("SLO_HEALTH_MONITOR is false; skipping health monitor startup", extra={"tag": "START"})
+            logger.info(
+                "SLO_HEALTH_MONITOR is false; skipping health monitor startup",
+                extra={"tag": "START"},
+            )
             return
 
         interval = int(os.environ.get("SLO_HEALTH_INTERVAL", "300"))
@@ -352,7 +386,9 @@ def _start_health_monitor() -> None:
             extra={"context": {"interval_seconds": interval}, "tag": "START"},
         )
     except Exception as e:
-        logger.warning("Failed to start health monitor", extra={"context": {"error": str(e)}, "tag": "START"})
+        logger.warning(
+            "Failed to start health monitor", extra={"context": {"error": str(e)}, "tag": "START"}
+        )
 
 
 def _start_watchdog() -> None:
@@ -380,18 +416,19 @@ def _start_watchdog() -> None:
                 if server_state.training_active:
                     return True
                 from domains.models.provider import get_provider
+
                 router = get_provider("default")
                 if router is None:
                     if os.environ.get("SLO_AUTOLOAD_MODEL", ""):
                         return False
                     return True
                 # Check if the underlying ModelServer's circuit breaker is open
-                server = getattr(router, '_server', None)
+                server = getattr(router, "_server", None)
                 if server is not None:
-                    cb = getattr(server, '_circuit_breaker', None)
+                    cb = getattr(server, "_circuit_breaker", None)
                     if cb is not None and cb.state.value == "open":
                         return False
-                    status = getattr(server, '_status', None)
+                    status = getattr(server, "_status", None)
                     if status is not None and status.value == "error":
                         return False
                 return True
@@ -414,7 +451,10 @@ def _start_watchdog() -> None:
         watchdog.set_health_check_fn(_check_health)
         watchdog.set_recovery_fn(_recover)
         watchdog.start(poll_interval=15, max_failures=3)
-        logger.info("Health watchdog started (poll=15s, max_failures=3, recovery=log-only)", extra={"tag": "START"})
+        logger.info(
+            "Health watchdog started (poll=15s, max_failures=3, recovery=log-only)",
+            extra={"tag": "START"},
+        )
     except Exception as e:
         logger.warning("Failed to start watchdog: %s", e, extra={"tag": "START"})
 
@@ -425,6 +465,7 @@ if __name__ == "__main__":
     import atexit
     import signal
     import subprocess
+
     import uvicorn
 
     # Ignore SIGHUP so server survives shell session close
@@ -434,7 +475,9 @@ if __name__ == "__main__":
         if issubclass(exc_type, (KeyboardInterrupt, SystemExit)):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
-        logger.critical("Unhandled exception: %s", exc_value, exc_info=(exc_type, exc_value, exc_tb))
+        logger.critical(
+            "Unhandled exception: %s", exc_value, exc_info=(exc_type, exc_value, exc_tb)
+        )
 
     sys.excepthook = _handle_uncaught_exception
 
@@ -474,6 +517,7 @@ if __name__ == "__main__":
     # Daemonize if requested — use subprocess to avoid fork() issues
     if args.daemon:
         import subprocess as sp
+
         cmd = [sys.executable, __file__]
         if args.port:
             cmd += ["--port", str(args.port)]
@@ -497,6 +541,7 @@ if __name__ == "__main__":
     # Without --force: healthy server -> exit 0 (reuse); non-server -> exit 1.
     # With --force: kill everything on the port and proceed.
     import socket as _sock
+
     _port_open = True
     try:
         with _sock.create_connection(("127.0.0.1", bind_port), timeout=1.0):
@@ -507,6 +552,7 @@ if __name__ == "__main__":
     if not _port_open:
         # Something is listening -- is it a SloughGPT server?
         import urllib.request as _urllib_request
+
         _is_server = False
         try:
             req = _urllib_request.Request(f"http://127.0.0.1:{bind_port}/health", method="GET")
@@ -519,33 +565,53 @@ if __name__ == "__main__":
         if _is_server and not args.force:
             logger.info(
                 "Server already running on port %d -- exiting (use --force to replace)",
-                bind_port, extra={"tag": "START"},
+                bind_port,
+                extra={"tag": "START"},
             )
             sys.exit(0)
 
         if args.force:
             try:
-                pids = subprocess.check_output(
-                    ["lsof", "-ti", f":{bind_port}"], timeout=5,
-                ).decode().strip().split()
+                pids = (
+                    subprocess.check_output(
+                        ["lsof", "-ti", f":{bind_port}"],
+                        timeout=5,
+                    )
+                    .decode()
+                    .strip()
+                    .split()
+                )
                 for pid in pids:
                     if pid and pid != str(os.getpid()):
                         os.kill(int(pid), 9)
-                        logger.warning("Killed process %s on port %d (--force)", pid, bind_port, extra={"tag": "START"})
+                        logger.warning(
+                            "Killed process %s on port %d (--force)",
+                            pid,
+                            bind_port,
+                            extra={"tag": "START"},
+                        )
             except Exception as e:
                 logger.warning("Failed to force-kill processes on port %d: %s", bind_port, e)
         elif not _is_server:
             # Port occupied by a non-server process
             try:
-                pids = subprocess.check_output(
-                    ["lsof", "-ti", f":{bind_port}"], timeout=5,
-                ).decode().strip().split()
+                pids = (
+                    subprocess.check_output(
+                        ["lsof", "-ti", f":{bind_port}"],
+                        timeout=5,
+                    )
+                    .decode()
+                    .strip()
+                    .split()
+                )
                 pids = [p for p in pids if p and p != str(os.getpid())]
                 if pids:
                     logger.error(
                         "Port %d occupied by process %s (not a SloughGPT server). "
                         "Use --force to kill it.",
-                        bind_port, ",".join(pids), extra={"tag": "START"},
+                        bind_port,
+                        ",".join(pids),
+                        extra={"tag": "START"},
                     )
                     sys.exit(1)
             except Exception as e:
@@ -553,7 +619,10 @@ if __name__ == "__main__":
 
     # Background daemons start AFTER uvicorn binds (moved from pre-uvicorn)
     # They are now started in the lifespan context below.
-    logger.info("Starting SloughGPT server", extra={"context": {"port": bind_port, "reload": args.reload}, "tag": "START"})
+    logger.info(
+        "Starting SloughGPT server",
+        extra={"context": {"port": bind_port, "reload": args.reload}, "tag": "START"},
+    )
 
     # Optional web frontend
     web_proc = None
@@ -561,6 +630,7 @@ if __name__ == "__main__":
         web_root = _REPO_ROOT / "apps" / "web"
         standalone_dir = web_root / ".next" / "standalone"
         from domains.shared import find_available_port as _find_available_port
+
         web_port = _find_available_port(host="", start_port=3000)
         web_env = {**os.environ, "PORT": str(web_port)}
 
@@ -582,7 +652,9 @@ if __name__ == "__main__":
             )
 
     if web_proc:
-        atexit.register(lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None)
+        atexit.register(
+            lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None
+        )
 
     uvicorn_kw: dict = dict(
         app=app,
@@ -598,11 +670,25 @@ if __name__ == "__main__":
             "packages/core-py/domains/**/*.py",
         ]
         uvicorn_kw["reload_excludes"] = [
-            ".*/**", "node_modules/**", "__pycache__/**", "*.pyc",
-            ".git/**", ".venv/**", "venv/**", "env/**",
-            "build/**", "dist/**", ".next/**", "data/**", "datasets/**", "models/**",
-            "tests/**", "logs/**", "checkpoints/**",
-            "apps/web/**", "apps/cli/**",
+            ".*/**",
+            "node_modules/**",
+            "__pycache__/**",
+            "*.pyc",
+            ".git/**",
+            ".venv/**",
+            "venv/**",
+            "env/**",
+            "build/**",
+            "dist/**",
+            ".next/**",
+            "data/**",
+            "datasets/**",
+            "models/**",
+            "tests/**",
+            "logs/**",
+            "checkpoints/**",
+            "apps/web/**",
+            "apps/cli/**",
         ]
 
     try:

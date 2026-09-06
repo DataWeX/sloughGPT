@@ -1,16 +1,16 @@
 """
 Tests for SloManager - soul/personality discovery, parsing, and switching.
 """
-import os
+
 import json
+import os
 import struct
 import tempfile
-from pathlib import Path
-from typing import Optional, List
-from domains.inference.slo_manager import SloManager, SloInfo
+
+from domains.inference.slo_manager import SloManager
 
 
-def _make_binary_sou(tmpdir: str, name: str, traits: Optional[List[str]] = None) -> str:
+def _make_binary_sou(tmpdir: str, name: str, traits: list[str] | None = None) -> str:
     """Create a minimal binary .soul file for testing."""
     config = {
         "name": name,
@@ -47,8 +47,7 @@ TAG {name},test
 """
 
 
-def _make_text_soul(tmpdir: str, name: str, warmth: float = 0.5,
-                    approach: str = "balanced") -> str:
+def _make_text_soul(tmpdir: str, name: str, warmth: float = 0.5, approach: str = "balanced") -> str:
     """Create a plain-text .soul profile file for testing."""
     path = os.path.join(tmpdir, f"{name}.soul")
     content = _TEXT_SOUL_TPL.format(
@@ -179,6 +178,7 @@ class TestSoulManagerAPI:
 
     def test_souls_endpoint_returns_list(self):
         from test_support import get_test_client
+
         client = get_test_client()
         resp = client.get("/souls")
         assert resp.status_code == 200
@@ -188,6 +188,7 @@ class TestSoulManagerAPI:
 
     def test_souls_endpoint_soul_has_personality(self):
         from test_support import get_test_client
+
         client = get_test_client()
         resp = client.get("/souls")
         body = resp.json()
@@ -199,6 +200,7 @@ class TestSoulManagerAPI:
 
     def test_souls_endpoint_soul_has_traits(self):
         from test_support import get_test_client
+
         client = get_test_client()
         resp = client.get("/souls")
         body = resp.json()

@@ -1,4 +1,5 @@
 from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for the POST /training/recovery/recover/{job_id} endpoint.
 
@@ -282,9 +283,7 @@ def test_recover_fallback_no_checkpoint_starts_fresh(tmp_path, deps):
         tmp_path,
         job,
         patches=[
-            patch.object(
-                CheckpointManager, "load_latest_with_path", return_value=(None, None)
-            ),
+            patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
         ],
     )
 
@@ -317,9 +316,7 @@ def test_recover_checkpoint_dir_from_job_config(tmp_path, deps):
         tmp_path,
         job,
         patches=[
-            patch.object(
-                CheckpointManager, "load_latest_with_path", return_value=(None, None)
-            ),
+            patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
         ],
     )
 
@@ -339,9 +336,7 @@ def test_recover_fallback_uses_latest_bundle(tmp_path, deps):
         tmp_path,
         job,
         patches=[
-            patch.object(
-                CheckpointManager, "load_latest_with_path", return_value=(latest, bundle)
-            ),
+            patch.object(CheckpointManager, "load_latest_with_path", return_value=(latest, bundle)),
         ],
     )
 
@@ -371,7 +366,9 @@ def test_recover_success_records_completion_on_original_job(tmp_path, deps):
         job,
         patches=[
             patch.object(CheckpointManager, "is_resumable", return_value=True),
-            patch.object(CheckpointManager, "load_from_path", return_value={"model_state_dict": {}}),
+            patch.object(
+                CheckpointManager, "load_from_path", return_value={"model_state_dict": {}}
+            ),
         ],
     )
     assert resp.status_code == 200
@@ -396,9 +393,7 @@ def test_recover_failure_marks_original_job_failed(tmp_path, deps):
         tmp_path,
         job,
         patches=[
-            patch.object(
-                CheckpointManager, "load_latest_with_path", return_value=(None, None)
-            ),
+            patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
         ],
     )
     assert resp.status_code == 200
@@ -428,18 +423,14 @@ def test_recover_cancel_restores_interrupted(tmp_path, deps):
         tmp_path,
         job,
         patches=[
-            patch.object(
-                CheckpointManager, "load_latest_with_path", return_value=(None, None)
-            ),
+            patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
         ],
     )
     assert resp.status_code == 200
 
     store = resp._store
     assert ("update", ("job-1",), {"status": "interrupted"}) in store.calls
-    assert not any(
-        method == "mark_completed" for method, args, kwargs in store.calls
-    )
+    assert not any(method == "mark_completed" for method, args, kwargs in store.calls)
     assert router_mod.training_jobs["recovery_job-1"]["status"] == "cancelled"
 
 
@@ -462,9 +453,7 @@ def test_recover_reuses_original_hyperparameters(tmp_path, deps):
         tmp_path,
         job,
         patches=[
-            patch.object(
-                CheckpointManager, "load_latest_with_path", return_value=(None, None)
-            ),
+            patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
             patch("domains.training.train_pipeline.SloughGPTTrainer", new=tcls),
         ],
     )

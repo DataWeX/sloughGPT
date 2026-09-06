@@ -6,16 +6,18 @@ Includes quality evaluation:
 - Repetition detection
 - Real model metrics
 """
+
 import logging
 import time as _time
+from typing import Any
+
 from fastapi import APIRouter, Depends
-from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-from infrastructure.auth import require_auth_if_enabled
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
 from domains.infrastructure.errors import AppError
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 
 def _numpy_perplexity(model, ids):
@@ -58,11 +60,13 @@ def _process_memory_mb() -> float:
     """
     try:
         import psutil
+
         return psutil.Process().memory_info().rss / (1024 * 1024)
     except Exception as exc:
         logger.debug("psutil memory check failed: %s", exc)
     try:
         import os
+
         with open("/proc/self/statm") as fh:
             resident_pages = int(fh.read().split()[1])
         page_size_kb = os.sysconf("SC_PAGE_SIZE") / 1024
@@ -71,6 +75,7 @@ def _process_memory_mb() -> float:
         logger.debug("/proc/self/statm fallback failed: %s", exc)
     try:
         import resource
+
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
     except Exception as exc:
         logger.debug("resource module fallback failed: %s", exc)
@@ -94,7 +99,7 @@ class BenchmarkRouter:
         self.router.add_api_route("/history/clear", self.clear_history, methods=["POST"])
         self.router.add_api_route("/{model_id}", self.get_benchmark_by_id, methods=["GET"])
 
-    def _get_model_metrics(self, model: str) -> Dict[str, Any]:
+    def _get_model_metrics(self, model: str) -> dict[str, Any]:
         """Get real model metrics from the active SloNet provider.
 
         Reads the provider that ModelsController publishes into the core
@@ -120,7 +125,9 @@ class BenchmarkRouter:
             if provider is None:
                 return {"model": model, "model_loaded": False}
 
-            inference_time = _time.time() - ctrl._last_inference_time if ctrl._last_inference_time else 0
+            inference_time = (
+                _time.time() - ctrl._last_inference_time if ctrl._last_inference_time else 0
+            )
             total_tokens = ctrl._total_tokens_generated
             total_inferences = ctrl._inference_count
 
@@ -142,7 +149,9 @@ class BenchmarkRouter:
         except Exception as e:
             raise_error(str(e), "E_DOMAIN", details={"model": model})
 
-    async def run_benchmark(self, model: str = "gpt2", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def run_benchmark(
+        self, model: str = "gpt2", auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Run model benchmark - returns real metrics"""
         try:
             _t0 = _time.monotonic()
@@ -174,7 +183,9 @@ class BenchmarkRouter:
             _t0 = _time.monotonic()
             result = self._get_model_metrics(model)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("benchmark.metrics", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms")
+            safe_audit_log(
+                "benchmark.metrics", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms"
+            )
             return success_response(data=result)
         except Exception as e:
             classify_and_raise(e, source="benchmark.get_model_metrics")
@@ -197,12 +208,18 @@ class BenchmarkRouter:
             _t0 = _time.monotonic()
             result = self._get_model_metrics(model_id)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("benchmark.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms")
+            safe_audit_log(
+                "benchmark.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms"
+            )
             return success_response(data=result)
         except Exception as e:
             classify_and_raise(e, source="benchmark.get_benchmark_by_id")
 
-    async def calculate_perplexity(self, text: str = "Sample text for evaluation", auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def calculate_perplexity(
+        self,
+        text: str = "Sample text for evaluation",
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Calculate next-token perplexity on text using the active SloNet model.
 
         Pure NumPy: one causal forward pass, then the negative log-likelihood
@@ -236,14 +253,20 @@ class BenchmarkRouter:
             perplexity, loss = _numpy_perplexity(model, ids)
 
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("benchmark.perplexity", resource="model", detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)} perplexity={round(perplexity, 2)}")
+            safe_audit_log(
+                "benchmark.perplexity",
+                resource="model",
+                detail=f"elapsed={_elapsed_ms:.0f}ms tokens={len(ids)} perplexity={round(perplexity, 2)}",
+            )
 
-            return success_response(data={
-                "text": text[:30],
-                "perplexity": round(perplexity, 2),
-                "loss": round(loss, 4),
-                "tokens": len(ids),
-            })
+            return success_response(
+                data={
+                    "text": text[:30],
+                    "perplexity": round(perplexity, 2),
+                    "loss": round(loss, 4),
+                    "tokens": len(ids),
+                }
+            )
         except AppError as e:
             classify_and_raise(e, source="benchmark.calculate_perplexity")
         except Exception as e:
@@ -253,8 +276,8 @@ class BenchmarkRouter:
     async def get_quality_metrics(
         self,
         limit: int = 50,
-        model: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        model: str | None = None,
+    ) -> dict[str, Any]:
         """
         Get response quality metrics from logged responses.
 
@@ -268,7 +291,11 @@ class BenchmarkRouter:
             bench = get_benchmark_domain()
             result = bench.evaluate_latest(limit=limit)
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("benchmark.quality", resource="responses", detail=f"elapsed={_elapsed_ms:.0f}ms limit={limit}")
+            safe_audit_log(
+                "benchmark.quality",
+                resource="responses",
+                detail=f"elapsed={_elapsed_ms:.0f}ms limit={limit}",
+            )
             return success_response(data=result)
         except Exception as e:
             logger.warning("Quality metrics failed: %s", e)
@@ -277,8 +304,8 @@ class BenchmarkRouter:
     async def get_logged_responses(
         self,
         limit: int = 20,
-        model: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        model: str | None = None,
+    ) -> dict[str, Any]:
         """Get recent logged responses for review."""
         _t0 = _time.monotonic()
         try:
@@ -288,27 +315,33 @@ class BenchmarkRouter:
             responses = tracker.get_responses(limit=limit, model=model)
 
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("benchmark.responses", resource="log", detail=f"elapsed={_elapsed_ms:.0f}ms count={len(responses)}")
+            safe_audit_log(
+                "benchmark.responses",
+                resource="log",
+                detail=f"elapsed={_elapsed_ms:.0f}ms count={len(responses)}",
+            )
 
-            return success_response(data={
-                "responses": [
-                    {
-                        "timestamp": r.timestamp,
-                        "user_message": r.user_message[:100],
-                        "assistant_response": r.assistant_response[:200],
-                        "model": r.model,
-                        "tokens_generated": r.tokens_generated,
-                        "duration_ms": r.duration_ms,
-                    }
-                    for r in responses
-                ],
-                "count": len(responses),
-            })
+            return success_response(
+                data={
+                    "responses": [
+                        {
+                            "timestamp": r.timestamp,
+                            "user_message": r.user_message[:100],
+                            "assistant_response": r.assistant_response[:200],
+                            "model": r.model,
+                            "tokens_generated": r.tokens_generated,
+                            "duration_ms": r.duration_ms,
+                        }
+                        for r in responses
+                    ],
+                    "count": len(responses),
+                }
+            )
         except Exception as e:
             logger.warning("Logged responses failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
-    async def get_tracker_stats(self) -> Dict[str, Any]:
+    async def get_tracker_stats(self) -> dict[str, Any]:
         """Get response tracker statistics - uses BenchmarkDomain."""
         _t0 = _time.monotonic()
         try:
@@ -317,7 +350,9 @@ class BenchmarkRouter:
             bench = get_benchmark_domain()
             result = bench.get_stats()
             _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("benchmark.stats", resource="tracker", detail=f"elapsed={_elapsed_ms:.0f}ms")
+            safe_audit_log(
+                "benchmark.stats", resource="tracker", detail=f"elapsed={_elapsed_ms:.0f}ms"
+            )
             return success_response(data=result)
         except Exception as e:
             logger.warning("Tracker stats failed: %s", e)

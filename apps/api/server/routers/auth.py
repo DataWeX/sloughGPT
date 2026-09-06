@@ -4,19 +4,24 @@ Auth Router - JWT token management + login/register/me/logout endpoints
 Storage backed by MogDB (the project's embedded document DB). User
 records are stored in a ``users`` collection instead of a raw JSON file.
 """
-import uuid, os, hashlib, secrets, logging
+
+import hashlib
+import logging
+import os
+import secrets
 import time
+import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Header, Request, Depends
+
+from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import success_response, raise_error, safe_audit_log, classify_and_raise
-
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 # ---------- rate limiting for auth endpoints ----------
+
 
 class _AuthRateLimiter:
     """Simple in-memory rate limiter for auth endpoints."""
@@ -39,11 +44,13 @@ class _AuthRateLimiter:
         self._attempts[key].append(now)
         return True
 
+
 _login_limiter = _AuthRateLimiter(max_attempts=5, window_seconds=300)
 _register_limiter = _AuthRateLimiter(max_attempts=3, window_seconds=600)
 
 
 # ---------- request / response models ----------
+
 
 class TokenRequest(BaseModel):
     api_key: str = Field(..., min_length=1, max_length=500)
@@ -85,11 +92,12 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 def _get_mogdb(db_path: str):
     """Create a MogDB instance at the given path."""
     from mogdb import MogDB
+
     return MogDB(db_path)
 
 
 class AuthRouter:
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             db_path = os.path.join(_REPO_ROOT, "data", "auth_mogdb")
         self._db = _get_mogdb(db_path)
@@ -108,6 +116,7 @@ class AuthRouter:
 
         except Exception as e:
             classify_and_raise(e, source="auth.users_collection")
+
     def _load_users(self) -> dict:
         """Load all users from MogDB, returned as a dict keyed by user ID.
 
@@ -163,14 +172,17 @@ class AuthRouter:
 
     @staticmethod
     def _get_auth_deps():
-        from infrastructure.auth import get_jwt_auth, get_audit_logger
+        from infrastructure.auth import get_audit_logger, get_jwt_auth
         from settings import get_security_settings
+
         sec = get_security_settings()
         return sec.valid_api_keys, sec.jwt_expiration_hours, get_jwt_auth(), get_audit_logger()
 
-    def _get_current_user(self, authorization: Optional[str] = Header(None)) -> dict:
+    def _get_current_user(self, authorization: str | None = Header(None)) -> dict:
         if not authorization or not authorization.startswith("Bearer "):
-            raise_error("Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401)
+            raise_error(
+                "Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401
+            )
         _, _, jwt_auth, _ = self._get_auth_deps()
         token = authorization[7:]
         payload = jwt_auth.verify_token(token)
@@ -203,14 +215,20 @@ class AuthRouter:
             """
             client_ip = request.client.host if request.client else "unknown"
             if not _login_limiter.check(client_ip):
-                raise_error("Too many login attempts. Please try again later.", "E_RATE_LIMITED", status_code=429)
+                raise_error(
+                    "Too many login attempts. Please try again later.",
+                    "E_RATE_LIMITED",
+                    status_code=429,
+                )
             user = self._users.find_one({"username": req.username})
             if not user:
                 safe_audit_log("auth.login_failed", resource=req.username, detail="user_not_found")
                 raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
             uid = user["_id"]
             if not self._verify_password(req.password, user.get("password_hash", "")):
-                safe_audit_log("auth.login_failed", resource=req.username, detail="invalid_password")
+                safe_audit_log(
+                    "auth.login_failed", resource=req.username, detail="invalid_password"
+                )
                 raise_error("Invalid credentials", "E_AUTH_MISSING", status_code=401)
             if not user.get("password_hash", "").startswith("v1:"):
                 user["password_hash"] = self._hash_password(req.password)
@@ -240,7 +258,11 @@ class AuthRouter:
             """
             client_ip = request.client.host if request.client else "unknown"
             if not _register_limiter.check(client_ip):
-                raise_error("Too many registration attempts. Please try again later.", "E_RATE_LIMITED", status_code=429)
+                raise_error(
+                    "Too many registration attempts. Please try again later.",
+                    "E_RATE_LIMITED",
+                    status_code=429,
+                )
             existing = self._users.find_one({"username": req.username})
             if existing:
                 raise_error("Username already exists", "E_INFRA_BUSY", status_code=409)
@@ -296,13 +318,25 @@ class AuthRouter:
             valid_keys, exp_hours, jwt_auth, audit_logger = self._get_auth_deps()
             client_ip = request.client.host if request.client else "unknown"
             if token_request.api_key not in valid_keys:
-                audit_logger.log("auth_failed", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "failure"})
+                audit_logger.log(
+                    "auth_failed",
+                    client_ip,
+                    resource="/auth/token",
+                    extra={"action": "token_create", "status": "failure"},
+                )
                 raise_error("Invalid API key", "E_AUTH_MISSING", status_code=401)
             token = jwt_auth.create_token(user_id=token_request.api_key[:8])
-            audit_logger.log("auth_success", client_ip, resource="/auth/token", extra={"action": "token_create", "status": "success"})
-            return TokenResponse(access_token=token, token_type="bearer", expires_in=exp_hours * 3600)
+            audit_logger.log(
+                "auth_success",
+                client_ip,
+                resource="/auth/token",
+                extra={"action": "token_create", "status": "success"},
+            )
+            return TokenResponse(
+                access_token=token, token_type="bearer", expires_in=exp_hours * 3600
+            )
 
-        async def verify_token(authorization: Optional[str] = Header(None)) -> dict:
+        async def verify_token(authorization: str | None = Header(None)) -> dict:
             """Verify whether a JWT bearer token is valid and not expired.
 
             Args:
@@ -319,14 +353,18 @@ class AuthRouter:
             """
             _, _, jwt_auth, _ = self._get_auth_deps()
             if not authorization or not authorization.startswith("Bearer "):
-                raise_error("Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401)
+                raise_error(
+                    "Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401
+                )
             token = authorization[7:]
             payload = jwt_auth.verify_token(token)
             if not payload:
                 raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
-            return success_response(data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")})
+            return success_response(
+                data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")}
+            )
 
-        async def refresh_token(authorization: Optional[str] = Header(None)) -> dict:
+        async def refresh_token(authorization: str | None = Header(None)) -> dict:
             """Issue a new JWT token from an existing valid token.
 
             Args:
@@ -343,25 +381,35 @@ class AuthRouter:
             """
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
             if not authorization or not authorization.startswith("Bearer "):
-                raise_error("Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401)
+                raise_error(
+                    "Missing or invalid authorization header", "E_AUTH_MISSING", status_code=401
+                )
             token = authorization[7:]
             new_token = jwt_auth.refresh_token(token)
             if not new_token:
                 raise_error("Invalid or expired token", "E_AUTH_MISSING", status_code=401)
             safe_audit_log("auth.token_refresh")
-            return TokenResponse(access_token=new_token, token_type="bearer", expires_in=exp_hours * 3600)
+            return TokenResponse(
+                access_token=new_token, token_type="bearer", expires_in=exp_hours * 3600
+            )
 
         self.router.add_api_route("/login", login, methods=["POST"], response_model=AuthResponse)
-        self.router.add_api_route("/register", register, methods=["POST"], response_model=AuthResponse)
+        self.router.add_api_route(
+            "/register", register, methods=["POST"], response_model=AuthResponse
+        )
         self.router.add_api_route("/me", get_me, methods=["GET"], response_model=UserInfo)
-        self.router.add_api_route("/token", create_token, methods=["POST"], response_model=TokenResponse)
+        self.router.add_api_route(
+            "/token", create_token, methods=["POST"], response_model=TokenResponse
+        )
         self.router.add_api_route("/verify", verify_token, methods=["POST"])
-        self.router.add_api_route("/refresh", refresh_token, methods=["POST"], response_model=TokenResponse)
+        self.router.add_api_route(
+            "/refresh", refresh_token, methods=["POST"], response_model=TokenResponse
+        )
 
 
 # ---------- module-level backward-compat shims ----------
 
-_auth_instance: Optional[AuthRouter] = None
+_auth_instance: AuthRouter | None = None
 router = None
 
 

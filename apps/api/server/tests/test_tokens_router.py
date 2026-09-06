@@ -1,8 +1,9 @@
 """Tests for tokens router — token billing API endpoints."""
+
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
-from fastapi import Depends
 
 
 @pytest.fixture
@@ -31,7 +32,9 @@ def mock_token_service():
         "by_model": {"gpt-4": 30000, "gpt-3.5": 25000},
     }
     mock.get_usage_history.return_value = [
-        MagicMock(to_dict=lambda: {"model": "gpt-4", "tokens": 1000, "timestamp": "2026-09-01T10:00:00Z"}),
+        MagicMock(
+            to_dict=lambda: {"model": "gpt-4", "tokens": 1000, "timestamp": "2026-09-01T10:00:00Z"}
+        ),
     ]
     mock.add_credits.return_value = MagicMock(
         to_dict=lambda: {
@@ -63,19 +66,20 @@ def client(mock_token_service):
     from fastapi import FastAPI
     from infrastructure.exception_handlers import register_app_error_handler
     from routers.tokens import router as tokens_router
-    
+
     app = FastAPI()
     app.include_router(tokens_router)
     register_app_error_handler(app)
-    
+
     # Mock auth dependency - need to override the actual dependency function
     async def mock_auth():
         return {"id": "user-1", "name": "Test User"}
-    
+
     # Override the dependency
     from infrastructure import auth
+
     app.dependency_overrides[auth.require_auth_if_enabled] = mock_auth
-    
+
     with patch("routers.tokens.get_token_billing_service", return_value=mock_token_service):
         yield TestClient(app)
 
@@ -142,22 +146,28 @@ class TestTokenUpgrade:
 
 class TestTokenCheck:
     def test_check_can_afford(self, client):
-        resp = client.post("/tokens/check", json={
-            "model": "gpt-4",
-            "input_tokens": 100,
-            "output_tokens": 200,
-        })
+        resp = client.post(
+            "/tokens/check",
+            json={
+                "model": "gpt-4",
+                "input_tokens": 100,
+                "output_tokens": 200,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["canAfford"] is True
         assert data["totalTokens"] == 300
 
     def test_check_response_structure(self, client):
-        resp = client.post("/tokens/check", json={
-            "model": "gpt-4",
-            "input_tokens": 100,
-            "output_tokens": 200,
-        })
+        resp = client.post(
+            "/tokens/check",
+            json={
+                "model": "gpt-4",
+                "input_tokens": 100,
+                "output_tokens": 200,
+            },
+        )
         data = resp.json()
         assert "canAfford" in data
         assert "totalTokens" in data

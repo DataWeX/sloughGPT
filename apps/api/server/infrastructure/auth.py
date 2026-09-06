@@ -15,14 +15,13 @@ import os
 import time
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Optional
 
-from fastapi import Depends, Request, status
+from domains.infrastructure.errors import AppError
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from schemas.common import raise_error
 
 from config import ServerConfig
-from schemas.common import raise_error
-from domains.infrastructure.errors import AppError
 
 logger = logging.getLogger("slo.auth")
 
@@ -36,13 +35,13 @@ class JWTAuth:
     auth; production deployments should integrate OAuth2/OIDC.
     """
 
-    def __init__(self, config: Optional[ServerConfig] = None):
+    def __init__(self, config: ServerConfig | None = None):
         cfg = config or ServerConfig.from_env()
         self._secret = cfg.jwt_secret
         self._algorithm = cfg.jwt_algorithm
         self._expiration_hours = cfg.jwt_expiration_hours
 
-    def create_token(self, user_id: str, extra_payload: Optional[dict] = None) -> str:
+    def create_token(self, user_id: str, extra_payload: dict | None = None) -> str:
         """Create a signed JWT token.
 
         Args:
@@ -53,6 +52,7 @@ class JWTAuth:
             Serialized JWT string.
         """
         import jwt as pyjwt
+
         payload = {
             "sub": user_id,
             "iat": int(time.time()),
@@ -75,6 +75,7 @@ class JWTAuth:
             HTTPException 401: If token is invalid or expired.
         """
         import jwt as pyjwt
+
         try:
             return pyjwt.decode(token, self._secret, algorithms=[self._algorithm])
         except pyjwt.ExpiredSignatureError:
@@ -82,7 +83,7 @@ class JWTAuth:
         except pyjwt.InvalidTokenError as e:
             raise_error(f"Invalid token: {e}", "E_AUTH_MISSING", status_code=401)
 
-    def refresh_token(self, token: str) -> Optional[str]:
+    def refresh_token(self, token: str) -> str | None:
         """Validate a token and issue a new one with a fresh expiry.
 
         Args:
@@ -102,7 +103,9 @@ class JWTAuth:
             return None
         return self.create_token(payload.get("sub", ""))
 
-    async def require_user(self, credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security)) -> dict:
+    async def require_user(
+        self, credentials: HTTPAuthorizationCredentials | None = Depends(_security)
+    ) -> dict:
         """FastAPI dependency — extracts and validates bearer token.
 
         Returns:
@@ -115,7 +118,9 @@ class JWTAuth:
             raise_error("Missing Authorization header", "E_AUTH_MISSING", status_code=401)
         return self.verify_token(credentials.credentials)
 
-    async def optional_user(self, credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security)) -> Optional[dict]:
+    async def optional_user(
+        self, credentials: HTTPAuthorizationCredentials | None = Depends(_security)
+    ) -> dict | None:
         """FastAPI dependency — like require_user but returns None on missing token."""
         if credentials is None:
             return None
@@ -131,7 +136,7 @@ class APIKeyAuth:
     Validates requests by comparing HMAC-SHA256(request_body + timestamp, shared_secret).
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         self._key = api_key or ServerConfig.from_env().jwt_secret
 
     def validate_request(self, body: bytes, timestamp: str, signature: str) -> bool:
@@ -189,8 +194,8 @@ class AuditLogger:
     def file_query(
         self,
         limit: int = 100,
-        event_type: Optional[str] = None,
-        before: Optional[str] = None,
+        event_type: str | None = None,
+        before: str | None = None,
     ) -> list:
         """Query persisted audit records from ``audit.log``, newest last.
 
@@ -243,8 +248,11 @@ class AuditLogger:
     def _setup(self):
         try:
             import logging.handlers
+
             handler = logging.handlers.RotatingFileHandler(
-                self._log_path, maxBytes=10 * 1024 * 1024, backupCount=5,
+                self._log_path,
+                maxBytes=10 * 1024 * 1024,
+                backupCount=5,
             )
             handler.setLevel(logging.INFO)
             handler.setFormatter(logging.Formatter("%(message)s"))
@@ -258,7 +266,7 @@ class AuditLogger:
         user: str = "anonymous",
         resource: str = "",
         detail: str = "",
-        extra: Optional[dict] = None,
+        extra: dict | None = None,
     ):
         """Record an audit event.
 
@@ -287,8 +295,8 @@ class AuditLogger:
 
 
 # Singleton instances
-_jwt_auth_instance: Optional[JWTAuth] = None
-_audit_logger_instance: Optional[AuditLogger] = None
+_jwt_auth_instance: JWTAuth | None = None
+_audit_logger_instance: AuditLogger | None = None
 
 
 def get_jwt_auth() -> JWTAuth:
@@ -323,8 +331,8 @@ def audit_user(auth_user) -> str:
 
 async def require_auth_if_enabled(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
-) -> Optional[dict]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(_security),
+) -> dict | None:
     """FastAPI dependency — enforces auth only when ``SLO_AUTH_REQUIRED=true``.
 
     When disabled, returns None (anonymous). When enabled, validates bearer token.
@@ -333,8 +341,13 @@ async def require_auth_if_enabled(
         Decoded token payload, or None if auth is disabled.
     """
     import os
+
     if os.environ.get("SLO_AUTH_REQUIRED", "false").lower() not in ("true", "1", "yes"):
         return None
     if credentials is None:
-        raise_error("Authorization required (set SLO_AUTH_REQUIRED=false to disable)", "E_AUTH_MISSING", status_code=401)
+        raise_error(
+            "Authorization required (set SLO_AUTH_REQUIRED=false to disable)",
+            "E_AUTH_MISSING",
+            status_code=401,
+        )
     return get_jwt_auth().verify_token(credentials.credentials)

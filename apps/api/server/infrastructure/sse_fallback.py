@@ -1,4 +1,4 @@
-'use strict'
+"use strict"
 
 """
 Consolidated SSE fallback utilities.
@@ -10,29 +10,36 @@ fallback implementations so that routers do not need to duplicate them.
 """
 
 import json
-from typing import Any, Optional, Dict, Union
-
+from typing import Any
 
 try:
     from domains.api.sse_envelope import (
-        sse_event as _sse_event,
-        sse_token as _sse_token,
-        sse_error as _sse_error,
         sse_complete as _sse_complete,
     )
+    from domains.api.sse_envelope import (
+        sse_error as _sse_error,
+    )
+    from domains.api.sse_envelope import (
+        sse_event as _sse_event,
+    )
+    from domains.api.sse_envelope import (
+        sse_token as _sse_token,
+    )
+
     sse_event = _sse_event
     sse_token = _sse_token
     sse_error = _sse_error
     sse_complete = _sse_complete
 except ImportError:
+
     def sse_event(
         stream: str,
         phase: str,
-        status: Union[str],
-        data: Optional[Dict[str, Any]] = None,
-        meta: Optional[Dict[str, Any]] = None,
+        status: str,
+        data: dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
         message: str = "",
-        id: Optional[str] = None,
+        id: str | None = None,
     ) -> str:
         """Fallback SSE event builder."""
         env = {
@@ -51,8 +58,8 @@ except ImportError:
         stream: str,
         token: str,
         done: bool = False,
-        meta: Optional[Dict[str, Any]] = None,
-        elapsed_ms: Optional[float] = None,
+        meta: dict[str, Any] | None = None,
+        elapsed_ms: float | None = None,
     ) -> str:
         """Fallback token streaming shortcut."""
         phase = "STREAMING"
@@ -66,12 +73,12 @@ except ImportError:
         stream: str,
         phase: str,
         error: str,
-        meta: Optional[Dict[str, Any]] = None,
-        code: Optional[str] = None,
-        http_status: Optional[int] = None,
+        meta: dict[str, Any] | None = None,
+        code: str | None = None,
+        http_status: int | None = None,
     ) -> str:
         """Fallback error event builder."""
-        data: Dict[str, Any] = {"error": error}
+        data: dict[str, Any] = {"error": error}
         if code is not None:
             data["code"] = code
         if http_status is not None:
@@ -81,8 +88,8 @@ except ImportError:
     def sse_complete(
         stream: str,
         phase: str = "COMPLETE",
-        data: Optional[Dict[str, Any]] = None,
-        meta: Optional[Dict[str, Any]] = None,
+        data: dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
         message: str = "Done",
     ) -> str:
         """Fallback completion event builder."""

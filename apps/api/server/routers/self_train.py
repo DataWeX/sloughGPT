@@ -1,20 +1,20 @@
 """
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
+
 import asyncio
 import logging
 import re
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
-import state as server_state
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
-from infrastructure.auth import require_auth_if_enabled
-from schemas.common import success_response, raise_error, classify_and_raise, safe_audit_log
+import state as server_state
 from domains.infrastructure.errors import AppError
+from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.self_train")
 
@@ -27,15 +27,16 @@ class SelfTrainRequest(BaseModel):
         temperature: Sampling temperature between 0.0 and 2.0.
         forever: Whether to train indefinitely.
     """
-    model: Optional[str] = Field(default=None, max_length=128)
-    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+
+    model: str | None = Field(default=None, max_length=128)
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     forever: bool = False
 
 
 class SelfTrainRouter:
     def __init__(self):
         self._repo_root = Path(__file__).resolve().parents[4]
-        self._model_name_re = re.compile(r'^[a-zA-Z0-9_./-]+$')
+        self._model_name_re = re.compile(r"^[a-zA-Z0-9_./-]+$")
         self.router = APIRouter(prefix="/self-train", tags=["self-train"])
         self._register_routes()
 
@@ -44,7 +45,11 @@ class SelfTrainRouter:
         self.router.add_api_route("/stop", self.stop_self_train, methods=["POST"])
         self.router.add_api_route("/status", self.get_self_train_status, methods=["GET"])
 
-    async def start_self_train(self, req: Optional[SelfTrainRequest] = None, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def start_self_train(
+        self,
+        req: SelfTrainRequest | None = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Start self-training in a subprocess.
 
         Args:
@@ -61,16 +66,32 @@ class SelfTrainRouter:
             cmd = [sys.executable, str(script)]
             if req and req.model:
                 if not self._model_name_re.match(req.model):
-                    raise_error("Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed", "E_VAL_REQUEST", status_code=422)
+                    raise_error(
+                        "Invalid model name — only alphanumeric, dots, hyphens, slashes, underscores allowed",
+                        "E_VAL_REQUEST",
+                        status_code=422,
+                    )
                 cmd.extend(["--model", req.model])
             if req and req.temperature is not None:
                 cmd.extend(["--temperature", str(req.temperature)])
             if req and req.forever:
                 cmd.append("--forever")
-            proc = await asyncio.to_thread(subprocess.Popen, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = await asyncio.to_thread(
+                subprocess.Popen, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             server_state._self_train_proc = proc
-            logger.info("Self-training started (pid=%d, model=%s)", proc.pid, req.model if req and req.model else "default")
-            safe_audit_log("self_train.start", resource=req.model if req and req.model else "default", detail=f"pid={proc.pid}", temperature=req.temperature if req and req.temperature is not None else None, forever=bool(req and req.forever))
+            logger.info(
+                "Self-training started (pid=%d, model=%s)",
+                proc.pid,
+                req.model if req and req.model else "default",
+            )
+            safe_audit_log(
+                "self_train.start",
+                resource=req.model if req and req.model else "default",
+                detail=f"pid={proc.pid}",
+                temperature=req.temperature if req and req.temperature is not None else None,
+                forever=bool(req and req.forever),
+            )
             return success_response(data={"status": "started", "pid": proc.pid})
         except AppError as e:
             classify_and_raise(e, source="self_train.start_self_train")
@@ -94,7 +115,9 @@ class SelfTrainRouter:
             except Exception as e:
                 proc.kill()
                 server_state._self_train_proc = None
-                logger.warning("Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e)
+                logger.warning(
+                    "Self-training killed after terminate timeout (pid=%d): %s", proc.pid, e
+                )
                 safe_audit_log("self_train.stop", resource=str(proc.pid), detail="killed")
                 raise_error(str(e), "E_INFRA_STARTUP", details={"status": "killed"})
         except Exception as e:
@@ -113,8 +136,12 @@ class SelfTrainRouter:
                 return success_response(data={"status": "not_started", "history": history})
             ret = proc.poll()
             if ret is None:
-                return success_response(data={"status": "running", "pid": proc.pid, "history": history})
-            return success_response(data={"status": "exited", "returncode": ret, "history": history})
+                return success_response(
+                    data={"status": "running", "pid": proc.pid, "history": history}
+                )
+            return success_response(
+                data={"status": "exited", "returncode": ret, "history": history}
+            )
         except Exception as e:
             classify_and_raise(e, source="self_train.status")
 

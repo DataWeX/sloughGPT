@@ -8,14 +8,13 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from domains.training.executor import get_training_executor
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
-
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
 from .jobs import training_jobs
-from domains.training.executor import get_training_executor
 
 logger = logging.getLogger("slo")
 
@@ -86,7 +85,11 @@ async def stop_training_job(job_id: str):
         raise_error("Job not found", "E_NOT_FOUND", status_code=404)
     job = training_jobs[job_id]
     if job.get("status") not in ("running", "queued", "starting"):
-        raise_error(f"Job is not running (status: {job.get('status', 'unknown')})", "E_BAD_REQUEST", status_code=400)
+        raise_error(
+            f"Job is not running (status: {job.get('status', 'unknown')})",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
     prev_status = job.get("status", "unknown")
     job["status"] = "stopping"
     cancel_event = job.get("_cancel_event")
@@ -96,11 +99,13 @@ async def stop_training_job(job_id: str):
     executor.cancel(job_id)
     try:
         from domains.infrastructure.cancel_manager import get_cancel_manager
+
         get_cancel_manager().cancel(job_id)
     except Exception as exc:
         logger.debug("cancel_manager.cancel failed: %s", exc)
     try:
         from infrastructure.auth import get_audit_logger
+
         get_audit_logger().log("training.stop", resource=job_id, detail=f"from={prev_status}")
     except Exception as exc:
         logger.debug("audit log failed: %s", exc)
@@ -133,11 +138,17 @@ async def get_training_summary(job_id: str):
             if final_loss < 1.5:
                 lines.append(f"Loss is low ({final_loss:.2f}) — your AI learned well.")
             elif final_loss < 3.0:
-                lines.append(f"Loss is moderate ({final_loss:.2f}) — your AI learned something, but could do better.")
+                lines.append(
+                    f"Loss is moderate ({final_loss:.2f}) — your AI learned something, but could do better."
+                )
             else:
-                lines.append(f"Loss is high ({final_loss:.2f}) — your AI may need more data or more training.")
+                lines.append(
+                    f"Loss is high ({final_loss:.2f}) — your AI may need more data or more training."
+                )
         if rl:
-            lines.append("Personality reinforcement was applied — your AI learned to give better answers.")
+            lines.append(
+                "Personality reinforcement was applied — your AI learned to give better answers."
+            )
         if checkpoint:
             lines.append(f"Your trained model is at: {checkpoint}")
             lines.append("Load it in the Models page to use it in chat.")
@@ -196,6 +207,7 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
 
     try:
         from infrastructure.auth import get_audit_logger
+
         get_audit_logger().log(
             "training.delete",
             resource=job_id,
@@ -267,6 +279,7 @@ async def export_training_job(job_id: str):
 
 class ExportTextRequest(BaseModel):
     """Request model for /training/export-text."""
+
     min_quality: float = Field(default=0, ge=0.0, le=1.0)
     target_count: int = Field(default=100, ge=1, le=10000)
 
@@ -275,6 +288,7 @@ class ExportTextRequest(BaseModel):
 async def export_feedback_pairs(request: ExportTextRequest):
     """Export feedback conversation pairs with a minimum quality threshold."""
     from controllers.feedback import get_feedback_controller
+
     ctrl = get_feedback_controller()
     pairs = []
     feedback_file = ctrl.feedback_dir / "feedback.jsonl"

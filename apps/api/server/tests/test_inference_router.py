@@ -1,7 +1,6 @@
 """Tests for inference router endpoints (non-streaming, sessions, suggestions, tools)."""
+
 import uuid
-import pytest
-from unittest.mock import patch, MagicMock
 
 from tests.test_support import get_test_client
 
@@ -122,7 +121,7 @@ class TestSessionCRUD:
 
     def test_delete_session_clears_slonet_kv(self):
         """Deleting a session drops its cross-turn KV state on the provider."""
-        from domains.models.provider import register_provider, _providers
+        from domains.models.provider import _providers, register_provider
 
         class _FakeProvider:
             def __init__(self):
@@ -145,6 +144,7 @@ class TestSessionCRUD:
     def test_delete_session_without_provider_still_succeeds(self):
         """KV clear is best-effort — delete works even with no slonet provider."""
         from domains.models.provider import _providers
+
         _providers.pop("slonet-native", None)
         sid = f"kvmiss_{uuid.uuid4().hex[:8]}"
         client.post("/chat/sessions", json={"session_id": sid, "name": "kv"})
@@ -209,6 +209,7 @@ class TestChatRequiresModel:
 class TestVoiceEndpoints:
     def test_voice_upload_requires_audio(self):
         from io import BytesIO
+
         files = {"file": ("test.txt", BytesIO(b"not audio"), "text/plain")}
         resp = client.post("/chat/voice/test_session", files=files)
         assert resp.status_code == 400

@@ -5,8 +5,9 @@ Tests all /mobile/* endpoints to ensure proper aggregation and response formatti
 Mocks the static helper methods on MobileRouter instead of httpx.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from test_support import get_test_client
 
 
@@ -158,9 +159,7 @@ class TestMobileModels:
             {"name": "Creative", "description": "Creative", "traits": ["creative"]},
         ]
         mock_current_soul = {"name": "Default"}
-        mock_checkpoints = [
-            {"name": "checkpoint_1", "soul": "Default", "loss": 0.5, "steps": 100}
-        ]
+        mock_checkpoints = [{"name": "checkpoint_1", "soul": "Default", "loss": 0.5, "steps": 100}]
         mock_health = {"model_type": "gpt2"}
 
         with (
@@ -252,19 +251,22 @@ class TestMobileKnowledge:
 
     def test_list_knowledge_paginated(self, client):
         """GET /mobile/knowledge should return paginated items."""
-        with patch("routers.mobile.MobileRouter._get_knowledge_items", return_value=[
-            {
-                "id": f"item_{i}",
-                "content": f"Knowledge {i}",
-                "topic": "tech",
-                "importance": 0.8,
-                "source": "manual",
-                "url": "",
-                "timestamp": 0,
-                "score": 0,
-            }
-            for i in range(1, 51)
-        ]):
+        with patch(
+            "routers.mobile.MobileRouter._get_knowledge_items",
+            return_value=[
+                {
+                    "id": f"item_{i}",
+                    "content": f"Knowledge {i}",
+                    "topic": "tech",
+                    "importance": 0.8,
+                    "source": "manual",
+                    "url": "",
+                    "timestamp": 0,
+                    "score": 0,
+                }
+                for i in range(1, 51)
+            ],
+        ):
             response = client.get("/mobile/knowledge?page=1&per_page=20")
 
         assert response.status_code == 200
@@ -276,9 +278,36 @@ class TestMobileKnowledge:
     def test_list_knowledge_with_topic_filter(self, client):
         """GET /mobile/knowledge should filter by topic."""
         items = [
-            {"id": "1", "content": "Tech 1", "topic": "tech", "importance": 0.8, "source": "manual", "url": "", "timestamp": 0, "score": 0},
-            {"id": "2", "content": "Science 1", "topic": "science", "importance": 0.9, "source": "manual", "url": "", "timestamp": 0, "score": 0},
-            {"id": "3", "content": "Tech 2", "topic": "tech", "importance": 0.7, "source": "manual", "url": "", "timestamp": 0, "score": 0},
+            {
+                "id": "1",
+                "content": "Tech 1",
+                "topic": "tech",
+                "importance": 0.8,
+                "source": "manual",
+                "url": "",
+                "timestamp": 0,
+                "score": 0,
+            },
+            {
+                "id": "2",
+                "content": "Science 1",
+                "topic": "science",
+                "importance": 0.9,
+                "source": "manual",
+                "url": "",
+                "timestamp": 0,
+                "score": 0,
+            },
+            {
+                "id": "3",
+                "content": "Tech 2",
+                "topic": "tech",
+                "importance": 0.7,
+                "source": "manual",
+                "url": "",
+                "timestamp": 0,
+                "score": 0,
+            },
         ]
 
         with patch("routers.mobile.MobileRouter._get_knowledge_items", return_value=items):
@@ -292,7 +321,14 @@ class TestMobileKnowledge:
     def test_list_knowledge_with_search(self, client):
         """GET /mobile/knowledge should use search when search param provided."""
         results = [
-            {"id": "1", "content": "Python programming", "topic": "tech", "importance": 0.9, "source": "manual", "score": 0.95},
+            {
+                "id": "1",
+                "content": "Python programming",
+                "topic": "tech",
+                "importance": 0.9,
+                "source": "manual",
+                "score": 0.95,
+            },
         ]
 
         with patch("routers.mobile.MobileRouter._search_knowledge", return_value=results):

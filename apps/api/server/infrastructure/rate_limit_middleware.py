@@ -5,14 +5,13 @@ Core owns the sliding-window logic. This file owns only HTTP concerns:
 BaseHTTPMiddleware, JSONResponse 429, header injection.
 """
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi.responses import JSONResponse
-
 from domains.infrastructure.rate_limiter import (
-    RateLimiter,
-    RATE_LIMIT_HEADER_REMAINING,
     RATE_LIMIT_HEADER_LIMIT,
+    RATE_LIMIT_HEADER_REMAINING,
+    RateLimiter,
 )
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

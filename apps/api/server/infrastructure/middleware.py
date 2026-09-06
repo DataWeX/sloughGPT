@@ -22,15 +22,14 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
-from fastapi import FastAPI, Request, Response, status
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-
-from schemas.common import error_response
 from domains.infrastructure.correlation import set_correlation_id
 from domains.logging.config import set_request_id
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse
+from schemas.common import error_response
+from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger("slo.middleware")
 
@@ -42,22 +41,36 @@ REQUEST_TIMEOUT_SECONDS = 60.0
 SLOW_THRESHOLD_SECONDS = 1.0
 
 # Paths that are always slow during cold start - suppress SLOW log for these
-_COLD_START_PATHS = frozenset({"/health", "/health/stream", "/models", "/models/hf", "/souls", "/chat/sessions", "/training/jobs", "/system/stream"})
+_COLD_START_PATHS = frozenset(
+    {
+        "/health",
+        "/health/stream",
+        "/models",
+        "/models/hf",
+        "/souls",
+        "/chat/sessions",
+        "/training/jobs",
+        "/system/stream",
+    }
+)
 
 # Inference endpoints that require a loaded model
-_INFERENCE_PATHS = frozenset({"/chat", "/chat/stream", "/inference/generate", "/inference/generate/stream"})
+_INFERENCE_PATHS = frozenset(
+    {"/chat", "/chat/stream", "/inference/generate", "/inference/generate/stream"}
+)
 
 
 def _model_ready() -> bool:
     """True when a model is actually materialized and ready for inference."""
     try:
         import state as server_state
+
         if server_state.model is not None:
             return True
         provider = server_state.provider
         if provider is None:
             return False
-        return getattr(provider, '_model', None) is not None
+        return getattr(provider, "_model", None) is not None
     except Exception:
         return False
 
@@ -66,6 +79,7 @@ def _get_startup_phase() -> dict:
     """Return the current startup phase info."""
     try:
         from startup_progress import STARTUP_PHASE
+
         return STARTUP_PHASE
     except Exception:
         return {"phase": "unknown", "step": 0, "total": 9, "message": "Starting..."}
@@ -79,7 +93,9 @@ class ReadinessGateMiddleware(BaseHTTPMiddleware):
     info in the response body so the frontend can show progress.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         path = request.url.path
         if path not in _INFERENCE_PATHS:
             return await call_next(request)
@@ -109,8 +125,17 @@ class ReadinessGateMiddleware(BaseHTTPMiddleware):
         corr_id = request.scope.get("correlation_id", "-")
         logger.warning(
             "readiness_gate: %s %s blocked (phase=%s step=%d/%d) retry_after=%ds corr=%s",
-            request.method, path, phase_name, step, total, retry_after, corr_id,
-            extra={"tag": "INFRA", "http": {"method": request.method, "path": path, "status": 503, "corr": corr_id}},
+            request.method,
+            path,
+            phase_name,
+            step,
+            total,
+            retry_after,
+            corr_id,
+            extra={
+                "tag": "INFRA",
+                "http": {"method": request.method, "path": path, "status": 503, "corr": corr_id},
+            },
         )
 
         return JSONResponse(
@@ -135,7 +160,9 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.timeout = timeout
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if request.method == "OPTIONS":
             return await call_next(request)
         try:
@@ -145,11 +172,17 @@ class RequestTimeoutMiddleware(BaseHTTPMiddleware):
             corr_id = request.scope.get("correlation_id", "-")
             logger.warning(
                 "504 on %s %s (%s) corr=%s",
-                request.method, request.url.path, elapsed_str, corr_id,
+                request.method,
+                request.url.path,
+                elapsed_str,
+                corr_id,
                 extra={
                     "op": "http.request",
                     "ok": False,
-                    "err": {"code": "E_INFRA_TIMEOUT", "msg": f"request timed out after {self.timeout}s"},
+                    "err": {
+                        "code": "E_INFRA_TIMEOUT",
+                        "msg": f"request timed out after {self.timeout}s",
+                    },
                     "dur_ms": int(self.timeout * 1000),
                     "http": {
                         "method": request.method,
@@ -179,8 +212,14 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
 
     HEADER = "X-Correlation-ID"
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        corr_id = request.headers.get(self.HEADER) or request.headers.get("X-Request-ID") or str(uuid.uuid4())[:8]
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        corr_id = (
+            request.headers.get(self.HEADER)
+            or request.headers.get("X-Request-ID")
+            or str(uuid.uuid4())[:8]
+        )
         request.scope["correlation_id"] = corr_id
         set_correlation_id(corr_id)
         set_request_id(corr_id)  # also set for logging contextvars
@@ -210,7 +249,9 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
       * Double-parsing what the handler already logged adds no value.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if request.method == "OPTIONS":
             return await call_next(request)
 
@@ -226,7 +267,10 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             elapsed_str = f"{elapsed:.3f}s"
             logger.exception(
                 "unhandled exception on %s %s (%s) corr=%s",
-                method, path, elapsed_str, corr_id,
+                method,
+                path,
+                elapsed_str,
+                corr_id,
                 extra={
                     "op": "http.request",
                     "ok": False,
@@ -246,20 +290,15 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         sc = response.status_code
         elapsed_str = f"{elapsed:.3f}s"
 
-        # Structured context for log aggregators (Datadog, ELK, etc.)
-        ctx = {
-            "corr": corr_id,
-            "method": method,
-            "path": path,
-            "status": sc,
-            "elapsed": elapsed_str,
-        }
-
         # Choose log level by status code.
         if sc >= 500:
             logger.error(
                 "%d on %s %s (%s) corr=%s",
-                sc, method, path, elapsed_str, corr_id,
+                sc,
+                method,
+                path,
+                elapsed_str,
+                corr_id,
                 extra={
                     "op": "http.request",
                     "ok": False,
@@ -270,7 +309,11 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         elif sc >= 400:
             logger.warning(
                 "%d on %s %s (%s) corr=%s",
-                sc, method, path, elapsed_str, corr_id,
+                sc,
+                method,
+                path,
+                elapsed_str,
+                corr_id,
                 extra={
                     "op": "http.request",
                     "ok": False,
@@ -282,7 +325,11 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             if path in _COLD_START_PATHS and elapsed < 60.0:
                 logger.debug(
                     "cold-start %s %s %d (%s) corr=%s",
-                    method, path, sc, elapsed_str, corr_id,
+                    method,
+                    path,
+                    sc,
+                    elapsed_str,
+                    corr_id,
                     extra={
                         "op": "http.request",
                         "dur_ms": int(elapsed * 1000),
@@ -292,7 +339,11 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
             else:
                 logger.warning(
                     "%s %s %d (%s) corr=%s",
-                    method, path, sc, elapsed_str, corr_id,
+                    method,
+                    path,
+                    sc,
+                    elapsed_str,
+                    corr_id,
                     extra={
                         "op": "http.request",
                         "dur_ms": int(elapsed * 1000),
@@ -302,7 +353,11 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
         else:
             logger.info(
                 "%s %s %d (%s) corr=%s",
-                method, path, sc, elapsed_str, corr_id,
+                method,
+                path,
+                sc,
+                elapsed_str,
+                corr_id,
                 extra={
                     "op": "http.request",
                     "dur_ms": int(elapsed * 1000),
@@ -316,8 +371,11 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Records every request to the Prometheus MetricsCollector."""
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         from domains.infrastructure.metrics import get_metrics_collector
+
         collector = get_metrics_collector()
         collector.set_active_requests(collector.get_active_requests() + 1)
         start = time.monotonic()
@@ -342,7 +400,9 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
 
     MAX_BODY_LOG = 2048  # chars
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         if not logger.isEnabledFor(logging.DEBUG):
             return await call_next(request)
 
@@ -356,7 +416,7 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
             try:
                 raw = await request.body()
                 if raw:
-                    req_body = raw[:self.MAX_BODY_LOG]
+                    req_body = raw[: self.MAX_BODY_LOG]
                     if len(raw) > self.MAX_BODY_LOG:
                         req_body += f"... ({len(raw)} bytes total)"
             except Exception:
@@ -364,7 +424,10 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
 
         logger.debug(
             ">>> %s %s corr=%s body=%s",
-            method, path, corr_id, req_body,
+            method,
+            path,
+            corr_id,
+            req_body,
             extra={
                 "op": "http.request",
                 "http": {"method": method, "path": path, "corr": corr_id, "phase": "request"},
@@ -375,16 +438,14 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
 
         # Log response body for non-streaming responses only
         resp_body = None
-        is_streaming = hasattr(response, 'body_iterator') or isinstance(
-            response, (Response.__class__.__mro__[0],)
-        )
         # Check if it's a StreamingResponse - skip body logging
         from starlette.responses import StreamingResponse
+
         if not isinstance(response, StreamingResponse):
             try:
-                resp_body_raw = response.body if hasattr(response, 'body') else None
+                resp_body_raw = response.body if hasattr(response, "body") else None
                 if resp_body_raw:
-                    resp_body = resp_body_raw[:self.MAX_BODY_LOG]
+                    resp_body = resp_body_raw[: self.MAX_BODY_LOG]
                     if len(resp_body_raw) > self.MAX_BODY_LOG:
                         resp_body += f"... ({len(resp_body_raw)} bytes total)"
             except Exception:
@@ -392,10 +453,20 @@ class PayloadLoggingMiddleware(BaseHTTPMiddleware):
 
         logger.debug(
             "<<< %s %s %d corr=%s body=%s",
-            method, path, response.status_code, corr_id, resp_body,
+            method,
+            path,
+            response.status_code,
+            corr_id,
+            resp_body,
             extra={
                 "op": "http.request",
-                "http": {"method": method, "path": path, "status": response.status_code, "corr": corr_id, "phase": "response"},
+                "http": {
+                    "method": method,
+                    "path": path,
+                    "status": response.status_code,
+                    "corr": corr_id,
+                    "phase": "response",
+                },
             },
         )
 
@@ -413,20 +484,26 @@ class ClientErrorFilterMiddleware(BaseHTTPMiddleware):
     the app outermost, it cannot alter the level of the UnifiedRequest log.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
         origin = request.headers.get("origin", "")
         if "chrome-extension" in origin or "moz-extension" in origin:
             if response.status_code >= 400:
                 logger.debug(
                     "Extension error suppressed: %s %s %d",
-                    request.method, request.url.path, response.status_code,
+                    request.method,
+                    request.url.path,
+                    response.status_code,
                     extra={"op": "http.request"},
                 )
         return response
 
 
-def get_configured_middleware(request_timeout: float = REQUEST_TIMEOUT_SECONDS) -> list[tuple[type[BaseHTTPMiddleware], dict]]:
+def get_configured_middleware(
+    request_timeout: float = REQUEST_TIMEOUT_SECONDS,
+) -> list[tuple[type[BaseHTTPMiddleware], dict]]:
     """Return middleware classes with kwargs in registration order.
 
     FastAPI/Starlette applies middleware in reverse registration order:
@@ -463,6 +540,7 @@ def register_all_middleware(app: FastAPI, request_timeout: float = REQUEST_TIMEO
     # Wire rate limiter middleware
     try:
         from infrastructure.rate_limit_middleware import RateLimitMiddleware
+
         app.add_middleware(RateLimitMiddleware)
         logger.info("RateLimitMiddleware registered", extra={"op": "infra.startup"})
     except Exception as exc:

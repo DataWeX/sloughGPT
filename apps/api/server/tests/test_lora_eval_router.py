@@ -1,6 +1,7 @@
 """Tests for the /lora-eval router (eval runs, history, aggregation)."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from test_support import get_test_client
 
 
@@ -69,8 +70,10 @@ class TestRunEval:
     def test_run_eval_with_adapter(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev), \
-             patch("pathlib.Path.exists", return_value=True):
+        with (
+            patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev),
+            patch("pathlib.Path.exists", return_value=True),
+        ):
             resp = client.get("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
         assert resp.status_code == 200
         data = _data(resp)

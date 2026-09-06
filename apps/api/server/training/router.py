@@ -14,31 +14,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
-
-from fastapi import APIRouter, Depends, Query, Request
-
+from domains.shared import find_repo_root
+from domains.training.executor import get_training_executor
+from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
-from infrastructure.sse_fallback import sse_event, sse_error
 from schemas.common import raise_error
 
-from .jobs import training_jobs
-from .resolution import resolve_training_inputs
-from .schemas import TrainingRequest, TrainRequest, TrainResolveRequest, DistillStartRequest, LoraFinetuneRequest
+from .control import router as control_router
 from .controller import get_training_controller
+from .execution import router as execution_router
+from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
+from .job_store import get_job_store
+from .jobs import training_jobs
+from .jobs_api import router as jobs_router
 from .webhooks import (
-    get_webhook_store,
-    TRAINING_EVENTS,
     notify_training_event,
 )
-from .job_store import get_job_store
-from .helpers import _finish_job, _sloughgpt_trainer_kwds, _run_async
-from .jobs_api import router as jobs_router
-from .control import router as control_router
-from .execution import router as execution_router
-from domains.training.executor import get_training_executor
-from domains.shared import find_repo_root
-from domains.mobile.notifications import get_notification_service
 
 logger = logging.getLogger("slo")
 
@@ -55,9 +46,13 @@ def _finetuned_dir() -> Path:
     return find_repo_root(Path(__file__).resolve()) / "models" / "hf-finetuned"
 
 
-def _write_finetuned_metadata(model_dir: str | Path, model: str, dataset: str,
-                              final_loss: float | None = None,
-                              epochs: int | None = None) -> None:
+def _write_finetuned_metadata(
+    model_dir: str | Path,
+    model: str,
+    dataset: str,
+    final_loss: float | None = None,
+    epochs: int | None = None,
+) -> None:
     """Persist authoritative model/dataset metadata inside a fine-tuned model dir.
 
     The directory name is not a reliable source of truth: datasets can contain
@@ -100,7 +95,6 @@ def _read_finetuned_metadata(model_dir: Path) -> dict[str, Any]:
         return {}
 
 
-
 def _resolve_finetuned(name: str) -> Path:
     """Resolve a fine-tuned model name to its directory, guarding against path traversal."""
     base = _finetuned_dir().resolve()
@@ -132,18 +126,21 @@ async def list_finetuned_models():
             size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
             meta = _read_finetuned_metadata(d)
             display_name = d.name.split("_")[0].replace("--", "/")
-            models.append({
-                "name": d.name,
-                "model_path": str(d),
-                "size_mb": round(size_bytes / (1024 * 1024), 1),
-                "size_bytes": size_bytes,
-                "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
-                "model": meta.get("model") or display_name,
-                "dataset": meta.get("dataset") or (d.name.split("_")[1] if "_" in d.name else ""),
-                "model_name": d.name,
-                "final_loss": meta.get("final_loss"),
-                "epochs": meta.get("epochs") or 0,
-            })
+            models.append(
+                {
+                    "name": d.name,
+                    "model_path": str(d),
+                    "size_mb": round(size_bytes / (1024 * 1024), 1),
+                    "size_bytes": size_bytes,
+                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                    "model": meta.get("model") or display_name,
+                    "dataset": meta.get("dataset")
+                    or (d.name.split("_")[1] if "_" in d.name else ""),
+                    "model_name": d.name,
+                    "final_loss": meta.get("final_loss"),
+                    "epochs": meta.get("epochs") or 0,
+                }
+            )
     result = {"models": models}
     _finetuned_models_cache = (now, result)
     return result
@@ -158,11 +155,20 @@ async def load_finetuned_model(name: str):
     """
     target = _resolve_finetuned(name)
     from controllers.models import get_models_controller
+
     result = get_models_controller().load_model_path(str(target), "cpu", identity=name)
     if result.get("status") != "loaded":
-        raise_error(result.get("error", "Failed to load fine-tuned model"), "E_INFRA_STARTUP", status_code=500)
-    return {"status": "loaded", "name": name, "model_path": str(target),
-            "model_id": result.get("model_id")}
+        raise_error(
+            result.get("error", "Failed to load fine-tuned model"),
+            "E_INFRA_STARTUP",
+            status_code=500,
+        )
+    return {
+        "status": "loaded",
+        "name": name,
+        "model_path": str(target),
+        "model_id": result.get("model_id"),
+    }
 
 
 @router.delete("/training/finetuned-models/{name}")
@@ -230,7 +236,8 @@ async def recover_job(job_id: str):
         raise_error(
             f"Job status is '{job['status']}', only 'interrupted' or 'failed' jobs "
             "(or a 'recovering' job with a stale heartbeat) can be recovered",
-            "E_BAD_REQUEST", status_code=400,
+            "E_BAD_REQUEST",
+            status_code=400,
         )
     # Get config and checkpoint. The store's checkpoint_dir column is only
     # written on completion, so interrupted jobs have it NULL — the job's
@@ -259,17 +266,23 @@ async def recover_job(job_id: str):
             raise_error(
                 f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
                 "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST", status_code=422,
+                "E_VAL_REQUEST",
+                status_code=422,
             )
         try:
             resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
         except Exception as exc:
-            raise_error(f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})", "E_VAL_REQUEST", status_code=422)
+            raise_error(
+                f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
+                "E_VAL_REQUEST",
+                status_code=422,
+            )
         if resume_bundle is None:
             raise_error(
                 f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
                 "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST", status_code=422,
+                "E_VAL_REQUEST",
+                status_code=422,
             )
     else:
         checkpoint_path, resume_bundle = manager.load_latest_with_path()
@@ -314,7 +327,8 @@ async def recover_job(job_id: str):
 
     # Register with CancelManager
     try:
-        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+
         _mgr = get_cancel_manager()
         op_id = _mgr.register(
             op_type=OpType.TRAINING,
@@ -355,13 +369,21 @@ async def recover_job(job_id: str):
                 tl = info.get("train_loss")
                 if tl is not None:
                     rec["train_loss"] = float(tl)
-                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": float(tl), "type": "train"})
+                    rec.setdefault("loss_history", []).append(
+                        {
+                            "step": int(info.get("global_step", 0)),
+                            "value": float(tl),
+                            "type": "train",
+                        }
+                    )
                 el = info.get("eval_loss")
                 if el is not None:
                     fe = float(el)
                     rec["eval_loss"] = fe
                     rec["loss"] = fe
-                    rec.setdefault("loss_history", []).append({"step": int(info.get("global_step", 0)), "value": fe, "type": "eval"})
+                    rec.setdefault("loss_history", []).append(
+                        {"step": int(info.get("global_step", 0)), "value": fe, "type": "eval"}
+                    )
                 store.update_progress(
                     job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
@@ -390,7 +412,9 @@ async def recover_job(job_id: str):
 
             _finish_job(jid, "completed")
             training_jobs[jid]["progress"] = 100
-            recovery_checkpoint = getattr(trainer, "_last_checkpoint_path", None) or checkpoint_for_recovery
+            recovery_checkpoint = (
+                getattr(trainer, "_last_checkpoint_path", None) or checkpoint_for_recovery
+            )
             training_jobs[jid]["checkpoint_path"] = recovery_checkpoint
             training_jobs[jid]["checkpoint"] = recovery_checkpoint
             store.mark_completed(job_id, recovery_checkpoint or "")
@@ -476,6 +500,7 @@ async def get_recovery_stats():
 async def training_log():
     from domains.training.service import get_log
     from schemas.common import success_response
+
     lines = await get_log()
     return success_response(data={"lines": lines, "total": len(lines)})
 
@@ -483,8 +508,10 @@ async def training_log():
 @router.post("/training/stop")
 async def training_stop():
     """Stop all active training (auto-train, turbo, from-sessions)."""
-    from .sse_stream import stop_all_training
     from schemas.common import success_response
+
+    from .sse_stream import stop_all_training
+
     result = stop_all_training()
     return success_response(data=result)
 
@@ -493,6 +520,7 @@ async def training_stop():
 async def training_list_checkpoints():
     from domains.training.service import list_checkpoints
     from schemas.common import success_response
+
     checkpoints = await list_checkpoints()
     return success_response(data=checkpoints)
 
@@ -500,7 +528,8 @@ async def training_list_checkpoints():
 @router.delete("/training/checkpoints/{name}")
 async def training_delete_checkpoint(name: str):
     from domains.training.service import delete_checkpoint
-    from schemas.common import success_response, safe_audit_log
+    from schemas.common import safe_audit_log, success_response
+
     deleted = await delete_checkpoint(name)
     if deleted:
         safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
@@ -510,7 +539,8 @@ async def training_delete_checkpoint(name: str):
 @router.post("/training/checkpoints/{name}/load")
 async def training_load_checkpoint(name: str):
     from domains.training.service import load_checkpoint
-    from schemas.common import success_response, classify_and_raise
+    from schemas.common import classify_and_raise, success_response
+
     try:
         result = await load_checkpoint(name)
         return success_response(data=result, message="loaded")
@@ -521,8 +551,9 @@ async def training_load_checkpoint(name: str):
 @router.get("/training/checkpoints/{name}/download")
 async def training_download_checkpoint(name: str):
     from domains.training.service import download_checkpoint_path
-    from schemas.common import raise_error
     from fastapi.responses import FileResponse
+    from schemas.common import raise_error
+
     fp = await download_checkpoint_path(name)
     if fp:
         return FileResponse(fp, media_type="application/octet-stream", filename=name)
@@ -532,7 +563,8 @@ async def training_download_checkpoint(name: str):
 @router.get("/training/checkpoints/{name}/info")
 async def training_checkpoint_info(name: str):
     from domains.training.service import checkpoint_info
-    from schemas.common import success_response, classify_and_raise
+    from schemas.common import classify_and_raise, success_response
+
     try:
         info = await checkpoint_info(name)
         return success_response(data=info)
@@ -542,21 +574,32 @@ async def training_checkpoint_info(name: str):
 
 @router.get("/training/metrics/export")
 async def training_metrics_export():
+    import json as _json
+
     from domains.training.service import get_all_checkpoint_data
     from fastapi.responses import Response
-    import json as _json
+
     checkpoints = await get_all_checkpoint_data()
-    export = {"exported_at": time.time(), "total_checkpoints": len(checkpoints), "checkpoints": checkpoints}
+    export = {
+        "exported_at": time.time(),
+        "total_checkpoints": len(checkpoints),
+        "checkpoints": checkpoints,
+    }
     content = _json.dumps(export, indent=2, default=str)
-    return Response(content=content, media_type="application/json",
-                    headers={"Content-Disposition": "attachment; filename=training-metrics.json"})
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=training-metrics.json"},
+    )
 
 
 @router.get("/training/from-sessions/cancel")
 async def training_cancel_from_sessions():
     """Cancel session-based training."""
-    from .sse_stream import cancel_from_sessions
     from schemas.common import success_response
+
+    from .sse_stream import cancel_from_sessions
+
     result = cancel_from_sessions()
     return success_response(data=result)
 
@@ -564,23 +607,42 @@ async def training_cancel_from_sessions():
 @router.get("/training/stream")
 async def training_stream(request: Request):
     """SSE training stream."""
-    from .sse_stream import build_training_sse_response
     from pathlib import Path
+
+    from .sse_stream import build_training_sse_response
 
     # Get auto_train state for config
     try:
         import routers.auto_train as at
+
         config = at.state.config or {}
         if not config:
             from schemas.common import success_response
-            return success_response(data={"status": "error", "error": "No training state", "code": "E_STATE_IDLE", "http_status": 409})
+
+            return success_response(
+                data={
+                    "status": "error",
+                    "error": "No training state",
+                    "code": "E_STATE_IDLE",
+                    "http_status": 409,
+                }
+            )
     except ImportError:
         from schemas.common import success_response
-        return success_response(data={"status": "error", "error": "auto_train not available", "code": "E_STATE_IDLE", "http_status": 409})
+
+        return success_response(
+            data={
+                "status": "error",
+                "error": "auto_train not available",
+                "code": "E_STATE_IDLE",
+                "http_status": 409,
+            }
+        )
 
     checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
     return await build_training_sse_response(
-        request, config,
+        request,
+        config,
         task_name="auto-train",
         task_type="training",
         cm_label="auto-train",
@@ -591,22 +653,41 @@ async def training_stream(request: Request):
 @router.get("/training/from-sessions-stream")
 async def training_from_sessions_stream(request: Request):
     """SSE stream from sessions."""
-    from .sse_stream import build_training_sse_response
     from pathlib import Path
+
+    from .sse_stream import build_training_sse_response
 
     try:
         import routers.auto_train as at
+
         config = at.state.config or {}
         if not config or config.get("method") != "from-sessions":
             from schemas.common import success_response
-            return success_response(data={"status": "error", "error": "No from-sessions state", "code": "E_STATE_IDLE", "http_status": 409})
+
+            return success_response(
+                data={
+                    "status": "error",
+                    "error": "No from-sessions state",
+                    "code": "E_STATE_IDLE",
+                    "http_status": 409,
+                }
+            )
     except ImportError:
         from schemas.common import success_response
-        return success_response(data={"status": "error", "error": "auto_train not available", "code": "E_STATE_IDLE", "http_status": 409})
+
+        return success_response(
+            data={
+                "status": "error",
+                "error": "auto_train not available",
+                "code": "E_STATE_IDLE",
+                "http_status": 409,
+            }
+        )
 
     checkpoints_dir = Path(__file__).resolve().parents[2] / "models" / "auto-training"
     return await build_training_sse_response(
-        request, config,
+        request,
+        config,
         task_name="auto-train-sessions",
         task_type="training-sessions",
         cm_label="auto-train-sessions",
@@ -618,5 +699,6 @@ async def training_from_sessions_stream(request: Request):
 # Include sub-routers
 from .turbo_endpoints import router as _turbo_router
 from .webhook_endpoints import router as _webhook_router
+
 router.include_router(_turbo_router)
 router.include_router(_webhook_router)

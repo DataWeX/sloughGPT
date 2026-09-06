@@ -7,8 +7,8 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from .jobs import training_jobs
 from .controller import get_training_controller
+from .jobs import training_jobs
 
 logger = logging.getLogger("slo")
 
@@ -41,6 +41,7 @@ def _signal_current_job(pause: bool | None = None, cancel: bool = False) -> dict
             signaled["cancel"] = "requested"
         try:
             from domains.infrastructure.cancel_manager import get_cancel_manager
+
             get_cancel_manager().cancel(jid)
         except Exception as e:
             logger.warning("CancelManager.cancel failed for %s: %s", jid, e)
@@ -99,8 +100,9 @@ async def control_pause_training():
 
     if result["success"]:
         signaled = _signal_current_job(pause=True)
-        logger.info("Training pause requested: %s", signaled or "no tracked job",
-            extra={"tag": "TRAIN"})
+        logger.info(
+            "Training pause requested: %s", signaled or "no tracked job", extra={"tag": "TRAIN"}
+        )
 
     return result
 
@@ -113,8 +115,7 @@ async def control_resume_training():
 
     if result["success"]:
         signaled = _signal_current_job(pause=False)
-        logger.info("Training resumed: %s", signaled or "no tracked job",
-            extra={"tag": "TRAIN"})
+        logger.info("Training resumed: %s", signaled or "no tracked job", extra={"tag": "TRAIN"})
 
     return result
 
@@ -130,8 +131,9 @@ async def control_stop_training():
             if job.get("status") == "running":
                 job["status"] = "stopping"
         signaled = _signal_current_job(cancel=True)
-        logger.info("Training stop requested: %s", signaled or "no tracked job",
-            extra={"tag": "TRAIN"})
+        logger.info(
+            "Training stop requested: %s", signaled or "no tracked job", extra={"tag": "TRAIN"}
+        )
 
     return result
 

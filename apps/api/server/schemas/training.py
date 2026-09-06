@@ -1,10 +1,11 @@
 """
 Training Schemas - Data models for training
 """
-from pydantic import BaseModel, Field
-from typing import Optional, List
+
 from datetime import datetime
 from enum import Enum
+
+from pydantic import BaseModel, Field
 
 
 class JobStatus(str, Enum):
@@ -34,13 +35,13 @@ class TrainingJob(BaseModel):
     data_source: str = ""
     batch_size: int = 32
     learning_rate: float = 1e-4
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     error: str = ""
     explanation: str = ""
-    loss_history: List[float] = []
-    reward_history: List[float] = []
+    loss_history: list[float] = []
+    reward_history: list[float] = []
     epochs_completed: int = 0
     status_message: str = ""
 
@@ -65,7 +66,7 @@ class CheckpointInfo(BaseModel):
     name: str = ""
     path: str = ""
     size_mb: float = 0
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class DatasetInfo(BaseModel):
