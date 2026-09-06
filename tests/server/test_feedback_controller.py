@@ -231,8 +231,11 @@ class TestRecordFeedbackPipeline:
         mock_get_wf.return_value = workflow
         student = object()
         tokenizer = object()
-        with patch("routers.auto_train.state.student_net", student, create=True), \
-             patch("routers.auto_train.state.student_tokenizer", tokenizer, create=True):
+        with patch("domains.training.state.get_state") as mock_get_state:
+            mock_state = MagicMock()
+            mock_state.student_net = student
+            mock_state.student_tokenizer = tokenizer
+            mock_get_state.return_value = mock_state
             wf = ctrl._get_workflow()
         assert wf is workflow
         workflow.set_model.assert_called_once_with(student, tokenizer)

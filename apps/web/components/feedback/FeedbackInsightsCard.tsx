@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { InsightsCard } from '@sloughgpt/strui'
 import type { FeedbackStats } from '@/lib/feedback-controller'
 
 interface FeedbackInsightsCardProps {
@@ -11,7 +11,7 @@ export function FeedbackInsightsCard({ stats }: FeedbackInsightsCardProps) {
   if (!stats?.db_stats) return null
 
   const { db_stats } = stats
-  const { thumbs_up, thumbs_down, feedback_total, conversations, messages, ratio } = db_stats
+  const { feedback_total, conversations, messages, ratio } = db_stats
 
   const feedbackPerConv = conversations > 0 ? (feedback_total / conversations).toFixed(1) : '0'
   const feedbackPerMsg = messages > 0 ? (feedback_total / messages).toFixed(2) : '0'
@@ -24,49 +24,28 @@ export function FeedbackInsightsCard({ stats }: FeedbackInsightsCardProps) {
   const activityColor = stats.history_length > 100 ? 'text-success' : stats.history_length > 20 ? 'text-primary' : 'text-muted-foreground'
 
   return (
-    <Card data-testid="feedback-insights">
-      <CardHeader>
-        <CardTitle className="text-base">Feedback Insights</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <KpiGrid columns={4} className="mb-3">
-          <StatCard label="Sentiment" value={<span className={qualityColor}>{sentimentScore}%</span>} />
-          <StatCard label="Quality" value={<span className={qualityColor}>{qualityLabel}</span>} />
-          <StatCard label="Fb/Conv" value={feedbackPerConv} />
-          <StatCard label="Activity" value={<span className={activityColor}>{activityLevel}</span>} />
-        </KpiGrid>
-
-        <div className="space-y-1.5 text-[11px]">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Feedback per message</span>
-            <span className="font-numeric">{feedbackPerMsg}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Total conversations</span>
-            <span className="font-numeric">{conversations}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Total messages</span>
-            <span className="font-numeric">{messages}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">History entries</span>
-            <span className="font-numeric">{stats.history_length}</span>
-          </div>
-          {stats.current_weights && (
-            <>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Temperature</span>
-                <span className="font-numeric">{stats.current_weights.temperature}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Repetition penalty</span>
-                <span className="font-numeric">{stats.current_weights.repetition_penalty}</span>
-              </div>
-            </>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <InsightsCard
+      title="Feedback Insights"
+      testId="feedback-insights"
+      kpis={[
+        { label: 'Sentiment', value: <span className={qualityColor}>{sentimentScore}%</span> },
+        { label: 'Quality', value: <span className={qualityColor}>{qualityLabel}</span> },
+        { label: 'Fb/Conv', value: feedbackPerConv },
+        { label: 'Activity', value: <span className={activityColor}>{activityLevel}</span> },
+      ]}
+      kpiColumns={4}
+      details={[
+        { label: 'Feedback per message', value: feedbackPerMsg },
+        { label: 'Total conversations', value: conversations },
+        { label: 'Total messages', value: messages },
+        { label: 'History entries', value: stats.history_length },
+        ...(stats.current_weights
+          ? [
+              { label: 'Temperature', value: stats.current_weights.temperature },
+              { label: 'Repetition penalty', value: stats.current_weights.repetition_penalty },
+            ]
+          : []),
+      ]}
+    />
   )
 }

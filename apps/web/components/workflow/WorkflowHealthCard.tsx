@@ -1,6 +1,6 @@
 'use client'
 
-import { cn, Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { cn, InsightsCard } from '@sloughgpt/strui'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
 
 interface WorkflowHealthCardProps {
@@ -45,27 +45,23 @@ export function WorkflowHealthCard({ status }: WorkflowHealthCardProps) {
   const healthColor = healthStatus === 'Healthy' ? 'text-success' : healthStatus === 'Degraded' ? 'text-warning' : healthStatus === 'Stopped' ? 'text-muted-foreground' : 'text-destructive'
 
   return (
-    <Card data-testid="workflow-health">
-      <CardHeader>
-        <CardTitle className="text-base">Workflow Health</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <KpiGrid columns={3} className="mb-3">
-          <StatCard label="Status" value={<span className={healthColor}>{healthStatus}</span>} />
-          <StatCard label="Feedback" value={stats.feedback_recorded ?? 0} />
-          <StatCard label="Fb/Trained" value={fbPerAdapter} />
-        </KpiGrid>
-
-        <div className="space-y-1.5">
-          <div className="text-[10px] text-muted-foreground mb-1">Last Operations</div>
-          {lastOps.map(op => (
-            <div key={op.label} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0">
-              <span className="text-muted-foreground">{op.label}</span>
-              <span className={cn('font-mono', !op.time ? 'text-warning' : '')}>{timeSince(op.time)}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <InsightsCard
+      title="Workflow Health"
+      testId="workflow-health"
+      kpis={[
+        { label: 'Status', value: <span className={healthColor}>{healthStatus}</span> },
+        { label: 'Feedback', value: stats.feedback_recorded ?? 0 },
+        { label: 'Fb/Trained', value: fbPerAdapter },
+      ]}
+      kpiColumns={3}
+      details={lastOps.map(op => ({
+        label: op.label,
+        value: (
+          <span className={cn('font-mono', !op.time ? 'text-warning' : '')}>
+            {timeSince(op.time)}
+          </span>
+        ),
+      }))}
+    />
   )
 }
