@@ -1,350 +1,639 @@
-# pugqeep — Point-Graph-Queue
+# pugqeep API Reference
 
-Processing queue for graphed files. Compress any structured data (model weights, knowledge graphs, time series) via vector quantization with Huffman encoding. Store, retrieve, and generate decompressed arrays on demand.
-
-## Quick Start
-
-```python
-import numpy as np
-from pugqeep import Tree
-
-# Create a tree and load data
-tree = Tree("my-model", n_clusters=64)
-tree.load_data({
-    "weights_1": np.random.randn(768, 3072),
-    "weights_2": np.random.randn(3072, 768),
-})
-
-# Retrieve decompressed data
-w1 = tree.get_data("weights_1")  # → np.ndarray, same shape as input
-
-# Save / load from disk
-tree.save("model.points.json")
-tree2, meta = Tree.from_points("model.points.json")
-```
-
-## Core Types
-
-### `Point`
-
-Compressed representation of any numpy array. Stores a generator function instead of raw values.
-
-```python
-from pugqeep import Point
-
-point.identity       # str — unique identifier ("model.layer1.weights")
-point.function_type  # str — "cluster", "periodic", "linear", "polynomial", "raw"
-point.params         # dict — function parameters (centroids, assignments, etc.)
-point.accuracy       # float — 0.0 to 1.0
-point.shape          # tuple — original array shape
-point.dtype          # str — original dtype ("float32")
-
-# Generate decompressed values
-arr = point.generate(n)     # → np.ndarray of n values
-arr = point.generate(1024)
-
-# Size info
-point.nbytes()              # compressed size in bytes
-point.compression_ratio     # raw_bytes / compressed_bytes
-point.is_lossless           # accuracy >= 1.0
-
-# Serialization
-d = point.to_dict()         # → JSON-compatible dict
-point = Point.from_dict(d)
-
-b = point.to_bytes()        # → compact binary bytes
-point = Point.from_bytes(b, identity="layer1")
-```
-
-### `FunctionType`
-
-Enum of supported compression methods:
-
-```python
-from pugqeep import FunctionType
-
-FunctionType.CLUSTER      # Vector quantization (Lloyd's + Huffman)
-FunctionType.LINEAR       # a*x + b
-FunctionType.POLYNOMIAL   # a*x^2 + b*x + c
-FunctionType.PERIODIC     # a*cos(x) + b*sin(x) + w
-FunctionType.RAW          # Incompressible — stored as-is
-```
-
-### `PointView`
-
-Lazy decompression wrapper. Holds metadata, generates numpy on demand.
-
-```python
-view = library.view("model.layer1", shape=(768, 3072), dtype="float32")
-
-arr = view.generate()    # decompress (cached after first call)
-arr = view[:]            # same as generate()
-arr = view[0:100]        # partial decompression (fast path for cluster)
-view.clear_cache()       # free memory
-```
-
-## `Tree`
-
-Generic tree that compresses arrays into Points and generates on demand. Works for any numpy data — model weights, knowledge graphs, sensor data.
-
-```python
-from pugqeep import Tree
-
-tree = Tree("my-tree", n_clusters=64)
-
-# Load data (sequential)
-stats = tree.load_data({
-    "layer1.weights": np.random.randn(768, 3072),
-    "layer1.bias": np.random.randn(768),
-})
-# → {"tree": "my-tree", "num_items": 2, "ratio": 5.6, "method": "cluster", ...}
-
-# Load data (parallel)
-stats = tree.load_data(data_dict, num_workers=4, on_progress=lambda done, total, name: print(f"{done}/{total} {name}"))
-
-# Retrieve
-arr = tree.get_data("layer1.weights")           # → np.ndarray
-batch = tree.get_data_batch()                    # → dict of all arrays
-batch = tree.get_data_batch(["layer1.weights"])  # → dict of named arrays
-
-# Check / list / remove
-tree.has("layer1.weights")      # → bool
-tree.list_items()               # → ["layer1.weights", "layer1.bias"]
-tree.remove("layer1.bias")      # → bool
-
-# Persistence
-tree.save("model.points.json")
-tree, meta = Tree.from_points("model.points.json")
-
-# Stats
-tree.stats()
-# → {"tree": "my-tree", "loaded": True, "num_items": 2, "library": {...}}
-```
-
-### Custom compression strategy
-
-```python
-from pugqeep import Tree, PointCompressor
-from pugqeep.config import CompressorConfig
-
-comp = PointCompressor(CompressorConfig(n_clusters=128))
-tree = Tree("my-tree", compressor=comp, n_clusters=128)
-```
-
-## `ModelTree`
-
-ML-specialized Tree. Skips VQ for embedding layers and bias tensors automatically.
-
-```python
-from pugqeep import ModelTree
-
-tree = ModelTree("llama-7b", n_clusters=64)
-
-# Same API as Tree
-tree.load_weights(weights_dict)
-w = tree.get_weight("model.embed_tokens.weight")
-```
-
-Skip logic (configurable via `TreeConfig`):
-- `skip_embeddings=True` — layers with "embed" in name → raw storage
-- `skip_biases=True` — layers ending in "bias" → raw storage
-
-## `PointLibrary`
-
-Thread-safe store for Points. The "Graph" in Point-Graph-Queue.
-
-```python
-from pugqeep import PointLibrary
-
-lib = PointLibrary("my-lib")
-
-# CRUD
-lib.add(point)                    # → True (new) / False (replaced)
-lib.get("model.layer1")           # → Point or None
-lib.has("model.layer1")           # → bool
-lib.remove("model.layer1")        # → bool
-
-# Batch ops
-lib.add_many([point1, point2])    # → count added
-lib.get_many(["id1", "id2"])      # → {"id1": Point, "id2": None}
-
-# Listing
-lib.list_all()                    # → [Point, Point, ...]
-lib.list_by_type("cluster")       # → [Point, ...]
-lib.list_identities()             # → ["id1", "id2", ...]
-lib.list_types()                  # → {"cluster": 5, "raw": 2}
-
-# Search
-lib.search("layer1")              # → [Point, ...] (case-insensitive substring)
-lib.best_points(10)               # → top 10 by accuracy
-lib.worst_points(10)              # → bottom 10 by accuracy
-
-# Lazy views
-view = lib.view("model.layer1", shape=(768, 3072))
-arr = view.generate()
-
-# Compress & store directly
-point = lib.compress_and_store(weights, "layer1", method="cluster", n_clusters=64)
-
-# Persistence
-lib.save("library.json")
-lib = PointLibrary.load("library.json")
-
-# Stats
-lib.stats()
-# → {"total_points": 10, "total_raw_bytes": 18_000_000, "total_compressed_bytes": 3_200_000, "ratio": 5.6, ...}
-```
-
-## `PointCompressor`
-
-Low-level compression engine. Lloyd's algorithm with quantile initialization + Huffman encoding.
-
-```python
-from pugqeep import PointCompressor
-from pugqeep.config import CompressorConfig
-
-comp = PointCompressor(CompressorConfig(n_clusters=64))
-
-# Vector quantization (recommended)
-point = comp.compress_cluster(flat_array, "layer1", n_clusters=64)
-# → Point with centroids, Huffman-encoded assignments
-
-# Function fitting
-point = comp.compress_function(flat_array, "layer1")
-# → Point with fitted function (linear, polynomial, or periodic)
-
-# Block quantization
-point = comp.compress_block_q4(flat_array, "layer1")  # 4-bit, ~5.3:1 ratio
-point = comp.compress_block_q8(flat_array, "layer1")  # 8-bit, ~3.2:1 ratio
-
-# Decompress block-quantized points
-arr = comp.decompress_block_q4(point)
-arr = comp.decompress_block_q8(point)
-```
-
-### Compression benchmarks (768×3072 + 3072×768 weights, ~18.9MB raw)
-
-| Method | Accuracy | Ratio | Time |
-|--------|----------|-------|------|
-| Lloyd's + Huffman k=64 | 99.9% | 5.6:1 | ~10s |
-| Lloyd's + Huffman k=128 | 99.98% | 4.8:1 | ~19s |
-| Q4 block | 99.4% | 5.3:1 | ~0.08s |
-| Q8 block | 99.998% | 3.2:1 | ~0.08s |
-
-## `PGQ`
-
-Top-level facade. Manages data across tiers (Disk → Hot → Memory) with compression, caching, and task queuing.
-
-```python
-from pugqeep import PGQ
-import numpy as np
-
-# Create system
-pgq = PGQ("my-system", n_clusters=64)
-
-# Store data (compressed)
-pgq.put("weights", np.random.randn(768, 3072))
-pgq.put("biases", np.random.randn(768), compress=False)  # raw cache
-
-# Retrieve data
-arr = pgq.get("weights")  # → np.ndarray
-
-# Batch operations
-pgq.put_many({"w1": arr1, "w2": arr2})
-batch = pgq.get_many(["w1", "w2"])
-
-# Task management
-from pugqeep import Task, TaskPriority
-task = Task(id="job-1", name="train", priority=TaskPriority.HIGH)
-pgq.submit_task(task)
-pgq.list_tasks()
-pgq.complete_task("job-1", result={"loss": 0.5})
-
-# Spawn processes
-pgq.spawn(my_function, arg1, arg2, name="worker-1")
-pgq.run()
-
-# Persistence
-pgq.save("system.points.json")
-pgq = PGQ.load("system.points.json")
-
-# Factory methods
-pgq = PGQ.from_model("meta-llama/Llama-2-7b", n_clusters=64)
-pgq = PGQ.from_file("system.points.json")
-```
-
-## `ModelQueue`
-
-Manages multiple Trees (one per loaded model). Supports deduplication across trees.
-
-```python
-from pugqeep import ModelQueue
-from pugqeep.config import QueueConfig
-
-queue = ModelQueue(QueueConfig(max_trees=10, dedup=True))
-
-# Add trees
-queue.add_tree("model-a")
-queue.add_tree("model-b")
-
-# Load HuggingFace models directly
-queue.load_model("meta-llama/Llama-2-7b", n_clusters=64)
-
-# List / get / remove
-queue.list_trees()           # → ["model-a", "model-b"]
-queue.get_tree("model-a")    # → ModelTree
-queue.remove_tree("model-b") # → bool
-
-# Dedup identical points across trees
-queue.deduplicate()          # → {"merged": 5, "bytes_saved": 1024, "groups": 3}
-
-# Stats
-queue.stats()
-# → {"num_trees": 2, "total_points": 50, "ratio": 4.8, ...}
-
-# Persistence
-queue.save_all("models/")
-queue.load_all("models/")
-```
-
-## Config
-
-All config classes are `@dataclass(slots=True)`:
-
-```python
-from pugqeep.config import (
-    PointConfig,        # function_type, n_clusters, residual_threshold
-    CompressorConfig,   # n_clusters, lloyd_iterations, gap_fill_*, method
-    LibraryConfig,      # name, storage_dir, auto_save
-    TreeConfig,         # name, n_clusters, method, skip_embeddings, skip_biases
-    QueueConfig,        # max_trees, default_n_clusters, storage_dir, dedup
-    EngineConfig,       # name, max_trees, tree_workers, max_stems, queue_size
-    SubprocessConfig,   # enabled, python_exe, max_workers, memory_limit_mb
-    RestartPolicy,      # max_restarts, restart_delay, backoff, max_backoff
-    MonitorConfig,      # enabled, poll_interval, stall_timeout, on_stall
-)
-```
+Point-Graph-Queue system — core infrastructure engine for spawning processes,
+branching parallel tasks, and managing data across tiers.
 
 ## Architecture
 
 ```
-PGQ (facade — tiered cache + task queue + engine)
-  └── Tree / ModelTree (compresses arrays into Points)
-        └── PointLibrary (thread-safe store, persistence)
-              └── Point (compressed data + generator function)
+Queue (core engine — main process)
+  └── Tree (model instance — branches stems into parallel tasks)
+        └── Graph/PointLibrary (context — what the tree knows)
+              └── Point (star — function-calling capacity)
 ```
 
-## Thread Safety
+## Quick Start
 
-- `PointLibrary`: thread-safe (RLock on all CRUD)
-- `PointCompressor`: NOT thread-safe (create one per thread)
-- `Tree`: NOT thread-safe (wraps PointLibrary, which is)
-- `PGQ`: NOT thread-safe (use from single thread or wrap calls)
+```python
+from pugqeep import PGQ
 
-## Performance Notes
+# Spawn the core engine
+pgq = PGQ("infra")
+pgq.spawn(load_config, "config.json")
+pgq.spawn(start_server, port=8000)
+pgq.run()
 
-- **Lloyd's + Huffman** (default): Best accuracy-to-ratio. ~10s for 19MB on CPU. One-time cost.
-- **Q4 block**: Fastest compression (~0.08s). Good for live streams.
-- **Q8 block**: Near lossless. Best for archival.
-- **Quantile init**: Default. 4x faster than k-means++ with identical accuracy.
-- **Huffman encoding**: Lossless compression on VQ assignments. Adds ~1.6:1 on top of VQ.
+# Or use data operations
+pgq.put("weights", numpy_array)
+data = pgq.get("weights")
+```
+
+---
+
+## PGQ Facade
+
+Main entry point. Wraps Engine, Tree, Library, Cache, and TaskQueue.
+
+### `PGQ(name, storage_dir, cache_dir, n_clusters, method, memory_max_mb, hot_max_mb)`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | `"model"` | System name |
+| `storage_dir` | `Path \| None` | `None` | Directory for persistent storage |
+| `cache_dir` | `Path \| None` | `None` | Disk cache directory. `None` = disabled |
+| `n_clusters` | `int` | `16` | Number of VQ clusters for compression |
+| `method` | `str` | `"cluster"` | Compression method (`"cluster"` or `"function"`) |
+| `memory_max_mb` | `int` | `512` | Max memory cache in MB |
+| `hot_max_mb` | `int` | `128` | Max hot cache in MB |
+
+### Factory Methods
+
+#### `PGQ.from_model(model_id, n_clusters, method, storage_dir)`
+Load a HuggingFace model and compress all weights.
+
+#### `PGQ.from_file(path)`
+Load a saved library from disk.
+
+#### `PGQ.queue(model_ids, n_clusters, storage_dir)`
+Create a `ModelQueue` with multiple models.
+
+### Data Operations
+
+#### `put(name, data, method, tier, compress) → Point | np.ndarray`
+Store data, optionally compressing into a Point.
+
+- `tier`: `"memory"` | `"hot"` | `"disk"`
+- `compress`: `True` = compress, `False` = store raw in cache
+
+#### `put_raw(name, data, tier, size_bytes, ttl)`
+Store any data (not just numpy) in the cache.
+
+#### `get(name) → np.ndarray | None`
+Get data by name, decompressing if needed. Checks cache first, then point library.
+
+#### `get_any(name) → Any | None`
+Get any data from cache (not just numpy).
+
+#### `has(name) → bool`
+Check if data exists in library or cache.
+
+#### `remove(name) → bool`
+Remove data from all tiers.
+
+#### `put_many(data, compress, method, num_workers) → dict`
+Store multiple arrays at once. `num_workers`: 0=sequential, -1=cpu_count.
+
+#### `get_many(names, num_workers) → dict`
+Get multiple arrays at once.
+
+#### `exists_many(names) → dict`
+Check existence of multiple keys.
+
+#### `remove_many(names) → int`
+Remove multiple items. Returns count removed.
+
+### Task Queue Operations
+
+#### `submit_task(task) → Task`
+Submit a task to the queue.
+
+#### `next_task() → Task | None`
+Get next task to process.
+
+#### `complete_task(task_id, result) → Task | None`
+Mark task as completed.
+
+#### `fail_task(task_id, error) → Task | None`
+Mark task as failed.
+
+#### `cancel_task(task_id) → Task | None`
+Cancel a task.
+
+#### `get_task(task_id) → Task | None`
+Get task by ID.
+
+#### `list_tasks(status) → list[Task]`
+List tasks, optionally filtered by status.
+
+#### `pause_queue()` / `resume_queue()`
+Pause/resume the task queue.
+
+### Engine Operations (Process/Tree/Stem)
+
+#### `spawn(fn, *args, name, timeout, priority, **kwargs) → Process`
+Spawn a new process on the core engine.
+
+#### `tree(name, max_stems, pool_workers) → Tree`
+Create a Tree (model instance) on the core engine.
+
+#### `branch(tree_name, processes) → Stem`
+Branch a Stem of parallel processes on a Tree.
+
+#### `run(poll_interval)` / `stop()`
+Run/stop the core engine main loop.
+
+#### `run_background(poll_interval) → Thread`
+Start engine dispatch loop in a background thread (non-blocking).
+
+#### `wait(timeout)` / `wait_all(timeout)`
+Wait for all pending and running processes to complete.
+
+#### `get_completed() → list[Process]`
+Return all completed processes since last call.
+
+#### `route(process_name, tree_name)`
+Route processes by name to a specific tree.
+
+#### `on_complete(callback)`
+Register a callback for when a process completes.
+
+### Training Integration
+
+#### `submit_training(fn, job_id, tree_id, **kwargs) → str`
+Submit a training job through the shared TrainingExecutor.
+
+#### `training_status(job_id) → dict | None`
+Get training job status.
+
+#### `cancel_training(job_id) → bool`
+Cancel a training job.
+
+### Search
+
+#### `search(query) → list[Point]`
+Search points by identity.
+
+#### `best(n) → list[Point]`
+Get best points by accuracy.
+
+### Persistence
+
+#### `save(path) → Path`
+Save library + task queue to disk.
+
+#### `PGQ.load(path) → PGQ`
+Load library + task queue from disk.
+
+### Stats
+
+#### `stats() → dict`
+System statistics (tree, cache, queue).
+
+#### `cache_stats() → dict`
+Cache-only statistics.
+
+#### `queue_stats() → dict`
+Queue-only statistics.
+
+#### `export_stats() → dict`
+Export full system stats as a serializable dict.
+
+#### `cleanup_cache() → int`
+Remove expired cache entries. Returns count removed.
+
+---
+
+## Engine
+
+Core infra engine — the vCPU.
+
+### `Engine(name, max_trees, config)`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | `"main"` | Engine name |
+| `max_trees` | `int` | `16` | Maximum number of trees |
+| `config` | `EngineConfig \| None` | `None` | Full engine configuration |
+
+### Process Lifecycle
+
+```
+CREATED → READY → RUNNING → COMPLETED
+                             → FAILED
+                             → CANCELLED
+```
+
+### `Process(fn, args, kwargs, name, timeout)`
+
+A unit of execution with lifecycle tracking.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Auto-generated 12-char hex ID |
+| `name` | `str` | Human-readable name |
+| `status` | `ProcessStatus` | Current lifecycle state |
+| `result` | `Any` | Return value (on completion) |
+| `error` | `str \| None` | Error message (on failure) |
+| `timeout` | `float \| None` | Timeout in seconds |
+| `depends_on` | `list[str]` | IDs of processes this depends on |
+
+### `ProcessStatus` Enum
+
+- `CREATED` — initial state
+- `READY` — queued for execution
+- `RUNNING` — currently executing
+- `COMPLETED` — finished successfully
+- `FAILED` — finished with error
+- `CANCELLED` — cancelled by user
+
+### `Stem(tree_id, processes)`
+
+A branch of parallel execution from a Tree.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Auto-generated 12-char hex ID |
+| `tree_id` | `str` | Name of the tree this branch is on |
+| `processes` | `list[Process]` | Processes in this stem |
+| `status` | `StemStatus` | Current state |
+
+### `StemStatus` Enum
+
+- `CREATED` — initial state
+- `RUNNING` — processes executing
+- `COMPLETED` — all processes completed
+- `FAILED` — one or more processes failed
+
+### `Tree(name, max_stems, pool_workers)`
+
+Model instance that branches Stems of parallel tasks.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `str` | Tree identifier |
+| `status` | `TreeStatus` | Current state |
+| `max_stems` | `int` | Max concurrent stems (default 8) |
+| `active_stems` | `int` | Current active stems (property) |
+
+### `TreeStatus` Enum
+
+- `IDLE` — no active stems
+- `BRANCHING` — stems executing
+- `STOPPED` — tree shut down
+
+### Methods
+
+#### `branch(processes) → Stem`
+Submit processes to the tree's thread pool.
+
+#### `wait_stem(stem, timeout) → Stem`
+Wait for a stem to complete.
+
+#### `store(key, value)` / `recall(key)`
+Store/recall context data on the tree's graph.
+
+#### `shutdown()`
+Shut down the tree's thread pool.
+
+### `GuardTree(name, config, max_stems, pool_workers)`
+
+Tree that wraps processes in `SubprocessProcess` for OS-level isolation.
+
+### Engine Methods
+
+#### `spawn(fn, *args, name, tree, priority, timeout, depends_on, **kwargs) → Process`
+Create and queue a process.
+
+#### `tree(name, max_stems, pool_workers, guarded) → Tree`
+Create a new tree.
+
+#### `route(process_name, tree_name)`
+Route processes by name to a tree.
+
+#### `branch(tree_name, processes) → Stem`
+Branch processes on a specific tree.
+
+#### `dispatch() → int`
+Dispatch pending processes to trees (one-shot). Returns count dispatched.
+
+#### `run(poll_interval, on_progress)` / `stop()`
+Run/stop the main dispatch loop.
+
+#### `run_background(poll_interval, as_future) → Thread | Future`
+Start dispatch loop in background. `as_future=True` returns a `Future`.
+
+#### `wait(timeout)` / `wait_all(timeout)`
+Wait for all processes to complete.
+
+#### `get_process(proc_id) → Process | None`
+Get a process by ID.
+
+#### `list_processes(status) → list[Process]`
+List processes, optionally filtered by status.
+
+#### `cancel_process(proc_id, propagate) → int`
+Cancel a process (and optionally its dependents). Returns count cancelled.
+
+#### `cancel_tree(tree_name) → int`
+Cancel all processes on a tree.
+
+#### `cancel_all() → int`
+Cancel all running/pending processes.
+
+#### `on_complete(callback)`
+Register a callback for process completion events.
+
+#### `set_scheduling(policy)`
+Set scheduling policy (`ROUND_ROBIN` or `FIRST`).
+
+#### `health() → dict`
+Engine health status.
+
+#### `to_dict() → dict`
+Full engine state as serializable dict.
+
+#### `start_workers(num_workers, max_queue)` / `stop_workers(timeout)`
+Start/stop producer-consumer worker threads.
+
+#### `install_signal_handlers()` / `restore_signal_handlers()`
+Manage SIGTERM/SIGINT handlers for graceful shutdown.
+
+---
+
+## TieredCache
+
+Three-tier cache: Disk → Hot → Memory.
+
+### `TieredCache(memory_max_mb, hot_max_mb, disk_dir, promote_threshold, auto_promote, eviction_policy)`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `memory_max_mb` | `int` | `512` | Max memory cache size in MB |
+| `hot_max_mb` | `int` | `128` | Max hot cache size in MB |
+| `disk_dir` | `Path \| None` | `None` | Disk directory. `None` = disabled |
+| `promote_threshold` | `int` | `3` | Access count before promoting tier |
+| `auto_promote` | `bool` | `True` | Auto-promote frequently accessed data |
+| `eviction_policy` | `EvictionPolicy` | `LRU` | Eviction strategy |
+
+### `Tier` Enum
+
+- `DISK` — cold storage (persistent)
+- `HOT` — fast local cache
+- `MEMORY` — in-memory (fastest, volatile)
+
+### `EvictionPolicy` Enum
+
+- `LRU` — Least Recently Used
+- `LFU` — Least Frequently Used
+
+### Methods
+
+#### `get(key) → Any | None`
+Get data, promoting to hotter tier if needed. Thread-safe.
+
+#### `peek(key) → Any | None`
+Get data without promoting or updating access stats.
+
+#### `put(key, value, tier, size_bytes, pinned, ttl)`
+Store data at the specified tier.
+
+- `pinned`: `True` = won't be evicted
+- `ttl`: Time-to-live in seconds
+
+#### `remove(key) → bool`
+Remove data from all tiers.
+
+#### `exists(key) → bool`
+Check if key exists.
+
+#### `list_keys(tier) → list[str]`
+List keys, optionally filtered by tier.
+
+#### `evict(target_tier, target_bytes) → int`
+Evict entries from a tier to free space. Returns bytes freed.
+
+#### `cleanup_expired() → int`
+Remove all expired entries. Returns count removed.
+
+#### `stats() → dict`
+Cache statistics including hit rates, tier sizes, eviction counts.
+
+---
+
+## TaskQueue
+
+Priority task queue with persistence, routing, and optional worker pool.
+
+### `TaskQueue(name, storage_dir, max_size)`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | `"default"` | Queue name |
+| `storage_dir` | `Path \| None` | `None` | Persistence directory. `None` = in-memory only |
+| `max_size` | `int` | `10000` | Maximum tasks in queue |
+
+### `Task(name, data, priority, tree_id, max_retries, metadata)`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Auto-generated 12-char hex ID |
+| `name` | `str` | Task type name (for handler lookup) |
+| `data` | `Any` | Task payload |
+| `status` | `TaskStatus` | Current state |
+| `priority` | `TaskPriority` | Priority level |
+| `tree_id` | `str \| None` | Assigned tree/instance |
+| `result` | `Any` | Return value |
+| `error` | `str \| None` | Error message |
+| `retries` | `int` | Current retry count |
+| `max_retries` | `int` | Max retries (default 3) |
+| `metadata` | `dict` | Arbitrary metadata |
+
+### `TaskStatus` Enum
+
+- `PENDING` — waiting to be processed
+- `RUNNING` — currently executing
+- `COMPLETED` — finished successfully
+- `FAILED` — finished with error
+- `CANCELLED` — cancelled by user
+
+### `TaskPriority` Enum
+
+- `LOW` (0)
+- `NORMAL` (1)
+- `HIGH` (2)
+- `URGENT` (3)
+
+### Methods
+
+#### `submit(task) → Task`
+Submit a task. Auto-dispatches to workers if running.
+
+#### `submit_many(tasks) → list[Task]`
+Submit multiple tasks.
+
+#### `submit_batch(items, priority) → list[Task]`
+Create and submit multiple tasks from dicts.
+
+#### `next() → Task | None`
+Get the next task (highest priority, oldest first).
+
+#### `complete(task_id, result) → Task | None`
+Mark task as completed.
+
+#### `fail(task_id, error) → Task | None`
+Mark task as failed. Auto-retries if `retries < max_retries`.
+
+#### `cancel(task_id) → Task | None`
+Cancel a task.
+
+#### `cancel_many(task_ids) → list[Task | None]`
+Cancel multiple tasks.
+
+#### `cancel_all() → int`
+Cancel all pending tasks. Returns count cancelled.
+
+#### `retry(task_id, reset_retries) → Task | None`
+Retry a failed/completed task.
+
+#### `retry_all(reset_retries) → int`
+Retry all failed tasks.
+
+#### `pause()` / `resume()`
+Pause/resume the queue.
+
+#### `register_handler(task_name, handler)`
+Register a handler for a task type (used by worker pool).
+
+#### `on_complete(callback)`
+Register a completion callback.
+
+#### `get_task(task_id) → Task | None`
+Get task by ID.
+
+#### `list_tasks(status) → list[Task]`
+List tasks, optionally filtered by status.
+
+#### `wait_for(task_id, timeout) → Task | None`
+Wait for a specific task to complete.
+
+#### `wait_all(timeout) → list[Task]`
+Wait for all tasks to complete.
+
+#### `clear_completed() → int`
+Remove completed tasks. Returns count removed.
+
+#### `save(path)` / `TaskQueue.load(path)`
+Persist/restore queue to/from disk.
+
+#### `start_workers(num_workers, max_queue)` / `stop_workers(timeout)`
+Start/stop worker threads for automatic task execution.
+
+#### `stats() → dict`
+Queue statistics.
+
+---
+
+## Generic (Pluggable Architecture)
+
+### `PGQGeneric(compressor, storage, registry)`
+
+Composable facade — wire any strategy + storage + types together.
+
+```python
+from pugqeep.generic import PGQGeneric, registry
+
+sys = PGQGeneric(compressor="cluster")
+sys.put("weights", array)
+```
+
+### ABCs
+
+#### `CompressionStrategy`
+Base class for compression strategies.
+
+```python
+class MyStrategy(CompressionStrategy):
+    name = "custom"
+
+    def compress(self, data, identity, **kwargs) -> Point: ...
+    def decompress(self, point, n) -> np.ndarray: ...
+```
+
+#### `StorageBackend`
+Base class for storage backends.
+
+```python
+class S3Storage(StorageBackend):
+    name = "s3"
+
+    def load(self, name) -> Point | None: ...
+    def save(self, point) -> None: ...
+    def remove(self, name) -> bool: ...
+    def has(self, name) -> bool: ...
+    def list_all(self) -> list[Point]: ...
+```
+
+### Built-in Strategies
+
+- `ClusterStrategy` — VQ-based compression (default)
+- `FunctionStrategy` — function approximation
+- `RawStrategy` — no compression, raw storage
+- `AutoStrategy` — picks best strategy per array
+
+### Built-in Storage
+
+- `MemoryStorage` — in-memory dict
+- `JSONStorage` — JSON files on disk
+- `DirectoryStorage` — directory-based storage
+
+### Registry
+
+```python
+from pugqeep.generic import registry
+
+registry.compressors.register(MyStrategy())
+registry.storage.register(MyStorage())
+```
+
+---
+
+## Config Dataclasses
+
+### `EngineConfig`
+Full engine configuration. Contains `SubprocessConfig`, `RestartPolicy`, `MonitorConfig`.
+
+### `SubprocessConfig`
+Subprocess isolation settings: memory limits, CPU affinity, cwd, env, capture output.
+
+### `RestartPolicy`
+Restart behavior: max_restarts, delay, backoff strategy.
+
+### `MonitorConfig`
+Health monitoring: poll interval, stall timeout, restart behavior.
+
+### `PointConfig`
+Point creation: function type, clusters, threshold.
+
+### `CompressorConfig`
+Compression settings: clusters, Lloyd iterations, gap fill.
+
+### `LibraryConfig`
+Library settings: name, storage directory, auto-save.
+
+### `TreeConfig`
+Tree settings: name, clusters, method, skip embeddings/biases.
+
+### `QueueConfig`
+Queue settings: max trees, default clusters, storage, dedup.
+
+---
+
+## Data Types
+
+### `ProcessStatus` / `StemStatus` / `TreeStatus`
+Enum states for engine components.
+
+### `TaskStatus` / `TaskPriority`
+Enum states for task queue.
+
+### `Tier` / `EvictionPolicy`
+Enum states for cache.
+
+### `EngineMetrics`
+Thread-safe metrics tracker: spawned, completed, failed, cancelled, latency, throughput.
+
+### `ResultCache`
+LRU + TTL cache for deduplicating identical function calls.
+
+### `ProcessMonitor`
+Background thread for stall detection and restart callbacks.
