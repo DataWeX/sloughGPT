@@ -31,19 +31,27 @@ _LOG_BUF = 500  # max lines kept per panel
 class StatusBlock:
     """Manages in-place updating of a block of status lines.
 
-    Uses the logger's cursor methods (CLILogger) for TTY-aware cursor manipulation.
-    Falls back to simple logging if cursor methods are unavailable.
+    Uses the logger's cursor methods (CLILogger) for TTY-aware cursor manipulation
+    only when the output stream is actually a TTY. Falls back to simple logging otherwise.
     """
 
     def __init__(self, logger):
         self._log = logger
         self._lines: list[str] = []
-        self._has_cursor = hasattr(logger, 'cursor_up') and hasattr(logger, 'clear_line')
+        # Check if logger has cursor methods AND the stream is actually a TTY
+        stream = getattr(logger, '_stream', None)
+        self._is_tty = (
+            hasattr(logger, 'cursor_up')
+            and hasattr(logger, 'clear_line')
+            and stream is not None
+            and hasattr(stream, 'isatty')
+            and stream.isatty()
+        )
         self._printed = False
 
     def update(self, *lines: str) -> None:
-        """Update the block with new lines, clearing previous output if possible."""
-        if self._has_cursor and self._lines:
+        """Update the block with new lines, clearing previous output if TTY."""
+        if self._is_tty and self._lines:
             # Clear previous lines using logger's cursor methods
             n = len(self._lines)
             for _ in range(n):
@@ -58,7 +66,7 @@ class StatusBlock:
             for line in lines:
                 self._log.info(line)
             self._printed = True
-        # If already printed and no cursor support, don't print again
+        # If already printed and not TTY, don't print again to avoid double output
 
 
 def _kill_port(port: int):
@@ -138,12 +146,36 @@ def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
         r"Application startup complete|Uvicorn running on)",
     )
 
-    # Phase 1: Find actual errors and critical messages
+    # Phase 1: Find actual errors and critical messages, plus traceback context.
+    # Tracebacks have the shape:
+    #   Traceback (most recent call last):
+    #     File "path", line N, in func
+    #       code
+    #     ErrorType: message
+    # The File/code lines don't match error keywords, so we track traceback
+    # blocks and include them whole.
     error_keywords = re.compile(
         r"(CRITICAL|ERROR|exception|traceback|failed|error|crashed|timed out|refused|exit code|ModuleNotFoundError|ImportError)",
         re.IGNORECASE,
     )
-    error_lines = [l for l in all_lines if error_keywords.search(l)]
+    traceback_header = re.compile(r"^\s*Traceback \(most recent call last\):")
+    traceback_file_line = re.compile(r"^\s*File \".*\", line \d+")
+    traceback_indented = re.compile(r"^\s{2,}\S")  # 2+ spaces then non-space
+
+    error_lines = []
+    in_traceback = False
+    for l in all_lines:
+        if error_keywords.search(l):
+            error_lines.append(l)
+            # If this line looks like it starts a new traceback block,
+            # capture the context that follows.
+            if traceback_header.search(l):
+                in_traceback = True
+        elif in_traceback:
+            if traceback_file_line.search(l) or traceback_indented.search(l):
+                error_lines.append(l)
+            else:
+                in_traceback = False
 
     # Phase 2: Find startup phase progress lines
     phase_keywords = re.compile(
