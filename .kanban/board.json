@@ -8437,8 +8437,8 @@
     {
       "id": "20260902_120100-mogdb-remaining-migrations",
       "title": "Migrate remaining data stores to MogDB + JSON sync",
-      "description": "Migrate: (1) data/knowledge/entries.json, (2) data/knowledge/visited.json, (3) data/rag_store/documents.jsonl, (4) data/response_logs/*.jsonl, (5) data/model_catalog/ directory. DONE: notifications, agent runs.",
-      "column": "in_progress",
+      "description": "Migrate: (1) data/knowledge/entries.json — DONE (MogDB entries collection, JSON fallback), (2) data/knowledge/visited.json — DONE (MogDB visited collection, JSON fallback), (3) data/rag_store/documents.jsonl — pending, (4) data/response_logs/*.jsonl — pending, (5) data/model_catalog/ — already MogDB. DONE: notifications, agent runs, knowledge entries/visited.",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "mogdb",
@@ -8474,7 +8474,7 @@
       "id": "20260902_120300-mogdb-data-migration-tools",
       "title": "Data migration tools for MogDB",
       "description": "Create tools: (1) scripts/migrate_legacy_json.py to import existing JSON files into MogDB, (2) CLI command slo db migrate for one-time migration, (3) CLI command slo db sync to force JSON sync, (4) CLI command slo db status to show collection stats",
-      "column": "todo",
+      "column": "done",
       "priority": "medium",
       "tags": [
         "mogdb",
@@ -8492,7 +8492,7 @@
       "id": "20260902_120400-mogdb-documentation",
       "title": "MogDB documentation",
       "description": "Document MogDB: (1) Update README.md with MogDB usage examples, (2) Document SyncableCollection API, (3) Add migration guide for developers, (4) Create architecture decision record (ADR) for MogDB + JSON sync",
-      "column": "todo",
+      "column": "done",
       "priority": "low",
       "tags": [
         "mogdb",
