@@ -29,6 +29,7 @@ import inspect
 import queue
 import time
 import gc
+from abc import ABC, abstractmethod
 from threading import Lock, Thread
 from typing import Generator as GeneratorType
 

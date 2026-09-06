@@ -3,6 +3,7 @@ Push notification service for mobile.
 
 Handles device token registration, notification sending, and topic subscriptions.
 Uses Expo Push Notifications (APNs/FCM via Expo) for cross-platform delivery.
+Persistence backed by MogDB.
 """
 
 from __future__ import annotations
@@ -11,16 +12,63 @@ import logging
 import time
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-import json
+from dataclasses import dataclass, field
 
 logger = logging.getLogger("slo.mobile.notifications")
 
-_NOTIFICATIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "mobile_notifications"
-_NOTIFICATIONS_DIR.mkdir(parents=True, exist_ok=True)
+NOTIFICATIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "mogdb" / "mobile_notifications"
 
-_DEVICES_FILE = _NOTIFICATIONS_DIR / "devices.json"
-_HISTORY_FILE = _NOTIFICATIONS_DIR / "history.json"
+_db = None
+_devices_col = None
+_history_col = None
+
+
+def _get_devices_col(db_path: Optional[str] = None):
+    global _db, _devices_col
+    if _devices_col is not None:
+        return _devices_col
+    if db_path is None:
+        from domains.shared import find_repo_root
+        repo = find_repo_root(Path(__file__).resolve())
+        db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
+    from mogdb import MogDB
+    _db = MogDB(db_path)
+    _devices_col = _db.collection("devices")
+    return _devices_col
+
+
+def _get_history_col(db_path: Optional[str] = None):
+    global _history_col
+    if _history_col is not None:
+        return _history_col
+    if db_path is None:
+        from domains.shared import find_repo_root
+        repo = find_repo_root(Path(__file__).resolve())
+        db_path = str(repo / "data" / "mogdb" / "mobile_notifications")
+    from mogdb import MogDB
+    if _db is None:
+        _db_inst = MogDB(db_path)
+    else:
+        _db_inst = _db
+    _history_col = _db_inst.collection("history")
+    return _history_col
+
+
+def set_mogdb_path(db_path: str) -> None:
+    """Override the default MogDB path (used by tests)."""
+    global _db, _devices_col, _history_col
+    from mogdb import MogDB
+    _db = MogDB(db_path)
+    _devices_col = _db.collection("devices")
+    _history_col = _db.collection("history")
+
+
+def reset_mogdb() -> None:
+    """Reset the module-level MogDB singletons (used by tests)."""
+    global _db, _devices_col, _history_col
+    _db = None
+    _devices_col = None
+    _history_col = None
 
 
 @dataclass
@@ -46,47 +94,79 @@ class NotificationPayload:
     topic: Optional[str] = None
 
 
+def _strip_meta(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove MogDB internal fields from a document."""
+    return {k: v for k, v in doc.items() if not k.startswith("_")}
+
+
 class PushNotificationService:
     """
     Manages device tokens and sends push notifications via Expo.
 
-    Notifications are persisted to disk and can be sent via Expo's push API
+    Notifications are persisted to MogDB and can be sent via Expo's push API
     or logged for development.
     """
 
-    def __init__(self):
+    def __init__(self, db_path: Optional[str] = None):
         self._devices: Dict[str, DeviceToken] = {}
         self._history: List[Dict[str, Any]] = []
+        self._dev_col = _get_devices_col(db_path)
+        self._hist_col = _get_history_col(db_path)
         self._load()
 
     def _load(self):
-        """Load devices and history from disk."""
+        """Load devices and history from MogDB."""
         try:
-            if _DEVICES_FILE.exists():
-                data = json.loads(_DEVICES_FILE.read_text())
-                for token_str, device_data in data.items():
-                    self._devices[token_str] = DeviceToken(**device_data)
+            for doc in self._dev_col.find({}):
+                token = doc["token"]
+                self._devices[token] = DeviceToken(**{k: v for k, v in doc.items() if k != "_id"})
         except Exception as e:
             logger.warning("Failed to load devices: %s", e, extra={"tag": "MODEL"})
 
         try:
-            if _HISTORY_FILE.exists():
-                self._history = json.loads(_HISTORY_FILE.read_text())
+            for doc in self._hist_col.find({}):
+                self._history.append(_strip_meta(doc))
         except Exception as e:
             logger.warning("Failed to load notification history: %s", e, extra={"tag": "MODEL"})
 
-    def _save_devices(self):
-        """Persist devices to disk."""
+    def _save_device(self, device: DeviceToken):
+        """Persist a single device to MogDB."""
         try:
-            data = {k: asdict(v) for k, v in self._devices.items()}
-            _DEVICES_FILE.write_text(json.dumps(data, indent=2))
+            data = {
+                "_id": device.token,
+                "token": device.token,
+                "platform": device.platform,
+                "user_id": device.user_id,
+                "topics": device.topics,
+                "created_at": device.created_at,
+                "last_active": device.last_active,
+                "enabled": device.enabled,
+            }
+            existing = self._dev_col.find_one({"_id": device.token})
+            if existing is not None:
+                self._dev_col.update_one({"_id": device.token}, {"$set": data})
+            else:
+                self._dev_col.insert_one(data)
         except Exception as e:
-            logger.warning("Failed to save devices: %s", e, extra={"tag": "MODEL"})
+            logger.warning("Failed to save device: %s", e, extra={"tag": "MODEL"})
 
-    def _save_history(self):
-        """Persist notification history to disk."""
+    def _delete_device(self, token: str):
+        """Remove a device from MogDB."""
         try:
-            _HISTORY_FILE.write_text(json.dumps(self._history[-200:], indent=2))
+            self._dev_col.delete_one({"_id": token})
+        except Exception as e:
+            logger.warning("Failed to delete device: %s", e, extra={"tag": "MODEL"})
+
+    def _save_history_record(self, record: Dict[str, Any]):
+        """Persist a single history record to MogDB."""
+        try:
+            data = {"_id": str(record["timestamp"]), **record}
+            self._hist_col.insert_one(data)
+            # Cap at 200 entries
+            all_records = self._hist_col.find({}, sort=[("_id", -1)])
+            if len(all_records) > 200:
+                stale = all_records[200:]
+                self._hist_col.delete_many({"_id": {"$in": [r["_id"] for r in stale]}})
         except Exception as e:
             logger.warning("Failed to save history: %s", e, extra={"tag": "MODEL"})
 
@@ -97,25 +177,13 @@ class PushNotificationService:
         user_id: str = "default",
         topics: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """
-        Register a mobile device for push notifications.
-
-        Args:
-            token: Expo push token or FCM/APNs token.
-            platform: "ios", "android", or "web".
-            user_id: User identifier (default: "default").
-            topics: Notification topics to subscribe to.
-
-        Returns:
-            Registration status with device info.
-        """
         existing = self._devices.get(token)
         if existing:
             existing.last_active = time.time()
             existing.platform = platform
             if topics:
                 existing.topics = topics
-            self._save_devices()
+            self._save_device(existing)
             return {"status": "updated", "token": token[:20] + "..."}
 
         device = DeviceToken(
@@ -125,21 +193,19 @@ class PushNotificationService:
             topics=topics or ["chat", "training"],
         )
         self._devices[token] = device
-        self._save_devices()
+        self._save_device(device)
 
         logger.info("Registered device: %s... (%s)", token[:20], platform, extra={"tag": "MODEL"})
         return {"status": "registered", "token": token[:20] + "..."}
 
     def unregister_device(self, token: str) -> bool:
-        """Unregister a device."""
         if token in self._devices:
             del self._devices[token]
-            self._save_devices()
+            self._delete_device(token)
             return True
         return False
 
     def get_devices(self, topic: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List registered devices, optionally filtered by topic."""
         devices = []
         for device in self._devices.values():
             if not device.enabled:
@@ -160,18 +226,6 @@ class PushNotificationService:
         tokens: Optional[List[str]] = None,
         topic: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Send a push notification to registered devices (sync).
-
-        Args:
-            payload: Notification title, body, data, sound, badge.
-            tokens: Specific tokens to send to (None = all matching topic).
-            topic: Filter devices by topic.
-
-        Returns:
-            Send result with count of recipients.
-        """
-        # Determine target devices
         if tokens:
             target_devices = [
                 self._devices[t] for t in tokens if t in self._devices
@@ -185,7 +239,6 @@ class PushNotificationService:
         if not target_devices:
             return {"status": "no_recipients", "sent": 0}
 
-        # Build Expo push messages
         messages = []
         for device in target_devices:
             msg = {
@@ -201,14 +254,12 @@ class PushNotificationService:
                 msg["channelId"] = payload.topic
             messages.append(msg)
 
-        # Send via Expo Push API
         sent_count = 0
         errors = []
 
         try:
             import httpx
 
-            # Expo push API accepts batches of up to 100
             for i in range(0, len(messages), 100):
                 batch = messages[i:i + 100]
                 with httpx.Client(timeout=30.0) as client:
@@ -228,14 +279,12 @@ class PushNotificationService:
                     else:
                         errors.append(f"HTTP {resp.status_code}")
         except ImportError:
-            # httpx not installed — log the notification
             sent_count = len(messages)
             logger.info("Notification (httpx unavailable, logged): %s → %s devices", payload.title, len(messages), extra={"tag": "MODEL"})
         except Exception as e:
             errors.append(str(e))
             logger.error("Failed to send notifications: %s", e, extra={"tag": "MODEL"})
 
-        # Record in history
         record = {
             "timestamp": time.time(),
             "title": payload.title,
@@ -245,7 +294,7 @@ class PushNotificationService:
             "errors": errors[:5],
         }
         self._history.append(record)
-        self._save_history()
+        self._save_history_record(record)
 
         return {
             "status": "sent" if sent_count > 0 else "failed",
@@ -260,11 +309,6 @@ class PushNotificationService:
         tokens: Optional[List[str]] = None,
         topic: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Send a push notification to registered devices (async, non-blocking).
-
-        Uses httpx.AsyncClient so the uvicorn event loop is not blocked.
-        """
         if tokens:
             target_devices = [
                 self._devices[t] for t in tokens if t in self._devices
@@ -333,7 +377,7 @@ class PushNotificationService:
             "errors": errors[:5],
         }
         self._history.append(record)
-        self._save_history()
+        self._save_history_record(record)
 
         return {
             "status": "sent" if sent_count > 0 else "failed",
@@ -350,7 +394,6 @@ class PushNotificationService:
         topics: Optional[List[str]] = None,
         sound: str = "default",
     ) -> Dict[str, Any]:
-        """Convenience method — build payload and send to topic-filtered devices."""
         payload = NotificationPayload(
             title=title,
             body=body,
@@ -358,7 +401,6 @@ class PushNotificationService:
             sound=sound,
             topic=topics[0] if topics else None,
         )
-        # Filter by each topic (union)
         if topics:
             target_tokens = [
                 t for t, d in self._devices.items()
@@ -368,17 +410,14 @@ class PushNotificationService:
         return self.send_notification(payload)
 
     def get_history(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get recent notification history."""
         return self._history[-limit:]
 
     def cleanup_stale(self, max_age_seconds: float = 30 * 24 * 3600) -> int:
-        """Remove devices inactive for more than max_age_seconds."""
         cutoff = time.time() - max_age_seconds
         stale = [t for t, d in self._devices.items() if d.last_active < cutoff]
         for token in stale:
             del self._devices[token]
-        if stale:
-            self._save_devices()
+            self._delete_device(token)
         return len(stale)
 
 

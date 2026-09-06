@@ -990,6 +990,7 @@ def _try_lazy_guard_autoload(cfg) -> bool:
         if not get_process_guard_enabled():
             return False
     except Exception:
+        logger.debug("Process guard config check failed", exc_info=True)
         return False
 
     model_type = cfg.autoload_model
@@ -1593,6 +1594,7 @@ def _make_engine_restart_fn(cfg):
             if not slnc_path.exists():
                 return None
         except Exception:
+            logger.debug("SLNC model path lookup failed", exc_info=True)
             return None
 
         engine_host = getattr(cfg, "inference_engine_host", "127.0.0.1")
