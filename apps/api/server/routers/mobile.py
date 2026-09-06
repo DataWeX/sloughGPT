@@ -104,8 +104,8 @@ class TrainingPair(BaseModel):
     """A single (user, assistant) conversation pair for on-device training."""
 
     id: str
-    user_msg: str
-    assistant_msg: str
+    user_msg: str = Field(..., min_length=1, max_length=10000)
+    assistant_msg: str = Field(..., min_length=1, max_length=10000)
     quality: float = 0.0
     timestamp: int = 0
     session_id: str = ""
@@ -1076,6 +1076,19 @@ class MobileRouter:
         if len(body.pairs) < 5:
             raise_error("Need at least 5 training pairs", "E_BAD_REQUEST", status_code=400)
 
+        # Filter out pairs with too-short messages
+        MIN_MSG_LEN = 5
+        valid_pairs = [
+            p for p in body.pairs
+            if len(p.user_msg.strip()) >= MIN_MSG_LEN and len(p.assistant_msg.strip()) >= MIN_MSG_LEN
+        ]
+        if len(valid_pairs) < 5:
+            raise_error(
+                f"Need at least 5 valid pairs (got {len(valid_pairs)} with messages >= {MIN_MSG_LEN} chars)",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+
         t0 = int(_time.time() * 1000)
 
         from domains.training.mobile_training_store import get_training_store
@@ -1089,7 +1102,7 @@ class MobileRouter:
                     "session_id": p.session_id,
                     "quality": p.quality,
                 }
-                for p in body.pairs
+                for p in valid_pairs
             ]
         )
 

@@ -266,7 +266,7 @@ export function useStreamingPipeline({
         onError: (status, text) => {
           acc.cancel()
 
-          const isRetryable = status === 408 || status === 429 || status === 502 || status === 503 || status === 504 || status === 0
+          const isRetryable = status === 408 || status === 429 || status === 502 || status === 503 || status === 504
           if (isRetryable) {
             trackEvent('stream_reconnecting', { status })
             setIsReconnecting(true)
