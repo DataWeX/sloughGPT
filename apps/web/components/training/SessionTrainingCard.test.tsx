@@ -32,6 +32,7 @@ vi.mock('@sloughgpt/strui', () => {
     Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
       <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
     ),
+    Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
   }
 })
 vi.mock('@/components/ConfirmDialog', () => ({
@@ -52,7 +53,7 @@ describe('SessionTrainingCard', () => {
   it('renders loading state', () => {
     vi.mocked(trainingJobsController.listChatSessions).mockReturnValue(new Promise(() => {}))
     render(<SessionTrainingCard addToast={mockAddToast} />)
-    expect(screen.getByText('Loading sessions...')).toBeDefined()
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThan(0)
   })
 
   it('renders sessions list', async () => {

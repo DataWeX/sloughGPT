@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Checkbox } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Checkbox, Skeleton } from '@sloughgpt/strui'
 import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 
@@ -106,7 +106,11 @@ export function SessionTrainingCard({ addToast }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <p className="text-xs text-muted-foreground">Loading sessions...</p>
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         ) : sessions.length === 0 ? (
           <p className="text-xs text-muted-foreground">No chat sessions found.</p>
         ) : (
