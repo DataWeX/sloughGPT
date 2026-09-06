@@ -61,19 +61,35 @@ _INFERENCE_PATHS = frozenset(
 
 
 def _model_ready() -> bool:
-    """True when a model is actually materialized and ready for inference."""
+    """True when a model is actually materialized and ready for inference.
+
+    Checks three sources because the lazy-guard autoload path stores the
+    provider in the core ``ServerState`` singleton but leaves
+    ``state.__dict__["model"]`` as ``None`` (module ``__setattr__`` is a
+    no-op in CPython — writes go to ``__dict__`` directly).
+
+    1. ``state.model`` — set by eager-load paths.
+    2. ``state.provider._model`` — set when eager load materializes weights.
+    3. Core ``ServerState.model.get()`` — set by the lazy-guard path.
+    """
     try:
         import state as server_state
 
         if server_state.model is not None:
             return True
         provider = server_state.provider
-        if provider is None:
-            return False
-        return getattr(provider, "_model", None) is not None
+        if provider is not None and getattr(provider, "_model", None) is not None:
+            return True
+        # Lazy-guard path: provider lives in the core ServerState singleton
+        # but state.__dict__["model"] stays None.
+        from domains.infrastructure.server_state import get_server_state
+
+        core_model = get_server_state().model.get()
+        if core_model is not None:
+            return True
     except Exception:
         logger.debug("Model loaded check failed", exc_info=True)
-        return False
+    return False
 
 
 def _get_startup_phase() -> dict:
