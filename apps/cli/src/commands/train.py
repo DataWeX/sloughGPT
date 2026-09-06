@@ -15,7 +15,7 @@ from domains.logging import get_global
 
 log = get_global()
 from utils.progress import ProgressBar
-from utils.formatting import format_size, format_time, format_number
+from utils.formatting import format_size, format_time, format_number, truncate
 
 
 def _softmax_np(x: np.ndarray) -> np.ndarray:

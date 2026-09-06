@@ -3917,6 +3917,7 @@ def world_tick(ticks, babies, render, neural, verbose):
     scene = SimScene(params)
 
     for _ in range(babies):
+        import numpy as np
         from domains.shell.simulation import SimBaby, Entity, EntityType
         baby = SimBaby()
         baby.entity.position[0] = 32 + np.random.randint(-10, 10)
@@ -3960,6 +3961,7 @@ def world_analyze(ticks, babies, threshold):
     scene = SimScene(params)
 
     for _ in range(babies):
+        import numpy as np
         from domains.shell.simulation import SimBaby
         baby = SimBaby()
         baby.entity.position[0] = 32 + np.random.randint(-10, 10)
@@ -3995,6 +3997,7 @@ def world_analyze(ticks, babies, threshold):
 @click.argument("image_a", type=click.Path(exists=True))
 @click.argument("image_b", type=click.Path(exists=True))
 def world_diff(image_a, image_b):
+    import numpy as np
     from domains.shell.world_render import RenderDiff
     from PIL import Image as PILImage
 
@@ -4020,6 +4023,7 @@ def world_diff(image_a, image_b):
 @click.option("--decay", default=0.95, type=float, help="Energy decay rate per tick")
 @click.option("--verbose", is_flag=True, help="Verbose output")
 def world_ingest(source_type, source_value, radius, decay, verbose):
+    import numpy as np
     from domains.collections.perception import WorldPerception, PerceptionConfig
     from domains.collections.sources import FileSource, UrlSource, RssSource, GeneratorSource, Record
     from domains.shell.simulation import WorldGrid

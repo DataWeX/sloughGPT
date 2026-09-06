@@ -521,4 +521,14 @@ def classify_exception(exc: BaseException) -> AppError:
             details={"original_type": "KeyError", "key": str(exc)},
             cause=exc,
         )
+    if isinstance(exc, RuntimeError):
+        msg = str(exc).lower()
+        if "already in progress" in msg:
+            return ConflictError(
+                message=str(exc),
+                user_message="Training already in progress.",
+                details={"original_type": "RuntimeError"},
+                cause=exc,
+            )
+        return AppError.from_exception(exc)
     return AppError.from_exception(exc)

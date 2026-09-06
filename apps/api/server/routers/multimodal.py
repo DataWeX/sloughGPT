@@ -170,7 +170,13 @@ class MultimodalRouter:
                             "errors": 0,
                         },
                         "video_training": {},
-                        "dpo": {"status": "idle"},
+                        "dpo": {
+                            "status": "idle",
+                            "accepted_count": 0,
+                            "rejected_count": 0,
+                            "last_run": None,
+                            "result": None,
+                        },
                     }
                 )
             caps = mgr.capabilities
