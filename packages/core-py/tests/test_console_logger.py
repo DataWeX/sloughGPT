@@ -146,7 +146,7 @@ class TestJsonFormat:
         assert data["lvl"] == "INFO"
         assert data["logger"] == "slo.api.inference"
         assert data["msg"] == "hello"
-        assert data["tag"] == "REQ"
+        assert data["op"] == "REQ"
         assert data["ctx"] == {"a": 1}
 
     def test_json_includes_code_and_exception(self):

@@ -4,6 +4,7 @@ PersonalityManager, MemoryManager, StyleManager, TaskManager, helpers."""
 import json
 import pytest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 from domains.context.managers import (
     TraitWeightsConfig,
     PersonalityManager,
@@ -16,6 +17,17 @@ from domains.context.managers import (
     _if_above,
     reset_trait_config,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_trait_config():
+    """Mock MogDB init so TraitWeightsConfig starts clean each test."""
+    mock_db = MagicMock()
+    mock_col = MagicMock()
+    mock_col.find_one.return_value = None
+    mock_db.collection.return_value = mock_col
+    with patch.object(TraitWeightsConfig, "_init_mogdb", return_value=mock_db):
+        yield
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

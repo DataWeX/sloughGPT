@@ -48,8 +48,11 @@ def _make_companion(**overrides):
     ns.set_personality = _set_personality
     # Make to_dict return current traits
     ns.to_dict = lambda: {"name": ns._traits.get("name", "Friend"), "traits": dict(ns._traits)}
-    # generate() async method for chat endpoint
+    # generate() async method — checks provider availability
     async def _generate(**kwargs):
+        from domains.models.provider import get_provider
+        if get_provider("default") is None:
+            raise RuntimeError("No model loaded")
         return "Hello there!"
     ns.generate = _generate
     return ns
@@ -129,17 +132,21 @@ class TestResetCompanion:
 
 
 class TestUsePreset:
+    @patch("routers.companion._get_db")
     @patch(PATCH_CREATE)
     @patch(PATCH_GET)
-    def test_apply_preset(self, mock_get, mock_create):
+    def test_apply_preset(self, mock_get, mock_create, mock_db):
         mock_get.return_value = _make_companion()
         comp = _make_companion()
         mock_create.return_value = comp
+        # Mock the database to return a preset
+        mock_col = MagicMock()
+        mock_col.find_one.return_value = {"id": "warm", "traits": {"warmth": 0.9}}
+        mock_db.return_value.collection.return_value = mock_col
         client = TestClient(_app())
-        resp = client.post("/companion/preset", json={"name": "Alice", "preset": "warm"})
+        resp = client.post("/companion/preset", json="warm")
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["preset"] == "warm"
         assert "traits" in data
 
 
