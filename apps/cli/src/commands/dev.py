@@ -31,54 +31,31 @@ _LOG_BUF = 500  # max lines kept per panel
 class StatusBlock:
     """Manages in-place updating of a block of status lines.
 
-    Tries to use /dev/tty for cursor manipulation regardless of stdout.
-    Falls back to logging only once if /dev/tty is unavailable.
+    Uses the logger's cursor methods for TTY-aware cursor manipulation.
+    Falls back to logging only once if not a TTY.
     """
 
     def __init__(self, logger):
         self._log = logger
         self._lines: list[str] = []
-        self._tty = None
-        self._is_tty = False
-        # Try /dev/tty for direct terminal access
-        try:
-            self._tty = open('/dev/tty', 'w')
-            self._is_tty = True
-        except (OSError, FileNotFoundError):
-            pass
+        self._is_tty = _is_tty(logger._stream) if hasattr(logger, '_stream') else False
         self._non_tty_logged = False
-        self._update_count = 0
-
-    def _write(self, text: str) -> None:
-        if self._tty:
-            try:
-                self._tty.write(text)
-                self._tty.flush()
-            except (OSError, ValueError):
-                pass
 
     def update(self, *lines: str) -> None:
         """Update the block with new lines, clearing previous output if TTY."""
-        self._update_count += 1
-
         if self._is_tty and self._lines:
             n = len(self._lines)
-            # Move up n lines, clear each
-            self._write(f"\033[{n}A")
+            # Move up n lines and clear each
             for _ in range(n):
-                self._write("\033[2K")
-                self._write("\033[1B")
-            # Move back up to start
-            self._write(f"\033[{n}A")
+                self._log.cursor_up(1)
+                self._log.clear_line()
 
         self._lines = list(lines)
 
         if self._is_tty:
             for line in lines:
-                self._write(line + "\n")
-            self._tty.flush()
+                self._log.emit(LogRecord(level=LogLevel.INFO, msg=line))
         elif not self._non_tty_logged:
-            # Only log once to avoid double printing when TTY unavailable
             for line in lines:
                 self._log.info(line)
             self._non_tty_logged = True

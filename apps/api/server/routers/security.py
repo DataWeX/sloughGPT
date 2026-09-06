@@ -4,7 +4,8 @@ Security Router - Audit logs and API key management
 
 import asyncio
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, success_response
 
 
@@ -27,6 +28,7 @@ class SecurityRouter:
         event_type: str | None = Query(default=None, description="Filter by event type"),
         history: bool = Query(default=False, description="Read from persisted audit.log file"),
         before: str | None = Query(default=None, description="ISO-8601 cursor for pagination"),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Get audit logs."""
         try:
@@ -45,7 +47,7 @@ class SecurityRouter:
         except Exception as e:
             classify_and_raise(e, source="security.audit_logs")
 
-    async def get_keys(self) -> dict:
+    async def get_keys(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get API key info (not the keys themselves)"""
         try:
             from settings import get_security_settings
