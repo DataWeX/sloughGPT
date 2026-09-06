@@ -2155,7 +2155,6 @@ class InferenceRouter:
                     return _cb
 
                 # Production RAG: verify response against knowledge base
-                rag_verification = None
                 if req.use_rag and full_response.strip():
                     try:
                         rag_svc = get_rag_service()

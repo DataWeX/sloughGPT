@@ -928,7 +928,7 @@ def _start_parent_preload(model_type: str):
 
             # Materialize the parent weights WHILE guard still serves requests.
             _st = time.monotonic()
-            model = provider.materialize_model()
+            provider.materialize_model()
             elapsed = time.monotonic() - _st
             logger.info(
                 "Parent preload complete: %s in %.1fs — in-process ready",

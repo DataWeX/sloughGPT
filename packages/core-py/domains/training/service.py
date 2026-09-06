@@ -316,7 +316,10 @@ def load_soul(name: str) -> dict | None:
                 if fp.suffix == ".soul" and st.st_size < 4096:
                     continue
                 return _load_soul_from_path(fp, st)
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger("slo.training").debug(
+                    "Failed to load checkpoint %s: %s", fp.name, exc)
                 continue
     return None
 

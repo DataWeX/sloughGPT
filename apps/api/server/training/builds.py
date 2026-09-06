@@ -78,7 +78,6 @@ async def list_builds():
         for d in sorted(_hf_finetuned_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if d.is_dir() and d.name not in seen:
                 seen.add(d.name)
-                config_path = d / "config.json"
                 size_mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / (1024 * 1024)
                 builds.append(
                     {

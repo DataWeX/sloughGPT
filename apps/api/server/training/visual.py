@@ -43,7 +43,6 @@ async def start_visual_training(request: VisualTrainRequest):
         raise_error(f"Dataset not found: {request.dataset}", "E_BAD_REQUEST", status_code=400)
     data_path_str = str(data_path)
 
-    out_stem = request.name or f"vlm_{job_id}"
     output_dir = (
         find_repo_root(Path(__file__).resolve()) / "models" / "video-training" / "checkpoints"
     )
@@ -73,7 +72,7 @@ async def start_visual_training(request: VisualTrainRequest):
         from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
 
         _mgr = get_cancel_manager()
-        op_id = _mgr.register(
+        _mgr.register(
             op_type=OpType.TRAINING,
             label=str(request.name or f"vlm-{job_id}"),
             cancel_fn=lambda: cancel_event.set(),

@@ -171,7 +171,8 @@ class ModelCatalog:
             {"$set": {
                 "last_used": now,
                 "updated_at": now,
-                "inference_count": {"$inc": 1},
+            }, "$inc": {
+                "inference_count": 1,
             }},
             return_document="after",
         )

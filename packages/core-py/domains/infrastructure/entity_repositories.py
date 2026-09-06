@@ -357,8 +357,10 @@ class FeedbackRepository:
                 try:
                     self._feedback.delete_one({"id": feedback_id})
                     return True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import logging
+                    logging.getLogger("slo.repos").warning(
+                        "MongoDB delete_feedback failed for %s: %s", feedback_id, exc)
             return self._memory.delete(feedback_id)
 
     def get_stats(self) -> dict[str, Any]:

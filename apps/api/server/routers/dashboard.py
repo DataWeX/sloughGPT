@@ -259,6 +259,7 @@ class DashboardRouter:
             events = get_event_buffer().recent(n)
             return success_response(data={"events": events, "count": len(events)})
         except Exception as e:
+            from schemas.common import classify_and_raise
             classify_and_raise(e, source="dashboard.events")
 
 

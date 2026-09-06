@@ -8,7 +8,6 @@ This cuts API cold-start from ~100s to ~8s.
 """
 
 import logging
-from typing import List, Optional
 
 from fastapi import APIRouter
 

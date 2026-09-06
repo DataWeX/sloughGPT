@@ -1378,7 +1378,10 @@ def replay_train_step(engine: MultimodalEngine, buffer: ReplayBuffer, batch_size
             loss_val = engine.train_step(img, tokens_arr)
             total_loss += loss_val
             count += 1
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.multimodal.engine").debug(
+                "Training step failed for sample %d: %s", i, exc)
             continue
 
     if count > 0:

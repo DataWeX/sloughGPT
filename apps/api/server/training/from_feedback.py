@@ -133,7 +133,7 @@ async def train_from_feedback(req: dict | None = None):
                             {"step": info.get("global_step", 0), "value": float(el), "type": "eval"}
                         )
 
-                result = trainer.train(on_progress=on_progress)
+                trainer.train(on_progress=on_progress)
                 safe_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
                 trainer.save(f"models/{safe_stem}.soul")
 

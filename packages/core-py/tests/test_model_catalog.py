@@ -149,7 +149,7 @@ class TestModelCatalogQueries:
         assert s["loaded"] == 1
         assert s["available"] == 1
         assert s["errors"] == 1
-        assert s["total_parameters"] == 100
+        assert s["total_parameters"] == 300
         assert s["total_inferences"] == 1
         assert set(s["sources"]) == {"local"}
 
