@@ -208,7 +208,10 @@ class CollectorRunner:
             self._stats[name]["total_collected"] += count
             self._stats[name]["last_run"] = time.time()
             return count
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.collections").warning(
+                "Collector '%s' failed: %s", name, exc)
             self._stats[name]["errors"] += 1
             return 0
 

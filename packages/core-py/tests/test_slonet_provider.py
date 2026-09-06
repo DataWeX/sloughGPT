@@ -74,14 +74,18 @@ class MockModel:
 
     def generate_numpy_stream(self, input_ids, max_new_tokens=50, eos_token=0,
                                temperature=1.0, top_k=None, top_p=None,
-                               repetition_penalty=1.0, extra_stop_ids=None, kv_state=None):
+                               repetition_penalty=1.0, extra_stop_ids=None, kv_state=None,
+                               return_logprobs=False):
         stop_ids = {eos_token} | set(extra_stop_ids or ())
         for i in range(max_new_tokens):
             tok = (self._counter + i) % self.vocab_size
             self._counter += 1
             if tok in stop_ids:
                 break
-            yield tok
+            if return_logprobs:
+                yield tok, np.random.randn(self.vocab_size)
+            else:
+                yield tok
 
     def generate_numpy(self, input_ids, max_new_tokens=50, temperature=1.0,
                         top_k=None, top_p=None, repetition_penalty=1.0,

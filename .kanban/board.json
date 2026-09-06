@@ -8420,7 +8420,7 @@
       "id": "20260902_120000-mogdb-verify-stabilize",
       "title": "Verify & stabilize MogDB migration",
       "description": "Run full test suite (including voice router tests). Fix any regressions from MogDB migration. Clean up legacy JSON files (keep as backup).",
-      "column": "todo",
+      "column": "done",
       "priority": "high",
       "tags": [
         "mogdb",

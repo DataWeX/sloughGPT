@@ -1685,7 +1685,7 @@ class SloNetChatProvider:
         m = self._get_model()
         logprobs_list = []
 
-        # Use the streaming path to capture logits
+        # Use the streaming path to capture logits for real logprobs
         for step, tok_id in enumerate(m.generate_numpy_stream(
             input_ids,
             max_new_tokens=max_tokens,
@@ -1695,15 +1695,18 @@ class SloNetChatProvider:
             top_k=top_k,
             top_p=top_p,
             repetition_penalty=repetition_penalty,
+            return_logprobs=True,
         )):
+            tok_id, logits = tok_id  # unpack (token_id, logits) tuple
             decoded = self._tokenizer.decode([tok_id])
-            # NOTE: Logprobs are approximated as 0.0. Computing true logprobs
-            # requires modifying generate_numpy_stream() to yield (token, logits)
-            # tuples. This is a known limitation — see issue #XXX.
+            # Compute true log-probability from raw logits
+            shifted = logits - np.max(logits)
+            log_probs = shifted - np.log(np.sum(np.exp(shifted)))
+            logprob = float(log_probs[int(tok_id)])
             logprobs_list.append({
                 "token_id": int(tok_id),
                 "token": decoded,
-                "logprob": 0.0,
+                "logprob": logprob,
                 "position": step,
             })
 

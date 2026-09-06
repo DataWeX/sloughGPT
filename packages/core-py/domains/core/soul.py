@@ -175,8 +175,8 @@ class SloEngine:
             from domains.soul.cognitive import SentimentAnalyzer
 
             self._sentiment_analyzer = SentimentAnalyzer()
-        except Exception:
-            logger.debug("SentimentAnalyzer not available")
+        except Exception as exc:
+            logger.warning("SentimentAnalyzer not available: %s", exc)
             self._sentiment_analyzer = None
 
     def _init_hd_memory(self) -> None:

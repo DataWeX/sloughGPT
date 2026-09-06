@@ -5675,6 +5675,7 @@ class SloTransformer(SloNet):
         repetition_penalty: float = 1.0,
         quantize_kv: Optional[bool] = None,
         kv_state: Optional[NumpyKVState] = None,
+        return_logprobs: bool = False,
     ):
         """Generator version of generate_numpy — yields token ids one at a time.
 
@@ -5701,9 +5702,15 @@ class SloTransformer(SloNet):
                 is updated in place on each yield; if the generator is
                 abandoned (closed before exhaustion) the state is invalidated
                 so the next call falls back to a fresh computation.
+            return_logprobs: When True, yields ``(token_id, logits)`` tuples
+                instead of bare token ids.  The logits are the raw output of
+                ``lm_head`` for the sampled position (shape ``(vocab_size,)``
+                as a numpy array).  Consumers can compute true log-
+                probabilities via ``scipy.special.log_softmax(logits)``.
 
         Yields:
-            Each generated token id.
+            Each generated token id, or ``(token_id, logits)`` when
+            *return_logprobs* is True.
         """
         if input_ids.ndim == 1:
             input_ids = input_ids.reshape(1, -1)
@@ -6111,14 +6118,14 @@ class SloTransformer(SloNet):
             if _is_quantized:
                 logits = lm_head_mod.forward_numpy(x[:, -1, :])
             elif _use_kernels:
-                if _is_greedy:
+                if _is_greedy and not return_logprobs:
                     next_id = _nb_lm_head_argmax(x[:, -1, :], lm_w)
                     out_buf[0, prompt_len + step] = next_id
                     if kv_state is not None:
                         kv_state.prev_ids = out_buf[:, :prompt_len + step + 1].copy()
                     if next_id in _stop_ids and step > 0:
                         return
-                    yield next_id
+                    yield (next_id, logits) if return_logprobs else next_id
                     continue
                 logits = x[:, -1, :] @ lm_w_T
             else:
@@ -6144,7 +6151,7 @@ class SloTransformer(SloNet):
             if _gen_metrics.n_tokens == 0:
                 _gen_metrics.t_first_token = time.perf_counter()
             _gen_metrics.n_tokens += 1
-            yield next_id
+            yield (next_id, logits) if return_logprobs else next_id
 
 
         _gen_metrics.t_end = time.perf_counter()

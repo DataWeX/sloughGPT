@@ -845,12 +845,16 @@ def _retrieval_benchmark(
 
         t_mrr, t_hit = _score(q_t, corpus_t, probe_idx)
         g_mrr, g_hit = _score(q_g, corpus_g, probe_idx)
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger("slo.embedder").warning(
+            "Retrieval benchmark failed: %s", exc)
         return {
             "queries": len(probe_idx), "top_k": top_k,
             "trained_mrr": 0.0, "ngram_mrr": 0.0,
             "trained_hit": 0.0, "ngram_hit": 0.0,
             "better": "n_gram",
+            "error": str(exc),
         }
 
     return {

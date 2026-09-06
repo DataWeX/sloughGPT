@@ -35,7 +35,8 @@ from .config import TreeConfig, QueueConfig
 from .point import Point
 from .compressor import PointCompressor
 from .library import PointLibrary
-from .model_tree import ModelTree, load_model_to_points
+from .model_tree import ModelTree
+from .tree import load_model_to_points
 from .cache import TieredCache, Tier
 from .queue import ModelQueue
 from .task_queue import TaskQueue, Task, TaskStatus
