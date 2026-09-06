@@ -90,7 +90,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   onStepChange: (step: StepId) => void
   completedSteps: Set<StepId>
   onStepComplete: (id: StepId) => void
-}}) {
+}) {
   const runningJob = form.allJobs.find(j => j.status === 'running')
   const isTurbo = session.method === 'turbo' && session.trainingRunning
   const isTraining = (session.trainingRunning || !!runningJob) && !isTurbo
@@ -241,7 +241,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
 
   return (
     <div className="space-y-4">
-      <StepIndicator current={step} completed={completedSteps} onStepClick={setStep} />
+      <StepIndicator current={step} completed={completedSteps} onStepClick={onStepChange} />
 
       {step === 'data' && <DataStep {...stepProps} />}
       {step === 'configure' && <ConfigureStep {...stepProps} />}

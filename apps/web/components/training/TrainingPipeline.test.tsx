@@ -108,7 +108,7 @@ describe('TrainingPipeline', () => {
   afterEach(cleanup)
 
   it('renders step indicator with 4 steps', () => {
-    render(<TrainingPipeline form={form} datasets={datasets} session={session} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={session} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText('Data')).toBeDefined()
     expect(screen.getByText('Configure')).toBeDefined()
     expect(screen.getByText('Train')).toBeDefined()
@@ -116,19 +116,19 @@ describe('TrainingPipeline', () => {
   })
 
   it('starts on data step', () => {
-    render(<TrainingPipeline form={form} datasets={datasets} session={session} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={session} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText(/Pick your data/)).toBeDefined()
   })
 
   it('shows training in progress when session is running', () => {
     const runningSession = { ...session, trainingRunning: true }
-    render(<TrainingPipeline form={form} datasets={datasets} session={runningSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={runningSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText('Training in progress')).toBeDefined()
   })
 
   it('shows error banner on training error', () => {
     const errorSession = { ...session, trainingRunning: true, phase: 'error' as const, message: 'OOM error' }
-    render(<TrainingPipeline form={form} datasets={datasets} session={errorSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={errorSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByTestId('error-banner')).toBeDefined()
     expect(screen.getByText('OOM error')).toBeDefined()
   })
@@ -139,13 +139,13 @@ describe('TrainingPipeline', () => {
       trainingRunning: true,
       lossHistory: [{ step: 1, loss: 0.5 }, { step: 2, loss: 0.3 }],
     }
-    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText('Training in progress')).toBeDefined()
   })
 
   it('shows epoch info during training', () => {
     const trainSession = { ...session, trainingRunning: true, epoch: 3, totalEpochs: 10 }
-    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText('Epoch 3/10')).toBeDefined()
   })
 
@@ -160,7 +160,7 @@ describe('TrainingPipeline', () => {
       eta: 98,
       elapsedSeconds: 20,
     }
-    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText('Step 80/500')).toBeDefined()
     expect(screen.getByText('4.3 steps/s')).toBeDefined()
     expect(screen.getByText('ETA 1m 38s')).toBeDefined()
@@ -176,13 +176,13 @@ describe('TrainingPipeline', () => {
       totalSteps: 500,
       eta: 0,
     }
-    render(<TrainingPipeline form={form} datasets={datasets} session={completeSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={completeSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.queryByText(/Step /)).toBeNull()
   })
 
   it('shows complete message and Test button', () => {
     const completeSession = { ...session, trainingRunning: true, phase: 'complete' as const }
-    render(<TrainingPipeline form={form} datasets={datasets} session={completeSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} />)
+    render(<TrainingPipeline form={form} datasets={datasets} session={completeSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
     expect(screen.getByText('Training complete')).toBeDefined()
     expect(screen.getByText('Test model')).toBeDefined()
   })
