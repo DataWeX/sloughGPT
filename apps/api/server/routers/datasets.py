@@ -129,6 +129,7 @@ class DatasetsRouter:
         self.router.add_api_route("/{dataset_id}/data", self.add_dataset_data, methods=["POST"])
         self.router.add_api_route("/{dataset_id}/preview", self.preview_dataset, methods=["GET"])
         self.router.add_api_route("/{dataset_id}/export", self.export_dataset, methods=["POST"])
+        self.router.add_api_route("/{dataset_id}/quality", self.quality_dataset, methods=["GET"])
         self.router.add_api_route("/from-chat", self.create_dataset_from_chat, methods=["POST"])
         self.router.add_api_route(
             "/convert-to-messages", self.convert_to_messages, methods=["POST"]
@@ -1049,6 +1050,62 @@ class DatasetsRouter:
 
         except Exception as e:
             classify_and_raise(e, source="datasets.export_dataset")
+
+    async def quality_dataset(
+        self,
+        dataset_id: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Return data quality metrics for a dataset.
+
+        Scores on a 0-5 scale: avg_quality, repetition_rate, diversity,
+        language_quality. Useful for pre-training quality checks.
+        """
+        try:
+            self._validate_dataset_id(dataset_id)
+            ctrl = get_datasets_controller()
+            info = ctrl.get_dataset_info(dataset_id)
+            if not info:
+                raise_error("Dataset not found", "E_NOT_FOUND")
+
+            data_path = Path(info["path"])
+            if data_path.is_dir():
+                candidates = [data_path / "input.txt", data_path / "corpus.jsonl", data_path / "train.txt"]
+                input_file = next((c for c in candidates if c.exists()), None)
+            else:
+                input_file = data_path
+
+            if not input_file or not input_file.exists():
+                raise_error("No training data file found", "E_NOT_FOUND")
+
+            raw = await asyncio.to_thread(
+                lambda: input_file.read_text(encoding="utf-8", errors="replace")[:500_000]
+            )
+
+            from domains.training.quality_scorer import compute_data_quality
+
+            metrics = await asyncio.to_thread(compute_data_quality, raw)
+
+            # Add file stats
+            metrics["file_size_bytes"] = input_file.stat().st_size
+            metrics["char_count"] = len(raw)
+            metrics["estimated_tokens"] = len(raw) // 4
+
+            # Quality verdict
+            q = metrics["avg_quality"]
+            if q >= 3.5:
+                metrics["verdict"] = "excellent"
+            elif q >= 2.5:
+                metrics["verdict"] = "good"
+            elif q >= 1.5:
+                metrics["verdict"] = "fair"
+            else:
+                metrics["verdict"] = "poor"
+
+            return metrics
+
+        except Exception as e:
+            classify_and_raise(e, source="datasets.quality_dataset")
 
     async def create_dataset_from_chat(
         self, req: FromChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
