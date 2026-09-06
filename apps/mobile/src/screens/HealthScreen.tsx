@@ -6,6 +6,7 @@ import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
+import {toast} from '../services/toast';
 
 interface DetailedHealth {
   status: string;
@@ -167,7 +168,9 @@ export function HealthScreen() {
           recent_errors: [],
           status_message: basic.status || 'Unknown',
         });
-      } catch {}
+      } catch (e: any) {
+        toast.warn('Could not reach server — showing stale data');
+      }
     }
   }, []);
 

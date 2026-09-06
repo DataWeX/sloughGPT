@@ -165,7 +165,9 @@ export function KnowledgeScreen() {
       }));
       const json = JSON.stringify(data, null, 2);
       await Share.share({title: 'Knowledge Export', message: json});
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to export knowledge');
+    }
   };
 
   const openEdit = (item: KnowledgeItem) => {
@@ -194,7 +196,9 @@ export function KnowledgeScreen() {
       setFormTopic('');
       await fetchItems();
       await fetchTopics();
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to import knowledge');
+    }
     setImporting(false);
   };
 

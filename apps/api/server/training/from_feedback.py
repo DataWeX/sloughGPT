@@ -33,6 +33,13 @@ class FromFeedbackRequest(BaseModel):
     epochs: int = Field(default=3, ge=1, le=1000, description="Number of training epochs")
     learning_rate: float = Field(default=1e-4, gt=0, le=1.0, description="Learning rate")
     batch_size: int = Field(default=16, ge=1, le=512, description="Batch size")
+    n_embed: int = Field(default=256, ge=16, le=1024, description="Embedding dimension")
+    n_layer: int = Field(default=6, ge=1, le=12, description="Number of transformer layers")
+    n_head: int = Field(default=8, ge=1, le=16, description="Number of attention heads")
+    block_size: int = Field(default=256, ge=32, le=1024, description="Context window size")
+    use_lora: bool = Field(default=True, description="Use LoRA fine-tuning")
+    lora_rank: int = Field(default=8, ge=1, le=64, description="LoRA rank")
+    lora_alpha: int = Field(default=16, ge=1, le=128, description="LoRA alpha parameter")
 
 
 @router.post("/training/from-feedback")
@@ -46,6 +53,13 @@ async def train_from_feedback(
     epochs = req.epochs if req else 3
     learning_rate = req.learning_rate if req else 1e-4
     batch_size = req.batch_size if req else 16
+    n_embed = req.n_embed if req else 256
+    n_layer = req.n_layer if req else 6
+    n_head = req.n_head if req else 8
+    block_size = req.block_size if req else 256
+    use_lora = req.use_lora if req else True
+    lora_rank = req.lora_rank if req else 8
+    lora_alpha = req.lora_alpha if req else 16
 
     try:
         from domains.feedback.training import FeedbackTrainer
@@ -109,16 +123,16 @@ async def train_from_feedback(
 
                 trainer = SloughGPTTrainer(
                     data_path=data_path,
-                    n_embed=256,
-                    n_layer=6,
-                    n_head=8,
-                    block_size=256,
+                    n_embed=n_embed,
+                    n_layer=n_layer,
+                    n_head=n_head,
+                    block_size=block_size,
                     epochs=epochs,
                     batch_size=batch_size,
                     lr=learning_rate,
-                    use_lora=True,
-                    lora_rank=8,
-                    lora_alpha=16,
+                    use_lora=use_lora,
+                    lora_rank=lora_rank,
+                    lora_alpha=lora_alpha,
                     checkpoint_dir="models",
                     checkpoint_interval=100,
                 )

@@ -18,6 +18,7 @@ import {
 } from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
+import {toast} from '../services/toast';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
 import {useHapticPress} from '../hooks/useHapticPress';
@@ -151,7 +152,9 @@ export function TrainingScreen() {
       const result = await api.get<{rows: string[]}>(`/datasets/${datasetId}/preview`);
       setPreviewData(result.rows || []);
       setPreviewVisible(true);
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load dataset preview');
+    }
   };
 
   const handleImport = async () => {

@@ -13,6 +13,7 @@ import {useNavigation} from '@react-navigation/native';
 import {YStack, XStack, Text, Input, Button} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {useSidebar} from '../contexts/SidebarContext';
+import {toast} from '../services/toast';
 import {Icon} from '../components/Icon';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
