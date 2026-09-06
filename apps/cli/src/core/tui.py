@@ -741,7 +741,7 @@ class LiveDisplay:
         """Replace screen content without causing terminal scroll."""
         _refresh_size()
         max_rows = max(1, _ROWS - 1)
-        lines = renderable.split("\n")
+        lines = renderable.rstrip("\n").split("\n")
         visible = lines[:max_rows]
         buf = []
         for i, line in enumerate(visible, 1):

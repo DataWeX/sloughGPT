@@ -710,7 +710,11 @@ def load_soul(sou_path: str):
                         arr = np.array(v, dtype=np.float32)
                         state_dict[k] = arr
             except Exception as e:
-                logger.debug("v1/v2 JSON weight parse failed: %s", e)
+                logger.error("v1/v2 JSON weight parse failed for %s: %s", sou_path, e,
+                    extra={"tag": "INF"})
+                raise ValueError(
+                    f"Corrupted .soul file weights: {sou_path} — {e}"
+                ) from e
 
     config = json.loads(config_json)
     soul = SouParser.parse(

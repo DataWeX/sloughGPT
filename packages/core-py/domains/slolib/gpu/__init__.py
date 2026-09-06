@@ -674,7 +674,7 @@ class _CPUBackend(_Accelerator):
         if self._openblas_threads_cache is not None:
             return self._openblas_threads_cache
         try:
-            import os
+            import os  # noqa: F401 — used in function bodies below
             # Check OMP_NUM_THREADS / OPENBLAS_NUM_THREADS
             n = int(os.environ.get("OPENBLAS_NUM_THREADS", os.environ.get("OMP_NUM_THREADS", "0")))
             if n > 0:

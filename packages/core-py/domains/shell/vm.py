@@ -764,13 +764,13 @@ class BlockCompressor:
             return True
         elif algo == CompressionAlgo.LZ4:
             try:
-                import lz4.frame
+                import lz4.frame  # noqa: F401
                 return True
             except ImportError:
                 return False
         elif algo == CompressionAlgo.ZSTD:
             try:
-                import zstandard
+                import zstandard  # noqa: F401
                 return True
             except ImportError:
                 return False
@@ -778,7 +778,7 @@ class BlockCompressor:
             return True  # Always available in Python stdlib
         elif algo == CompressionAlgo.SNAPPY:
             try:
-                import snappy
+                import snappy  # noqa: F401
                 return True
             except ImportError:
                 return False
@@ -1949,7 +1949,8 @@ class DiskDevice(Device):
         return bytes(data)
 
     def write_sectors(self, lba: int, data: bytes):
-        for i in range(count := (len(data) + self.SECTOR_SIZE - 1) // self.SECTOR_SIZE):
+        num_sectors = (len(data) + self.SECTOR_SIZE - 1) // self.SECTOR_SIZE
+        for i in range(num_sectors):
             chunk = data[i * self.SECTOR_SIZE:(i + 1) * self.SECTOR_SIZE]
             self._block.write_sector(lba + i, chunk)
             self._writes += 1

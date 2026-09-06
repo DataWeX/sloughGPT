@@ -15,11 +15,11 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from ...__init__ import (
-    BaseComponent,
-    ComponentException,
-    IMetacognitiveMonitor,
-    Thought,
-    ThoughtType,
+    BaseComponent as BaseComponent,
+    ComponentException as ComponentException,
+    IMetacognitiveMonitor as IMetacognitiveMonitor,
+    Thought as Thought,
+    ThoughtType as ThoughtType,
 )
 
 

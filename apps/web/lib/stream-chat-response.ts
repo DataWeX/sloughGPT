@@ -149,7 +149,8 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
         }
 
         if (event.status === 'error') {
-          const httpStatus = typeof d.http_status === 'number' ? d.http_status as number : 500
+          const hasHttpStatus = d != null && typeof d.http_status === 'number'
+          const httpStatus = hasHttpStatus ? d.http_status as number : 0
           const errStr = typeof d.error === 'string' ? d.error : undefined
           const message = event.message || errStr || 'Stream error'
 

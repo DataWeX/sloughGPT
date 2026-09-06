@@ -103,7 +103,7 @@ def _check_numba():
     global _NUMBA_AVAILABLE
     if _NUMBA_AVAILABLE is None:
         try:
-            from numba import njit  # pragma: no cover
+            from numba import njit  # pragma: no cover  # noqa: F401
             _NUMBA_AVAILABLE = True  # pragma: no cover
         except ImportError:
             _NUMBA_AVAILABLE = False
@@ -214,7 +214,8 @@ def _get_accelerator():
     try:
         from domains.training.gpu.accelerator import get_accelerator as _get_old_acc
         _ACCELERATOR = _get_old_acc()
-    except Exception:
+    except Exception as e:
+        logger.debug("Legacy GPU accelerator unavailable: %s", e)
         _ACCELERATOR = "none"
         return None
     if _ACCELERATOR is None:
@@ -252,7 +253,8 @@ def _accel_op(op_name: str, *args, threshold: int = _ACCEL_THRESHOLD):
         device_args = [acc.to_device(a) if isinstance(a, np.ndarray) else a for a in data_args]
         result = acc_fn(*device_args)
         return acc.from_device(result)
-    except Exception:
+    except Exception as e:
+        logger.debug("Accelerator op '%s' failed, falling back to numpy: %s", op_name, e)
         return numpy_fn(*data_args)
 
 

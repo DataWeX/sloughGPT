@@ -13,18 +13,30 @@ External architectures plug in via **ModelLoader.register** or loaders.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING, Callable
+from typing import Any, Dict, Optional, Tuple, Callable
 import logging
 import numpy as np
 
 from domains.training.slonet import (
-    SloTransformer, SloNet, Tensor,
-    SloRMSNorm, SloMultiHeadAttention, SloFeedForward,
-    SloTransformerBlock, SloDropout,
-    export_to_sou, import_from_sou,
-    cross_entropy, softmax,
-    zeros, ones, randn, tensor,
-    no_grad, topk, multinomial,
+    SloTransformer as SloTransformer,
+    SloNet as SloNet,
+    Tensor as Tensor,
+    SloRMSNorm as SloRMSNorm,
+    SloMultiHeadAttention as SloMultiHeadAttention,
+    SloFeedForward as SloFeedForward,
+    SloTransformerBlock as SloTransformerBlock,
+    SloDropout as SloDropout,
+    export_to_sou as export_to_sou,
+    import_from_sou as import_from_sou,
+    cross_entropy as cross_entropy,
+    softmax as softmax,
+    zeros as zeros,
+    ones as ones,
+    randn as randn,
+    tensor as tensor,
+    no_grad as no_grad,
+    topk as topk,
+    multinomial as multinomial,
 )
 
 logger = logging.getLogger("sloughgpt.models")

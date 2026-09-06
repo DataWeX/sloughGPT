@@ -75,7 +75,7 @@ class ServerSpeechRecognizer:
         """Load an ASR backend if one is installed."""
         # 1) vosk — offline, pure-Python inference (model loaded from disk)
         try:
-            import vosk  # type: ignore
+            import vosk  # type: ignore  # noqa: F401
             self._backend = "vosk"
             logger.info("Loaded vosk ASR backend", extra={"tag": "MODEL"})
             return

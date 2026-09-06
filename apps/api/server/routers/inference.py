@@ -2714,8 +2714,10 @@ class InferenceRouter:
                             },
                             "metadata": provider.metadata,
                         }
-                    except Exception:
-                        result[name] = {"model_id": str(provider)}
+                    except Exception as exc:
+                        logger.warning("Provider '%s' capability query failed: %s", name, exc,
+                            extra={"tag": "INF"})
+                        result[name] = {"model_id": str(provider), "error": str(exc)}
                 else:
                     result[name] = {"error": "provider not found"}
             return success_response(data=result)

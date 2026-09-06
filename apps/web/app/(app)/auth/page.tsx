@@ -182,7 +182,10 @@ export default function AuthPage() {
                   try {
                     const data = await authController.verify(token!)
                     alert(data?.valid ? 'Token valid' : 'Token invalid')
-                  } catch { alert('Verification failed') }
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    alert(`Verification failed: ${msg}`)
+                  }
                 }}
               >
                 Verify Token

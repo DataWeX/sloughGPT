@@ -26,7 +26,6 @@ class ChromaDBVectorStore(VectorStore):
     async def connect(self) -> bool:
         try:
             import chromadb
-            from chromadb.config import Settings
 
             self.client = chromadb.PersistentClient(path=self.persist_directory)
             self.collection = self.client.get_or_create_collection(name=self.collection_name)

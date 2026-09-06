@@ -27,10 +27,10 @@ Quick start:
 """
 
 from .point import Point
-from .point_interface import PointProtocol, PointView, FunctionType
+from .point_interface import PointProtocol, PointView
 from .compressor import PointCompressor
 from .library import PointLibrary
-from .tree import Tree, load_model_to_points, load_from_points, decompress_tree
+from .tree import Tree, load_model_to_points, load_from_points as load_from_points, decompress_tree as decompress_tree
 from .model_tree import ModelTree
 from .queue import ModelQueue
 from .cache import TieredCache, Tier, MemoryStore as CacheMemoryStore
@@ -39,7 +39,7 @@ from .dedup import PointDeduplicator, PointLibrarySync
 from .store import MemoryStore as FunctionMemoryStore, JSONStore, DirectoryStore
 from .config import PointConfig, CompressorConfig, LibraryConfig, TreeConfig, QueueConfig
 from .facade import PGQ
-from .engine import Engine, Process, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
+from .engine import Engine as Engine, Process as Process, ProcessGroup, SubprocessProcess, ProcessMonitor, GuardTree, EngineMetrics, ResultCache
 from .generic import (
     PGQGeneric,
     CompressionStrategy,

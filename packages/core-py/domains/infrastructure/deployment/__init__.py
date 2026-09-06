@@ -363,7 +363,6 @@ class DeploymentManager(BaseComponent, IDeploymentManager):
         and records the preparation timestamp.
         """
         import json as _json
-        import os
         from pathlib import Path
 
         self.logger.info("Preparing deployment %s", deployment.deployment_id,
