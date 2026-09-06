@@ -11,6 +11,15 @@ from domains.chat.domain import (
     get_chat_domain,
     __all__ as domain_all,
 )
+from domains.feedback.response_tracker import ResponseTracker
+
+
+@pytest.fixture(autouse=True)
+def _isolate_response_tracker(tmp_path):
+    """Mock get_response_tracker to return a fresh tracker per test."""
+    tracker = ResponseTracker(log_dir=str(tmp_path / "logs"))
+    with patch("domains.chat.domain.get_response_tracker", return_value=tracker):
+        yield
 
 
 # ---------------------------------------------------------------------------

@@ -337,31 +337,31 @@ class TestAutoIngester:
         assert len(results) >= 1
         assert results[0]["file"] == "doc.txt"
 
-    def test_main_dry_run(self, tmp_path, monkeypatch, capsys):
+    def test_main_dry_run(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr(sys, "argv",
                             ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
-        asyncio.run(main())
-        out = capsys.readouterr().err
-        assert "Done" in out
+        with caplog.at_level("INFO"):
+            asyncio.run(main())
+        assert "Done" in caplog.text
 
-    def test_main_file(self, tmp_path, monkeypatch, capsys):
+    def test_main_file(self, tmp_path, monkeypatch, caplog):
         (tmp_path / "one.py").write_text("def f():\n    return 1\n")
         monkeypatch.setattr(sys, "argv",
                             ["auto_ingest", "--path", str(tmp_path), "--file", str(tmp_path / "one.py")])
-        asyncio.run(main())
-        out = capsys.readouterr().out
-        assert "Ingested" in out
+        with caplog.at_level("INFO"):
+            asyncio.run(main())
+        assert "Ingested" in caplog.text
 
-    def test_module_main_block(self, tmp_path, monkeypatch, capsys):
+    def test_module_main_block(self, tmp_path, monkeypatch, caplog):
         monkeypatch.setattr(sys, "argv", ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
         module_path = os.path.abspath(os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "domains",
                          "infrastructure", "auto_ingest.py")))
         with open(module_path) as fh:
             source = fh.read()
-        exec(compile(source, module_path, "exec"), {"__name__": "__main__", "__file__": module_path})
-        out = capsys.readouterr().out
-        assert "Done" in out
+        with caplog.at_level("INFO"):
+            exec(compile(source, module_path, "exec"), {"__name__": "__main__", "__file__": module_path})
+        assert "Done" in caplog.text
 
     @pytest.mark.asyncio
     async def test_ingest_single_file_missing_returns_zero(self, tmp_path):

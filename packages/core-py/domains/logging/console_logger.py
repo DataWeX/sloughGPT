@@ -136,3 +136,73 @@ class ConsoleLogger(Logger):
                 self._stream.flush()
             except (OSError, ValueError):
                 pass
+
+    def _format_record(self, record: LogRecord) -> str:
+        """Format a LogRecord and return the string (does not emit)."""
+        return self._formatter.format_oop(record)
+
+    def _parse_exception(self, exc_text: str):
+        """Parse an exception string into (exc_type, exc_msg, file_info).
+
+        Handles:
+          - "ValueError: bad input" → ("ValueError", "bad input", None)
+          - "just a message" → (None, "just a message", None)
+          - Traceback strings → extracts type, message, and file info
+        """
+        import re
+
+        if not exc_text:
+            return (None, "", None)
+
+        # Check for traceback format
+        tb_match = re.search(
+            r"Traceback \(most recent call last\):\n"
+            r"\s+File '([^']+)', line (\d+), in (\w+)\n"
+            r".+?\n"
+            r"(\w+): (.+)",
+            exc_text,
+            re.DOTALL,
+        )
+        if tb_match:
+            file_path = tb_match.group(1)
+            line_no = tb_match.group(2)
+            func_name = tb_match.group(3)
+            exc_type = tb_match.group(4)
+            exc_msg = tb_match.group(5)
+            file_info = f"{file_path}:{line_no} in {func_name}()"
+            return (exc_type, exc_msg, file_info)
+
+        # Check for "Type: message" format
+        colon_match = re.match(r"(\w+[\w.]*)\s*:\s*(.+)", exc_text, re.DOTALL)
+        if colon_match:
+            return (colon_match.group(1), colon_match.group(2).strip(), None)
+
+        return (None, exc_text, None)
+
+    def _get_exception_color(self, exc_type: str) -> str:
+        """Return ANSI color code for an exception type."""
+        from .config import _A
+
+        _PROGRAMMING = {"ValueError", "TypeError", "KeyError", "IndexError",
+                        "AttributeError", "NameError", "SyntaxError"}
+        _SYSTEM = {"RuntimeError", "OSError", "MemoryError", "PermissionError"}
+        _TRANSIENT = {"TimeoutError", "ConnectionError", "BrokenPipeError"}
+        _DEPENDENCY = {"ImportError", "ModuleNotFoundError"}
+
+        if exc_type in _PROGRAMMING:
+            return _A.RED + _A.BOLD
+        elif exc_type in _SYSTEM:
+            return _A.MAGENTA + _A.BOLD
+        elif exc_type in _TRANSIENT:
+            return _A.YELLOW + _A.BOLD
+        elif exc_type in _DEPENDENCY:
+            return _A.CYAN + _A.BOLD
+        else:
+            return _A.RED
+
+    def _format_exception(self, exc_text: str):
+        """Format an exception string into display parts [type] and message."""
+        exc_type, exc_msg, _ = self._parse_exception(exc_text)
+        if exc_type:
+            return [f"[{exc_type}]", exc_msg]
+        return ["", exc_text]

@@ -371,7 +371,7 @@ class TestFindCheckpoint:
         soul_file = ckpt_dir / "my-model.soul"
         soul_file.write_bytes(b"\x00" * 5000)
 
-        with patch("domains.training.service.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("my-model")
         assert result is not None
         assert result.name == "my-model.soul"
@@ -382,7 +382,7 @@ class TestFindCheckpoint:
         slo_file = ckpt_dir / "model.slo"
         slo_file.write_text("test")
 
-        with patch("domains.training.service.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("model")
         assert result is not None
         assert result.name == "model.slo"
@@ -393,7 +393,7 @@ class TestFindCheckpoint:
         soul_file = ckpt_dir / "test.soul"
         soul_file.write_bytes(b"\x00" * 5000)
 
-        with patch("domains.training.service.CHECKPOINTS_DIR", ckpt_dir):
+        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", ckpt_dir):
             result = find_checkpoint("test.soul")
         assert result is not None
 
@@ -411,8 +411,8 @@ class TestFindCheckpoint:
         soul_file = turbo_dir / "turbo-model.soul"
         soul_file.write_bytes(b"\x00" * 5000)
 
-        with patch("domains.training.service.CHECKPOINTS_DIR", tmp_path / "empty"):
-            with patch("domains.training.service.TURBO_DIR", turbo_dir):
+        with patch("domains.training.checkpoints.CHECKPOINTS_DIR", tmp_path / "empty"):
+            with patch("domains.training.checkpoints.TURBO_DIR", turbo_dir):
                 result = find_checkpoint("turbo-model")
         assert result is not None
 

@@ -37,6 +37,7 @@ def _make_companion(**overrides):
         _traits={"name": "Friend", "warmth": 0.7, "curiosity": 0.6, "creativity": 0.5, "confidence": 0.5, "humor": 0.4},
         set_personality=lambda **kw: None,
         get_system_prompt=lambda: "You are a friendly companion.",
+        build_system_prompt=lambda: "You are a friendly companion.",
         adjust_for_mood=lambda mood: None,
     )
     defaults.update(overrides)
@@ -47,6 +48,10 @@ def _make_companion(**overrides):
     ns.set_personality = _set_personality
     # Make to_dict return current traits
     ns.to_dict = lambda: {"name": ns._traits.get("name", "Friend"), "traits": dict(ns._traits)}
+    # generate() async method for chat endpoint
+    async def _generate(**kwargs):
+        return "Hello there!"
+    ns.generate = _generate
     return ns
 
 

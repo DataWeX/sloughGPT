@@ -347,7 +347,7 @@ class TestContinualLearner:
 
     @patch("domains.learner.knowledge.get_knowledge_memory")
     @patch("domains.learner.knowledge.get_knowledge_ingestor")
-    def test_status_has_knowledge(self, mock_knowledge, mock_ingestor):
+    def test_status_has_knowledge(self, mock_ingestor, mock_knowledge):
         mock_ingestor_inst = MagicMock()
         mock_ingestor.return_value = mock_ingestor_inst
         mock_knowledge_inst = MagicMock()

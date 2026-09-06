@@ -242,7 +242,7 @@ class TestCompileHlsl:
 
         assert result is True
 
-    def test_failure(self, tmp_path, capsys):
+    def test_failure(self, tmp_path, caplog):
         wgsl = tmp_path / "bad.wgsl"
         out = tmp_path / "bad.hlsl"
 
@@ -251,11 +251,11 @@ class TestCompileHlsl:
         mock_result.stderr = "unsupported feature"
 
         with patch("domains.infrastructure.gpu.compile_shaders.subprocess.run", return_value=mock_result):
-            result = compile_hlsl("naga", wgsl, out)
+            with caplog.at_level("ERROR"):
+                result = compile_hlsl("naga", wgsl, out)
 
         assert result is False
-        captured = capsys.readouterr()
-        assert "HLSL FAILED" in captured.out
+        assert "HLSL FAILED" in caplog.text
 
     def test_passes_correct_command(self, tmp_path):
         wgsl = tmp_path / "compute.wgsl"
@@ -294,7 +294,7 @@ class TestCompileMsl:
 
         assert result is True
 
-    def test_failure(self, tmp_path, capsys):
+    def test_failure(self, tmp_path, caplog):
         wgsl = tmp_path / "bad.wgsl"
         out = tmp_path / "bad.metal"
 
@@ -303,11 +303,11 @@ class TestCompileMsl:
         mock_result.stderr = "metal: unknown intrinsic"
 
         with patch("domains.infrastructure.gpu.compile_shaders.subprocess.run", return_value=mock_result):
-            result = compile_msl("naga", wgsl, out)
+            with caplog.at_level("ERROR"):
+                result = compile_msl("naga", wgsl, out)
 
         assert result is False
-        captured = capsys.readouterr()
-        assert "MSL FAILED" in captured.out
+        assert "MSL FAILED" in caplog.text
 
     def test_passes_correct_command(self, tmp_path):
         wgsl = tmp_path / "compute.wgsl"

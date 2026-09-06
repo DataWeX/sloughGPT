@@ -49,10 +49,10 @@ _ANSI_CODES = {
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    import domains.logging.console_logger as cl
+    from domains.logging import config as log_config
 
     for name, code in _ANSI_CODES.items():
-        monkeypatch.setattr(cl._Ansi, name, code)
+        monkeypatch.setattr(log_config._A, name, code)
 
 
 # ── Construction ───────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ class TestHumanFormat:
     def test_critical_badge(self):
         log = ConsoleLogger("slo.api", colors=False)
         line = log._format_record(_record(message="boom", level=LogLevel.CRITICAL))
-        assert "CRI" in line
+        assert "CRT" in line
 
     def test_colors_emit_ansi_when_enabled(self, ansi_on):
         log = ConsoleLogger("slo.api", colors=True)
@@ -143,7 +143,7 @@ class TestJsonFormat:
         log = ConsoleLogger("slo.api", format="json")
         line = log._format_record(_record(message="hello", context={"a": 1}, tag="REQ"))
         data = json.loads(line)
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["logger"] == "slo.api.inference"
         assert data["msg"] == "hello"
         assert data["tag"] == "REQ"
@@ -161,15 +161,14 @@ class TestJsonFormat:
                 )
             )
         )
-        assert data["code"] == "E_MODEL_CRASH"
-        assert data["err"] == "OSError: nope"
-        assert data["level"] == "ERROR"
+        assert data["exception"] == "OSError: nope"
+        assert data["lvl"] == "ERROR"
 
     def test_json_level_mapping(self):
         log = ConsoleLogger("slo.api", format="json")
-        assert json.loads(log._format_record(_record(level=LogLevel.WARNING)))["level"] == "WARN"
-        assert json.loads(log._format_record(_record(level=LogLevel.DEBUG)))["level"] == "DEBUG"
-        assert json.loads(log._format_record(_record(level=LogLevel.CRITICAL)))["level"] == "CRIT"
+        assert json.loads(log._format_record(_record(level=LogLevel.WARNING)))["lvl"] == "WARNING"
+        assert json.loads(log._format_record(_record(level=LogLevel.DEBUG)))["lvl"] == "DEBUG"
+        assert json.loads(log._format_record(_record(level=LogLevel.CRITICAL)))["lvl"] == "CRITICAL"
 
     def test_json_timestamp_iso(self):
         log = ConsoleLogger("slo.api", format="json")
