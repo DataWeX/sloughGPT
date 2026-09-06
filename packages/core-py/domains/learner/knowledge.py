@@ -43,6 +43,9 @@ FEED_STATE_PATH = KNOWLEDGE_DIR / "feeds.json"
 VISITED_PATH = KNOWLEDGE_DIR / "visited.json"
 ENTRIES_PATH = KNOWLEDGE_DIR / "entries.json"
 
+# MogDB paths for knowledge persistence
+_KNOWLEDGE_DB_PATH = str(_REPO_ROOT / "data" / "knowledge_mogdb")
+
 DEFAULT_FEED_POLL_INTERVAL = 3600  # 1 hour
 MAX_ARTICLE_TOKENS = 2048
 
@@ -521,6 +524,9 @@ class KnowledgeMemory:
 
     def __init__(self, vector_store: Optional[Any] = None, load_persisted: bool = True):
         self._lock = threading.Lock()
+        self._mogdb = None
+        self._visited_col = None
+        self._init_mogdb()
         self._visited: set[str] = set(self._load_visited()) if load_persisted else set()
         if vector_store is not None:
             self._vector_store = vector_store
@@ -539,6 +545,16 @@ class KnowledgeMemory:
             self._load_entries()
             self._migrate_from_json_topics()
 
+    def _init_mogdb(self) -> None:
+        """Initialize MogDB for visited hashes persistence."""
+        try:
+            from mogdb import MogDB
+            self._mogdb = MogDB(_KNOWLEDGE_DB_PATH)
+            self._visited_col = self._mogdb.collection("visited")
+            logger.debug("Initialized MogDB for knowledge at %s", _KNOWLEDGE_DB_PATH)
+        except Exception as e:
+            logger.warning("Failed to initialize MogDB for knowledge: %s, using JSON fallback", e)
+
     def _zero_vec(self) -> list[float]:
         from domains.infrastructure.embedding_service import get_embedding_service
         return [0.0] * get_embedding_service().dimension
@@ -552,6 +568,17 @@ class KnowledgeMemory:
     # ---- persistence -------------------------------------------------------
 
     def _load_visited(self) -> list[str]:
+        """Load visited hashes from MogDB (or JSON fallback)."""
+        # Try MogDB first
+        if self._visited_col is not None:
+            try:
+                docs = self._visited_col.find()
+                if docs:
+                    return [doc["hash"] for doc in docs if "hash" in doc]
+            except Exception as e:
+                logger.warning("Failed to load visited from MogDB: %s, trying JSON fallback", e)
+
+        # Fallback: load from legacy JSON file
         if VISITED_PATH.exists():
             try:
                 return json.loads(VISITED_PATH.read_text())
@@ -560,7 +587,23 @@ class KnowledgeMemory:
         return []
 
     def _save_visited(self):
-        VISITED_PATH.write_text(json.dumps(list(self._visited), indent=2))
+        """Persist visited hashes to MogDB (and legacy JSON for backward compat)."""
+        # Save to MogDB
+        if self._visited_col is not None:
+            try:
+                # Clear and re-insert all hashes
+                self._visited_col.drop()
+                if self._visited:
+                    docs = [{"hash": h} for h in self._visited]
+                    self._visited_col.insert_many(docs)
+            except Exception as e:
+                logger.warning("Failed to save visited to MogDB: %s", e)
+
+        # Also save to legacy JSON for backward compatibility
+        try:
+            VISITED_PATH.write_text(json.dumps(list(self._visited), indent=2))
+        except Exception as e:
+            logger.warning("Failed to save visited to JSON: %s", e)
 
     def _save_entries(self):
         """Persist all vector entries to JSON for restart survival.

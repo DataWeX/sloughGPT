@@ -70,6 +70,22 @@ class ResponseTracker:
         self.current_file = self.log_dir / f"responses_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
         self._buffer: List[ResponseLog] = []
         self._buffer_size = 1
+        # MogDB persistence
+        self._mogdb = None
+        self._coll = None
+        self._init_mogdb(repo_root)
+
+    def _init_mogdb(self, repo_root: Path) -> None:
+        """Initialize MogDB for response log persistence with TTL index."""
+        try:
+            from mogdb import MogDB
+            db_path = str(repo_root / "data" / "response_mogdb")
+            self._mogdb = MogDB(db_path)
+            self._coll = self._mogdb.collection("responses")
+            # Create TTL index on timestamp (auto-expire after 30 days)
+            self._coll.create_ttl_index("timestamp", expire_after_seconds=30 * 24 * 3600)
+        except Exception as e:
+            logger.warning("Failed to initialize MogDB for response logs: %s", e)
 
     def log(
         self,
@@ -109,10 +125,11 @@ class ResponseTracker:
         return entry
 
     def _flush(self):
-        """Flush buffer to file."""
+        """Flush buffer to file and MogDB."""
         if not self._buffer:
             return
 
+        # Write to JSONL file
         with open(self.current_file, "a") as f:
             for entry in self._buffer:
                 f.write(json.dumps({
@@ -130,8 +147,30 @@ class ResponseTracker:
                     "context_tokens": entry.context_tokens,
                 }) + "\n")
 
+        # Write to MogDB
+        if self._coll is not None:
+            try:
+                for entry in self._buffer:
+                    self._coll.insert_one({
+                        "timestamp": entry.timestamp,
+                        "user_message": entry.user_message,
+                        "assistant_response": entry.assistant_response,
+                        "model": entry.model,
+                        "temperature": entry.temperature,
+                        "max_tokens": entry.max_tokens,
+                        "session_id": entry.session_id,
+                        "user_id": entry.user_id,
+                        "tokens_generated": entry.tokens_generated,
+                        "duration_ms": entry.duration_ms,
+                        "has_images": entry.has_images,
+                        "context_tokens": entry.context_tokens,
+                    })
+            except Exception as e:
+                logger.warning("Failed to write to MogDB: %s", e)
+
+        count = len(self._buffer)
         self._buffer.clear()
-        logger.info("Flushed %s responses to %s", len(self._buffer), self.current_file, extra={"tag": "INFRA"})
+        logger.info("Flushed %s responses to %s", count, self.current_file, extra={"tag": "INFRA"})
 
     def get_responses(
         self,

@@ -30,6 +30,9 @@ logger = logging.getLogger("slo.rag_service")
 _DATA_DIR = find_repo_root(Path(__file__).resolve()) / "data" / "rag_store"
 _DOCUMENTS_FILE = _DATA_DIR / "documents.jsonl"
 
+# MogDB paths for RAG persistence
+_RAG_DB_PATH = str(find_repo_root(Path(__file__).resolve()) / "data" / "rag_mogdb")
+
 
 class ProductionRAGWithRealEmbeddings(ProductionRAG):
     """ProductionRAG subclass that uses the project's real embedder."""
@@ -49,13 +52,15 @@ class RAGService:
     """High-level RAG service with document persistence, query, and KG integration.
 
     Thread-safe singleton via ``get_rag_service()``. Persists documents to
-    ``data/rag_store/documents.jsonl`` so they survive server restarts.
+    MogDB (with JSONL fallback for legacy data).
 
     Attributes:
         rag: Underlying ProductionRAG instance with real embeddings.
         _documents: In-memory list of persisted document dicts.
         _kg: Lazily-created KnowledgeGraph for entity/fact extraction.
         _lock: Thread lock for document list mutations.
+        _mogdb: MogDB instance for document persistence.
+        _coll: MogDB collection for documents.
     """
 
     def __init__(self) -> None:
@@ -64,10 +69,47 @@ class RAGService:
         self._documents: List[Dict[str, Any]] = []
         self._kg = None
         self._lock = threading.Lock()
+        self._mogdb = None
+        self._coll = None
+        self._init_mogdb()
         self._load_documents()
 
+    def _init_mogdb(self) -> None:
+        """Initialize MogDB for document persistence."""
+        try:
+            from mogdb import MogDB
+            self._mogdb = MogDB(_RAG_DB_PATH)
+            self._coll = self._mogdb.collection("documents")
+            logger.debug("Initialized MogDB for RAG at %s", _RAG_DB_PATH)
+        except Exception as e:
+            logger.warning("Failed to initialize MogDB for RAG: %s, using JSONL fallback", e)
+
     def _load_documents(self) -> None:
-        """Load persisted documents from the JSONL file into memory and RAG index."""
+        """Load persisted documents from MogDB (or JSONL fallback) into memory and RAG index."""
+        loaded = 0
+
+        # Try MogDB first
+        if self._coll is not None:
+            try:
+                for doc in self._coll.find():
+                    content = doc.get("content")
+                    if not content:
+                        continue
+                    self._documents.append(doc)
+                    self.rag.add_document(
+                        content=content,
+                        metadata=doc.get("metadata", {}),
+                        chunk_size=doc.get("chunk_size", 512),
+                        overlap=doc.get("overlap", 50),
+                    )
+                    loaded += 1
+                if loaded:
+                    logger.debug("Loaded %d documents from MogDB RAG store", loaded)
+                    return
+            except Exception as e:
+                logger.warning("Failed to load from MogDB: %s, trying JSONL fallback", e)
+
+        # Fallback: load from legacy JSONL file
         if not _DOCUMENTS_FILE.exists():
             return
         try:
@@ -87,17 +129,26 @@ class RAGService:
                         chunk_size=doc.get("chunk_size", 512),
                         overlap=doc.get("overlap", 50),
                     )
-            logger.debug("Loaded %d documents from RAG store", len(self._documents))
+                    loaded += 1
+            logger.debug("Loaded %d documents from legacy JSONL RAG store", loaded)
         except (OSError, json.JSONDecodeError) as e:
             logger.warning("Failed to load RAG documents: %s", e)
 
     def _save_document(self, doc: Dict[str, Any]) -> None:
-        """Append a single document to the JSONL persistence file."""
+        """Persist a document to MogDB (and legacy JSONL for backward compat)."""
+        # Save to MogDB
+        if self._coll is not None:
+            try:
+                self._coll.insert_one(doc)
+            except Exception as e:
+                logger.warning("Failed to persist RAG document to MogDB: %s", e)
+
+        # Also save to legacy JSONL for backward compatibility
         try:
             with open(_DOCUMENTS_FILE, "a", encoding="utf-8") as f:
                 f.write(json.dumps(doc, ensure_ascii=False) + "\n")
         except OSError as e:
-            logger.warning("Failed to persist RAG document: %s", e)
+            logger.warning("Failed to persist RAG document to JSONL: %s", e)
 
     def _ensure_kg(self) -> None:
         """Lazily initialize the knowledge graph on first access."""
@@ -258,11 +309,22 @@ class RAGService:
             count = len(self._documents)
             self._documents.clear()
         self.rag = ProductionRAGWithRealEmbeddings()
+
+        # Clear MogDB collection
+        if self._coll is not None:
+            try:
+                self._coll.drop()
+                self._coll = self._mogdb.collection("documents")
+            except Exception as e:
+                logger.warning("Failed to clear MogDB RAG collection: %s", e)
+
+        # Clear legacy JSONL file
         try:
             if _DOCUMENTS_FILE.exists():
                 _DOCUMENTS_FILE.unlink()
         except OSError as e:
             logger.warning("Failed to delete RAG persistence file: %s", e)
+
         logger.debug("Cleared RAG index (%d documents removed)", count)
         return count
 

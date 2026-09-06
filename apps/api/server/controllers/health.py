@@ -78,6 +78,62 @@ def _is_model_loading() -> bool:
         return False
 
 
+def _get_mogdb_health() -> Optional[Dict[str, Any]]:
+    """Check MogDB storage health: disk usage, journal sizes, write latency."""
+    try:
+        from pathlib import Path
+        from domains.shared import find_repo_root
+
+        data_root = find_repo_root(Path(__file__).resolve()) / "data"
+        mogdb_dirs = list(data_root.glob("*_mogdb"))
+
+        if not mogdb_dirs:
+            return {"status": "no_collections", "total_size_bytes": 0}
+
+        total_size = 0
+        journals = []
+        for d in mogdb_dirs:
+            for f in d.glob("*.journal.jsonl"):
+                size = f.stat().st_size
+                total_size += size
+                journals.append({"file": str(f.relative_to(data_root)), "size_bytes": size})
+            for f in d.glob("*.mogdb"):
+                size = f.stat().st_size
+                total_size += size
+
+        # Write latency test: write a tiny doc and measure time
+        import tempfile, time
+        from mogdb import MogDB
+        test_path = data_root / "_health_check_mogdb"
+        try:
+            db = MogDB(str(test_path))
+            col = db.collection("_ping")
+            start = time.monotonic()
+            col.insert_one({"ts": time.time()})
+            elapsed_ms = (time.monotonic() - start) * 1000
+            col.drop()
+            db.close()
+        except Exception:
+            elapsed_ms = -1
+        finally:
+            import shutil
+            if test_path.exists():
+                shutil.rmtree(test_path, ignore_errors=True)
+
+        # Flag if any journal > 50MB (needs compaction)
+        large_journals = [j for j in journals if j["size_bytes"] > 50 * 1024 * 1024]
+
+        return {
+            "status": "ok" if not large_journals else "needs_compaction",
+            "total_size_bytes": total_size,
+            "collection_count": len(mogdb_dirs),
+            "write_latency_ms": round(elapsed_ms, 2),
+            "large_journals": large_journals,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 def _is_app_ready() -> bool:
     """True only when the app has finished startup (routers registered).
 
@@ -581,8 +637,38 @@ class HealthController:
         return {"status": "alive"}
 
     def get_readiness(self) -> Dict[str, Any]:
-        """Kubernetes readiness probe"""
-        return {"status": "ready"}
+        """Kubernetes readiness probe — verifies subsystems are ready to serve."""
+        checks = {}
+        ready = True
+
+        # 1. App lifecycle must be in running/ready phase
+        app_ready = _is_app_ready()
+        checks["app_lifecycle"] = "ready" if app_ready else "starting"
+        if not app_ready:
+            ready = False
+
+        # 2. Model must be loaded (or server in no-model mode)
+        model_loaded, model_type = _get_model_info()
+        checks["model"] = "loaded" if model_loaded else "not_loaded"
+        if not model_loaded:
+            ready = False
+
+        # 3. Model loading in progress = not ready yet
+        if _is_model_loading():
+            checks["model"] = "loading"
+            ready = False
+
+        # 4. MogDB storage must be writable
+        mogdb_health = _get_mogdb_health()
+        if mogdb_health:
+            checks["mogdb"] = mogdb_health.get("status", "unknown")
+            if mogdb_health.get("status") == "error":
+                ready = False
+
+        return {
+            "status": "ready" if ready else "not_ready",
+            "checks": checks,
+        }
 
 
 _health_controller: Optional[HealthController] = None

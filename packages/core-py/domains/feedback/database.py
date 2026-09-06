@@ -370,9 +370,14 @@ class FeedbackDB:
 
         docs = self._feedback.find(query, sort=[("created_at", -1)], limit=limit)
 
+        # Batch-load all referenced messages in one query (fixes N+1)
+        message_ids = list({doc["message_id"] for doc in docs})
+        messages = self._messages.find_by_ids(message_ids) if message_ids else []
+        msg_map = {m["_id"]: m for m in messages}
+
         results = []
         for doc in docs:
-            message = self._messages.find_one({"_id": doc["message_id"]})
+            message = msg_map.get(doc["message_id"])
             if not message:
                 continue
             results.append(

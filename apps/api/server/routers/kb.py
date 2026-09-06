@@ -117,6 +117,9 @@ class KBRouter:
         self._BLOCKED_SCHEMES = {"file", "ftp", "data", "javascript", "vbscript"}
         self._ALLOWED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
         self._spaced_rep_scheduler = None
+        # Query cache for hot paths (stats, topics) - 5 second TTL
+        from mogdb.cache import QueryCache
+        self._cache = QueryCache(ttl_seconds=5.0, max_entries=32)
         self._register_routes()
 
     def _register_routes(self):
@@ -285,6 +288,8 @@ class KBRouter:
                 detail="stored" if is_new else "duplicate",
                 source=req.source or "",
             )
+            # Invalidate cached stats/topics
+            self._cache.clear()
             return success_response(data={"status": "stored" if is_new else "duplicate", "id": item_id, "content": req.content, "topic": topic, "label": label})
 
         except Exception as e:
@@ -317,6 +322,8 @@ class KBRouter:
             memory.delete_by_id(item_id)
             ok = memory.add_fact(new_fact)
             safe_audit_log("knowledge.update", resource=item_id, detail="updated" if ok else "stored")
+            # Invalidate cached stats/topics
+            self._cache.clear()
             return success_response(data={"status": "updated" if ok else "stored"})
 
         except Exception as e:
@@ -338,6 +345,8 @@ class KBRouter:
                 if memory.add_fact(fact):
                     stored += 1
             safe_audit_log("knowledge.add", resource="batch", detail=f"stored={stored}")
+            # Invalidate cached stats/topics
+            self._cache.clear()
             return success_response(data={"stored": stored})
 
         except Exception as e:
@@ -358,48 +367,57 @@ class KBRouter:
         """Return knowledge base statistics.
 
         Aggregates topic/source counts from the full store in a single pass.
+        Cached for 5 seconds to avoid repeated expensive aggregations.
         """
         try:
-            memory = self._get_memory()
-            topics: dict[str, int] = {}
-            sources: dict[str, int] = {}
-            total = 0
-            importance_sum = 0.0
+            def compute():
+                memory = self._get_memory()
+                topics: dict[str, int] = {}
+                sources: dict[str, int] = {}
+                total = 0
+                importance_sum = 0.0
 
-            for item in memory.list_all(top_k=5000):
-                t = item.get("topic", "general")
-                topics[t] = topics.get(t, 0) + 1
-                s = item.get("source", "unknown")
-                sources[s] = sources.get(s, 0) + 1
-                importance_sum += item.get("importance", 0.5)
-                total += 1
+                for item in memory.list_all(top_k=5000):
+                    t = item.get("topic", "general")
+                    topics[t] = topics.get(t, 0) + 1
+                    s = item.get("source", "unknown")
+                    sources[s] = sources.get(s, 0) + 1
+                    importance_sum += item.get("importance", 0.5)
+                    total += 1
 
-            avg_importance = importance_sum / max(total, 1)
-            return success_response(data={
-                "total_items": total,
-                "topics": topics,
-                "topic_count": len(topics),
-                "sources": sources,
-                "avg_importance": round(avg_importance, 3),
-                "searchable": True,
-            })
+                avg_importance = importance_sum / max(total, 1)
+                return {
+                    "total_items": total,
+                    "topics": topics,
+                    "topic_count": len(topics),
+                    "sources": sources,
+                    "avg_importance": round(avg_importance, 3),
+                    "searchable": True,
+                }
+
+            data = self._cache.get_or_set("kb:stats", compute)
+            return success_response(data=data)
 
         except Exception as e:
             classify_and_raise(e, source="kb.knowledge_stats")
     def list_topics(self) -> dict:
-        """List all unique topics with item counts."""
+        """List all unique topics with item counts. Cached for 5 seconds."""
         try:
-            memory = self._get_memory()
-            all_items = memory.list_all(top_k=5000)
-            topics: dict[str, int] = {}
-            for item in all_items:
-                t = item.get("topic", "general")
-                topics[t] = topics.get(t, 0) + 1
-            sorted_topics = sorted(topics.items(), key=lambda x: -x[1])
-            return success_response(data={
-                "topics": [{"name": t, "count": c} for t, c in sorted_topics],
-                "total": len(topics),
-            })
+            def compute():
+                memory = self._get_memory()
+                all_items = memory.list_all(top_k=5000)
+                topics: dict[str, int] = {}
+                for item in all_items:
+                    t = item.get("topic", "general")
+                    topics[t] = topics.get(t, 0) + 1
+                sorted_topics = sorted(topics.items(), key=lambda x: -x[1])
+                return {
+                    "topics": [{"name": t, "count": c} for t, c in sorted_topics],
+                    "total": len(topics),
+                }
+
+            data = self._cache.get_or_set("kb:topics", compute)
+            return success_response(data=data)
 
         except Exception as e:
             classify_and_raise(e, source="kb.list_topics")
@@ -463,6 +481,8 @@ class KBRouter:
                 if memory.delete_by_id(item_id):
                     deleted += 1
             safe_audit_log("knowledge.batch.delete", resource="batch", detail=f"deleted={deleted}")
+            # Invalidate cached stats/topics
+            self._cache.clear()
             return success_response(data={"deleted": deleted})
 
         except Exception as e:
@@ -481,6 +501,8 @@ class KBRouter:
             memory = self._get_memory()
             if memory.delete_by_id(item_id):
                 safe_audit_log("knowledge.delete", resource=item_id)
+                # Invalidate cached stats/topics
+                self._cache.clear()
                 return success_response(data={"status": "deleted"})
             raise_error("Item not found", "E_NOT_FOUND", status_code=404)
 

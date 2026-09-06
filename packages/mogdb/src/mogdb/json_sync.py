@@ -46,6 +46,9 @@ class SyncableCollection:
     sync_mode:
         "full" — rewrite entire JSON on every write (simple, safe).
         "append" — append new docs, reload on read (faster for large sets).
+        "lazy" — mark dirty and schedule background sync (best for high write volume).
+    lazy_sync_interval:
+        Minimum seconds between background syncs when sync_mode="lazy".
     """
 
     def __init__(
@@ -53,6 +56,7 @@ class SyncableCollection:
         collection: Collection,
         json_path: Union[str, Path],
         sync_mode: str = "full",
+        lazy_sync_interval: float = 5.0,
     ):
         self._col = collection
         self._json_path = Path(json_path)
@@ -60,11 +64,19 @@ class SyncableCollection:
         self._lock = threading.Lock()
         self._json_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Lazy sync state
+        self._dirty = False
+        self._lazy_interval = lazy_sync_interval
+        self._last_sync = 0.0
+        self._lazy_timer: Optional[threading.Timer] = None
+        self._shutdown = False
+
         # Bootstrap: if JSON exists but collection is empty, load from JSON
         self._bootstrap_from_json()
 
         # Initial sync: ensure JSON matches collection state
-        self._sync_to_json()
+        if self._sync_mode != "lazy":
+            self._sync_to_json()
 
     def _bootstrap_from_json(self) -> None:
         """Load documents from JSON file into collection if collection is empty."""
@@ -100,8 +112,33 @@ class SyncableCollection:
 
     def _on_write(self) -> None:
         """Called after every write operation to sync to JSON."""
+        if self._sync_mode == "lazy":
+            self._mark_dirty()
+        else:
+            with self._lock:
+                self._sync_to_json()
+
+    def _mark_dirty(self) -> None:
+        """Mark collection as needing sync and schedule background sync if needed."""
+        self._dirty = True
+        now = time.monotonic()
+        if now - self._last_sync >= self._lazy_interval:
+            self._do_sync()
+
+    def _do_sync(self) -> None:
+        """Perform the actual sync and schedule next if still dirty."""
+        if self._shutdown:
+            return
         with self._lock:
             self._sync_to_json()
+            self._last_sync = time.monotonic()
+            self._dirty = False
+
+        # Schedule next sync if still dirty
+        if self._dirty and not self._shutdown:
+            self._lazy_timer = threading.Timer(self._lazy_interval, self._do_sync)
+            self._lazy_timer.daemon = True
+            self._lazy_timer.start()
 
     # ------------------------------------------------------------------
     # Proxied CRUD — all writes trigger JSON sync
@@ -168,6 +205,24 @@ class SyncableCollection:
         self._on_write()
 
     # ------------------------------------------------------------------
+    # Batch writes — defer sync until context exits
+    # ------------------------------------------------------------------
+
+    def batch(self):
+        """Context manager that defers JSON sync until the block exits.
+
+        All writes inside the block are applied to the in-memory collection
+        immediately, but JSON persistence happens only once on exit.
+
+        Usage::
+
+            with sync_col.batch():
+                for item in items:
+                    sync_col.insert_one(item)
+        """
+        return _BatchContext(self)
+
+    # ------------------------------------------------------------------
     # Read-only proxied methods — no sync needed
     # ------------------------------------------------------------------
 
@@ -207,6 +262,18 @@ class SyncableCollection:
         """Force a manual sync to JSON."""
         with self._lock:
             self._sync_to_json()
+            self._last_sync = time.monotonic()
+            self._dirty = False
+
+    def close(self) -> None:
+        """Shut down lazy sync timer and flush any pending writes."""
+        self._shutdown = True
+        if self._lazy_timer:
+            self._lazy_timer.cancel()
+            self._lazy_timer = None
+        if self._dirty:
+            self._sync_to_json()
+            self._dirty = False
 
     def reload(self) -> None:
         """Force reload from JSON file into collection."""
@@ -222,3 +289,22 @@ class SyncableCollection:
     def underlying(self) -> Collection:
         """Access the raw MogDB Collection."""
         return self._col
+
+
+class _BatchContext:
+    """Context manager for batch writes — defers JSON sync until exit."""
+
+    def __init__(self, syncable: SyncableCollection):
+        self._syncable = syncable
+        self._write_count = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None and self._write_count > 0:
+            self._syncable._on_write()
+        return False
+
+    def _count_write(self) -> None:
+        self._write_count += 1

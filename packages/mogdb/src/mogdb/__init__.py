@@ -27,6 +27,7 @@ from .document import Document, ObjectId
 from .query import match_document
 from .index import Index, SortedIndex
 from .json_sync import SyncableCollection
+from .cache import QueryCache, get_query_cache
 
 __all__ = [
     "MogDB",
@@ -39,4 +40,6 @@ __all__ = [
     "SortedIndex",
     "ASCENDING",
     "DESCENDING",
+    "QueryCache",
+    "get_query_cache",
 ]

@@ -428,6 +428,26 @@ class Collection:
         results = self.find(query, limit=1, projection=projection)
         return results[0] if results else None
 
+    def find_by_ids(
+        self,
+        ids: List[str],
+        projection: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Batch-fetch documents by their ``_id`` values.
+
+        More efficient than N individual ``find_one`` calls — acquires
+        the lock once and does a single pass over the document map.
+        """
+        if not ids:
+            return []
+        id_set = set(ids)
+        self._expire_documents()
+        with self._lock:
+            results = [dict(d) for d in self._docs.values() if d.id in id_set]
+        if projection:
+            results = [self._apply_projection(r, projection) for r in results]
+        return results
+
     def count(self, query: Optional[Dict[str, Any]] = None) -> int:
         """Count documents matching *query*."""
         if not query:
