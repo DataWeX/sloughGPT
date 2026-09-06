@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { apiGet } from '@/lib/http-client'
+import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
@@ -23,6 +23,21 @@ interface AuditResponse {
   count?: number
 }
 
+interface ApiKey {
+  id: string
+  name: string
+  key_hash: string
+  scopes: string[]
+  created_at: number
+  revoked: boolean
+  expires_at?: number
+}
+
+interface KeysResponse {
+  keys: ApiKey[]
+  count: number
+}
+
 function mergeLogs(a: AuditLog[], b: AuditLog[]): AuditLog[] {
   const seen = new Set<string>()
   const out: AuditLog[] = []
@@ -37,11 +52,14 @@ function mergeLogs(a: AuditLog[], b: AuditLog[]): AuditLog[] {
 
 export default function SecurityPage() {
   const [logs, setLogs] = useState<AuditLog[]>([])
-  const [keyInfo, setKeyInfo] = useState<{ count: number; configured: boolean } | null>(null)
+  const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [historyMode, setHistoryMode] = useState(false)
   const [filter, setFilter] = useState('')
+  const [newKeyName, setNewKeyName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newKeyValue, setNewKeyValue] = useState<string | null>(null)
   const filterRef = useRef(filter)
   filterRef.current = filter
   const addToast = useToastStore(s => s.addToast)
@@ -51,23 +69,30 @@ export default function SecurityPage() {
     return f ? `&event_type=${encodeURIComponent(f)}` : ''
   }
 
+  const fetchKeys = useCallback(async () => {
+    try {
+      const res = await apiGet<KeysResponse>('/security/keys')
+      setKeys(res?.keys ?? [])
+    } catch {
+      logger.warning('Could not fetch API keys')
+    }
+  }, [])
+
   const fetchData = useCallback(async (useHistory = false) => {
     setLoading(true)
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
-      const [logsRes, keysRes] = await Promise.all([
+      const [logsRes] = await Promise.all([
         apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('Could not audit log fetch', e); return null }),
-        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('Could not security keys fetch', e); return null }),
+        fetchKeys(),
       ])
       setLogs(logsRes?.logs ?? [])
-      const keysData = keysRes && 'count' in keysRes ? keysRes : null
-      setKeyInfo(keysData)
     } catch {
       addToast('Could not load security data', 'error')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fetchKeys])
 
   const toggleHistory = () => {
     const next = !historyMode
@@ -95,11 +120,55 @@ export default function SecurityPage() {
     }
   }
 
+  const createKey = async () => {
+    if (!newKeyName.trim()) return
+    setCreating(true)
+    try {
+      const res = await apiPost<{ key: string; id: string }>('/security/keys', { name: newKeyName, scopes: ['*'] })
+      if (res?.key) {
+        setNewKeyValue(res.key)
+        setNewKeyName('')
+        await fetchKeys()
+        addToast('API key created — copy it now, it won\'t be shown again', 'success')
+      }
+    } catch {
+      addToast('Could not create API key', 'error')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const revokeKey = async (id: string) => {
+    try {
+      await apiDelete(`/security/keys/${id}`)
+      await fetchKeys()
+      addToast('API key revoked', 'success')
+    } catch {
+      addToast('Could not revoke API key', 'error')
+    }
+  }
+
+  const rotateKey = async (id: string) => {
+    try {
+      const res = await apiPost<{ key: string }>(`/security/keys/${id}/rotate`)
+      if (res?.key) {
+        setNewKeyValue(res.key)
+        await fetchKeys()
+        addToast('API key rotated — copy the new key', 'success')
+      }
+    } catch {
+      addToast('Could not rotate API key', 'error')
+    }
+  }
+
   useEffect(() => { fetchData(false) }, [fetchData])
 
   const filteredLogs = filter.trim()
     ? logs.filter(l => l.event_type?.toLowerCase().includes(filter.toLowerCase()))
     : logs
+
+  const activeKeys = keys.filter(k => !k.revoked)
+  const revokedKeys = keys.filter(k => k.revoked)
 
   if (loading) {
     return (
@@ -119,7 +188,7 @@ export default function SecurityPage() {
   return (
     <PageContainer title="Security" subtitle="Audit logs & API keys">
       <KpiGrid>
-        <StatCard label="API Keys" value={keyInfo?.configured ? `${keyInfo.count} configured` : 'None'} />
+        <StatCard label="API Keys" value={activeKeys.length > 0 ? `${activeKeys.length} active` : 'None'} />
         <StatCard label="Audit Logs" value={logs.length} />
         <StatCard label="History Mode" value={historyMode ? 'Persisted' : 'Session'} />
         <StatCard label="Filter" value={filter || 'All'} />
@@ -127,9 +196,59 @@ export default function SecurityPage() {
 
       <SecurityOverviewCard
         logs={logs}
-        apiKeyConfigured={keyInfo?.configured ?? false}
-        apiKeyCount={keyInfo?.count ?? 0}
+        apiKeyConfigured={activeKeys.length > 0}
+        apiKeyCount={activeKeys.length}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">API Keys</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Input
+              value={newKeyName}
+              onChange={e => setNewKeyName(e.target.value)}
+              placeholder="Key name (e.g. 'ci-pipeline')"
+              className="flex-1"
+            />
+            <Button size="sm" onClick={createKey} disabled={creating || !newKeyName.trim()}>
+              {creating ? 'Creating...' : 'Create Key'}
+            </Button>
+          </div>
+
+          {newKeyValue && (
+            <div className="rounded-md bg-success/10 border border-success/30 p-3">
+              <div className="text-sm font-medium text-success mb-1">New API Key (copy now)</div>
+              <code className="text-xs break-all">{newKeyValue}</code>
+              <Button size="sm" variant="ghost" className="mt-2" onClick={() => setNewKeyValue(null)}>Dismiss</Button>
+            </div>
+          )}
+
+          {activeKeys.length === 0 && revokedKeys.length === 0 ? (
+            <div className="text-center py-4 text-sm text-muted-foreground">No API keys yet. Create one above.</div>
+          ) : (
+            <div className="space-y-2">
+              {activeKeys.map(k => (
+                <div key={k.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
+                  <div>
+                    <span className="font-medium text-sm">{k.name}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{k.key_hash}</span>
+                    <span className="text-xs text-muted-foreground ml-2">scopes: {k.scopes.join(', ')}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => rotateKey(k.id)}>Rotate</Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => revokeKey(k.id)}>Revoke</Button>
+                  </div>
+                </div>
+              ))}
+              {revokedKeys.length > 0 && (
+                <div className="text-xs text-muted-foreground mt-2">{revokedKeys.length} revoked key(s) hidden</div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

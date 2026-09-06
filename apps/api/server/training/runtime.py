@@ -169,17 +169,17 @@ class TrainingRuntime:
     # ── Shutdown ──────────────────────────────────────────────────────────
 
     def _signal_auto_train_cancel(self) -> None:
-        """Set the auto-train router's module-level cancel events."""
+        """Set the service-layer cancel events for auto-train and turbo."""
         try:
-            import routers.auto_train as at
+            from domains.training.service import get_cancel_event, get_turbo_cancel_event
 
-            ev = getattr(at, "_auto_train_cancel_event", None)
+            ev = get_cancel_event()
             if ev is not None:
                 try:
                     ev.set()
                 except Exception:
                     pass
-            tev = getattr(at, "_turbo_cancel_event", None)
+            tev = get_turbo_cancel_event()
             if tev is not None:
                 try:
                     tev.set()

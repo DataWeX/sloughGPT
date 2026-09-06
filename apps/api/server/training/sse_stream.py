@@ -248,28 +248,36 @@ def stop_all_training() -> dict:
     except Exception as e:
         logger.warning("CancelManager.cancel_all failed: %s", e)
 
-    # Also signal legacy auto_train globals if they exist
+    # Also signal service-layer cancel events
     try:
-        import routers.auto_train as at
+        from domains.training.service import (
+            get_cancel_event,
+            get_turbo_cancel_event,
+            get_turbo_pause_event,
+            get_pgq,
+            get_turbo_state,
+            get_state,
+        )
 
-        if getattr(at, "_auto_train_cancel_event", None) is not None:
-            at._auto_train_cancel_event.set()
-        if hasattr(at, "_turbo_cancel_event"):
-            at._turbo_cancel_event.set()
-        if hasattr(at, "_turbo_pause_event"):
-            at._turbo_pause_event.clear()
+        ev = get_cancel_event()
+        if ev is not None:
+            ev.set()
+        tev = get_turbo_cancel_event()
+        tev.set()
+        tpause = get_turbo_pause_event()
+        tpause.clear()
         # Try to cancel PGQ job
-        pgq = getattr(at, "_auto_train_pgq", None)
+        pgq = get_pgq()
         if pgq is not None:
-            turbo_state = getattr(at, "_turbo_state", {})
+            turbo_state = get_turbo_state()
             job_id = turbo_state.get("job_id")
             if job_id:
                 try:
                     pgq.cancel_training(job_id)
                 except Exception as exc:
                     logger.warning("Failed to cancel PGQ turbo job %s: %s", job_id, exc)
-        at.state.running = False
-    except ImportError:
+        get_state().running = False
+    except Exception:
         pass
 
     return {"status": "cancelling", "message": "Cancelling all training"}
@@ -285,12 +293,13 @@ def cancel_from_sessions() -> dict:
         logger.warning("CancelManager.cancel_all failed: %s", e)
 
     try:
-        import routers.auto_train as at
+        from domains.training.service import get_cancel_event, get_state
 
-        if getattr(at, "_auto_train_cancel_event", None) is not None:
-            at._auto_train_cancel_event.set()
-        at.state.running = False
-    except ImportError:
+        ev = get_cancel_event()
+        if ev is not None:
+            ev.set()
+        get_state().running = False
+    except Exception:
         pass
 
     return {"status": "cancelled", "message": "Cancel signal sent"}

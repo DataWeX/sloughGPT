@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.kb import KBRouter as KnowledgeRouter  # noqa: E402
-from tests.conftest import build_test_app
+from conftest import build_test_app
 
 
 def _mock_km(**overrides) -> MagicMock:

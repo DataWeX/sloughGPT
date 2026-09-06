@@ -611,11 +611,11 @@ async def training_stream(request: Request):
 
     from .sse_stream import build_training_sse_response
 
-    # Get auto_train state for config
+    # Get training state for config
     try:
-        import routers.auto_train as at
+        from domains.training.service import get_state
 
-        config = at.state.config or {}
+        config = get_state().config or {}
         if not config:
             from schemas.common import success_response
 
@@ -658,9 +658,9 @@ async def training_from_sessions_stream(request: Request):
     from .sse_stream import build_training_sse_response
 
     try:
-        import routers.auto_train as at
+        from domains.training.service import get_state
 
-        config = at.state.config or {}
+        config = get_state().config or {}
         if not config or config.get("method") != "from-sessions":
             from schemas.common import success_response
 

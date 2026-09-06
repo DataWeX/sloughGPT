@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 import apps.api.server.routers.self_train as self_train_mod
 import state as server_state
-from tests.conftest import build_test_app
+from conftest import build_test_app
 
 
 @pytest.fixture(autouse=True)

@@ -171,9 +171,9 @@ class CompanionRouter:
         """Reset companion to default state."""
         try:
             self._companion = None
-            from domains.companion import reset_companion
+            from domains.companion import create_companion
 
-            reset_companion()
+            self._companion = create_companion()
             safe_audit_log("companion.reset")
             return success_response(data={"reset": True})
         except Exception as e:

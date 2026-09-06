@@ -18,7 +18,7 @@ if _server_dir not in sys.path:
 from fastapi.testclient import TestClient
 
 from routers.mobile import MobileRouter
-from tests.conftest import build_test_app
+from conftest import build_test_app
 
 
 def _app(mr: MobileRouter):

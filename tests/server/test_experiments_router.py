@@ -6,16 +6,53 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.experiments import ExperimentsRouter
 
 
+@pytest.fixture(autouse=True)
+def mock_db():
+    with patch("apps.api.server.routers.experiments._get_db") as mock_get:
+        store = []
+
+        class FakeDeleteResult:
+            def __init__(self, n):
+                self.deleted_count = n
+            def __bool__(self):
+                return self.deleted_count > 0
+
+        def make_col(name):
+            col = MagicMock()
+            col.find.return_value = store
+            col.count.return_value = len(store)
+            col.find_one.side_effect = lambda q: next(
+                (d for d in store if d.get("experiment_id") == q.get("experiment_id")), None
+            )
+            col.insert_one.side_effect = lambda doc: store.append(doc)
+            col.delete_one.side_effect = lambda q: (
+                FakeDeleteResult(1) if store.remove(next(d for d in store if d.get("experiment_id") == q.get("experiment_id"))) is None
+                else FakeDeleteResult(0)
+            ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store) else FakeDeleteResult(0)
+            col.delete_many.side_effect = lambda q: (
+                FakeDeleteResult(
+                    len([store.remove(d) for d in list(store) if d.get("experiment_id") == q.get("experiment_id")])
+                ) if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
+                else FakeDeleteResult(0)
+            )
+            return col
+
+        mock_db = MagicMock()
+        mock_db.collection.side_effect = make_col
+        mock_get.return_value = mock_db
+        yield store
+        store.clear()
+
+
 @pytest.fixture
 def experiments_router(tmp_path):
     r = ExperimentsRouter()
-    r.EXPERIMENTS_DIR = tmp_path / "experiments"
     return r
 
 
@@ -45,11 +82,16 @@ class TestCreateExperiment:
         resp = client.post("/experiments", json={"name": "my_experiment"})
         assert resp.json()["data"]["id"].startswith("my_experiment_")
 
-    def test_experiment_dir_created(self, client, experiments_router):
+    @patch("apps.api.server.routers.experiments._get_db")
+    def test_experiment_dir_created(self, mock_get_db, client):
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
         resp = client.post("/experiments", json={"name": "dir_test"})
+        assert resp.status_code == 200
         exp_id = resp.json()["data"]["id"]
-        exp_dir = experiments_router.EXPERIMENTS_DIR / exp_id
-        assert exp_dir.exists()
+        assert exp_id.startswith("dir_test_")
+        mock_db.collection.assert_called_with("experiments")
+        mock_db.collection().insert_one.assert_called_once()
 
     def test_experiment_id_has_timestamp(self, client):
         resp = client.post("/experiments", json={"name": "ts_test"})

@@ -1204,7 +1204,7 @@ def _cmd_api_and_web(args):
                 log.error(f"API server exited (code {api_proc.returncode})")
                 break
             # Web crashed — restart it (unless EADDRINUSE)
-            if web_proc.poll() is not None:
+            if web_proc is not None and web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
                     _handle_eaddrinuse(web_port, "web")
                     break

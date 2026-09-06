@@ -616,11 +616,11 @@ class StartupOrchestrator:
                     try:
                         import asyncio as _aio
 
-                        from routers.auto_train import _auto_train_instance as _inst
+                        from domains.training.service import list_checkpoints as _service_list_checkpoints
 
                         _loop = _aio.new_event_loop()
                         try:
-                            _loop.run_until_complete(_inst.list_checkpoints())
+                            _loop.run_until_complete(_service_list_checkpoints())
                         finally:
                             _loop.close()
                     except Exception as e:

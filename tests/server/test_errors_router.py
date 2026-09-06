@@ -2,6 +2,7 @@
 Tests for the errors router — log, recent, grouped, trends, export, clear, unread.
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -249,8 +250,6 @@ class TestIngestFrontendLogs:
 
     @patch("domains.infrastructure.output_buffer.get_server_buffer")
     def test_ingests_single_log(self, mock_get_buf, client):
-        buf = MagicMock()
-        mock_get_buf.return_value = buf
         resp = client.post("/errors/logs/ingest", json={
             "logs": [{"level": "info", "logger": "chat", "message": "hello"}],
         })
@@ -259,8 +258,6 @@ class TestIngestFrontendLogs:
 
     @patch("domains.infrastructure.output_buffer.get_server_buffer")
     def test_ingests_multiple_logs(self, mock_get_buf, client):
-        buf = MagicMock()
-        mock_get_buf.return_value = buf
         resp = client.post("/errors/logs/ingest", json={
             "logs": [
                 {"level": "debug", "message": "a"},
@@ -271,33 +268,36 @@ class TestIngestFrontendLogs:
         assert resp.status_code == 200
         assert resp.json()["data"]["ingested"] == 3
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
-    def test_ingest_maps_levels(self, mock_get_buf, client):
-        buf = MagicMock()
-        mock_get_buf.return_value = buf
+    @patch("logging.getLogger")
+    def test_ingest_maps_levels(self, mock_get_logger, client):
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
         resp = client.post("/errors/logs/ingest", json={
             "logs": [{"level": "warning", "logger": "models", "message": "warn"}],
         })
         assert resp.status_code == 200
-        buf.append_log.assert_called_once()
-        kwargs = buf.append_log.call_args.kwargs
-        assert kwargs["level"] == "warning"
-        assert kwargs["source"] == "web.models"
+        mock_logger.log.assert_called_once()
+        args, kwargs = mock_logger.log.call_args
+        assert args[0] == logging.WARNING
+        assert args[1] == "warn"
+        assert kwargs["extra"]["source"] == "web.models"
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
-    def test_ingest_unknown_level_defaults_info(self, mock_get_buf, client):
-        buf = MagicMock()
-        mock_get_buf.return_value = buf
+    @patch("logging.getLogger")
+    def test_ingest_unknown_level_defaults_info(self, mock_get_logger, client):
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
         resp = client.post("/errors/logs/ingest", json={
             "logs": [{"level": "bogus", "message": "x"}],
         })
         assert resp.status_code == 200
-        assert buf.append_log.call_args.kwargs["level"] == "info"
+        mock_logger.log.assert_called_once()
+        args, _ = mock_logger.log.call_args
+        assert args[0] == logging.INFO
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
-    def test_ingest_with_exception_context(self, mock_get_buf, client):
-        buf = MagicMock()
-        mock_get_buf.return_value = buf
+    @patch("logging.getLogger")
+    def test_ingest_with_exception_context(self, mock_get_logger, client):
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
         resp = client.post("/errors/logs/ingest", json={
             "logs": [{
                 "level": "error",
@@ -308,14 +308,13 @@ class TestIngestFrontendLogs:
             }],
         })
         assert resp.status_code == 200
-        ctx = buf.append_log.call_args.kwargs["context"]
+        _, kwargs = mock_logger.log.call_args
+        ctx = kwargs["extra"]["context"]
         assert ctx["page"] == "/settings"
         assert ctx["exception"] == "TypeError: x"
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
-    def test_ingest_empty_batch(self, mock_get_buf, client):
-        buf = MagicMock()
-        mock_get_buf.return_value = buf
+    @patch("logging.getLogger")
+    def test_ingest_empty_batch(self, mock_get_logger, client):
         resp = client.post("/errors/logs/ingest", json={"logs": []})
         assert resp.status_code == 200
         assert resp.json()["data"]["ingested"] == 0

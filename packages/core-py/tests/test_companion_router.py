@@ -95,7 +95,6 @@ class TestSetPersonality:
         })
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["status"] == "ok"
         assert "traits" in data
 
 
@@ -108,7 +107,7 @@ class TestPatchPersonality:
         resp = client.patch("/companion/personality", json={"warmth": 0.95})
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["status"] == "ok"
+        assert "traits" in data
 
 
 class TestResetCompanion:

@@ -15,7 +15,7 @@ def tmp_repo(tmp_path):
 
 @pytest.fixture
 def repo_with_datasets(tmp_path):
-    ds_dir = tmp_path / "datasets"
+    ds_dir = tmp_path / "data"
     ds_dir.mkdir()
     (ds_dir / "shakespeare").mkdir()
     (ds_dir / "shakespeare" / "input.txt").write_text("hello world")
@@ -102,7 +102,7 @@ class TestGetDatasetStats:
         assert result is None
 
     def test_messages_format(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "convo"
+        ds_dir = tmp_path / "data" / "convo"
         ds_dir.mkdir()
         msgs = [
             {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]},
@@ -115,7 +115,7 @@ class TestGetDatasetStats:
         assert result["has_messages"] is True
 
     def test_dialogue_format(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "dialog"
+        ds_dir = tmp_path / "data" / "dialog"
         ds_dir.mkdir()
         (ds_dir / "corpus.jsonl").write_text(
             "User: hello\nAssistant: hi there\nUser: how are you\nAssistant: fine\n"
@@ -218,7 +218,7 @@ class TestPreviewDataset:
         assert result is None
 
     def test_preview_visual_dataset(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "vis"
+        ds_dir = tmp_path / "data" / "vis"
         ds_dir.mkdir()
         entry = {
             "image_path": "/img/test.jpg",
@@ -291,7 +291,7 @@ class TestDescribeDataset:
         assert "small dataset" in desc
 
     def test_describe_dataset_with_content(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "medium"
+        ds_dir = tmp_path / "data" / "medium"
         ds_dir.mkdir()
         (ds_dir / "input.txt").write_text("hello world " * 200)
         desc = repo_with_datasets._describe_dataset(ds_dir, [], 1024)

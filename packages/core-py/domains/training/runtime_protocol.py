@@ -46,6 +46,16 @@ def get_training_runtime() -> TrainingRuntimeProtocol:
     return _NoOpRuntime()
 
 
+def update_job(job_id: str, **fields: Any) -> Optional[dict[str, Any]]:
+    """Get a job, update fields, and sync. Returns the job or None."""
+    job = get_training_runtime().get(job_id)
+    if job is None:
+        return None
+    job.update(fields)
+    get_training_runtime().sync(job_id)
+    return job
+
+
 class _NoOpRuntime:
     """Stub runtime that does nothing — used before the real runtime is injected."""
 

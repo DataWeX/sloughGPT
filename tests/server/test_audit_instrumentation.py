@@ -18,7 +18,6 @@ from fastapi.testclient import TestClient
 
 from apps.api.server.routers.models import ModelsRouter
 from apps.api.server.routers.souls import SoulsRouter
-from apps.api.server.routers.auto_train import AutoTrainRouter
 from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.routers.kb import KBRouter
 from apps.api.server.routers.agents import AgentsRouter
@@ -46,20 +45,6 @@ def souls_client():
     app = FastAPI()
     register_all_handlers(app)
     app.include_router(SoulsRouter().router)
-    return TestClient(app, raise_server_exceptions=False)
-
-
-@pytest.fixture
-def auto_train_client(tmp_path, monkeypatch):
-    rtr = AutoTrainRouter()
-    rtr.CHECKPOINTS_DIR = tmp_path / "checkpoints"
-    rtr.CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-    import domains.training.service as _svc
-    monkeypatch.setattr(_svc, "CHECKPOINTS_DIR", rtr.CHECKPOINTS_DIR)
-    app = FastAPI()
-    register_all_handlers(app)
-    app.state.checkpoint_dir = rtr.CHECKPOINTS_DIR
-    app.include_router(rtr.router)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -313,57 +298,6 @@ class TestSoulAudit:
         assert kwargs["resource"] == "traits"
         assert kwargs["detail"] == "traits_saved=3"
         assert kwargs["extra"] == {"groups": ["personality", "emotion"]}
-
-
-class TestAutoTrainAudit:
-    """Auto-train start and checkpoint ops emit audit events."""
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_start_logs_event(self, mock_logger, auto_train_client):
-        resp = auto_train_client.post(
-            "/auto-train/start",
-            json={"dataset_id": "missing-ds", "epochs": 5, "soul_name": "assistant"},
-        )
-        assert resp.status_code == 200
-        logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "training.start"
-        assert kwargs["resource"] == "missing-ds"
-        assert kwargs["detail"] == "fresh"
-        assert kwargs["extra"]["method"] == "slonet"
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_delete_checkpoint_logs_event(self, mock_logger, auto_train_client):
-        ckpt_dir = auto_train_client.app.state.checkpoint_dir
-        (ckpt_dir / "fake.soul").write_bytes(b"x" * 16)
-        resp = auto_train_client.delete("/auto-train/checkpoints/fake.soul")
-        assert resp.status_code == 200
-        logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "training.checkpoint.delete"
-        assert kwargs["resource"] == "fake.soul"
-        assert kwargs["detail"] == "deleted"
-
-    @patch("domains.training.slonet.import_from_sou")
-    @patch("domains.models.provider.register_provider")
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_load_checkpoint_logs_event(self, mock_logger, mock_register, mock_import, auto_train_client):
-        ckpt_dir = auto_train_client.app.state.checkpoint_dir
-        _make_fake_sou(ckpt_dir / "fake.soul")
-        soul_net = MagicMock()
-        soul_net.soul_signature.return_value = {"soul_name": "fake", "soul_traits": {}}
-        soul_net.num_parameters.return_value = 42
-        mock_import.return_value = soul_net
-        resp = auto_train_client.post("/auto-train/checkpoints/fake.soul/load")
-        assert resp.status_code == 200
-        logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "training.checkpoint.load"
-        assert kwargs["resource"] == "fake.soul"
-        assert "vocab=" in kwargs["detail"]
 
 
 class TestDatasetAudit:
@@ -1135,79 +1069,6 @@ class TestSelfTrainAudit:
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "not_running"
         mock_logger.return_value.log.assert_not_called()
-
-
-# ── Auto-train pause/resume/cancel ────────────────────────────────────
-
-
-class TestAutoTrainControlAudit:
-    """Auto-train pause/resume and from-sessions cancel emit audit events."""
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_pause_logs_event(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        at_module._auto_train_pause_event = threading.Event()
-        try:
-            resp = auto_train_client.post("/auto-train/pause")
-            assert resp.status_code == 200
-            assert resp.json()["data"]["success"] is True
-            logger = mock_logger.return_value
-            logger.log.assert_called_once()
-            args, kwargs = logger.log.call_args
-            assert args[0] == "training.pause"
-            assert "resource" in kwargs
-        finally:
-            at_module._auto_train_pause_event = None
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_pause_no_active_training_no_audit(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        at_module._auto_train_pause_event = None
-        try:
-            resp = auto_train_client.post("/auto-train/pause")
-            assert resp.status_code == 200
-            assert resp.json()["data"]["success"] is False
-            mock_logger.return_value.log.assert_not_called()
-        finally:
-            at_module._auto_train_pause_event = None
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_resume_logs_event(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        evt = threading.Event()
-        evt.set()
-        at_module._auto_train_pause_event = evt
-        try:
-            resp = auto_train_client.post("/auto-train/resume")
-            assert resp.status_code == 200
-            assert resp.json()["data"]["success"] is True
-            logger = mock_logger.return_value
-            logger.log.assert_called_once()
-            args, kwargs = logger.log.call_args
-            assert args[0] == "training.resume"
-            assert "resource" in kwargs
-        finally:
-            at_module._auto_train_pause_event = None
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_cancel_from_sessions_logs_event(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        at_module._auto_train_cancel_event = threading.Event()
-        try:
-            resp = auto_train_client.get("/auto-train/from-sessions/cancel")
-            assert resp.status_code == 200
-            logger = mock_logger.return_value
-            logger.log.assert_called_once()
-            args, kwargs = logger.log.call_args
-            assert args[0] == "training.stop"
-            assert "resource" in kwargs
-            assert kwargs["detail"] == "cancelled"
-        finally:
-            at_module._auto_train_cancel_event = None
 
 
 # ── Datasets extra mutations ──────────────────────────────────────────

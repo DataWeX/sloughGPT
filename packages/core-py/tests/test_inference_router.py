@@ -30,7 +30,7 @@ from routers.inference import (
     InferenceRouter,
     Message,
 )  # noqa: E402
-from tests.conftest import build_test_app
+from conftest import build_test_app
 
 
 def _app(ir: InferenceRouter):

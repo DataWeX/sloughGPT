@@ -270,3 +270,72 @@ class TestPortHelpers:
     def test_check_web_ready_nonexistent(self):
         from commands.dev import _check_web_ready
         assert _check_web_ready(49997) is False
+
+
+class TestCleanup:
+    """Tests for _cleanup function handling None processes."""
+
+    def test_cleanup_with_none_processes(self):
+        """_cleanup should not crash when api_proc or web_proc is None."""
+        from commands.dev import _cleanup
+        with patch("commands.dev._kill_port"):
+            _cleanup(None, None, 8000, 3000)
+
+    def test_cleanup_with_api_proc_none(self):
+        """_cleanup should handle api_proc=None and a valid web_proc."""
+        from commands.dev import _cleanup
+        mock_web_proc = MagicMock()
+        mock_web_proc.poll.return_value = None
+        with patch("commands.dev._kill_port"):
+            _cleanup(None, mock_web_proc, 8000, 3000)
+        mock_web_proc.terminate.assert_called_once()
+
+    def test_cleanup_with_web_proc_none(self):
+        """_cleanup should handle web_proc=None and a valid api_proc."""
+        from commands.dev import _cleanup
+        mock_api_proc = MagicMock()
+        mock_api_proc.poll.return_value = None
+        with patch("commands.dev._kill_port"):
+            _cleanup(mock_api_proc, None, 8000, 3000)
+        mock_api_proc.terminate.assert_called_once()
+
+    def test_cleanup_skips_already_terminated(self):
+        """_cleanup should not terminate processes that already exited."""
+        from commands.dev import _cleanup
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0  # already exited
+        with patch("commands.dev._kill_port"):
+            _cleanup(mock_proc, mock_proc, 8000, 3000)
+        mock_proc.terminate.assert_not_called()
+
+
+class TestCmdApiAndWebMonitorLoop:
+    """Tests for _cmd_api_and_web monitor loop handling web_proc=None."""
+
+    def test_monitor_loop_web_proc_none_no_crash(self, mock_log, monkeypatch):
+        """Monitor loop should not crash when web_proc is None (web reused)."""
+        from commands.dev import _cmd_api_and_web
+
+        args = MagicMock()
+        args.host = "localhost"
+        args.port = 8000
+        args.web_port = 3000
+
+        with patch("commands.dev._check_api_ready", return_value=True), \
+             patch("commands.dev._check_web_ready", return_value=True), \
+             patch("commands.dev._check_port", return_value=True), \
+             patch("commands.dev._repo_root") as mock_root, \
+             patch("commands.dev._cleanup"), \
+             patch("commands.dev.signal"), \
+             patch("commands.dev.webbrowser"), \
+             patch("commands.dev.time") as mock_time:
+
+            mock_root.return_value = MagicMock()
+            mock_time.sleep.side_effect = [None, None, KeyboardInterrupt]
+
+            # Simulate web_reused=True by making _check_web_ready return True
+            # This means web_proc stays None
+            _cmd_api_and_web(args)
+
+            # Should not raise AttributeError: 'NoneType' object has no attribute 'poll'
+            # The function should complete without crashing
