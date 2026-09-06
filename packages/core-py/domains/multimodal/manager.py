@@ -126,7 +126,8 @@ class MultimodalManager:
             with open(meta_path) as f:
                 meta = json.load(f)
             return meta.get("images_learned", 0)
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to read trained image count: %s", exc)
             return 0
 
     @property

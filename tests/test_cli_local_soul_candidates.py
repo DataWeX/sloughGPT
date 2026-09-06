@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from apps.cli.src.cli import _local_soul_candidate_paths
+from apps.cli.src.utils.helpers import local_soul_candidate_paths as _local_soul_candidate_paths
 
 
 class TestLocalSoulCandidates(unittest.TestCase):
