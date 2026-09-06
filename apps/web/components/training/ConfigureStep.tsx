@@ -1,11 +1,15 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox } from '@sloughgpt/strui'
 import { TrainingPresets } from '@/components/training/TrainingPresets'
+import { trainingJobsController, type TrainingRecommendationResponse } from '@/lib/training-controller'
 import type { StepProps } from './DataStep'
 
 export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: StepProps) {
+  const [recommendation, setRecommendation] = useState<TrainingRecommendationResponse | null>(null)
+  const [loadingRec, setLoadingRec] = useState(false)
+
   const hpErrors = useMemo(() => {
     const errors: string[] = []
     if (form.trainingEpochs < 1 || form.trainingEpochs > 500) errors.push('Epochs must be 1–500')
@@ -15,6 +19,25 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
   }, [form.trainingEpochs, form.trainingBatchSize, form.trainingLR])
 
   const canAdvance = form.canStart && hpErrors.length === 0
+
+  // Fetch recommendation when dataset changes
+  useEffect(() => {
+    if (datasets?.selectedDataset) {
+      setLoadingRec(true)
+      trainingJobsController.getTrainingRecommendation(datasets.selectedDataset, form.method)
+        .then(setRecommendation)
+        .catch(() => setRecommendation(null))
+        .finally(() => setLoadingRec(false))
+    }
+  }, [datasets?.selectedDataset, form.method])
+
+  const applyRecommendation = () => {
+    if (!recommendation) return
+    const rec = recommendation.recommendation
+    form.setTrainingLR(rec.learning_rate)
+    form.setTrainingBatchSize(rec.batch_size)
+    form.setTrainingEpochs(rec.epochs)
+  }
 
   return (
     <Card>
@@ -143,6 +166,35 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
                 {hpErrors.map(e => <div key={e}>{e}</div>)}
               </div>
+            )}
+
+            {/* Training recommendation */}
+            {recommendation && (
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-primary">Recommended Configuration</span>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={applyRecommendation}>
+                    Apply
+                  </Button>
+                </div>
+                <div className="text-[11px] text-muted-foreground space-y-1">
+                  <div>Dataset: {recommendation.dataset_size.toLocaleString()} examples</div>
+                  <div>Reason: {recommendation.recommendation.reason}</div>
+                  <div className="flex gap-3">
+                    <span>LR: {recommendation.recommendation.learning_rate.toExponential(1)}</span>
+                    <span>Batch: {recommendation.recommendation.batch_size}</span>
+                    <span>Epochs: {recommendation.recommendation.epochs}</span>
+                  </div>
+                  {recommendation.tips.length > 0 && (
+                    <div className="pt-1 border-t border-border/30">
+                      {recommendation.tips[0]}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {loadingRec && (
+              <div className="text-[10px] text-muted-foreground animate-pulse">Loading recommendation...</div>
             )}
 
             {form.method === 'finetune' && (

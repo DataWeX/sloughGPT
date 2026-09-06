@@ -702,3 +702,75 @@ from .webhook_endpoints import router as _webhook_router
 
 router.include_router(_turbo_router)
 router.include_router(_webhook_router)
+
+
+@router.get("/training/recommend")
+async def get_training_recommendation(
+    dataset_path: str = "",
+    method: str = "distill",
+):
+    """Get training configuration recommendations based on dataset characteristics."""
+    from schemas.common import success_response
+    
+    try:
+        from pathlib import Path as _P
+
+        from domains.training.training_advisor import get_training_tips, recommend_training_config
+        
+        dataset_size = 0
+        avg_quality = None
+        
+        if dataset_path:
+            dp = _P(dataset_path)
+            if dp.exists():
+                if dp.is_file():
+                    # Count lines in file
+                    try:
+                        with open(dp, 'r', encoding='utf-8', errors='ignore') as f:
+                            dataset_size = sum(1 for _ in f)
+                    except Exception:
+                        dataset_size = 0
+                elif dp.is_dir():
+                    # Count data files
+                    data_files = list(dp.rglob("*.jsonl")) + list(dp.rglob("*.json")) + list(dp.rglob("*.txt"))
+                    dataset_size = len(data_files)
+        
+        # Get recommendation
+        recommendation = recommend_training_config(
+            dataset_size=dataset_size,
+            method=method,
+            avg_quality=avg_quality,
+        )
+        
+        # Get tips
+        tips = get_training_tips(dataset_size=dataset_size)
+        
+        return success_response(data={
+            "dataset_size": dataset_size,
+            "recommendation": {
+                "learning_rate": recommendation.learning_rate,
+                "batch_size": recommendation.batch_size,
+                "epochs": recommendation.epochs,
+                "warmup_steps": recommendation.warmup_steps,
+                "early_stopping_patience": recommendation.early_stopping_patience,
+                "reason": recommendation.reason,
+                "confidence": recommendation.confidence,
+            },
+            "tips": tips,
+        })
+        
+    except Exception as e:
+        logger.warning("Failed to generate training recommendation: %s", e)
+        return success_response(data={
+            "dataset_size": 0,
+            "recommendation": {
+                "learning_rate": 3e-4,
+                "batch_size": 32,
+                "epochs": 20,
+                "warmup_steps": 50,
+                "early_stopping_patience": 5,
+                "reason": "Default recommendation",
+                "confidence": 0.5,
+            },
+            "tips": ["Could not analyze dataset. Using default configuration."],
+        })

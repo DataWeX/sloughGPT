@@ -664,6 +664,13 @@ export const trainingJobsController = {
     return Array.isArray(data) ? data : []
   },
 
+  async getTrainingRecommendation(datasetPath: string = '', method: string = 'distill'): Promise<TrainingRecommendationResponse> {
+    const query: Record<string, string> = {}
+    if (datasetPath) query.dataset_path = datasetPath
+    if (method) query.method = method
+    return apiGet<TrainingRecommendationResponse>('/training/recommend', query)
+  },
+
   async exportTrainingPairs(params?: {
     min_quality?: number
     session_id?: string
@@ -742,6 +749,22 @@ export interface EvalHistoryEntry {
     verdict: string
   }
   report?: string
+}
+
+export interface TrainingRecommendation {
+  learning_rate: number
+  batch_size: number
+  epochs: number
+  warmup_steps: number
+  early_stopping_patience: number
+  reason: string
+  confidence: number
+}
+
+export interface TrainingRecommendationResponse {
+  dataset_size: number
+  recommendation: TrainingRecommendation
+  tips: string[]
 }
 
 export const trainingController = trainingJobsController
