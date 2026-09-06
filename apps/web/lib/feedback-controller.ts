@@ -56,7 +56,7 @@ export const feedbackController = {
         thumbs_down: thumbsDown,
         ratio,
       },
-      current_weights: (metaStats.current_weights as Record<string, number>) ?? {
+      current_weights: (metaStats.current_weights as { temperature: number; repetition_penalty: number }) ?? {
         temperature: 0.7,
         repetition_penalty: 1.1,
       },
