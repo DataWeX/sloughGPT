@@ -154,6 +154,24 @@ cd apps/web && npm run lint
 | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Environment configuration |
 | [docs/STRUCTURE.md](docs/STRUCTURE.md) | Project structure and conventions |
 | [docs/SHELL.md](docs/SHELL.md) | Shell REPL documentation |
+| [docs/mogdb-guide.md](docs/mogdb-guide.md) | MogDB usage guide |
+| [docs/engineering-overview.md](docs/engineering-overview.md) | System architecture overview |
+
+## Data Infrastructure
+
+SloughGPT uses **MogDB** as the primary embedded document database with optional JSON sync for human-readable backups.
+
+```python
+# Quick example
+from mogdb import MogDB
+
+db = MogDB("data/my_collection")
+col = db.collection("items")
+col.insert_one({"name": "item", "value": 42})
+doc = col.find_one({"name": "item"})
+```
+
+All data stores (knowledge, RAG, model catalog, response logs, experiments, etc.) use MogDB with automatic JSON sync and TTL expiration. See [docs/mogdb-guide.md](docs/mogdb-guide.md) for details.
 
 ## Docker
 
