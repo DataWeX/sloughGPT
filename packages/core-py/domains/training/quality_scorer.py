@@ -189,6 +189,52 @@ def _language_quality_score(assistant_msg: str) -> float:
     return sum(scores) / len(scores) if scores else 0.0
 
 
+# Toxicity detection patterns (regex-based, no external deps)
+_TOXICITY_PATTERNS = [
+    # PII patterns
+    r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',  # Phone numbers
+    r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',  # Email addresses
+    r'\b\d{3}[-]?\d{2}[-]?\d{4}\b',  # SSN-like patterns
+    r'\b\d{16}\b',  # Credit card-like numbers
+    # Jailbreak patterns
+    r'ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?)',
+    r'you\s+are\s+now\s+(DAN|a\s+hacker|unrestricted)',
+    r'pretend\s+(you\s+are|to\s+be)\s+(evil|unrestricted|without\s+restrictions)',
+    r'bypass\s+(all\s+)?(safety|content|security)\s+(filters?|rules?|guidelines?)',
+    r'do\s+not\s+(follow|obey)\s+(any\s+)?(rules?|guidelines?|safety)',
+    # Harmful content indicators
+    r'\b(how\s+to\s+(make|build|create)\s+(a\s+)?(bomb|weapon|drug))\b',
+    r'\b(kill|murder|assassinate)\s+(yourself|someone|people)\b',
+]
+
+
+def _toxicity_score(text: str) -> float:
+    """Detect potentially toxic, harmful, or sensitive content.
+
+    Returns a safety score: 1.0 = safe, 0.0 = toxic.
+    Checks for PII, jailbreak attempts, and harmful content patterns.
+    """
+    if not text:
+        return 1.0
+
+    text_lower = text.lower()
+    violations = 0
+
+    for pattern in _TOXICITY_PATTERNS:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            violations += 1
+
+    # Check for excessive profanity (simple heuristic: many short words)
+    words = text_lower.split()
+    if len(words) > 5:
+        short_ratio = sum(1 for w in words if len(w) <= 2) / len(words)
+        if short_ratio > 0.4:
+            violations += 1
+
+    # Score: 1.0 if no violations, decreasing with each violation
+    return max(0.0, 1.0 - (violations * 0.25))
+
+
 def score_pair(user_msg: str, assistant_msg: str) -> float:
     """
     Score a (user_msg, assistant_msg) pair on a 0-5 scale.
@@ -207,8 +253,9 @@ def score_pair(user_msg: str, assistant_msg: str) -> float:
     repetition = _repetition_score(assistant_msg)
     coherence = _coherence_score(user_msg, assistant_msg)
     language = _language_quality_score(assistant_msg)
+    safety = _toxicity_score(user_msg + " " + assistant_msg)
 
-    combined = (length * 0.25 + repetition * 0.25 + coherence * 0.25 + language * 0.25)
+    combined = (length * 0.2 + repetition * 0.2 + coherence * 0.2 + language * 0.2 + safety * 0.2)
 
     score = round(combined * 5, 1)
     return max(0.0, min(5.0, score))
@@ -292,28 +339,32 @@ def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
             break
 
     if not chunks:
-        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
+        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
 
     qualities = []
     repetitions = []
     diversities = []
     languages = []
+    toxicities = []
 
     for chunk in chunks:
         words = _tokenize(chunk)
         rep = _repetition_score(chunk)
         lang = _language_quality_score(chunk)
         div = min(1.0, (len(set(words)) / max(1, len(words))) * 1.5) if len(words) > 10 else 0.5
+        tox = _toxicity_score(chunk)
 
-        combined = (rep * 0.4 + lang * 0.3 + div * 0.3)
+        combined = (rep * 0.35 + lang * 0.25 + div * 0.25 + tox * 0.15)
         qualities.append(round(combined * 5, 1))
         repetitions.append(rep)
         diversities.append(div)
         languages.append(lang)
+        toxicities.append(tox)
 
     return {
         "avg_quality": round(sum(qualities) / len(qualities), 2),
         "repetition_rate": round(1.0 - (sum(repetitions) / len(repetitions)), 2),
         "diversity": round(sum(diversities) / len(diversities), 2),
         "language_quality": round(sum(languages) / len(languages), 2),
+        "toxicity_rate": round(1.0 - (sum(toxicities) / len(toxicities)), 2),
     }
