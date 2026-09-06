@@ -176,20 +176,19 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                 <label htmlFor="resume-checkpoint" className="text-[10px] text-muted-foreground uppercase tracking-wider">
                   Resume from checkpoint (optional)
                 </label>
-                <select
-                  id="resume-checkpoint"
-                  value={form.resumeCheckpoint}
-                  onChange={e => form.setResumeCheckpoint(e.target.value)}
-                  aria-label="Resume from checkpoint"
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-mono"
-                >
-                  <option value="">Start fresh</option>
-                  {checkpoints.checkpoints.map(c => (
-                    <option key={c.name} value={c.name}>
-                      {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
-                    </option>
-                  ))}
-                </select>
+                <Select value={form.resumeCheckpoint} onValueChange={form.setResumeCheckpoint}>
+                  <SelectTrigger id="resume-checkpoint" className="h-8 text-xs font-mono" aria-label="Resume from checkpoint">
+                    <SelectValue placeholder="Start fresh" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Start fresh</SelectItem>
+                    {checkpoints.checkpoints.map(c => (
+                      <SelectItem key={c.name} value={c.name}>
+                        {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </>

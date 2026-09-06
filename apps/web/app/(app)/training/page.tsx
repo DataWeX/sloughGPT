@@ -259,15 +259,16 @@ export default function TrainingPage() {
         <TrainingLogCard trainingRunning={session.trainingRunning} />
 
         {/* Manual sub-tabs */}
-        <div className="border-b border-border/50" role="tablist">
+        <div className="border-b border-border/50" role="tablist" aria-label="Training sections">
           <div className="flex gap-0">
             {MANUAL_TABS.map(t => (
               <button
                 type="button"
                 role="tab"
+                id={`tab-${t.id}`}
                 key={t.id}
                 aria-selected={manualTab === t.id}
-                aria-label={`${t.label} tab`}
+                aria-controls={`panel-${t.id}`}
                 onClick={() => setManualTab(t.id)}
                 className={cn(
                   'relative px-4 py-2.5 text-xs font-medium transition-colors',
@@ -287,7 +288,7 @@ export default function TrainingPage() {
 
             {/* Train tab */}
             {manualTab === 'train' && (
-              <>
+              <div role="tabpanel" id="panel-train" aria-labelledby="tab-train">
                 {/* Pipeline */}
                 <TrainingPipeline
                   form={form}
@@ -306,12 +307,12 @@ export default function TrainingPage() {
 
                 {/* Train from API conversation logs */}
                 <APILogsCard addToast={addToast} />
-              </>
+              </div>
             )}
 
             {/* Results tab */}
             {manualTab === 'results' && (
-              <>
+              <div role="tabpanel" id="panel-results" aria-labelledby="tab-results">
                 {/* Training analytics */}
                 <TrainingAnalyticsCard addToast={addToast} />
 
@@ -326,18 +327,18 @@ export default function TrainingPage() {
 
                 {/* Session training */}
                 <SessionTrainingCard addToast={addToast} />
-              </>
+              </div>
             )}
 
             {/* Settings tab */}
             {manualTab === 'settings' && (
-              <>
+              <div role="tabpanel" id="panel-settings" aria-labelledby="tab-settings">
                 {/* Recoverable jobs */}
                 <RecoveryCard addToast={addToast} />
 
                 {/* Webhooks */}
                 <WebhooksCard addToast={addToast} />
-              </>
+              </div>
             )}
 
       <TestModelDialog
