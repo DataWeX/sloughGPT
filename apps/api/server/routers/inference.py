@@ -387,7 +387,7 @@ def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 
         logger.warning(
             "Knowledge enrichment failed: %s", e, extra={"tag": "INF", "context": {"error": str(e)}}
         )
-        return {"facts": [], "source": "none", "topics": []}
+        return {"facts": [], "source": "error", "topics": [], "error": str(e)}
 
 
 def _search_sessions_sync(q: str, limit: int) -> list:

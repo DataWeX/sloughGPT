@@ -128,6 +128,7 @@ def _get_mogdb_health() -> dict[str, Any] | None:
             col.drop()
             db.close()
         except Exception:
+            logger.debug("MogDB write latency test failed", exc_info=True)
             elapsed_ms = -1
         finally:
             import shutil
@@ -166,10 +167,8 @@ def _is_app_ready() -> bool:
 
         return STARTUP_PHASE.get("phase") in ("running", "ready")
     except Exception:
-        return True
-
-
-def _get_model_info() -> tuple[bool, str | None]:
+        logger.debug("Startup phase check failed", exc_info=True)
+        return True() -> tuple[bool, str | None]:
     """Get model info from registry, controller, or server_state."""
     loaded, model_type, _ = _get_model_info_with_registry()
     if loaded and not _is_app_ready():
@@ -283,6 +282,7 @@ def _get_inference_stats() -> dict[str, Any]:
     except ImportError:
         return {}
     except Exception:
+        logger.debug("Inference stats unavailable", exc_info=True)
         return {}
 
 
@@ -300,6 +300,7 @@ def _get_quantization_info() -> dict[str, Any]:
             return provider.quantization_report()
         return {}
     except Exception:
+        logger.debug("Quantization info unavailable", exc_info=True)
         return {}
 
 

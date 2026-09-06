@@ -1,19 +1,22 @@
-"""Tests for domains.agents.run_history — AgentRunStore file-backed persistence."""
+"""Tests for domains.agents.run_history — AgentRunStore MogDB persistence."""
 
-import json
 import os
 import tempfile
 
 import pytest
-from domains.agents.run_history import AgentRunStore, _new_run_id, reset_agent_run_store
+from domains.agents.run_history import AgentRunStore, _new_run_id, reset_agent_run_store, set_mogdb_path, reset_mogdb
 
 
 @pytest.fixture
-def store():
-    """Create a temporary AgentRunStore for each test."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        s = AgentRunStore(directory=tmpdir, max_runs=10)
-        yield s
+def store(tmp_path):
+    """Create a temporary AgentRunStore backed by MogDB for each test."""
+    db_path = str(tmp_path / "mogdb")
+    set_mogdb_path(db_path)
+    reset_agent_run_store()
+    s = AgentRunStore(db_path=db_path, max_runs=10)
+    yield s
+    reset_agent_run_store()
+    reset_mogdb()
 
 
 class TestNewRunId:
@@ -21,7 +24,7 @@ class TestNewRunId:
         rid = _new_run_id()
         parts = rid.split("_")
         assert parts[0] == "run"
-        assert len(parts) >= 4  # run + date + time + pid + counter
+        assert len(parts) >= 4
 
     def test_unique(self):
         ids = {_new_run_id() for _ in range(50)}
@@ -30,15 +33,15 @@ class TestNewRunId:
 
 class TestSafeId:
     def test_valid(self):
-        s = AgentRunStore()
+        s = AgentRunStore.__new__(AgentRunStore)
         assert s._safe_id("run_20260101_120000_1_000001") is True
 
     def test_empty(self):
-        s = AgentRunStore()
+        s = AgentRunStore.__new__(AgentRunStore)
         assert s._safe_id("") is False
 
     def test_path_traversal(self):
-        s = AgentRunStore()
+        s = AgentRunStore.__new__(AgentRunStore)
         assert s._safe_id("../../../etc/passwd") is False
 
 
@@ -47,10 +50,6 @@ class TestAgentRunStoreLifecycle:
         rid = store.start(goal="test goal")
         assert rid is not None
         assert rid.startswith("run_")
-
-    def test_start_creates_file(self, store):
-        rid = store.start(goal="test goal")
-        assert os.path.exists(store._path(rid))
 
     def test_start_record_fields(self, store):
         rid = store.start(goal="test goal", context="ctx")
@@ -67,10 +66,10 @@ class TestAgentRunStoreLifecycle:
         store.append_log(rid, "Step 1")
         store.append_log(rid, "Step 2")
         record = store.get(rid)
-        assert len(record["logs"]) == 3  # start + 2 appends
+        assert len(record["logs"]) == 3
 
     def test_append_log_noop_missing(self, store):
-        store.append_log("nonexistent_run", "msg")  # should not raise
+        store.append_log("nonexistent_run", "msg")
 
     def test_set_tasks(self, store):
         rid = store.start(goal="test")
@@ -124,7 +123,7 @@ class TestAgentRunStoreQueries:
         rid3 = store.start(goal="third")
         runs = store.list_runs()
         assert len(runs) == 3
-        assert runs[0]["id"] == rid3  # newest first
+        assert runs[0]["id"] == rid3
         assert runs[2]["id"] == rid1
 
     def test_list_runs_limit(self, store):
@@ -149,14 +148,15 @@ class TestAgentRunStoreClear:
 
 
 class TestAgentRunStorePrune:
-    def test_prune_on_start(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            s = AgentRunStore(directory=tmpdir, max_runs=3)
-            ids = []
-            for i in range(5):
-                ids.append(s.start(goal=f"run {i}"))
-            runs = s.list_runs()
-            assert len(runs) == 3
-            # oldest runs pruned
-            assert s.get(ids[0]) is None
-            assert s.get(ids[1]) is None
+    def test_prune_on_start(self, tmp_path):
+        db_path = str(tmp_path / "prune_test")
+        set_mogdb_path(db_path)
+        s = AgentRunStore(db_path=db_path, max_runs=3)
+        ids = []
+        for i in range(5):
+            ids.append(s.start(goal=f"run {i}"))
+        runs = s.list_runs()
+        assert len(runs) == 3
+        assert s.get(ids[0]) is None
+        assert s.get(ids[1]) is None
+        reset_agent_run_store()
