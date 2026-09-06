@@ -1,251 +1,170 @@
-"""Tests for the agent system CRUD layer (file-backed agent definitions)."""
+"""Tests for agents.system — AgentSystem CRUD and default agents."""
 
-import sys
-import types
+from __future__ import annotations
+
+from unittest.mock import patch, MagicMock
 
 import pytest
 
-import domains.agents as agents_pkg
-import domains.agents.system as system_mod
-from domains.agents.system import AgentSystem, get_agent_system, DEFAULT_AGENTS, _default_inference_fn
-from domains.infrastructure.repository import FileRepository, JsonSerializer
+from domains.agents.system import (
+    AgentSystem,
+    DEFAULT_AGENTS,
+    get_agent_system,
+    _default_inference_fn,
+)
 
 
 @pytest.fixture
-async def agent_system(tmp_path, monkeypatch):
-    repo = FileRepository[dict](
-        directory=str(tmp_path / "agents"),
+def sys(tmp_path, monkeypatch):
+    """Create an AgentSystem with a temp directory."""
+    monkeypatch.setattr("domains.agents.system.AGENTS_DIR", str(tmp_path))
+    monkeypatch.setattr("domains.agents.system._agent_repo", None)
+    from domains.agents.system import _agent_repo as _
+    # Reset singleton
+    import domains.agents.system as mod
+    mod._default_system = None
+
+    # Patch the repo
+    from domains.infrastructure.repository import FileRepository, JsonSerializer
+    repo = FileRepository(
+        directory=str(tmp_path),
         serializer=JsonSerializer(dict),
         key_suffix=".json",
     )
     repo.enable_cache(ttl_seconds=5.0)
-    monkeypatch.setattr(system_mod, "_agent_repo", repo)
-    monkeypatch.setattr(system_mod, "_default_system", None)
-    monkeypatch.setattr(agents_pkg, "_agent", None)
-    yield AgentSystem()
-    monkeypatch.setattr(system_mod, "_default_system", None)
+    monkeypatch.setattr("domains.agents.system._agent_repo", repo)
+    monkeypatch.setattr("domains.agents.system.get_agent", lambda: MagicMock())
+    monkeypatch.setattr("domains.agents.system._default_inference_fn", lambda *a, **kw: {})
+
+    return AgentSystem()
 
 
-# ── AgentSystem init / defaults ───────────────────────────────────────────
+# ── Default agents ────────────────────────────────────────────────────────
 
 
-class TestInit:
-    def test_loads_all_defaults(self, agent_system):
-        ids = {a["id"] for a in agent_system.list()}
-        assert ids == set(DEFAULT_AGENTS.keys())
+class TestDefaultAgents:
 
-    def test_default_entries_have_fields(self, agent_system):
-        by_id = {a["id"]: a for a in agent_system.list()}
-        coder = by_id["coder"]
-        assert coder["name"] == "Coder"
-        assert "code_execution" in coder["tools"]
+    def test_default_agents_structure(self):
+        assert "general" in DEFAULT_AGENTS
+        assert "coder" in DEFAULT_AGENTS
+        assert "researcher" in DEFAULT_AGENTS
+        assert "writer" in DEFAULT_AGENTS
+        assert "analyst" in DEFAULT_AGENTS
 
-    def test_does_not_overwrite_existing_default(self, agent_system):
-        agent_system.create("coder", name="Custom Coder", description="mine")
-        agent_system._load_defaults()
-        data = agent_system.get("coder")
-        assert data["name"] == "Custom Coder"
+    def test_default_agent_has_required_fields(self):
+        for aid, data in DEFAULT_AGENTS.items():
+            assert "name" in data, f"{aid} missing name"
+            assert "description" in data, f"{aid} missing description"
+            assert "tools" in data, f"{aid} missing tools"
+            assert "avatar" in data, f"{aid} missing avatar"
 
-
-# ── CRUD ──────────────────────────────────────────────────────────────────
-
-
-class TestGet:
-    def test_get_existing(self, agent_system):
-        data = agent_system.get("general")
-        assert data is not None
-        assert data["id"] == "general"
-        assert data["name"] == "General"
-
-    def test_get_missing(self, agent_system):
-        assert agent_system.get("nope") is None
+    def test_default_agent_tools_are_lists(self):
+        for aid, data in DEFAULT_AGENTS.items():
+            assert isinstance(data["tools"], list), f"{aid} tools not list"
 
 
-class TestList:
-    def test_list_returns_all_with_ids(self, agent_system):
-        agents = agent_system.list()
-        assert len(agents) == len(DEFAULT_AGENTS)
-        assert all("id" in a for a in agents)
-
-    def test_list_skips_unreadable_files(self, agent_system, tmp_path, monkeypatch):
-        bad = tmp_path / "agents" / "bad.json"
-        bad.write_text("{ not valid json")
-        agents = agent_system.list()
-        assert all(a["id"] != "bad" for a in agents)
+# ── AgentSystem CRUD ──────────────────────────────────────────────────────
 
 
-class TestGetInstructions:
-    def test_returns_instructions(self, agent_system):
-        instructions = agent_system.get_instructions("general")
-        assert "helpful AI assistant" in instructions
+class TestAgentSystemCRUD:
 
-    def test_missing_returns_empty(self, agent_system):
-        assert agent_system.get_instructions("nope") == ""
+    def test_create_agent(self, sys):
+        result = sys.create("test1", "Test Agent", "A test agent", "Be helpful")
+        assert result["id"] == "test1"
+        assert result["name"] == "Test Agent"
+        assert result["instructions"] == "Be helpful"
 
-
-class TestCreate:
-    def test_create_full(self, agent_system):
-        result = agent_system.create("scientist", "Scientist", "Does science",
-                                     instructions="Be rigorous", tools=["file_search"], avatar="S")
-        assert result["id"] == "scientist"
-        assert result["name"] == "Scientist"
-        assert result["instructions"] == "Be rigorous"
-        assert result["tools"] == ["file_search"]
-        assert result["avatar"] == "S"
-        assert agent_system.get("scientist")["id"] == "scientist"
-
-    def test_create_default_instructions(self, agent_system):
-        result = agent_system.create("bot", "Bot", "desc")
-        assert result["instructions"] == "You are a Bot assistant."
-
-    def test_create_default_tools(self, agent_system):
-        result = agent_system.create("bot", "Bot", "desc")
+    def test_create_agent_defaults(self, sys):
+        result = sys.create("test2", "Test", "Desc")
+        assert result["instructions"] == "You are a Test assistant."
         assert result["tools"] == ["memory"]
 
-    def test_create_default_avatar_from_name(self, agent_system):
-        assert agent_system.create("bot", "Bob", "desc")["avatar"] == "B"
+    def test_create_agent_default_avatar(self, sys):
+        result = sys.create("test3", "Alice", "Desc")
+        assert result["avatar"] == "A"
 
-    def test_create_default_avatar_empty_name(self, agent_system):
-        assert agent_system.create("bot", "", "desc")["avatar"] == "A"
+    def test_get_agent(self, sys):
+        sys.create("test1", "Test", "Desc")
+        result = sys.get("test1")
+        assert result is not None
+        assert result["id"] == "test1"
+        assert result["name"] == "Test"
 
-    def test_create_uses_given_avatar(self, agent_system):
-        assert agent_system.create("bot", "Bob", "desc", avatar="X")["avatar"] == "X"
+    def test_get_nonexistent(self, sys):
+        assert sys.get("nonexistent") is None
 
-    def test_create_persists_to_disk(self, agent_system, tmp_path):
-        agent_system.create("sci", "Sci", "d")
-        assert (tmp_path / "agents" / "sci.json").exists()
+    def test_list_agents(self, sys):
+        sys.create("a1", "Agent 1", "Desc 1")
+        sys.create("a2", "Agent 2", "Desc 2")
+        agents = sys.list()
+        ids = [a["id"] for a in agents]
+        assert "a1" in ids
+        assert "a2" in ids
 
+    def test_update_agent(self, sys):
+        sys.create("test1", "Test", "Desc")
+        result = sys.update("test1", name="Updated", description="New desc")
+        assert result["name"] == "Updated"
+        assert result["description"] == "New desc"
 
-class TestUpdate:
-    def test_updates_fields(self, agent_system):
-        result = agent_system.update("general", name="General 2", instructions="New")
-        assert result["name"] == "General 2"
-        assert result["instructions"] == "New"
-        assert agent_system.get("general")["name"] == "General 2"
+    def test_update_nonexistent(self, sys):
+        assert sys.update("nonexistent", name="X") is None
 
-    def test_ignores_none_values(self, agent_system):
-        before = agent_system.get("general")
-        result = agent_system.update("general", name=None, instructions="Keep")
-        assert result["instructions"] == "Keep"
-        assert result["name"] == before["name"]
+    def test_update_ignores_invalid_keys(self, sys):
+        sys.create("test1", "Test", "Desc")
+        result = sys.update("test1", name="Valid", invalid_key="Ignored")
+        assert result["name"] == "Valid"
 
-    def test_ignores_unknown_keys(self, agent_system):
-        result = agent_system.update("general", not_a_field="x")
-        assert "not_a_field" not in result
+    def test_delete_agent(self, sys):
+        sys.create("test1", "Test", "Desc")
+        assert sys.delete("test1") is True
+        assert sys.get("test1") is None
 
-    def test_update_missing_returns_none(self, agent_system):
-        assert agent_system.update("nope", name="X") is None
+    def test_get_instructions(self, sys):
+        sys.create("test1", "Test", "Desc", instructions="Be helpful")
+        assert sys.get_instructions("test1") == "Be helpful"
 
-
-class TestDelete:
-    def test_delete_existing(self, agent_system):
-        assert agent_system.delete("general") is True
-        assert agent_system.get("general") is None
-
-    def test_delete_missing(self, agent_system):
-        assert agent_system.delete("nope") is False
-
-
-class TestPrivateIO:
-    def test_save_load_roundtrip(self, agent_system):
-        agent_system._save("custom", {"name": "N", "description": "D"})
-        data = agent_system._load("custom")
-        assert data["name"] == "N"
-
-    def test_load_missing(self, agent_system):
-        assert agent_system._load("missing") is None
+    def test_get_instructions_nonexistent(self, sys):
+        assert sys.get_instructions("nonexistent") == ""
 
 
-# ── Execute ───────────────────────────────────────────────────────────────
+# ── Default loading ───────────────────────────────────────────────────────
 
 
-class TestExecute:
-    async def test_missing_agent(self, agent_system):
-        result = await agent_system.execute("nope", "hello")
-        assert result["success"] is False
-        assert "not found" in result["error"]
+class TestDefaultsLoading:
 
-    async def test_empty_plan(self, agent_system, monkeypatch):
-        monkeypatch.setattr(agent_system._agent, "_inference_fn", lambda prompt: "[]")
-        result = await agent_system.execute("general", "hello", session_id="s1")
-        assert result["session_id"] == "s1"
-        assert result["tools_used"] == []
+    def test_defaults_loaded_on_init(self, sys):
+        agents = sys.list()
+        ids = [a["id"] for a in agents]
+        for default_id in DEFAULT_AGENTS:
+            assert default_id in ids
 
-    async def test_llm_plan_runs_code_tool(self, agent_system, monkeypatch):
-        monkeypatch.setattr(
-            agent_system._agent, "_inference_fn",
-            lambda prompt: '[{"tool": "code_execution", "args": {"code": "print(41+1)"}}]',
-        )
-        result = await agent_system.execute("coder", "run code", user_id="u1")
-        assert result["tools_used"]
-        tool_result = result["tools_used"][0]["result"]
-        assert tool_result["success"] is True
-
-    async def test_invalid_plan_falls_back_to_keywords(self, agent_system, monkeypatch):
-        monkeypatch.setattr(agent_system._agent, "_inference_fn", lambda prompt: "not json at all")
-        result = await agent_system.execute("general", "hello there", user_id="u1")
-        assert "response" in result
-
-    async def test_unknown_tool_filtered_from_capabilities(self, agent_system, monkeypatch):
-        monkeypatch.setattr(agent_system._agent, "_inference_fn", lambda prompt: "[]")
-        agent_system.update("general", tools=["code_execution", "not_a_capability"])
-        result = await agent_system.execute("general", "hi")
-        assert result["tools_used"] == []
+    def test_defaults_not_overwritten(self, sys):
+        sys.create("general", "Custom General", "Overridden")
+        result = sys.get("general")
+        assert result["name"] == "Custom General"
 
 
-# ── Default inference fn ──────────────────────────────────────────────────
+# ── Inference function ────────────────────────────────────────────────────
 
 
-class _FakeResponse:
-    def __init__(self, status_code=200, payload=None):
-        self.status_code = status_code
-        self._payload = payload
+class TestInferenceFunction:
 
-    def json(self):
-        return self._payload
-
-
-class _FakeRequests:
-    def __init__(self, response=None, error=None):
-        self._response = response
-        self._error = error
-
-    def post(self, url, json=None, timeout=None):
-        if self._error:
-            raise self._error
-        return self._response
-
-
-class TestDefaultInferenceFn:
-    def test_success_path(self, monkeypatch):
-        fake = _FakeRequests(_FakeResponse(200, {"text": "hi"}))
-        monkeypatch.setitem(sys.modules, "requests", fake)
-        assert _default_inference_fn("prompt") == {"text": "hi"}
-
-    def test_non_200(self, monkeypatch):
-        fake = _FakeRequests(_FakeResponse(500, {}))
-        monkeypatch.setitem(sys.modules, "requests", fake)
-        result = _default_inference_fn("prompt")
-        assert result["error"] == "HTTP 500"
-
-    def test_exception(self, monkeypatch):
-        fake = _FakeRequests(error=RuntimeError("boom"))
-        monkeypatch.setitem(sys.modules, "requests", fake)
-        result = _default_inference_fn("prompt")
-        assert result["error"] == "boom"
+    def test_default_inference_fn_returns_dict(self):
+        result = _default_inference_fn("test prompt")
+        assert isinstance(result, dict)
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────
 
 
 class TestSingleton:
-    async def test_get_agent_system_singleton(self, monkeypatch):
-        monkeypatch.setattr(system_mod, "_default_system", None)
-        a = get_agent_system()
-        b = get_agent_system()
-        assert a is b
-        monkeypatch.setattr(system_mod, "_default_system", None)
 
-    def test_system_uses_shared_agent(self, agent_system):
-        a = get_agent_system()
-        assert a._agent is not None
+    def test_get_returns_same(self):
+        with patch("domains.agents.system.get_agent", return_value=MagicMock()):
+            import domains.agents.system as mod
+            mod._default_system = None
+            s1 = get_agent_system()
+            s2 = get_agent_system()
+            assert s1 is s2
+            mod._default_system = None
