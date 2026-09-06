@@ -273,7 +273,7 @@ def _poll_fallback(host: str, port: int, interval: float, output_json: bool, cle
             with urllib.request.urlopen(req, timeout=5) as resp:
                 raw = json.loads(resp.read())
                 snapshot["data"]["health"] = raw.get("data", raw)
-        except Exception:
+        except (urllib.error.URLError, OSError, ValueError):
             pass
 
         try:
@@ -282,7 +282,7 @@ def _poll_fallback(host: str, port: int, interval: float, output_json: bool, cle
                 raw = json.loads(resp.read())
                 data = raw.get("data", raw)
                 snapshot["data"]["events"] = data.get("events", [])
-        except Exception:
+        except (urllib.error.URLError, OSError, ValueError):
             pass
 
         if output_json:
@@ -308,7 +308,7 @@ def monitor(interval: float, host: str, port: int, output_json: bool, no_clear: 
 
     try:
         _consume_sse(host, port, interval, output_json, clear)
-    except Exception:
+    except (urllib.error.URLError, OSError, ValueError):
         try:
             _poll_fallback(host, port, interval, output_json, clear)
         except KeyboardInterrupt:

@@ -72,7 +72,7 @@ def _fetch_models(host: str = "localhost", port: int = 8000) -> List[str]:
             data = r.json()
             models = data if isinstance(data, list) else data.get("models", [])
             return [m.get("name", m.get("id", "")) for m in models if isinstance(m, dict)]
-    except Exception:
+    except requests.RequestException:
         pass
     return []
 
@@ -87,7 +87,7 @@ def _fetch_hf_models(host: str = "localhost", port: int = 8000) -> List[str]:
             data = r.json()
             models = data if isinstance(data, list) else data.get("models", [])
             return [m.get("id", m.get("name", "")) for m in models if isinstance(m, dict)]
-    except Exception:
+    except requests.RequestException:
         pass
     return []
 
@@ -102,7 +102,7 @@ def _fetch_souls(host: str = "localhost", port: int = 8000) -> List[str]:
             data = r.json()
             souls = data if isinstance(data, list) else data.get("souls", [])
             return [s.get("name", "") for s in souls if isinstance(s, dict)]
-    except Exception:
+    except requests.RequestException:
         pass
     return []
 
@@ -117,7 +117,7 @@ def _fetch_datasets(host: str = "localhost", port: int = 8000) -> List[str]:
             data = r.json()
             datasets = data if isinstance(data, list) else data.get("datasets", [])
             return [d.get("name", "") for d in datasets if isinstance(d, dict)]
-    except Exception:
+    except requests.RequestException:
         pass
     return []
 
@@ -132,7 +132,7 @@ def _fetch_checkpoints(host: str = "localhost", port: int = 8000) -> List[str]:
             data = r.json()
             cps = data if isinstance(data, list) else data.get("checkpoints", [])
             return [c.get("name", "") for c in cps if isinstance(c, dict)]
-    except Exception:
+    except requests.RequestException:
         pass
     return []
 

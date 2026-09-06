@@ -78,7 +78,7 @@ class PermissionsManager:
             try:
                 from domains.infrastructure.config import get_config
                 self.auto_yes = get_config().features.auto_download
-            except Exception:
+            except (ImportError, AttributeError):
                 self.auto_yes = False
 
     def estimate_model_size(self, model_id: str) -> Optional[ModelSizeEstimate]:
@@ -217,7 +217,7 @@ class PermissionsManager:
                 return True
             if cache.exists() and _has_weight_files(cache):
                 return True
-        except Exception:
+        except (ImportError, OSError):
             pass
 
         # Fallback: check standard HF cache location

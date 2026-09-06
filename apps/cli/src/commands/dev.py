@@ -87,7 +87,7 @@ def _check_port(port: int) -> bool:
         import urllib.request
         urllib.request.urlopen(f"http://localhost:{port}/", timeout=1)
         return True
-    except Exception:
+    except (urllib.error.URLError, OSError):
         return False
 
 
@@ -206,7 +206,7 @@ def _check_api_ready(port: int) -> bool:
         import urllib.request
         urllib.request.urlopen(f"http://localhost:{port}/health", timeout=3)
         return True
-    except Exception:
+    except (urllib.error.URLError, OSError):
         return False
 
 
@@ -216,7 +216,7 @@ def _check_web_ready(port: int) -> bool:
         import urllib.request
         urllib.request.urlopen(f"http://localhost:{port}/", timeout=3)
         return True
-    except Exception:
+    except (urllib.error.URLError, OSError):
         return False
 
 
@@ -244,7 +244,7 @@ def _get_startup_progress(port: int) -> dict | None:
         resp = urllib.request.urlopen(f"http://localhost:{port}/health/startup-progress", timeout=2)
         data = json.loads(resp.read())
         return data.get("data", data)
-    except Exception:
+    except (urllib.error.URLError, OSError, ValueError):
         return None
 
 
@@ -493,11 +493,11 @@ def _cleanup(api_proc, web_proc, api_port, web_port):
             try:
                 proc.terminate()
                 proc.wait(timeout=3)
-            except Exception:
+            except (OSError, subprocess.TimeoutExpired):
                 try:
                     proc.kill()
                     proc.wait(timeout=2)
-                except Exception:
+                except (OSError, subprocess.TimeoutExpired):
                     pass
     _kill_port(api_port)
     _kill_port(web_port)
@@ -677,7 +677,7 @@ def _cmd_api_only(args):
             try:
                 api_proc.terminate()
                 api_proc.wait(timeout=5)
-            except Exception:
+            except (OSError, subprocess.TimeoutExpired):
                 api_proc.kill()
         status.update(
             ansi_c("  SloughGPT API", _A.BOLD, log._colors),
@@ -703,7 +703,7 @@ def _cmd_api_only(args):
                 try:
                     api_proc.terminate()
                     api_proc.wait(timeout=5)
-                except Exception:
+                except (OSError, subprocess.TimeoutExpired):
                     api_proc.kill()
             status.update(
                 ansi_c("  SloughGPT API", _A.BOLD, log._colors),
@@ -1173,7 +1173,7 @@ def _cmd_api_and_web(args):
         time.sleep(1.5)
         try:
             webbrowser.open(web_url)
-        except Exception:
+        except OSError:
             pass
 
     browser_thread = threading.Thread(target=_open_browser, daemon=True)
@@ -1287,7 +1287,7 @@ def cmd_api_status(args):
                 log.status(name, "OK", "ok")
             else:
                 log.status(name, f"HTTP {r.status_code}", "warn")
-        except Exception:
+        except requests.RequestException:
             log.status(name, "Not reachable", "error")
 
     # Check metrics
@@ -1301,7 +1301,7 @@ def cmd_api_status(args):
             log.key_value("Active Clients", str(data.get("active_clients", "N/A")))
             log.key_value("CPU", f"{data.get('system', {}).get('cpu_percent', 'N/A')}%")
             log.key_value("Memory", f"{data.get('system', {}).get('memory_percent', 'N/A')}%")
-    except Exception:
+    except requests.RequestException:
         log.info("  (metrics endpoint not available)")
 
 

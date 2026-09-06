@@ -1315,8 +1315,8 @@ def cmd_train_embed(args):
                 for fp in p.rglob(ext):
                     try:
                         texts.append(fp.read_text(errors="ignore"))
-                    except Exception:
-                        pass
+                    except OSError as e:
+                        log.warning("Skipping %s: %s", fp, e)
         else:
             log.error(f"Corpus not found: {corpus}")
             return
@@ -1327,8 +1327,8 @@ def cmd_train_embed(args):
             for fp in knowledge_dir.rglob("*.txt"):
                 try:
                     texts.append(fp.read_text(errors="ignore"))
-                except Exception:
-                    pass
+                except OSError as e:
+                    log.warning("Skipping %s: %s", fp, e)
             for fp in knowledge_dir.rglob("*.json"):
                 try:
                     data = json.loads(fp.read_text(errors="ignore"))
@@ -1336,8 +1336,8 @@ def cmd_train_embed(args):
                         texts.extend(str(x) for x in data if isinstance(x, str))
                     elif isinstance(data, dict):
                         texts.extend(str(v) for v in data.values() if isinstance(v, str))
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, OSError) as e:
+                    log.warning("Skipping %s: %s", fp, e)
 
         sessions_dir = repo_root / "data" / "sessions"
         if sessions_dir.exists():
@@ -1352,8 +1352,8 @@ def cmd_train_embed(args):
                         for msg in data["messages"]:
                             if isinstance(msg, dict) and "content" in msg:
                                 texts.append(msg["content"])
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, OSError) as e:
+                    log.warning("Skipping %s: %s", fp, e)
 
         # Datasets directory
         datasets_dir = repo_root / "data"
@@ -1361,14 +1361,14 @@ def cmd_train_embed(args):
             for fp in datasets_dir.rglob("*.txt"):
                 try:
                     texts.append(fp.read_text(errors="ignore"))
-                except Exception:
-                    pass
+                except OSError as e:
+                    log.warning("Skipping %s: %s", fp, e)
             for fp in datasets_dir.rglob("*.jsonl"):
                 try:
                     for line in fp.read_text(errors="ignore").splitlines():
                         texts.append(line)
-                except Exception:
-                    pass
+                except OSError as e:
+                    log.warning("Skipping %s: %s", fp, e)
 
     # Filter empty / tiny texts
     texts = [t.strip() for t in texts if len(t.strip()) > 20]
@@ -1752,7 +1752,7 @@ def cmd_train_from_sessions(args):
         if not health.get("model_loaded"):
             log.warning("No model loaded on server. Training will still work,")
             log.warning("but you need a model to test the checkpoint afterwards.")
-    except Exception:
+    except (requests.RequestException, ValueError) as e:
         log.error("Cannot reach server. Is it running? (make api)")
         return
 
@@ -1769,8 +1769,8 @@ def cmd_train_from_sessions(args):
         if n_sessions == 0 and n_corpus == 0:
             log.error("No chat data found. Use the chat first to generate training data.")
             return
-    except Exception:
-        pass
+    except OSError as e:
+        log.warning("Could not count training data: %s", e)
 
     # Start training
     session_ids = None

@@ -22,8 +22,8 @@ def cmd_datasets(args):
         try:
             with open(registry_file) as f:
                 registry = json.load(f)
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("Could not load registry: %s", e)
 
     log.header("Datasets")
 
