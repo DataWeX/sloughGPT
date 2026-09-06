@@ -100,12 +100,12 @@ class FeedbackRouter:
                 resource=req.conversation_id,
                 detail=f"rating={req.rating}",
             )
-            return success_response(
-                data={
-                    "feedback_id": feedback.get("feedback_id", ""),
-                    "workflow_active": True,
-                },
-                message="recorded",
+            return FeedbackResponse(
+                status="ok",
+                feedback_id=feedback.get("feedback_id", ""),
+                message_id=req.conversation_id,
+                rating=req.rating,
+                timestamp=feedback.get("timestamp", ""),
             )
         except Exception as e:
             logger.error(
@@ -130,7 +130,8 @@ class FeedbackRouter:
             safe_audit_log(
                 "feedback.record", resource=req.message_id, detail=f"rating={req.rating}"
             )
-            return success_response(data=FeedbackResponse(**feedback).model_dump())
+            resp_data = FeedbackResponse(**feedback).model_dump()
+            return resp_data
         except Exception as e:
             logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
             classify_and_raise(e, source="feedback.record")

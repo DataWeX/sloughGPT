@@ -34,12 +34,12 @@ function personalityType(traits: CompanionTraits): string {
 
 export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCardProps) {
   const numericValues = useMemo(() => (Object.values(traits ?? {}) as unknown[]).filter((v): v is number => typeof v === 'number'), [traits])
-  const { dominant, weakest, spread } = useMemo(() => traitBalance(traits!), [traits])
-  const type = useMemo(() => personalityType(traits!), [traits])
 
   if (!traits) return null
   if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
 
+  const { dominant, weakest, spread } = traitBalance(traits)
+  const type = personalityType(traits)
   const balanceLabel = spread < 0.2 ? 'Even' : spread < 0.4 ? 'Moderate' : 'Skewed'
 
   const traitEntries = (Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name')
