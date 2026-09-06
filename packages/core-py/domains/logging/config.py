@@ -883,8 +883,8 @@ def setup_logging(
     try:
         from domains.logging.dashboard_filter import DashboardFilter
         root.addFilter(DashboardFilter())
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"Warning: DashboardFilter unavailable: {exc}", file=sys.stderr)
 
     # Suppress noisy third-party loggers
     for logger_name, logger_level in _NOISY_LOGGERS.items():

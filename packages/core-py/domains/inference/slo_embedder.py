@@ -964,7 +964,10 @@ def _save_checkpoint(
             quality["retrieval"] = _retrieval_benchmark_for(
                 texts, encoder, vocab, max_seq_len, encode_fn, embed_mean,
             )
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger("slo.embedder").warning(
+                "Quality computation failed: %s", exc)
             quality = None
             embed_mean = None
     meta = {
