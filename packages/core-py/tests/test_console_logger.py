@@ -234,6 +234,157 @@ class TestExceptionParsing:
         assert "nope" in parts[1]
 
 
+# ── Cursor methods ────────────────────────────────────────────────────────
+
+class TestCursorMethods:
+
+    def test_cursor_up_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.cursor_up(3)
+        assert "\033[3A" in stream.data
+
+    def test_cursor_up_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.cursor_up(3)
+        assert buf.getvalue() == ""
+
+    def test_cursor_up_noop_on_zero(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.cursor_up(0)
+        assert not hasattr(stream, "data") or stream.data == ""
+
+    def test_cursor_down_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.cursor_down(2)
+        assert "\033[2B" in stream.data
+
+    def test_cursor_down_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.cursor_down(2)
+        assert buf.getvalue() == ""
+
+    def test_clear_line_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.clear_line()
+        assert "\033[2K" in stream.data
+
+    def test_clear_line_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.clear_line()
+        assert buf.getvalue() == ""
+
+    def test_clear_lines_combines_up_and_clear(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.clear_lines(2)
+        assert "\033[1A" in stream.data
+        assert "\033[2K" in stream.data
+
+    def test_hide_cursor_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.hide_cursor()
+        assert "\033[?25l" in stream.data
+
+    def test_hide_cursor_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.hide_cursor()
+        assert buf.getvalue() == ""
+
+    def test_show_cursor_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.show_cursor()
+        assert "\033[?25h" in stream.data
+
+    def test_show_cursor_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.show_cursor()
+        assert buf.getvalue() == ""
+
+    def test_cursor_methods_swallows_stream_error(self):
+        class BrokenTTY:
+            def isatty(self):
+                return True
+            def write(self, _):
+                raise OSError("closed")
+            def flush(self):
+                raise OSError("closed")
+
+        log = ConsoleLogger("slo.api", stream=BrokenTTY())
+        log.cursor_up(1)
+        log.cursor_down(1)
+        log.clear_line()
+        log.clear_lines(1)
+        log.hide_cursor()
+        log.show_cursor()
+
+
 # ── emit ───────────────────────────────────────────────────────────────────
 
 class TestEmit:

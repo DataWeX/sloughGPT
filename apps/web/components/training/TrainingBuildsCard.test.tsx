@@ -14,10 +14,13 @@ vi.mock('@/lib/souls-controller', () => ({
 }))
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(' '),
-  Card: ({ children, ...p }: any) => <div data-testid="card" {...p}>{children}</div>,
-  CardHeader: ({ children }: any) => <div>{children}</div>,
-  CardTitle: ({ children, ...p }: any) => <div data-testid="card-title" {...p}>{children}</div>,
-  CardContent: ({ children }: any) => <div>{children}</div>,
+  ActionCard: ({ children, title, actions, ...p }: any) => (
+    <div data-testid={p.testId || 'action-card'} {...p}>
+      <div data-testid="card-title">{title}</div>
+      {actions && <div>{actions}</div>}
+      {children}
+    </div>
+  ),
   Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
   Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
 }))

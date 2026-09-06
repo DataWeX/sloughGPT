@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, ActionCard } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { Chip } from '@sloughgpt/strui'
@@ -74,16 +74,16 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Output Comparison</CardTitle>
-          {Object.keys(outputResults).length > 0 && (
-            <Button variant="ghost" size="sm" onClick={clearOutputComparison}><IconX className="h-3.5 w-3.5 mr-1" /> Clear</Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <ActionCard
+      title="Output Comparison"
+      actions={
+        Object.keys(outputResults).length > 0 && (
+          <Button variant="ghost" size="sm" onClick={clearOutputComparison}><IconX className="h-3.5 w-3.5 mr-1" /> Clear</Button>
+        )
+      }
+      testId="output-comparison"
+      contentClassName="space-y-3"
+    >
         <Textarea value={outputPrompt} onChange={e => setOutputPrompt(e.target.value)} placeholder="Enter a prompt to compare model outputs..." className="min-h-[80px] text-sm" aria-label="Comparison prompt" />
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground mr-1">Models:</span>
@@ -128,7 +128,6 @@ export default function OutputComparisonCard({ models }: OutputComparisonCardPro
             })}
           </div>
         )})()}
-      </CardContent>
-    </Card>
+      </ActionCard>
   )
 }

@@ -50,6 +50,8 @@ class DatasetsRouter:
         self._import_locks: dict[str, asyncio.Lock] = {}
         self._import_locks_lock = asyncio.Lock()
         self._DATASET_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
+        from mogdb.cache import QueryCache
+        self._cache = QueryCache(ttl_seconds=5.0, max_entries=32)
         self._register_routes()
 
     def _register_routes(self):
@@ -159,24 +161,14 @@ class DatasetsRouter:
         q: str | None = Query(None, description="Search query"),
         type: str | None = Query(None, description="Filter by type"),
     ) -> dict:
-        """List all datasets, optionally filtered by search query and type.
+        """List all datasets, optionally filtered by search query and type."""
+        cache_key = f"datasets:list:{q or ''}:{type or ''}"
 
-        Args:
-            q: Optional search string to filter datasets by name or
-                description. When None, all datasets are returned.
-            type: Optional type filter (e.g. "text", "image"). When None,
-                all types are returned.
+        def compute():
+            ctrl = get_datasets_controller()
+            return ctrl.list_datasets(q, type)
 
-        Returns:
-            DatasetListResponse containing a list of DatasetInfo objects
-            and a count of matching datasets.
-
-        Side effects:
-            Reads from the DatasetsController which scans the datasets
-            directory on disk.
-        """
-        ctrl = get_datasets_controller()
-        datasets = await asyncio.to_thread(ctrl.list_datasets, q, type)
+        datasets = await asyncio.to_thread(self._cache.get_or_set, cache_key, compute)
         return DatasetListResponse(
             datasets=[DatasetInfo(**d) for d in datasets],
             count=len(datasets),

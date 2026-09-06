@@ -128,8 +128,10 @@ class TestRecordFeedbackWorkflow:
         })
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "success"
-        assert body["data"]["workflow_active"] is True
+        assert body["status"] == "ok"
+        assert body["feedback_id"] == "fb-wf-1"
+        assert body["message_id"] == "conv-1"
+        assert body["rating"] == "thumbs_up"
 
     def test_rejects_invalid_workflow_rating(self, mock_get_ctrl, client):
         resp = client.post("/feedback/workflow-record", json={
@@ -155,7 +157,7 @@ class TestRecordFeedbackWorkflow:
             "user_message": "y" * 5000,
         })
         assert resp.status_code == 200
-        assert resp.json()["data"]["workflow_active"] is True
+        assert resp.json()["status"] == "ok"
 
     def test_workflow_rejects_thumbs_down_rating(self, mock_get_ctrl, client):
         ctrl = MagicMock()
@@ -193,7 +195,7 @@ class TestRecordFeedbackWorkflow:
             "conversation_id": "conv-1",
             "rating": "thumbs_up",
         })
-        assert resp.json()["data"]["feedback_id"] == ""
+        assert resp.json()["feedback_id"] == ""
 
     def test_workflow_overlong_assistant_response_422(self, mock_get_ctrl, client):
         resp = client.post("/feedback/workflow-record", json={
@@ -216,6 +218,8 @@ class TestFeedbackStats:
     """GET /feedback/stats/summary"""
 
     def test_returns_stats(self, mock_get_ctrl, client):
+        import apps.api.server.routers.feedback as fb_mod
+        fb_mod._feedback_stats_cache = None
         ctrl = MagicMock()
         ctrl.get_stats.return_value = dict(STATS_RESPONSE)
         mock_get_ctrl.return_value = ctrl
@@ -226,6 +230,8 @@ class TestFeedbackStats:
         assert body["total"] == 12
 
     def test_returns_empty_stats(self, mock_get_ctrl, client):
+        import apps.api.server.routers.feedback as fb_mod
+        fb_mod._feedback_stats_cache = None
         ctrl = MagicMock()
         ctrl.get_stats.return_value = {"thumbs_up": 0, "thumbs_down": 0, "total": 0, "up_ratio": 0.0}
         mock_get_ctrl.return_value = ctrl

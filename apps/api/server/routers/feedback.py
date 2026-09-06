@@ -152,7 +152,7 @@ class FeedbackRouter:
             result = FeedbackStats(**stats)
             with _feedback_stats_lock:
                 _feedback_stats_cache = (now, result)
-            return success_response(data=result.model_dump())
+            return result.model_dump()
         except Exception as e:
             classify_and_raise(e, source="feedback.get_stats")
 
@@ -171,7 +171,7 @@ class FeedbackRouter:
                 resource=getattr(conv, "id", "unknown"),
                 detail=f"name={req.name}",
             )
-            return success_response(data=conv if isinstance(conv, dict) else conv.model_dump())
+            return conv if isinstance(conv, dict) else conv.model_dump()
         except Exception as e:
             classify_and_raise(e, source="feedback.create_conversation")
 

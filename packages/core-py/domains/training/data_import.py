@@ -1181,48 +1181,6 @@ class DataImporter:
             )
 
 
-def import_data(
-    source: str,
-    name: str,
-    source_type: str = "auto",
-    output_dir: str = "datasets",
-    **kwargs,
-) -> ImportResult:
-    """
-    Import data from various sources.
-
-    Args:
-        source: URL, path, or dataset ID
-        name: Dataset name
-        source_type: 'github', 'huggingface', 'url', 'local', or 'auto'
-        output_dir: Output directory
-        **kwargs: Additional options
-
-    Returns:
-        ImportResult
-    """
-    importer = DataImporter(output_dir)
-
-    if source_type == "auto":
-        if source.startswith(("https://github.com", "git@github.com")):
-            source_type = "github"
-        elif "/" in source and not source.startswith("http"):
-            source_type = "huggingface"
-        elif source.startswith(("http://", "https://")):
-            source_type = "url"
-        else:
-            source_type = "local"
-
-    if source_type == "github":
-        return importer.import_from_github(source, name, **kwargs)
-    elif source_type == "huggingface":
-        return importer.import_from_huggingface(source, name)
-    elif source_type == "url":
-        return importer.import_from_url(source, name)
-    else:
-        return importer.import_from_local(source, name, **kwargs)
-
-
 __all__ = [
     "DataImporter",
     "RepoImporter",
@@ -1232,5 +1190,4 @@ __all__ = [
     "BooksSearch",
     "ISBNImporter",
     "ImportResult",
-    "import_data",
 ]

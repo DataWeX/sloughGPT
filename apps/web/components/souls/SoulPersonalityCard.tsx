@@ -1,6 +1,6 @@
 'use client'
 
-import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, ActionCard, ChipGroup } from '@sloughgpt/strui'
 
 interface SoulPersonalityCardProps {
   personality: Record<string, number> | undefined
@@ -28,42 +28,34 @@ export function SoulPersonalityCard({ personality, traits, soulName }: SoulPerso
   const avgScore = entries.reduce((s, [, v]) => s + v, 0) / entries.length
 
   return (
-    <Card data-testid="soul-personality">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Personality{soulName ? ` — ${soulName}` : ''}</CardTitle>
-          <span className="text-[10px] font-mono text-muted-foreground">
-            avg {(avgScore * 100).toFixed(0)}%
-          </span>
+    <ActionCard
+      title={`Personality${soulName ? ` — ${soulName}` : ''}`}
+      subtitle={`avg ${(avgScore * 100).toFixed(0)}%`}
+      testId="soul-personality"
+    >
+      {traits && traits.length > 0 && (
+        <div className="mb-3">
+          <ChipGroup
+            chips={traits.map(t => ({ children: t, className: 'bg-primary/10 text-primary' }))}
+          />
         </div>
-      </CardHeader>
-      <CardContent>
-        {traits && traits.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-3">
-            {traits.map(t => (
-              <span key={t} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                {t}
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="space-y-2">
-          {entries.map(([key, value]) => (
-            <div key={key}>
-              <div className="flex items-center justify-between text-[11px] mb-0.5">
-                <span className="text-muted-foreground">{traitLabel(key)}</span>
-                <span className="font-mono">{(value * 100).toFixed(0)}%</span>
-              </div>
-              <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
-                <div
-                  className={cn('h-full rounded-full transition-all', traitColor(value))}
-                  style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
-                />
-              </div>
+      )}
+      <div className="space-y-2">
+        {entries.map(([key, value]) => (
+          <div key={key}>
+            <div className="flex items-center justify-between text-[11px] mb-0.5">
+              <span className="text-muted-foreground">{traitLabel(key)}</span>
+              <span className="font-mono">{(value * 100).toFixed(0)}%</span>
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            <div className="h-1.5 rounded-full bg-muted/50 overflow-hidden">
+              <div
+                className={cn('h-full rounded-full transition-all', traitColor(value))}
+                style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </ActionCard>
   )
 }

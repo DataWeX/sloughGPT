@@ -5,10 +5,13 @@ import { TrainingLogCard } from './TrainingLogCard'
 import { trainingJobsController } from '@/lib/training-controller'
 
 vi.mock('@sloughgpt/strui', () => ({
-  Card: ({ children, className }: any) => <div className={className}>{children}</div>,
-  CardHeader: ({ children, className }: any) => <div className={className}>{children}</div>,
-  CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
-  CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
+  ActionCard: ({ children, title, actions, className }: any) => (
+    <div className={className}>
+      <div data-testid="card-title">{title}</div>
+      {actions && <div>{actions}</div>}
+      {children}
+    </div>
+  ),
   Button: ({ children, onClick, disabled, className }: any) => (
     <button onClick={onClick} disabled={disabled} className={className}>{children}</button>
   ),

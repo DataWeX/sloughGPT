@@ -46,6 +46,42 @@ const MAX_RETRIES = 1;
 const BASE_DELAY = 500;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Simple in-memory cache for GET requests. */
+class RequestCache {
+  private store = new Map<string, {data: unknown; expiresAt: number}>();
+
+  constructor(private defaultTtlMs = 5000) {}
+
+  get<T>(key: string): T | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return undefined;
+    }
+    return entry.data as T;
+  }
+
+  set(key: string, data: unknown, ttlMs?: number) {
+    this.store.set(key, {data, expiresAt: Date.now() + (ttlMs ?? this.defaultTtlMs)});
+  }
+
+  invalidate(prefix: string) {
+    for (const key of this.store.keys()) {
+      if (key.startsWith(prefix)) this.store.delete(key);
+    }
+  }
+}
+
+const cache = new RequestCache(5000);
+
+/** Paths that benefit from longer cache TTL. */
+const LONG_TTL_PATHS: [RegExp, number][] = [
+  [/^\/models(?!\/)/, 10_000],
+  [/^\/datasets(?!\/)/, 10_000],
+  [/^\/health/, 5_000],
+];
+
 function parseErrorDetail(text: string, resStatus: number): string {
   try {
     const j = JSON.parse(text);

@@ -67,6 +67,8 @@ class ModelsRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/models", tags=["models"])
+        from mogdb.cache import QueryCache
+        self._cache = QueryCache(ttl_seconds=5.0, max_entries=16)
         self._register_routes()
 
     def _register_routes(self):
@@ -243,7 +245,8 @@ class ModelsRouter:
 
     async def list_models(self) -> dict:
         """List available/loaded models with plain-language descriptions."""
-        try:
+
+        def compute():
             ctrl = get_models_controller()
             current = ctrl.get_current_model()
             models = []
@@ -279,7 +282,11 @@ class ModelsRouter:
                             description=self._describe_model(model_id, params, loaded=False),
                         )
                     )
-            return success_response(data=[m.model_dump() for m in models])
+            return [m.model_dump() for m in models]
+
+        try:
+            data = self._cache.get_or_set("models:list", compute)
+            return success_response(data=data)
         except Exception as e:
             classify_and_raise(e, source="models.list")
 

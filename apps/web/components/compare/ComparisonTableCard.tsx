@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, ActionCard } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 import { METRIC_COLUMNS } from '@/lib/compare-config'
 

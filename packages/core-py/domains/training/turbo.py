@@ -156,6 +156,15 @@ def run_turbo_worker(config: dict) -> None:
     job_id = _turbo_state.get("job_id", "")
     data_path = config.get("data_path", "")
 
+    def _finish_cm(status: str, error: str = "") -> None:
+        op_id = _turbo_state.get("_cm_op_id")
+        if op_id:
+            try:
+                from domains.infrastructure.cancel_manager import get_cancel_manager
+                get_cancel_manager().finish(op_id, error=error if status != "completed" else "")
+            except Exception as exc:
+                logger.debug("CancelManager.finish failed: %s", exc)
+
     if not data_path:
         dataset_id = config.get("dataset_id")
         if dataset_id:
@@ -169,15 +178,6 @@ def run_turbo_worker(config: dict) -> None:
     resume = config.get("resume", False)
     resume_path = config.get("resume_path", "")
     experiment_id = config.get("experiment_id")
-
-    def _finish_cm(status: str, error: str = "") -> None:
-        op_id = _turbo_state.get("_cm_op_id")
-        if op_id:
-            try:
-                from domains.infrastructure.cancel_manager import get_cancel_manager
-                get_cancel_manager().finish(op_id, error=error if status != "completed" else "")
-            except Exception as exc:
-                logger.debug("CancelManager.finish failed: %s", exc)
 
     def on_progress(info: dict[str, Any]) -> None:
         with _turbo_lock:

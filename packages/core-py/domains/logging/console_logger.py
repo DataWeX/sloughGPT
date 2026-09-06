@@ -73,6 +73,60 @@ class ConsoleLogger(Logger):
         from .config import LogFormatter
         self._formatter = LogFormatter(fmt=format, colors=self._colors)
 
+    # ── Cursor methods (for StatusBlock TTY detection) ──────────────────
+
+    def cursor_up(self, n: int = 1) -> None:
+        """Move cursor up n lines. No-op if stream is not a TTY."""
+        if hasattr(self._stream, "isatty") and self._stream.isatty() and n > 0:
+            try:
+                self._stream.write(f"\033[{n}A")
+                self._stream.flush()
+            except (OSError, ValueError):
+                pass
+
+    def cursor_down(self, n: int = 1) -> None:
+        """Move cursor down n lines. No-op if stream is not a TTY."""
+        if hasattr(self._stream, "isatty") and self._stream.isatty() and n > 0:
+            try:
+                self._stream.write(f"\033[{n}B")
+                self._stream.flush()
+            except (OSError, ValueError):
+                pass
+
+    def clear_line(self) -> None:
+        """Clear the current line. No-op if stream is not a TTY."""
+        if hasattr(self._stream, "isatty") and self._stream.isatty():
+            try:
+                self._stream.write("\033[2K")
+                self._stream.flush()
+            except (OSError, ValueError):
+                pass
+
+    def clear_lines(self, n: int = 1) -> None:
+        """Clear n lines starting from cursor position up."""
+        if hasattr(self._stream, "isatty") and self._stream.isatty():
+            for _ in range(n):
+                self.cursor_up(1)
+                self.clear_line()
+
+    def hide_cursor(self) -> None:
+        """Hide the terminal cursor. No-op if stream is not a TTY."""
+        if hasattr(self._stream, "isatty") and self._stream.isatty():
+            try:
+                self._stream.write("\033[?25l")
+                self._stream.flush()
+            except (OSError, ValueError):
+                pass
+
+    def show_cursor(self) -> None:
+        """Restore the terminal cursor. No-op if stream is not a TTY."""
+        if hasattr(self._stream, "isatty") and self._stream.isatty():
+            try:
+                self._stream.write("\033[?25h")
+                self._stream.flush()
+            except (OSError, ValueError):
+                pass
+
     def emit(self, record: LogRecord) -> None:
         """Format and write the record to the output stream (thread-safe)."""
         line = self._formatter.format_oop(record)
