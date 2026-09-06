@@ -341,7 +341,7 @@ class TestAutoIngester:
         monkeypatch.setattr(sys, "argv",
                             ["auto_ingest", "--path", str(tmp_path), "--dry-run"])
         asyncio.run(main())
-        out = capsys.readouterr().out
+        out = capsys.readouterr().err
         assert "Done" in out
 
     def test_main_file(self, tmp_path, monkeypatch, capsys):

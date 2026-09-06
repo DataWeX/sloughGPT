@@ -275,7 +275,7 @@ class TestBabyAction:
 
     def test_move_toward_out_of_bounds(self):
         """Move toward target outside grid → returns False."""
-        baby = FakeBaby(position=[1, 0, 1])
+        baby = FakeBaby(position=[9.5, 0, 9.5])
         world = WorldGrid(size=(10, 4, 10))
         action = BabyAction(baby)
         target = np.array([100, 0, 100], dtype=np.float64)

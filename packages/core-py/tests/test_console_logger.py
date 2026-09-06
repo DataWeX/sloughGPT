@@ -81,7 +81,7 @@ class TestHumanFormat:
 
     def test_info_line(self):
         log = ConsoleLogger("slo.api", colors=False)
-        line = log._format_record(_record(message="server started", context={"port": 8000}))
+        line = log._formatter.format_oop(_record(message="server started", context={"port": 8000}))
         assert "server started" in line
         assert "INF" in line
         assert "port=8000" in line

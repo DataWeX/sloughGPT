@@ -66,6 +66,7 @@ class TestTraitWeightsConfig:
 
     def test_get_default(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg._weights = {}
         assert cfg.get("warmth") == 0.5
 
     def test_get_custom_default(self, tmp_path):
