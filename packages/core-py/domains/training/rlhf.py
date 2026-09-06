@@ -14,6 +14,7 @@ Runs entirely on numpy/SloNet.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional
 import logging
 
@@ -21,6 +22,17 @@ import numpy as np
 from domains.training.slonet import SloLinear, Tensor
 
 logger = logging.getLogger("slo.rlhf")
+
+
+class RLHFMetric(Enum):
+    """Metrics tracked during RLHF training."""
+    REWARD = "reward"
+    KL_DIVERGENCE = "kl_divergence"
+    VALUE_LOSS = "value_loss"
+    POLICY_LOSS = "policy_loss"
+    ENTROPY = "entropy"
+    APPROX_KL = "approx_kl"
+    ADVANTAGE = "advantage"
 
 
 @dataclass
@@ -524,6 +536,7 @@ def create_rlhf_trainer(
 
 __all__ = [
     "RLHFConfig",
+    "RLHFMetric",
     "RewardModel",
     "ValueHead",
     "PPOTrainer",

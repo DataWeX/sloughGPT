@@ -7,19 +7,24 @@ Factory delegates to slonet.create_scheduler for native types.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Optional
-import logging
 
 logger = logging.getLogger("slo.lr_schedulers")
 
 from domains.training.slonet import (
-    WarmupCosineScheduler as SloWarmupCosine,
-    PolynomialDecayScheduler as SloPolynomial,
     LinearWarmupScheduler as SloLinearWarmup,
+)
+from domains.training.slonet import (
+    PolynomialDecayScheduler as SloPolynomial,
+)
+from domains.training.slonet import (
+    WarmupCosineScheduler as SloWarmupCosine,
+)
+from domains.training.slonet import (
     create_scheduler as soul_create_scheduler,
 )
-
 
 # =============================================================================
 # Configuration
@@ -92,14 +97,29 @@ class LinearWarmupScheduler(SloLinearWarmup):
 
 
 def create_scheduler(optimizer, scheduler_type: str, total_steps=None,
-                     warmup_steps=0, min_lr=1e-6, max_lr=1e-3, **kwargs):
+                     warmup_steps=0, min_lr=1e-6, max_lr=3e-4, **kwargs):
     """
     Create an LR scheduler.
 
     Delegates to slonet.create_scheduler for all types.
     Supports: cosine, warmup, onecycle, cyclic, polynomial, step, plateau,
               cosine_annealing, none
+
+    Args:
+        optimizer: The optimizer to schedule
+        scheduler_type: Type of scheduler ('cosine', 'warmup', etc.)
+        total_steps: Total training steps
+        warmup_steps: Number of warmup steps (default: 0)
+        min_lr: Minimum learning rate (default: 1e-6)
+        max_lr: Maximum/initial learning rate (default: 3e-4)
+        **kwargs: Additional scheduler-specific arguments
     """
+    # Auto-calculate warmup steps if not provided
+    if warmup_steps == 0 and total_steps and total_steps > 1000:
+        # Default to 5% of total steps for warmup, minimum 100 steps
+        warmup_steps = max(100, int(total_steps * 0.05))
+        logger.info(f"Auto warmup_steps={warmup_steps} (5% of total_steps={total_steps})")
+
     return soul_create_scheduler(optimizer, scheduler_type,
                                  total_steps=total_steps, warmup_steps=warmup_steps,
                                  min_lr=min_lr, max_lr=max_lr, **kwargs)
