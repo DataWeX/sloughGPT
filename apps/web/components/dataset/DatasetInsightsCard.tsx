@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, InsightsCard, ChipGroup } from '@sloughgpt/strui'
 import type { DatasetPreview } from '@/lib/dataset-controller'
 
 interface DatasetInsightsCardProps {
@@ -59,60 +59,33 @@ export function DatasetInsightsCard({ preview, loading }: DatasetInsightsCardPro
   if (!insights) return null
 
   return (
-    <Card data-testid="dataset-insights">
-      <CardHeader>
-        <CardTitle className="text-base">Insights</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <KpiGrid columns={3} className="mb-3">
-          <StatCard label="Avg Words" value={insights.avgWords} />
-          <StatCard label="Avg Length" value={`${insights.avgLen} chars`} />
-          <StatCard label="Diversity" value={<span className={insights.diversityScore > 80 ? 'text-success' : insights.diversityScore > 50 ? 'text-warning' : 'text-destructive'}>{insights.diversityScore}%</span>} />
-        </KpiGrid>
-
-        {insights.langEntries.length > 0 && (
-          <div className="mb-3">
-            <div className="text-[10px] text-muted-foreground mb-1">Languages</div>
-            <div className="flex flex-wrap gap-1">
-              {insights.langEntries.slice(0, 5).map(([lang, count]) => (
-                <span key={lang} className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                  {lang} ({count})
-                </span>
-              ))}
-              {insights.langEntries.length > 5 && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                  +{insights.langEntries.length - 5} more
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-1 text-[11px]">
-          {insights.emptyLines > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Empty samples</span>
-              <span className="font-mono text-warning">{insights.emptyLines}</span>
-            </div>
-          )}
-          {insights.shortLines > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Very short (&lt;20 chars)</span>
-              <span className="font-mono text-warning">{insights.shortLines}</span>
-            </div>
-          )}
-          {insights.longLines > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Very long (&gt;1K chars)</span>
-              <span className="font-mono">{insights.longLines}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Word range</span>
-            <span className="font-mono">{insights.minWords}–{insights.maxWords}</span>
-          </div>
+    <InsightsCard
+      title="Insights"
+      testId="dataset-insights"
+      kpis={[
+        { label: 'Avg Words', value: insights.avgWords },
+        { label: 'Avg Length', value: `${insights.avgLen} chars` },
+        { label: 'Diversity', value: <span className={insights.diversityScore > 80 ? 'text-success' : insights.diversityScore > 50 ? 'text-warning' : 'text-destructive'}>{insights.diversityScore}%</span> },
+      ]}
+      kpiColumns={3}
+      details={[
+        ...(insights.emptyLines > 0 ? [{ label: 'Empty samples', value: <span className="font-mono text-warning">{insights.emptyLines}</span> }] : []),
+        ...(insights.shortLines > 0 ? [{ label: 'Very short (<20 chars)', value: <span className="font-mono text-warning">{insights.shortLines}</span> }] : []),
+        ...(insights.longLines > 0 ? [{ label: 'Very long (>1K chars)', value: <span className="font-mono">{insights.longLines}</span> }] : []),
+        { label: 'Word range', value: <span className="font-mono">{insights.minWords}–{insights.maxWords}</span> },
+      ]}
+    >
+      {insights.langEntries.length > 0 && (
+        <div className="mt-2">
+          <div className="text-[10px] text-muted-foreground mb-1">Languages</div>
+          <ChipGroup
+            chips={insights.langEntries.slice(0, 5).map(([lang, count]) => ({
+              children: `${lang} (${count})`,
+            }))}
+            maxVisible={5}
+          />
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </InsightsCard>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, InsightsCard, ChipGroup } from '@sloughgpt/strui'
 import type { CompanionTraits } from '@/lib/companion-controller'
 
 interface CompanionInsightsCardProps {
@@ -39,52 +39,36 @@ export function CompanionInsightsCard({ traits, presets }: CompanionInsightsCard
 
   if (!traits) return null
   if (numericValues.length === 0 || numericValues.every(v => v === 0)) return null
-  const avg = numericValues.length > 0 ? numericValues.reduce((s, v) => s + v, 0) / numericValues.length : 0
+
+  const balanceLabel = spread < 0.2 ? 'Even' : spread < 0.4 ? 'Moderate' : 'Skewed'
+
+  const traitEntries = (Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name')
 
   return (
-    <Card data-testid="companion-insights">
-      <CardHeader>
-        <CardTitle className="text-base">Personality Profile</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Type</div>
-            <div className="text-sm font-semibold">{type}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Dominant</div>
-            <div className="text-sm font-semibold capitalize">{dominant}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Weakest</div>
-            <div className="text-sm font-semibold capitalize">{weakest}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Balance</div>
-            <div className="text-sm font-semibold">
-              {spread < 0.2 ? 'Even' : spread < 0.4 ? 'Moderate' : 'Skewed'}
-            </div>
-          </div>
+    <InsightsCard
+      title="Personality Profile"
+      testId="companion-insights"
+      kpis={[
+        { label: 'Type', value: type },
+        { label: 'Dominant', value: <span className="capitalize">{dominant}</span> },
+        { label: 'Weakest', value: <span className="capitalize">{weakest}</span> },
+        { label: 'Balance', value: balanceLabel },
+      ]}
+      kpiColumns={4}
+    >
+      <ChipGroup
+        chips={traitEntries.map(([key, value]) => ({
+          children: `${key} ${(value * 100).toFixed(0)}%`,
+          className: cn(value >= 0.7 ? 'bg-primary/15 text-primary' :
+            value >= 0.4 ? 'bg-muted text-muted-foreground' :
+            'bg-muted/50 text-muted-foreground/60'),
+        }))}
+      />
+      {presets.length > 0 && (
+        <div className="mt-2 text-[10px] text-muted-foreground">
+          {presets.length} preset{presets.length !== 1 ? 's' : ''} available
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {(Object.entries(traits) as [string, number][]).filter(([k]) => k !== 'name').map(([key, value]) => (
-            <span
-              key={key}
-              className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', value >= 0.7 ? 'bg-primary/15 text-primary' :
-                value >= 0.4 ? 'bg-muted text-muted-foreground' :
-                'bg-muted/50 text-muted-foreground/60')}
-            >
-              {key} {(value * 100).toFixed(0)}%
-            </span>
-          ))}
-        </div>
-        {presets.length > 0 && (
-          <div className="mt-3 text-[10px] text-muted-foreground">
-            {presets.length} preset{presets.length !== 1 ? 's' : ''} available
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </InsightsCard>
   )
 }

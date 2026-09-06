@@ -231,7 +231,8 @@ class TestRecordFeedbackPipeline:
         mock_get_wf.return_value = workflow
         student = object()
         tokenizer = object()
-        with patch("domains.training.state.get_state") as mock_get_state:
+        ctrl._workflow = None
+        with patch("domains.training.service.get_state") as mock_get_state:
             mock_state = MagicMock()
             mock_state.student_net = student
             mock_state.student_tokenizer = tokenizer

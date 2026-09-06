@@ -176,6 +176,8 @@ export { ThemeColorPicker, ThemeSwatch, ColorInput, DEFAULT_THEME_SWATCHES, type
 export { VersionInspector, type VersionInspectorProps, type FeatureVersionEntry } from './components/composed/version-inspector'
 export { ActionCard, type ActionCardProps } from './components/composed/action-card'
 export { InsightsCard, type InsightsCardProps, type InsightsCardDetail } from './components/composed/insights-card'
+export { MetricsCard, type MetricsCardProps } from './components/composed/metrics-card'
+export { ChipGroup, type ChipGroupProps, type ChipItem } from './components/composed/chip-group'
 
 // === AI components (non-overlapping) ===
 export { MessageBubble, type MessageBubbleProps } from './components/ai/message-bubble'
