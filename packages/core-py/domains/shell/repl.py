@@ -394,7 +394,7 @@ class ShellREPL(LinuxCommandsMixin):
         try:
             self._perms.check(cmd, args_str)
             return True
-        except PermissionError as e:
+        except PermissionError:
             risk = self._perms.classify(cmd, args_str)
             if not interactive:
                 self._print(f"  {_C_RED}Permission denied:{_C_RESET} {cmd} (risk={risk})")
@@ -563,7 +563,7 @@ class ShellREPL(LinuxCommandsMixin):
                     elif len(cmds) > 1:
                         self._execute_pipeline(cmds, should_time=should_time)
                     else:
-                        out = self._execute_single(cmds[0][0], "")
+                        self._execute_single(cmds[0][0], "")
                 except Exception as e:
                     logger.warning("rc line %d: %s", line_no, e, extra={"tag": "INFRA"})
 
@@ -2134,10 +2134,10 @@ Examples:
         try:
             n = int(parts[0])
         except ValueError:
-            self._print(f"  Usage: fc [-l] [n]")
-            self._print(f"    fc       — list history")
-            self._print(f"    fc -l 5  — list last 5 commands")
-            self._print(f"    fc 42    — re-run command #42")
+            self._print("  Usage: fc [-l] [n]")
+            self._print("    fc       — list history")
+            self._print("    fc -l 5  — list last 5 commands")
+            self._print("    fc 42    — re-run command #42")
             return
         if n < 1 or n > len(self._history):
             self._print(f"  No history entry #{n} (have {len(self._history)} entries)")
@@ -2163,8 +2163,8 @@ Examples:
         from .permissions import Risk
         parts = args.strip().split()
         if not parts:
-            self._print(f"  Usage: permit <cmd> [--persist]")
-            self._print(f"         permit --all-<risk> [--persist]")
+            self._print("  Usage: permit <cmd> [--persist]")
+            self._print("         permit --all-<risk> [--persist]")
             self._print(f"  Risk levels: {Risk.SAFE}, {Risk.ELEVATED}, {Risk.DANGEROUS}, {Risk.CRITICAL}")
             granted = self._perms.list_granted()
             if granted:
@@ -2191,8 +2191,8 @@ Examples:
         from .permissions import Risk
         parts = args.strip().split()
         if not parts:
-            self._print(f"  Usage: deny <cmd> [--persist]")
-            self._print(f"         deny --all-<risk> [--persist]")
+            self._print("  Usage: deny <cmd> [--persist]")
+            self._print("         deny --all-<risk> [--persist]")
             return
         persist = "--persist" in parts
         targets = [p for p in parts if p != "--persist"]
@@ -2214,7 +2214,7 @@ Examples:
     def _cmd_permissions(self, args: str = "") -> None:
         """permissions — show current permission policy and granted commands."""
         from .permissions import Risk
-        self._print(f"  Risk policies:")
+        self._print("  Risk policies:")
         for risk in (Risk.SAFE, Risk.ELEVATED, Risk.DANGEROUS, Risk.CRITICAL):
             action = self._perms._policy.get(risk, "deny")
             icon = f"{_C_GREEN}✓ allow{_C_RESET}" if action == "allow" else f"{_C_RED}✗ deny{_C_RESET}"
@@ -2222,7 +2222,7 @@ Examples:
         granted = self._perms.list_granted()
         if granted:
             self._print(f"  Granted commands: {', '.join(granted)}")
-        self._print(f"  Config: MogDB (shell_permissions)")
+        self._print("  Config: MogDB (shell_permissions)")
 
     def _cmd_confirm(self, args: str = "") -> None:
         """confirm [on|off] — toggle auto-download (skip download confirmations).
@@ -2246,17 +2246,17 @@ Examples:
 
             if current:
                 self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
-                self._print(f"  Downloads will be confirmed automatically (no prompts)")
+                self._print("  Downloads will be confirmed automatically (no prompts)")
             else:
                 self._print(f"  Auto-download: {_C_RED}OFF{_C_RESET}")
-                self._print(f"  Downloads will require confirmation")
-            self._print(f"  Toggle: confirm on / confirm off")
+                self._print("  Downloads will require confirmation")
+            self._print("  Toggle: confirm on / confirm off")
             return
 
         if arg not in ("on", "off", "yes", "no", "true", "false", "1", "0"):
-            self._print(f"  Usage: confirm [on|off]")
-            self._print(f"    on/yes/true/1  — enable auto-download")
-            self._print(f"    off/no/false/0 — disable auto-download")
+            self._print("  Usage: confirm [on|off]")
+            self._print("    on/yes/true/1  — enable auto-download")
+            self._print("    off/no/false/0 — disable auto-download")
             return
 
         new_value = arg in ("on", "yes", "true", "1")
@@ -2283,15 +2283,15 @@ Examples:
 
             if new_value:
                 self._print(f"  Auto-download: {_C_GREEN}ON{_C_RESET}")
-                self._print(f"  Downloads will be confirmed automatically")
+                self._print("  Downloads will be confirmed automatically")
             else:
                 self._print(f"  Auto-download: {_C_RED}OFF{_C_RESET}")
-                self._print(f"  Downloads will require confirmation")
+                self._print("  Downloads will require confirmation")
             self._print(f"  Setting saved to {config_path}")
 
         except Exception as e:
             self._print(self._format_error(e, "config"))
-            self._print(f"  Fallback: export SLO_AUTO_DOWNLOAD=1")
+            self._print("  Fallback: export SLO_AUTO_DOWNLOAD=1")
 
     def _cmd_procs(self, args: str = "") -> None:
         jobs = self._spinner_call("Fetching jobs", lambda: self.cmds.ps(), ok_msg=None)
@@ -2346,7 +2346,7 @@ Examples:
 
         def _print_result(result):
             if result is None:
-                self._print(f"  ✗ Load failed")
+                self._print("  ✗ Load failed")
                 return
             status = result.get("status", "?")
             if status == "loaded":
@@ -2993,7 +2993,7 @@ Examples:
                 if status in ("completed", "failed", "error"):
                     if status == "completed":
                         ckpt = result.get("checkpoint", "")
-                        self._print(f"\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
+                        self._print("\n  Training complete" + (f" — {ckpt}" if ckpt else ""))
                     else:
                         err = result.get("error", "unknown error")
                         self._print(f"\n  Training {status}: {err}")
@@ -3125,7 +3125,7 @@ Examples:
             return
         if not self._require_api("gen"):
             return
-        with self.console.spinner("Generating") as s:
+        with self.console.spinner("Generating"):
             result = self.cmds.generate(args, max_tokens=150)
         if isinstance(result, dict) and "text" in result:
             self._print(f"\n  {result['text']}\n")
@@ -3465,7 +3465,7 @@ Examples:
                 for e in err_entries:
                     ts = _dt.fromtimestamp(e.timestamp).strftime("%H:%M:%S")
                     err_lines.append(f"{ts} [{e.source}] {e.message}")
-                ctx_parts.append(f"  Recent errors:\n" + "\n".join(f"    {l}" for l in err_lines))
+                ctx_parts.append("  Recent errors:\n" + "\n".join(f"    {l}" for l in err_lines))
         shell_context = "\n".join(ctx_parts)
 
         prompt = (
@@ -3479,7 +3479,7 @@ Examples:
             "Command:"
         )
 
-        self._print(f"  \u2601\ufe0f Interpreting as LLM query...")
+        self._print("  \u2601\ufe0f Interpreting as LLM query...")
         result = self._spinner_call("Thinking", lambda: self.cmds.generate(prompt, max_tokens=60))
 
         if isinstance(result, dict) and "text" in result:
@@ -3503,9 +3503,9 @@ Examples:
         else:
             error = result.get("error", "unknown") if isinstance(result, dict) else "unexpected response"
             if "timeout" in str(error).lower() or "timed out" in str(error).lower():
-                self._print(f"  \u26a0\ufe0f AI server is busy (timeout). Try again in a moment.")
+                self._print("  \u26a0\ufe0f AI server is busy (timeout). Try again in a moment.")
             elif "connect" in str(error).lower() or "refused" in str(error).lower():
-                self._print(f"  \u274c AI server is not running. Start it with: api start")
+                self._print("  \u274c AI server is not running. Start it with: api start")
             else:
                 self._print(f"  \u274c AI interpretation failed: {error}")
 
@@ -3517,19 +3517,19 @@ Examples:
         w(f"  {_C_BOLD}{_C_CYAN}\u2728 Welcome to Dait{_C_RESET}")
         w(f"  {_C_DIM}{'─' * min(terminal, 50)}{_C_RESET}")
         w(f"  {_C_GREEN}Dait{_C_RESET} connects you to your local AI backend.")
-        w(f"")
+        w("")
         w(f"  {_C_YELLOW}Quick start:{_C_RESET}")
-        w(f"    health           Check server status")
-        w(f"    models           List available models")
-        w(f"    load gpt2        Load a model")
-        w(f"    gen hello world  Generate text")
-        w(f"    ai show models   Natural language commands")
-        w(f"")
+        w("    health           Check server status")
+        w("    models           List available models")
+        w("    load gpt2        Load a model")
+        w("    gen hello world  Generate text")
+        w("    ai show models   Natural language commands")
+        w("")
         w(f"  {_C_YELLOW}Pipes & more:{_C_RESET}")
-        w(f"    health &         Run in background")
-        w(f"    gen hello > out.txt  Redirect to file")
-        w(f"    time load gpt2       Time a command")
-        w(f"")
+        w("    health &         Run in background")
+        w("    gen hello > out.txt  Redirect to file")
+        w("    time load gpt2       Time a command")
+        w("")
         w(f"  Type {_C_YELLOW}`tutorial`{_C_RESET} for an interactive walkthrough.")
         w(f"  Type {_C_YELLOW}`help`{_C_RESET} for all commands, {_C_YELLOW}`exit`{_C_RESET} to quit.")
         w(f"  {_C_DIM}{'─' * min(terminal, 50)}{_C_RESET}")
@@ -3772,7 +3772,7 @@ Examples:
         status = self.os.api_status
         if status.get("available"):
             return True
-        self._print(f"  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
+        self._print("  \u2717 API server is not connected. Use \u2018api start\u2019 to launch it.")
         self._last_exit_code = 1
         return False
 
@@ -3801,7 +3801,7 @@ Examples:
         if isinstance(result, tuple):
             log, api_status = result
         else:
-            log, api_status = result, self.os.api_status
+            _log, api_status = result, self.os.api_status
         if api_status.get("available"):
             model = api_status.get("model_id", "unknown") or "unknown"
             self._status("ok", f"API — {model}")

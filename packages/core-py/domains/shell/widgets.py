@@ -634,7 +634,6 @@ class Input(Widget):
         visible = self._pad_line(visible, display_w)
 
         # Cursor indicator
-        cursor_char = Box.V if self._focused else "|"
 
         line = self.prompt + " " + visible
         self._dirty = False
@@ -1080,7 +1079,7 @@ class Dialog(Widget):
 
         # Content
         child_lines = self.child.render() if self.child and self.child.visible else []
-        content_rows = max(dialog_h - 2, 0)
+        max(dialog_h - 2, 0)
 
         for row in range(dialog_h):
             line_idx = dialog_top + row

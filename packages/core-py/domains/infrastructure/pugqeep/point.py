@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from .point_interface import PointProtocol, FunctionType
+from .point_interface import PointProtocol
 
 
 @dataclass(eq=False)

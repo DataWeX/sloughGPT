@@ -20,13 +20,10 @@ ioctl commands:
 
 from __future__ import annotations
 
-import os
 import time
-import struct
 import logging
 import threading
 import numpy as np
-from dataclasses import dataclass, field
 from typing import Any
 
 from .kernel_devices import DeviceDriver, DeviceType, DeviceState
@@ -294,7 +291,7 @@ class NPUDevice(DeviceDriver):
             elif command == "LOAD":
                 path = args[0] if len(args) > 0 else ""
                 name = args[1] if len(args) > 1 else ""
-                provider = self.load(path, name)
+                self.load(path, name)
                 return SyscallResult.ok({"model": name or path.rsplit("/", 1)[-1]})
 
             elif command == "UNLOAD":

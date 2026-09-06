@@ -646,7 +646,6 @@ class LoRAEvaluator:
         if output_sou is None:
             output_sou = str(Path(adapter_npz).with_suffix(".soul"))
 
-        from domains.inference import save_soul
         from domains.training.slonet import SloNet
 
         net = SloNet(

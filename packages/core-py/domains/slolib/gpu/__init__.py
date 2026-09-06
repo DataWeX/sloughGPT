@@ -499,7 +499,7 @@ class _Accelerator:
             attn = attn / attn.sum(axis=-1, keepdims=True)
             return self._apply_attn(attn, v)
         tile_s = min(128, S)
-        o = np.zeros((B, H, N, E), dtype=np.float32)
+        np.zeros((B, H, N, E), dtype=np.float32)
         for t_start in range(0, S, tile_s):
             t_end = min(t_start + tile_s, S)
             k_tile = k[:, :, t_start:t_end, :]
@@ -954,7 +954,7 @@ class _OpenCLBackend(_Accelerator):
     def is_available(self) -> bool:
         try:
             import pyopencl as cl
-            ctx = cl.create_some_context(interactive=False)
+            cl.create_some_context(interactive=False)
             self._cl = cl
             return True
         except Exception as e:

@@ -233,7 +233,7 @@ class OptimizedDataLoader:
             from domains.infrastructure.resource_manager import get_resource_manager
             num_workers = get_resource_manager().dataloader_workers
         effective_workers = effective_dataloader_workers(num_workers)
-        effective_prefetch = effective_prefetch_factor(effective_workers, prefetch_factor)
+        effective_prefetch_factor(effective_workers, prefetch_factor)
 
         self._collate_fn = collate_fn
         self.dataloader = _NumpyBatchIterator(dataset, batch_size, shuffle=True)
@@ -449,7 +449,6 @@ class FastInferenceSampler:
         penalties[idx] = penalty
 
         pos_mask = logits > 0
-        neg_mask = ~pos_mask
         return np.where(pos_mask, logits * penalties, logits / penalties)
 
     @staticmethod

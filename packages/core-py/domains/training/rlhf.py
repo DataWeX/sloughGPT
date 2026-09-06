@@ -13,13 +13,13 @@ Runs entirely on numpy/SloNet.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 import logging
 from enum import Enum
 
 import numpy as np
-from domains.training.slonet import SloLinear, Tensor, softmax
+from domains.training.slonet import SloLinear, Tensor
 
 logger = logging.getLogger("slo.rlhf")
 
@@ -308,7 +308,7 @@ class PPOTrainer:
         cfg = self.config
         obs = rollout["obs"]           # [B, T]
         old_logprobs = rollout["logprobs"]  # [B, T, V]
-        old_values = rollout["values"]      # [B]
+        rollout["values"]      # [B]
         advantages = rollout["advantages"]   # [T]
         returns = rollout["returns"]         # [T]
         rewards = rollout["rewards"]         # [B]

@@ -77,7 +77,10 @@ class FileIndex:
                 return 0
             with open(filepath, 'r', errors='ignore') as f:
                 content = f.read()
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.knowledge.ops").warning(
+                "Failed to read file %s: %s", filepath, e, extra={"tag": "INF"})
             return 0
 
         chunks = self._chunk_code(content, filepath)

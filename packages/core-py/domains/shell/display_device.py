@@ -7,7 +7,6 @@ Output operations with clean ioctl interface.
 from __future__ import annotations
 
 import sys
-import time
 from typing import Any
 
 from .kernel_syscall import SyscallResult

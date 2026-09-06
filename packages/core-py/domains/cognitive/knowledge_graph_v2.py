@@ -636,8 +636,8 @@ class KnowledgeGraph:
     def summary(self) -> str:
         """Get human-readable summary."""
         lines = [
-            f"Knowledge Graph Summary",
-            f"=" * 40,
+            "Knowledge Graph Summary",
+            "=" * 40,
             f"Entities: {self.stats['entities']:,}",
             f"Facts: {self.stats['facts']:,}",
             f"Avg Degree: {self.stats['avg_degree']:.2f}",
@@ -649,7 +649,7 @@ class KnowledgeGraph:
             predicate_counts[f.predicate] = predicate_counts.get(f.predicate, 0) + 1
 
         if predicate_counts:
-            lines.append(f"\nTop Relations:")
+            lines.append("\nTop Relations:")
             for pred, count in sorted(predicate_counts.items(), key=lambda x: -x[1])[:5]:
                 lines.append(f"  {pred}: {count}")
 

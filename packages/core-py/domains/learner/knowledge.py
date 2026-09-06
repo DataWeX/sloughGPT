@@ -977,14 +977,22 @@ class KnowledgeMemory:
         except Exception:
             total_facts = 0
         with self._lock:
+            topics = self.all_topics()
             return {
-                "topics": max(1, total_facts // 10),
+                "topics": len(topics),
                 "total_facts": total_facts,
                 "visited_urls": len(self._visited),
             }
 
     def all_topics(self) -> list[str]:
-        return ["general"]
+        """Return all unique topics from stored facts."""
+        try:
+            all_facts = self.list_all(top_k=5000)
+            topics = sorted(set(f.get("topic", "general") for f in all_facts))
+            return topics if topics else ["general"]
+        except Exception as e:
+            logger.warning("all_topics failed: %s", e, extra={"tag": "INF"})
+            return ["general"]
 
     def get_topic_facts(self, topic: str) -> list[dict]:
         return self.query(topic, top_k=100)

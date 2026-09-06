@@ -3109,9 +3109,8 @@ class Simulation:
 
         # Render the world state after all compute, before baby actions.
         # The bridge converts the WorldGrid into a Cycles Scene and renders it.
-        rendered_image = None
         if self._render_bridge is not None:
-            rendered_image = self._render_bridge.render_tick(
+            self._render_bridge.render_tick(
                 self.scene.world,
                 babies=list(self.scene.alive_babies),
                 nests=self.scene.nests if self.scene.params.structure_enabled else None,

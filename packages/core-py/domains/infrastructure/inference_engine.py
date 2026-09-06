@@ -504,7 +504,6 @@ class InferenceEngine:
                     str(_slnc), model_id=new_model_id, **load_kwargs,
                 )
 
-            old_provider = self._provider
             self._provider = new_provider
             self.model_id = new_model_id
             self.slnc_path = new_slnc_path

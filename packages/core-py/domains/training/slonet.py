@@ -1725,7 +1725,7 @@ class SloLSTM(SloLayer):
         c = _reshape(hidden[1] if hidden else zeros((1,self.hidden_dim)), (1,self.hidden_dim))
         hd = self.hidden_dim
         seq_len = xd_data.shape[1]
-        ed = xd_data.shape[2]
+        xd_data.shape[2]
         W_ih_T = self.W_ih.weight.T()
         W_hh_T = self.W_hh.weight.T()
         # Precompute input-gate contribution for all timesteps in one batched
@@ -1792,7 +1792,7 @@ class SloLSTM(SloLayer):
         W_hh_T = self.W_hh.weight.data.T
         h = hidden[0].copy() if hidden else np.zeros((1, hd), dtype=np.float32)
         c = hidden[1].copy() if hidden else np.zeros((1, hd), dtype=np.float32)
-        batch = xd.shape[0]
+        xd.shape[0]
         seq_len = embeds.shape[1]
         for t in range(seq_len):
             gates = all_igates[:, t, :] + h @ W_hh_T
@@ -2758,7 +2758,7 @@ class SloMultiHeadAttention(SloLayer):
         q_dim = self.W_q.out_features
         k_dim = self.W_k.out_features
         v_dim = self.W_v.out_features
-        fused_dim = q_dim + k_dim + v_dim
+        q_dim + k_dim + v_dim
         W_q = self.W_q.weight
         W_k = self.W_k.weight
         W_v = self.W_v.weight
@@ -3266,7 +3266,7 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
         s = np.sqrt(var + eps)
         x_center = x.data - mean
         if training:
-            N = n * h * w
+            n * h * w
             t_mean = t_x.mean(axis=(0, 2, 3), keepdims=True)
             t_var = (2 * (x_center * t_x)).mean(axis=(0, 2, 3), keepdims=True)
             t_norm = (t_x - t_mean) / s - x_center * t_var / (2 * s ** 3)
@@ -3470,16 +3470,16 @@ class SloNet:
         num_blocks = len(set(k.split(".")[1] for k in block_keys))
 
         # Determine dims from first block
-        norm1_w = sd.get(f"blocks.0.norm1.weight")
+        norm1_w = sd.get("blocks.0.norm1.weight")
         hidden_dim = norm1_w.shape[0] if norm1_w is not None else 384
 
-        q_w = sd.get(f"blocks.0.attn.q_proj.weight")
+        q_w = sd.get("blocks.0.attn.q_proj.weight")
         n_heads = 4  # default
         if q_w is not None:
             head_dim = q_w.shape[0]
             n_heads = hidden_dim // head_dim
 
-        ff_w1 = sd.get(f"blocks.0.mlp.w1.weight")
+        ff_w1 = sd.get("blocks.0.mlp.w1.weight")
         ff_dim = ff_w1.shape[0] if ff_w1 is not None else hidden_dim * 4
 
         for i in range(num_blocks):
@@ -4465,7 +4465,7 @@ def load_checkpoint_npz(path: str) -> Dict[str, Any]:
 
 def train_char_lstm_from_gpt(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, lr=0.001, embed_dim=256, hidden_dim=512, on_step=None):
     charset = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'")
-    stoi = {c:i for i,c in enumerate(charset)}; itos = {i:c for i,c in enumerate(charset)}
+    stoi = {c:i for i,c in enumerate(charset)}; {i:c for i,c in enumerate(charset)}
     unk = 0
     net = SloNet([SloEmbedding(len(charset), embed_dim), SloLSTM(len(charset), embed_dim, hidden_dim, num_layers=2, dropout=0.2)],
                   soul_name=soul_name, soul_traits={"warmth":0.5,"creativity":0.5,"curiosity":0.5,"confidence":0.5},
@@ -6266,7 +6266,7 @@ def _named_ff(prefix: str, ff: SloFeedForward) -> List[Tuple[str, Tensor]]:
 def train_soul_transformer(gpt_fn, soul_name="Slo", epochs=10, temperature=0.8, lr=0.001,
                            vocab_size=256, n_embed=128, n_layer=4, n_head=4, on_step=None):
     charset = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?-'")
-    stoi = {c:i for i,c in enumerate(charset)}; itos = {i:c for i,c in enumerate(charset)}
+    stoi = {c:i for i,c in enumerate(charset)}; {i:c for i,c in enumerate(charset)}
     unk = 0
     net = SloTransformer(
         vocab_size=len(charset), n_embed=n_embed, n_layer=n_layer, n_head=n_head,

@@ -10,21 +10,14 @@ All operations delegate to Tree's generic load_data/get_data.
 """
 from __future__ import annotations
 
-import base64
 from typing import Optional
 
 import numpy as np
 
 from .tree import (
     Tree,
-    load_model_to_points,
-    load_from_points,
-    decompress_tree,
-    save_library,
-    load_library,
 )
 from .strategies import CompressStrategy, RawStrategy, ClusterStrategy
-from .point import Point
 from .compressor import PointCompressor
 from .library import PointLibrary
 from .config import TreeConfig

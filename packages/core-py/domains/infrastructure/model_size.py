@@ -40,7 +40,6 @@ except ImportError:
     def find_cached_model_dir(model_id: str):
         return None
 
-from .download_manager import _has_weight_files
 
 
 def _sum_weight_files(cache_dir: Path) -> Optional[float]:

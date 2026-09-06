@@ -623,12 +623,12 @@ class InferenceRouter:
         try:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self._session_repo.save, session_id, data_copy)
+            self._session_dirty.discard(session_id)
         except Exception as exc:
             logger.warning(
-                "Disk write failed for session %s: %s", session_id, exc, extra={"tag": "REQ"}
+                "Disk write failed for session %s: %s — will retry on next flush", session_id, exc,
+                extra={"tag": "REQ"}
             )
-        finally:
-            self._session_dirty.discard(session_id)
 
     async def flush_dirty_sessions(self) -> int:
         try:
@@ -658,8 +658,9 @@ class InferenceRouter:
 
         try:
             self._background_flush_task = asyncio.create_task(_flush_loop())
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            logger.warning("Failed to start background session flush: %s", e,
+                extra={"tag": "REQ"})
 
     def _build_session_metadata_index(self) -> list:
         """Build a lightweight metadata index without loading full message content.

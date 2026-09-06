@@ -27,16 +27,14 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
-import struct
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from domains.infrastructure.arch_config import ArchConfig, build_arch
+from domains.infrastructure.arch_config import build_arch
 from domains.infrastructure.numpy_ops import softmax
-from domains.infrastructure.numpy_forward import forward, forward_cached
+from domains.infrastructure.numpy_forward import forward_cached
 from domains.infrastructure.compression import CompressedWeight, LRUCache
 
 logger = logging.getLogger("slo.infrastructure.numpy_engine")
@@ -463,7 +461,7 @@ class NumpyEngine:
             raise RuntimeError("No tokenizer")
 
         ids = self.tokenizer.encode(prompt)
-        initial_len = len(ids)
+        len(ids)
 
         if use_kv_cache:
             self._kv_cache = KVCache(self.arch.n_layers)

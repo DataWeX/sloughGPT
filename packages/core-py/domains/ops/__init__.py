@@ -95,7 +95,7 @@ class FusedCrossEntropyLoss:
 
         valid_mask = targets != self.ignore_index
         valid_targets = targets[valid_mask]
-        valid_log_probs = log_probs[valid_mask]
+        log_probs[valid_mask]
 
         if len(valid_targets) == 0:
             return 0.0
@@ -212,7 +212,7 @@ class MemoryEfficientSoftmax:
         shape = list(logits.shape)
         n_out = shape[dim]
         shape[dim] = n_out
-        result = np.zeros(shape, dtype=np.float32)
+        np.zeros(shape, dtype=np.float32)
 
         # Two-pass: compute max across all chunks for numerical stability,
         # then compute exp and sum across all chunks.

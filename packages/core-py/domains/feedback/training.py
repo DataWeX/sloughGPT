@@ -103,7 +103,6 @@ class FeedbackTrainer:
         Side effects:
             - none (read-only)
         """
-        examples: List[TrainingExample] = []
         dated: List[tuple] = []
         for fb in self._feedback.find():
             if fb.get("rating") is None:

@@ -647,8 +647,6 @@ def _hf_worker_main(
         nonlocal model, tokenizer
         del model
         del tokenizer
-        model = None
-        tokenizer = None
 
     _worker_loop(req_q, resp_q, hb_q, worker_id, _generate, _stream, _cleanup)
 

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import gzip
 import hashlib
 import io
 import os
 import struct
-import time
 from pathlib import Path
 
 import pytest
@@ -15,11 +13,8 @@ import pytest
 from domains.infrastructure.compressed_transfer import (
     MAGIC,
     HEADER_SIZE,
-    CHUNK_SIZE,
     CompressedDownloader,
     CompressedFileServer,
-    CompressionResult,
-    DownloadResult,
     compress_bytes,
     compress_file,
     compress_stream,
@@ -104,11 +99,11 @@ class TestStreamingRoundtrip:
     def test_stream_roundtrip_without_header(self):
         src = io.BytesIO(MEDIUM_TEXT)
         dst = io.BytesIO()
-        c_result = compress_stream(src, dst, include_header=False)
+        compress_stream(src, dst, include_header=False)
 
         dst.seek(0)
         out = io.BytesIO()
-        d_result = decompress_stream(dst, out, verify_header=False)
+        decompress_stream(dst, out, verify_header=False)
         assert out.getvalue() == MEDIUM_TEXT
 
     def test_progress_callback(self):

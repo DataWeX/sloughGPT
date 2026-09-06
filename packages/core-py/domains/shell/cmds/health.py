@@ -11,7 +11,7 @@ help = "Show API server status"
 def run(argv: list[str], out: Console, api: ShellCommands,
         env: dict[str, str]) -> int:
     try:
-        with out.spinner("Checking health") as s:
+        with out.spinner("Checking health"):
             h = api.health()
     except Exception as e:
         out.status("error", f"Health check failed: {type(e).__name__}: {e}")

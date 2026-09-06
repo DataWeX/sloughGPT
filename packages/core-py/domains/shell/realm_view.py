@@ -163,7 +163,7 @@ def _heat_bg(energy: float, emax: float) -> str:
     if emax <= 0.0:
         return "232"
     b = energy / emax
-    return f"233" if b <= 0.001 else f"{232 + int(23 * min(b, 1.0))}"
+    return "233" if b <= 0.001 else f"{232 + int(23 * min(b, 1.0))}"
 
 
 def render_frame(scene: SimScene, tick: int) -> list[str]:

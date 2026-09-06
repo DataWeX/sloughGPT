@@ -64,7 +64,9 @@ class IReasoningEngine(Protocol):
 
 class Memory:
     """Represents a memory entry."""
-    def __init__(self, key: str, value: Any, memory_type: str = "episodic", importance: float = 0.5):
+    def __init__(
+        self, key: str, value: Any, memory_type: str = "episodic", importance: float = 0.5
+    ):
         self.key = key
         self.value = value
         self.content = value
@@ -111,6 +113,8 @@ class DomainException(AppError):
 __all__ = [
     "ChatDomain",
     "get_chat_domain",
+    "BenchmarkDomain",
+    "get_benchmark_domain",
     "get_companion",
     "CompanionSystem",
     "BaseComponent",

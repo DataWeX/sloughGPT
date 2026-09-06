@@ -96,7 +96,9 @@ class BenchmarkDomain:
         texts = [r.get("text", "") for r in recent if isinstance(r, dict)]
         lengths = [len(t) for t in texts]
         avg_len = sum(lengths) / len(lengths) if lengths else 0
-        std_len = (sum((l - avg_len) ** 2 for l in lengths) / len(lengths)) ** 0.5 if lengths else 0
+        std_len = (
+            sum((ln - avg_len) ** 2 for ln in lengths) / len(lengths)
+        ) ** 0.5 if lengths else 0
 
         # Repetition detection
         total_bigrams = 0

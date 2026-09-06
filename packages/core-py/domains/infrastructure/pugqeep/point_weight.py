@@ -99,10 +99,9 @@ def compress_slonet_to_points(model, method: str = "auto",
 
     Returns dict mapping weight name → PointWeight.
     """
-    from domains.training.slonet import SloTransformer, SloNet
 
     points = {}
-    compressor = PointCompressor()
+    PointCompressor()
 
     def _compress(name: str, arr: np.ndarray):
         if arr.size < 16:

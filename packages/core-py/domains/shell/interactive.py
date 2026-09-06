@@ -595,9 +595,9 @@ class InteractivePrompt:
         def _render() -> str:
             if selected:
                 yes_text = f"{_REVERSE}{_GREEN} Yes {_RESET_REVERSE}{_RESET}"
-                no_text = f" No "
+                no_text = " No "
             else:
-                yes_text = f" Yes "
+                yes_text = " Yes "
                 no_text = f"{_REVERSE}{_RED} No {_RESET_REVERSE}{_RESET}"
             return f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET} [{hint}]  {yes_text}  {no_text}{_HIDE_CURSOR}"
 
@@ -1087,9 +1087,9 @@ class InteractivePrompt:
         def _render() -> str:
             if on:
                 on_text = f"{_REVERSE}{_GREEN} ON {_RESET_REVERSE}{_RESET}"
-                off_text = f"OFF "
+                off_text = "OFF "
             else:
-                on_text = f" ON "
+                on_text = " ON "
                 off_text = f"{_REVERSE}{_RED}OFF{_RESET_REVERSE}{_RESET}"
             return f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {on_text}  {off_text}{_HIDE_CURSOR}"
 
@@ -1774,7 +1774,6 @@ class InteractivePrompt:
             for i, cmd in enumerate(flt):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 display = cmd[:60] + "..." if len(cmd) > 60 else cmd
                 lines.append(f"  {prefix}{color}{display}{_RESET}")
             if not lines:
@@ -1997,7 +1996,6 @@ class InteractivePrompt:
                 else:
                     prefix = ">> " if i == idx else "   "
                     color = _CYAN if i == idx else ""
-                    reset = _RESET if i == idx else ""
                     lines.append(f"  {prefix}{color}{key} = {val_str}{_RESET}")
             help_text = f"  {_DIM}(arrows=navigate, enter=edit, esc=save){_RESET}" if not editing else f"  {_DIM}(type=value, enter=confirm, esc=cancel){_RESET}"
             return (
@@ -2162,7 +2160,6 @@ class InteractivePrompt:
             for i, item in enumerate(flt):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 display = item[:50] + "..." if len(item) > 50 else item
                 lines.append(f"  {prefix}{color}{display}{_RESET}")
             if not lines:
@@ -2433,7 +2430,6 @@ class InteractivePrompt:
                 icon = "\U0001f4c1" if is_dir else "\u25b6"
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{icon} {item}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=open, backspace=back){_RESET}\n"
@@ -2592,7 +2588,6 @@ class InteractivePrompt:
             for i, item in enumerate(items):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 pos = f"{i + 1:>2}. "
                 lines.append(f"  {prefix}{color}{pos}{item}{_RESET}")
             if not lines:
@@ -2667,7 +2662,6 @@ class InteractivePrompt:
                 for i, item in enumerate(items):
                     prefix = ">>" if c == col_idx and i == item_idx else "  "
                     color = _CYAN if c == col_idx and i == item_idx else ""
-                    reset = _RESET if c == col_idx and i == item_idx else ""
                     lines.append(f"    {prefix} {color}{item}{_RESET}")
                 if not items:
                     lines.append(f"    {_DIM}(empty){_RESET}")
@@ -2825,7 +2819,6 @@ class InteractivePrompt:
         fd = self._get_fd()
         r, g, b = self._hex_to_rgb(default)
         focus = 0  # 0=r, 1=g, 2=b
-        labels = ["R", "G", "B"]
 
         def _render() -> str:
             hex_str = f"#{r:02x}{g:02x}{b:02x}"
@@ -4056,7 +4049,7 @@ class InteractivePrompt:
         def _render() -> str:
             c = colors[idx]
             n = names[idx]
-            r, g, b = int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)
+            _r, _g, _b = int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows, enter){_RESET}\n"
                 f"  {c} {n}  "
@@ -4530,7 +4523,6 @@ class InteractivePrompt:
             for i, (icon, label) in enumerate(zip(icons, labels)):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{icon} {label}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows){_RESET}\n"
@@ -4723,7 +4715,6 @@ class InteractivePrompt:
             for i, label in items:
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{label}{_RESET}")
             page_info = f"  {_DIM}page {page + 1}/{_total_pages()} (PgUp/PgDn){_RESET}"
             return (
@@ -4967,7 +4958,6 @@ class InteractivePrompt:
                 else:
                     prefix = ">> " if i == idx else "   "
                     color = _CYAN if i == idx else ""
-                    reset = _RESET if i == idx else ""
                     lines.append(f"  {prefix}{color}{item}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows){_RESET}\n"
@@ -5036,7 +5026,6 @@ class InteractivePrompt:
                 check = f"{_GREEN}\u2714{_RESET}" if i in selected else " "
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{check} {color}{opt}{_RESET}")
             count_str = f"  {_DIM}{len(selected)} selected{_RESET}"
             return (
@@ -5212,7 +5201,6 @@ class InteractivePrompt:
             for i, opt in enumerate(options):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             countdown = f"  {_YELLOW}auto-select in {remaining}s{_RESET}" if remaining > 0 else f"  {_GREEN}selected!{_RESET}"
             return (
@@ -5551,7 +5539,6 @@ class InteractivePrompt:
             for i, (icon, label) in enumerate(zip(icons, labels)):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{icon} {label}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows){_RESET}\n"
@@ -5613,7 +5600,6 @@ class InteractivePrompt:
                 check = f"{_GREEN}\u2714{_RESET}" if states[item] else f"{_RED}\u2718{_RESET}"
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{check} {color}{item}{_RESET}")
             count = sum(1 for v in states.values() if v)
             count_str = f"  {_DIM}{count}/{len(items)} confirmed{_RESET}"
@@ -5734,7 +5720,6 @@ class InteractivePrompt:
                 check = f"{_GREEN}\u2714{_RESET}" if states[item] else f"{_RED}\u2718{_RESET}"
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{check} {color}{item}{_RESET}")
             count = sum(1 for v in states.values() if v)
             count_str = f"  {_DIM}{count}/{len(items)} confirmed{_RESET}"
@@ -5840,7 +5825,6 @@ class InteractivePrompt:
             for i, opt in enumerate(options):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows, enter to confirm){_RESET}\n"
@@ -6005,7 +5989,6 @@ class InteractivePrompt:
             for i, opt in enumerate(options):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=confirm){_RESET}\n"
@@ -6400,7 +6383,6 @@ class InteractivePrompt:
             for i, opt in enumerate(options):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_BOLD}{message}{_RESET}  {_DIM}(arrows, enter=select){_RESET}\n"
@@ -6469,7 +6451,6 @@ class InteractivePrompt:
                 check = f"{_GREEN}\u2714{_RESET}" if opt in selected else f"{_RED}\u2718{_RESET}"
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{check} {color}{opt}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
@@ -6758,7 +6739,6 @@ class InteractivePrompt:
             for i, opt in enumerate(flt):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
@@ -6837,7 +6817,6 @@ class InteractivePrompt:
             for i, opt in enumerate(flt):
                 prefix = ">> " if i == idx else "   "
                 color = _CYAN if i == idx else ""
-                reset = _RESET if i == idx else ""
                 lines.append(f"  {prefix}{color}{opt}{_RESET}")
             if not lines:
                 lines = [f"  {_DIM}(no matches){_RESET}"]
@@ -7015,7 +6994,6 @@ class InteractivePrompt:
                 else:
                     prefix = ">> " if i == idx else "   "
                     color = _CYAN if i == idx else ""
-                    reset = _RESET if i == idx else ""
                     lines.append(f"  {prefix}{color}{item}{_RESET}")
             return (
                 f"{_ERASE_LINE}\r  {_CYAN}{message}{_RESET}  {_DIM}(arrows){_RESET}\n"
@@ -7686,7 +7664,6 @@ class InteractivePrompt:
         fd = self._get_fd()
         cursor = 0
         answers: dict[int, bool] = {}
-        hint = "Y/n" if default else "y/N"
         width = _terminal_width()
 
         def _render() -> list[str]:

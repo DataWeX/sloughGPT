@@ -376,7 +376,7 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     opt_raw = raw.get("optimizer")
     if isinstance(opt_raw, dict):
         opt = dict(opt_raw)
-        hyper = opt.get("hyperparameters", {})
+        opt.get("hyperparameters", {})
         state = opt.get("state", {})
         # Convert nested lists in state back to numpy arrays
         converted_state = {}

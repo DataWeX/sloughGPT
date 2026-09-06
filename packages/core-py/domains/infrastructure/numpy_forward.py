@@ -184,7 +184,6 @@ def forward_cached(
     Returns:
         Logits for next token prediction.
     """
-    from domains.infrastructure.numpy_engine import KVCache
 
     seq_len = len(token_ids)
     W = arch.weight_map

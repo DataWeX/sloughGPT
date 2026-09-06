@@ -99,7 +99,7 @@ def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
     Detects the architecture from config, then selects the right weight map.
     The weight map is the ONLY architecture-specific data.
     """
-    arch_name = config.get("architectures", ["unknown"])[0]
+    config.get("architectures", ["unknown"])[0]
 
     # Detect features from config
     n_head = config.get("n_head") or config.get("num_attention_heads", 12)

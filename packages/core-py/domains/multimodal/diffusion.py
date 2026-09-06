@@ -219,7 +219,7 @@ class LatentUNet:
         Returns:
             noise_pred: (B, out_channels, H, W) predicted noise
         """
-        B = x.data.shape[0]
+        x.data.shape[0]
 
         # Timestep embedding
         temb = self.timestep_embedder.forward(timesteps)

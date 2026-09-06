@@ -14,7 +14,7 @@ def run(argv: list[str], out: Console, api: ShellCommands,
     json_output = "--json" in argv or "-j" in argv
 
     try:
-        with out.spinner("Checking status") as s:
+        with out.spinner("Checking status"):
             h = api.health()
     except Exception as e:
         out.status("error", f"Status check failed: {type(e).__name__}: {e}")

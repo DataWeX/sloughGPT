@@ -119,7 +119,7 @@ class RAGGrounder:
 
         # Get supporting documents - use sync fallback if already in event loop
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             supporting = []  # Skip async retrieval if loop exists
         except RuntimeError:
             supporting = asyncio.run(self.retrieve(query, top_k=3))

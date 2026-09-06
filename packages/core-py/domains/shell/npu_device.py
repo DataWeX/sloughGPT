@@ -80,7 +80,7 @@ class NPUDevice:
                     return SyscallResult.fail("LOAD requires path")
                 path = args[0]
                 name = args[1] if len(args) > 1 else ""
-                provider = self.load(path, name)
+                self.load(path, name)
                 return SyscallResult.ok({"model": name or path.rsplit("/", 1)[-1]})
 
             elif cmd == IoctlCommand.UNLOAD:

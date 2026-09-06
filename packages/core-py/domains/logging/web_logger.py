@@ -117,7 +117,7 @@ class WebLogger(Logger):
         - Node/SSR: writes a JSON line to stderr.
         """
         method = _CONSOLE_METHOD.get(record.level, "log")
-        formatted = self._format_brief(record)
+        self._format_brief(record)
         data = self._record_to_dict(record)
 
         with self._lock:

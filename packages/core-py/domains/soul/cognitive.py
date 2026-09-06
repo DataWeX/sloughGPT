@@ -562,7 +562,7 @@ class CognitiveArchitecture:
 
     def _consolidate_to_episodic(self, item: Any) -> bool:
         """Consolidate working memory to episodic."""
-        episode = {
+        {
             "content": item,
             "timestamp": datetime.now().isoformat(),
             "importance": random.random(),  # Simplified

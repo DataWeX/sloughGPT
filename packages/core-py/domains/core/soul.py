@@ -261,7 +261,7 @@ class SloEngine:
             self._soul = SloProfile(
                 name=model_path.split("/")[-1].split(".")[0],
                 lineage="nanogpt",
-                system_prompt=f"You are a helpful AI assistant.",
+                system_prompt="You are a helpful AI assistant.",
             )
 
         logger.info("Loaded model: %s", model_path, extra={"tag": "MODEL"})
@@ -519,7 +519,6 @@ class SloEngine:
         """
         start_time = time.time()
         reasoning_chain: List[str] = []
-        cache_hit = False
         cached_response: Optional[str] = None
 
         # Semantic Cache: Check for cached response
@@ -527,8 +526,7 @@ class SloEngine:
             try:
                 cached_response = self._semantic_cache.get(prompt)
                 if cached_response:
-                    cache_hit = True
-                    reasoning_chain.append(f"cache_hit: semantic match")
+                    reasoning_chain.append("cache_hit: semantic match")
                     generated_text = cached_response
                     tokens_generated = len(cached_response.split())
                     latency_ms = (time.time() - start_time) * 1000

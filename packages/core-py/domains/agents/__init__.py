@@ -21,8 +21,6 @@ import re
 import asyncio
 import logging
 import tempfile
-import subprocess
-import resource
 from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -400,7 +398,10 @@ class ToolRunner:
                     with open(fp, "r", errors="replace") as f:
                         text = f.read(8192)
                     if query_lower in text.lower():
-                        matches.append({"file": os.path.relpath(fp, workspace), "snippet": text[:500].strip()})
+                        matches.append({
+                            "file": os.path.relpath(fp, workspace),
+                            "snippet": text[:500].strip(),
+                        })
                 except Exception:
                     continue
             return {"success": True, "matches": matches, "count": len(matches)}
@@ -473,7 +474,6 @@ class ToolRunner:
     ) -> Dict[str, Any]:
         """Analyze a data file (CSV/JSON/JSONL)."""
         data_path = args.get("data_path", "")
-        operation = args.get("operation", "summary")
         if not data_path:
             return {"error": "data_path required", "success": False}
         try:
@@ -488,7 +488,11 @@ class ToolRunner:
                 return {"success": True, "rows": len(lines) - 1, "columns": len(headers), "headers": headers}
             elif ext in (".json", ".jsonl"):
                 import json
-                data = json.loads(raw) if ext == ".json" else [json.loads(l) for l in raw.strip().split("\n") if l]
+                data = (
+                    json.loads(raw)
+                    if ext == ".json"
+                    else [json.loads(line) for line in raw.strip().split("\n") if line]
+                )
                 if isinstance(data, list):
                     keys = list(data[0].keys()) if data and isinstance(data[0], dict) else []
                     return {"success": True, "items": len(data), "keys": keys}
@@ -806,9 +810,11 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     if name in ("MultiAgentOrchestrator", "SpecializedAgent", "AgentTask",
                  "TaskStatus", "get_orchestrator", "reset_orchestrator"):
-        from .multi import (MultiAgentOrchestrator, SpecializedAgent,
-                            AgentTask, TaskStatus,
-                            get_orchestrator, reset_orchestrator)
+        from .multi import (  # noqa: F401
+            MultiAgentOrchestrator, SpecializedAgent,
+            AgentTask, TaskStatus,
+            get_orchestrator, reset_orchestrator,
+        )
         globals().update(locals())
         return globals()[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

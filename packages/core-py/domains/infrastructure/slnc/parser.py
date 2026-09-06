@@ -198,7 +198,7 @@ class SLNCParser:
             # Read entry fields
             offset = struct.unpack("<Q", buf[pos:pos + 8])[0]
             pos += 8
-            size = struct.unpack("<I", buf[pos:pos + 4])[0]
+            struct.unpack("<I", buf[pos:pos + 4])[0]
             pos += 4
             ndim = struct.unpack("<I", buf[pos:pos + 4])[0]
             pos += 4

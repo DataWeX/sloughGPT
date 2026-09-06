@@ -27,7 +27,7 @@ class BabyPerception:
         self._memory: list[dict] = []
 
     def perceive_world(self, world, perception: WorldPerception) -> dict:
-        gx, gy, gz = int(self.baby.position[0]), int(self.baby.position[1]), int(self.baby.position[2])
+        gx, _gy, gz = int(self.baby.position[0]), int(self.baby.position[1]), int(self.baby.position[2])
         radius = self.config.see_radius
 
         nearby_events = []

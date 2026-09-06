@@ -137,7 +137,10 @@ class EmbeddingDevice(AIDevice):
         try:
             from domains.inference.vector_store import simple_embed
             return simple_embed(text)
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.devices").warning(
+                "simple_embed failed, using hash fallback: %s", e)
             # Absolute fallback — deterministic based on text content
             import hashlib
             h = hashlib.sha256(text.encode()).digest()

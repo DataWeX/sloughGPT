@@ -106,8 +106,8 @@ def _load_gpt2_numpy() -> Tuple[dict, ArchConfig, dict]:
     slnc_path = snap / "model.slnc"
     if not slnc_path.exists():
         raise RuntimeError(
-            f"No .slnc file for GPT-2. Convert first: "
-            f"python -m domains.infrastructure.slnc.compiler gpt2"
+            "No .slnc file for GPT-2. Convert first: "
+            "python -m domains.infrastructure.slnc.compiler gpt2"
         )
 
     parser = SLNCParser(str(slnc_path))
@@ -654,7 +654,7 @@ def distill_gpt2_to_slo(
             step += 1
 
             if step % config.log_interval == 0:
-                avg = epoch_loss / epoch_steps
+                epoch_loss / epoch_steps
                 logger.info("step %d/%d loss=%.4f (hard=%.4f soft=%.4f)",
                             step, total_steps, float(total_loss.data), float(hard_loss.data), float(soft_loss.data),
                             extra={"tag": "TRAIN"})

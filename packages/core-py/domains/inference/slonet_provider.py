@@ -908,7 +908,6 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
-        from domains.inference.slo_format import load_soul
         from domains.infrastructure.weight_loader import SoulWeightLoader, build_model_from_config
 
         loader = SoulWeightLoader(soul_path)
@@ -1078,7 +1077,6 @@ class SloNetChatProvider:
         Returns:
             Dict with active session count, TTL, and memory estimate.
         """
-        import time as _time
         with self._kv_lock:
             n_sessions = len(self._kv_states)
             total_tokens = 0
@@ -1523,8 +1521,6 @@ class SloNetChatProvider:
         """
         import asyncio
         import numpy as _np
-        import math
-        import time
 
         server = getattr(self, '_server', None)
         if server is not None:
@@ -1549,7 +1545,7 @@ class SloNetChatProvider:
         top_p = kwargs.get('top_p')
         repetition_penalty = kwargs.get('repetition_penalty', 1.0)
         cancel_event = kwargs.get('cancel_event')
-        priority = kwargs.get('priority', 1)  # default MEDIUM
+        kwargs.get('priority', 1)  # default MEDIUM
         session_id = kwargs.get('session_id')
 
         # Cross-turn KV cache: resolve or create state for this session
@@ -1677,7 +1673,6 @@ class SloNetChatProvider:
             Tuple of (generated_text, logprobs_list) where each logprob entry is:
             {"token_id": int, "token": str, "logprob": float, "top_tokens": [{token, logprob}]}
         """
-        import math
 
         if seed is not None:
             np.random.seed(seed)

@@ -29,7 +29,10 @@ export default function AuthPage() {
         setToken(saved)
         authController.getMe(saved)
           .then(d => setCurrentUser(d))
-          .catch(() => { chatDB.deleteKV('auth_token').catch(() => {}); setToken(null) })
+          .catch(async () => {
+            try { await chatDB.deleteKV('auth_token') } catch { /* best-effort */ }
+            setToken(null)
+          })
           .finally(() => setChecking(false))
       } else {
         setChecking(false)
@@ -48,7 +51,11 @@ export default function AuthPage() {
         : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
-      chatDB.setKV('auth_token', data.token).catch(() => {})
+      try {
+        await chatDB.setKV('auth_token', data.token)
+      } catch {
+        setError('Warning: login succeeded but session may not persist after refresh')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed')
     } finally {

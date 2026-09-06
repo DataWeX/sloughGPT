@@ -357,7 +357,7 @@ class PaneLayout:
             # Total outer width for this pane (full cols or width_ratio share).
             outer_w = int(cols * p.width_ratio)
             # Content width = outer width minus border columns.
-            content_w = max(outer_w - p.border_left - p.border_right, 0)
+            max(outer_w - p.border_left - p.border_right, 0)
             # Centering when width_ratio < 1.
             left = (cols - outer_w) // 2 if p.width_ratio < 1.0 else 0
 

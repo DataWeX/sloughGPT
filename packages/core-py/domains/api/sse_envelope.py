@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Standard SSE Envelope — SloughGPT Streaming API
 
@@ -48,6 +46,8 @@ Usage in routers:
     yield sse_event(stream="chat", phase="STREAMING", status="complete",
                     data={}, meta={"elapsed_ms": 890}, message="done")
 """
+
+from __future__ import annotations
 
 from typing import Any, Optional, Dict, Union
 from dataclasses import dataclass, field

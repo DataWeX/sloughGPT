@@ -7,9 +7,7 @@ No new library. Just clean ioctl dispatch using what we already have.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
 
-from .kernel_syscall import SyscallResult
 
 
 class IoctlCommand(Enum):

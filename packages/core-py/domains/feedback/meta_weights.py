@@ -281,7 +281,7 @@ class MetaWeightManager:
             conversation_id = self.db.create_conversation(user_id=user_id)
 
         # Add messages with embeddings
-        user_msg_id = self.db.add_message(
+        self.db.add_message(
             conversation_id=conversation_id,
             role="user",
             content=user_message,

@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
 import threading
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -423,7 +420,7 @@ class TestSessionRepository:
         repo1.save_session(SessionData(session_id="s1", title="Persisted"))
         repo1.add_message("s1", MessageRecord(role="user", content="stored"))
 
-        dir2 = tmp_path / "sessions2"
+        tmp_path / "sessions2"
         repo2 = SessionRepository(persist_dir=dir1)
         loaded = repo2.get_session("s1")
         assert loaded is not None

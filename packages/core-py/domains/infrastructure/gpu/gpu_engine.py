@@ -384,7 +384,7 @@ class GpuBufferPool:
         self._ptr = self._lib.gpu_pool_create(device._ptr, capacity, min_size)
 
     def acquire(self, min_size: int) -> GpuBuffer:
-        ptr = self._lib.gpu_pool_acquire(self._ptr, min_size)
+        self._lib.gpu_pool_acquire(self._ptr, min_size)
         return GpuBuffer(self._device, min_size, GPU_BUF_STORAGE)
 
     def release(self, buffer: GpuBuffer) -> None:

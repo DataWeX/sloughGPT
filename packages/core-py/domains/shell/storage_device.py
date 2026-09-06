@@ -7,10 +7,8 @@ File system operations with clean ioctl interface.
 from __future__ import annotations
 
 import os
-import time
 from typing import Any
 
-from .ioctl import IoctlCommand
 from .kernel_syscall import SyscallResult
 
 

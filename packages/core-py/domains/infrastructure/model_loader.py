@@ -247,7 +247,6 @@ class ModelLoader:
 
         Returns LoadResult or None if no .soul found.
         """
-        from pathlib import Path
 
         native_dir = _REPO_ROOT / "models" / "slonet-native"
         if not native_dir.exists():

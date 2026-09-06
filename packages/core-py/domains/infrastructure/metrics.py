@@ -85,7 +85,7 @@ class MetricsCollector:
         lines: List[str] = []
 
         uptime = time.time() - self._start_time
-        lines.append(f"# HELP sloughgpt_uptime_seconds Server uptime in seconds.")
+        lines.append("# HELP sloughgpt_uptime_seconds Server uptime in seconds.")
         lines.append("# TYPE sloughgpt_uptime_seconds gauge")
         lines.append(f"sloughgpt_uptime_seconds {uptime:.1f}")
 
@@ -113,7 +113,7 @@ class MetricsCollector:
                 p50 = sorted_lat[int(n * 0.5)] if n > 0 else 0
                 p95 = sorted_lat[int(n * 0.95)] if n > 1 else p50
                 p99 = sorted_lat[int(n * 0.99)] if n > 2 else p95
-                avg = sum(sorted_lat) / n
+                sum(sorted_lat) / n
                 lines.append(f'sloughgpt_request_duration_seconds{{path="{path}",quantile="0.5"}} {p50:.4f}')
                 lines.append(f'sloughgpt_request_duration_seconds{{path="{path}",quantile="0.95"}} {p95:.4f}')
                 lines.append(f'sloughgpt_request_duration_seconds{{path="{path}",quantile="0.99"}} {p99:.4f}')
@@ -132,7 +132,7 @@ class MetricsCollector:
             if self._inference_latencies:
                 sorted_il = sorted(self._inference_latencies)
                 n = len(sorted_il)
-                avg = sum(sorted_il) / n
+                sum(sorted_il) / n
                 p50 = sorted_il[int(n * 0.5)]
                 p95 = sorted_il[int(n * 0.95)] if n > 1 else p50
                 lines.append("# HELP sloughgpt_inference_duration_seconds Inference latency percentiles.")

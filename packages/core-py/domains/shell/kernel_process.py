@@ -109,7 +109,6 @@ class Process:
 
     def transition(self, new_state: ProcessState) -> None:
         """Transition to a new state, recording timestamps."""
-        old = self.state
         self.state = new_state
         if new_state == ProcessState.RUNNING and self.started_at is None:
             self.started_at = time.time()

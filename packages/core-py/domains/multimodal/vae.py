@@ -89,7 +89,7 @@ class SloVAEEncoder:
 
         # Split into mean and log_var
         out_data = x.data
-        B = out_data.shape[0]
+        out_data.shape[0]
         mean_data = out_data[:, :self.latent_dim, :, :]
         log_var_data = out_data[:, self.latent_dim:, :, :]
 

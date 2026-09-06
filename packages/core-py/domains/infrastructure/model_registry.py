@@ -222,7 +222,7 @@ class ModelRegistry:
         server = self.get(model_id)
         if server is None:
             raise RuntimeError(
-                f"No model registered" + (f" (requested '{model_id}')" if model_id else "")
+                "No model registered" + (f" (requested '{model_id}')" if model_id else "")
             )
         return await server.generate(prompt, **kwargs)
 

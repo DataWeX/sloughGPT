@@ -552,7 +552,7 @@ class SlonetTrainingDevice(Device):
         self._ensure_model()
 
         from domains.training.slonet import (
-            cross_entropy, SloAdam, clip_grad_norm_, Tensor, export_to_sou
+            SloAdam, clip_grad_norm_, Tensor, export_to_sou
         )
 
         data = self._load_dataset(dataset_path, max_seq_len)

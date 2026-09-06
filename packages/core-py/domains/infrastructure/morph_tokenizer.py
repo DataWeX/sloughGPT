@@ -283,7 +283,6 @@ class MorphTokenizer:
     @classmethod
     def from_pretrained(cls, model_id: str) -> "MorphTokenizer":
         """Load from tokenizer.json — our own parser, no HF tokenizers lib."""
-        from pathlib import Path
 
         model_slug = model_id.replace("/", "--")
 
@@ -559,7 +558,6 @@ class MorphTokenizer:
         # Split text by special tokens, keeping the tokens
         parts = self._added_token_patterns.split(text)
         ids: List[int] = []
-        import re as _re
         all_tokens = self._added_token_patterns.findall(text)
         for i, part in enumerate(parts):
             if part:

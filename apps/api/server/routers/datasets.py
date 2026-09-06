@@ -1156,12 +1156,16 @@ class DatasetsRouter:
                         except json.JSONDecodeError:
                             continue
                         if "text" in row:
+                            # Text-only datasets: use text as user message,
+                            # assistant message is empty (prompt-only training).
+                            # For chat-format fine-tuning, use datasets with
+                            # explicit "messages" field instead.
                             msgs.append(
                                 {
                                     "messages": [
                                         {"role": "system", "content": system_prompt},
                                         {"role": "user", "content": row["text"]},
-                                        {"role": "assistant", "content": row["text"]},
+                                        {"role": "assistant", "content": ""},
                                     ]
                                 }
                             )

@@ -366,8 +366,6 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         parts = args.strip().split()
-        recursive = False
-        force = False
         verbose = False
         preserve = False
         interactive = False
@@ -376,9 +374,9 @@ class LinuxCommandsMixin:
             if p.startswith("-") and len(p) > 1:
                 flags = p[1:]
                 if "r" in flags:
-                    recursive = True
+                    pass
                 if "f" in flags:
-                    force = True
+                    pass
                 if "v" in flags:
                     verbose = True
                 if "p" in flags:
@@ -409,7 +407,7 @@ class LinuxCommandsMixin:
             self._print(f"  cp: cannot stat '{paths[0]}': No such file or directory")
             self._last_exit_code = 1
         except PermissionError:
-            self._print(f"  cp: permission denied")
+            self._print("  cp: permission denied")
             self._last_exit_code = 1
 
     def _cmd_mv(self, args: str = "") -> None:
@@ -425,7 +423,6 @@ class LinuxCommandsMixin:
             self._last_exit_code = 1
             return
         parts = args.strip().split()
-        force = False
         verbose = False
         interactive = False
         paths = []
@@ -433,7 +430,7 @@ class LinuxCommandsMixin:
             if p.startswith("-") and len(p) > 1:
                 flags = p[1:]
                 if "f" in flags:
-                    force = True
+                    pass
                 if "v" in flags:
                     verbose = True
                 if "i" in flags:
@@ -458,7 +455,7 @@ class LinuxCommandsMixin:
             self._print(f"  mv: cannot stat '{parts[0]}': No such file or directory")
             self._last_exit_code = 1
         except PermissionError:
-            self._print(f"  mv: permission denied")
+            self._print("  mv: permission denied")
             self._last_exit_code = 1
 
     def _cmd_chmod(self, args: str = "") -> None:
@@ -477,7 +474,7 @@ class LinuxCommandsMixin:
             if mode.isdigit():
                 os.chmod(target, int(mode, 8))
             else:
-                self._print(f"  chmod: symbolic modes not supported (use octal, e.g. 644)")
+                self._print("  chmod: symbolic modes not supported (use octal, e.g. 644)")
                 self._last_exit_code = 1
                 return
             self._last_exit_code = 0
@@ -646,7 +643,6 @@ class LinuxCommandsMixin:
         n = 10
         byte_mode = False
         quiet = False
-        verbose = False
         targets = []
         i = 0
         while i < len(parts):
@@ -665,7 +661,6 @@ class LinuxCommandsMixin:
                 quiet = True
                 i += 1
             elif p == "-v":
-                verbose = True
                 i += 1
             else:
                 targets.append(p)
@@ -1548,7 +1543,6 @@ class LinuxCommandsMixin:
         delete = False
         squeeze = False
         complement = False
-        truncate = False
         non_flags = []
         for p in parts:
             if p == "-d":
@@ -1558,7 +1552,7 @@ class LinuxCommandsMixin:
             elif p == "-c" or p == "-C":
                 complement = True
             elif p == "-t":
-                truncate = True
+                pass
             elif not p.startswith("-"):
                 non_flags.append(p)
         if not non_flags or (not delete and not squeeze and len(non_flags) < 2):
@@ -2117,7 +2111,7 @@ class LinuxCommandsMixin:
                 self._last_exit_code = 1
                 return
         except ValueError:
-            self._print(f"  seq: invalid number")
+            self._print("  seq: invalid number")
             self._last_exit_code = 1
             return
 
@@ -2541,7 +2535,7 @@ class LinuxCommandsMixin:
 
     def _cmd_who(self, args: str = "") -> None:
         """Show who is logged on."""
-        import os as _os, time as _time
+        import time as _time
         import getpass as _gp
         user = _gp.getuser()
         self._print(f"  {user}    console  {_time.strftime('%Y-%m-%d %H:%M')}")
@@ -2849,11 +2843,11 @@ class LinuxCommandsMixin:
         else:
             month, year = int(argv[0]), int(argv[1])
         if month < 1 or month > 12 or year < 1 or year > 9999:
-            self._print(f"  cal: invalid date")
+            self._print("  cal: invalid date")
             return
         header = f"{_cal.month_name[month]} {year}".center(20)
         self._print(f"  {_C_BOLD}{header}{_C_RESET}")
-        self._print(f"  Mo Tu We Th Fr Sa Su")
+        self._print("  Mo Tu We Th Fr Sa Su")
         first_dow = _cal.weekday(year, month, 1)
         days = _cal.monthrange(year, month)[1]
         line = "   " * first_dow
@@ -3064,7 +3058,6 @@ class LinuxCommandsMixin:
 
     def _cmd_awk(self, args: str = "") -> None:
         """AWK-like processor: awk '-F<sep>' '{print $1,$2}' [file]"""
-        import re as _re
         if not args:
             self._print("  Usage: awk '-F<sep>' '{print $1}' [file]")
             self._last_exit_code = 1
@@ -3308,7 +3301,6 @@ class LinuxCommandsMixin:
         import base64 as _b64
         if decode:
             try:
-                import io as _io
                 decoded = _b64.b64decode(data)
                 self._print(decoded.decode("utf-8", errors="replace"))
             except Exception:
@@ -3710,7 +3702,6 @@ class LinuxCommandsMixin:
         cmd_str = " ".join(cmd_parts)
         import subprocess as _sp
         import signal as _signal
-        import time as _time
         try:
             proc = _sp.Popen(cmd_str, shell=True, stdout=_sp.PIPE, stderr=_sp.PIPE)
             try:
@@ -3809,7 +3800,7 @@ class LinuxCommandsMixin:
                     if result.stderr:
                         self._print(result.stderr.rstrip(), file=sys.stderr)
                 except _sp.TimeoutExpired:
-                    self._print(f"  watch: command timed out")
+                    self._print("  watch: command timed out")
                 iterations += 1
                 if iterations < max_iterations:
                     _time.sleep(interval)

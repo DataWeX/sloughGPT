@@ -253,7 +253,7 @@ class SLNCCompiler:
         for name, tensor in tensor_list:
             tensor_bytes = tensor.tobytes()
             crc = _crc32(tensor_bytes)
-            dtype_code = dtype_to_code(tensor.dtype)
+            dtype_to_code(tensor.dtype)
             ndim = len(tensor.shape)
 
             # Align tensor data if enabled

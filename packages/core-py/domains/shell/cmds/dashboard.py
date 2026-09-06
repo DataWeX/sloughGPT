@@ -160,10 +160,10 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
     if not compact:
         procs = health.get("active_processes", {})
         _w("")
-        _w(f"  \033[1mPROCESSES\033[0m")
+        _w("  \033[1mPROCESSES\033[0m")
         _w(f"  {'─' * 56}")
         if not procs:
-            _w(f"  \033[2m  (none active)\033[0m")
+            _w("  \033[2m  (none active)\033[0m")
         else:
             for proc_id, proc in procs.items():
                 status = proc.get("status", "unknown")
@@ -181,10 +181,10 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
                 _w(f"  {icon} {name} \033[2m{detail_str}\033[0m")
 
         _w("")
-        _w(f"  \033[1mEVENTS\033[0m")
+        _w("  \033[1mEVENTS\033[0m")
         _w(f"  {'─' * 56}")
         if not events:
-            _w(f"  \033[2m  (no events yet)\033[0m")
+            _w("  \033[2m  (no events yet)\033[0m")
         else:
             cat_colors = {
                 "TRAIN": "\033[32m", "MODEL": "\033[36m", "INFERENCE": "\033[35m",
@@ -206,7 +206,7 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
 
         if errors:
             _w("")
-            _w(f"  \033[1;31mRECENT ERRORS\033[0m")
+            _w("  \033[1;31mRECENT ERRORS\033[0m")
             _w(f"  {'─' * 56}")
             for err in errors[:3]:
                 path = err.get("path", "")
@@ -214,7 +214,7 @@ def _render(data: dict, compact: bool = False, io=None) -> None:
                 _w(f"  \033[2m{path:<18}\033[0m \033[31m{msg}\033[0m")
 
     _w("")
-    _w(f"  \033[2mCtrl+C to exit\033[0m")
+    _w("  \033[2mCtrl+C to exit\033[0m")
     if io:
         io.flush()
     else:

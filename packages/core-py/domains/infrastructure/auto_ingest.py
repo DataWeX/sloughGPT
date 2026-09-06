@@ -150,10 +150,10 @@ class CodeChunker:
         if not content or content.startswith('[File too large') or content.startswith('[Binary'):
             return [self.chunk_text(content, path, 0)]
 
-        relative = str(Path(path).relative_to(Path(path).parent.parent))
+        str(Path(path).relative_to(Path(path).parent.parent))
         lang = Path(path).suffix.lstrip('.')
 
-        lines = content.split('\n')
+        content.split('\n')
         chunks: List[FileChunk] = []
 
         # Try to chunk by logical blocks first (for code)
@@ -172,7 +172,6 @@ class CodeChunker:
         """Split code by functions/classes when possible."""
         chunks = []
         chunk_content = ""
-        chunk_start = 0
         lines = content.split('\n')
 
         for i, line in enumerate(lines):

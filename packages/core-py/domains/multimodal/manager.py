@@ -207,7 +207,7 @@ class MultimodalManager:
         Uses 6 colors × 3 shapes × 4 backgrounds × 3 templates = 216 combinations.
         """
         from PIL import Image, ImageDraw
-        rng = np.random.RandomState(42)
+        np.random.RandomState(42)
 
         colors = {"red": (255,50,50), "green": (50,180,50), "blue": (50,50,255),
                   "yellow": (255,255,50), "purple": (180,50,180), "orange": (255,150,50)}

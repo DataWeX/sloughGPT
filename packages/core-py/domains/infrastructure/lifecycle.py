@@ -606,7 +606,7 @@ class LifecycleManager:
             except asyncio.TimeoutError:
                 elapsed = time.time() - started
                 results.append(
-                    _HookResult(name=hook.name, success=False, elapsed=elapsed, error=f"timeout")
+                    _HookResult(name=hook.name, success=False, elapsed=elapsed, error="timeout")
                 )
             except Exception as exc:
                 elapsed = time.time() - started

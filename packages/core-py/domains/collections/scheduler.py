@@ -205,7 +205,7 @@ class CollectorMonitor:
 
     def format_report(self) -> str:
         overview = self.get_overview()
-        lines = [f"Collection Monitor Report", f"{'=' * 40}"]
+        lines = ["Collection Monitor Report", f"{'=' * 40}"]
         lines.append(f"Healthy: {'Yes' if overview['healthy'] else 'NO'}")
         lines.append("")
         for component, stats in overview.get("components", {}).items():

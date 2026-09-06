@@ -610,7 +610,6 @@ class Console:
                     self._io.write(f"  {_color(content, _C_BOLD)}")
                 continue
             lines = stripped.split("\n")
-            list_type = None
             for line in lines:
                 b_match = re.match(r"^(\s*)[-*+]\s+(.+)$", line)
                 n_match = re.match(r"^(\s*)\d+[.)]\s+(.+)$", line)

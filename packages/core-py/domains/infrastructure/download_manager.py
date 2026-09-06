@@ -14,7 +14,7 @@ import logging
 import shutil
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -318,7 +318,7 @@ class DownloadManager:
         )
         mgr.start(op_id)
 
-        loop = asyncio.get_event_loop()
+        asyncio.get_event_loop()
         task = asyncio.create_task(self._download_worker(model_id, total_est, cancel_event))
         self._tasks[model_id] = task
 

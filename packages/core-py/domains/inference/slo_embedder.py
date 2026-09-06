@@ -418,7 +418,7 @@ def train_embedder(
     if len(texts) < 2:
         raise ValueError("Need at least 2 text samples for contrastive training")
 
-    rng = np.random.RandomState(42)
+    np.random.RandomState(42)
 
     # 1. Build tokenizer — prefer BPE, fall back to whitespace
     logger.info("Building tokenizer from %d texts", len(texts), extra={"tag": "INFRA"})
@@ -1070,7 +1070,7 @@ class SloTextEmbedder:
             if raw[:4] != SOU_MAGIC:
                 return None
 
-            version = struct.unpack("<I", raw[4:8])[0]
+            struct.unpack("<I", raw[4:8])[0]
             json_len = struct.unpack("<I", raw[8:12])[0]
             meta_bytes = raw[12:12 + json_len].rstrip(b"\x00")
             meta = json.loads(meta_bytes.decode())

@@ -175,8 +175,8 @@ Thought:"""
     async def _default_llm(self, prompt: str) -> str:
         """Default LLM simulation."""
         await asyncio.sleep(0.01)
-        words = prompt.split()
-        return f"Analyzing the problem step by step. We need to consider the given constraints and derive the logical conclusion."
+        prompt.split()
+        return "Analyzing the problem step by step. We need to consider the given constraints and derive the logical conclusion."
 
 
 class TreeOfThoughts:

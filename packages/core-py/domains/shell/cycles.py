@@ -356,9 +356,9 @@ class CyclesRenderer:
             self.scene.build_bvh()
 
         image = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        depth_buf = np.zeros((self.height, self.width), dtype=np.float32)
-        normal_buf = np.zeros((self.height, self.width, 3), dtype=np.float32)
-        albedo_buf = np.zeros((self.height, self.width, 3), dtype=np.float32)
+        np.zeros((self.height, self.width), dtype=np.float32)
+        np.zeros((self.height, self.width, 3), dtype=np.float32)
+        np.zeros((self.height, self.width, 3), dtype=np.float32)
 
         origins, dirs = self.scene.camera.generate_rays(self.width, self.height)
 
@@ -408,7 +408,7 @@ class CyclesRenderer:
             act_dire = dire[alive]
             t_hit, face_idx, hit_point, hit_normal, hit_mesh_idx, hit_mat_idx = \
                 self._intersect_scene(act_orig, act_dire)
-            n_alive = act_orig.shape[0]
+            act_orig.shape[0]
 
             # Map results back to full arrays
             t_full = np.full(N, 1e30, dtype=np.float32)

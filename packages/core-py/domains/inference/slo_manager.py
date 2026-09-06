@@ -130,7 +130,7 @@ class SloManager:
             with open(sou_path, "rb") as f:
                 header = f.read(4)
                 if header == b"SOUL":
-                    ver = struct.unpack("<I", f.read(4))[0]
+                    struct.unpack("<I", f.read(4))[0]
                     config_len = struct.unpack("<I", f.read(4))[0]
                     file_size = os.path.getsize(sou_path)
                     if config_len > file_size - 12:

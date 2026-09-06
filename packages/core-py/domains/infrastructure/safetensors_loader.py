@@ -7,9 +7,7 @@ This module just orchestrates: resolve → auto-convert → load via SLNC.
 
 from __future__ import annotations
 
-import json
 import logging
-import struct
 from pathlib import Path
 from typing import Dict
 
@@ -18,7 +16,6 @@ import numpy as np
 from domains.infrastructure.model_resolver import (
     get_model_dir,
     find_safetensors,
-    load_model_config,
 )
 
 logger = logging.getLogger("slo.infrastructure.safetensors_loader")

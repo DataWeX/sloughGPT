@@ -182,7 +182,7 @@ class ProcessGuard:
         with self._semaphore:
             try:
                 result = self._worker.generate(prompt, **kwargs)
-            except (TimeoutError, WorkerStreamStalledError) as e:
+            except (TimeoutError, WorkerStreamStalledError):
                 self._recover_from_stall()
                 raise
         with self._requests_served_lock:
@@ -213,7 +213,7 @@ class ProcessGuard:
                     token = next(gen)
             except StopIteration as e:
                 return e.value if hasattr(e, "value") else {}
-            except (TimeoutError, WorkerStreamStalledError) as e:
+            except (TimeoutError, WorkerStreamStalledError):
                 self._recover_from_stall()
                 raise
 

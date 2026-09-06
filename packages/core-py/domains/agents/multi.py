@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Multi-agent system — specialized agents collaborating on a goal.
 
@@ -18,6 +16,8 @@ Usage:
     result = orch.execute("research transformers and write a summary")
     print(result["response"])
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -311,7 +311,7 @@ class MultiAgentOrchestrator:
         """Fallback plan when LLM fails — independent research + write."""
         return [
             AgentTask(id="1", description=f"Research: {goal}", assigned_agent="researcher", depends_on=[]),
-            AgentTask(id="2", description=f"Write: synthesize findings", assigned_agent="writer", depends_on=["1"]),
+            AgentTask(id="2", description="Write: synthesize findings", assigned_agent="writer", depends_on=["1"]),
         ]
 
     def _compute_levels(self, tasks: List[AgentTask]) -> List[List[str]]:

@@ -21,7 +21,6 @@ import logging
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
 
 
 import numpy as np
@@ -2394,7 +2393,7 @@ class DeviceRegisterMap:
             self._registers[base + self.REG_ERROR] = 0
             self._registers[base + self.REG_STATUS] = self.STATUS_READY | self.STATUS_DATA_RDY
 
-        except Exception as e:
+        except Exception:
             self._registers[base + self.REG_ERROR] = 1
             self._registers[base + self.REG_STATUS] = self.STATUS_READY | self.STATUS_ERROR
 
@@ -3284,7 +3283,7 @@ def _op_dev_open(cpu, ops):
     rd = cpu._reg(ops[0])
     name = str(cpu._val(ops[1]))
     try:
-        dev = cpu._devices.open(name)
+        cpu._devices.open(name)
         cpu.regs[rd] = name
     except DeviceFault:
         # Try registering from standalone device registry
@@ -7573,7 +7572,7 @@ class X86CPU:
         mask = (1 << bits) - 1
         a &= mask
         b &= mask
-        sign = bits - 1
+        bits - 1
 
         if op == 0:  # ADD
             result = a + b
@@ -8593,8 +8592,8 @@ class X86SyscallHandler:
         arg1 = self._cpu._regs[3]  # EBX
         arg2 = self._cpu._regs[1]  # ECX
         arg3 = self._cpu._regs[2]  # EDX
-        arg4 = self._cpu._regs[6]  # ESI
-        arg5 = self._cpu._regs[7]  # EDI
+        self._cpu._regs[6]  # ESI
+        self._cpu._regs[7]  # EDI
 
         handlers = {
             self.SYS_EXIT: lambda: self._sys_exit(arg1),
@@ -8802,7 +8801,10 @@ class X86SyscallHandler:
         asm = X86Assembler()
         try:
             code = asm.assemble(source)
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger("slo.vm").warning(
+                "Assembly failed: %s", e, extra={"tag": "VM"})
             return -1
 
         if not code:

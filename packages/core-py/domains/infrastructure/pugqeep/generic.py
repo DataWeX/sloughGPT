@@ -39,7 +39,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from .point import Point
-from .store import MemoryStore, JSONStore, DirectoryStore, Store
+from .store import MemoryStore, JSONStore, DirectoryStore
 
 logger = logging.getLogger("slo.pugqeep")
 
