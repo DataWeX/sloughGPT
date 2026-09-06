@@ -659,7 +659,8 @@ class KnowledgeMemory:
         data = None
 
         # Try MogDB first
-        if self._entries_col is not None:
+        entries_col = getattr(self, '_entries_col', None)
+        if entries_col is not None:
             try:
                 docs = self._entries_col.find({})
                 if docs:
