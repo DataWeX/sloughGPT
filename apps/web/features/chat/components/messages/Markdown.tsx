@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useMemo, useRef, useState, useEffect } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import Prism from 'prismjs'
 import 'prismjs/components/prism-typescript'
@@ -33,11 +33,19 @@ function InlineCode({ children }: { children: string }) {
   )
 }
 
+/** Strip all HTML tags except safe span elements from Prism output. */
+function sanitizeHtml(html: string): string {
+  return html.replace(/<(?!\/?span\b|\/?code\b)[^>]*>/g, (tag) => {
+    if (tag.startsWith('<script') || tag.startsWith('<iframe') || tag.startsWith('<object') || tag.startsWith('<embed')) return ''
+    return tag.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  })
+}
+
 function highlightCode(code: string, language: string): string {
   const lang = language.toLowerCase()
   const grammar = Prism.languages[lang]
   if (grammar) {
-    return Prism.highlight(code, grammar, lang)
+    return sanitizeHtml(Prism.highlight(code, grammar, lang))
   }
   return code
     .replace(/&/g, '&amp;')
@@ -108,11 +116,49 @@ function parseMarkdown(text: string): React.ReactNode[] {
       continue
     }
 
+    // Table detection: look for header row, separator row, then data rows
+    if (line.includes('|') && i + 1 < lines.length && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])) {
+      const headerCells = line.split('|').map(c => c.trim()).filter(Boolean)
+      i += 2 // skip header + separator
+      const rows: string[][] = []
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
+        rows.push(lines[i].split('|').map(c => c.trim()).filter(Boolean))
+        i++
+      }
+      nodes.push(
+        <div key={key++} className="my-2 overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr>
+                {headerCells.map((cell, ci) => (
+                  <th key={ci} className="border border-border/40 bg-muted/30 px-2 py-1 text-left font-medium text-muted-foreground">
+                    {parseInline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, ri) => (
+                <tr key={ri}>
+                  {row.map((cell, ci) => (
+                    <td key={ci} className="border border-border/40 px-2 py-1">
+                      {parseInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+      continue
+    }
+
     // Headings
     const headingMatch = line.match(/^(#{1,6})\s+(.+)/)
     if (headingMatch) {
       const level = headingMatch[1].length
-      const text = headingMatch[2]
+      const headingText = headingMatch[2]
       const Tag = `h${level}` as keyof React.JSX.IntrinsicElements
       nodes.push(
         <Tag key={key++} className={cn(
@@ -121,7 +167,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
           level === 2 && 'text-sm',
           level >= 3 && 'text-xs',
         )}>
-          {parseInline(text)}
+          {parseInline(headingText)}
         </Tag>
       )
       i++
@@ -143,6 +189,40 @@ function parseMarkdown(text: string): React.ReactNode[] {
           {bqLines.join('\n')}
         </blockquote>
       )
+      continue
+    }
+
+    // Task list
+    const taskMatch = line.match(/^[-*]\s+\[([ xX])\]\s+(.*)/)
+    if (taskMatch) {
+      const checked = taskMatch[1] !== ' '
+      const items: React.ReactNode[] = []
+      items.push(
+        <li key={`li-0`} className="text-sm flex items-start gap-1.5">
+          <span className={cn('mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border', checked ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+            {checked && <span className="text-[10px]">✓</span>}
+          </span>
+          {parseInline(taskMatch[2])}
+        </li>
+      )
+      i++
+      let liKey = 1
+      while (i < lines.length) {
+        const m = lines[i].match(/^[-*]\s+\[([ xX])\]\s+(.*)/)
+        if (m) {
+          const c = m[1] !== ' '
+          items.push(
+            <li key={`li-${liKey++}`} className="text-sm flex items-start gap-1.5">
+              <span className={cn('mt-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border', c ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/40')}>
+                {c && <span className="text-[10px]">✓</span>}
+              </span>
+              {parseInline(m[2])}
+            </li>
+          )
+          i++
+        } else break
+      }
+      nodes.push(<ul key={key++} className="space-y-0.5 my-1">{items}</ul>)
       continue
     }
 
@@ -185,7 +265,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
     }
 
     // Regular paragraph
-    nodes.push(    <p key={key++} className="text-sm leading-relaxed mb-1 break-words">{parseInline(line)}</p>)
+    nodes.push(<p key={key++} className="text-sm leading-relaxed mb-1 break-words">{parseInline(line)}</p>)
     i++
   }
 
@@ -226,7 +306,20 @@ function parseInline(text: string): React.ReactNode[] {
       continue
     }
 
-    // Italic
+    // Strikethrough
+    match = remaining.match(/~~(.+?)~~/)
+    if (match) {
+      const idx = remaining.indexOf(match[0])
+      if (idx > 0) {
+        parts.push(remaining.slice(0, idx))
+        remaining = remaining.slice(idx)
+      }
+      parts.push(<del key={key++} className="text-muted-foreground/70">{match[1]}</del>)
+      remaining = remaining.slice(match[0].length)
+      continue
+    }
+
+    // Italic (must come after bold and strikethrough)
     match = remaining.match(/\*(.+?)\*/)
     if (match) {
       const idx = remaining.indexOf(match[0])
@@ -279,12 +372,11 @@ export const Markdown = memo(function Markdown({ content, className }: MarkdownP
     const timeSinceLastParse = now - throttleRef.current
 
     // During streaming, throttle full re-parsing to every 300ms
-    // Only re-parse immediately if content shrunk (edit/regenerate) or 300ms elapsed
+    // Only re-parse immediately if content shrank (edit/regenerate) or 300ms elapsed
     const contentShrunk = content.length < lastParsedRef.current.length
     const throttled = !contentShrunk && timeSinceLastParse < 300 && lastParsedRef.current.length > 0
 
     if (throttled) {
-      // Re-use last render but update the trailing text for streaming feel
       return lastRenderedRef.current
     }
 
