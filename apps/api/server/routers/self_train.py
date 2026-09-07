@@ -71,6 +71,8 @@ class SelfTrainRouter:
                         "E_VAL_REQUEST",
                         status_code=422,
                     )
+                if '..' in req.model:
+                    raise_error("Model name cannot contain path traversal", "E_VAL_REQUEST", status_code=422)
                 cmd.extend(["--model", req.model])
             if req and req.temperature is not None:
                 cmd.extend(["--temperature", str(req.temperature)])

@@ -267,12 +267,17 @@ async def start_distillation(
             for epoch in range(request.epochs):
                 if cancel_event.is_set():
                     _finish_job(job_id, "cancelled")
+                    get_training_controller().reset()
                     return
                 indices = list(range(n_samples))
                 _random.shuffle(indices)
                 epoch_loss = 0.0
                 n_batches = 0
                 for start in range(0, n_samples, batch_size):
+                    if cancel_event.is_set():
+                        _finish_job(job_id, "cancelled")
+                        get_training_controller().reset()
+                        return
                     batch_idx = indices[start : start + batch_size]
                     bx = inputs_np[batch_idx]
                     by = targets_np[batch_idx]
