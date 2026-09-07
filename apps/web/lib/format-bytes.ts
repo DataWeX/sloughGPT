@@ -14,24 +14,12 @@ export function formatBytes(bytes: number): string {
  */
 export function estimateTokens(text: string): number {
   if (!text) return 0
-  // Count words by splitting on whitespace
   const words = text.split(/\s+/).filter(w => w.length > 0).length
-  // Add 0.3 tokens per word as overhead for subword tokenization
   return Math.ceil(words * 1.3)
 }
 
-/** Format milliseconds to mm:ss or h:mm:ss duration string. */
-export function formatDuration(ms: number): string {
-  if (!ms || ms <= 0) return '0:00'
-  const totalSeconds = Math.floor(ms / 1000)
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-}
+/** Re-export formatDurationMs for backward compatibility. */
+export { formatDurationMs as formatDuration } from './formatDuration'
 
 /** Time constants in milliseconds. */
 export const MS_PER_SECOND = 1000

@@ -98,8 +98,9 @@ export function useTrainingStream() {
           }
           if (env.status === 'error') {
             closeStream()
-            writeTraining({ phase: 'error', error: 'Training failed' })
-            addToast('Training failed', 'error')
+            const errorMsg = env.message || env.data?.error || 'Training failed'
+            writeTraining({ phase: 'error', error: errorMsg })
+            addToast(errorMsg, 'error')
           }
         } catch (err) { _log.error('SSE parse error', { exception: String(err) }) }
       }

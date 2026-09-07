@@ -1181,6 +1181,40 @@ class DataImporter:
             )
 
 
+def import_data(
+    source: str,
+    name: str,
+    *,
+    source_type: Optional[str] = None,
+    output_dir: str = "runs/imports",
+    **kwargs,
+) -> ImportResult:
+    """Convenience wrapper: auto-detect source type and dispatch to the right importer.
+
+    source_type can be "github", "huggingface", "url", or "local" to force
+    a specific importer. If omitted, the type is detected from the source string.
+    """
+    imp: object
+    if source_type == "local" or (
+        not source_type and not source.startswith(("http://", "https://", "git@"))
+        and "/" not in source.split(":")[-1]
+    ):
+        imp = RepoImporter()
+        return imp.import_from_local(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]
+    elif source_type == "huggingface" or (
+        not source_type and not source.startswith(("http://", "https://", "git@"))
+        and ":" not in source
+    ):
+        return HuggingFaceImporter().download_dataset(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]
+    elif source_type == "url" or (
+        not source_type and source.startswith(("http://", "https://"))
+        and "github.com" not in source
+    ):
+        return URLImporter().import_from_url(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]
+    else:
+        return RepoImporter().import_from_github(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]
+
+
 __all__ = [
     "DataImporter",
     "RepoImporter",
@@ -1190,4 +1224,5 @@ __all__ = [
     "BooksSearch",
     "ISBNImporter",
     "ImportResult",
+    "import_data",
 ]

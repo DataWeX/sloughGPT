@@ -147,3 +147,49 @@ def get_accelerator() -> object:
         _accelerator = _CPUAccelerator()
 
     return _accelerator
+
+
+def cholesky(A: object) -> object:
+    """Cholesky decomposition A = L @ L.T using numpy."""
+    import numpy as np
+    n = A.shape[0]
+    L = np.zeros_like(A)
+    for i in range(n):
+        for j in range(i + 1):
+            s = sum(L[i, k] * L[j, k] for k in range(j))
+            if i == j:
+                L[i, j] = np.sqrt(max(A[i, i] - s, 0))
+            else:
+                L[i, j] = (A[i, j] - s) / L[j, j] if L[j, j] != 0 else 0
+    return L
+
+
+def solve_triangular(L: object, b: object) -> object:
+    """Solve L @ x = b for lower triangular L."""
+    import numpy as np
+    n = L.shape[0]
+    x = np.zeros(n)
+    for i in range(n):
+        x[i] = (b[i] - sum(L[i, j] * x[j] for j in range(i))) / L[i, i] if L[i, i] != 0 else 0
+    return x
+
+
+def solve_cholesky(A: object, b: object) -> object:
+    """Solve A @ x = b via Cholesky decomposition."""
+    L = cholesky(A)
+    y = solve_triangular(L, b)
+    return solve_triangular(L.T, y)
+
+
+def dominant_eigen(A: object, max_iter: int = 100) -> object:
+    """Compute dominant eigenvalue via power iteration."""
+    import numpy as np
+    n = A.shape[0]
+    v = np.ones(n) / np.sqrt(n)
+    for _ in range(max_iter):
+        w = A @ v
+        norm = np.linalg.norm(w)
+        if norm == 0:
+            break
+        v = w / norm
+    return float(v @ A @ v)

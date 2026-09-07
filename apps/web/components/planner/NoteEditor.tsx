@@ -44,19 +44,20 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Edit note">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full max-w-md bg-card border-l border-border shadow-lg overflow-y-auto">
         <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Edit Note</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <IconX className="h-4 w-4" />
           </Button>
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="text-sm font-medium">Title</label>
+            <label htmlFor="note-title" className="text-sm font-medium">Title</label>
             <input
+              id="note-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -64,8 +65,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Body</label>
+            <label htmlFor="note-body" className="text-sm font-medium">Body</label>
             <textarea
+              id="note-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono"
@@ -74,8 +76,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Status</label>
+              <label htmlFor="note-status" className="text-sm font-medium">Status</label>
               <select
+                id="note-status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
                 className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -89,8 +92,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium">Tags (comma-separated)</label>
+              <label htmlFor="note-tags" className="text-sm font-medium">Tags (comma-separated)</label>
               <input
+                id="note-tags"
                 type="text"
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
@@ -100,8 +104,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Sprint</label>
+              <label htmlFor="note-sprint" className="text-sm font-medium">Sprint</label>
               <input
+                id="note-sprint"
                 type="text"
                 value={sprint}
                 onChange={(e) => setSprint(e.target.value)}
@@ -109,8 +114,9 @@ export function NoteEditor({ note, onClose, onUpdate, onDelete }: NoteEditorProp
               />
             </div>
             <div>
-              <label className="text-sm font-medium">GitHub</label>
+              <label htmlFor="note-gh" className="text-sm font-medium">GitHub</label>
               <input
+                id="note-gh"
                 type="text"
                 value={gh}
                 onChange={(e) => setGh(e.target.value)}

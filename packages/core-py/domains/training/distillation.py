@@ -258,6 +258,12 @@ class ProgressiveDistiller:
         return {i: int(i * n_t / n_s) for i in range(n_s)}
 
     def distill_intermediate(self, inputs, intermediate_losses=None):
+        """Intermediate-layer distillation — not yet implemented.
+
+        Returns 0.0 loss contribution. Use distill_logits() and
+        distill_hidden_states() for actual distillation losses.
+        """
+        logger.debug("distill_intermediate called but not implemented — returning 0.0")
         return 0.0
 
 

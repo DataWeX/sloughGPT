@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
 import { cn, ActionCard, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { workflowController, type WorkflowStatus } from '@/lib/workflow-controller'
@@ -11,7 +11,7 @@ interface WorkflowCardProps {
   onRefresh?: () => void
 }
 
-export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
+export const WorkflowCard = memo(function WorkflowCard({ onRefresh }: WorkflowCardProps) {
   const [status, setStatus] = useState<WorkflowStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const addToast = useToastStore((s) => s.addToast)
@@ -177,4 +177,4 @@ export function WorkflowCard({ onRefresh }: WorkflowCardProps) {
       </div>
     </ActionCard>
   )
-}
+})

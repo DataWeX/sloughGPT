@@ -16,6 +16,7 @@ export interface GenerateRequest {
   top_k?: number
   repetition_penalty?: number
   model?: string
+  response_format?: 'text' | 'json'
 }
 
 export interface GenerateResponse {

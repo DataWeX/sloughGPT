@@ -94,7 +94,9 @@ export const useErrorStore = create<ErrorStore>((set, get) => ({
     }
 
     set(prev => ({ errors: [error, ...prev.errors].slice(0, 20) }))
-    console.debug('[ErrorStore] Added error:', title, message, source)
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[ErrorStore] Added error:', title, message, source)
+    }
     return id
   },
 

@@ -48,7 +48,6 @@ def get_all_routers() -> list[APIRouter]:
     # pre-lifespan (needed during model load). Do NOT list them here.
     _router_names = [
         "auth",
-        "auto_train",
         "models",
         "inference",
         "feedback",

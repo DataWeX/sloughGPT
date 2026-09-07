@@ -1,47 +1,77 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useState, useEffect, useCallback } from 'react'
 import { cn, Card, CardContent, Button, StatCard, KpiGrid, IconRefresh } from '@sloughgpt/strui'
-import { systemController } from '@/lib/system-controller'
-import { useFetchCard } from '@/hooks/useFetchCard'
+import { systemController, type InferencePoolStatus } from '@/lib/system-controller'
+import { useToastStore } from '@/lib/toast-store'
 
 interface InferencePoolCardProps {
   onRefresh?: () => void
 }
 
 export const InferencePoolCard = memo(function InferencePoolCard({ onRefresh }: InferencePoolCardProps) {
-  const { data: status, loading, error, refetch } = useFetchCard(
-    () => systemController.getInferencePoolStatus(),
-    [],
-  )
+  const [status, setStatus] = useState<InferencePoolStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const addToast = useToastStore(s => s.addToast)
 
-  const handleRefresh = () => {
-    refetch()
-    onRefresh?.()
-  }
+  const fetchStatus = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const s = await systemController.getInferencePoolStatus()
+      setStatus(s)
+    } catch {
+      addToast('Could not load inference pool status', 'error')
+      setError('Failed to load')
+    } finally {
+      setLoading(false)
+    }
+  }, [addToast])
+
+  useEffect(() => {
+    let active = true
+    const load = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const s = await systemController.getInferencePoolStatus()
+        if (active) setStatus(s)
+      } catch {
+        if (active) {
+          addToast('Could not load inference pool status', 'error')
+          setError('Failed to load')
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void load()
+    return () => { active = false }
+  }, [addToast])
 
   return (
     <Card data-testid="inference-pool">
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-3 px-4">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Inference Pool</span>
-        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={handleRefresh} disabled={loading} aria-label="Refresh inference pool">
+        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onRefresh} disabled={loading} aria-label="Refresh inference pool">
           <IconRefresh className={cn(loading && 'animate-spin', 'h-3 w-3')} />
         </Button>
       </div>
       <CardContent className="pt-3">
         {loading && !status ? (
           <KpiGrid>
-            <StatCard label="Active" value="" loading />
-            <StatCard label="Queued" value="" loading />
-            <StatCard label="Avg Latency" value="" loading />
+            <StatCard label="Initialized" value="" loading />
+            <StatCard label="Max Workers" value="" loading />
+            <StatCard label="Queue Timeout" value="" loading />
           </KpiGrid>
         ) : error ? (
           <p className="text-xs text-destructive text-center py-2">{error}</p>
         ) : status ? (
           <KpiGrid>
-            <StatCard label="Active" value={String(status.active ?? 0)} />
-            <StatCard label="Queued" value={String(status.queued ?? 0)} />
-            <StatCard label="Avg Latency" value={status.avg_latency_ms != null ? `${Math.round(status.avg_latency_ms)}ms` : '—'} />
+            <StatCard label="Initialized" value={status.initialized ? 'Yes' : 'No'} />
+            <StatCard label="Max Workers" value={status.max_workers != null ? String(status.max_workers) : '—'} />
+            <StatCard label="Queue Timeout" value={status.queue_timeout != null ? `${status.queue_timeout}ms` : '—'} />
           </KpiGrid>
         ) : null}
       </CardContent>

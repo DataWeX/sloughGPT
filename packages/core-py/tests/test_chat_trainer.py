@@ -10,13 +10,13 @@ from domains.training.chat_trainer import (
     ChatTextDataset,
     ChatTrainConfig,
     _build_vocab,
-    _cross_entropy_loss,
     _format_pairs_text,
     evaluate_chat_model,
     generate_from_chat_model,
     train_chat_model,
     train_from_sessions,
 )
+from domains.training.helpers import cross_entropy_loss as _cross_entropy_loss
 from domains.training.pair_extractor import _SESSIONS_DIR
 
 

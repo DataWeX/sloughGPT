@@ -61,19 +61,20 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Edit card">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
       <div className="relative w-full max-w-md bg-card border-l border-border shadow-lg overflow-y-auto">
         <div className="sticky top-0 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Edit Card</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <IconX className="h-4 w-4" />
           </Button>
         </div>
         <div className="p-4 space-y-4">
           <div>
-            <label className="text-sm font-medium">Title</label>
+            <label htmlFor="card-title" className="text-sm font-medium">Title</label>
             <input
+              id="card-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}

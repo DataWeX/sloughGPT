@@ -143,3 +143,9 @@
 {"id": "test-22", "title": "Tests: core.soul (43 tests)", "column": "done", "created": "2026-09-06", "status": "completed"}
 {"id": "test-24", "title": "Tests: shell.repl + shell.tui_repl (36 tests)", "column": "done", "created": "2026-09-06", "status": "completed"}
 {"id": "test-25", "title": "Tests: training.slonet (52 tests) + shell.repl execute (19 tests)", "column": "done", "created": "2026-09-06", "status": "completed"}
+{"id":"test-26","title":"Tests: slonet ops (39 tests) + slonet layers (47 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-27","title":"Tests: slonet optimizers (24 tests) + attention (17 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-28","title":"Tests: slonet feedforward (18 tests) + network (36 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-29","title":"Tests: slonet dataset/schedulers (29 tests) + SOU export (12 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-30","title":"Tests: slonet kernels (17 tests) + utils (31 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-31","title":"Tests: SloCrossAttention (14 tests) + NumpyKVState","column":"done","created":"2026-09-06"}

@@ -3,6 +3,7 @@
 import { useState, useCallback, memo } from 'react'
 import { Button, IconX, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { formatDurationCompact } from '@/lib/formatDuration'
 
 interface CodeExecution {
   id: string
@@ -19,11 +20,6 @@ interface CodeExecutionResultsProps {
   executions: CodeExecution[]
   onRerun?: (id: string) => void
   className?: string
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(2)}s`
 }
 
 function getStatusColor(exitCode: number): string {
@@ -82,7 +78,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
               </span>
               <span className="text-xs font-medium">{exec.language}</span>
               <span className="text-[10px] text-muted-foreground">
-                {formatDuration(exec.duration)}
+                {formatDurationCompact(exec.duration)}
               </span>
             </div>
             <div className="flex items-center gap-1">

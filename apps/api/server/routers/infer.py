@@ -41,6 +41,7 @@ class InferRequest(BaseModel):
     top_k: int = Field(default=40, ge=0, le=500)
     repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
     model: str | None = None
+    response_format: str | None = Field(default=None, description='"text" or "json"')
 
 
 class InferResponse(BaseModel):
@@ -226,7 +227,13 @@ class InferRouter:
         if provider is None:
             raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500)
 
-        provider_messages = [{"role": "user", "content": req.prompt}]
+        prompt_text = req.prompt
+        if req.response_format == "json":
+            prompt_text = (
+                f"{req.prompt}\n\n"
+                "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
+            )
+        provider_messages = [{"role": "user", "content": prompt_text}]
         start = datetime.datetime.now()
         try:
             result = await provider.chat(
@@ -331,7 +338,13 @@ class InferRouter:
                     )
                     return
 
-                provider_messages = [{"role": "user", "content": req.prompt}]
+                prompt_text = req.prompt
+                if req.response_format == "json":
+                    prompt_text = (
+                        f"{req.prompt}\n\n"
+                        "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
+                    )
+                provider_messages = [{"role": "user", "content": prompt_text}]
                 start = datetime.datetime.now()
                 token_count = 0
                 _token_gen_start = _time.time()

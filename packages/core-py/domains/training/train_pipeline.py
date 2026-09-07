@@ -1234,7 +1234,11 @@ class SloughGPTTrainer:
                     }
                 )
             except Exception:
-                logger.exception("on_progress callback failed", extra={"tag": "TRAIN"})
+                self._progress_fail_count = getattr(self, '_progress_fail_count', 0) + 1
+                if self._progress_fail_count <= 3:
+                    logger.exception("on_progress callback failed (attempt %d)", self._progress_fail_count, extra={"tag": "TRAIN"})
+                if self._progress_fail_count == 3:
+                    logger.warning("on_progress callback failed 3 times — UI may show stale progress", extra={"tag": "TRAIN"})
 
         self._is_training = True
         self._training_start_time = time.time()
@@ -1523,6 +1527,9 @@ class SloughGPTTrainer:
         start_t = getattr(self, '_training_start_time', None)
         training_duration = round(time.time() - start_t, 1) if start_t else None
 
+        # Enforce MAX_CHECKPOINT_DISK_MB: prune oldest checkpoints if total size exceeds limit
+        self._enforce_disk_limit(checkpoint_dir)
+
         # Save in .soul format with vocab; periodic checkpoints keep optimizer
         # state (accurate resume), final artifact strips momentum buffers.
         self.save(str(checkpoint_path),
@@ -1532,6 +1539,27 @@ class SloughGPTTrainer:
                   avg_quality=self._avg_quality)
         self._last_checkpoint_path = str(checkpoint_path) + ".soul"
         self._prune_stale_checkpoints(keep_final=is_final)
+
+    def _enforce_disk_limit(self, checkpoint_dir: Path) -> None:
+        """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
+        from .state import MAX_CHECKPOINT_DISK_MB
+        try:
+            files = sorted(
+                checkpoint_dir.glob("*.soul"),
+                key=lambda p: p.stat().st_mtime,
+            )
+        except OSError:
+            return
+        total_bytes = sum(f.stat().st_size for f in files)
+        limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
+        while total_bytes > limit_bytes and len(files) > 1:
+            oldest = files.pop(0)
+            total_bytes -= oldest.stat().st_size
+            try:
+                oldest.unlink()
+                logger.info("Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB)
+            except OSError:
+                pass
 
     def _prune_stale_checkpoints(self, keep_final: bool = False) -> None:
         """Delete stale ``.soul`` checkpoints so the directory never accumulates files.

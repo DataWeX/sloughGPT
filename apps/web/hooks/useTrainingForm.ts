@@ -236,6 +236,17 @@ export function useTrainingForm(
 
   const startTraining = useCallback(async (checkpointName?: string) => {
     trackEvent('training_started', { method, input_mode: inputMode })
+
+    if (trainingEpochs < 1 || trainingEpochs > 500) {
+      addToast('Epochs must be 1–500', 'error'); return
+    }
+    if (trainingBatchSize < 1 || trainingBatchSize > 256) {
+      addToast('Batch size must be 1–256', 'error'); return
+    }
+    if (trainingLR <= 0 || trainingLR > 1) {
+      addToast('Learning rate must be 0–1', 'error'); return
+    }
+
     const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
     const hasText = inputMode === 'text' && textInput.trim()
 

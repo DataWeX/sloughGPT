@@ -72,7 +72,19 @@ def _job_summary(job: dict) -> dict:
 
 @router.get("/training/jobs")
 async def list_training_jobs():
-    """List all tracked training jobs with plain-language status."""
+    """List all tracked training jobs with plain-language status.
+
+    Auto-purges completed/failed jobs older than 1 hour to bound memory.
+    """
+    import time as _time
+    now = _time.time()
+    stale = [
+        jid for jid, j in training_jobs.items()
+        if j.get("status") in ("completed", "failed", "stopped")
+        and now - j.get("updated_at", j.get("started_at", 0)) > 3600
+    ]
+    for jid in stale:
+        training_jobs.pop(jid, None)
     return [_job_summary(j) for j in training_jobs.values()]
 
 
@@ -197,8 +209,8 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
             try:
                 checkpoint_path.unlink()
                 deleted_files.append(str(checkpoint_path))
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.warning("Could not delete checkpoint %s: %s", checkpoint_path, exc)
 
     if job.get("checkpoint_dir"):
         checkpoint_dir = Path(job["checkpoint_dir"])
@@ -206,8 +218,8 @@ async def delete_training_job(job_id: str, auth_user: dict = Depends(require_aut
             try:
                 shutil.rmtree(checkpoint_dir)
                 deleted_files.append(str(checkpoint_dir))
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.warning("Could not delete checkpoint dir %s: %s", checkpoint_dir, exc)
 
     del training_jobs[job_id]
 
@@ -306,6 +318,8 @@ async def export_feedback_pairs(request: ExportTextRequest):
                 except json.JSONDecodeError:
                     continue
                 if fb.get("user_message") and fb.get("assistant_response"):
+                    if fb.get("quality", 0) < request.min_quality:
+                        continue
                     pairs.append(fb)
                     if len(pairs) >= request.target_count:
                         break

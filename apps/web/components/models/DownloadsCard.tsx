@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle, Progress, Button } from '@sloughgpt/strui'
+import { cn, ActionCard, Progress, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'

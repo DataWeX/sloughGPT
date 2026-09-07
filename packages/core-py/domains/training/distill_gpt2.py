@@ -149,6 +149,31 @@ def _compute_perplexity(loss: float) -> float:
     return float(np.exp(loss))
 
 
+def _softmax(x: np.ndarray, axis: int = -1) -> np.ndarray:
+    """Numerically stable softmax."""
+    x_max = x.max(axis=axis, keepdims=True)
+    e_x = np.exp(x - x_max)
+    return e_x / e_x.sum(axis=axis, keepdims=True)
+
+
+def _kl_div_loss(student_logits: np.ndarray, teacher_logits: np.ndarray) -> float:
+    """KL divergence loss between teacher and student distributions."""
+    student_probs = _softmax(student_logits)
+    teacher_probs = _softmax(teacher_logits)
+    # KL(teacher || student)
+    mask = teacher_probs > 0
+    kl = np.where(mask, teacher_probs * (np.log(teacher_probs + 1e-12) - np.log(student_probs + 1e-12)), 0)
+    return float(kl.sum(axis=-1).mean())
+
+
+def _cross_entropy_loss(logits: np.ndarray, targets: np.ndarray) -> float:
+    """Cross-entropy loss on (batch, vocab) logits and (batch,) targets."""
+    log_probs = logits - logits.max(axis=-1, keepdims=True)
+    log_probs = log_probs - np.log(np.exp(log_probs).sum(axis=-1, keepdims=True))
+    batch_size = targets.shape[0]
+    return float(-log_probs[np.arange(batch_size), targets].mean())
+
+
 def _bleu_score(candidate: str, reference: str, max_n: int = 4) -> float:
     """Compute BLEU score between candidate and reference strings.
 
