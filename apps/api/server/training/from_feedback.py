@@ -44,27 +44,32 @@ class FromFeedbackRequest(BaseModel):
 
 @router.post("/training/from-feedback")
 async def train_from_feedback(
-    req: FromFeedbackRequest | None = None,
+    req: FromFeedbackRequest,
     auth_user: dict = Depends(require_auth_if_enabled),
 ):
     """Train a model from collected feedback data."""
     import uuid
 
-    epochs = req.epochs if req else 3
-    learning_rate = req.learning_rate if req else 1e-4
-    batch_size = req.batch_size if req else 16
-    n_embed = req.n_embed if req else 256
-    n_layer = req.n_layer if req else 6
-    n_head = req.n_head if req else 8
-    block_size = req.block_size if req else 256
-    use_lora = req.use_lora if req else True
-    lora_rank = req.lora_rank if req else 8
-    lora_alpha = req.lora_alpha if req else 16
+    epochs = req.epochs
+    learning_rate = req.learning_rate
+    batch_size = req.batch_size
+    n_embed = req.n_embed
+    n_layer = req.n_layer
+    n_head = req.n_head
+    block_size = req.block_size
+    use_lora = req.use_lora
+    lora_rank = req.lora_rank
+    lora_alpha = req.lora_alpha
 
     try:
         from domains.feedback.training import FeedbackTrainer
 
         trainer = FeedbackTrainer()
+
+        # Pre-flight: check feedback data exists before creating job
+        count = trainer.export_sft("/dev/null")
+        if count == 0:
+            raise_error("No feedback data available for training", "E_BAD_REQUEST", status_code=400)
 
         # Export feedback data
         timestamp = int(time.time())
@@ -76,7 +81,7 @@ async def train_from_feedback(
         count = trainer.export_sft(str(sft_path))
 
         if count == 0:
-            return {"status": "no_data", "message": "No feedback data available for training"}
+            raise_error("No feedback data available for training", "E_BAD_REQUEST", status_code=400)
 
         # Create training job
         jid = f"feedback_train_{uuid.uuid4().hex[:8]}"
