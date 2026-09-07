@@ -201,17 +201,17 @@ class LoadAdapterRequest(BaseModel):
 class FromSessionsRequest(BaseModel):
     """Request body for from-sessions training."""
 
-    epochs: int = 5
-    learning_rate: float = 3e-4
-    batch_size: int = 8
-    n_embed: int = 128
-    n_layer: int = 4
-    n_head: int = 4
-    block_size: int = 128
-    dropout: float = 0.1
+    epochs: int = Field(default=5, ge=1, le=1000)
+    learning_rate: float = Field(default=3e-4, gt=0, le=1.0)
+    batch_size: int = Field(default=8, ge=1, le=512)
+    n_embed: int = Field(default=128, ge=16, le=1024)
+    n_layer: int = Field(default=4, ge=1, le=12)
+    n_head: int = Field(default=4, ge=1, le=16)
+    block_size: int = Field(default=128, ge=32, le=1024)
+    dropout: float = Field(default=0.1, ge=0, le=1)
     soul_name: str | None = None
-    min_pair_quality: float = 2.0
-    max_pairs: int = 500
+    min_pair_quality: float = Field(default=2.0, ge=0, le=5)
+    max_pairs: int = Field(default=500, ge=1, le=10000)
     checkpoint_name: str | None = None
     session_ids: list[str] | None = None
     experiment_id: str | None = None
@@ -224,15 +224,15 @@ class TurboStartRequest(BaseModel):
     checkpoint_name: str | None = None
     soul_name: str | None = None
     source_text: str | None = None
-    epochs: int = 3
-    learning_rate: float = 3e-4
-    batch_size: int = 8
-    n_embed: int = 128
-    n_layer: int = 4
-    n_head: int = 4
-    block_size: int = 128
+    epochs: int = Field(default=3, ge=1, le=1000)
+    learning_rate: float = Field(default=3e-4, gt=0, le=1.0)
+    batch_size: int = Field(default=8, ge=1, le=512)
+    n_embed: int = Field(default=128, ge=16, le=1024)
+    n_layer: int = Field(default=4, ge=1, le=12)
+    n_head: int = Field(default=4, ge=1, le=16)
+    block_size: int = Field(default=128, ge=32, le=1024)
     use_lora: bool = False
-    lora_rank: int = 8
+    lora_rank: int = Field(default=8, ge=1, le=64)
     experiment_id: str | None = None
 
 

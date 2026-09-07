@@ -513,7 +513,7 @@ export default function AdminPage() {
                       try {
                         const data = await authController.verify(token!)
                         addToast(data?.valid ? 'Token is valid' : 'Token is invalid', data?.valid ? 'success' : 'error')
-                      } catch { addToast('Could not verification', 'error') }
+                      } catch { addToast('Could not verify token', 'error') }
                     }}
                   >
                     Verify Token

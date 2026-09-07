@@ -60,15 +60,13 @@ router.include_router(builds_router)
 
 
 @router.post("/training/start")
-async def start_training(request: dict, auth_user: dict = Depends(require_auth_if_enabled)):
+async def start_training(request: TrainingRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Start a tracked training job (web UI).
 
     ``*.soul`` files saved on the server include ``stoi`` / ``itos`` / ``chars``
     for char-LM eval; see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
     from domains.training.dataset_manifest import ManifestError
-
-    request = TrainingRequest(**request) if isinstance(request, dict) else request
 
     try:
         data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(

@@ -27,11 +27,9 @@ async def get_turbo_status():
 
 
 @router.post("/training/from-sessions-start")
-async def start_from_sessions_unified(request: dict):
+async def start_from_sessions_unified(req: FromSessionsRequest):
     """Start from-sessions training."""
     try:
-        req = FromSessionsRequest(**request)
-
         from domains.training.service import _state, start_from_sessions_training
 
         config = {
@@ -65,11 +63,9 @@ async def start_from_sessions_unified(request: dict):
 
 
 @router.post("/training/turbo-start")
-async def start_turbo_training_unified(request: dict):
+async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
-        req = TurboStartRequest(**request)
-
         from domains.training.service import run_turbo_worker, start_turbo_training
 
         config = req.model_dump()
