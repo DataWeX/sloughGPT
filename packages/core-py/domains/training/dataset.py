@@ -168,8 +168,8 @@ class TrainingDataset:
             ValueError: If file is empty or too short.
         """
         text = Path(path).read_text(encoding="utf-8")
-        if len(text.strip()) < 50:
-            raise ValueError(f"Source text too short for training (need >50 chars, got {len(text.strip())})")
+        if len(text.strip()) < 200:
+            raise ValueError(f"Source text too short for training (need >=200 chars, got {len(text.strip())})")
         return cls(source_text=text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     @classmethod

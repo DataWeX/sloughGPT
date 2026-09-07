@@ -203,18 +203,40 @@ export const api = {
   /** Upload a file (image/audio) via multipart form data. */
   upload: async <T>(path: string, formData: FormData): Promise<T> => {
     const baseUrl = await getApiUrl();
-    const res = await fetch(`${baseUrl}${path}`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      throw new ApiError(res.status, (data as any)?.detail || res.statusText, data);
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 60_000;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${baseUrl}${path}`, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new ApiError(res.status, (data as any)?.detail || res.statusText, data);
+        }
+        const text = await res.text();
+        if (!text) return undefined as T;
+        const raw = JSON.parse(text);
+        return unwrap<T>(raw);
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        const isRetryable = err?.name === 'AbortError' || (err?.status && [408, 429, 502, 503, 504].includes(err.status));
+        if (isRetryable && attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw err;
+      }
     }
-    const text = await res.text();
-    if (!text) return undefined as T;
-    const raw = JSON.parse(text);
-    return unwrap<T>(raw);
+    throw new Error('Upload failed after retries');
   },
 
   /** Sync offline messages with the server. */

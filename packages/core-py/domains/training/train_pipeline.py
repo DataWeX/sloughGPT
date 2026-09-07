@@ -771,13 +771,18 @@ class SloughGPTTrainer:
             raw_text = "".join(self.itos.get(int(i), "") for i in self.data[:min(50000, len(self.data))])
             self._data_quality = compute_data_quality(raw_text)
             self._avg_quality = self._data_quality.get("avg_quality")
-            logger.info("Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f",
+            tox_rate = self._data_quality.get("toxicity_rate", 0)
+            logger.info("Data quality: avg=%.2f repetition=%.2f diversity=%.2f language=%.2f toxicity=%.2f",
                 self._data_quality["avg_quality"], self._data_quality["repetition_rate"],
                 self._data_quality["diversity"], self._data_quality["language_quality"],
+                tox_rate,
                 extra={"tag": "TRAIN"})
+            if tox_rate > 0.3:
+                logger.warning("High toxicity detected in training data (%.2f). Consider cleaning the data.", tox_rate,
+                    extra={"tag": "TRAIN"})
         except Exception as e:
             logger.warning("Data quality computation failed, using defaults: %s", e)
-            self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
+            self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
 
         # Create model
         self._create_model()
