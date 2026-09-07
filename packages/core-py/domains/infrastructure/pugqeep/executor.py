@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 import threading
-import time
 from typing import Any, Callable, Dict, List, Tuple
 
 
@@ -55,8 +54,7 @@ class ParallelExecutor:
         try:
             for item in items:
                 q.put(item)
-            while not q.empty:
-                time.sleep(0.01)
+            q._drain_event.wait(timeout=self._timeout)
         finally:
             q.stop(timeout=self._timeout)
 

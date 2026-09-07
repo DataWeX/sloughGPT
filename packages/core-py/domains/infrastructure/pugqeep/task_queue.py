@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -57,6 +58,7 @@ class Task:
     retries: int = 0
     max_retries: int = 3
     metadata: Dict[str, Any] = field(default_factory=dict)
+    _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def to_dict(self) -> dict:
         return {
@@ -197,6 +199,7 @@ class TaskQueue:
         task.status = TaskStatus.COMPLETED
         task.result = result
         task.completed_at = time.time()
+        task._done_event.set()
         self._completed.append(task_id)
 
         if self._storage_dir:
@@ -220,12 +223,14 @@ class TaskQueue:
             task.retries += 1
             task.status = TaskStatus.PENDING
             task.started_at = None
+            task.completed_at = None
             self._pending.append(task.id)
             self._sort_pending()
             logger.info("TaskQueue[%s]: retrying %s (attempt %d)",
                        self.name, task_id, task.retries,
                        extra={"tag": "INFRA"})
         else:
+            task._done_event.set()
             self._completed.append(task_id)
 
         if self._storage_dir:
@@ -245,6 +250,7 @@ class TaskQueue:
         if task:
             task.status = TaskStatus.CANCELLED
             task.completed_at = time.time()
+            task._done_event.set()
 
             if self._storage_dir:
                 self._persist()
@@ -374,18 +380,13 @@ class TaskQueue:
         Returns:
             The completed/failed/cancelled Task, or None if timeout.
         """
-        import threading as _threading
-        deadline = time.time() + timeout if timeout else None
-
-        while True:
-            task = self._tasks.get(task_id)
-            if task is None:
-                return None
-            if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
-                return task
-            if deadline and time.time() > deadline:
-                return None
-            _threading.Event().wait(0.05)
+        task = self._tasks.get(task_id)
+        if task is None:
+            return None
+        if task.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+            return task
+        task._done_event.wait(timeout=timeout)
+        return self._tasks.get(task_id)
 
     def wait_all(self, timeout: Optional[float] = None) -> List[Task]:
         """Wait for all running/pending tasks to complete.
@@ -396,9 +397,12 @@ class TaskQueue:
         Returns:
             List of completed/failed/cancelled Tasks.
         """
+        if not self._pending and not self._running:
+            return [t for t in self._tasks.values()
+                    if t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED)]
+
         import threading as _threading
         deadline = time.time() + timeout if timeout else None
-
         while True:
             has_pending = len(self._pending) > 0
             has_running = len(self._running) > 0

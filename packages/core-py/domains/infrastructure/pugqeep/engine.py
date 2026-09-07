@@ -104,6 +104,7 @@ class Process:
     _future: Optional[Future] = field(default=None, repr=False)
     _tree_name: Optional[str] = field(default=None, repr=False)
     _cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
+    _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _priority: int = field(default=2, repr=False)
     _restart_count: int = field(default=0, repr=False)
     _pid: Optional[int] = field(default=None, repr=False)
@@ -121,23 +122,22 @@ class Process:
         self.status = ProcessStatus.COMPLETED
         self.result = result
         self.completed_at = time.time()
+        self._done_event.set()
 
     def fail(self, error: str) -> None:
         self.status = ProcessStatus.FAILED
         self.error = error
         self.completed_at = time.time()
+        self._done_event.set()
 
     def cancel(self) -> None:
         self.status = ProcessStatus.CANCELLED
         self.completed_at = time.time()
         self._cancel_event.set()
+        self._done_event.set()
 
     def wait_cancel(self, timeout: float = None) -> None:
-        deadline = time.time() + timeout if timeout else None
-        while not self.is_cancelled:
-            if deadline and time.time() > deadline:
-                break
-            time.sleep(0.01)
+        self._cancel_event.wait(timeout=timeout)
 
     @property
     def is_cancelled(self) -> bool:
@@ -749,10 +749,13 @@ class ProcessGroup:
 
     def wait(self, timeout: float = None) -> None:
         deadline = time.time() + timeout if timeout else None
-        while not self.all_done:
-            if deadline and time.time() > deadline:
+        for p in self._processes:
+            if p.is_done:
+                continue
+            wait_timeout = (deadline - time.time()) if deadline else None
+            if wait_timeout is not None and wait_timeout <= 0:
                 break
-            time.sleep(0.05)
+            p._done_event.wait(timeout=wait_timeout)
 
     def to_dict(self) -> dict:
         return {
@@ -1001,6 +1004,7 @@ class Engine:
         self._monitor: Optional[ProcessMonitor] = None
         self._signal_handlers_installed = False
         self._old_signal_handlers: Dict = {}
+        self._all_done_event = threading.Event()
 
         if self._config and self._config.monitor.enabled:
             self._monitor = ProcessMonitor(
@@ -1038,6 +1042,7 @@ class Engine:
                 self._dependents.setdefault(dep_id, []).append(proc.id)
         self._processes[proc.id] = proc
         self._pending.append(proc)
+        self._all_done_event.clear()
         self._metrics.record_spawn()
 
         if register_cancel and self._monitor:
@@ -1195,6 +1200,11 @@ class Engine:
                     logger.error("Engine[%s]: on_progress callback error: %s",
                                  self.name, e)
 
+            if not self._pending and all(
+                p.is_done for p in self._processes.values()
+            ):
+                self._all_done_event.set()
+
             time.sleep(poll_interval)
 
         logger.info("Engine[%s]: main loop stopped", self.name)
@@ -1217,18 +1227,11 @@ class Engine:
         return thread
 
     def wait(self, timeout: Optional[float] = None) -> None:
-        deadline = time.time() + timeout if timeout else None
-        while True:
-            has_pending = bool(self._pending)
-            has_running = any(
-                not p.is_done
-                for p in self._processes.values()
-            )
-            if not has_pending and not has_running:
-                break
-            if deadline and time.time() > deadline:
-                break
-            time.sleep(0.05)
+        if not self._pending and all(
+            p.is_done for p in self._processes.values()
+        ):
+            return
+        self._all_done_event.wait(timeout=timeout)
 
     def wait_all(self, timeout: Optional[float] = None) -> List[Process]:
         self.wait(timeout=timeout)
@@ -1270,14 +1273,26 @@ class Engine:
         proc = self._processes.get(proc_id)
         if proc is None:
             raise KeyError(f"Process '{proc_id}' not found")
-        deadline = time.time() + timeout if timeout else None
-        while not proc.is_done:
-            if deadline and time.time() > deadline:
-                return None
-            time.sleep(0.05)
-        return proc
+        if proc.is_done:
+            return proc
+        proc._done_event.wait(timeout=timeout)
+        return proc if proc.is_done else None
 
     def wait_for_any(self, proc_ids: List[str], timeout: float = None) -> Optional[Process]:
+        # Check if any already done
+        for pid in proc_ids:
+            proc = self._processes.get(pid)
+            if proc and proc.is_done:
+                return proc
+        # Wait on all events with timeout
+        events = []
+        for pid in proc_ids:
+            proc = self._processes.get(pid)
+            if proc and not proc.is_done:
+                events.append(proc._done_event)
+        if not events:
+            return None
+        # Poll with event waits for the first one to complete
         deadline = time.time() + timeout if timeout else None
         while True:
             for pid in proc_ids:
@@ -1286,7 +1301,10 @@ class Engine:
                     return proc
             if deadline and time.time() > deadline:
                 return None
-            time.sleep(0.05)
+            # Wait on any event with a short timeout, then re-check
+            remaining = (deadline - time.time()) if deadline else 1.0
+            wait_time = min(0.05, remaining) if remaining > 0 else 0.01
+            events[0].wait(timeout=wait_time)
 
     def cancel_process(self, proc_id: str, propagate: bool = True) -> int:
         proc = self._processes.get(proc_id)
