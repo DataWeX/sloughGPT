@@ -104,20 +104,20 @@ export function RecoveryCard({ addToast }: Props) {
         <CardTitle className="text-base">Recoverable Jobs ({jobs.length})</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {jobs.map(j => (
-            <div key={j.id} className="flex items-center justify-between rounded border p-3 text-sm">
+            <div key={j.id} className="flex items-center justify-between rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{j.name || j.id}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="truncate font-medium text-xs">{j.name || j.id}</p>
+                <p className="text-[10px] text-muted-foreground/60">
                   Failed {j.failed_at ? new Date(j.failed_at).toLocaleString() : 'recently'}
                 </p>
               </div>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={() => void handleRecover(j.id)} disabled={recovering === j.id}>
+              <div className="flex items-center gap-0.5">
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void handleRecover(j.id)} disabled={recovering === j.id}>
                   {recovering === j.id ? 'Recovering...' : 'Recover'}
                 </Button>
-                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPendingAbandon(j.id)}>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={() => setPendingAbandon(j.id)}>
                   Abandon
                 </Button>
               </div>

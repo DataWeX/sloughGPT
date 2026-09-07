@@ -62,19 +62,29 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   }
   const highlighted = useMemo(() => highlightCode(code, language), [code, language])
   return (
-    <div className="relative my-2 rounded-lg border border-border/50 bg-muted/30 overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/30 bg-muted/20">
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{language || 'code'}</span>
+    <div className="relative my-3 rounded-xl border border-border/40 bg-[#1a1a2e]/60 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-white/[0.03]">
+        <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-wider">{language || 'code'}</span>
         <button
           type="button"
           onClick={handleCopy}
-          className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground/80 transition-colors"
           aria-label="Copy code"
         >
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? (
+            <span className="text-success">Copied</span>
+          ) : (
+            <>
+              <svg className="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="5" y="5" width="8" height="8" rx="1.5" />
+                <path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H11" />
+              </svg>
+              Copy
+            </>
+          )}
         </button>
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-relaxed font-mono">
+      <pre className="overflow-x-auto px-4 py-3 text-[13px] leading-[1.6] font-mono">
         {language ? (
           <code dangerouslySetInnerHTML={{ __html: highlighted }} />
         ) : (
@@ -126,12 +136,12 @@ function parseMarkdown(text: string): React.ReactNode[] {
         i++
       }
       nodes.push(
-        <div key={key++} className="my-2 overflow-x-auto">
+        <div key={key++} className="my-3 overflow-x-auto rounded-lg border border-border/40">
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr>
                 {headerCells.map((cell, ci) => (
-                  <th key={ci} className="border border-border/40 bg-muted/30 px-2 py-1 text-left font-medium text-muted-foreground">
+                  <th key={ci} className="border-b border-border/40 bg-muted/40 px-3 py-2 text-left font-medium text-muted-foreground">
                     {parseInline(cell)}
                   </th>
                 ))}
@@ -139,9 +149,9 @@ function parseMarkdown(text: string): React.ReactNode[] {
             </thead>
             <tbody>
               {rows.map((row, ri) => (
-                <tr key={ri}>
+                <tr key={ri} className="border-b border-border/20 last:border-0">
                   {row.map((cell, ci) => (
-                    <td key={ci} className="border border-border/40 px-2 py-1">
+                    <td key={ci} className="px-3 py-2">
                       {parseInline(cell)}
                     </td>
                   ))}
@@ -185,7 +195,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
         else break
       }
       nodes.push(
-        <blockquote key={key++} className="border-l-2 border-primary/30 pl-3 my-2 text-sm text-muted-foreground italic break-words">
+        <blockquote key={key++} className="border-l-2 border-primary/30 pl-4 my-3 py-1 text-sm text-muted-foreground italic break-words bg-primary/[0.03] rounded-r-lg">
           {bqLines.join('\n')}
         </blockquote>
       )

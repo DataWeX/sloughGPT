@@ -80,6 +80,7 @@ class CompanionSystem:
 
     def __init__(self):
         self.traits = CompanionTraits()
+        self._base_traits = CompanionTraits()
         self.context = ConversationContext()
         self._system_prompt = self._build_system_prompt()
 
@@ -99,6 +100,11 @@ class CompanionSystem:
         self.traits.creativity = creativity
         self.traits.confidence = confidence
         self.traits.humor = humor
+        # Store base traits so mood adjustments don't accumulate
+        self._base_traits = CompanionTraits(
+            name=name, warmth=warmth, curiosity=curiosity,
+            creativity=creativity, confidence=confidence, humor=humor,
+        )
         self._system_prompt = self._build_system_prompt()
 
     def _build_system_prompt(self) -> str:
@@ -185,11 +191,17 @@ class CompanionSystem:
         """Adjust tone based on user's mood."""
         self.context.user_mood = user_mood
 
+        # Apply deltas relative to base traits to prevent drift
+        base = self._base_traits
         if user_mood in ["sad", "down", "upset"]:
-            self.traits.warmth = min(1.0, self.traits.warmth + 0.2)
-            self.traits.humor = max(0, self.traits.humor - 0.2)
+            self.traits.warmth = min(1.0, base.warmth + 0.2)
+            self.traits.humor = max(0, base.humor - 0.2)
         elif user_mood in ["happy", "excited"]:
-            self.traits.warmth = min(1.0, self.traits.warmth + 0.1)
+            self.traits.warmth = min(1.0, base.warmth + 0.1)
+        else:
+            # Reset to base for neutral/unknown moods
+            self.traits.warmth = base.warmth
+            self.traits.humor = base.humor
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to dict."""

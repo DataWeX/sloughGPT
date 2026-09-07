@@ -10,6 +10,13 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, onClick, disabled, variant, size, className, ...rest }: any) =>
     React.createElement('button', { onClick, disabled, className, ...rest }, children),
   IconSend: (p: any) => React.createElement('svg', { 'data-testid': 'icon-send', ...p }),
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message }: { variant: string; message: string }) => (
+    React.createElement('div', { 'data-variant': variant }, message)
+  ),
 }))
 
 const mockVs = (overrides: Record<string, any> = {}): UseVisionStudioReturn => ({

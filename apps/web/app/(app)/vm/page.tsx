@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, Spinner } from '@sloughgpt/strui'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -788,7 +788,7 @@ export default function VMPage() {
                 >
                   {running ? (
                     <span className="inline-flex items-center gap-1">
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <Spinner size="xs" />
                       Running
                     </span>
                   ) : (

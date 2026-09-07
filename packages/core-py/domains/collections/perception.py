@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections import OrderedDict
+
 import numpy as np
 from dataclasses import dataclass, field
 
@@ -83,16 +85,18 @@ class WorldPerception:
         self.config = config or PerceptionConfig()
         self._mapper = RecordToMaterial(self.config)
         self._events: list[PerceptionEvent] = []
-        self._seen_hashes: set[int] = set()
+        self._seen_hashes: OrderedDict[int, None] = OrderedDict()
         self._tick = 0
 
     def process_record(self, record: Record) -> PerceptionEvent | None:
         h = hash(record.content)
         if h in self._seen_hashes:
             return None
-        self._seen_hashes.add(h)
-        if len(self._seen_hashes) > self.config.dedup_window:
-            self._seen_hashes = set(list(self._seen_hashes)[-self.config.dedup_window:])
+        self._seen_hashes[h] = None
+        # FIFO eviction: move to end (most recent), trim from front
+        self._seen_hashes.move_to_end(h)
+        while len(self._seen_hashes) > self.config.dedup_window:
+            self._seen_hashes.popitem(last=False)
 
         pos = self._mapper.position_from_record(record, self._tick)
         mat_id = self._mapper.material_id(record)

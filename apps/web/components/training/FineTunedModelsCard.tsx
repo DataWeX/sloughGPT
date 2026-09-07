@@ -170,14 +170,14 @@ export function FineTunedModelsCard({
                 Select all ({models.length})
               </label>
             )}
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:grid-cols-2">
               {models.map((m) => {
                 const isActive = !!activeModelId && (activeModelId === m.model_name || activeModelId === m.name)
                 const isSelected = selectedIds.has(m.name)
                 return (
                   <div key={m.name} className={cn(
-                    'flex items-center justify-between rounded-lg border p-3 text-sm transition-colors',
-                    isActive ? 'border-primary/30 bg-primary/[0.08]' : isSelected ? 'border-primary/40 bg-primary/5' : 'border-border/50 hover:bg-muted/30',
+                    'flex items-center justify-between rounded-lg border p-2.5 text-sm transition-colors',
+                    isActive ? 'border-primary/30 bg-primary/[0.08]' : isSelected ? 'border-primary/40 bg-primary/5' : 'border-border/40 hover:bg-muted/20',
                   )}>
                     <div className="flex items-start gap-2 min-w-0 flex-1">
                       {models.length > 2 && (
@@ -198,7 +198,7 @@ export function FineTunedModelsCard({
                           <p className="truncate font-medium text-xs hover:text-primary transition-colors">{m.name}</p>
                           {isActive && <span className="text-primary text-[10px]">✓</span>}
                         </button>
-                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground/60 mt-0.5">
                           <span>{m.model}</span>
                           {m.dataset && <span>· {m.dataset}</span>}
                           {m.size_mb > 0 && <span>· {m.size_mb.toFixed(1)} MB</span>}
@@ -207,23 +207,23 @@ export function FineTunedModelsCard({
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <div className="flex items-center gap-0.5 shrink-0 ml-2">
                       {!isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleLoad(m.name)}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={loadingName !== null} onClick={() => handleLoad(m.name)}>
                           {loadingName === m.name ? 'Loading...' : 'Load'}
                         </Button>
                       )}
                       {isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
                           {loadingName === m.name ? 'Unloading...' : (
                             <>
-                              <IconX className="h-3 w-3 mr-1" />
+                              <IconX className="h-3 w-3 mr-0.5" />
                               Unload
                             </>
                           )}
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => handleDelete(m.name)} aria-label={`Delete ${m.name}`}>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive hover:text-destructive" onClick={() => handleDelete(m.name)} aria-label={`Delete ${m.name}`}>
                         <IconTrash className="h-3 w-3" />
                       </Button>
                     </div>

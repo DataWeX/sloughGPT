@@ -142,12 +142,13 @@ class RequestCoalescer:
                     self._in_flight.keys(),
                     key=lambda k: self._in_flight[k].created_at,
                 )
-                for k in sorted_keys[: len(self._in_flight) - self._max_entries]:
+                evicted_count = len(sorted_keys[: len(self._in_flight) - self._max_entries])
+                for k in sorted_keys[: evicted_count]:
                     entry = self._in_flight.pop(k)
                     if not entry.event.is_set():
                         entry.error = TimeoutError("Coalescer evicted (max_entries exceeded)")
                         entry.event.set()
-                logger.warning("Coalescer evicted %d entries (max_entries=%d)", len(sorted_keys[:len(sorted_keys) - self._max_entries + len(stale)]), self._max_entries)
+                logger.warning("Coalescer evicted %d entries (max_entries=%d)", evicted_count, self._max_entries)
 
 
 _coalescer: Optional[RequestCoalescer] = None

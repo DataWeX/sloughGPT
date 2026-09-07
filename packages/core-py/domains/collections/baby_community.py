@@ -251,13 +251,11 @@ class BabyCommunitySystem:
         for community in self._communities.values():
             if len(community._members) >= self.config.max_community_size:
                 continue
-            avg_pos = np.zeros(3)
-            count = 0
-            for member_id in community._members:
-                avg_pos += np.array([32, 0, 32], dtype=np.float64)
-                count += 1
+            # Use zero position as fallback — member positions are not stored
+            # in this class.  Override in subclasses with a position store.
+            avg_pos = np.zeros(3, dtype=np.float64)
+            count = len(community._members)
             if count > 0:
-                avg_pos /= count
                 dist = np.linalg.norm(position - avg_pos)
                 if dist < best_distance:
                     best_distance = dist

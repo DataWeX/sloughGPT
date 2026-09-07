@@ -369,10 +369,14 @@ export default function TrainingPage() {
         prompt={test.testPrompt}
         result={test.testResult}
         loading={test.testLoading}
+        streaming={test.testStreaming}
+        streamingText={test.testStreamingText}
+        responseFormat={test.responseFormat}
         onClose={() => test.setTestDialogOpen(false)}
         onPromptChange={test.setTestPrompt}
         onGenerate={test.handleTestModel}
         onClear={test.clearTest}
+        onResponseFormatChange={test.setResponseFormat}
       />
     </PageContainer>
   )

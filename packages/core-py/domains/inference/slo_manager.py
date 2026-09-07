@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import glob
+import threading
 import json
 import struct
 from pathlib import Path
@@ -422,13 +423,16 @@ class SloManager:
 
 # Global manager instance
 _slo_manager: Optional[SloManager] = None
+_slo_manager_lock = threading.Lock()
 
 
 def get_slo_manager() -> SloManager:
     """Get the global soul manager instance."""
     global _slo_manager
     if _slo_manager is None:
-        _slo_manager = SloManager()
+        with _slo_manager_lock:
+            if _slo_manager is None:
+                _slo_manager = SloManager()
     return _slo_manager
 
 

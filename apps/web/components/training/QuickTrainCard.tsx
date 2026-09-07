@@ -86,8 +86,16 @@ export const QuickTrainCard = memo(function QuickTrainCard({
     }
   }
 
-  const setNum = (key: keyof QuickTrainConfig) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setConfig(prev => ({ ...prev, [key]: Number(e.target.value) }))
+  const RANGES: Record<keyof QuickTrainConfig, [number, number]> = {
+    epochs: [1, 500], lr: [1e-6, 1], embed: [16, 1024], heads: [1, 32], layers: [1, 64],
+  }
+  const setNum = (key: keyof QuickTrainConfig) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = Number(e.target.value)
+    if (Number.isNaN(raw) || raw <= 0) return
+    const [lo, hi] = RANGES[key]
+    const clamped = Math.max(lo, Math.min(hi, Math.round(raw)))
+    setConfig(prev => ({ ...prev, [key]: clamped }))
+  }
 
   return (
     <Card>
@@ -98,16 +106,42 @@ export const QuickTrainCard = memo(function QuickTrainCard({
         {running ? (
           <div className="space-y-3" aria-live="polite" aria-atomic="true">
             <Progress value={session.turboProgress} max={100} />
-            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
-              <span>
-                Step {session.turboGlobalStep}/{session.turboTotalSteps || '--'}
-              </span>
-              <span>{session.turboStepsPerSec != null ? `${session.turboStepsPerSec.toFixed(1)} steps/s` : '-- steps/s'}</span>
-              <span>ETA {formatDuration(session.turboEta)}</span>
-              <span>Elapsed {formatDuration(session.turboElapsedSeconds)}</span>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {session.turboTotalSteps > 0 && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Step</p>
+                  <p className="text-sm font-semibold tabular-nums">{session.turboGlobalStep}<span className="text-muted-foreground/40 font-normal">/{session.turboTotalSteps}</span></p>
+                </div>
+              )}
+              {session.turboLoss != null && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Loss</p>
+                  <p className="text-sm font-semibold tabular-nums">{session.turboLoss.toFixed(4)}</p>
+                </div>
+              )}
+              {session.turboStepsPerSec != null && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Speed</p>
+                  <p className="text-sm font-semibold tabular-nums">{session.turboStepsPerSec.toFixed(1)}<span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span></p>
+                </div>
+              )}
+              {session.turboEta != null && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">ETA</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatDuration(session.turboEta)}</p>
+                </div>
+              )}
+              <div className="rounded-lg bg-muted/30 px-3 py-2">
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Elapsed</p>
+                <p className="text-sm font-semibold tabular-nums">{formatDuration(session.turboElapsedSeconds)}</p>
+              </div>
+              {session.avgQuality != null && (
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Quality</p>
+                  <p className="text-sm font-semibold tabular-nums">{session.avgQuality.toFixed(1)}<span className="text-muted-foreground/40 font-normal text-xs">/5</span></p>
+                </div>
+              )}
             </div>
-            {session.turboLoss != null && <p className="text-xs text-muted-foreground">Loss {session.turboLoss.toFixed(4)}</p>}
-            {session.avgQuality != null && <p className="text-xs text-muted-foreground">Quality {session.avgQuality.toFixed(1)}/5</p>}
             <div className="flex items-center gap-2">
               <Button variant="destructive" size="sm" onClick={session.stopTurboTrain}>
                 Stop

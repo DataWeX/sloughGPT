@@ -78,7 +78,14 @@ class RepoImporter:
         depth: Optional[int] = 1,
     ) -> Path:
         """Clone a git repository."""
+        # Validate URL protocol — reject file:// and other local protocols
+        _allowed_protocols = ("https://", "git://", "git@", "ssh://", "http://")
+        if not any(url.startswith(p) for p in _allowed_protocols):
+            raise ValueError(f"URL must use one of {_allowed_protocols}, got: {url[:60]}")
+
         repo_name = url.split("/")[-1].replace(".git", "")
+        # Sanitize repo_name — reject path traversal
+        repo_name = re.sub(r'[^\w\-]', '_', repo_name).strip('_') or "repo"
         target = self.cache_dir / repo_name
 
         if target.exists():
@@ -1199,13 +1206,13 @@ def import_data(
         not source_type and not source.startswith(("http://", "https://", "git@"))
         and "/" not in source.split(":")[-1]
     ):
-        imp = RepoImporter()
-        return imp.import_from_local(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]
+        imp = DataImporter(output_dir=output_dir)
+        return imp.import_from_local(source, name, **kwargs)  # type: ignore[union-attr]
     elif source_type == "huggingface" or (
         not source_type and not source.startswith(("http://", "https://", "git@"))
         and ":" not in source
     ):
-        return HuggingFaceImporter().download_dataset(source, name, output_dir=output_dir, **kwargs)  # type: ignore[union-attr]
+        return HuggingFaceImporter().download_dataset(source, output_dir=output_dir, name=name, **kwargs)  # type: ignore[union-attr]
     elif source_type == "url" or (
         not source_type and source.startswith(("http://", "https://"))
         and "github.com" not in source

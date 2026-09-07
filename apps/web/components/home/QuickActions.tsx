@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useRef } from 'react'
 import { Card, CardContent, Button } from '@sloughgpt/strui'
 import { chatController } from '@/lib/chat-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -19,6 +20,8 @@ interface QuickActionsProps {
 
 export function QuickActions({ loading, modelStatus, testRunning, testResponse, setTestRunning, setTestResponse, knowledgeCount, setKnowledgeCount }: QuickActionsProps) {
   const addToast = useToastStore(s => s.addToast)
+  const [streaming, setStreaming] = useState(false)
+  const streamingRef = useRef(false)
 
   if (loading) {
     return (
@@ -66,13 +69,21 @@ export function QuickActions({ loading, modelStatus, testRunning, testResponse, 
               onClick={async () => {
                 setTestRunning(true)
                 setTestResponse(null)
+                setStreaming(true)
+                streamingRef.current = true
+                let accumulated = ''
                 try {
-                  const result = await chatController.send('Hello!', { waitForModel: true })
-                  setTestResponse(result.message || 'No response')
+                  for await (const token of chatController.stream('Hello!', { waitForModel: true })) {
+                    if (!streamingRef.current) break
+                    accumulated += token
+                    setTestResponse(accumulated)
+                  }
                 } catch (e: unknown) {
                   setTestResponse(extractErrorMessage(e, 'Could not connect'))
                 } finally {
+                  streamingRef.current = false
                   setTestRunning(false)
+                  setStreaming(false)
                 }
               }}
             >
@@ -82,6 +93,7 @@ export function QuickActions({ loading, modelStatus, testRunning, testResponse, 
           {testResponse && (
             <div className="mt-2 rounded bg-muted/50 p-2 text-xs text-muted-foreground font-mono leading-relaxed">
               {testResponse}
+              {streaming && <span className="inline-block w-1.5 h-3 bg-primary/70 animate-pulse ml-0.5" />}
             </div>
           )}
         </CardContent>

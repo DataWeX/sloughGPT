@@ -209,7 +209,7 @@ export function BuffetEngine() {
             <p className="text-sm text-[hsl(40,20%,45%)]">Board</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>
+            <Button variant="ghost" size="sm" onClick={refresh} disabled={loading} aria-label="Refresh board">
               <IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} />
             </Button>
             <Button
@@ -218,6 +218,7 @@ export function BuffetEngine() {
               onClick={handleSync}
               disabled={sync.status === 'syncing'}
               title="Sync notes to board"
+              aria-label="Sync notes to board"
             >
               <IconRefresh className={cn('h-4 w-4', sync.status === 'syncing' && 'animate-spin')} />
             </Button>

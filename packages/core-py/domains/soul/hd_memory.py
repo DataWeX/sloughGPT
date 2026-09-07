@@ -178,8 +178,9 @@ class HDMemoryStore:
 
         context_parts = []
         total_chars = 0
+        items_by_id = {item.id: item for item in self.items}
 
-        for _, content, sim in results:
+        for item_id, content, sim in results:
             if sim < 0.01:  # Skip very low-similarity items
                 continue
 
@@ -187,12 +188,12 @@ class HDMemoryStore:
                 break
 
             if include_roles:
-                # Find the item to get its role
-                for item in self.items:
-                    if item.content == content:
-                        role_label = item.role.replace("_", " ").title()
-                        context_parts.append(f"[{role_label}]: {content[:200]}")
-                        break
+                item = items_by_id.get(item_id)
+                if item:
+                    role_label = item.role.replace("_", " ").title()
+                    context_parts.append(f"[{role_label}]: {content[:200]}")
+                else:
+                    context_parts.append(content[:200])
             else:
                 context_parts.append(content[:200])
 

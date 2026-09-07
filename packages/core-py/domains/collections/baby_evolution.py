@@ -19,7 +19,12 @@ class EvolutionConfig:
 
 
 class Genome:
+    _next_id: int = 0
+
     def __init__(self, genes: np.ndarray | None = None, gene_names: list[str] | None = None):
+        self.id = Genome._next_id
+        Genome._next_id += 1
+
         if genes is not None:
             self.genes = genes.astype(np.float32)
         else:
@@ -161,7 +166,7 @@ class EvolutionEngine:
                 self._fitness_tracker.record(baby.entity.id, fitness)
 
         for genome in self._population:
-            genome.fitness = self._fitness_tracker.get_fitness(genome.id if hasattr(genome, 'id') else 0)
+            genome.fitness = self._fitness_tracker.get_fitness(genome.id)
 
     def _calculate_fitness(self, baby) -> float:
         energy_score = baby.energy / 100.0

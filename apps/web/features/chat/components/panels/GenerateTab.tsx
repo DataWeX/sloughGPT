@@ -2,6 +2,7 @@
 
 import { Button } from '@sloughgpt/strui'
 import { IconSend } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import type { UseVisionStudioReturn } from './useVisionStudio'
 
 interface GenerateTabProps {
@@ -27,7 +28,7 @@ export function GenerateTab({ vs }: GenerateTabProps) {
       </div>
 
       {vs.genError && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">{vs.genError}</div>
+        <StatusBanner variant="error" message={vs.genError} dismissible={false} />
       )}
 
       {vs.genResult && (

@@ -144,22 +144,22 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Summary stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="text-center">
-            <p className="text-base font-semibold">{analytics.total}</p>
-            <p className="text-[10px] text-muted-foreground">Total runs</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="rounded-lg bg-muted/20 px-3 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total runs</p>
+            <p className="text-sm font-semibold tabular-nums mt-0.5">{analytics.total}</p>
           </div>
-          <div className="text-center">
-            <p className="text-base font-semibold text-success">{analytics.completed}</p>
-            <p className="text-[10px] text-muted-foreground">Completed</p>
+          <div className="rounded-lg bg-muted/20 px-3 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Completed</p>
+            <p className="text-sm font-semibold tabular-nums text-success mt-0.5">{analytics.completed}</p>
           </div>
-          <div className="text-center">
-            <p className="text-base font-semibold text-destructive">{analytics.failed}</p>
-            <p className="text-[10px] text-muted-foreground">Failed</p>
+          <div className="rounded-lg bg-muted/20 px-3 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Failed</p>
+            <p className="text-sm font-semibold tabular-nums text-destructive mt-0.5">{analytics.failed}</p>
           </div>
-          <div className="text-center">
-            <p className="text-base font-semibold">{analytics.avgLoss != null ? analytics.avgLoss.toFixed(3) : '—'}</p>
-            <p className="text-[10px] text-muted-foreground">Avg loss</p>
+          <div className="rounded-lg bg-muted/20 px-3 py-2 text-center">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Avg loss</p>
+            <p className="text-sm font-semibold tabular-nums mt-0.5">{analytics.avgLoss != null ? analytics.avgLoss.toFixed(3) : '—'}</p>
           </div>
         </div>
 
@@ -235,11 +235,11 @@ export const TrainingAnalyticsCard = memo(function TrainingAnalyticsCard({ addTo
         {analytics.methodData.length > 0 && (
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Method distribution</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {analytics.methodData.map(m => (
-                <div key={m.name} className="flex items-center gap-1.5 rounded bg-muted/30 px-2 py-1 text-xs">
+                <div key={m.name} className="flex items-center gap-1 rounded-full bg-muted/30 px-2 py-0.5 text-[10px]">
                   <span className="font-medium">{m.name}</span>
-                  <span className="text-muted-foreground">({m.count})</span>
+                  <span className="text-muted-foreground/60">({m.count})</span>
                 </div>
               ))}
             </div>

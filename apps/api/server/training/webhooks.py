@@ -205,6 +205,7 @@ class WebhookStore:
         payload: dict[str, Any],
         timeout: float = 10.0,
         retries: int = 3,
+        base_attempt_count: int = 0,
     ) -> WebhookDelivery:
         """Deliver a webhook event to the endpoint."""
         webhook = self.get(webhook_id)
@@ -251,7 +252,7 @@ class WebhookStore:
         # Deliver with retries
         last_error = None
         for attempt in range(retries):
-            delivery.attempt_count = attempt + 1
+            delivery.attempt_count = base_attempt_count + attempt + 1
             try:
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     response = await client.post(
@@ -302,7 +303,7 @@ class WebhookStore:
         if not delivery.success:
             delivery.error = last_error
             # Queue for background retry if we haven't exhausted all retries
-            if retries < self._dead_letter_max_attempts:
+            if delivery.attempt_count < self._dead_letter_max_attempts:
                 self._queue_retry(delivery, webhook_id, event, payload, timeout)
             else:
                 delivery.dead_letter = True
@@ -410,6 +411,7 @@ class WebhookStore:
                     entry["payload"],
                     timeout=entry["timeout"],
                     retries=1,  # Single attempt, will re-queue if needed
+                    base_attempt_count=attempt_count,
                 )
                 processed += 1
             except Exception as e:

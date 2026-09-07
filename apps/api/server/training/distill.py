@@ -18,7 +18,7 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from .controller import get_training_controller
-from .helpers import _finish_job
+from .helpers import _finish_job, _run_async
 from .jobs import training_jobs
 from .schemas import DistillStartRequest
 from .webhooks import notify_training_event
@@ -41,7 +41,9 @@ async def start_distillation(
     job_id = str(uuid.uuid4())[:8]
 
     datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
-    data_path = datasets_dir / request.dataset
+    data_path = (datasets_dir / request.dataset).resolve()
+    if not str(data_path).startswith(str(datasets_dir.resolve())):
+        raise_error("Invalid dataset path", "E_BAD_REQUEST", status_code=400)
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
     if not data_path.exists():
@@ -340,14 +342,16 @@ async def start_distillation(
                 logger.debug("Training controller complete failed: %s", e)
             # Webhook notification
             try:
-                notify_training_event(
-                    "training.completed",
-                    {
-                        "job_id": job_id,
-                        "type": "distill",
-                        "checkpoint": str(ckpt_path),
-                        "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
-                    },
+                _run_async(
+                    notify_training_event(
+                        "training.completed",
+                        {
+                            "job_id": job_id,
+                            "type": "distill",
+                            "checkpoint": str(ckpt_path),
+                            "final_loss": float(epoch_losses[-1]) if epoch_losses else 0.0,
+                        },
+                    )
                 )
             except Exception as e:
                 logger.debug("Training completion webhook failed: %s", e)
@@ -372,9 +376,11 @@ async def start_distillation(
                 logger.debug("Training controller fail failed: %s", exc)
             # Webhook notification
             try:
-                notify_training_event(
-                    "training.failed",
-                    {"job_id": job_id, "type": "distill", "error": str(e)},
+                _run_async(
+                    notify_training_event(
+                        "training.failed",
+                        {"job_id": job_id, "type": "distill", "error": str(e)},
+                    )
                 )
             except Exception as exc:
                 logger.debug("Training failure webhook failed: %s", exc)

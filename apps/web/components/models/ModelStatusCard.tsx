@@ -36,7 +36,7 @@ export default memo(function ModelStatusCard({
           <CardContent>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2">
-                <span className={cn("w-2 h-2 rounded-full", h.model_loaded ? "bg-success animate-pulse" : "bg-warning")} />
+                <span className={cn("w-1.5 h-1.5 rounded-full", h.model_loaded ? "bg-success animate-pulse" : "bg-warning")} />
                 <span className="text-xs font-medium">{modelDisplayName(h.model_type) || 'No model'}</span>
               </div>
               {quant && (
@@ -44,18 +44,18 @@ export default memo(function ModelStatusCard({
               )}
               {currentSoul && (
                 <>
-                  <span className="text-muted-foreground/40 text-xs">→</span>
+                  <span className="text-muted-foreground/30 text-[10px]">→</span>
                   <Chip label={currentSoul} />
                 </>
               )}
               {activeCheckpoint && (
                 <>
-                  <span className="text-muted-foreground/40 text-xs">→</span>
+                  <span className="text-muted-foreground/30 text-[10px]">→</span>
                   <Chip label={activeCheckpoint} />
                 </>
               )}
               {h.inference_count != null && (
-                <span className="ml-auto text-[10px] text-muted-foreground">{h.inference_count} inferences</span>
+                <span className="ml-auto text-[10px] text-muted-foreground/50 tabular-nums">{h.inference_count} inferences</span>
               )}
             </div>
           </CardContent>

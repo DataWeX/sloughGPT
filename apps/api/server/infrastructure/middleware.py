@@ -233,11 +233,13 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        corr_id = (
+        raw_id = (
             request.headers.get(self.HEADER)
             or request.headers.get("X-Request-ID")
             or str(uuid.uuid4())[:8]
         )
+        # Sanitize: strip control chars, newlines, truncate to 64 chars
+        corr_id = "".join(c for c in raw_id if c.isalnum() or c in "-_.")[:64] or str(uuid.uuid4())[:8]
         request.scope["correlation_id"] = corr_id
         set_correlation_id(corr_id)
         set_request_id(corr_id)  # also set for logging contextvars

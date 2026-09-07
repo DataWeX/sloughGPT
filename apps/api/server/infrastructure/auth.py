@@ -8,6 +8,7 @@ All config is derived from ``ServerConfig``.
 from __future__ import annotations
 
 import hashlib
+import threading
 import hmac
 import json
 import logging
@@ -298,19 +299,24 @@ class AuditLogger:
 # Singleton instances
 _jwt_auth_instance: JWTAuth | None = None
 _audit_logger_instance: AuditLogger | None = None
+_auth_lock = threading.Lock()
 
 
 def get_jwt_auth() -> JWTAuth:
     global _jwt_auth_instance
     if _jwt_auth_instance is None:
-        _jwt_auth_instance = JWTAuth()
+        with _auth_lock:
+            if _jwt_auth_instance is None:
+                _jwt_auth_instance = JWTAuth()
     return _jwt_auth_instance
 
 
 def get_audit_logger() -> AuditLogger:
     global _audit_logger_instance
     if _audit_logger_instance is None:
-        _audit_logger_instance = AuditLogger()
+        with _auth_lock:
+            if _audit_logger_instance is None:
+                _audit_logger_instance = AuditLogger()
     return _audit_logger_instance
 
 

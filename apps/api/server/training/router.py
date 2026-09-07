@@ -175,7 +175,10 @@ async def load_finetuned_model(name: str):
 async def delete_finetuned_model(name: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """Delete a fine-tuned model directory."""
     target = _resolve_finetuned(name)
-    shutil.rmtree(str(target))
+    try:
+        shutil.rmtree(str(target))
+    except OSError as exc:
+        raise_error(f"Failed to delete model: {exc}", "E_DELETE_FAILED", status_code=500)
     return {"status": "deleted", "name": name}
 
 
@@ -460,7 +463,7 @@ async def recover_job(job_id: str):
 
 
 @router.delete("/recovery/abandon/{job_id}")
-async def abandon_recovery(job_id: str):
+async def abandon_recovery(job_id: str, auth_user: dict = Depends(require_auth_if_enabled)):
     """
     Abandon a crashed job and mark it as permanently failed.
     """
@@ -528,8 +531,11 @@ async def training_list_checkpoints():
 @router.delete("/training/checkpoints/{name}")
 async def training_delete_checkpoint(name: str):
     from domains.training.service import delete_checkpoint
+    from domains.training.state import VALID_CKPT_NAME
     from schemas.common import safe_audit_log, success_response
 
+    if not VALID_CKPT_NAME.match(name):
+        raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
     deleted = await delete_checkpoint(name)
     if deleted:
         safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
@@ -721,19 +727,21 @@ async def get_training_recommendation(
         avg_quality = None
         
         if dataset_path:
-            dp = _P(dataset_path)
-            if dp.exists():
-                if dp.is_file():
-                    # Count lines in file
-                    try:
-                        with open(dp, 'r', encoding='utf-8', errors='ignore') as f:
-                            dataset_size = sum(1 for _ in f)
-                    except Exception:
-                        dataset_size = 0
-                elif dp.is_dir():
-                    # Count data files
-                    data_files = list(dp.rglob("*.jsonl")) + list(dp.rglob("*.json")) + list(dp.rglob("*.txt"))
-                    dataset_size = len(data_files)
+            dp = _P(dataset_path).resolve()
+            repo_root = find_repo_root(Path(__file__).resolve())
+            datasets_dir = (repo_root / "datasets").resolve()
+            data_dir = (repo_root / "data").resolve()
+            if str(dp).startswith(str(datasets_dir)) or str(dp).startswith(str(data_dir)):
+                if dp.exists():
+                    if dp.is_file():
+                        try:
+                            with open(dp, 'r', encoding='utf-8', errors='ignore') as f:
+                                dataset_size = sum(1 for _ in f)
+                        except Exception:
+                            dataset_size = 0
+                    elif dp.is_dir():
+                        data_files = list(dp.rglob("*.jsonl")) + list(dp.rglob("*.json")) + list(dp.rglob("*.txt"))
+                        dataset_size = len(data_files)
         
         # Get recommendation
         recommendation = recommend_training_config(

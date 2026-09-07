@@ -150,7 +150,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         )}
 
         {sessionLoading && (
-          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-4 space-y-2" role="status" aria-busy="true" aria-label="Loading messages">
+          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 py-4 space-y-2" role="status" aria-busy="true" aria-label="Loading messages">
             <span className="sr-only">Loading conversation...</span>
             {[1, 2, 3].map(i => (
                 <div key={i} className="animate-pulse space-y-1" aria-hidden="true">
@@ -168,13 +168,13 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         )}
 
         {toolEvents && toolEvents.length > 0 && (
-          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-1">
+          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-1">
             <ToolCallPanel events={toolEvents} />
           </div>
         )}
 
         {ragVerification && (
-          <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 pb-1">
+          <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 pb-1">
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground rounded-md border border-border/40 bg-muted/30 px-3 py-1.5">
               <span className={cn(
                 "inline-block h-1.5 w-1.5 rounded-full",
@@ -201,7 +201,7 @@ export const ChatScreen = memo(forwardRef<HTMLDivElement, ChatScreenProps>(
         <div
           ref={scrollRef}
           id="chat-messages"
-          className="mx-auto w-full max-w-3xl space-y-1.5 sm:space-y-2 px-4 sm:px-6 pb-4"
+          className="mx-auto w-full max-w-4xl space-y-3 sm:space-y-4 px-4 sm:px-6 pb-4"
           role="feed"
           aria-label="Message history"
           aria-busy={loading}

@@ -8,7 +8,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Card, CardContent, Checkbox, EmptyCard, cn, Slider } from '@sloughgpt/strui'
+import { Card, CardContent, Checkbox, EmptyCard, cn, Slider, Spinner } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -617,7 +617,7 @@ export default function KnowledgePage() {
                 >
                   {adapterTraining ? (
                     <span className="flex items-center gap-1">
-                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <Spinner size="xs" />
                       Learning...
                     </span>
                   ) : adapterStatus.adapter_exists ? 'Retrain' : 'Train memory'}
@@ -649,7 +649,7 @@ export default function KnowledgePage() {
                   <Button size="sm" variant="outline" className="h-7 text-xs px-2.5" onClick={handleRAGSync} disabled={ragSyncing}>
                     {ragSyncing ? (
                       <span className="flex items-center gap-1">
-                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <Spinner size="xs" />
                         Syncing...
                       </span>
                     ) : 'Sync'}

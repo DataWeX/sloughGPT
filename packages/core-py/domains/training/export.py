@@ -687,8 +687,12 @@ def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:
     output_path = config.output_path
     fmt = config.format
 
+    supported = {"sou", "gguf_q4_k_m", "gguf_fp16", "all"}
+    if fmt not in supported:
+        raise ValueError(f"Unsupported export format: {fmt!r}. Supported: {sorted(supported)}")
+
     if fmt == "sou" or fmt == "all":
-        path = export_to_sou(model, output_path, soul_profile=tokenizer)
+        path = export_to_sou(model, output_path, soul_profile=None)
         results.append(path)
 
     if fmt == "gguf_q4_k_m" or fmt == "all":
@@ -697,10 +701,6 @@ def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:
 
     if fmt == "gguf_fp16" or fmt == "all":
         path = export_to_gguf_fp16(model, output_path, tokenizer=tokenizer)
-        results.append(path)
-
-    if not results:
-        path = export_to_sou(model, output_path, soul_profile=tokenizer)
         results.append(path)
 
     return results

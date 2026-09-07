@@ -85,7 +85,10 @@ export function CommandPalette() {
     const soulActs: CommandAction[] = souls.map(s => ({
       id: `soul-${s.name}`, label: `Switch soul: ${s.name}`, description: s.description || 'Switch personality',
       icon: '🎭', category: 'soul' as const,
-      run: async () => { await soulsController.switch(s.name); router.push('/chat') },
+      run: async () => {
+        try { await soulsController.switch(s.name) } catch { /* soul switch failed — navigate anyway */ }
+        router.push('/chat')
+      },
     }))
 
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]

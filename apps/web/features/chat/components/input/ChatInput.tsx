@@ -156,7 +156,7 @@ export const ChatInput = memo(function ChatInput({
       className="shrink-0 bg-background/95 backdrop-blur-sm px-4 sm:px-6 pb-2 pt-1"
       style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
     >
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-4xl">
         {loading && (
           <div className="flex justify-center pb-1">
             <StreamingIndicator status={streamingStatus} toolName={streamingToolName} />

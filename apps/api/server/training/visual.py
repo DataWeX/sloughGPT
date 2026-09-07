@@ -40,7 +40,9 @@ async def start_visual_training(
     job_id = str(uuid.uuid4())[:8]
 
     datasets_dir = find_repo_root(Path(__file__).resolve()) / "data"
-    data_path = datasets_dir / request.dataset
+    data_path = (datasets_dir / request.dataset).resolve()
+    if not str(data_path).startswith(str(datasets_dir.resolve())):
+        raise_error("Invalid dataset path", "E_BAD_REQUEST", status_code=400)
     if not data_path.exists():
         data_path = datasets_dir / f"{request.dataset}.jsonl"
     if not data_path.exists():

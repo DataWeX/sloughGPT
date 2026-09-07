@@ -168,7 +168,7 @@ class ChatDomain:
             return "[Error: Generation timed out after 300 seconds]"
         except Exception as e:
             logger.error("Chat generation failed: %s", e, exc_info=True)
-            return f"[Error: {type(e).__name__}: {str(e)}]"
+            return "[Error: Generation failed — see server logs for details]"
 
     @staticmethod
     def _build_prompt(system_prompt: str, messages: list[dict[str, str]], user_msg: str) -> str:

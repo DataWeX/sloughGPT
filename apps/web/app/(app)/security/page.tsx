@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, Spinner } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
@@ -268,7 +268,7 @@ export default function SecurityPage() {
               disabled={loadingMore || !historyMode}
             >
               {loadingMore ? (
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <Spinner size="sm" />
               ) : (
                 'Load older'
               )}

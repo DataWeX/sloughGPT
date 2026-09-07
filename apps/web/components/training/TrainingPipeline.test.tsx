@@ -161,10 +161,10 @@ describe('TrainingPipeline', () => {
       elapsedSeconds: 20,
     }
     render(<TrainingPipeline form={form} datasets={datasets} session={trainSession} checkpoints={checkpoints} onTest={vi.fn()} addToast={vi.fn()} step="data" onStepChange={vi.fn()} completedSteps={new Set()} onStepComplete={vi.fn()} />)
-    expect(screen.getByText('Step 80/500')).toBeDefined()
-    expect(screen.getByText('4.3 steps/s')).toBeDefined()
-    expect(screen.getByText('ETA 1m 38s')).toBeDefined()
-    expect(screen.getByText('Elapsed 20s')).toBeDefined()
+    expect(screen.getByText('80')).toBeDefined()
+    expect(screen.getByText('4.3')).toBeDefined()
+    expect(screen.getByText('1m 38s')).toBeDefined()
+    expect(screen.getByText('20s')).toBeDefined()
   })
 
   it('does not show stats when training is complete', () => {

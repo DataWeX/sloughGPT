@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, CardContent } from '@sloughgpt/strui'
+import { Card, CardContent, cn } from '@sloughgpt/strui'
 import { formatUptime } from '@/lib/chat-utils'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
@@ -39,36 +39,43 @@ export function SystemHealth({ apiStatus, loading, liveHealth }: SystemHealthPro
 
   if (apiStatus !== 'online' || !liveHealth) return null
 
+  function resourceColor(percent: number | null): string {
+    if (percent === null) return 'text-muted-foreground'
+    if (percent >= 90) return 'text-destructive'
+    if (percent >= 70) return 'text-warning'
+    return 'text-success'
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <Card>
         <CardContent className="py-3">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <p className="text-xs font-medium">System</p>
             <Link href="/monitoring" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">Details →</Link>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <p className="text-sm font-semibold tabular-nums">
+            <div className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">CPU</p>
+              <p className={cn("text-sm font-semibold tabular-nums", resourceColor(liveHealth.cpu_percent))}>
                 {liveHealth.cpu_percent !== null ? `${Math.round(liveHealth.cpu_percent)}%` : '—'}
               </p>
-              <p className="text-xs text-muted-foreground">CPU</p>
             </div>
-            <div>
-              <p className="text-sm font-semibold tabular-nums">
+            <div className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Memory</p>
+              <p className={cn("text-sm font-semibold tabular-nums", resourceColor(liveHealth.memory_percent))}>
                 {liveHealth.memory_percent !== null ? `${Math.round(liveHealth.memory_percent)}%` : '—'}
               </p>
-              <p className="text-xs text-muted-foreground">Memory</p>
             </div>
-            <div>
-              <p className="text-sm font-semibold tabular-nums">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
-              <p className="text-xs text-muted-foreground">Requests</p>
+            <div className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Requests</p>
+              <p className="text-sm font-semibold tabular-nums text-foreground/80">{(liveHealth.request_count ?? 0).toLocaleString()}</p>
             </div>
-            <div>
-              <p className="text-sm font-semibold tabular-nums">
+            <div className="rounded-lg bg-muted/30 px-3 py-2">
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Uptime</p>
+              <p className="text-sm font-semibold tabular-nums text-foreground/80">
                 {liveHealth.uptime_seconds > 0 ? formatUptime(liveHealth.uptime_seconds) : '—'}
               </p>
-              <p className="text-xs text-muted-foreground">Uptime</p>
             </div>
           </div>
         </CardContent>

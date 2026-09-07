@@ -30,10 +30,10 @@ function SuggestionChip({ text, icon, onClick }: SuggestionChipProps) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left px-3 py-2 text-xs rounded-lg border border-border/50 bg-card hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer flex items-center gap-2"
+      className="w-full text-left px-3 py-2.5 text-xs rounded-xl border border-border/40 bg-card/50 hover:border-primary/30 hover:bg-primary/[0.04] hover:shadow-sm hover:shadow-primary/5 transition-all duration-200 cursor-pointer flex items-center gap-2.5 group"
     >
-      <span className="text-muted-foreground/60 shrink-0">{icon}</span>
-      <span>{text}</span>
+      <span className="text-muted-foreground/40 group-hover:text-primary/60 shrink-0 transition-colors duration-200">{icon}</span>
+      <span className="text-muted-foreground/80 group-hover:text-foreground/90 transition-colors duration-200">{text}</span>
     </button>
   )
 }
@@ -55,24 +55,22 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
 
   return (
     <div
-      className="flex flex-col items-center justify-center gap-4 py-8 sm:py-12 text-center px-4"
+      className="flex flex-col items-center justify-center gap-5 py-12 sm:py-16 text-center px-4"
       role="region"
       aria-label="Chat ready"
     >
-      {/* Protocol identity mark */}
       <div className="relative" aria-hidden="true">
-        <div
-          className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/15 flex items-center justify-center border border-primary/10"
-        >
-          <IconChat className="h-5 w-5 sm:h-6 sm:w-6 text-primary/60" />
+        <div className="absolute inset-0 rounded-xl bg-primary/10 blur-xl" />
+        <div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-xl bg-gradient-to-br from-primary/20 via-primary/10 to-accent/15 flex items-center justify-center border border-primary/10">
+          <IconChat className="h-5 w-5 sm:h-6 sm:w-6 text-primary/50" />
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <p className="text-base font-semibold text-foreground tracking-tight">
           {hasModel ? (greeting || 'Ready') + '!' : t('common.starting')}
         </p>
-        <p className="text-xs text-muted-foreground/70 max-w-[260px] leading-relaxed">
+        <p className="text-xs text-muted-foreground/60 max-w-[260px] leading-relaxed">
           {hasModel
             ? 'Ask me anything — I\'m here to help.'
             : t('common.starting_sub')}
@@ -80,8 +78,8 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
       </div>
 
       {displaySuggestions ? (
-        <div className="w-full max-w-sm space-y-2 pt-1">
-          <p className="text-[10px] text-muted-foreground/40 font-medium uppercase tracking-[0.1em]">Try asking</p>
+        <div className="w-full max-w-sm space-y-2.5 pt-0.5">
+          <p className="text-[10px] text-muted-foreground/35 font-medium uppercase tracking-[0.12em]">Try asking</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {displaySuggestions.map((s) => (
               <SuggestionChip
@@ -96,7 +94,7 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
       ) : null}
 
       {!hasModel && (
-        <div className="pt-1">
+        <div className="pt-0.5">
           <Button size="sm" className="gap-1.5 h-8 text-xs">
             <IconBolt className="w-3 h-3" aria-hidden="true" />
             Load a model to start
@@ -105,21 +103,21 @@ export const EmptyState = memo(function EmptyState({ hasModel, suggestions, onSu
       )}
 
       <div
-        className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] text-muted-foreground/35"
+        className="flex flex-wrap items-center justify-center gap-2.5 text-[10px] text-muted-foreground/30"
         aria-label="Keyboard shortcuts"
       >
         <span className="flex items-center gap-1">
-          <kbd className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] border border-border/40">↵</kbd>
+          <kbd className="rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[9px] border border-border/30">↵</kbd>
           <span>{t('chat.send')}</span>
         </span>
         <span className="text-muted-foreground/15">·</span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] border border-border/40">/</kbd>
+          <kbd className="rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[9px] border border-border/30">/</kbd>
           <span>commands</span>
         </span>
         <span className="text-muted-foreground/15">·</span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded bg-muted/60 px-1 py-0.5 font-mono text-[9px] border border-border/40">?</kbd>
+          <kbd className="rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[9px] border border-border/30">?</kbd>
           <span>shortcuts</span>
         </span>
       </div>

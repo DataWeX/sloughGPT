@@ -19,6 +19,7 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     Card: passthrough,
     CardContent: passthrough,
+    cn: (...args: any[]) => args.filter(Boolean).join(' '),
   }
 })
 

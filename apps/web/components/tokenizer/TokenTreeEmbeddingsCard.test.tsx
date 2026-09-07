@@ -20,6 +20,13 @@ vi.mock('@sloughgpt/strui', () => ({
   Input: (props: any) => <input {...props} />,
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Chip: ({ label }: { label: string }) => <span>{label}</span>,
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message }: { variant: string; message: string }) => (
+    <div data-variant={variant}>{message}</div>
+  ),
 }))
 
 import { TokenTreeEmbeddingsCard } from './TokenTreeEmbeddingsCard'

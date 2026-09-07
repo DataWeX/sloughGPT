@@ -7,28 +7,28 @@ afterEach(cleanup)
 describe('StreamingIndicator', () => {
   it('renders thinking status', () => {
     render(<StreamingIndicator status="thinking" />)
-    expect(screen.getByText('Thinking...')).toBeInTheDocument()
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
   })
 
   it('renders generating status', () => {
     render(<StreamingIndicator status="generating" />)
-    expect(screen.getByText('Generating...')).toBeInTheDocument()
+    expect(screen.getByText('Generating')).toBeInTheDocument()
   })
 
   it('renders tool call status with tool name', () => {
     render(<StreamingIndicator status="tool_call" toolName="calculator" />)
-    expect(screen.getByText('Running tool...')).toBeInTheDocument()
+    expect(screen.getByText(/Running tool/)).toBeInTheDocument()
     expect(screen.getByText('(calculator)')).toBeInTheDocument()
   })
 
   it('renders context status', () => {
     render(<StreamingIndicator status="context" />)
-    expect(screen.getByText('Processing context...')).toBeInTheDocument()
+    expect(screen.getByText('Processing')).toBeInTheDocument()
   })
 
   it('renders error status', () => {
     render(<StreamingIndicator status="error" />)
-    expect(screen.getByText('Error occurred')).toBeInTheDocument()
+    expect(screen.getByText('Error')).toBeInTheDocument()
   })
 
   it('has correct aria attributes', () => {

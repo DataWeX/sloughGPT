@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Spinner } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 
@@ -192,7 +192,7 @@ export default function CollectionsPage() {
         <CardContent>
           {loading ? (
             <div className="flex justify-center py-8">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <Spinner size="md" />
             </div>
           ) : pipelines.length === 0 ? (
             <div className="text-center py-6 space-y-2">

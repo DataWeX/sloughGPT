@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Chip } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { tokenTreeController, type EmbeddingInfo } from '@/lib/token-tree-controller'
 
 const TOP_K = 8
@@ -54,9 +55,7 @@ export function TokenTreeEmbeddingsCard() {
         </div>
 
         {failed && !result && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-            Token not in the vocabulary, or embeddings are disabled. Try a token shown in the Vocabulary card.
-          </div>
+          <StatusBanner variant="error" message="Token not in the vocabulary, or embeddings are disabled. Try a token shown in the Vocabulary card." dismissible={false} />
         )}
 
         {result && !failed && (

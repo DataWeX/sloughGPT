@@ -36,6 +36,7 @@ class TrainingState:
 _state = TrainingState()
 
 _turbo_lock = threading.Lock()
+_sessions_lock = threading.Lock()
 _turbo_cancel_event = threading.Event()
 _turbo_pause_event = threading.Event()
 _turbo_state: dict[str, Any] = {

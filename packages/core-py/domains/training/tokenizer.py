@@ -276,6 +276,9 @@ class SloBPE:
         """
         encoded = [self.encode(t, add_bos=add_bos, add_eos=add_eos) for t in texts]
 
+        if not encoded:
+            return []
+
         if max_length is not None:
             encoded = [ids[:max_length] for ids in encoded]
 
@@ -836,11 +839,11 @@ class SloUnigram:
 
     @property
     def unk_id(self) -> int:
-        return self.stoi.get("<UNK>", 0)
+        return self.stoi.get("<UNK>", 1)
 
     @property
     def bos_id(self) -> int:
-        return self.stoi.get("<BOS>", 0)
+        return self.stoi.get("<BOS>", 2)
 
     @property
     def eos_id(self) -> int:

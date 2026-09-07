@@ -19,6 +19,8 @@ from schemas.common import raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.files")
 
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+
 
 class FileMetadata(BaseModel):
     id: str
@@ -234,6 +236,12 @@ class FilesRouter:
             raise_error("File must have an extension", "E_BAD_REQUEST", status_code=400)
 
         contents = await file.read()
+        if len(contents) > MAX_UPLOAD_SIZE:
+            raise_error(
+                f"File too large ({len(contents)} bytes, max {MAX_UPLOAD_SIZE})",
+                "E_BAD_REQUEST",
+                status_code=413,
+            )
         fid = self._file_id(file.filename)
         file_path = self.UPLOADS_DIR / f"{fid}{ext}"
 

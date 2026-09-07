@@ -11,29 +11,24 @@ export interface StreamingIndicatorProps {
 
 const STATUS_CONFIG = {
   thinking: {
-    label: 'Thinking...',
+    label: 'Thinking',
     color: 'text-primary',
-    dots: true,
   },
   generating: {
-    label: 'Generating...',
+    label: 'Generating',
     color: 'text-primary',
-    dots: true,
   },
   tool_call: {
-    label: 'Running tool...',
+    label: 'Running tool',
     color: 'text-warning',
-    dots: false,
   },
   context: {
-    label: 'Processing context...',
+    label: 'Processing',
     color: 'text-muted-foreground',
-    dots: true,
   },
   error: {
-    label: 'Error occurred',
+    label: 'Error',
     color: 'text-destructive',
-    dots: false,
   },
 } as const
 
@@ -47,24 +42,22 @@ export const StreamingIndicator = memo(function StreamingIndicator({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 text-xs',
+        'flex items-center gap-1.5 text-xs',
         config.color,
         className
       )}
       role="status"
       aria-live="polite"
     >
-      {config.dots && (
-        <div className="flex gap-1">
-          <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-          <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
-          <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
-        </div>
-      )}
-      <span>
+      <span className="flex gap-0.5">
+        <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+        <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+        <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+      </span>
+      <span className="text-muted-foreground">
         {config.label}
         {toolName && status === 'tool_call' && (
-          <span className="text-muted-foreground ml-1">({toolName})</span>
+          <span className="ml-0.5 opacity-60">({toolName})</span>
         )}
       </span>
     </div>

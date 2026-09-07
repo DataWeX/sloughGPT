@@ -10,7 +10,7 @@ import logging
 import threading
 
 from fastapi import APIRouter
-from schemas.common import classify_and_raise, safe_audit_log, success_response
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from .schemas import FromSessionsRequest, TurboStartRequest
 

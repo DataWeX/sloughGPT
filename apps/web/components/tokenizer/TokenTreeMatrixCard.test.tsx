@@ -22,6 +22,13 @@ vi.mock('@sloughgpt/strui', () => ({
   Chip: ({ label }: { label: string }) => <span>{label}</span>,
   Skeleton: ({ className }: { className?: string }) => <div data-testid="skeleton" className={className} />,
   IconRefresh: () => <svg data-testid="icon-refresh" />,
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message }: { variant: string; message: string }) => (
+    <div data-variant={variant}>{message}</div>
+  ),
 }))
 
 import { TokenTreeMatrixCard } from './TokenTreeMatrixCard'

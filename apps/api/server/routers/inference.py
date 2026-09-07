@@ -1090,10 +1090,12 @@ class InferenceRouter:
                     logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
                 _mgr.finish(_op_id, str(e))
                 logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
-                from domains.infrastructure.errors import classify_exception
-                classified = classify_exception(e)
-                err_code = classified.code or "E_INFRA_GENERATION"
-                http_status = getattr(classified, 'http_status', None) or 500
+                err_code = (
+                    "E_MEMORY_PRESSURE"
+                    if isinstance(e, RuntimeError) and "memory" in str(e).lower()
+                    else "E_INFRA_GENERATION"
+                )
+                http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
                 yield sse_error("generate", "ERROR", str(e), code=err_code, http_status=http_status)
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:

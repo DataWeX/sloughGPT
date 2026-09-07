@@ -29,42 +29,61 @@ type StepId = typeof STEPS[number]['id']
 
 function StepIndicator({ current, completed, onStepClick }: { current: StepId; completed: Set<StepId>; onStepClick: (id: StepId) => void }) {
   return (
-    <div className="flex items-center gap-1" role="navigation" aria-label="Training steps">
+    <nav className="flex items-center gap-0" role="navigation" aria-label="Training steps">
       {STEPS.map((step, i) => {
         const isDone = completed.has(step.id)
         const isCurrent = step.id === current
         const clickable = isDone && !isCurrent
         const content = (
-          <>
-            <div className={cn('flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium transition-colors', isCurrent ? 'bg-primary text-primary-foreground' :
-              isDone ? 'bg-primary/15 text-primary' :
-              'bg-muted text-muted-foreground')}>
-              {isDone ? <IconCheck className="h-3 w-3" /> : i + 1}
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              'relative flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-300',
+              isCurrent && 'bg-primary text-primary-foreground shadow-md shadow-primary/25',
+              isDone && 'bg-primary/15 text-primary',
+              !isCurrent && !isDone && 'bg-muted/60 text-muted-foreground border border-border/40'
+            )}>
+              {isDone ? <IconCheck className="h-3.5 w-3.5" /> : i + 1}
+              {isCurrent && (
+                <span className="absolute inset-0 rounded-full bg-primary/20 animate-ping [animation-duration:2s]" aria-hidden="true" />
+              )}
             </div>
-            <span className={cn('text-xs', isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground')}>
-              {step.label}
-            </span>
-          </>
+            <div className="hidden sm:block">
+              <span className={cn(
+                'text-xs font-medium block leading-tight',
+                isCurrent ? 'text-foreground' : isDone ? 'text-primary/80' : 'text-muted-foreground/70'
+              )}>
+                {step.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground/50 leading-tight hidden lg:block">
+                {step.description}
+              </span>
+            </div>
+          </div>
         )
         return (
-          <div key={step.id} className="flex items-center gap-1">
-            {i > 0 && <div className={cn('w-6 h-px', isDone || isCurrent ? 'bg-primary' : 'bg-border')} />}
+          <div key={step.id} className="flex items-center">
+            {i > 0 && (
+              <div className={cn(
+                'w-8 sm:w-12 h-px mx-1 transition-colors duration-300',
+                isDone || isCurrent ? 'bg-primary/40' : 'bg-border/40'
+              )} />
+            )}
             {clickable ? (
               <button
                 type="button"
                 onClick={() => onStepClick(step.id)}
-                className="flex items-center gap-1.5 rounded-md transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="rounded-lg transition-all duration-200 hover:bg-primary/5 px-1 py-0.5 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label={`Go to ${step.label} step`}
               >
                 {content}
               </button>
             ) : (
-              <div className="flex items-center gap-1.5">{content}</div>
+              <div className="px-1 py-0.5 -mx-1">{content}</div>
             )}
           </div>
         )
       })}
-    </div>
+    </nav>
   )
 }
 
@@ -158,24 +177,48 @@ export const TrainingPipeline = memo(function TrainingPipeline({
           )}
 
           {session.phase !== 'complete' && session.phase !== 'error' && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {session.paused && (
                 <div className="rounded-md bg-warning/10 border border-warning/20 px-3 py-1.5 text-xs text-warning font-medium" role="status">
                   Paused
                 </div>
               )}
               <Progress value={displayProgress} max={100} label="Progress" showValue size="sm" />
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {displayTotalSteps > 0 && (
-                  <span>Step {displayGlobalStep}/{displayTotalSteps}</span>
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Step</p>
+                    <p className="text-sm font-semibold tabular-nums">{displayGlobalStep}<span className="text-muted-foreground/40 font-normal">/{displayTotalSteps}</span></p>
+                  </div>
+                )}
+                {displayEpoch > 0 && displayTotalEpochs > 0 && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Epoch</p>
+                    <p className="text-sm font-semibold tabular-nums">{displayEpoch}<span className="text-muted-foreground/40 font-normal">/{displayTotalEpochs}</span></p>
+                  </div>
+                )}
+                {displayLoss != null && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Loss</p>
+                    <p className="text-sm font-semibold tabular-nums">{displayLoss.toFixed(4)}</p>
+                  </div>
                 )}
                 {displayStepsPerSec != null && displayStepsPerSec > 0 && (
-                  <span>{displayStepsPerSec.toFixed(1)} steps/s</span>
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Speed</p>
+                    <p className="text-sm font-semibold tabular-nums">{displayStepsPerSec.toFixed(1)}<span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span></p>
+                  </div>
                 )}
                 {displayEta != null && (
-                  <span>ETA {formatDuration(displayEta)}</span>
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">ETA</p>
+                    <p className="text-sm font-semibold tabular-nums">{formatDuration(displayEta)}</p>
+                  </div>
                 )}
-                <span>Elapsed {formatDuration(displayElapsed)}</span>
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Elapsed</p>
+                  <p className="text-sm font-semibold tabular-nums">{formatDuration(displayElapsed)}</p>
+                </div>
               </div>
               {session.dataQuality && (
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">

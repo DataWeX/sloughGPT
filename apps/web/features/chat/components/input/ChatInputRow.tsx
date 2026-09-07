@@ -112,7 +112,7 @@ export const ChatInputRow = memo(function ChatInputRow({
           />
         )}
       </div>
-      <div className="flex items-end gap-2 w-full flex-wrap rounded-2xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/10 transition-all duration-200" role="group" aria-label="Message composition">
+      <div className="flex items-end gap-2 w-full flex-wrap rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm focus-within:border-primary/40 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/10 transition-all duration-200" role="group" aria-label="Message composition">
       <ChatInputAccessories
         onImage={onImage}
         onTranscript={onTranscript}

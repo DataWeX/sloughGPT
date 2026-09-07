@@ -86,7 +86,9 @@ def _get_logprobs(model, input_ids: np.ndarray) -> np.ndarray:
         logits = out
     arr = _as_array(logits)
     # arr shape: [batch, seq_len, vocab]
-    logprobs = arr - np.log(np.exp(arr).sum(axis=-1, keepdims=True) + 1e-8)
+    # Log-sum-exp trick for numerical stability
+    arr_max = arr.max(axis=-1, keepdims=True)
+    logprobs = arr - arr_max - np.log(np.exp(arr - arr_max).sum(axis=-1, keepdims=True) + 1e-8)
     return logprobs
 
 
@@ -329,6 +331,7 @@ class PPOTrainer:
         all_kl = []
         all_approx_kl = []
         early_stopped = False
+        epoch = -1
 
         for epoch in range(cfg.ppo_epochs):
             # Shuffle indices for mini-batching
@@ -376,9 +379,13 @@ class PPOTrainer:
                 policy_loss = -np.minimum(surr1, surr2).mean()
 
                 # ── Value function loss ──
-                # new_values is [mb], returns is [T]. Use mean return as target.
-                value_target = float(returns.mean())
-                value_loss = ((new_values - value_target) ** 2).mean()
+                # new_values is [mb], returns is [T]. Broadcast values to per-timestep.
+                if new_values.ndim == 1:
+                    new_values_per_t = np.broadcast_to(new_values[:, None], (B_mb, T_mb))
+                else:
+                    new_values_per_t = new_values[:, :T_mb] if new_values.shape[1] >= T_mb else np.broadcast_to(new_values.mean(axis=1)[:, None], (B_mb, T_mb))
+                mb_returns = returns[None, :T_mb] if returns.ndim == 1 else returns[mb_idx, :T_mb]
+                value_loss = ((new_values_per_t - mb_returns) ** 2).mean()
 
                 # ── Entropy bonus ──
                 probs = np.exp(new_logprobs)

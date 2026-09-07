@@ -27,25 +27,45 @@ export function FeedbackBar({ loading, feedbackStats }: FeedbackBarProps) {
 
   if (!feedbackStats?.db_stats || feedbackStats.db_stats.feedback_total === 0) return null
 
+  const { thumbs_up, thumbs_down, ratio, feedback_total } = feedbackStats.db_stats
+  const positivePercent = Math.round(ratio * 100)
+
   return (
     <Card>
       <CardContent className="py-3">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground">Feedback</span>
-            <span className="text-sm font-medium tabular-nums">{feedbackStats.db_stats.feedback_total}</span>
+            <span className="text-xs font-medium text-muted-foreground">Feedback</span>
+            <span className="text-sm font-semibold tabular-nums">{feedback_total}</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-success flex items-center gap-1"><IconThumbUp className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_up}</span>
-            <span className="text-sm text-destructive flex items-center gap-1"><IconThumbDown className="h-3.5 w-3.5" /> {feedbackStats.db_stats.thumbs_down}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm text-muted-foreground">Ratio</span>
-            <span className={cn('text-sm font-medium', feedbackStats.db_stats.ratio >= 0.5 ? 'text-success' : 'text-warning')}>
-              {Math.round(feedbackStats.db_stats.ratio * 100)}% positive
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1 text-xs">
+              <span className="text-success"><IconThumbUp className="h-3 w-3" /></span>
+              <span className="font-medium tabular-nums">{thumbs_up}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-xs">
+              <span className="text-destructive"><IconThumbDown className="h-3 w-3" /></span>
+              <span className="font-medium tabular-nums">{thumbs_down}</span>
             </span>
           </div>
-          <Link href="/training" className="ml-auto text-sm text-primary hover:text-primary/80 shrink-0">
+          <div className="flex items-center gap-2 flex-1 min-w-[140px]">
+            <div className="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  ratio >= 0.7 ? 'bg-success' : ratio >= 0.4 ? 'bg-warning' : 'bg-destructive'
+                )}
+                style={{ width: `${positivePercent}%` }}
+              />
+            </div>
+            <span className={cn(
+              "text-xs font-medium tabular-nums shrink-0",
+              ratio >= 0.7 ? 'text-success' : ratio >= 0.4 ? 'text-warning' : 'text-destructive'
+            )}>
+              {positivePercent}%
+            </span>
+          </div>
+          <Link href="/training" className="text-xs text-primary hover:text-primary/80 shrink-0">
             Train from feedback →
           </Link>
         </div>

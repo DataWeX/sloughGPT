@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { cn, Button } from '@sloughgpt/strui'
+import { cn, Button, Spinner } from '@sloughgpt/strui'
 import { IconSearch, IconX } from '@sloughgpt/strui'
 import { chatDB, type MessageNote } from '@/lib/db'
 import { truncateMessage } from '@/lib/conversations-utils'
@@ -93,7 +93,7 @@ export function NoteSearchPanel({ open, onClose, onNavigateToNote }: NoteSearchP
         <div className="max-h-[400px] overflow-y-auto">
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="h-5 w-5 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+              <Spinner size="sm" />
             </div>
           )}
 

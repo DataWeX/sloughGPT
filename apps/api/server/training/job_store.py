@@ -285,10 +285,16 @@ class JobStore:
             limit=limit,
         )
 
+        def _safe_json(s: str) -> Any:
+            try:
+                return json.loads(s)
+            except (json.JSONDecodeError, TypeError):
+                return None
+
         return [
             {
                 "event": doc.get("event"),
-                "data": json.loads(doc["data"]) if doc.get("data") else None,
+                "data": _safe_json(doc["data"]) if doc.get("data") else None,
                 "timestamp": doc.get("timestamp"),
             }
             for doc in docs

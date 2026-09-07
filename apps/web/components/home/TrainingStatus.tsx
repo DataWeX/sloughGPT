@@ -25,10 +25,10 @@ export function TrainingStatus({ apiStatus, modelStatus, modelReadiness, running
             </CardHeader>
             <CardContent className="text-sm space-y-2">
               <p>{modelReadiness.message}</p>
-              <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
+              <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
+                <div className="h-full bg-warning rounded-full transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
               </div>
-              <p className="text-xs text-muted-foreground">First startup may take 90 seconds while AI components load.</p>
+              <p className="text-[10px] text-muted-foreground/60">First startup may take 90 seconds while AI components load.</p>
             </CardContent>
           </Card>
         ) : (
@@ -54,9 +54,9 @@ export function TrainingStatus({ apiStatus, modelStatus, modelReadiness, running
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">Training: {runningTraining.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{runningTraining.status_message}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{runningTraining.status_message}</p>
                 </div>
-                <span className="text-sm text-primary shrink-0">View →</span>
+                <span className="text-[10px] text-primary/60 shrink-0">View →</span>
               </div>
             </CardContent>
           </Card>
@@ -73,10 +73,10 @@ export function TrainingStatus({ apiStatus, modelStatus, modelReadiness, running
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">Model loading</p>
-                <p className="text-xs text-muted-foreground">{modelReadiness.message}</p>
+                <p className="text-[10px] text-muted-foreground">{modelReadiness.message}</p>
               </div>
-              <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden shrink-0">
-                <div className="h-full bg-warning transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
+              <div className="h-1.5 w-16 rounded-full bg-muted/60 overflow-hidden shrink-0">
+                <div className="h-full bg-warning rounded-full transition-all duration-500" style={{width: `${(modelReadiness.step / modelReadiness.total) * 100}%`}} />
               </div>
             </div>
           </CardContent>
@@ -87,12 +87,10 @@ export function TrainingStatus({ apiStatus, modelStatus, modelReadiness, running
         <Card className="border-dashed border-border/60 bg-muted/20">
           <CardContent className="py-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium">No model loaded</p>
-              </div>
-              <p className="text-xs text-muted-foreground">Load a model in Models to start chatting</p>
+              <p className="text-sm font-medium">No model loaded</p>
+              <p className="text-[10px] text-muted-foreground">Load a model in Models to start chatting</p>
             </div>
-            <Link href="/models" className="inline-flex items-center h-8 px-3 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted transition-colors shrink-0">
+            <Link href="/models" className="inline-flex items-center h-7 px-2.5 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors shrink-0">
               Open Models
             </Link>
           </CardContent>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { datasetController, type ImportSource, type GitHubRepo, type BookResult } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { reportError } from '@/lib/error-reporter'
@@ -63,6 +63,8 @@ export function useDatasetImport(
   const [selectedBook, setSelectedBook] = useState<BookResult | null>(null)
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   const resetForm = () => {
     setUrl('')

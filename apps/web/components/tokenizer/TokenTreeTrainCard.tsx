@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Textarea, Input, Button } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type TrainTreeResult } from '@/lib/token-tree-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -50,15 +51,10 @@ export function TokenTreeTrainCard({ onTrained }: TokenTreeTrainCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {result && !training && (
-          <div className="rounded-md bg-success/10 border border-success/20 px-3 py-2 text-sm text-success">
-            Trained: vocab {result.vocab_size} · embed dim {result.embed_dim} · compression{' '}
-            {result.embedding_compression_ratio}x
-          </div>
+          <StatusBanner variant="success" message={`Trained: vocab ${result.vocab_size} · embed dim ${result.embed_dim} · compression ${result.embedding_compression_ratio}x`} dismissible={false} />
         )}
         {failed && !training && (
-          <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-            Training failed. Check the logs and try again.
-          </div>
+          <StatusBanner variant="error" message="Training failed. Check the logs and try again." dismissible={false} />
         )}
         <div className="space-y-2">
           <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

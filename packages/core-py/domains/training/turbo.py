@@ -41,10 +41,6 @@ def get_turbo_status() -> dict:
 
 
 def start_turbo_training(config: dict) -> dict:
-    with _turbo_lock:
-        if _turbo_state.get("status") == "running":
-            raise RuntimeError("A turbo training job is already running")
-
     data_path = config.get("data_path", "")
     dataset_id = config.get("dataset_id")
     if not data_path and dataset_id:
@@ -79,7 +75,11 @@ def start_turbo_training(config: dict) -> dict:
     cancel_event = threading.Event()
     pause_event = threading.Event()
 
+    # Atomic check-and-set: reserve the "running" slot under a single lock
+    # acquisition to prevent two concurrent requests from both starting.
     with _turbo_lock:
+        if _turbo_state.get("status") == "running":
+            raise RuntimeError("A turbo training job is already running")
         _turbo_state.update({
             "status": "running",
             "job_id": job_id,
@@ -189,15 +189,19 @@ def run_turbo_worker(config: dict) -> None:
             _turbo_state["elapsed_s"] = info.get("elapsed_s", _turbo_state["elapsed_s"])
             _turbo_state["avg_quality"] = info.get("avg_quality", _turbo_state.get("avg_quality"))
             _turbo_state["last_heartbeat"] = time.time()
+            # Capture under lock to avoid TOCTOU race
+            _snap_progress = _turbo_state["progress"]
+            _snap_step = _turbo_state["global_step"]
+            _snap_loss = _turbo_state["loss"]
         update_job(
             job_id,
-            progress=float(_turbo_state["progress"]),
-            global_step=int(_turbo_state["global_step"]),
-            train_loss=_turbo_state["loss"],
-            loss=_turbo_state["loss"],
+            progress=float(_snap_progress),
+            global_step=int(_snap_step),
+            train_loss=_snap_loss,
+            loss=_snap_loss,
         )
-        if experiment_id and _turbo_state["loss"] is not None:
-            log_experiment_metric(experiment_id, "train_loss", float(_turbo_state["loss"]), int(_turbo_state["global_step"]))
+        if experiment_id and _snap_loss is not None:
+            log_experiment_metric(experiment_id, "train_loss", float(_snap_loss), int(_snap_step))
 
     try:
         n_layer = config.get("n_layer") or config.get("n_decoder_layers") or 3

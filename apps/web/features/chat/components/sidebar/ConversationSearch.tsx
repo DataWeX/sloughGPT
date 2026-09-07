@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Input } from '@sloughgpt/strui'
+import { Input, Spinner } from '@sloughgpt/strui'
 import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
 import { sessionController, type SearchResult as RemoteSearchResult } from '@/lib/session-controller'
@@ -134,7 +134,7 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
         <div className="max-h-[50vh] overflow-y-auto p-2" aria-busy={loading} aria-live="polite">
           {loading && (
             <div className="flex items-center justify-center py-8">
-              <div className="h-4 w-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+              <Spinner size="sm" />
             </div>
           )}
 

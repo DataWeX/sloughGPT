@@ -9,7 +9,10 @@ logger = logging.getLogger("slo.infra.ssrf")
 
 
 def is_private_ip(hostname: str) -> bool:
-    """Check if hostname resolves to a private/loopback IP (SSRF protection)."""
+    """Check if hostname resolves to a private/loopback IP (SSRF protection).
+
+    Returns True (blocks) on DNS failure since the IP cannot be verified as safe.
+    """
     try:
         addrinfos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for family, _, _, _, sockaddr in addrinfos:
@@ -17,7 +20,9 @@ def is_private_ip(hostname: str) -> bool:
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 return True
     except (socket.gaierror, ValueError):
-        pass
+        # DNS resolution failed — treat as private to prevent bypass
+        logger.warning("SSRF check: DNS resolution failed for %s, blocking", hostname)
+        return True
     return False
 
 

@@ -129,29 +129,29 @@ export function TrainingBuildsCard({ addToast }: Props) {
               ))}
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(b => (
-                <div key={b.name} className="flex items-center justify-between rounded border p-3 text-sm">
+                <div key={b.name} className="flex items-center justify-between rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate font-medium">{b.name}</p>
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <p className="truncate font-medium text-xs">{b.name}</p>
+                      <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground/60">
                         {BUILD_TYPE_LABELS[b.build_type] ?? b.build_type}
                       </span>
                     </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground">
+                    <div className="flex gap-2 text-[10px] text-muted-foreground/60 mt-0.5">
                       {b.loss != null && <span>Loss {b.loss.toFixed(4)}</span>}
                       {b.epochs != null && <span>{b.epochs} epochs</span>}
                       {b.size_mb != null && <span>{b.size_mb.toFixed(1)} MB</span>}
                       {b.model && <span>Model: {b.model}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => void handleLoad(b.name, b.build_type)} disabled={loadingModel === b.name}>
+                  <div className="flex items-center gap-0.5">
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void handleLoad(b.name, b.build_type)} disabled={loadingModel === b.name}>
                       {loadingModel === b.name ? 'Loading...' : 'Load'}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void handleDownload(b.name)}>Download</Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setPendingDelete(b.name)}>Delete</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void handleDownload(b.name)}>Download</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={() => setPendingDelete(b.name)}>Delete</Button>
                   </div>
                 </div>
               ))}

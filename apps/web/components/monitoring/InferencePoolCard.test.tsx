@@ -1,6 +1,27 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+  Card: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  CardContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  StatCard: ({ label, value, loading }: any) => <div>{loading ? 'Loading...' : `${label}: ${value}`}</div>,
+  KpiGrid: ({ children }: any) => <div>{children}</div>,
+  IconRefresh: ({ className }: any) => <span className={className} />,
+}))
+
+vi.mock('@/lib/toast-store', () => ({
+  useToastStore: (selector: any) => selector({ addToast: vi.fn() }),
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message }: { variant: string; message: string }) => (
+    <div data-variant={variant}>{message}</div>
+  ),
+}))
+
 import { InferencePoolCard } from './InferencePoolCard'
 
 vi.mock('@/lib/system-controller', () => ({
@@ -13,41 +34,41 @@ import { systemController } from '@/lib/system-controller'
 
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 
-it('renders nothing while loading', () => {
+it('renders loading state while loading', () => {
   vi.mocked(systemController.getInferencePoolStatus).mockReturnValue(new Promise(() => {}))
   const { container } = render(<InferencePoolCard />)
-  expect(container.innerHTML).toBe('')
+  expect(container.textContent).toContain('Loading...')
 })
 
-it('renders nothing when status is null', async () => {
+it('shows error banner when fetch fails', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockRejectedValue(new Error('fail'))
-  const { container } = render(<InferencePoolCard />)
-  await vi.waitFor(() => expect(container.innerHTML).toBe(''))
+  render(<InferencePoolCard />)
+  expect(await screen.findByText('Failed to load')).toBeTruthy()
 })
 
-it('shows Active when initialized', async () => {
+it('shows Yes when initialized', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true, max_workers: 4 })
   render(<InferencePoolCard />)
-  expect(await screen.findByText('Active')).toBeTruthy()
+  expect(await screen.findByText('Initialized: Yes')).toBeTruthy()
   expect(screen.getByText('Inference Pool')).toBeTruthy()
 })
 
-it('shows Inactive when not initialized', async () => {
+it('shows No when not initialized', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: false })
   render(<InferencePoolCard />)
-  expect(await screen.findByText('Inactive')).toBeTruthy()
+  expect(await screen.findByText('Initialized: No')).toBeTruthy()
 })
 
 it('shows max_workers when present', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true, max_workers: 8 })
   render(<InferencePoolCard />)
-  expect(await screen.findByText('8')).toBeTruthy()
+  expect(await screen.findByText('Max Workers: 8')).toBeTruthy()
 })
 
 it('shows queue_timeout when present', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true, queue_timeout: 5.2 })
   render(<InferencePoolCard />)
-  expect(await screen.findByText('5.2s')).toBeTruthy()
+  expect(await screen.findByText('Queue Timeout: 5.2ms')).toBeTruthy()
 })
 
 it('shows error message when present', async () => {
@@ -59,7 +80,7 @@ it('shows error message when present', async () => {
 it('hides error when absent', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true })
   render(<InferencePoolCard />)
-  await vi.waitFor(() => expect(screen.queryByText('Active')).toBeTruthy())
+  await vi.waitFor(() => expect(screen.queryByText('Initialized: Yes')).toBeTruthy())
   expect(screen.queryByText('OOM killed')).toBeNull()
 })
 
@@ -67,22 +88,24 @@ it('calls onRefresh and refetches when Refresh clicked', async () => {
   const onRefresh = vi.fn()
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true })
   render(<InferencePoolCard onRefresh={onRefresh} />)
-  await vi.waitFor(() => expect(screen.getByText('Active')).toBeTruthy())
-  screen.getByText('Refresh').click()
+  await vi.waitFor(() => expect(screen.getByText('Initialized: Yes')).toBeTruthy())
+  screen.getByRole('button', { name: /refresh/i }).click()
   expect(onRefresh).toHaveBeenCalledOnce()
   expect(systemController.getInferencePoolStatus).toHaveBeenCalledTimes(2)
 })
 
-it('does not render Refresh button when onRefresh is absent', async () => {
+it('does not crash when Refresh clicked and onRefresh is absent', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true })
   render(<InferencePoolCard />)
-  await vi.waitFor(() => expect(screen.getByText('Active')).toBeTruthy())
-  expect(screen.queryByText('Refresh')).toBeNull()
+  await vi.waitFor(() => expect(screen.getByText('Initialized: Yes')).toBeTruthy())
+  const btn = screen.getByRole('button', { name: /refresh/i })
+  expect(btn).toBeTruthy()
+  btn.click()
+  await vi.waitFor(() => expect(screen.getByText('Initialized: Yes')).toBeTruthy())
 })
 
-it('hides max_workers when null', async () => {
+it('shows — when max_workers is null', async () => {
   vi.mocked(systemController.getInferencePoolStatus).mockResolvedValue({ initialized: true, max_workers: undefined })
   render(<InferencePoolCard />)
-  await vi.waitFor(() => expect(screen.getByText('Active')).toBeTruthy())
-  expect(screen.queryByText('Max Workers')).toBeNull()
+  expect(await screen.findByText('Max Workers: —')).toBeTruthy()
 })

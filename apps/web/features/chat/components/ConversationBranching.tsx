@@ -86,7 +86,7 @@ export const ConversationBranching = memo(function ConversationBranching({
         <span className="text-[10px] font-medium text-muted-foreground">
           Branch from message {currentIndex + 1} of {messages.length}
         </span>
-        <Button variant="ghost" size="icon-sm" className="h-4 w-4" onClick={handleCancel}>
+        <Button variant="ghost" size="icon-sm" className="h-4 w-4" onClick={handleCancel} aria-label="Close">
           <IconX className="h-2.5 w-2.5" />
         </Button>
       </div>

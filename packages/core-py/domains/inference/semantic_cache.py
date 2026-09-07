@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import time
 import hashlib
+import threading
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 import logging
@@ -60,6 +61,7 @@ class SemanticCache:
         self.ttl_seconds = ttl_seconds
 
         self.entries: Dict[str, CacheEntry] = {}
+        self._lock = threading.Lock()
         self._hyperdim = None
         self._stats = {
             "hits": 0,
@@ -95,89 +97,90 @@ class SemanticCache:
         Returns:
             Cached response if hit, None if miss
         """
-        if not self.entries:
-            self._stats["misses"] += 1
-            return None
+        with self._lock:
+            if not self.entries:
+                self._stats["misses"] += 1
+                return None
 
-        query_vec = self.encode_query(query)
-        hd = self._get_hyperdim()
-        # Strip punctuation from words
-        import re
+            query_vec = self.encode_query(query)
+            hd = self._get_hyperdim()
+            # Strip punctuation from words
+            import re
 
-        query_words = set(re.sub(r"[^\w\s]", "", w.lower()) for w in query.split())
+            query_words = set(re.sub(r"[^\w\s]", "", w.lower()) for w in query.split())
 
-        best_entry: Optional[CacheEntry] = None
-        best_score = 0.0
-        current_time = time.time()
+            best_entry: Optional[CacheEntry] = None
+            best_score = 0.0
+            current_time = time.time()
 
-        for entry in self.entries.values():
-            # Check TTL
-            if current_time - entry.timestamp > self.ttl_seconds:
-                continue
+            for entry in self.entries.values():
+                # Check TTL
+                if current_time - entry.timestamp > self.ttl_seconds:
+                    continue
 
-            # HD similarity
-            hd_sim = hd.similarity(query_vec, entry.hypervector)
+                # HD similarity
+                hd_sim = hd.similarity(query_vec, entry.hypervector)
 
-            # Word overlap (Jaccard) - filter stop words
-            stop_words = {
-                "what",
-                "is",
-                "a",
-                "the",
-                "an",
-                "of",
-                "to",
-                "and",
-                "or",
-                "in",
-                "on",
-                "at",
-                "for",
-                "how",
-                "do",
-                "you",
-                "your",
-                "it",
-                "this",
-                "that",
-                "can",
-                "be",
-                "about",
-                "tell",
-                "me",
-                "hello",
-            }
-            query_content = query_words - stop_words
-            entry_words = set(entry.query.lower().split())
-            entry_content = entry_words - stop_words
+                # Word overlap (Jaccard) - filter stop words
+                stop_words = {
+                    "what",
+                    "is",
+                    "a",
+                    "the",
+                    "an",
+                    "of",
+                    "to",
+                    "and",
+                    "or",
+                    "in",
+                    "on",
+                    "at",
+                    "for",
+                    "how",
+                    "do",
+                    "you",
+                    "your",
+                    "it",
+                    "this",
+                    "that",
+                    "can",
+                    "be",
+                    "about",
+                    "tell",
+                    "me",
+                    "hello",
+                }
+                query_content = query_words - stop_words
+                entry_words = set(entry.query.lower().split())
+                entry_content = entry_words - stop_words
 
-            # Calculate content word match
-            common_content = query_content & entry_content
+                # Calculate content word match
+                common_content = query_content & entry_content
 
-            # Score: primarily based on content word match
-            common_content = query_content & entry_content
-            score = 0.0
+                # Score: primarily based on content word match
+                common_content = query_content & entry_content
+                score = 0.0
 
-            if common_content:
-                # Query content must overlap with entry
-                query_len = len(query_content)
-                common_ratio = len(common_content) / query_len if query_len > 0 else 0
+                if common_content:
+                    # Query content must overlap with entry
+                    query_len = len(query_content)
+                    common_ratio = len(common_content) / query_len if query_len > 0 else 0
 
-                # High overlap required (80%)
-                if common_ratio >= 0.8:
-                    score = 0.85 + common_ratio * 0.1
-                elif common_ratio >= 0.5:
-                    # Medium overlap - use HD to validate
-                    if hd_sim > 0.5:
-                        score = 0.6
-                elif common_ratio >= 0.3:
-                    # Low overlap - require very high HD
-                    if hd_sim > 0.7:
-                        score = 0.5
+                    # High overlap required (80%)
+                    if common_ratio >= 0.8:
+                        score = 0.85 + common_ratio * 0.1
+                    elif common_ratio >= 0.5:
+                        # Medium overlap - use HD to validate
+                        if hd_sim > 0.5:
+                            score = 0.6
+                    elif common_ratio >= 0.3:
+                        # Low overlap - require very high HD
+                        if hd_sim > 0.7:
+                            score = 0.5
 
-            if score > best_score and score >= self.similarity_threshold:
-                best_score = score
-                best_entry = entry
+                if score > best_score and score >= self.similarity_threshold:
+                    best_score = score
+                    best_entry = entry
 
         if best_entry:
             best_entry.hit_count += 1
@@ -206,12 +209,13 @@ class SemanticCache:
         Returns:
             Cache entry ID
         """
-        # Evict expired entries
-        self._evict_expired()
+        with self._lock:
+            # Evict expired entries
+            self._evict_expired()
 
-        # Evict if full
-        if len(self.entries) >= self.max_entries:
-            self._evict_lru()
+            # Evict if full
+            if len(self.entries) >= self.max_entries:
+                self._evict_lru()
 
         query_vec = self.encode_query(query)
         entry_id = hashlib.sha256(query.encode()).hexdigest()[:16]
@@ -272,18 +276,20 @@ class SemanticCache:
         query_vec = self.encode_query(query)
         hd = self._get_hyperdim()
 
-        for entry_id, entry in list(self.entries.items()):
-            sim = hd.similarity(query_vec, entry.hypervector)
-            if sim > 0.95:  # Exact match threshold
-                del self.entries[entry_id]
-                return True
+        with self._lock:
+            for entry_id, entry in list(self.entries.items()):
+                sim = hd.similarity(query_vec, entry.hypervector)
+                if sim > 0.95:  # Exact match threshold
+                    del self.entries[entry_id]
+                    return True
 
         return False
 
     def clear(self) -> int:
         """Clear all cache entries."""
-        count = len(self.entries)
-        self.entries.clear()
+        with self._lock:
+            count = len(self.entries)
+            self.entries.clear()
         return count
 
     def get_stats(self) -> Dict[str, Any]:

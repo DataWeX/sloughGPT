@@ -2,6 +2,7 @@
 
 import { memo, useState, useEffect, useCallback } from 'react'
 import { cn, Card, CardContent, Button, StatCard, KpiGrid, IconRefresh } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { systemController, type InferencePoolStatus } from '@/lib/system-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -66,7 +67,9 @@ export const InferencePoolCard = memo(function InferencePoolCard({ onRefresh }: 
             <StatCard label="Queue Timeout" value="" loading />
           </KpiGrid>
         ) : error ? (
-          <p className="text-xs text-destructive text-center py-2">{error}</p>
+          <StatusBanner variant="error" message={error} dismissible={false} />
+        ) : status?.error ? (
+          <StatusBanner variant="error" message={status.error} dismissible={false} />
         ) : status ? (
           <KpiGrid>
             <StatCard label="Initialized" value={status.initialized ? 'Yes' : 'No'} />

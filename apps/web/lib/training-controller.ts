@@ -462,7 +462,8 @@ export const trainingJobsController = {
   },
 
   async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {
-    const results = await Promise.allSettled(names.map(n => this.deleteCheckpoint(n)))
+    const self = this
+    const results = await Promise.allSettled(names.map(n => self.deleteCheckpoint(n)))
     return { deleted: results.filter(r => r.status === 'fulfilled').length }
   },
 

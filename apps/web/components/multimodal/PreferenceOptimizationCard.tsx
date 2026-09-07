@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 
 interface PreferenceOptimizationCardProps {
   dpoRunning: boolean
@@ -48,12 +49,10 @@ export default memo(function PreferenceOptimizationCard({ dpoRunning, dpoStatus,
           </div>
         )}
         {dpoResult && dpoResult.status === 'rejected' && (
-          <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-            DPO rejected — PPL degradation above threshold
-          </div>
+          <StatusBanner variant="error" message="DPO rejected — PPL degradation above threshold" dismissible={false} />
         )}
         {dpoError && (
-          <div className="p-2 rounded bg-destructive/10 border border-destructive/20 text-xs text-destructive">{dpoError}</div>
+          <StatusBanner variant="error" message={dpoError} dismissible={false} />
         )}
       </CardContent>
     </Card>

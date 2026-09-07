@@ -30,6 +30,9 @@ export function useMemoryData(): UseMemoryDataReturn {
   const [searchResults, setSearchResults] = useState<MemoryItem[] | null>(null)
   const [searched, setSearched] = useState(false)
 
+  const searchRef = useRef(search)
+  searchRef.current = search
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
@@ -41,7 +44,7 @@ export function useMemoryData(): UseMemoryDataReturn {
       setStats(statsResult)
       setItems(listResult.items || [])
       setArchiveStats(archiveResult)
-      const q = search.trim()
+      const q = searchRef.current.trim()
       if (q) {
         const searchResult = await memoryController.search(q)
         setSearchResults(searchResult.results || [])
@@ -51,7 +54,7 @@ export function useMemoryData(): UseMemoryDataReturn {
     } finally {
       setLoading(false)
     }
-  }, [addToast, search])
+  }, [addToast])
 
   useEffect(() => {
     let active = true

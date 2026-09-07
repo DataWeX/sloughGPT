@@ -119,7 +119,7 @@ export const sessionController = {
   },
 
   async delete(id: string): Promise<void> {
-    await apiDelete(`/chat/sessions/${id}`)
+    await apiDelete(`/chat/sessions/${encodeURIComponent(id)}`)
   },
 
   async search(q: string, limit = 20): Promise<SearchResult[]> {

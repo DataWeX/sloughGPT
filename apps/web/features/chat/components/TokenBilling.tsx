@@ -134,7 +134,7 @@ export const TokenBilling = memo(function TokenBilling({
             </span>
           )}
         </div>
-        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={fetchData}>
+        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={fetchData} aria-label="Refresh token balance">
           <IconRefresh className="h-3 w-3" />
         </Button>
       </div>

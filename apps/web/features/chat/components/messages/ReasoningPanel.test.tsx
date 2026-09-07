@@ -24,7 +24,8 @@ describe('ReasoningPanel', () => {
 
   it('hides dots when not thinking', () => {
     render(<ReasoningPanel isThinking={false} />)
-    const dots = screen.getByLabelText('Show reasoning').querySelector('[aria-hidden="true"]')
+    const btn = screen.getByLabelText('Show reasoning')
+    const dots = btn.querySelector('.animate-bounce')
     expect(dots).toBeNull()
   })
 

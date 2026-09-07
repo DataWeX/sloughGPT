@@ -3,11 +3,15 @@ import { render, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 
 const mockSend = vi.fn()
+const mockStream = vi.fn()
 const mockAdd = vi.fn()
 const mockAddToast = vi.fn()
 
 vi.mock('@/lib/chat-controller', () => ({
-  chatController: { send: (...args: any[]) => mockSend(...args) },
+  chatController: {
+    send: (...args: any[]) => mockSend(...args),
+    stream: (...args: any[]) => mockStream(...args),
+  },
 }))
 
 vi.mock('@/lib/knowledge-controller', () => ({
@@ -68,19 +72,19 @@ describe('QuickActions', () => {
     expect(container.textContent).toContain('Quick note')
   })
 
-  it('calls chatController.send when Test model clicked', async () => {
-    mockSend.mockResolvedValue({ message: 'Hello back!' })
+  it('calls chatController.stream when Test model clicked', async () => {
+    mockStream.mockImplementation(async function* () { yield 'Hello back!' })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
     const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith('Hello!', { waitForModel: true })
+      expect(mockStream).toHaveBeenCalledWith('Hello!', { waitForModel: true })
     })
   })
 
   it('shows test response after model responds', async () => {
-    mockSend.mockResolvedValue({ message: 'Hello back!' })
+    mockStream.mockImplementation(async function* () { yield 'Hello back!' })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
     const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
@@ -91,7 +95,7 @@ describe('QuickActions', () => {
   })
 
   it('shows error when model call fails', async () => {
-    mockSend.mockRejectedValue(new Error('Connection refused'))
+    mockStream.mockImplementation(async function* () { throw new Error('Connection refused') })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
     const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
@@ -103,7 +107,10 @@ describe('QuickActions', () => {
 
   it('disables button while testing', async () => {
     let resolveTest: any
-    mockSend.mockImplementation(() => new Promise(r => { resolveTest = r }))
+    mockStream.mockImplementation(async function* () {
+      await new Promise(r => { resolveTest = r })
+      yield 'done'
+    })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
     const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
@@ -111,7 +118,7 @@ describe('QuickActions', () => {
     await waitFor(() => {
       expect(container.textContent).toContain('Testing...')
     })
-    resolveTest({ message: 'done' })
+    resolveTest()
   })
 
   it('saves knowledge note on form submit', async () => {

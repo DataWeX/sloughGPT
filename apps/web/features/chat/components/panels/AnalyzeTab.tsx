@@ -3,6 +3,7 @@
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload, IconX, IconRefresh, IconSend, IconDownload, IconAlert } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import type { UseVisionStudioReturn } from './useVisionStudio'
 
 interface AnalyzeTabProps {
@@ -62,9 +63,7 @@ export function AnalyzeTab({ vs, onSendText }: AnalyzeTabProps) {
       )}
 
       {vs.analyzeError && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-          {vs.analyzeError}
-        </div>
+        <StatusBanner variant="error" message={vs.analyzeError} dismissible={false} />
       )}
 
       {vs.analyzeResult && (

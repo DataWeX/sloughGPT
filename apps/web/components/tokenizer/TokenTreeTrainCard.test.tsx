@@ -27,6 +27,13 @@ vi.mock('@sloughgpt/strui', () => ({
     <button onClick={onClick} disabled={disabled}>{children}</button>
   ),
   IconRefresh: () => <span />,
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message }: { variant: string; message: string }) => (
+    <div data-variant={variant}>{message}</div>
+  ),
 }))
 
 import { TokenTreeTrainCard } from './TokenTreeTrainCard'

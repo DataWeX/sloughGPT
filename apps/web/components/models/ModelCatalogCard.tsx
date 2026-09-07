@@ -2,7 +2,7 @@
 
 import { useState, useEffect, memo } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, Card, CardContent, CardHeader, CardTitle, Progress } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Spinner } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconStar } from '@sloughgpt/strui'
 import { catalogIdMatchesRuntime } from '@/lib/inference-display'
@@ -209,7 +209,7 @@ export default memo(function ModelCatalogCard({ models, modelsLoading, activeRun
                           {isLoading
                             ? (conversionStatus && conversionStatus.stage !== 'idle'
                                 ? `${Math.round(conversionStatus.progress * 100)}%`
-                                : <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />)
+                                : <Spinner size="xs" />)
                             : warmingModel === model.id ? 'Warming…' : isLoaded ? 'Loaded' : 'Load'}
                         </Button>
                       )}

@@ -164,8 +164,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
               />
             </div>
             <div>
-              <label className="text-sm font-medium">GitHub</label>
+              <label htmlFor="card-gh" className="text-sm font-medium">GitHub</label>
               <input
+                id="card-gh"
                 type="text"
                 value={gh}
                 onChange={(e) => setGh(e.target.value)}

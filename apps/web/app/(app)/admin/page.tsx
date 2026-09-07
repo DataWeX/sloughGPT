@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import {
-  Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton,
+  Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, Spinner,
   Tabs, TabsList, TabsTrigger, TabsContent,
 } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
@@ -364,7 +364,7 @@ export default function AdminPage() {
                   disabled={loadingMore || !historyMode}
                 >
                   {loadingMore ? (
-                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    <Spinner size="sm" />
                   ) : (
                     'Load older'
                   )}

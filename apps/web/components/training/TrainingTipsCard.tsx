@@ -75,10 +75,10 @@ function generateTips(checkpoints: Checkpoint[]): TrainingTip[] {
   return tips
 }
 
-const TIP_STYLES: Record<TrainingTip['type'], { icon: string; bg: string }> = {
-  info: { icon: 'ℹ️', bg: 'bg-muted/50' },
-  warning: { icon: '⚠️', bg: 'bg-warning/5' },
-  success: { icon: '✓', bg: 'bg-success/5' },
+const TIP_STYLES: Record<TrainingTip['type'], { icon: string; border: string; bg: string }> = {
+  info: { icon: 'ℹ️', border: 'border-l-muted-foreground/30', bg: 'bg-muted/30' },
+  warning: { icon: '⚠️', border: 'border-l-warning', bg: 'bg-warning/5' },
+  success: { icon: '✓', border: 'border-l-success', bg: 'bg-success/5' },
 }
 
 export const TrainingTipsCard = memo(function TrainingTipsCard({ checkpoints, loading }: TrainingTipsCardProps) {
@@ -108,13 +108,13 @@ export const TrainingTipsCard = memo(function TrainingTipsCard({ checkpoints, lo
         <CardTitle className="text-base">Training tips</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {tips.map((tip, i) => {
             const styles = TIP_STYLES[tip.type]
             return (
               <div
                 key={i}
-                className={`flex items-start gap-2 text-xs p-2 rounded ${styles.bg}`}
+                className={`flex items-start gap-2 text-[11px] p-2 rounded-lg border-l-2 ${styles.border} ${styles.bg}`}
               >
                 <span className="shrink-0 mt-0.5">{styles.icon}</span>
                 <span className="text-muted-foreground">{tip.message}</span>

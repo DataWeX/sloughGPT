@@ -108,26 +108,26 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
           <p className="text-xs text-muted-foreground">Loading...</p>
         ) : error ? (
           <div className="text-center py-4">
-            <p className="text-sm text-destructive mb-2">{error}</p>
+            <p className="text-xs text-destructive mb-2">{error}</p>
             <Button size="sm" variant="ghost" onClick={() => void fetchData()} aria-label="Retry loading training data">Retry</Button>
           </div>
         ) : stats ? (
-          <div className="grid grid-cols-4 gap-2 text-center text-xs">
-            <div className="rounded bg-muted/30 p-2">
-              <p className="text-muted-foreground">Total</p>
-              <p className="font-medium">{stats.total}</p>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.total}</p>
             </div>
-            <div className="rounded bg-muted/30 p-2">
-              <p className="text-muted-foreground">Pending</p>
-              <p className="font-medium">{stats.pending}</p>
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Pending</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.pending}</p>
             </div>
-            <div className="rounded bg-muted/30 p-2">
-              <p className="text-muted-foreground">Synced</p>
-              <p className="font-medium">{stats.synced}</p>
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Synced</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.synced}</p>
             </div>
-            <div className="rounded bg-muted/30 p-2">
-              <p className="text-muted-foreground">Used</p>
-              <p className="font-medium">{stats.used}</p>
+            <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Used</p>
+              <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.used}</p>
             </div>
           </div>
         ) : null}
@@ -148,28 +148,28 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
         ) : pairs.length === 0 ? (
           <p className="text-xs text-muted-foreground">No training pairs found.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {pairs.map(p => (
-              <div key={p.id} className="rounded border p-3 text-sm">
+              <div key={p.id} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-xs text-muted-foreground truncate">User: {p.user_msg}</p>
-                    <p className="text-xs truncate">Assistant: {p.assistant_msg}</p>
-                    <div className="flex gap-2 text-[10px] text-muted-foreground">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <p className="text-[11px] text-muted-foreground/60 truncate">User: {p.user_msg}</p>
+                    <p className="text-xs truncate">{p.assistant_msg}</p>
+                    <div className="flex gap-2 text-[10px] text-muted-foreground/50">
                       <span>Quality: {p.quality}</span>
                       <span>{new Date(p.timestamp).toLocaleDateString()}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <Select value={String(p.quality)} onValueChange={v => void handleUpdateQuality(p.id, Number(v))}>
-                      <SelectTrigger className="h-7 w-14 text-xs" aria-label="Quality rating">
+                      <SelectTrigger className="h-6 w-12 text-[10px]" aria-label="Quality rating">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {[1, 2, 3, 4, 5].map(q => <SelectItem key={q} value={String(q)}>{q}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleDelete(p.id)} aria-label={`Delete training pair ${p.id.slice(0, 8)}`}>
+                    <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={() => void handleDelete(p.id)} aria-label={`Delete training pair ${p.id.slice(0, 8)}`}>
                       Delete
                     </Button>
                   </div>

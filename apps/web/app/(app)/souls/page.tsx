@@ -7,7 +7,7 @@ import {
   SearchInput, Slider, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   Tabs, TabsList, TabsTrigger, TabsContent, AlertDialog, AlertDialogAction,
   AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, cn,
+  AlertDialogHeader, AlertDialogTitle, cn, Spinner,
 } from '@sloughgpt/strui'
 import { IconRefresh, IconPlus, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
@@ -558,7 +558,7 @@ export default function SoulsPage() {
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                         <Button size="sm" variant="ghost" onClick={() => handleLoadCheckpoint(cp.name)} disabled={loadingCheckpoint === cp.name}>
                           {loadingCheckpoint === cp.name ? (
-                            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            <Spinner size="sm" />
                           ) : 'Load'}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => handleDownloadCheckpoint(cp.name)} aria-label="Download checkpoint">

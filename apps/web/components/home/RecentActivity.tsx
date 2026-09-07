@@ -42,30 +42,30 @@ export function RecentActivity({ apiStatus, loading, modelStatus, recentSessions
     <>
       <Card>
         <CardContent className="py-3">
-          <p className="text-sm font-medium mb-2">Recent activity</p>
-          <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Recent activity</p>
+          <div className="space-y-0.5">
             {recentSessions.slice(0, 3).map(s => (
               <button
                  key={s.id}
                  type="button"
                  onClick={() => router.push(`/chat?session=${s.id}`)}
-                 className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                 className="w-full flex items-center gap-2.5 text-left hover:bg-muted/30 rounded-lg px-2 py-1.5 transition-colors group"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
-                <span className="text-xs truncate flex-1">{s.name}</span>
-                {s.starred && <span className="text-xs shrink-0">★</span>}
-                {s.pinned && <span className="text-xs text-primary shrink-0">📌</span>}
-                <span className="text-xs text-muted-foreground shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/50 shrink-0 group-hover:bg-primary transition-colors" />
+                <span className="text-xs truncate flex-1 font-medium">{s.name}</span>
+                {s.starred && <span className="text-xs shrink-0 text-warning">★</span>}
+                {s.pinned && <span className="text-xs shrink-0 text-primary">📌</span>}
+                <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">
                   {s.message_count != null && <span>{s.message_count}m · </span>}
                   {timeAgo(s.updated_at)}
                 </span>
               </button>
             ))}
             {recentJobs.slice(0, 2).map(j => (
-              <div key={j.id} className="flex items-center gap-2 px-1.5 py-1">
+              <div key={j.id} className="flex items-center gap-2.5 px-2 py-1.5">
                 <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', j.status === 'running' ? 'bg-success animate-pulse' : j.status === 'completed' ? 'bg-success' : j.status === 'failed' ? 'bg-destructive' : 'bg-muted-foreground/40')} />
-                <span className="text-xs truncate flex-1">{j.name || j.id}</span>
-                <span className={cn('text-xs px-1.5 py-0.5 rounded font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
+                <span className="text-xs truncate flex-1 font-medium">{j.name || j.id}</span>
+                <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', j.status === 'running' ? 'bg-warning/15 text-warning' : j.status === 'completed' ? 'bg-success/15 text-success' : j.status === 'failed' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>{j.status}</span>
               </div>
             ))}
           </div>
@@ -76,21 +76,21 @@ export function RecentActivity({ apiStatus, loading, modelStatus, recentSessions
         <Card>
           <CardContent className="py-3">
             <div className="flex items-center gap-2 mb-2">
-              <p className="text-sm font-medium">Recent datasets</p>
-              <Link href="/datasets" prefetch={false} className="text-xs text-primary hover:text-primary/80 ml-auto">View all →</Link>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Recent datasets</p>
+              <Link href="/datasets" prefetch={false} className="text-[10px] text-primary hover:text-primary/80 ml-auto">View all →</Link>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-0.5">
               {recentDatasets.map(ds => (
                 <button
                   key={ds.id}
                   type="button"
                   onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
-                  className="w-full flex items-center gap-2 text-left hover:bg-muted/30 rounded px-1.5 py-1 transition-colors"
+                  className="w-full flex items-center gap-2.5 text-left hover:bg-muted/30 rounded-lg px-2 py-1.5 transition-colors group"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent/60 shrink-0" />
-                  <span className="text-xs truncate flex-1">{ds.name}</span>
-                  {ds.samples != null && <span className="text-xs text-muted-foreground shrink-0">{ds.samples.toLocaleString()} samples</span>}
-                  <span className="text-xs text-primary shrink-0">Train →</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent/50 shrink-0 group-hover:bg-accent transition-colors" />
+                  <span className="text-xs truncate flex-1 font-medium">{ds.name}</span>
+                  {ds.samples != null && <span className="text-[10px] text-muted-foreground/50 shrink-0 tabular-nums">{ds.samples.toLocaleString()} samples</span>}
+                  <span className="text-[10px] text-primary/60 shrink-0 group-hover:text-primary transition-colors">Train →</span>
                 </button>
               ))}
             </div>

@@ -150,3 +150,16 @@
 {"id": "test-30", "title": "Tests: slonet kernels (17 tests) + utils (31 tests)", "column": "done", "created": "2026-09-06", "status": "completed"}
 {"id": "test-31", "title": "Tests: SloCrossAttention (14 tests) + NumpyKVState", "column": "done", "created": "2026-09-06", "status": "completed"}
 {"id": "test-32", "title": "Tests: generate (22 tests) + serialization (13 tests)", "column": "done", "created": "2026-09-06", "status": "completed"}
+{"id":"test-33","title":"Tests: quantization (14 tests) + compression (19 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-34","title":"Tests: lr_schedulers (22 tests) + model_utils (11 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-35","title":"Tests: token_tree (18 tests) + tokenizer_bpe (14 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-36","title":"Tests: lora (26 tests) + rlhf (13 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-37","title":"Tests: performance (17 tests) + distillation (13 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-38","title":"Tests: export (25 tests) + tokenizer_manager (10 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-39","title":"Tests: tracking (11 tests) + auto_trainer (6 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-40","title":"Tests: chat_trainer (5 tests) + state (9 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-41","title":"Tests: dataset_manifest (12 tests) + ewc (13 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-42","title":"Tests: training_advisor (10 tests) + auto_config (10 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-43","title":"Tests: hf_loader (7 tests) + gpu_accelerator (11 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-44","title":"Tests: hf_lora_finetune (5 tests) + mobile_store (3 tests)","column":"done","created":"2026-09-06"}
+{"id":"test-46","title":"Tests: dataset (5 tests) + trainer_protocol (7 tests)","column":"done","created":"2026-09-06"}

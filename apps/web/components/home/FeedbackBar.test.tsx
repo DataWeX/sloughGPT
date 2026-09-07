@@ -58,12 +58,12 @@ describe('FeedbackBar', () => {
 
   it('shows positive ratio when >= 50%', () => {
     const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.8 })} />)
-    expect(container.textContent).toContain('80% positive')
+    expect(container.textContent).toContain('80%')
   })
 
   it('shows warning ratio when < 50%', () => {
     const { container } = render(<FeedbackBar loading={false} feedbackStats={makeStats({ ratio: 0.3 })} />)
-    expect(container.textContent).toContain('30% positive')
+    expect(container.textContent).toContain('30%')
   })
 
   it('links to training page', () => {

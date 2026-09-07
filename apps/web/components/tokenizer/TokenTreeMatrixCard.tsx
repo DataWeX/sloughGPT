@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type MatrixSummary } from '@/lib/token-tree-controller'
 
@@ -62,9 +63,7 @@ export function TokenTreeMatrixCard() {
             <Skeleton className="h-6 w-full rounded" />
           </div>
         ) : failed ? (
-          <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
-            Could not load the embedding matrix overview.
-          </div>
+          <StatusBanner variant="error" message="Could not load the embedding matrix overview." dismissible={false} />
         ) : summary && summary.matrix === null ? (
           <div className="text-center py-6 text-sm text-muted-foreground">
             Embeddings are disabled for this tree. Train with embed-dim &gt; 0 to generate an embedding matrix.

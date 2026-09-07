@@ -2,8 +2,13 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import React from 'react'
 
+const mockGenerateStream = vi.fn()
+
 vi.mock('@/lib/generate-controller', () => ({
-  generateController: { generate: vi.fn() },
+  generateController: {
+    generate: vi.fn(),
+    generateStream: (...args: any[]) => mockGenerateStream(...args),
+  },
 }))
 vi.mock('@sloughgpt/strui', async () => {
   const actual = await vi.importActual<typeof import('@sloughgpt/strui')>('@sloughgpt/strui')
@@ -25,7 +30,6 @@ vi.mock('@sloughgpt/strui', async () => {
 })
 
 import ModelPlaygroundCard from './ModelPlaygroundCard'
-import { generateController } from '@/lib/generate-controller'
 
 describe('ModelPlaygroundCard', () => {
   afterEach(cleanup)
@@ -70,16 +74,29 @@ describe('ModelPlaygroundCard', () => {
     expect(btn.disabled).toBe(false)
   })
 
-  it('calls generate on Generate click', async () => {
-    vi.mocked(generateController.generate).mockResolvedValue({ text: 'hello output', tokens_generated: 2 })
+  it('calls generateStream on Generate click', async () => {
+    mockGenerateStream.mockImplementation(async (_req: any, onToken: any, onDone: any) => {
+      onToken('hello output')
+      onDone()
+    })
     render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
     fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 'hi' } })
     fireEvent.click(screen.getByText('Generate'))
-    expect(vi.mocked(generateController.generate)).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'hi' }))
+    await waitFor(() => {
+      expect(mockGenerateStream).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: 'hi' }),
+        expect.any(Function),
+        expect.any(Function),
+        expect.any(Function),
+      )
+    })
   })
 
   it('displays generated output', async () => {
-    vi.mocked(generateController.generate).mockResolvedValue({ text: 'model response', tokens_generated: 3 })
+    mockGenerateStream.mockImplementation(async (_req: any, onToken: any, onDone: any) => {
+      onToken('model response')
+      onDone()
+    })
     render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
     fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 'test' } })
     fireEvent.click(screen.getByText('Generate'))
@@ -87,23 +104,20 @@ describe('ModelPlaygroundCard', () => {
   })
 
   it('shows error message on generate failure', async () => {
-    vi.mocked(generateController.generate).mockRejectedValue(new Error('OOM'))
+    mockGenerateStream.mockImplementation(async (_req: any, _onToken: any, _onDone: any, onError: any) => {
+      onError('OOM')
+    })
     render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
     fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 'fail' } })
     fireEvent.click(screen.getByText('Generate'))
     await waitFor(() => expect(screen.getByText('Error: OOM')).toBeDefined())
   })
 
-  it('shows "No output" when result.text is empty', async () => {
-    vi.mocked(generateController.generate).mockResolvedValue({ text: '', tokens_generated: 0 })
-    render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
-    fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 'empty' } })
-    fireEvent.click(screen.getByText('Generate'))
-    await waitFor(() => expect(screen.getByText('No output')).toBeDefined())
-  })
-
   it('Clear button resets prompt and output', async () => {
-    vi.mocked(generateController.generate).mockResolvedValue({ text: 'done', tokens_generated: 1 })
+    mockGenerateStream.mockImplementation(async (_req: any, onToken: any, onDone: any) => {
+      onToken('done')
+      onDone()
+    })
     render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
     fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 'x' } })
     fireEvent.click(screen.getByText('Generate'))
@@ -114,22 +128,34 @@ describe('ModelPlaygroundCard', () => {
   })
 
   it('shows Generating... while request is pending', async () => {
-    let resolve: any
-    vi.mocked(generateController.generate).mockImplementation(() => new Promise(r => { resolve = r }))
+    let resolveStream: any
+    mockGenerateStream.mockImplementation((_req: any, onToken: any, onDone: any) => {
+      return new Promise(r => { resolveStream = { onToken, onDone, r } })
+    })
     render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
     fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 'wait' } })
     fireEvent.click(screen.getByText('Generate'))
     await waitFor(() => expect(screen.getAllByText('Generating...').length).toBeGreaterThanOrEqual(1))
-    resolve({ text: 'ok', tokens_generated: 1 })
+    resolveStream.onToken('ok')
+    resolveStream.onDone()
+    resolveStream.r()
   })
 
-  it('applies temperature to generate call', () => {
-    vi.mocked(generateController.generate).mockResolvedValue({ text: '', tokens_generated: 0 })
+  it('applies temperature to generate call', async () => {
+    mockGenerateStream.mockImplementation(async (_req: any, onToken: any, onDone: any) => {
+      onToken('')
+      onDone()
+    })
     render(<ModelPlaygroundCard activeRuntimeId="gpt2" />)
     fireEvent.change(screen.getByPlaceholderText(/Enter a prompt to test/), { target: { value: 't' } })
     fireEvent.click(screen.getByText('Generate'))
-    expect(vi.mocked(generateController.generate)).toHaveBeenCalledWith(
-      expect.objectContaining({ temperature: 0.7, max_new_tokens: 100 })
-    )
+    await waitFor(() => {
+      expect(mockGenerateStream).toHaveBeenCalledWith(
+        expect.objectContaining({ temperature: 0.7, max_new_tokens: 100 }),
+        expect.any(Function),
+        expect.any(Function),
+        expect.any(Function),
+      )
+    })
   })
 })

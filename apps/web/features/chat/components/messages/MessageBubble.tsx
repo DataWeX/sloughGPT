@@ -161,12 +161,12 @@ export const MessageBubble = memo(function MessageBubble({
 
       <div
         className={cn(
-          "relative rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 max-w-[90%] sm:max-w-[80%] lg:max-w-[72%] transition-all duration-200 leading-relaxed",
+          "relative rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-full transition-all duration-200 leading-relaxed",
           role === 'user'
-            ? 'bg-primary text-primary-foreground rounded-br-md shadow-md'
-            : 'bg-card text-foreground rounded-bl-md border border-border/40 shadow-sm',
-          isStreaming && role === 'assistant' && "ring-1 ring-primary/20 animate-pulse",
-          isError && role === 'assistant' && "ring-1 ring-destructive/40 border-destructive/30"
+            ? 'bg-primary text-primary-foreground rounded-br-md shadow-md max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] ml-auto'
+            : 'bg-card text-foreground rounded-bl-md shadow-sm',
+          isStreaming && role === 'assistant' && "ring-1 ring-primary/20",
+          isError && role === 'assistant' && "ring-1 ring-destructive/40 border border-destructive/30"
         )}
       >
         {images && images.length > 0 && <MessageImages images={images} role={role} />}

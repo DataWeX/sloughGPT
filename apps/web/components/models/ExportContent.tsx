@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh, Spinner } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
@@ -135,20 +136,13 @@ export default function ExportContent() {
   return (
     <>
       {exportResult && (
-        <div className="rounded-md bg-success/10 border border-success/20 px-4 py-3 text-sm text-success">
-          {exportResult}
-        </div>
+        <StatusBanner variant="success" message={exportResult} dismissible={false} />
       )}
       {exportError && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          {exportError}
-          <button type="button" className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
-        </div>
+        <StatusBanner variant="error" message={exportError} dismissible={false} />
       )}
       {formatLoadError && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          {formatLoadError}
-        </div>
+        <StatusBanner variant="error" message={formatLoadError} dismissible={false} />
       )}
 
       <ExportHistoryCard />
@@ -188,7 +182,7 @@ export default function ExportContent() {
           >
             {exporting ? (
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <Spinner size="xs" />
                 Exporting...
               </span>
             ) : (
@@ -218,7 +212,7 @@ export default function ExportContent() {
             >
               {exportingPairs ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <Spinner size="xs" />
                   Exporting...
                 </span>
               ) : (
