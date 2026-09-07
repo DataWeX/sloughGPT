@@ -84,9 +84,9 @@ async def start_distillation(
         "teacher_model": request.teacher_model,
         "config": request.model_dump(),
     }
-    training_jobs[job_id] = job
     cancel_event = threading.Event()
-    training_jobs[job_id]["_cancel_event"] = cancel_event
+    job["_cancel_event"] = cancel_event
+    training_jobs[job_id] = job
 
     try:
         from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
@@ -182,6 +182,11 @@ async def start_distillation(
                 _finish_job(job_id, "failed", "Not enough data for training")
                 return
 
+            MIN_SAMPLES = 10
+            if len(inputs_list) < MIN_SAMPLES:
+                _finish_job(job_id, "failed", f"Not enough training samples: {len(inputs_list)} (minimum {MIN_SAMPLES})")
+                return
+
             inputs_np = np.array(inputs_list, dtype=np.int64)
             targets_np = np.array(targets_list, dtype=np.int64)
             n_samples = len(inputs_np)
@@ -243,6 +248,12 @@ async def start_distillation(
 
                     losses = trainer.step(bx, by)
                     batch_loss = losses.get("total_loss", 0.0)
+
+                    # NaN/Inf guard
+                    if not np.isfinite(batch_loss):
+                        logger.warning("Distill: non-finite loss (%s), skipping batch", batch_loss)
+                        continue
+
                     epoch_loss += batch_loss
                     n_batches += 1
 
