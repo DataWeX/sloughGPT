@@ -110,6 +110,14 @@ class Process:
     _pid: Optional[int] = field(default=None, repr=False)
     _last_heartbeat: Optional[float] = field(default=None, repr=False)
     _restart_policy: Optional["RestartPolicy"] = field(default=None, repr=False)
+    _stream_results: List[Any] = field(default_factory=list, repr=False)
+    _progress: float = field(default=0.0, repr=False)
+    _progress_message: str = field(default="", repr=False)
+    _on_complete: List[Callable] = field(default_factory=list, repr=False)
+    _on_fail: List[Callable] = field(default_factory=list, repr=False)
+    _on_cancel: List[Callable] = field(default_factory=list, repr=False)
+    _on_stream: List[Callable] = field(default_factory=list, repr=False)
+    _on_progress: List[Callable] = field(default_factory=list, repr=False)
 
     def ready(self) -> None:
         self.status = ProcessStatus.READY
@@ -123,21 +131,80 @@ class Process:
         self.result = result
         self.completed_at = time.time()
         self._done_event.set()
+        for cb in self._on_complete:
+            try:
+                cb(self)
+            except Exception:
+                pass
 
     def fail(self, error: str) -> None:
         self.status = ProcessStatus.FAILED
         self.error = error
         self.completed_at = time.time()
         self._done_event.set()
+        for cb in self._on_fail:
+            try:
+                cb(self)
+            except Exception:
+                pass
 
     def cancel(self) -> None:
         self.status = ProcessStatus.CANCELLED
         self.completed_at = time.time()
         self._cancel_event.set()
         self._done_event.set()
+        for cb in self._on_cancel:
+            try:
+                cb(self)
+            except Exception:
+                pass
 
     def wait_cancel(self, timeout: float = None) -> None:
         self._cancel_event.wait(timeout=timeout)
+
+    def emit(self, value: Any) -> None:
+        self._stream_results.append(value)
+        for cb in self._on_stream:
+            try:
+                cb(self, value)
+            except Exception:
+                pass
+
+    @property
+    def stream_results(self) -> List[Any]:
+        return self._stream_results
+
+    @property
+    def progress(self) -> float:
+        return self._progress
+
+    @property
+    def progress_message(self) -> str:
+        return self._progress_message
+
+    def on_complete(self, callback: Callable) -> None:
+        self._on_complete.append(callback)
+
+    def on_fail(self, callback: Callable) -> None:
+        self._on_fail.append(callback)
+
+    def on_cancel(self, callback: Callable) -> None:
+        self._on_cancel.append(callback)
+
+    def on_stream(self, callback: Callable) -> None:
+        self._on_stream.append(callback)
+
+    def on_progress(self, callback: Callable) -> None:
+        self._on_progress.append(callback)
+
+    def report_progress(self, value: float, message: str = "") -> None:
+        self._progress = max(0.0, min(1.0, value))
+        self._progress_message = message
+        for cb in self._on_progress:
+            try:
+                cb(self, self._progress, message)
+            except Exception:
+                pass
 
     @property
     def is_cancelled(self) -> bool:
@@ -176,6 +243,8 @@ class Process:
             "depends_on": self.depends_on,
             "is_done": self.is_done,
             "is_cancelled": self.is_cancelled,
+            "progress": self._progress,
+            "stream_count": len(self._stream_results),
         }
 
 
@@ -388,6 +457,8 @@ class EngineMetrics:
         self._dispatched = 0
         self._total_latency = 0.0
         self._start_time = time.monotonic()
+        self._total_memory_bytes = 0
+        self._peak_memory_bytes = 0
 
     def record_spawn(self) -> None:
         with self._lock:
@@ -419,6 +490,12 @@ class EngineMetrics:
         with self._lock:
             self._dispatched += count
 
+    def record_memory(self, bytes_used: int) -> None:
+        with self._lock:
+            self._total_memory_bytes += bytes_used
+            if bytes_used > self._peak_memory_bytes:
+                self._peak_memory_bytes = bytes_used
+
     def snapshot(self) -> dict:
         with self._lock:
             elapsed = time.monotonic() - self._start_time
@@ -434,6 +511,8 @@ class EngineMetrics:
                 "avg_latency_s": self._total_latency / max(1, self._completed),
                 "throughput_per_s": self._completed / max(0.001, elapsed),
                 "error_rate": self._failed / max(1, total),
+                "total_memory_bytes": self._total_memory_bytes,
+                "peak_memory_bytes": self._peak_memory_bytes,
             }
 
     def reset(self) -> None:
@@ -447,6 +526,8 @@ class EngineMetrics:
             self._dispatched = 0
             self._total_latency = 0.0
             self._start_time = time.monotonic()
+            self._total_memory_bytes = 0
+            self._peak_memory_bytes = 0
 
 
 class SubprocessProcess:
@@ -730,7 +811,7 @@ class ProcessGroup:
         starts = [p.started_at for p in self._processes if p.started_at]
         ends = [p.completed_at or time.time() for p in self._processes]
         if not starts:
-            return None
+            return 0.0
         return max(ends) - min(starts)
 
     def results(self) -> List[Any]:
@@ -746,6 +827,10 @@ class ProcessGroup:
                 p.cancel()
                 count += 1
         return count
+
+    def gather(self, timeout: float = None) -> List[Any]:
+        self.wait(timeout=timeout)
+        return self.results()
 
     def wait(self, timeout: float = None) -> None:
         deadline = time.time() + timeout if timeout else None
@@ -907,6 +992,8 @@ class ResultCache:
         self._cache: Dict[str, Any] = {}
         self._timestamps: Dict[str, float] = {}
         self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
 
     def _key(self, fn: Callable, args: tuple, kwargs: dict) -> str:
         return f"{fn.__name__}:{args}:{sorted(kwargs.items())}"
@@ -918,8 +1005,11 @@ class ResultCache:
                 if self.ttl and time.monotonic() - self._timestamps[key] > self.ttl:
                     del self._cache[key]
                     del self._timestamps[key]
+                    self._misses += 1
                     return False, None
+                self._hits += 1
                 return True, self._cache[key]
+            self._misses += 1
         return False, None
 
     def put(self, fn: Callable, args: tuple, kwargs: dict, result: Any) -> None:
@@ -932,20 +1022,27 @@ class ResultCache:
             self._cache[key] = result
             self._timestamps[key] = time.monotonic()
 
-    def invalidate(self, fn: Callable = None) -> int:
+    def invalidate(self, fn: Callable = None, args: tuple = None, kwargs: dict = None) -> bool:
         with self._lock:
-            if fn is None:
-                count = len(self._cache)
+            if fn is None and args is None and kwargs is None:
+                had_items = len(self._cache) > 0
                 self._cache.clear()
                 self._timestamps.clear()
-                return count
+                return had_items
+            if args is not None and kwargs is not None:
+                key = self._key(fn, args, kwargs)
+                if key in self._cache:
+                    del self._cache[key]
+                    del self._timestamps[key]
+                    return True
+                return False
             count = 0
             to_remove = [k for k in self._cache if fn.__name__ in k]
             for k in to_remove:
                 del self._cache[k]
                 del self._timestamps[k]
                 count += 1
-            return count
+            return count > 0
 
     def clear(self) -> int:
         with self._lock:
@@ -956,10 +1053,14 @@ class ResultCache:
 
     def stats(self) -> dict:
         with self._lock:
+            total = self._hits + self._misses
             return {
                 "size": len(self._cache),
                 "maxsize": self.maxsize,
                 "ttl": self.ttl,
+                "hits": self._hits,
+                "misses": self._misses,
+                "hit_rate": self._hits / max(1, total),
             }
 
     @property
@@ -1040,6 +1141,17 @@ class Engine:
             proc.depends_on = list(depends_on)
             for dep_id in depends_on:
                 self._dependents.setdefault(dep_id, []).append(proc.id)
+
+        # Check cache for hit
+        if self._cache is not None:
+            hit, cached = self._cache.get(fn, args, kwargs)
+            if hit:
+                proc.complete(cached)
+                self._processes[proc.id] = proc
+                self._completed.append(proc)
+                self._metrics.record_complete(proc)
+                return proc
+
         self._processes[proc.id] = proc
         self._pending.append(proc)
         self._all_done_event.clear()
@@ -1453,6 +1565,119 @@ class Engine:
             "cache": self._cache.stats() if self._cache else None,
             "subprocess_config": subprocess_config,
         }
+
+    def reset(self) -> None:
+        with self._lock:
+            self._processes.clear()
+            self._pending.clear()
+            self._completed.clear()
+            self._dependents.clear()
+            self._all_done_event.set()
+
+    def summary(self) -> str:
+        counts = {}
+        for p in self._processes.values():
+            counts[p.status.value] = counts.get(p.status.value, 0) + 1
+        parts = [f"{k}={v}" for k, v in sorted(counts.items())]
+        return f"Engine '{self.name}': processes={len(self._processes)} ({', '.join(parts) if parts else 'none'})"
+
+    def dispatch_batch(self, max_count: int = None) -> int:
+        if max_count is None:
+            max_count = self._dispatch_batch_size
+        if not self._pending:
+            return 0
+        batch = self._pending[:max_count]
+        self._pending = self._pending[max_count:]
+        dispatched = 0
+        for proc in batch:
+            self._dispatch_process(proc)
+            dispatched += 1
+        self._metrics.record_dispatch(dispatched)
+        return dispatched
+
+    def cancel_all(self, status: ProcessStatus = None) -> int:
+        count = 0
+        for proc in list(self._processes.values()):
+            if proc.is_done:
+                continue
+            if status is not None and proc.status != status:
+                continue
+            proc.cancel()
+            count += 1
+        return count
+
+    def dependency_graph(self) -> dict:
+        nodes = []
+        edges = []
+        for proc in self._processes.values():
+            nodes.append(proc.id)
+            for dep_id in proc.depends_on:
+                edges.append({"from": dep_id, "to": proc.id})
+        return {"nodes": nodes, "edges": edges}
+
+    def critical_path(self) -> List[str]:
+        if not self._processes:
+            return []
+        # Build adjacency and find longest path via DFS
+        dep_of: Dict[str, List[str]] = {}
+        for proc in self._processes.values():
+            for dep_id in proc.depends_on:
+                dep_of.setdefault(dep_id, []).append(proc.id)
+
+        memo: Dict[str, List[str]] = {}
+        def _longest_path(pid: str) -> List[str]:
+            if pid in memo:
+                return memo[pid]
+            children = dep_of.get(pid, [])
+            if not children:
+                memo[pid] = [pid]
+                return [pid]
+            best = []
+            for child in children:
+                path = _longest_path(child)
+                if len(path) > len(best):
+                    best = path
+            result = [pid] + best
+            memo[pid] = result
+            return result
+
+        # Find roots (processes with no dependents)
+        all_children = set()
+        for children in dep_of.values():
+            all_children.update(children)
+        roots = [p.id for p in self._processes.values() if p.id not in all_children]
+        if not roots:
+            roots = list(self._processes.keys())
+
+        best_path = []
+        for root in roots:
+            path = _longest_path(root)
+            if len(path) > len(best_path):
+                best_path = path
+        return best_path
+
+    def orphan_processes(self) -> List[Process]:
+        return [p for p in self._processes.values() if p.depends_on and not self._deps_met(p)]
+
+    def spawn_batch(self, items: list) -> List[Process]:
+        procs = []
+        for item in items:
+            if not item:
+                continue
+            fn = item[0]
+            args = tuple(item[1:]) if len(item) > 1 else ()
+            procs.append(self.spawn(fn, *args))
+        return procs
+
+    def save_state(self, path: str) -> None:
+        import json
+        state = {
+            "name": self.name,
+            "processes": {pid: p.to_dict() for pid, p in self._processes.items()},
+            "metrics": self._metrics.snapshot(),
+        }
+        with open(path, "w") as f:
+            json.dump(state, f, indent=2, default=str)
 
     def install_signal_handlers(self) -> None:
         import signal
