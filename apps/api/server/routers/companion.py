@@ -206,7 +206,7 @@ class CompanionRouter:
         """Get the current system prompt."""
         try:
             companion = self._get_companion()
-            return success_response(data={"system_prompt": companion.build_system_prompt()})
+            return success_response(data={"system_prompt": companion.get_system_prompt()})
         except Exception as e:
             classify_and_raise(e, source="companion.get_prompt")
 
@@ -214,20 +214,15 @@ class CompanionRouter:
         """Chat with the companion."""
         try:
             companion = self._get_companion()
-            system_prompt = companion.build_system_prompt() if req.include_system_prompt else ""
             _chat_start = _time.monotonic()
-            response_text = await companion.generate(
-                user_message=req.message,
-                system_prompt=system_prompt,
-                max_tokens=req.max_tokens,
-                temperature=req.temperature,
-            )
+            result = companion.respond(user_message=req.message)
+            response_text = result if isinstance(result, str) else result.get("response", "")
             _chat_elapsed_ms = (_time.monotonic() - _chat_start) * 1000
             safe_audit_log("companion.chat", detail=f"elapsed={_chat_elapsed_ms:.0f}ms tokens={len(response_text.split())}")
 
             return ChatResponse(
                 response=response_text,
-                system_prompt=system_prompt,
+                system_prompt=companion.get_system_prompt(),
                 elapsed_ms=round(_chat_elapsed_ms, 1),
             )
         except Exception as e:
