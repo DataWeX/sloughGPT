@@ -323,7 +323,7 @@ def compute_data_quality(text: str, sample_size: int = 20) -> Dict[str, float]:
         on a 0-5 scale.
     """
     if not text or len(text) < 100:
-        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0}
+        return {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
 
     chunk_size = min(500, len(text) // max(1, sample_size))
     if chunk_size < 50:

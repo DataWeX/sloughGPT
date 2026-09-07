@@ -147,7 +147,7 @@ export default function PlannerPage() {
           }
         })
       }
-    } catch {}
+    } catch { /* optimistic update — server may reject, board will resync on next fetch */ }
   }, [board])
 
   const handleCreateNote = useCallback(async (data: { title: string; tags: string[]; status: string; body: string }) => {

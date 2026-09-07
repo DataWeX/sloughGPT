@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
 
 from config import ServerConfig
+from config import gen_config as _gen_config
 
 logger = logging.getLogger("slo.inference")
 
@@ -1912,7 +1913,7 @@ class InferenceRouter:
                         _orig_count = len(provider_messages)
                         provider_messages = _trim_messages_to_budget(
                             provider_messages,
-                            cfg.gen_config.max_context_length,
+                            _gen_config.max_context_length,
                             req.max_tokens,
                         )
                         _trimmed = _orig_count - len(provider_messages)
@@ -1922,7 +1923,7 @@ class InferenceRouter:
                                 corr_id,
                                 _trimmed,
                                 len(provider_messages),
-                                cfg.gen_config.max_context_length - req.max_tokens,
+                                _gen_config.max_context_length - req.max_tokens,
                             )
                         try:
                             _control_check_interval = 0.1  # Check for controls every 100ms
@@ -2504,7 +2505,7 @@ class InferenceRouter:
             )
             # Enforce context window budget before delegating to domain
             messages = _trim_messages_to_budget(
-                messages, cfg.gen_config.max_context_length, req.max_tokens
+                messages, _gen_config.max_context_length, req.max_tokens
             )
             result = await asyncio.wait_for(
                 chat_domain.respond(

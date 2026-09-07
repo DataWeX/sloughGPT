@@ -116,39 +116,13 @@ export function useWebhooks(): UseWebhooksReturn {
 
   useEffect(() => {
     let active = true
-    const load = async () => {
-      try {
-        const result = await trainingJobsController.listWebhooks()
-        if (active) setWebhooks(result ?? [])
-      } catch {
-        if (active) setWebhooks([])
-      } finally {
-        if (active) setLoading(false)
-      }
+    const loadAll = async () => {
+      await Promise.all([
+        fetchWebhooks(),
+        fetchRetryData(),
+      ])
     }
-    load()
-    return () => { active = false }
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    const load = async () => {
-      try {
-        const [retries, deads, statsResult] = await Promise.all([
-          trainingJobsController.getWebhookRetryQueue(),
-          trainingJobsController.getWebhookDeadLetters(),
-          trainingJobsController.webhookStats(),
-        ])
-        if (active) {
-          setRetryQueue(retries?.retries ?? [])
-          setDeadLetters(deads?.dead_letters ?? [])
-          setStats(statsResult)
-        }
-      } catch {
-        // ignore
-      }
-    }
-    load()
+    loadAll()
     return () => { active = false }
   }, [])
 

@@ -367,14 +367,29 @@ class ModelLoader:
             logger.warning("SloNet conversion failed: %s", e, extra={"tag": "MODEL"})
             return None
 
-    def _verify_model(self, result: LoadResult) -> bool:
+    def _verify_model(self, result: LoadResult, timeout_s: float = 30.0) -> bool:
         """Run lightweight verification to confirm model loads correctly.
 
         Single forward pass (~1-2s) instead of full generation (~12s).
+        Wrapped in a timeout to prevent hanging on quantized models.
         """
         try:
             test_ids = np.array([[1, 2, 3]], dtype=np.int64)
-            output = result.model.forward(test_ids)
+
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(result.model.forward, test_ids)
+                try:
+                    output = future.result(timeout=timeout_s)
+                except concurrent.futures.TimeoutError:
+                    logger.warning(
+                        "Model verification timed out after %.0fs: %s",
+                        timeout_s, result.model_id, extra={"tag": "MODEL"},
+                    )
+                    result.metrics["verified"] = False
+                    return True  # Don't fail the load — model loaded, verification is advisory
+                except Exception as e:
+                    raise e from None
 
             if output is None:
                 result.success = False

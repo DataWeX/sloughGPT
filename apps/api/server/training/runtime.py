@@ -177,14 +177,14 @@ class TrainingRuntime:
             if ev is not None:
                 try:
                     ev.set()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to set cancel event: %s", exc, extra={"tag": "TRAIN"})
             tev = get_turbo_cancel_event()
             if tev is not None:
                 try:
                     tev.set()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to set turbo cancel event: %s", exc, extra={"tag": "TRAIN"})
         except Exception as e:
             logger.debug("Auto-train cancel signal failed: %s", e, extra={"tag": "TRAIN"})
 
@@ -216,8 +216,8 @@ class TrainingRuntime:
             if ev is not None:
                 try:
                     ev.set()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to set cancel event for job %s: %s", jid, exc, extra={"tag": "TRAIN"})
                 cooperative.append(jid)
 
         # Jobs without a cooperative cancel event (e.g. SSE auto-train) cannot

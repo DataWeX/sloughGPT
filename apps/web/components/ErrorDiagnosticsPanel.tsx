@@ -19,6 +19,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { cn, Button, IconX } from '@sloughgpt/strui'
 import type { ErrorEvent } from '@/hooks/useErrorStream'
+import { timeAgo } from '@/lib/time-ago'
 
 interface ErrorDiagnosticsPanelProps {
   errors: ErrorEvent[]
@@ -50,14 +51,6 @@ function levelBadge(level: ErrorEvent['level']): { label: string; color: string 
 function formatTime(ts: number): string {
   const d = new Date(ts)
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-function formatTimeAgo(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 1000) return 'just now'
-  if (diff < 60_000) return `${Math.floor(diff / 1000)}s ago`
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-  return `${Math.floor(diff / 3_600_000)}h ago`
 }
 
 function copyToClipboard(text: string) {
@@ -155,7 +148,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
               <span className="font-mono mr-1.5">{event.durationMs}ms</span>
             )}
             {event.source && <span className="mr-1.5">{event.source}</span>}
-            <span>{formatTimeAgo(event.timestamp)}</span>
+            <span>{timeAgo(event.timestamp)}</span>
             {event.correlationId && <span className="ml-1.5 font-mono">[{event.correlationId}]</span>}
           </span>
         </span>
@@ -271,7 +264,7 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
             {group.count > 1 && (
               <span className="text-yellow-400/70 mr-1.5">×{group.count}</span>
             )}
-            <span>{formatTimeAgo(group.latest.timestamp)}</span>
+            <span>{timeAgo(group.latest.timestamp)}</span>
           </span>
         </span>
         <span className="shrink-0 text-muted-foreground/30 text-[9px] pt-0.5">
@@ -292,7 +285,7 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
             </Button>
           </div>
           <div className="text-[9px] text-muted-foreground/50">
-            {group.count} occurrence{group.count !== 1 ? 's' : ''} — first {formatTimeAgo(group.events[0].timestamp)}, latest {formatTimeAgo(group.latest.timestamp)}
+            {group.count} occurrence{group.count !== 1 ? 's' : ''} — first {timeAgo(group.events[0].timestamp)}, latest {timeAgo(group.latest.timestamp)}
           </div>
           {group.fingerprint && (
             <div className="text-[9px] text-muted-foreground/50">

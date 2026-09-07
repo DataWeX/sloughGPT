@@ -7,6 +7,7 @@ import type { DetailedHealth, SystemMetrics, DiskUsage, SystemInfo } from '@/lib
 import { formatUptime } from '@/lib/chat-utils'
 import { useTick } from '@/hooks/useTick'
 import { timeAgo } from '@/lib/time-ago'
+import { formatTokens } from './TrafficCard'
 
 interface SystemHealthPanelProps {
   liveHealth: LiveHealthSnapshot | null
@@ -18,12 +19,6 @@ interface SystemHealthPanelProps {
   loaded: boolean
   chartHistory: Array<{ time: string; cpu: number; mem: number; tokens?: number; latency?: number }>
   modelHealth?: { perplexity?: number; loss?: number; quality_score?: number; last_eval?: string; perplexity_trend?: Array<{ ts: string; value: number }>; loss_trend?: Array<{ ts: string; value: number }> } | null
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return `${n}`
 }
 
 function StatusDot({ active, className }: { active: boolean; className?: string }) {

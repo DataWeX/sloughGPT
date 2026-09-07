@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { formatUptime } from '@/lib/chat-utils'
 
 interface EngineStatus {
   engine: string
@@ -13,14 +14,6 @@ interface EngineStatus {
   models_loaded: number
   uptime_s: number
   memory_usage_mb: number
-}
-
-function formatUptime(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  return `${h}h ${m}m`
 }
 
 export default function EngineStatusCard() {
