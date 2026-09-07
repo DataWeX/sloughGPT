@@ -86,6 +86,32 @@ class HFLoraConfig:
             model_stem = Path(self.model_path).stem
             self.adapter_name = f"{model_stem}_lora_r{self.rank}"
 
+        # Validate paths
+        if not self.model_path:
+            raise ValueError("model_path is required")
+        if not Path(self.model_path).is_file():
+            raise ValueError(f"Model file not found: {self.model_path}")
+        if not self.data_path:
+            raise ValueError("data_path is required")
+        if not Path(self.data_path).is_file():
+            raise ValueError(f"Data file not found: {self.data_path}")
+
+        # Validate hyperparameters
+        if self.rank < 1:
+            raise ValueError(f"rank must be >= 1, got {self.rank}")
+        if self.alpha <= 0:
+            raise ValueError(f"alpha must be > 0, got {self.alpha}")
+        if self.epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {self.epochs}")
+        if self.batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.block_size < 8:
+            raise ValueError(f"block_size must be >= 8, got {self.block_size}")
+        if self.learning_rate <= 0:
+            raise ValueError(f"learning_rate must be > 0, got {self.learning_rate}")
+        if self.weight_decay < 0:
+            raise ValueError(f"weight_decay must be >= 0, got {self.weight_decay}")
+
 
 class HFLoraTrainer:
     """LoRA fine-tuner for .slnc models — pure numpy, no torch.
