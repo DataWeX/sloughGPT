@@ -139,7 +139,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         from schemas.common import AppError
         if isinstance(e, AppError):
             raise
-        logger.debug("Quality gate check failed (proceeding): %s", e)
+        logger.warning("Quality gate check failed (proceeding): %s", e)
 
     # Pre-flight JSONL validation for conversation-format datasets
     try:
@@ -167,17 +167,27 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                     status_code=400,
                 )
             if _result["error_count"] > 0:
+                _total = _result["valid_count"] + _result["error_count"]
+                _error_ratio = _result["error_count"] / max(_total, 1)
                 logger.warning(
-                    "JSONL validation: %d valid, %d errors in %s",
+                    "JSONL validation: %d valid, %d errors (%.0f%%) in %s",
                     _result["valid_count"],
                     _result["error_count"],
+                    _error_ratio * 100,
                     _j_file,
                 )
+                if _error_ratio > 0.5:
+                    raise_error(
+                        f"Dataset has too many malformed lines ({_result['error_count']}/{_total}, "
+                        f"{_error_ratio:.0%} error rate). Fix the dataset or lower the error threshold.",
+                        "E_BAD_REQUEST",
+                        status_code=400,
+                    )
     except Exception as e:
         from schemas.common import AppError
         if isinstance(e, AppError):
             raise
-        logger.debug("JSONL validation skipped: %s", e)
+        logger.warning("JSONL validation failed (proceeding): %s", e)
 
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     job: dict[str, Any] = {
