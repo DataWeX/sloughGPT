@@ -22,7 +22,6 @@ vi.mock('@sloughgpt/strui', () => ({
   Textarea: ({ value, onChange, ...p }: any) => <textarea value={value} onChange={e => onChange(e)} {...p} />,
   StatCard: ({ label, value, ...p }: any) => <div data-testid="stat-card" data-label={label}>{String(value)}</div>,
   KpiGrid: ({ children, ...p }: any) => <div data-testid="kpi-grid" {...p}>{children}</div>,
-  ActionCard: (p: any) => <section data-testid="action-card" {...p} />,
   IconRefresh: () => <span>↻</span>,
 }))
 
