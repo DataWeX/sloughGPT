@@ -380,7 +380,7 @@ class DownloadManager:
         except Exception as exc:
             logger.debug("Failed to record download start event: %s", exc)
 
-        def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
+        def _progress_cb_orig(mid: str, downloaded: int, total: int, speed: float):
             try:
                 with self._lock:
                     cur = self._downloads.get(mid)
@@ -416,6 +416,10 @@ class DownloadManager:
             def _cancel_check():
                 if cancel_event and cancel_event.is_set():
                     raise InterruptedError("Download cancelled")
+
+            def _progress_cb(mid, downloaded, total, speed):
+                _cancel_check()
+                _progress_cb_orig(mid, downloaded, total, speed)
 
             download_hf_model(
                 model_id,

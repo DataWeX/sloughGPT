@@ -106,6 +106,7 @@ export function useTrainingStream() {
       }
 
       let esRetries = 0
+      es.onopen = () => { esRetries = 0 }
       es.onerror = () => {
         if (es.readyState === EventSource.CLOSED || esRetries >= 3) {
           closeStream()

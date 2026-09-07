@@ -470,7 +470,7 @@ def _eval_loss(
     """Compute average cross-entropy loss on validation set."""
     total_loss = 0.0
     total_tokens = 0
-    n_batches = min(50, len(val_ds) // batch_size)
+    n_batches = max(1, min(50, len(val_ds) // batch_size))
 
     for _ in range(n_batches):
         x_batch, y_batch = val_ds.get_batch(batch_size, rng)

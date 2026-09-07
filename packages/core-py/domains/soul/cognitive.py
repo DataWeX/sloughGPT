@@ -562,11 +562,15 @@ class CognitiveArchitecture:
 
     def _consolidate_to_episodic(self, item: Any) -> bool:
         """Consolidate working memory to episodic."""
-        {
+        episode = {
             "content": item,
             "timestamp": datetime.now().isoformat(),
-            "importance": random.random(),  # Simplified
+            "importance": random.random(),
         }
+        try:
+            self.episodic_store.save_episode("working_memory_evictions", [episode])
+        except Exception:
+            pass
         return True
 
     def add_to_session(self, role: str, content: str) -> Dict:
