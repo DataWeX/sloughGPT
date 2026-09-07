@@ -840,6 +840,15 @@ class SloughGPTTrainer:
         self.train_data = self.data[:n]
         self.val_data = self.data[n:]
 
+        # Validate data length vs training params
+        min_samples = self.config.block_size * self.config.batch_size
+        if len(self.train_data) < min_samples:
+            raise ValueError(
+                f"Training data too small: {len(self.train_data)} samples but "
+                f"block_size * batch_size = {min_samples}. "
+                f"Reduce batch_size/block_size or add more data."
+            )
+
         # Compute data quality metrics
         try:
             raw_text = "".join(self.itos.get(int(i), "") for i in self.data[:min(50000, len(self.data))])
