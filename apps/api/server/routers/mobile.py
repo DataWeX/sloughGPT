@@ -838,9 +838,26 @@ class MobileRouter:
             from routers.inference import ChatRequest, Message
             from routers.inference import _instance as _inference
 
+            # Cap batch size to prevent DoS via unbounded inference calls
+            MAX_SYNC_MESSAGES = 50
+            if len(body.pending_messages) > MAX_SYNC_MESSAGES:
+                raise_error(
+                    f"Too many pending messages: {len(body.pending_messages)} (max {MAX_SYNC_MESSAGES})",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+
+            # Deduplicate by message ID
+            seen_ids: set[str] = set()
+            unique_messages = []
+            for msg in body.pending_messages:
+                if msg.id not in seen_ids:
+                    seen_ids.add(msg.id)
+                    unique_messages.append(msg)
+
             results: list[SyncResult] = []
 
-            for msg in body.pending_messages:
+            for msg in unique_messages:
                 try:
                     chat_req = ChatRequest(
                         messages=[Message(role="user", content=msg.content)],
@@ -1115,7 +1132,7 @@ class MobileRouter:
 
         def _write_pairs():
             with open(text_file, "w") as f:
-                for pair in body.pairs:
+                for pair in valid_pairs:
                     f.write(f"User: {pair.user_msg}\nAssistant: {pair.assistant_msg}\n\n")
 
         await asyncio.to_thread(_write_pairs)
