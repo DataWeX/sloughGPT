@@ -97,6 +97,12 @@ async def train_from_feedback(
             "dataset": str(sft_path),
             "data_source": "feedback",
             "epochs": epochs,
+            "current_epoch": 0,
+            "global_step": 0,
+            "loss": None,
+            "train_loss": None,
+            "eval_loss": None,
+            "loss_history": [],
             "checkpoint_interval": 100,
             "output_checkpoint_stem": out_stem,
             "_cancel_event": cancel_event,
@@ -118,6 +124,13 @@ async def train_from_feedback(
             logger.warning(
                 "CancelManager registration failed for feedback training %s: %s", jid, exc
             )
+
+        # Register with TrainingRuntime
+        try:
+            from .runtime import get_training_runtime
+            get_training_runtime().register(jid, training_jobs[jid], cancel_event, req.model_dump())
+        except Exception as exc:
+            logger.warning("Training runtime registration failed for %s: %s", jid, exc)
 
         # Update global training controller
         get_training_controller().start(jid, f"Feedback Training {timestamp}")
@@ -147,6 +160,9 @@ async def train_from_feedback(
                     training_jobs[jid]["current_epoch"] = int(
                         info.get("epoch", training_jobs[jid].get("current_epoch", 0))
                     )
+                    gs = info.get("global_step")
+                    if gs is not None:
+                        training_jobs[jid]["global_step"] = int(gs)
                     tl = info.get("train_loss")
                     if tl is not None:
                         training_jobs[jid]["train_loss"] = float(tl)
@@ -210,8 +226,8 @@ async def train_from_feedback(
                             },
                         )
                     )
-                except Exception as e:
-                    logger.warning("Feedback training failure webhook failed: %s: %s", jid, e)
+                except Exception as webhook_exc:
+                    logger.warning("Feedback training failure webhook failed: %s: %s", jid, webhook_exc)
 
         executor = get_training_executor()
         executor.submit(run_feedback_training, jid)
