@@ -156,7 +156,7 @@ function DatasetChip({
 }
 
 export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
-  const canAdvance = !!datasets.selectedDataset || (form.inputMode === 'text' && form.textInput.trim().length > 0)
+  const canAdvance = !!datasets.selectedDataset
   const [importingKaggle, setImportingKaggle] = useState<string | null>(null)
   const [importingHF, setImportingHF] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -374,10 +374,10 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
         )}
 
         <div className="flex items-center gap-2 pt-2">
-          <Button size="sm" onClick={onNext}>
+          <Button size="sm" onClick={onNext} disabled={!canAdvance}>
             Next: Configure
           </Button>
-          {!canAdvance && (
+          {!datasets.selectedDataset && (
             <span className="text-[11px] text-muted-foreground">Select a dataset or switch to paste text in the next step</span>
           )}
         </div>

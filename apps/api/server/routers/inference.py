@@ -1571,6 +1571,8 @@ class InferenceRouter:
                                 )
                 except Exception as e:
                     logger.debug("RAG query skipped: %s", e)
+                    if corr_id:
+                        yield sse_error("chat", "RAG_ERROR", str(e), code="RAG_ERROR")
 
             if req.agent_id:
                 try:
@@ -1744,6 +1746,7 @@ class InferenceRouter:
                             },
                         },
                     )
+                    yield sse_error("chat", "KNOWLEDGE_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
@@ -1790,6 +1793,7 @@ class InferenceRouter:
                             },
                         },
                     )
+                    yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             try:
                 logger.debug(
