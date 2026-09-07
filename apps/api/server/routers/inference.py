@@ -206,12 +206,8 @@ class ChatRequest(BaseModel):
 
     def model_post_init(self, __context: Any) -> None:
         """Resolve max_new_tokens alias into max_tokens."""
-        try:
-            if self.max_new_tokens is not None and self.max_tokens == 128:
-                object.__setattr__(self, "max_tokens", self.max_new_tokens)
-
-        except Exception as e:
-            classify_and_raise(e, source="inference.model_post_init")
+        if self.max_new_tokens is not None and self.max_tokens == 128:
+            object.__setattr__(self, "max_tokens", self.max_new_tokens)
 
 
 class ChatResponse(BaseModel):

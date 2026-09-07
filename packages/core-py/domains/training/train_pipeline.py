@@ -260,6 +260,10 @@ class TrainerConfig:
     log_interval: int = 10
     eval_interval: int = 100
 
+    # Data quality gates
+    min_data_quality: float = 1.0
+    max_toxicity_rate: float = 0.5
+
     # Early stopping (0 = disabled; stop if no improvement for N evals)
     early_stopping_patience: int = 5
 
@@ -780,7 +784,22 @@ class SloughGPTTrainer:
             if tox_rate > 0.3:
                 logger.warning("High toxicity detected in training data (%.2f). Consider cleaning the data.", tox_rate,
                     extra={"tag": "TRAIN"})
+
+            # Enforce quality gates
+            avg_q = self._data_quality.get("avg_quality", 0)
+            if avg_q < self.config.min_data_quality:
+                raise ValueError(
+                    f"Data quality too low: avg_quality={avg_q:.2f} (minimum={self.config.min_data_quality}). "
+                    "Improve your training data or lower min_data_quality in config."
+                )
+            if tox_rate > self.config.max_toxicity_rate:
+                raise ValueError(
+                    f"Data toxicity too high: toxicity_rate={tox_rate:.2f} (maximum={self.config.max_toxicity_rate}). "
+                    "Remove harmful content from training data or increase max_toxicity_rate in config."
+                )
         except Exception as e:
+            if "Data quality too low" in str(e) or "Data toxicity too high" in str(e):
+                raise
             logger.warning("Data quality computation failed, using defaults: %s", e)
             self._data_quality = {"avg_quality": 0.0, "repetition_rate": 0.0, "diversity": 0.0, "language_quality": 0.0, "toxicity_rate": 0.0}
 
