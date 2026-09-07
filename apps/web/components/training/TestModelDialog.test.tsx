@@ -11,7 +11,9 @@ describe('TestModelDialog', () => {
 
   const base = {
     open: true, prompt: '', result: null, loading: false,
+    streaming: false, streamingText: '', responseFormat: 'text' as const,
     onClose: vi.fn(), onPromptChange: vi.fn(), onGenerate: vi.fn(), onClear: vi.fn(),
+    onResponseFormatChange: vi.fn(),
   }
 
   it('returns null when not open', () => {

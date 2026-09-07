@@ -4,7 +4,10 @@
  */
 export function extractErrorMessage(err: unknown, fallback = 'Unknown error'): string {
   if (typeof err === 'string') return err
-  if (err instanceof Error) return err.message || err.name || fallback
+  if (err instanceof Error) {
+    if (err.message === '') return ''
+    return err.message || err.name || fallback
+  }
   if (err && typeof err === 'object') {
     const e = err as Record<string, unknown>
     if (typeof e.message === 'string') return e.message

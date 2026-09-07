@@ -84,6 +84,8 @@ export interface CircuitBreakerOptions {
   failureThreshold: number
   resetTimeoutMs: number
   halfOpenMax?: number
+  /** Cold-start grace period (ms) during which failures are not counted. Default 15000. */
+  gracePeriodMs?: number
 }
 
 export type CircuitState = 'closed' | 'open' | 'half-open'
@@ -168,6 +170,7 @@ const DOCSTORE_BASE_DELAY = 300
 const DEFAULT_CACHE_TTL_MS = 60_000
 const DEFAULT_CB_FAILURE_THRESHOLD = 5
 const DEFAULT_CB_RESET_TIMEOUT_MS = 30_000
+const DEFAULT_CB_GRACE_MS = 15_000
 const DEFAULT_THROTTLE_MAX = 10
 const DEFAULT_THROTTLE_QUEUE = 50
 const DEFAULT_THROTTLE_TIMEOUT_MS = 10_000
@@ -357,11 +360,11 @@ export class CircuitBreaker {
   }
 
   recordFailure() {
-    // During the first 15s after creation (cold start grace period),
+    // During the first GRACE_MS after creation (cold start grace period),
     // don't count failures toward the circuit breaker threshold.
     // The backend may still be loading modules / models.
-    const GRACE_MS = 15_000
-    if (Date.now() - this._createdAt < GRACE_MS) return
+    const graceMs = this.opts.gracePeriodMs ?? DEFAULT_CB_GRACE_MS
+    if (Date.now() - this._createdAt < graceMs) return
 
     this._failureCount++
     this._lastFailureAt = Date.now()

@@ -46,8 +46,8 @@ export interface UseVisionStudioReturn {
   resetLoading: boolean
   dragOver: boolean
   retryLoading: boolean
-  fileInputRef: React.RefObject<HTMLInputElement | null>
-  dropRef: React.RefObject<HTMLDivElement | null>
+  fileInputRef: React.RefObject<HTMLInputElement>
+  dropRef: React.RefObject<HTMLDivElement>
   refreshReport: () => Promise<void>
   processFile: (file: File) => Promise<void>
   retryAnalyze: () => Promise<void>
@@ -102,8 +102,8 @@ export function useVisionStudio(
   const [resetLoading, setResetLoading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [retryLoading, setRetryLoading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const dropRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null!)
+  const dropRef = useRef<HTMLDivElement>(null!)
 
   const refreshReport = useCallback(async () => {
     try {
