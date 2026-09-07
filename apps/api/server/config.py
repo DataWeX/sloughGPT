@@ -195,3 +195,35 @@ def set_process_guard_enabled(enabled: bool) -> None:
     """Set the runtime ProcessGuard enabled state (persists until restart)."""
     global _runtime_process_guard_enabled
     _runtime_process_guard_enabled = enabled
+
+
+# ── Runtime memory pressure thresholds ──────────────────────────────
+# Can be changed at runtime via serving profiles; persist until restart.
+_cfg = ServerConfig.from_env()
+_runtime_memory_pressure_warning: float = _cfg.memory_pressure_warning
+_runtime_memory_pressure_critical: float = _cfg.memory_pressure_critical
+_runtime_memory_pressure_emergency: float = _cfg.memory_pressure_emergency
+
+
+def get_memory_pressure_thresholds() -> dict[str, float]:
+    """Return current memory pressure thresholds."""
+    return {
+        "warning": _runtime_memory_pressure_warning,
+        "critical": _runtime_memory_pressure_critical,
+        "emergency": _runtime_memory_pressure_emergency,
+    }
+
+
+def set_memory_pressure_thresholds(
+    warning: float | None = None,
+    critical: float | None = None,
+    emergency: float | None = None,
+) -> None:
+    """Set runtime memory pressure thresholds (persists until restart)."""
+    global _runtime_memory_pressure_warning, _runtime_memory_pressure_critical, _runtime_memory_pressure_emergency
+    if warning is not None:
+        _runtime_memory_pressure_warning = warning
+    if critical is not None:
+        _runtime_memory_pressure_critical = critical
+    if emergency is not None:
+        _runtime_memory_pressure_emergency = emergency

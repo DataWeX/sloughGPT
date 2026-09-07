@@ -40,6 +40,7 @@ import { chatDB } from '@/lib/db'
 import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
+import { ServingProfilesCard } from '@/components/ServingProfilesCard'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { settingsSchema } from '@/lib/validation-schemas'
@@ -777,6 +778,9 @@ export default function SettingsPage() {
             <VersionBadge label="v" version={detailed?.versions?.package} />
           </CardFooter>
         </Card>
+
+        {/* Serving profiles */}
+        <ServingProfilesCard />
 
         {/* Danger zone */}
         <Card className="border-destructive/30">
