@@ -121,6 +121,76 @@ def validate_training_data(text: str, min_chars: int = 200) -> None:
         )
 
 
+_VALID_ROLES = {"user", "assistant", "system"}
+
+
+def validate_conversation_data(path: str, max_errors: int = 10) -> dict:
+    """Validate JSONL conversation dataset for training.
+
+    Args:
+        path: Path to JSONL file with {"messages": [...]} per line.
+        max_errors: Max errors to collect before stopping.
+
+    Returns:
+        Dict with valid_count, error_count, errors (list of str).
+    """
+    import json
+
+    valid_count = 0
+    error_count = 0
+    errors: list[str] = []
+    prev_role: str | None = None
+
+    with open(path, "r", encoding="utf-8") as f:
+        for line_num, raw_line in enumerate(f, 1):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError as e:
+                error_count += 1
+                if len(errors) < max_errors:
+                    errors.append(f"Line {line_num}: invalid JSON: {e}")
+                continue
+
+            messages = obj.get("messages")
+            if not isinstance(messages, list) or len(messages) == 0:
+                error_count += 1
+                if len(errors) < max_errors:
+                    errors.append(f"Line {line_num}: missing or empty 'messages' array")
+                continue
+
+            line_ok = True
+            for i, msg in enumerate(messages):
+                role = msg.get("role")
+                content = msg.get("content")
+
+                if role not in _VALID_ROLES:
+                    error_count += 1
+                    line_ok = False
+                    if len(errors) < max_errors:
+                        errors.append(f"Line {line_num}, msg {i}: invalid role '{role}'")
+                    break
+
+                if not isinstance(content, str) or not content.strip():
+                    error_count += 1
+                    line_ok = False
+                    if len(errors) < max_errors:
+                        errors.append(f"Line {line_num}, msg {i}: empty content")
+                    break
+
+            if line_ok:
+                valid_count += 1
+
+    return {
+        "valid_count": valid_count,
+        "error_count": error_count,
+        "errors": errors,
+    }
+
+
 def prepare_data(data_path, block_size=128, tokenizer=None):
     """Prepare training data from a text file or multiple datasets with ratios.
 

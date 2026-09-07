@@ -141,6 +141,44 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
             raise
         logger.debug("Quality gate check failed (proceeding): %s", e)
 
+    # Pre-flight JSONL validation for conversation-format datasets
+    try:
+        import asyncio as _aio
+        from pathlib import Path as _PJ
+        from domains.training.train_pipeline import validate_conversation_data
+
+        _j_path = _PJ(data_path_str)
+        _j_file = None
+        if _j_path.is_file() and _j_path.suffix == ".jsonl":
+            _j_file = _j_path
+        elif _j_path.is_dir():
+            for _c in ["input.jsonl", "corpus.jsonl", "train.jsonl", "conversations.jsonl"]:
+                if (_j_path / _c).is_file():
+                    _j_file = _j_path / _c
+                    break
+
+        if _j_file:
+            _result = await _aio.to_thread(validate_conversation_data, str(_j_file))
+            if _result["error_count"] > 0 and _result["valid_count"] == 0:
+                raise_error(
+                    f"Dataset has no valid conversation entries ({_result['error_count']} malformed lines). "
+                    f"First error: {_result['errors'][0] if _result['errors'] else 'unknown'}",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+            if _result["error_count"] > 0:
+                logger.warning(
+                    "JSONL validation: %d valid, %d errors in %s",
+                    _result["valid_count"],
+                    _result["error_count"],
+                    _j_file,
+                )
+    except Exception as e:
+        from schemas.common import AppError
+        if isinstance(e, AppError):
+            raise
+        logger.debug("JSONL validation skipped: %s", e)
+
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     job: dict[str, Any] = {
         "id": job_id,
@@ -291,7 +329,7 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
                 _finish_job(jid, "cancelled")
                 training_jobs[jid]["progress"] = 0
                 get_training_runtime().sync(jid)
-                get_training_controller().complete()
+                get_training_controller().reset()
                 return
             trainer.save(f"models/{safe_stem}_trained.soul")
             _finish_job(jid, "completed")
