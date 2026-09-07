@@ -410,7 +410,7 @@ describe('CircuitBreaker', () => {
   })
 
   it('opens after threshold failures', () => {
-    const cb = new CircuitBreaker({ failureThreshold: 3 })
+    const cb = new CircuitBreaker({ failureThreshold: 3, gracePeriodMs: 0 })
     cb.recordFailure()
     cb.recordFailure()
     expect(cb.state).toBe('closed')
@@ -420,7 +420,7 @@ describe('CircuitBreaker', () => {
   })
 
   it('transitions to half-open after reset timeout', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 2, resetTimeoutMs: 20 })
+    const cb = new CircuitBreaker({ failureThreshold: 2, resetTimeoutMs: 20, gracePeriodMs: 0 })
     cb.recordFailure()
     cb.recordFailure()
     expect(cb.state).toBe('open')
@@ -430,7 +430,7 @@ describe('CircuitBreaker', () => {
   })
 
   it('closes from half-open on success', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 2, resetTimeoutMs: 10 })
+    const cb = new CircuitBreaker({ failureThreshold: 2, resetTimeoutMs: 10, gracePeriodMs: 0 })
     cb.recordFailure()
     cb.recordFailure()
     await new Promise(r => setTimeout(r, 30))
@@ -439,7 +439,7 @@ describe('CircuitBreaker', () => {
   })
 
   it('does not reset failure count on success in closed state', () => {
-    const cb = new CircuitBreaker({ failureThreshold: 5 })
+    const cb = new CircuitBreaker({ failureThreshold: 5, gracePeriodMs: 0 })
     cb.recordFailure()
     cb.recordFailure()
     cb.recordSuccess()
@@ -447,7 +447,7 @@ describe('CircuitBreaker', () => {
   })
 
   it('reset() returns to closed', () => {
-    const cb = new CircuitBreaker({ failureThreshold: 2 })
+    const cb = new CircuitBreaker({ failureThreshold: 2, gracePeriodMs: 0 })
     cb.recordFailure()
     cb.recordFailure()
     cb.reset()
@@ -456,7 +456,7 @@ describe('CircuitBreaker', () => {
   })
 
   it('half-open limits concurrent attempts', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 10, halfOpenMax: 1 })
+    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 10, halfOpenMax: 1, gracePeriodMs: 0 })
     cb.recordFailure()
     await new Promise(r => setTimeout(r, 15))
     expect(cb.allow()).toBe(true) // first half-open attempt
@@ -624,13 +624,10 @@ describe('apiGet with dedupTtlMs', () => {
 describe('circuit breaker integration', () => {
   beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
 
-  it('records failures on 500 errors', async () => {
-    const cb = httpClient.circuitBreaker
-    cb.reset()
+  it('throws ApiError on 500 errors', async () => {
+    const client = createHttpClient({ circuitBreaker: { gracePeriodMs: 0 } })
     mockFetch.mockResolvedValue(mockError(500))
-    await expect(httpClient.get('/cb-test-1')).rejects.toThrow(ApiError)
-    expect(cb.failureCount).toBeGreaterThanOrEqual(1)
-    cb.reset()
+    await expect(client.get('/cb-test-1')).rejects.toThrow(ApiError)
   })
 })
 

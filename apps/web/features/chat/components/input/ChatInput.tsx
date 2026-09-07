@@ -63,7 +63,7 @@ export const ChatInput = memo(function ChatInput({
   onPDFError,
   onExecuteCommand,
 }: ChatInputProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null!)
   const pendingSendRef = useRef(false)
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)

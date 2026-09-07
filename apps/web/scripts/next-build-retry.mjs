@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 function runBuild() {
-  return spawnSync('npx', ['next', 'build'], {
+  return spawnSync('npx', ['next', 'build', '--webpack'], {
     stdio: 'inherit',
     cwd: root,
     shell: true,
