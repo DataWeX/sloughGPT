@@ -139,7 +139,9 @@ export function TrainingScreen() {
         const names = (data?.souls || []).map((s: any) => s.name || '').filter(Boolean);
         if (names.length > 0) setSoulNames(names);
       })
-      .catch(() => {});
+      .catch(() => {
+        toast.warn('Could not load model list');
+      });
   }, []);
 
   useEffect(() => {
@@ -187,6 +189,10 @@ export function TrainingScreen() {
     if (inputMode === 'text') {
       if (!sourceText.trim()) {
         Alert.alert('Training', 'Enter some training text first');
+        return;
+      }
+      if (sourceText.trim().length < 200) {
+        Alert.alert('Training', 'Training text too short. Need at least 200 characters for meaningful training.');
         return;
       }
       setConfig({source_text: sourceText, dataset_id: undefined});
