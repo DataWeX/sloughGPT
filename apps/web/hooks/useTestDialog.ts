@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { generateController } from '@/lib/generate-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 
@@ -17,8 +17,12 @@ export interface UseTestDialogReturn {
   testPrompt: string
   testResult: TestModelResult | null
   testLoading: boolean
+  testStreaming: boolean
+  testStreamingText: string
+  responseFormat: 'text' | 'json'
   setTestDialogOpen: (open: boolean) => void
   setTestPrompt: (prompt: string) => void
+  setResponseFormat: (format: 'text' | 'json') => void
   handleTestModel: () => Promise<void>
   clearTest: () => void
 }
@@ -28,24 +32,57 @@ export function useTestDialog(): UseTestDialogReturn {
   const [testPrompt, setTestPrompt] = useState('')
   const [testResult, setTestResult] = useState<TestModelResult | null>(null)
   const [testLoading, setTestLoading] = useState(false)
+  const [testStreaming, setTestStreaming] = useState(false)
+  const [testStreamingText, setTestStreamingText] = useState('')
+  const [responseFormat, setResponseFormat] = useState<'text' | 'json'>('text')
+  const streamingRef = useRef(false)
 
   const handleTestModel = useCallback(async () => {
     if (!testPrompt.trim()) return
     setTestLoading(true)
+    setTestStreaming(true)
+    setTestStreamingText('')
     setTestResult(null)
+    streamingRef.current = true
+
+    let accumulated = ''
+    let model = ''
+    let tokensGenerated = 0
+
     try {
-      const data = await generateController.generate({
-        prompt: testPrompt,
-        max_new_tokens: 100,
-        temperature: 0.8,
-      })
-      setTestResult({
-        prompt: testPrompt,
-        response: data.text || '(empty)',
-        model: data.model || '',
-        tokens_generated: data.tokens_generated || 0,
-        error: '',
-      })
+      await generateController.generateStream(
+        {
+          prompt: testPrompt,
+          max_new_tokens: 256,
+          temperature: 0.8,
+          response_format: responseFormat,
+        },
+        (token) => {
+          if (!streamingRef.current) return
+          accumulated += token
+          setTestStreamingText(accumulated)
+        },
+        () => {
+          if (!streamingRef.current) return
+          setTestResult({
+            prompt: testPrompt,
+            response: accumulated || '(empty)',
+            model,
+            tokens_generated: tokensGenerated,
+            error: '',
+          })
+        },
+        (error) => {
+          if (!streamingRef.current) return
+          setTestResult({
+            prompt: testPrompt,
+            response: '',
+            model: '',
+            tokens_generated: 0,
+            error,
+          })
+        },
+      )
     } catch (e) {
       setTestResult({
         prompt: testPrompt,
@@ -54,15 +91,24 @@ export function useTestDialog(): UseTestDialogReturn {
         tokens_generated: 0,
         error: extractErrorMessage(e, 'unknown error'),
       })
-    } finally { setTestLoading(false) }
-  }, [testPrompt])
+    } finally {
+      streamingRef.current = false
+      setTestLoading(false)
+      setTestStreaming(false)
+    }
+  }, [testPrompt, responseFormat])
 
   const clearTest = useCallback(() => {
-    setTestPrompt(''); setTestResult(null)
+    setTestPrompt('')
+    setTestResult(null)
+    setTestStreamingText('')
+    setResponseFormat('text')
   }, [])
 
   return {
     testDialogOpen, testPrompt, testResult, testLoading,
-    setTestDialogOpen, setTestPrompt, handleTestModel, clearTest,
+    testStreaming, testStreamingText, responseFormat,
+    setTestDialogOpen, setTestPrompt, setResponseFormat,
+    handleTestModel, clearTest,
   }
 }

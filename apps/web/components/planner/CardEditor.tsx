@@ -82,8 +82,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
             />
           </div>
           <div>
-            <label className="text-sm font-medium">Description</label>
+            <label htmlFor="card-description" className="text-sm font-medium">Description</label>
             <textarea
+              id="card-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -92,8 +93,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Column</label>
+              <label htmlFor="card-column" className="text-sm font-medium">Column</label>
               <select
+                id="card-column"
                 value={column}
                 onChange={(e) => setColumn(e.target.value)}
                 className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -104,8 +106,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium">Priority</label>
+              <label htmlFor="card-priority" className="text-sm font-medium">Priority</label>
               <select
+                id="card-priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
                 className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
@@ -118,8 +121,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
             </div>
           </div>
           <div>
-            <label className="text-sm font-medium">Tags (comma-separated)</label>
+            <label htmlFor="card-tags" className="text-sm font-medium">Tags (comma-separated)</label>
             <input
+              id="card-tags"
               type="text"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
@@ -128,8 +132,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Assignee</label>
+              <label htmlFor="card-assignee" className="text-sm font-medium">Assignee</label>
               <input
+                id="card-assignee"
                 type="text"
                 value={assignee}
                 onChange={(e) => setAssignee(e.target.value)}
@@ -137,8 +142,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Due Date</label>
+              <label htmlFor="card-due-date" className="text-sm font-medium">Due Date</label>
               <input
+                id="card-due-date"
                 type="text"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
@@ -148,8 +154,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Sprint</label>
+              <label htmlFor="card-sprint" className="text-sm font-medium">Sprint</label>
               <input
+                id="card-sprint"
                 type="text"
                 value={sprint}
                 onChange={(e) => setSprint(e.target.value)}
