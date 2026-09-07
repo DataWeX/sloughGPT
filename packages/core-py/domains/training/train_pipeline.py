@@ -906,6 +906,20 @@ class SloughGPTTrainer:
         scale_factor = 1.0 / self.config.gradient_accumulation_steps
 
         logits, loss = model(x, y)
+
+        # NaN/Inf guard: skip corrupted batches to prevent model corruption
+        loss_val = loss.item()
+        if not np.isfinite(loss_val):
+            logger.warning(
+                "train_step: non-finite loss (%s), skipping batch", loss_val,
+                extra={"tag": "TRAIN"},
+            )
+            self._nan_count = getattr(self, "_nan_count", 0) + 1
+            if self._nan_count > 10:
+                raise RuntimeError(f"Too many NaN losses ({self._nan_count}), aborting training")
+            return {"loss": self._ema_loss or 0.0, "raw_loss": loss_val, "skipped": True}
+
+        self._nan_count = 0
         (loss * scale_factor).backward()
         self.accumulation_step += 1
         raw_loss = loss.item() / scale_factor
@@ -962,8 +976,12 @@ class SloughGPTTrainer:
         for _ in range(num_batches):
             x, y = self.get_batch("val")
             _, loss = model(x, y)
-            total_loss += loss.item()
-            steps += 1
+            loss_val = loss.item()
+            if np.isfinite(loss_val):
+                total_loss += loss_val
+                steps += 1
+            else:
+                logger.debug("evaluate: non-finite loss (%s), skipping batch", loss_val)
 
         avg_loss = total_loss / max(steps, 1)
         elapsed_ms = (_time.monotonic() - eval_start) * 1000
