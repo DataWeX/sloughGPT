@@ -84,6 +84,7 @@ export function TrainingScreen() {
     deleteFinetunedModel,
     importDataset,
     clearError,
+    rehydrate,
   } = useTrainingStore();
   const modelStore = useModelStore();
   const [sourceText, setSourceText] = useState('');
@@ -133,6 +134,11 @@ export function TrainingScreen() {
     return () => {
       cleanupTraining();
     };
+  }, []);
+
+  // Rehydrate training state from server on mount
+  useEffect(() => {
+    rehydrate();
   }, []);
 
   useEffect(() => {
