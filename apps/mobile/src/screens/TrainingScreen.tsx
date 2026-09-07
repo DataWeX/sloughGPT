@@ -187,7 +187,7 @@ export function TrainingScreen() {
     setRefreshing(false);
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (inputMode === 'text') {
       if (!sourceText.trim()) {
         Alert.alert('Training', 'Enter some training text first');
@@ -202,6 +202,22 @@ export function TrainingScreen() {
       if (!selectedDataset) {
         Alert.alert('Training', 'Select a dataset first');
         return;
+      }
+      // Pre-flight quality check
+      try {
+        const quality = await api.get<any>(`/datasets/${selectedDataset}/quality`);
+        const avg = quality?.avg_quality ?? 0;
+        const tox = quality?.toxicity_rate ?? 0;
+        if (avg < 1.0) {
+          Alert.alert('Low Quality', `Dataset quality is low (${avg.toFixed(2)}/5.0). Training may produce poor results.`);
+          return;
+        }
+        if (tox > 0.5) {
+          Alert.alert('High Toxicity', `Dataset has high toxicity (${(tox * 100).toFixed(0)}%). Please clean the data first.`);
+          return;
+        }
+      } catch {
+        // Quality endpoint not available, proceed without check
       }
       setConfig({dataset_id: selectedDataset, source_text: undefined});
     }

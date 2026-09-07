@@ -89,7 +89,7 @@ class ProfilesRouter:
             )
             has_gpu = bool(result.stdout.strip())
         except Exception:
-            pass
+            logger.debug("GPU detection failed (nvidia-smi not available)")
 
         recommended = detect_recommended_profile(ram_gb, has_gpu)
         return success_response(data={
