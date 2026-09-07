@@ -98,6 +98,49 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         if _total_size < 100:
             raise_error(f"Total dataset size too small ({_total_size} bytes across {len(_data_files)} files)", "E_BAD_REQUEST", status_code=400)
 
+    # Pre-flight quality gate: check data quality before wasting compute
+    try:
+        import asyncio as _aio
+        from pathlib import Path as _PQ
+
+        _q_path = _PQ(data_path_str)
+        if _q_path.is_file():
+            _raw = await _aio.to_thread(lambda: _q_path.read_text(encoding="utf-8", errors="replace")[:200_000])
+        elif _q_path.is_dir():
+            _candidates = [_q_path / "input.txt", _q_path / "corpus.jsonl", _q_path / "train.txt"]
+            _q_file = next((c for c in _candidates if c.exists()), None)
+            _raw = await _aio.to_thread(lambda: _q_file.read_text(encoding="utf-8", errors="replace")[:200_000]) if _q_file else ""
+        else:
+            _raw = ""
+
+        if _raw:
+            from domains.training.quality_scorer import compute_data_quality
+            _quality = await _aio.to_thread(compute_data_quality, _raw)
+            _avg = _quality.get("avg_quality", 0)
+            _tox = _quality.get("toxicity_rate", 0)
+
+            if _avg < 1.0:
+                raise_error(
+                    f"Data quality too low (avg_quality={_avg:.2f}/5.0, minimum=1.0). "
+                    "Improve your training data or use a different dataset.",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                    details=_quality,
+                )
+            if _tox > 0.5:
+                raise_error(
+                    f"Data toxicity too high (toxicity_rate={_tox:.2f}, maximum=0.5). "
+                    "Remove harmful or inappropriate content from your training data.",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                    details=_quality,
+                )
+    except Exception as e:
+        from schemas.common import AppError
+        if isinstance(e, AppError):
+            raise
+        logger.debug("Quality gate check failed (proceeding): %s", e)
+
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     job: dict[str, Any] = {
         "id": job_id,

@@ -817,7 +817,7 @@ class InferenceRouter:
 
         provider = get_provider("default")
         if provider is None:
-            raise_error("No provider available", "E_BAD_REQUEST", status_code=503)
+            raise_error("No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500)
 
         provider_messages = [{"role": "user", "content": req.prompt}]
         try:
@@ -936,9 +936,9 @@ class InferenceRouter:
                 yield sse_error(
                     "generate",
                     "IDLE",
-                    "No provider available",
+                    "No provider available — load a model first",
                     code="E_INFRA_REGISTRY",
-                    http_status=503,
+                    http_status=500,
                 )
                 return
 
