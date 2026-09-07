@@ -132,21 +132,21 @@ export function FeedbackTrainCard({ addToast }: Props) {
         </p>
 
         {isRunning ? (
-          <div className="space-y-3" aria-live="polite" aria-atomic="true">
+          <div className="space-y-2" aria-live="polite" aria-atomic="true">
             <Progress value={progress} max={100} />
-            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            <div className="grid grid-cols-2 gap-1.5 text-[10px] text-muted-foreground/60">
               <span>Progress {progress}%</span>
               {loss != null && <span>Loss {loss.toFixed(4)}</span>}
               {job?.samples != null && <span>{job.samples} pairs</span>}
             </div>
-            <Button variant="destructive" size="sm" onClick={() => setPendingStop(true)}>
+            <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={() => setPendingStop(true)}>
               Stop
             </Button>
           </div>
         ) : phase === 'complete' ? (
-          <div className="space-y-2">
-            <p className="text-sm text-success font-medium">Training complete</p>
-            <div className="grid grid-cols-2 gap-x-4 text-xs text-muted-foreground">
+          <div className="space-y-1.5">
+            <p className="text-xs text-success font-medium">Training complete</p>
+            <div className="grid grid-cols-2 gap-x-4 text-[10px] text-muted-foreground/60">
               {job?.job_id && (
                 <>
                   <span>Job ID</span>
@@ -160,48 +160,48 @@ export function FeedbackTrainCard({ addToast }: Props) {
                 </>
               )}
             </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleLoad} disabled={loadingModel}>
+            <div className="flex gap-1.5">
+              <Button size="sm" className="h-7 text-[10px]" onClick={handleLoad} disabled={loadingModel}>
                 {loadingModel ? 'Loading...' : 'Load for chat'}
               </Button>
-            <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setJob(null); setError(null) }}>
+            <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setPhase('idle'); setJob(null); setError(null) }}>
                 Train again
               </Button>
             </div>
           </div>
         ) : phase === 'error' ? (
-          <div className="space-y-2">
-            <p className="text-sm text-destructive font-medium">Training failed</p>
-            {error && <p className="text-xs text-muted-foreground">{error}</p>}
-            <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setJob(null) }}>
+          <div className="space-y-1.5">
+            <p className="text-xs text-destructive font-medium">Training failed</p>
+            {error && <p className="text-[10px] text-muted-foreground/60">{error}</p>}
+            <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setPhase('idle'); setJob(null) }}>
               Dismiss
             </Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <Button size="sm" variant="ghost" onClick={() => setShowConfig(!showConfig)}>
+          <div className="space-y-2">
+            <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={() => setShowConfig(!showConfig)}>
               {showConfig ? 'Hide config' : 'Show config'}
             </Button>
             {showConfig && (
-              <div className="grid grid-cols-3 gap-2">
-                <div className="flex flex-col gap-1">
+              <div className="grid grid-cols-3 gap-1.5">
+                <div className="flex flex-col gap-0.5">
                   <Label htmlFor="fb-epochs" variant="uppercase">Epochs</Label>
                   <Input id="fb-epochs" type="number" min={1} max={100} value={epochs}
-                    onChange={e => setEpochs(Number(e.target.value))} className="h-8 text-xs font-mono" />
+                    onChange={e => setEpochs(Number(e.target.value))} className="h-7 text-[10px] font-mono" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-0.5">
                   <Label htmlFor="fb-lr" variant="uppercase">Learning Rate</Label>
                   <Input id="fb-lr" type="text" inputMode="decimal" value={lr}
-                    onChange={e => setLr(Number(e.target.value))} className="h-8 text-xs font-mono" />
+                    onChange={e => setLr(Number(e.target.value))} className="h-7 text-[10px] font-mono" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-0.5">
                   <Label htmlFor="fb-batch" variant="uppercase">Batch Size</Label>
                   <Input id="fb-batch" type="number" min={1} max={256} value={batchSize}
-                    onChange={e => setBatchSize(Number(e.target.value))} className="h-8 text-xs font-mono" />
+                    onChange={e => setBatchSize(Number(e.target.value))} className="h-7 text-[10px] font-mono" />
                 </div>
               </div>
             )}
-            <Button size="sm" onClick={handleTrain} disabled={starting}>
+            <Button size="sm" className="h-7 text-[10px]" onClick={handleTrain} disabled={starting}>
               {starting ? 'Starting...' : 'Train from feedback'}
             </Button>
           </div>

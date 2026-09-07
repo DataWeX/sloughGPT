@@ -117,37 +117,37 @@ export default function DownloadsCard() {
         </Button>
       }
     >
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {downloads.map(d => {
             const pct = Math.round(d.progress * 100)
             const isActive = d.status === 'downloading' || d.status === 'queued'
             const isFailed = d.status === 'failed' || d.status === 'error'
             return (
-              <div key={d.model_id} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+              <div key={d.model_id} className="rounded-lg border border-border/40 px-2.5 py-2 text-xs">
                 <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-medium truncate text-xs">{d.model_id}</span>
-                    <span className={cn('text-[10px] px-1 rounded', isActive ? 'bg-primary/10 text-primary' :
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-medium truncate text-[11px]">{d.model_id}</span>
+                    <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', isActive ? 'bg-primary/10 text-primary' :
                       isFailed ? 'bg-destructive/10 text-destructive' :
                       d.status === 'completed' ? 'bg-success/10 text-success' :
                       'bg-muted text-muted-foreground')}>{d.status}</span>
                   </div>
-                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
+                  <div className="flex items-center gap-1 text-[9px] text-muted-foreground/60 shrink-0 tabular-nums">
                     <span>{formatBytes(d.bytes_downloaded)} / {formatBytes(d.total_bytes)}</span>
-                    <span className="ml-1">{formatSpeed(d.speed_bps)}</span>
+                    <span className="ml-0.5">{formatSpeed(d.speed_bps)}</span>
                   </div>
                 </div>
                 {isActive && (
                   <Progress value={pct} size="sm" variant={pct > 0 ? 'default' : 'warning'} />
                 )}
                 {isFailed && (
-                  <div className="flex gap-1 mt-1">
-                    <Button size="sm" variant="ghost" onClick={() => handleRetry(d.model_id)}>Retry</Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleVerify(d.model_id)}>Verify</Button>
+                  <div className="flex gap-0.5 mt-1">
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleRetry(d.model_id)}>Retry</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleVerify(d.model_id)}>Verify</Button>
                   </div>
                 )}
                 {isActive && (
-                  <Button size="sm" variant="ghost" className="mt-1" onClick={() => handleCancel(d.model_id)}>Cancel</Button>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] mt-1" onClick={() => handleCancel(d.model_id)}>Cancel</Button>
                 )}
               </div>
             )

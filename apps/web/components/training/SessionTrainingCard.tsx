@@ -104,21 +104,21 @@ export function SessionTrainingCard({ addToast }: Props) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2">
         {loading ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
           </div>
         ) : sessions.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No chat sessions found.</p>
+          <p className="text-[10px] text-muted-foreground/60">No chat sessions found.</p>
         ) : (
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
+          <div className="space-y-1 max-h-64 overflow-y-auto">
             {sessions.slice(0, 50).map(s => (
               <div
                 key={s.id}
-                className={cn('flex items-center gap-3 rounded border px-3 py-2 text-sm transition-colors', selected.has(s.id) ? 'border-primary bg-primary/5' : 'border-border/50 hover:bg-muted/30')}
+                className={cn('flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors', selected.has(s.id) ? 'border-primary bg-primary/5' : 'border-border/40 hover:bg-muted/20')}
               >
                 <Checkbox
                   checked={selected.has(s.id)}
@@ -127,10 +127,10 @@ export function SessionTrainingCard({ addToast }: Props) {
                   className="h-3.5 w-3.5 rounded border-border shrink-0"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium">{s.name}</p>
-                  <div className="flex gap-2 text-[10px] text-muted-foreground">
-                    <span>{new Date(s.updated_at).toLocaleDateString()}</span>
-                    {pairCounts[s.id] != null && <span>{pairCounts[s.id]} pairs</span>}
+                  <p className="truncate text-[11px] font-medium">{s.name}</p>
+                  <div className="flex gap-1.5 text-[9px] text-muted-foreground/60">
+                    <span className="tabular-nums">{new Date(s.updated_at).toLocaleDateString()}</span>
+                    {pairCounts[s.id] != null && <span className="tabular-nums">{pairCounts[s.id]} pairs</span>}
                   </div>
                 </div>
               </div>
@@ -139,11 +139,11 @@ export function SessionTrainingCard({ addToast }: Props) {
         )}
 
         {selected.size > 0 && (
-          <div className="flex items-center justify-between rounded bg-muted/30 px-3 py-2 text-xs">
-            <span className="text-muted-foreground">
+          <div className="flex items-center justify-between rounded-lg bg-muted/20 px-2.5 py-1.5 text-[10px]">
+            <span className="text-muted-foreground/60">
               {selected.size} sessions, ~{totalPairs} pairs
             </span>
-            <Button size="sm" onClick={() => setPendingTrain(true)} disabled={training}>
+            <Button size="sm" className="h-6 text-[10px]" onClick={() => setPendingTrain(true)} disabled={training}>
               {training ? 'Training...' : 'Train from Sessions'}
             </Button>
           </div>

@@ -141,6 +141,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                     className="h-5 w-5 opacity-0 group-hover:opacity-100"
                     onClick={() => handleDelete(group.id)}
                     title="Delete group"
+                    aria-label="Delete group"
                   >
                     <IconX className="h-3 w-3" />
                   </Button>
@@ -159,6 +160,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                         className="h-4 w-4 opacity-0 group-hover:opacity-100"
                         onClick={() => handleUnassign(session.id)}
                         title="Remove from group"
+                        aria-label="Remove from group"
                       >
                         <IconX className="h-2.5 w-2.5" />
                       </Button>
@@ -189,6 +191,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                   className="h-4 w-4"
                   onClick={() => setAssigningTo(assigningTo === session.id ? null : session.id)}
                   title="Assign to group"
+                  aria-label="Assign to group"
                 >
                   <IconPlus className="h-2.5 w-2.5" />
                 </Button>

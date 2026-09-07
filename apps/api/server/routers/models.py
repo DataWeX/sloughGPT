@@ -876,6 +876,11 @@ class ModelsRouter:
             )
             ctrl = get_models_controller()
             if model_dir:
+                from pathlib import Path as _P
+                resolved = _P(model_dir).resolve()
+                allowed_parents = [_P("models").resolve(), _P("data").resolve(), _P.home()]
+                if not any(str(resolved).startswith(str(p)) for p in allowed_parents):
+                    raise_error("model_dir must be under models/, data/, or home", "E_BAD_REQUEST")
                 result = ctrl.load_model_path(model_dir)
             elif model_id:
                 result = ctrl.load_model(model_id)

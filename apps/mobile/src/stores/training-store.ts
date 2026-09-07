@@ -93,6 +93,7 @@ interface TrainingState {
   unloadAdapterModel: () => Promise<void>;
   importDataset: (source: string, name: string, type: 'url' | 'github' | 'huggingface' | 'csv') => Promise<void>;
   clearError: () => void;
+  rehydrate: () => Promise<void>;
 }
 
 let abortController: AbortController | null = null;
@@ -485,4 +486,50 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   },
 
   clearError: () => set({error: null}),
+
+  rehydrate: async () => {
+    const state = get();
+    if (state.phase !== 'idle' && state.running) return;
+
+    try {
+      const jobs = await listTrainingJobs();
+      const running = Array.isArray(jobs) ? jobs.find((j: any) => j.status === 'running') : null;
+      if (running) {
+        set({
+          phase: 'TRAINING',
+          running: true,
+          loss: running.loss ?? null,
+          epoch: running.current_epoch ?? 0,
+          totalEpochs: running.epochs ?? 0,
+          steps: running.global_step ?? 0,
+        });
+
+        abortController = new AbortController();
+        try {
+          for await (const event of streamTraining(abortController.signal)) {
+            const rawPhase = event.phase;
+            const rawStatus = event.status;
+            const rawData = (event.data || {}) as Record<string, any>;
+            if (rawPhase) set({phase: rawPhase as TrainPhase});
+            if (rawData.loss !== undefined) {
+              set(s => ({
+                loss: Number(rawData.loss),
+                steps: Number(rawData.step ?? rawData.global_step ?? s.steps),
+                epoch: Number(rawData.epoch ?? rawData.current_epoch ?? s.epoch),
+                lossHistory: [...s.lossHistory, {step: Number(rawData.step ?? 0), value: Number(rawData.loss)}].slice(-200),
+              }));
+            }
+            if (rawStatus === 'complete') {
+              set({phase: 'COMPLETE', running: false});
+              break;
+            }
+            if (rawStatus === 'error') {
+              set({phase: 'FAILED', error: String(event.message || 'Training failed'), running: false});
+              break;
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  },
 }));

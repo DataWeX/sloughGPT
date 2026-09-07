@@ -66,11 +66,14 @@ class EventBuffer:
 
 
 _buffer: Optional[EventBuffer] = None
+_buffer_lock = Lock()
 
 
 def get_event_buffer() -> EventBuffer:
     """Get (or create) the singleton EventBuffer."""
     global _buffer
     if _buffer is None:
-        _buffer = EventBuffer()
+        with _buffer_lock:
+            if _buffer is None:
+                _buffer = EventBuffer()
     return _buffer

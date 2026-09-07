@@ -77,7 +77,7 @@ class SelfTrainRouter:
             if req and req.forever:
                 cmd.append("--forever")
             proc = await asyncio.to_thread(
-                subprocess.Popen, cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+                subprocess.Popen, cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
             )
             server_state._self_train_proc = proc
             logger.info(

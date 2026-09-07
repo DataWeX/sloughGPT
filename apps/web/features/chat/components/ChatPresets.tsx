@@ -88,6 +88,7 @@ export const ChatPresets = memo(function ChatPresets({
           size="icon-sm"
           className="h-5 w-5"
           onClick={() => setCreating(!creating)}
+          aria-label={creating ? 'Cancel preset creation' : 'Create preset'}
         >
           <IconPlus className="h-3 w-3" />
         </Button>
@@ -162,6 +163,7 @@ export const ChatPresets = memo(function ChatPresets({
                   className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
                   onClick={() => handleDelete(preset.id)}
                   title="Delete preset"
+                  aria-label="Delete preset"
                 >
                   <IconX className="h-3 w-3" />
                 </Button>

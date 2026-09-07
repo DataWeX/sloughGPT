@@ -43,57 +43,57 @@ export function WebhooksCard({ addToast }: Props) {
           </p>
         )}
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {loading ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Skeleton className="h-16 w-full" />
             <Skeleton className="h-16 w-full" />
           </div>
         ) : webhooks.length === 0 && !newUrl ? (
-          <p className="text-xs text-muted-foreground">No webhooks yet. Add one to get notified when training starts or finishes.</p>
+          <p className="text-[10px] text-muted-foreground/60">No webhooks yet. Add one to get notified when training starts or finishes.</p>
         ) : null}
 
         {webhooks.map(w => (
-          <div key={w.id} className="rounded border text-sm">
+          <div key={w.id} className="rounded-lg border border-border/40 text-xs">
             <div
-              className="flex cursor-pointer items-center justify-between p-3 hover:bg-muted/30"
+              className="flex cursor-pointer items-center justify-between p-2.5 hover:bg-muted/20 transition-colors"
               onClick={() => handleToggleExpand(w.id)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleExpand(w.id); } }}
               role="button"
               tabIndex={0}
             >
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-xs">{w.url}</p>
-                <div className="flex gap-2 text-xs text-muted-foreground">
+                <p className="truncate font-mono text-[10px]">{w.url}</p>
+                <div className="flex gap-1 text-[10px] text-muted-foreground/60">
                   {w.events.map(e => (
-                    <span key={e} className="rounded bg-muted px-1.5 py-0.5">{eventLabel(e)}</span>
+                    <span key={e} className="rounded-full bg-muted/50 px-1.5 py-0.5">{eventLabel(e)}</span>
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); void testWebhook(w.url, addToast) }} disabled={testingUrl === w.url}>
+              <div className="flex items-center gap-0.5">
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={e => { e.stopPropagation(); void testWebhook(w.url, addToast) }} disabled={testingUrl === w.url}>
                   {testingUrl === w.url ? 'Testing...' : 'Test'}
                 </Button>
-                <Button size="sm" variant="ghost" className="text-destructive" onClick={e => { e.stopPropagation(); setPendingDelete(w.id) }}>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={e => { e.stopPropagation(); setPendingDelete(w.id) }}>
                   Delete
                 </Button>
               </div>
             </div>
             {expandedId === w.id && (
-              <div className="border-t px-3 py-2">
+              <div className="border-t border-border/30 px-2.5 py-1.5">
                 {deliveriesLoading ? (
-                  <p className="text-xs text-muted-foreground">Loading deliveries...</p>
+                  <p className="text-[10px] text-muted-foreground/60">Loading deliveries...</p>
                 ) : deliveries.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No deliveries yet</p>
+                  <p className="text-[10px] text-muted-foreground/60">No deliveries yet</p>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {deliveries.map(d => (
-                      <div key={d.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                      <div key={d.id} className="flex items-center justify-between text-[10px] text-muted-foreground/60">
                         <span>{eventLabel(d.event)}</span>
                         <span className={d.success ? 'text-success' : 'text-destructive'}>
                           {d.success ? 'Delivered' : 'Failed'} ({d.status})
                         </span>
-                        <span>{formatTimestamp(d.delivered_at)}</span>
+                        <span className="tabular-nums">{formatTimestamp(d.delivered_at)}</span>
                       </div>
                     ))}
                   </div>
@@ -103,19 +103,19 @@ export function WebhooksCard({ addToast }: Props) {
           </div>
         ))}
 
-        <div className="space-y-2 border-t pt-3">
-          <p className="text-xs font-medium">Add webhook</p>
+        <div className="space-y-1.5 border-t border-border/30 pt-2.5">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Add webhook</p>
           <Input
             id="webhook-url"
             aria-label="Webhook URL"
             placeholder="https://example.com/webhook"
             value={newUrl}
             onChange={e => setNewUrl(e.target.value)}
-            className="h-8 font-mono text-xs"
+            className="h-7 font-mono text-[10px]"
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {AVAILABLE_EVENTS.map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-1 text-xs text-muted-foreground">
+              <label key={key} className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
                 <Checkbox
                   checked={newEvents.includes(key)}
                   onCheckedChange={() => toggleEvent(key)}
@@ -125,16 +125,16 @@ export function WebhooksCard({ addToast }: Props) {
               </label>
             ))}
           </div>
-          <Button size="sm" onClick={() => void addWebhook(addToast)} disabled={adding || !newUrl.trim()}>
+          <Button size="sm" className="h-7 text-[10px]" onClick={() => void addWebhook(addToast)} disabled={adding || !newUrl.trim()}>
             {adding ? 'Adding...' : 'Add webhook'}
           </Button>
         </div>
 
         {(retryQueue.length > 0 || deadLetters.length > 0) && (
-          <div className="border-t pt-3 space-y-2">
+          <div className="border-t border-border/30 pt-2.5 space-y-1.5">
             <button
               type="button"
-              className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground/60 hover:text-foreground"
               onClick={() => setShowRetries(!showRetries)}
               aria-expanded={showRetries}
             >
@@ -144,23 +144,23 @@ export function WebhooksCard({ addToast }: Props) {
             </button>
 
             {showRetries && (
-              <div className="space-y-2 text-xs">
+              <div className="space-y-1.5 text-[10px]">
                 {retryQueue.length > 0 && (
-                  <div className="space-y-1">
-                    <p className="text-muted-foreground font-medium">Pending retries</p>
+                  <div className="space-y-0.5">
+                    <p className="text-muted-foreground/60 font-medium">Pending retries</p>
                     {retryQueue.map(r => (
                       <div key={r.delivery_id} className="flex items-center justify-between rounded bg-muted/30 px-2 py-1">
                         <span className="truncate font-mono">{r.webhook_id}</span>
                         <span>{eventLabel(r.event)}</span>
                         <span>attempt {r.attempt_count}/5</span>
-                        <span className="text-muted-foreground">next: {new Date(r.next_retry_at * 1000).toLocaleTimeString()}</span>
+                        <span className="text-muted-foreground/60 tabular-nums">next: {new Date(r.next_retry_at * 1000).toLocaleTimeString()}</span>
                       </div>
                     ))}
                   </div>
                 )}
 
                 {deadLetters.length > 0 && (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     <p className="text-destructive font-medium">Dead letters (permanently failed)</p>
                     {deadLetters.map(dl => (
                       <div key={dl.delivery_id} className="flex items-center justify-between rounded bg-destructive/5 px-2 py-1">
@@ -168,7 +168,7 @@ export function WebhooksCard({ addToast }: Props) {
                         <span>{eventLabel(dl.event)}</span>
                         <span className="text-destructive">{dl.error || `HTTP ${dl.status_code}`}</span>
                         <span>{dl.attempt_count} attempts</span>
-                        <span className="text-muted-foreground">{formatTimestamp(dl.dead_lettered_at)}</span>
+                        <span className="text-muted-foreground/60 tabular-nums">{formatTimestamp(dl.dead_lettered_at)}</span>
                       </div>
                     ))}
                   </div>

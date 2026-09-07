@@ -23,15 +23,15 @@ export default memo(function ComposableLayersCard({ modelsCount, soulsCount, che
     <Card>
       <CardHeader><CardTitle className="text-base">Composable Layers</CardTitle></CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
           {layers.map(layer => (
-            <div key={layer.title} className="rounded-lg border border-border/60 p-3">
-              <div className="flex items-center gap-2 mb-1">
+            <div key={layer.title} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
+              <div className="flex items-center gap-1.5 mb-0.5">
                 {layer.icon}
-                <span className="text-sm font-medium">{layer.title}</span>
+                <span className="text-xs font-medium">{layer.title}</span>
               </div>
-              <p className="text-[11px] text-muted-foreground mb-2">{layer.desc}</p>
-              <span className="text-[10px] text-muted-foreground/60">{layer.count} available</span>
+              <p className="text-[10px] text-muted-foreground/60 mb-1">{layer.desc}</p>
+              <span className="text-[9px] text-muted-foreground/40">{layer.count} available</span>
             </div>
           ))}
         </div>

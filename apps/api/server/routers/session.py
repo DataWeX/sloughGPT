@@ -222,7 +222,7 @@ class SessionRouter:
             _op_id = None
             try:
                 mgr = get_cancel_manager()
-                _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}")
+                _op_id = mgr.register(OpType.INFERENCE, f"regenerate:{session_id}", cancel_fn=lambda: None)
                 mgr.start(_op_id)
             except Exception as exc:
                 logger.debug("CancelManager registration failed for regenerate: %s", exc)

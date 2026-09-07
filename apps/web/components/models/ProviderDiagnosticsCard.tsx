@@ -8,13 +8,13 @@ const POLL_MS = 2000
 const DONE_PHASES = new Set(['ready', 'running'])
 
 function StatusDot({ ok }: { ok: boolean }) {
-  return <span className={cn("inline-block w-2 h-2 rounded-full shrink-0", ok ? "bg-success" : "bg-destructive")} />
+  return <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", ok ? "bg-success" : "bg-destructive")} />
 }
 
 function KvRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-baseline gap-2 text-xs">
-      <span className="text-muted-foreground shrink-0 w-28">{label}</span>
+    <div className="flex items-baseline gap-2 text-[10px]">
+      <span className="text-muted-foreground/60 shrink-0 w-28">{label}</span>
       <span className={cn("text-foreground truncate", mono && "font-mono")}>{value ?? '—'}</span>
     </div>
   )
@@ -87,18 +87,18 @@ export default memo(function ProviderDiagnosticsCard() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">Provider Chain</CardTitle>
-        <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading} className="h-8 text-xs">
+        <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={loading} className="h-7 text-[10px]">
           {loading ? 'Loading...' : 'Refresh'}
         </Button>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {error && <p className="text-xs text-destructive">{error}</p>}
+      <CardContent className="space-y-2">
+        {error && <p className="text-[10px] text-destructive">{error}</p>}
 
         {startup && <StartupBar progress={startup} />}
 
         {modelState && (
-          <div className="space-y-1.5 rounded-md border border-border/40 bg-muted/30 p-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Model State</div>
+          <div className="space-y-1 rounded-md border border-border/40 bg-muted/30 p-2.5">
+            <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">Model State</div>
             <KvRow label="model" value={modelState.model} mono />
             <KvRow label="model_type" value={modelState.model_type} mono />
             <KvRow label="tokenizer" value={modelState.tokenizer} mono />
@@ -106,23 +106,23 @@ export default memo(function ProviderDiagnosticsCard() {
           </div>
         )}
 
-        <div className="space-y-1.5 rounded-md border border-border/40 bg-muted/30 p-3">
-          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Default Router</div>
+        <div className="space-y-1 rounded-md border border-border/40 bg-muted/30 p-2.5">
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">Default Router</div>
           {defaultRouter ? (
             <>
               <KvRow label="text_provider" value={defaultRouter.text_provider ?? 'NONE — chat broken'} mono />
               <KvRow label="processors" value={defaultRouter.processors?.join(', ') ?? '—'} />
             </>
           ) : (
-            <p className="text-xs text-destructive">No default router registered</p>
+            <p className="text-[10px] text-destructive">No default router registered</p>
           )}
         </div>
 
         {textProvider && (
-          <div className="space-y-1.5 rounded-md border border-border/40 bg-muted/30 p-3">
-            <div className="flex items-center gap-2 mb-1">
+          <div className="space-y-1 rounded-md border border-border/40 bg-muted/30 p-2.5">
+            <div className="flex items-center gap-1.5 mb-0.5">
               <StatusDot ok={!!textProvider.model_id} />
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Text Provider ({textProviderName})</div>
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Text Provider ({textProviderName})</div>
             </div>
             <KvRow label="model_id" value={textProvider.model_id} mono />
             {textProvider.server && (
@@ -134,18 +134,18 @@ export default memo(function ProviderDiagnosticsCard() {
           </div>
         )}
 
-        <div className="space-y-1">
-          <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">All Providers ({Object.keys(providers).length})</div>
+        <div className="space-y-0.5">
+          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">All Providers ({Object.keys(providers).length})</div>
           {Object.entries(providers).map(([name, info]) => (
-            <div key={name} className="flex items-center gap-2 text-xs py-0.5">
+            <div key={name} className="flex items-center gap-1.5 text-[10px] py-0.5">
               <StatusDot ok={!!info.model_id || name === 'default'} />
               <span className="font-mono text-foreground w-28 truncate">{name}</span>
-              <span className="text-muted-foreground">{info.type}</span>
-              {info.text_provider && <span className="text-muted-foreground">→ {info.text_provider}</span>}
+              <span className="text-muted-foreground/60">{info.type}</span>
+              {info.text_provider && <span className="text-muted-foreground/60">→ {info.text_provider}</span>}
             </div>
           ))}
           {Object.keys(providers).length === 0 && (
-            <p className="text-xs text-muted-foreground">No providers registered</p>
+            <p className="text-[10px] text-muted-foreground/60">No providers registered</p>
           )}
         </div>
       </CardContent>
