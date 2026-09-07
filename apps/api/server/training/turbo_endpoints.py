@@ -66,7 +66,45 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
 async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
+        from domains.shared import find_repo_root
         from domains.training.service import run_turbo_worker, start_turbo_training
+
+        # Pre-flight validation
+        if req.source_text and len(req.source_text.strip()) < 200:
+            raise_error(
+                f"Source text too short for training ({len(req.source_text.strip())} chars, minimum 200)",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+
+        if req.dataset_id:
+            from pathlib import Path
+
+            repo_root = find_repo_root(Path(__file__).resolve())
+            ds_path = repo_root / "data" / req.dataset_id
+            if not ds_path.exists():
+                ds_path = repo_root / "data" / f"{req.dataset_id}.jsonl"
+            if not ds_path.exists():
+                raise_error(
+                    f"Dataset not found: {req.dataset_id}",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+            if ds_path.is_dir():
+                candidates = [ds_path / "input.txt", ds_path / "corpus.jsonl", ds_path / "train.txt"]
+                data_file = next((c for c in candidates if c.exists()), None)
+                if not data_file:
+                    raise_error(
+                        f"No data files found in dataset directory: {req.dataset_id}",
+                        "E_BAD_REQUEST",
+                        status_code=400,
+                    )
+                if data_file.stat().st_size < 100:
+                    raise_error(
+                        f"Dataset file too small ({data_file.stat().st_size} bytes, minimum 100)",
+                        "E_BAD_REQUEST",
+                        status_code=400,
+                    )
 
         config = req.model_dump()
         job_info = await asyncio.to_thread(start_turbo_training, config)

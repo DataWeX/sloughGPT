@@ -68,6 +68,35 @@ async def start_distillation(
     data_str = Path(input_file).read_text(encoding="utf-8", errors="replace")
     if not data_str.strip():
         raise_error("Training data is empty", "E_BAD_REQUEST", status_code=400)
+
+    # Pre-flight quality gate
+    try:
+        from domains.training.quality_scorer import compute_data_quality
+
+        quality = compute_data_quality(data_str[:200_000])
+        avg_q = quality.get("avg_quality", 0)
+        tox_r = quality.get("toxicity_rate", 0)
+
+        if avg_q < 1.0:
+            raise_error(
+                f"Data quality too low for distillation (avg_quality={avg_q:.2f}/5.0, minimum=1.0)",
+                "E_BAD_REQUEST",
+                status_code=400,
+                details=quality,
+            )
+        if tox_r > 0.5:
+            raise_error(
+                f"Data toxicity too high for distillation (toxicity_rate={tox_r:.2f}, maximum=0.5)",
+                "E_BAD_REQUEST",
+                status_code=400,
+                details=quality,
+            )
+    except Exception as e:
+        from schemas.common import AppError
+        if isinstance(e, AppError):
+            raise
+        logger.debug("Distill quality gate check failed (proceeding): %s", e)
+
     out_stem = request.name or f"distill_{job_id}"
     _REPO_ROOT = find_repo_root(Path(__file__).resolve())
     output_dir = _REPO_ROOT / "models" / "auto-training"
