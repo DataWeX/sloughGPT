@@ -3,6 +3,8 @@ import {
   ScrollView,
   TextInput,
   Modal,
+  Platform,
+  KeyboardAvoidingView,
   RefreshControl,
   ActivityIndicator,
   Alert,
@@ -385,6 +387,9 @@ export function TrainingScreen() {
 
   return (
     <SafeAreaView style={{flex: 1}} edges={['top']}>
+      <KeyboardAvoidingView
+        style={{flex: 1}}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -1497,6 +1502,7 @@ export function TrainingScreen() {
           )}
         </YStack>
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* ── Dataset Preview Modal ──────────────────────────────────────── */}
       <Modal visible={previewVisible} animationType="slide" transparent>

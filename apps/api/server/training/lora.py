@@ -51,8 +51,13 @@ async def start_lora_finetune(
                 "E_BAD_REQUEST",
                 status_code=400,
             )
-    # Validate dataset
+    # Path traversal guard
     repo_root = find_repo_root(Path(__file__).resolve())
+    if not str(model_path.resolve()).startswith(str(repo_root.resolve())):
+        raise_error("Invalid model path", "E_BAD_REQUEST", status_code=400)
+    if model_path.suffix != ".slnc":
+        raise_error(f"Model must be .slnc format, got {model_path.suffix}", "E_BAD_REQUEST", status_code=400)
+    # Validate dataset
     datasets_dir = repo_root / "datasets"
     data_dir = datasets_dir / request.dataset
     data_path = None
@@ -235,7 +240,7 @@ async def start_lora_finetune(
             if cancel_event.is_set():
                 _finish_job(job_id, "cancelled")
                 training_jobs[job_id]["progress"] = 0
-                get_training_controller().complete()
+                get_training_controller().reset()
                 return
 
             training_jobs[job_id].update(
@@ -292,7 +297,7 @@ async def start_lora_finetune(
         except Exception as exc:
             logger.exception("LoRA fine-tune job %s failed", job_id, extra={"tag": "TRAIN"})
             _finish_job(job_id, "failed", str(exc))
-            get_training_controller().complete()
+            get_training_controller().fail(str(exc))
 
     executor = get_training_executor()
     executor.submit(run_lora_finetune, job_id)
