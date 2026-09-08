@@ -78,8 +78,12 @@ class SelfTrainRouter:
                 cmd.extend(["--temperature", str(req.temperature)])
             if req and req.forever:
                 cmd.append("--forever")
+            import tempfile
+            _log_path = Path(__file__).resolve().parents[4] / "data" / "self_train_output.log"
+            _log_path.parent.mkdir(parents=True, exist_ok=True)
+            _log_file = open(_log_path, "w")
             proc = await asyncio.to_thread(
-                subprocess.Popen, cmd, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT
+                subprocess.Popen, cmd, stdout=_log_file, stderr=subprocess.STDOUT
             )
             server_state._self_train_proc = proc
             logger.info(
