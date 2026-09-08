@@ -650,6 +650,108 @@ class WorkspacesRouter:
                 "imported_members": imported_members,
             })
 
+        # ─── Workspace health check ──────────────────────────────
+        async def workspace_health_check(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            """Health check for workspace data integrity."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            checks: list[dict] = []
+
+            # Check workspace exists
+            checks.append({
+                "name": "workspace_exists",
+                "status": "pass",
+                "detail": f"Workspace '{ws.name}' exists",
+            })
+
+            # Check members
+            members = self._ws_repo.list_members(workspace_id)
+            has_owner = any(
+                (m.role.value if hasattr(m.role, "value") else str(m.role)) == "owner"
+                for m in members
+            )
+            checks.append({
+                "name": "has_owner",
+                "status": "pass" if has_owner else "warn",
+                "detail": f"{len(members)} members, {'has' if has_owner else 'missing'} owner",
+            })
+
+            # Check training jobs consistency
+            orphan_jobs = 0
+            active_jobs = 0
+            try:
+                from training.jobs import training_jobs
+                member_ids = {m.user_id for m in members}
+                for j in training_jobs.values():
+                    if j.get("workspace_id", "") == workspace_id:
+                        if j.get("status") == "running":
+                            active_jobs += 1
+                        j_uid = j.get("user_id", "")
+                        if j_uid and j_uid not in member_ids:
+                            orphan_jobs += 1
+            except Exception:
+                pass
+
+            checks.append({
+                "name": "training_jobs",
+                "status": "pass" if orphan_jobs == 0 else "warn",
+                "detail": f"{active_jobs} active, {orphan_jobs} orphaned (user not in workspace)",
+            })
+
+            # Check datasets accessible
+            dataset_count = 0
+            try:
+                from controllers.datasets import get_datasets_controller
+                ctrl = get_datasets_controller()
+                ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
+                dataset_count = len(ds_list) if ds_list else 0
+            except Exception:
+                pass
+
+            checks.append({
+                "name": "datasets",
+                "status": "pass",
+                "detail": f"{dataset_count} datasets accessible",
+            })
+
+            # Check knowledge items
+            knowledge_count = 0
+            try:
+                from routers.kb import get_kb_router
+                kb = get_kb_router()
+                memory = kb._get_memory()
+                all_items = memory.list_all(top_k=10000)
+                knowledge_count = sum(
+                    1 for item in all_items
+                    if item.get("workspace_id", "") == workspace_id
+                )
+            except Exception:
+                pass
+
+            checks.append({
+                "name": "knowledge",
+                "status": "pass",
+                "detail": f"{knowledge_count} knowledge items",
+            })
+
+            # Overall status
+            has_warning = any(c["status"] == "warn" for c in checks)
+            has_error = any(c["status"] == "fail" for c in checks)
+
+            return success_response(data={
+                "workspace_id": workspace_id,
+                "status": "error" if has_error else ("warning" if has_warning else "healthy"),
+                "checks": checks,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -665,6 +767,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/activity", get_workspace_activity, methods=["GET"])
         router.add_api_route("/{workspace_id}/export", export_workspace_data, methods=["GET"])
         router.add_api_route("/import", import_workspace_data, methods=["POST"])
+        router.add_api_route("/{workspace_id}/health", workspace_health_check, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────

@@ -31,7 +31,22 @@ export default function WorkspaceDashboardPage() {
   const [stats, setStats] = useState<WorkspaceStats | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
+  const [healthStatus, setHealthStatus] = useState<string | null>(null)
+  const [checkingHealth, setCheckingHealth] = useState(false)
   const { currentWorkspace } = useAuthStore()
+
+  const runHealthCheck = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    setCheckingHealth(true)
+    try {
+      const res = await apiGet<{ data: { status: string } }>(`/workspaces/${currentWorkspace.id}/health`)
+      setHealthStatus(res?.data?.status ?? null)
+    } catch {
+      setHealthStatus('error')
+    } finally {
+      setCheckingHealth(false)
+    }
+  }, [currentWorkspace?.id])
 
   const fetchData = useCallback(async () => {
     if (!currentWorkspace?.id) {
@@ -45,12 +60,14 @@ export default function WorkspaceDashboardPage() {
       ])
       setStats(statsRes?.data ?? null)
       setActivities(activityRes?.data?.activities ?? [])
+      // Run health check in background
+      runHealthCheck()
     } catch {
       logger.warning('Could not fetch workspace dashboard data')
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id])
+  }, [currentWorkspace?.id, runHealthCheck])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -104,6 +121,30 @@ export default function WorkspaceDashboardPage() {
                 <span className="text-green-600 dark:text-green-400 font-medium">
                   {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
                 </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quick health status */}
+        {healthStatus && (
+          <Card>
+            <CardContent className="py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`h-2 w-2 rounded-full ${
+                    healthStatus === 'healthy' ? 'bg-green-500' :
+                    healthStatus === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
+                  }`} />
+                  <span className="font-medium capitalize">Workspace {healthStatus}</span>
+                </div>
+                <button
+                  onClick={runHealthCheck}
+                  disabled={checkingHealth}
+                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {checkingHealth ? 'Checking...' : 'Re-check'}
+                </button>
               </div>
             </CardContent>
           </Card>
