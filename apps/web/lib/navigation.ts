@@ -113,4 +113,5 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/usage': IconChart,
   '/audit-trail': IconActivity,
   '/workspace-settings': IconSettings,
+  '/workspace-api-keys': IconCode,
 }
