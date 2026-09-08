@@ -90,6 +90,7 @@ def get_all_routers() -> list[APIRouter]:
         "tokens",
         "feeds",
         "profiles",
+        "users",
     ]
 
     _cached_routers = []

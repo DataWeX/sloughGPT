@@ -240,6 +240,36 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# GZip omitted — Starlette GZipMiddleware buffers responses, which kills SSE streaming.
+# /chat/stream and /inference/generate/stream send chunked text/event-stream that must
+# not be buffered. Non-streaming responses (health, models, etc.) are <5KB — compression
+# overhead exceeds bandwidth savings at that size. Add back only if large payload
+# endpoints (/datasets/export, /training/export-text) need it, using per-route config.
+
+# Register structured middleware from the infrastructure package.
+# NOTE: CORSMiddleware is registered LAST (after all other middleware) so it is
+# outermost in the middleware stack. In Starlette, the last add_middleware() call
+# wraps everything added before it. CORSMiddleware must be outermost because:
+#   1. It must intercept OPTIONS preflight before any other middleware can
+#      return a non-CORS response (e.g. 429 from rate limiter).
+#   2. It must add Access-Control-* headers to ALL responses, including error
+#      responses from inner middleware (429, 504, etc.).
+# Without this, the browser sees responses without CORS headers and fires
+# TypeError: NetworkError when attempting to fetch resource.
+from infrastructure.middleware import register_all_middleware  # noqa: E402
+
+register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
+
+# Auth middleware — enforces JWT at middleware level (before CORS)
+try:
+    from infrastructure.auth_middleware import AuthMiddleware
+
+    app.add_middleware(AuthMiddleware)
+    logger.info("AuthMiddleware registered", extra={"op": "infra.startup"})
+except Exception as exc:
+    logger.warning("AuthMiddleware skipped: %s", exc, extra={"op": "infra.startup"})
+
+# CORS must be outermost — added after all other middleware so it wraps them.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get(
@@ -249,17 +279,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# GZip omitted — Starlette GZipMiddleware buffers responses, which kills SSE streaming.
-# /chat/stream and /inference/generate/stream send chunked text/event-stream that must
-# not be buffered. Non-streaming responses (health, models, etc.) are <5KB — compression
-# overhead exceeds bandwidth savings at that size. Add back only if large payload
-# endpoints (/datasets/export, /training/export-text) need it, using per-route config.
-
-# Register structured middleware from the infrastructure package.
-from infrastructure.middleware import register_all_middleware  # noqa: E402
-
-register_all_middleware(app, request_timeout=cfg.request_timeout_seconds)
 
 # Register health/status routes IMMEDIATELY — before lifespan runs.
 # During the 25-40s model loading phase, the frontend must still get
@@ -547,7 +566,7 @@ if __name__ == "__main__":
         with _sock.create_connection(("127.0.0.1", bind_port), timeout=1.0):
             _port_open = False
     except (ConnectionRefusedError, OSError, TimeoutError):
-        pass
+        pass  # Expected: port is free when connection is refused
 
     if not _port_open:
         # Something is listening -- is it a SloughGPT server?

@@ -77,6 +77,8 @@ class UserInfo(BaseModel):
     id: str
     username: str
     email: str
+    role: str = "user"
+    status: str = "active"
 
 
 class AuthResponse(BaseModel):
@@ -247,11 +249,23 @@ class AuthRouter:
                 user["password_hash"] = self._hash_password(req.password)
                 self._save_user(uid, user)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
-            token = jwt_auth.create_token(user_id=uid)
+            token = jwt_auth.create_token(
+                user_id=uid,
+                extra_payload={
+                    "role": user.get("role", "user"),
+                    "tenant_id": user.get("tenant_id", ""),
+                },
+            )
             safe_audit_log("auth.login_success", resource=uid, detail=f"username={req.username}")
             return AuthResponse(
                 token=token,
-                user=UserInfo(id=uid, username=user["username"], email=user["email"]),
+                user=UserInfo(
+                    id=uid,
+                    username=user["username"],
+                    email=user["email"],
+                    role=user.get("role", "user"),
+                    status=user.get("status", "active"),
+                ),
             )
 
         async def register(req: RegisterRequest, request: Request) -> dict:
@@ -284,15 +298,26 @@ class AuthRouter:
                 "username": req.username,
                 "email": req.email,
                 "password_hash": self._hash_password(req.password),
+                "role": "user",
+                "tenant_id": "",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             self._save_user(uid, user_data)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()
-            token = jwt_auth.create_token(user_id=uid)
+            token = jwt_auth.create_token(
+                user_id=uid,
+                extra_payload={"role": "user", "tenant_id": ""},
+            )
             safe_audit_log("auth.register", resource=uid, detail=f"username={req.username}")
             return AuthResponse(
                 token=token,
-                user=UserInfo(id=uid, username=req.username, email=req.email),
+                user=UserInfo(
+                    id=uid,
+                    username=req.username,
+                    email=req.email,
+                    role="user",
+                    status="active",
+                ),
             )
 
         async def get_me(current_user: dict = current_user_dep) -> dict:

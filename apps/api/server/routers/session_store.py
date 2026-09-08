@@ -48,6 +48,8 @@ class SessionStore:
         name: str = "",
         model: str | None = None,
         messages: list[dict] | None = None,
+        user_id: str = "",
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         """Create a new chat session.
 
@@ -59,6 +61,8 @@ class SessionStore:
             "name": name,
             "model": model,
             "messages": messages or [],
+            "user_id": user_id,
+            "workspace_id": workspace_id,
             "created_at": now,
             "updated_at": now,
             "archived": False,
@@ -73,11 +77,25 @@ class SessionStore:
         """Get a session by ID. Returns None if not found."""
         return self._col.find_one({"id": session_id})
 
-    def list(self, include_archived: bool = False) -> list[dict[str, Any]]:
-        """List sessions, sorted by updated_at descending."""
-        query = {} if include_archived else {"archived": {"$ne": True}}
+    def list(self, include_archived: bool = False, user_id: str = "") -> list[dict[str, Any]]:
+        """List sessions, sorted by updated_at descending.
+
+        If user_id is provided, only return sessions owned by that user.
+        """
+        query: dict[str, Any] = {}
+        if not include_archived:
+            query["archived"] = {"$ne": True}
+        if user_id:
+            query["user_id"] = user_id
         sessions = self._col.find(query, sort=[("updated_at", -1)])
         return sessions
+
+    def list_by_workspace(self, workspace_id: str, include_archived: bool = False) -> list[dict[str, Any]]:
+        """List sessions for a workspace."""
+        query: dict[str, Any] = {"workspace_id": workspace_id}
+        if not include_archived:
+            query["archived"] = {"$ne": True}
+        return self._col.find(query, sort=[("updated_at", -1)])
 
     def upsert(self, session_id: str, **fields: Any) -> None:
         """Update session fields (archived, starred, pinned, name, etc.).
