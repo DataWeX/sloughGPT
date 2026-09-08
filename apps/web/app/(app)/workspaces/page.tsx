@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiG
 import { IconPlus, IconTrash } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
-import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
@@ -47,6 +47,9 @@ export default function WorkspacesPage() {
   const [loadingMembers, setLoadingMembers] = useState(false)
   const [addMemberId, setAddMemberId] = useState('')
   const [addMemberRole, setAddMemberRole] = useState('member')
+  const [editingWs, setEditingWs] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editDesc, setEditDesc] = useState('')
   const addToast = useToastStore(s => s.addToast)
   const { currentWorkspace, switchWorkspace } = useAuthStore()
 
@@ -86,6 +89,24 @@ export default function WorkspacesPage() {
       addToast('Workspace deleted', 'success')
     } catch {
       addToast('Could not delete workspace', 'error')
+    }
+  }
+
+  const startEdit = (ws: Workspace) => {
+    setEditingWs(ws.id)
+    setEditName(ws.name)
+    setEditDesc(ws.description)
+  }
+
+  const saveEdit = async () => {
+    if (!editingWs || !editName.trim()) return
+    try {
+      await apiPut(`/workspaces/${editingWs}`, { name: editName, description: editDesc })
+      setEditingWs(null)
+      await fetchWorkspaces()
+      addToast('Workspace updated', 'success')
+    } catch {
+      addToast('Could not update workspace', 'error')
     }
   }
 
@@ -194,29 +215,63 @@ export default function WorkspacesPage() {
               workspaces.map(ws => (
                 <div
                   key={ws.id}
-                  className={`flex items-center justify-between px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
+                  className={`px-3 py-2 rounded-md text-xs transition-colors ${
                     selectedWs === ws.id ? 'bg-primary/[0.08] border border-primary/40' : 'hover:bg-muted/50 border border-transparent'
                   }`}
-                  onClick={() => setSelectedWs(selectedWs === ws.id ? null : ws.id)}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">{ws.name}</div>
-                    {ws.description && <div className="text-[10px] text-muted-foreground truncate">{ws.description}</div>}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] text-muted-foreground">{ws.member_count ?? 0} members</span>
-                    {ws.id === currentWorkspace?.id && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">Active</span>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={e => { e.stopPropagation(); deleteWorkspace(ws.id) }}
-                    >
-                      <IconTrash className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  {editingWs === ws.id ? (
+                    /* Edit mode */
+                    <div className="space-y-2">
+                      <div className="flex gap-1.5">
+                        <Input
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          placeholder="Name"
+                          className="flex-1 h-6 text-[10px]"
+                        />
+                        <Input
+                          value={editDesc}
+                          onChange={e => setEditDesc(e.target.value)}
+                          placeholder="Description"
+                          className="flex-1 h-6 text-[10px]"
+                        />
+                      </div>
+                      <div className="flex gap-1.5">
+                        <Button size="sm" className="h-5 text-[10px]" onClick={saveEdit}>Save</Button>
+                        <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => setEditingWs(null)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* View mode */
+                    <div className="flex items-center justify-between cursor-pointer" onClick={() => setSelectedWs(selectedWs === ws.id ? null : ws.id)}>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate">{ws.name}</div>
+                        {ws.description && <div className="text-[10px] text-muted-foreground truncate">{ws.description}</div>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-muted-foreground">{ws.member_count ?? 0} members</span>
+                        {ws.id === currentWorkspace?.id && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">Active</span>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 text-[10px]"
+                          onClick={e => { e.stopPropagation(); startEdit(ws) }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={e => { e.stopPropagation(); deleteWorkspace(ws.id) }}
+                        >
+                          <IconTrash className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}
