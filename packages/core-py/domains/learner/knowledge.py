@@ -63,6 +63,7 @@ class KnowledgeFact:
     url: str = ""
     timestamp: float = 0.0
     importance: float = 0.5  # 0-1, auto-estimated
+    workspace_id: str = ""  # workspace scope (empty = global)
 
 
 @dataclass
@@ -747,18 +748,21 @@ class KnowledgeMemory:
         try:
             vec = self._get_embedding(fact.content)
             from domains.inference.vector_store import VectorEntry
+            metadata = {
+                "topic": fact.topic,
+                "source": fact.source,
+                "url": fact.url,
+                "timestamp": fact.timestamp,
+                "importance": fact.importance,
+                "content_hash": content_hash,
+            }
+            if fact.workspace_id:
+                metadata["workspace_id"] = fact.workspace_id
             entry = VectorEntry(
                 id=f"fact_{self._fact_counter}_{content_hash[:8]}",
                 vector=vec,
                 text=fact.content,
-                metadata={
-                    "topic": fact.topic,
-                    "source": fact.source,
-                    "url": fact.url,
-                    "timestamp": fact.timestamp,
-                    "importance": fact.importance,
-                    "content_hash": content_hash,
-                },
+                metadata=metadata,
             )
             if hasattr(self._vector_store, 'upsert_sync'):
                 self._vector_store.upsert_sync([entry])
@@ -1052,7 +1056,7 @@ class KnowledgeMemory:
                 )
             facts = []
             for r in results:
-                facts.append({
+                fact = {
                     "id": r.id,
                     "content": r.text,
                     "topic": r.metadata.get("topic", "general"),
@@ -1061,7 +1065,10 @@ class KnowledgeMemory:
                     "timestamp": r.metadata.get("timestamp", 0.0),
                     "importance": r.metadata.get("importance", 0.5),
                     "score": r.score,
-                })
+                }
+                if r.metadata.get("workspace_id"):
+                    fact["workspace_id"] = r.metadata["workspace_id"]
+                facts.append(fact)
             return facts
         except Exception as e:
             logger.warning("list_all failed: %s", e, extra={"tag": "INF"})

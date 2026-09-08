@@ -16,6 +16,7 @@ class DatasetInfo(BaseModel):
     size_formatted: str = "Empty"
     num_samples: int = 0
     visual_metadata: dict[str, Any] | None = None
+    workspace_id: str | None = None
 
 
 class DatasetCreate(BaseModel):

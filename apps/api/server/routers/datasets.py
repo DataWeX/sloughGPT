@@ -161,13 +161,22 @@ class DatasetsRouter:
         self,
         q: str | None = Query(None, description="Search query"),
         type: str | None = Query(None, description="Filter by type"),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """List all datasets, optionally filtered by search query and type."""
-        cache_key = f"datasets:list:{q or ''}:{type or ''}"
+        """List all datasets, optionally filtered by search query and type.
+
+        When auth is enabled, only shows datasets in the user's workspace
+        (plus global datasets with no workspace assignment).
+        """
+        workspace_id = ""
+        if auth_user and auth_user.get("sub"):
+            workspace_id = auth_user.get("workspace_id", "")
+
+        cache_key = f"datasets:list:{q or ''}:{type or ''}:{workspace_id}"
 
         def compute():
             ctrl = get_datasets_controller()
-            return ctrl.list_datasets(q, type)
+            return ctrl.list_datasets(q, type, workspace_id)
 
         datasets = await asyncio.to_thread(self._cache.get_or_set, cache_key, compute)
         return DatasetListResponse(
@@ -819,21 +828,14 @@ class DatasetsRouter:
         try:
             """Create a new empty dataset with the given name and description.
 
-            Args:
-                req: DatasetCreate with name (used as the directory name and
-                    ID slug) and an optional description string.
-
-            Returns:
-                DatasetInfo with the newly created dataset's id, name,
-                description, and timestamp fields.
-
-            Side effects:
-                Creates a new directory under the datasets root directory.
-                Persists dataset metadata via DatasetsController.
-                Logs an audit entry for dataset creation.
+            When auth is enabled, the dataset is scoped to the user's workspace.
             """
+            workspace_id = ""
+            if auth_user and auth_user.get("sub"):
+                workspace_id = auth_user.get("workspace_id", "")
+
             ctrl = get_datasets_controller()
-            dataset = ctrl.create_dataset(req.name, req.description)
+            dataset = ctrl.create_dataset(req.name, req.description, workspace_id)
             safe_audit_log("dataset.create", resource=req.name, detail=req.description or "")
             return DatasetInfo(**dataset)
 

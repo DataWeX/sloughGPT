@@ -288,12 +288,34 @@ class KBRouter:
         return best if scores[best] > 0 else "general"
 
     def list_knowledge(
-        self, limit: int = Query(200, ge=1, le=5000), offset: int = Query(0, ge=0)
+        self,
+        limit: int = Query(200, ge=1, le=5000),
+        offset: int = Query(0, ge=0),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """List knowledge items with optional pagination."""
+        """List knowledge items with optional pagination.
+
+        When auth is enabled, only shows items in the user's workspace
+        (plus global items with no workspace assignment).
+        """
         try:
             memory = self._get_memory()
-            entries = memory.list_all(top_k=limit + offset)
+            entries = memory.list_all(top_k=limit + offset + 1000)
+
+            # Filter by workspace if auth is enabled
+            workspace_id = ""
+            if auth_user and auth_user.get("sub"):
+                workspace_id = auth_user.get("workspace_id", "")
+
+            if workspace_id:
+                filtered = []
+                for e in entries:
+                    item_ws = e.get("workspace_id", "")
+                    # Include item if: no workspace (global), or same workspace
+                    if not item_ws or item_ws == workspace_id:
+                        filtered.append(e)
+                entries = filtered
+
             entries = entries[offset : offset + limit]
             return [self._fact_from_entry(e) for e in entries]
 
@@ -322,11 +344,17 @@ class KBRouter:
                 logger.debug("Truth labeler unavailable: %s", exc)
             logger.debug("Suppressed exception in %s", __name__, exc_info=True)
 
+            # Get workspace_id from auth
+            workspace_id = ""
+            if auth_user and auth_user.get("sub"):
+                workspace_id = auth_user.get("workspace_id", "")
+
             fact = KnowledgeFact(
                 content=req.content,
                 topic=topic,
                 source=req.source,
                 importance=req.importance,
+                workspace_id=workspace_id,
             )
             is_new = memory.add_fact(fact)
             import hashlib
@@ -427,6 +455,12 @@ class KBRouter:
             from domains.learner.knowledge import KnowledgeFact
 
             memory = self._get_memory()
+
+            # Get workspace_id from auth
+            workspace_id = ""
+            if auth_user and auth_user.get("sub"):
+                workspace_id = auth_user.get("workspace_id", "")
+
             stored = 0
             for item in req.items:
                 fact = KnowledgeFact(
@@ -435,6 +469,7 @@ class KBRouter:
                     source=item.source,
                     timestamp=time.time(),
                     importance=0.7,
+                    workspace_id=workspace_id,
                 )
                 if memory.add_fact(fact):
                     stored += 1

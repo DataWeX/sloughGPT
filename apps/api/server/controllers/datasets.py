@@ -20,9 +20,9 @@ class DatasetsController:
         self.datasets_dir = repo_root / "data"
 
     def list_datasets(
-        self, q: str | None = None, dataset_type: str | None = None
+        self, q: str | None = None, dataset_type: str | None = None, workspace_id: str = ""
     ) -> list[dict[str, Any]]:
-        """List available datasets"""
+        """List available datasets, optionally filtered by workspace."""
         # Use datasets/ directory primarily
         datasets_dir = self.datasets_dir
         if not datasets_dir.exists():
@@ -37,6 +37,20 @@ class DatasetsController:
             # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
             if d.name.endswith(".db"):
                 continue
+
+            # Check workspace ownership if filtering
+            if workspace_id:
+                meta_path = d / ".metadata.json"
+                if meta_path.exists():
+                    try:
+                        meta = json.loads(meta_path.read_text())
+                        if meta.get("workspace_id") and meta["workspace_id"] != workspace_id:
+                            continue
+                    except Exception:
+                        pass
+                else:
+                    # No metadata = global dataset, include in all workspaces
+                    pass
 
             input_file = d / "input.txt"
             corpus_file = d / "corpus.jsonl"
@@ -87,6 +101,16 @@ class DatasetsController:
                     dataset["visual_metadata"] = json.loads(visual_meta_path.read_text())
                 except Exception as e:
                     logger.debug("Failed to parse visual metadata from %s: %s", visual_meta_path, e)
+
+            # Attach workspace_id from metadata if present
+            meta_path = d / ".metadata.json"
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text())
+                    if "workspace_id" in meta:
+                        dataset["workspace_id"] = meta["workspace_id"]
+                except Exception:
+                    pass
 
             # Filters
             if q and q.lower() not in d.name.lower() and q.lower() not in dataset["name"].lower():
@@ -271,10 +295,25 @@ class DatasetsController:
         """
         return self.list_datasets(q=q)
 
-    def create_dataset(self, name: str, description: str | None = None) -> dict[str, Any]:
-        """Create a new dataset"""
+    def create_dataset(
+        self, name: str, description: str | None = None, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """Create a new dataset, optionally scoped to a workspace."""
         path = self.datasets_dir / name
         path.mkdir(parents=True, exist_ok=True)
+
+        # Persist workspace_id in metadata
+        if workspace_id:
+            meta_path = path / ".metadata.json"
+            meta = {}
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text())
+                except Exception:
+                    pass
+            meta["workspace_id"] = workspace_id
+            with open(meta_path, "w") as f:
+                json.dump(meta, f, indent=2)
 
         return {
             "id": name,
@@ -282,6 +321,7 @@ class DatasetsController:
             "description": description,
             "created": True,
             "path": str(path),
+            "workspace_id": workspace_id,
         }
 
     def update_dataset(self, dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
