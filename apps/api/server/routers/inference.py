@@ -2629,12 +2629,21 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.get_voice_audio")
 
-    async def list_sessions(self, archived: bool | None = None) -> dict:
+    async def list_sessions(
+        self,
+        archived: bool | None = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         try:
             """list_sessions."""
             sessions = await asyncio.to_thread(self._build_session_metadata_index)
             if archived is not None:
                 sessions = [s for s in sessions if s.get("archived", False) == archived]
+            # Filter by user_id if auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
             return success_response(data=sessions)
 
         except Exception as e:
@@ -2689,6 +2698,9 @@ class InferenceRouter:
             session_id = req.session_id or str(uuid.uuid4())
             session_data = req.model_dump(exclude_none=True)
             session_data["session_id"] = session_id
+            # Attach user_id from auth
+            if auth_user:
+                session_data["user_id"] = auth_user.get("sub", "")
             self._save_session(session_id, session_data)
             await self._flush_session_to_disk(session_id)
             safe_audit_log("inference.session_create", resource=session_id)
