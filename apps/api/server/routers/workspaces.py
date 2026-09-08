@@ -428,6 +428,65 @@ class WorkspacesRouter:
                 "api_keys": api_key_count,
             })
 
+        # ─── Workspace activity log ──────────────────────────────
+        async def get_workspace_activity(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            """Recent activity in a workspace (training jobs, member changes, etc.)."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            activity: list[dict] = []
+
+            # Training job events
+            try:
+                from training.jobs import training_jobs
+                for j in training_jobs.values():
+                    if j.get("workspace_id", "") == workspace_id:
+                        status = j.get("status", "unknown")
+                        activity.append({
+                            "type": "training",
+                            "action": f"Training job {status}",
+                            "detail": j.get("job_id", j.get("name", "unknown")),
+                            "status": status,
+                            "timestamp": j.get("updated_at", j.get("started_at", "")),
+                            "user": j.get("user_id", ""),
+                        })
+            except Exception:
+                pass
+
+            # Audit log entries for this workspace
+            try:
+                from infrastructure.auth import get_audit_logger
+                audit = get_audit_logger()
+                entries = audit.file_query(workspace_id=workspace_id, limit=50)
+                for entry in entries:
+                    activity.append({
+                        "type": "audit",
+                        "action": entry.get("action", ""),
+                        "detail": entry.get("resource", ""),
+                        "status": "success" if entry.get("success", True) else "failure",
+                        "timestamp": entry.get("timestamp", ""),
+                        "user": entry.get("user_id", ""),
+                    })
+            except Exception:
+                pass
+
+            # Sort by timestamp descending, limit to 50
+            activity.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            activity = activity[:50]
+
+            return success_response(data={
+                "workspace_id": workspace_id,
+                "activities": activity,
+                "total": len(activity),
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -440,6 +499,7 @@ class WorkspacesRouter:
         )
         router.add_api_route("/{workspace_id}/stats", get_workspace_stats, methods=["GET"])
         router.add_api_route("/{workspace_id}/usage", get_workspace_usage, methods=["GET"])
+        router.add_api_route("/{workspace_id}/activity", get_workspace_activity, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────

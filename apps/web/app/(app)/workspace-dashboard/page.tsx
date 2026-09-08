@@ -18,17 +18,18 @@ interface WorkspaceStats {
   knowledge_items: number
 }
 
-interface AuditLog {
-  event_type: string
+interface Activity {
+  type: string
+  action: string
+  detail: string
+  status: string
   timestamp: string
-  user?: string
-  resource?: string
-  detail?: string
+  user: string
 }
 
 export default function WorkspaceDashboardPage() {
   const [stats, setStats] = useState<WorkspaceStats | null>(null)
-  const [recentAudit, setRecentAudit] = useState<AuditLog[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const { currentWorkspace } = useAuthStore()
 
@@ -38,12 +39,12 @@ export default function WorkspaceDashboardPage() {
       return
     }
     try {
-      const [statsRes, auditRes] = await Promise.all([
+      const [statsRes, activityRes] = await Promise.all([
         apiGet<{ data: WorkspaceStats }>(`/workspaces/${currentWorkspace.id}/stats`),
-        apiGet<{ data: { logs: AuditLog[] } }>('/security/audit?limit=20'),
+        apiGet<{ data: { activities: Activity[] } }>(`/workspaces/${currentWorkspace.id}/activity`),
       ])
       setStats(statsRes?.data ?? null)
-      setRecentAudit(auditRes?.data?.logs ?? [])
+      setActivities(activityRes?.data?.activities ?? [])
     } catch {
       logger.warning('Could not fetch workspace dashboard data')
     } finally {
@@ -53,23 +54,20 @@ export default function WorkspaceDashboardPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  if (!currentWorkspace) {
-    return (
-      <PageContainer title="Workspace Dashboard" subtitle="Select a workspace first">
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No workspace selected. Use the workspace switcher in the header to select one.
-          </CardContent>
-        </Card>
-      </PageContainer>
-    )
+  const formatTime = (ts: string) => {
+    if (!ts) return ''
+    try {
+      const d = new Date(ts)
+      return d.toLocaleString()
+    } catch {
+      return ts
+    }
   }
 
   if (loading) {
     return (
-      <PageContainer title="Workspace Dashboard" subtitle={currentWorkspace.name} loadingCards={4}>
+      <PageContainer title="Dashboard" subtitle="Workspace overview" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
@@ -82,71 +80,66 @@ export default function WorkspaceDashboardPage() {
   return (
     <div className="sl-page mx-auto max-w-4xl">
       <AppRouteHeader
-        left={<AppRouteHeaderLead title="Workspace Dashboard" subtitle={currentWorkspace.name} />}
+        left={<AppRouteHeaderLead title="Dashboard" subtitle={`Overview for ${stats?.name ?? currentWorkspace?.name ?? 'workspace'}`} />}
       />
 
       <div className="space-y-4">
         <KpiGrid>
           <StatCard label="Members" value={stats?.member_count ?? 0} />
-          <StatCard label="Datasets" value={stats?.dataset_count ?? 0} />
           <StatCard label="Training Jobs" value={stats?.training_jobs ?? 0} />
+          <StatCard label="Active Jobs" value={stats?.active_training_jobs ?? 0} />
+          <StatCard label="Datasets" value={stats?.dataset_count ?? 0} />
           <StatCard label="Knowledge Items" value={stats?.knowledge_items ?? 0} />
         </KpiGrid>
 
-        {stats && stats.active_training_jobs > 0 && (
+        {/* Active training indicator */}
+        {(stats?.active_training_jobs ?? 0) > 0 && (
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs">Active Training</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="py-3">
               <div className="flex items-center gap-2 text-xs">
-                <span className="inline-block h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                <span>{stats.active_training_jobs} job{stats.active_training_jobs !== 1 ? 's' : ''} running</span>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
+                </span>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Recent activity */}
+        {/* Activity feed */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs">Recent Activity</CardTitle>
           </CardHeader>
-          <CardContent>
-            {recentAudit.length === 0 ? (
-              <p className="text-[10px] text-muted-foreground py-4 text-center">No recent activity</p>
+          <CardContent className="space-y-1">
+            {activities.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">No recent activity</p>
             ) : (
-              <div className="space-y-0.5">
-                {recentAudit.slice(0, 10).map((log, i) => (
-                  <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded text-[10px] hover:bg-muted/50">
-                    <div className="min-w-0 flex-1">
-                      <span className="font-medium">{log.event_type}</span>
-                      {log.resource && <span className="text-muted-foreground ml-1.5">· {log.resource}</span>}
-                    </div>
-                    <div className="shrink-0 text-muted-foreground">
-                      {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}
-                    </div>
+              activities.slice(0, 15).map((a, i) => (
+                <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded text-[10px] hover:bg-muted/50">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium">{a.action}</span>
+                    {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
                   </div>
-                ))}
-              </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {a.status && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                        a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {a.status}
+                      </span>
+                    )}
+                    <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                  </div>
+                </div>
+              ))
             )}
-          </CardContent>
-        </Card>
-
-        {/* Quick links */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Quick Links</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <a href="/workspaces" className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">Manage Members</a>
-              <a href="/datasets" className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">Datasets</a>
-              <a href="/training" className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">Training Jobs</a>
-              <a href="/kb" className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">Knowledge Base</a>
-              <a href="/security" className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">API Keys</a>
-              <a href="/profile" className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">Profile</a>
-            </div>
           </CardContent>
         </Card>
       </div>
