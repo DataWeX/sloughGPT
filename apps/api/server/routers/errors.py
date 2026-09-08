@@ -85,6 +85,7 @@ class ErrorsRouter:
         self._error_buffer: list[dict] = []
         self._error_count_since_clear = 0
         self._dedup_map: dict[str, float] = {}
+        self._storage_healthy = True
 
         self._error_buffer = self._load_from_mogdb()
         self._error_count_since_clear = 0
@@ -113,9 +114,11 @@ class ErrorsRouter:
             db = _get_error_db()
             col = db.collection("errors")
             docs = col.find(sort=[("_created", -1)], limit=MAX_ERRORS)
+            self._storage_healthy = True
             return docs
         except Exception as e:
             logger.warning("failed to load errors from mogdb: %s", e)
+            self._storage_healthy = False
             return []
 
     def _persist_to_mogdb(self, records: list[dict]):
@@ -124,8 +127,10 @@ class ErrorsRouter:
             db = _get_error_db()
             col = db.collection("errors")
             col.insert_many(records)
+            self._storage_healthy = True
         except Exception as e:
             logger.warning("failed to persist errors to mogdb: %s", e)
+            self._storage_healthy = False
 
     def _clear_mogdb(self):
         """Clear all errors from MogDB."""
@@ -133,8 +138,10 @@ class ErrorsRouter:
             db = _get_error_db()
             col = db.collection("errors")
             col.delete_many({})
+            self._storage_healthy = True
         except Exception as e:
             logger.warning("failed to clear mogdb errors: %s", e)
+            self._storage_healthy = False
 
     def _fingerprint(self, message: str) -> str:
         normalized = re.sub(r"\d+", "N", message.lower())
@@ -284,6 +291,7 @@ class ErrorsRouter:
                     "total": total,
                     "offset": offset,
                     "limit": limit,
+                    "storage_healthy": self._storage_healthy,
                 }
             )
         except Exception as e:

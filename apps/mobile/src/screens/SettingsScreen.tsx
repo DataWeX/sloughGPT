@@ -58,6 +58,7 @@ export function SettingsScreen() {
   const [serverUrl, setServerUrl] = useState('');
   const serverUrlEditedRef = useRef(false);
   const [healthData, setHealthData] = useState<HealthStatus | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [lastNotification, setLastNotification] = useState<string | null>(null);
   const [soundsOn, setSoundsOn] = useState(sounds.isEnabled());
@@ -71,7 +72,14 @@ export function SettingsScreen() {
         setServerUrl(url);
       }
     });
-    const fetchHealth = () => api.get<HealthStatus>('/health').then(setHealthData).catch(() => {});
+    const fetchHealth = () => api.get<HealthStatus>('/health')
+      .then(data => { setHealthData(data); setHealthError(null); })
+      .catch((err: any) => {
+        setHealthData(null);
+        if (err?.message?.includes('timeout')) setHealthError('Request timed out');
+        else if (err?.message?.includes('Network')) setHealthError('No network connection');
+        else setHealthError(err?.message || 'Server unreachable');
+      });
     fetchHealth();
     const healthTimer = setInterval(fetchHealth, 30000);
     isNotificationsEnabled().then(setNotificationsOn);
@@ -105,7 +113,12 @@ export function SettingsScreen() {
     if (!trimmed) return;
     await setApiUrl(trimmed);
     await refresh();
-    api.get<HealthStatus>('/health').then(setHealthData).catch(() => {});
+    api.get<HealthStatus>('/health')
+      .then(data => { setHealthData(data); setHealthError(null); })
+      .catch((err: any) => {
+        setHealthData(null);
+        setHealthError(err?.message || 'Server unreachable');
+      });
   };
 
   const themes: ThemeMode[] = ['light', 'dark', 'system'];
@@ -138,10 +151,13 @@ export function SettingsScreen() {
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize={13} color="$color11">Status</Text>
               <StatusBadge
-                label={healthData?.status === 'healthy' ? 'Connected' : 'Offline'}
+                label={healthData?.status === 'healthy' ? 'Connected' : healthError ? 'Error' : 'Offline'}
                 variant={healthData?.status === 'healthy' ? 'success' : 'error'}
               />
             </XStack>
+            {healthError && (
+              <Text fontSize={11} color={colors.error || 'red'} marginTop={2}>{healthError}</Text>
+            )}
             <XStack justifyContent="space-between" alignItems="center">
               <Text fontSize={13} color="$color11">Model</Text>
               <Text fontSize={13} fontWeight="500" color="$color">{healthData?.model_name || 'None'}</Text>
