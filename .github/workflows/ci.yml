@@ -71,8 +71,9 @@ jobs:
         working-directory: apps/web
       - run: npm ci --omit=peer
         working-directory: packages/strui
-      - run: npm run build
+      - name: Build
         working-directory: apps/web
+        run: npx next build --webpack
 
   frontend-e2e:
     name: E2E tests
@@ -93,8 +94,9 @@ jobs:
         working-directory: apps/web
       - run: npm ci --omit=peer
         working-directory: packages/strui
-      - run: npm run build
+      - name: Build
         working-directory: apps/web
+        run: npx next build --webpack
       - run: npx start-server-and-test "npx next start -p 3010" http://localhost:3010 "npx cypress run --config baseUrl=http://localhost:3010"
         working-directory: apps/web
 
