@@ -274,6 +274,65 @@ class WorkspacesRouter:
                 )
             return success_response(data=result, meta={"total": len(result)})
 
+        # ─── Workspace stats ────────────────────────────────────
+        async def get_workspace_stats(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            members = self._ws_repo.list_members(workspace_id)
+
+            # Count datasets in workspace
+            dataset_count = 0
+            try:
+                from controllers.datasets import get_datasets_controller
+                ctrl = get_datasets_controller()
+                datasets = ctrl.list_datasets(workspace_id=workspace_id)
+                dataset_count = len(datasets)
+            except Exception:
+                pass
+
+            # Count training jobs in workspace
+            job_count = 0
+            active_jobs = 0
+            try:
+                from training.jobs import training_jobs
+                for j in training_jobs.values():
+                    if j.get("workspace_id", "") == workspace_id:
+                        job_count += 1
+                        if j.get("status") == "running":
+                            active_jobs += 1
+            except Exception:
+                pass
+
+            # Count knowledge items in workspace
+            knowledge_count = 0
+            try:
+                from routers.kb import get_kb_router
+                kb = get_kb_router()
+                memory = kb._get_memory()
+                all_items = memory.list_all(top_k=5000)
+                knowledge_count = sum(
+                    1 for item in all_items
+                    if item.get("workspace_id", "") == workspace_id
+                )
+            except Exception:
+                pass
+
+            return success_response(data={
+                "workspace_id": workspace_id,
+                "name": ws.name,
+                "member_count": len(members),
+                "dataset_count": dataset_count,
+                "training_jobs": job_count,
+                "active_training_jobs": active_jobs,
+                "knowledge_items": knowledge_count,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -284,6 +343,7 @@ class WorkspacesRouter:
         router.add_api_route(
             "/{workspace_id}/members/{user_id}", remove_member, methods=["DELETE"]
         )
+        router.add_api_route("/{workspace_id}/stats", get_workspace_stats, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
