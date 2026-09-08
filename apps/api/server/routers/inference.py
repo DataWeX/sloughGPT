@@ -262,8 +262,14 @@ _CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
 
 def get_chat_response_cache(session_id: str) -> dict | None:
     """Get cached response for a session."""
+    import time
+
     with _chat_cache_lock:
-        return _chat_response_cache.get(session_id)
+        entry = _chat_response_cache.get(session_id)
+        if entry and time.time() - entry.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S:
+            _chat_response_cache.pop(session_id, None)
+            return None
+        return entry
 
 
 def set_chat_response_cache(session_id: str, response: dict) -> None:
