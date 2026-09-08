@@ -48,19 +48,31 @@ class SecurityRouter:
         before: str | None = Query(default=None, description="ISO-8601 cursor for pagination"),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Get audit logs."""
+        """Get audit logs, scoped to user's workspace when auth is enabled."""
         try:
             from infrastructure.auth import get_audit_logger
 
             audit_logger = get_audit_logger()
+
+            # Get workspace_id from auth
+            workspace_id = ""
+            if auth_user and auth_user.get("sub"):
+                workspace_id = auth_user.get("workspace_id", "")
+
             if history:
                 logs = await asyncio.to_thread(
-                    audit_logger.file_query, limit=limit, event_type=event_type, before=before
+                    audit_logger.file_query,
+                    limit=limit,
+                    event_type=event_type,
+                    before=before,
+                    workspace_id=workspace_id,
                 )
             else:
                 logs = audit_logger.logs[-limit:]
                 if event_type:
                     logs = [l for l in logs if l.get("event_type") == event_type]
+                if workspace_id:
+                    logs = [l for l in logs if l.get("workspace_id", "") == workspace_id]
             return success_response(data={"logs": logs, "count": len(logs)})
         except Exception as e:
             classify_and_raise(e, source="security.audit_logs")

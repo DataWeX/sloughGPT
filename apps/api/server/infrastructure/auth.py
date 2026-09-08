@@ -197,6 +197,7 @@ class AuditLogger:
         limit: int = 100,
         event_type: str | None = None,
         before: str | None = None,
+        workspace_id: str = "",
     ) -> list:
         """Query persisted audit records from ``audit.log``, newest last.
 
@@ -210,6 +211,7 @@ class AuditLogger:
             event_type: Only return records with this event_type.
             before: ISO-8601 timestamp cursor; only records strictly older
                 than it are returned.
+            workspace_id: Only return records for this workspace.
 
         Returns:
             List of audit records as dicts, newest last.
@@ -240,6 +242,8 @@ class AuditLogger:
             events = [e for e in events if e.get("timestamp") and e["timestamp"] < before]
         if event_type:
             events = [e for e in events if e.get("event_type") == event_type]
+        if workspace_id:
+            events = [e for e in events if e.get("workspace_id", "") == workspace_id]
         if limit == 0:
             return events
         if limit < 0:
@@ -269,6 +273,7 @@ class AuditLogger:
         resource: str = "",
         detail: str = "",
         extra: dict | None = None,
+        workspace_id: str = "",
     ):
         """Record an audit event.
 
@@ -278,6 +283,7 @@ class AuditLogger:
             resource: Target resource identifier.
             detail: Human-readable description.
             extra: Additional structured data.
+            workspace_id: Workspace scope for the event.
         """
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -286,6 +292,8 @@ class AuditLogger:
             "resource": resource,
             "detail": detail,
         }
+        if workspace_id:
+            record["workspace_id"] = workspace_id
         if extra:
             record["extra"] = extra
         self._logs.append(record)

@@ -185,6 +185,7 @@ def safe_audit_log(
     detail: str = "",
     user: str = "anonymous",
     extra: dict | None = None,
+    workspace_id: str = "",
     **kwargs: Any,
 ) -> None:
     """Log an audit event without crashing on failure.
@@ -198,19 +199,24 @@ def safe_audit_log(
         detail: Human-readable detail string.
         user: User identifier (default: "anonymous").
         extra: Optional extra dict to forward to the audit logger.
+        workspace_id: Workspace scope for the event.
         **kwargs: Additional fields merged into ``extra``.
     """
     try:
         from infrastructure.auth import get_audit_logger
 
         merged = {**(extra or {}), **kwargs} if kwargs else extra
-        get_audit_logger().log(action, user=user, resource=resource, detail=detail, extra=merged)
+        get_audit_logger().log(
+            action, user=user, resource=resource, detail=detail,
+            extra=merged, workspace_id=workspace_id,
+        )
     except Exception:
         _audit_logger.info(
-            "audit:%s resource=%s detail=%s %s",
+            "audit:%s resource=%s detail=%s ws=%s %s",
             action,
             resource,
             detail,
+            workspace_id or "global",
             " ".join(f"{k}={v}" for k, v in (extra or kwargs).items()) if (extra or kwargs) else "",
         )
 
@@ -255,3 +261,24 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
             exc_info=True,
         )
         raise_error(str(e), "E_DOMAIN", status_code=500)
+
+
+def endpoint(source: str):
+    """Decorator that wraps a router method with try/except + classify_and_raise.
+
+    Usage:
+        @endpoint("learner.search")
+        def learn_search(self, req: ...):
+            ...
+    """
+    import functools
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                classify_and_raise(e, source=source)
+        return wrapper
+    return decorator
