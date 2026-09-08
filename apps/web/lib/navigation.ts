@@ -108,4 +108,8 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/developer': IconCode,
   '/feedback': IconThumbUp,
   '/planner': IconGrid,
+  '/workspace-dashboard': IconActivity,
+  '/members': IconAgents,
+  '/usage': IconChart,
+  '/audit-trail': IconActivity,
 }
