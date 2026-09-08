@@ -208,10 +208,16 @@ export function ChatScreen() {
               paddingHorizontal={8} paddingVertical={4}
               backgroundColor={colors.errorAlpha(0.12)}
               borderRadius={6}
-              onPress={() => { a.clearError(); a.regenerate(); }}>
+              onPress={() => {
+                a.clearError();
+                const lastUserMsg = [...a.messages].reverse().find(m => m.role === 'user');
+                if (lastUserMsg) a.regenerate(lastUserMsg.id);
+              }}>
               <Text fontSize={11} fontWeight="600" color={colors.error}>Retry</Text>
             </YStack>
-            <Icon name="x" size={14} color={colors.error} onPress={a.clearError} />
+            <YStack onPress={a.clearError}>
+              <Icon name="x" size={14} color={colors.error} />
+            </YStack>
           </XStack>
         )}
 

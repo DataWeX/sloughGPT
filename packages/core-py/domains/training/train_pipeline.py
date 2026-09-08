@@ -371,6 +371,8 @@ class TrainerConfig:
             raise ValueError(f"min_lr must be >= 0, got {self.min_lr}")
         if self.n_head > self.n_embed:
             raise ValueError(f"n_head ({self.n_head}) must be <= n_embed ({self.n_embed})")
+        if self.n_embed % self.n_head != 0:
+            raise ValueError(f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})")
         if self.block_size > self.n_embed * 4:
             import warnings
             warnings.warn(

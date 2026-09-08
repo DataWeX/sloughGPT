@@ -68,7 +68,7 @@ function makeStyles(colors: ReturnType<typeof useColors>) {
       marginBottom: 16,
     },
     stackContainer: {
-      backgroundColor: colors.surface || colors.background,
+      backgroundColor: colors.card,
       borderWidth: 1,
       borderColor: colors.border || 'rgba(255,255,255,0.1)',
       borderRadius: 8,

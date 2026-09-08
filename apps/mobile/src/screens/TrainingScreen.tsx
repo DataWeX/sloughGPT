@@ -59,6 +59,8 @@ export function TrainingScreen() {
     epoch,
     totalEpochs,
     steps,
+    stepsPerSec,
+    eta,
     checkpoint,
     error,
     checkpoints,
@@ -316,15 +318,6 @@ export function TrainingScreen() {
       const H = 80;
       const pad = 4;
 
-      // Build line segments SVG path
-      const points = valid.map((point, i) => {
-        const x = pad + (i / (valid.length - 1)) * (W - pad * 2);
-        const y = H - pad - ((point.value - minLoss) / range) * (H - pad * 2);
-        return {x, y};
-      });
-      const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-      const lastPt = points[points.length - 1];
-
       return (
         <YStack marginTop={4}>
           <YStack
@@ -332,41 +325,30 @@ export function TrainingScreen() {
             borderRadius={4}
             overflow="hidden"
             style={{width: W, height: H}}>
-            {/* Line segments as thin absolute boxes */}
-            {points.slice(0, -1).map((p, i) => {
-              const next = points[i + 1];
-              const dx = next.x - p.x;
-              const dy = next.y - p.y;
-              const len = Math.sqrt(dx * dx + dy * dy);
-              const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            {valid.map((point, i) => {
+              const x = pad + (i / (valid.length - 1)) * (W - pad * 2);
+              const y =
+                H -
+                pad -
+                ((point.value - minLoss) / range) * (H - pad * 2);
+              const dotSize = i === valid.length - 1 ? 6 : 3;
+              const color =
+                i === valid.length - 1 ? colors.primary : colors.primaryAlpha(0.5);
               return (
                 <YStack
-                  key={`line-${i}`}
+                  key={i}
                   position="absolute"
                   style={{
-                    left: p.x,
-                    top: p.y - 0.5,
-                    width: len,
-                    height: 1,
-                    backgroundColor: colors.primaryAlpha(0.6),
-                    transform: [{rotate: `${angle}deg`}],
-                    transformOrigin: '0 0',
+                    left: x - dotSize / 2,
+                    top: y - dotSize / 2,
+                    width: dotSize,
+                    height: dotSize,
+                    borderRadius: dotSize / 2,
+                    backgroundColor: color,
                   }}
                 />
               );
             })}
-            {/* Current point (larger) */}
-            <YStack
-              position="absolute"
-              style={{
-                left: lastPt.x - 4,
-                top: lastPt.y - 4,
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: colors.primary,
-              }}
-            />
           </YStack>
           <XStack justifyContent="space-between" marginTop={4}>
             <Text fontSize={11} color={colors.textSecondary}>
@@ -1055,6 +1037,38 @@ export function TrainingScreen() {
                     {steps.toLocaleString()}
                   </Text>
                 </YStack>
+                {stepsPerSec != null && stepsPerSec > 0 && (
+                  <YStack>
+                    <Text
+                      fontSize={11}
+                      color={colors.textSecondary}
+                      letterSpacing={0.2}>
+                      Speed
+                    </Text>
+                    <Text
+                      fontSize={16}
+                      fontWeight="600"
+                      color={colors.text}>
+                      {stepsPerSec.toFixed(1)}/s
+                    </Text>
+                  </YStack>
+                )}
+                {eta != null && eta > 0 && (
+                  <YStack>
+                    <Text
+                      fontSize={11}
+                      color={colors.textSecondary}
+                      letterSpacing={0.2}>
+                      ETA
+                    </Text>
+                    <Text
+                      fontSize={16}
+                      fontWeight="600"
+                      color={colors.text}>
+                      {eta < 60 ? `${Math.round(eta)}s` : `${Math.round(eta / 60)}m`}
+                    </Text>
+                  </YStack>
+                )}
               </XStack>
               <LossChart data={lossHistory} />
               {isTraining && (

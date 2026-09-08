@@ -62,6 +62,8 @@ interface TrainingState {
   epoch: number;
   totalEpochs: number;
   steps: number;
+  stepsPerSec: number | null;
+  eta: number | null;
   checkpoint: string | null;
   error: string | null;
   checkpoints: Checkpoint[];
@@ -137,6 +139,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   epoch: 0,
   totalEpochs: 10,
   steps: 0,
+  stepsPerSec: null,
+  eta: null,
   checkpoint: null,
   error: null,
   checkpoints: [],
@@ -176,6 +180,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       epoch: 0,
       totalEpochs: cfg.epochs,
       steps: 0,
+      stepsPerSec: null,
+      eta: null,
       checkpoint: null,
       error: null,
     });
@@ -206,6 +212,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             loss: Number(rawData.loss),
             steps: Number(step),
             epoch: Number(ep),
+            stepsPerSec: rawData.steps_per_sec != null ? Number(rawData.steps_per_sec) : s.stepsPerSec,
+            eta: rawData.eta_s != null ? Number(rawData.eta_s) : s.eta,
             lossHistory: [
               ...s.lossHistory,
               {step: Number(step), value: Number(rawData.loss)},
@@ -275,6 +283,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       epoch: 0,
       totalEpochs: hfOpts.epochs,
       steps: 0,
+      stepsPerSec: null,
+      eta: null,
       error: null,
       hfFinetunedPath: null,
     });
