@@ -333,6 +333,101 @@ class WorkspacesRouter:
                 "knowledge_items": knowledge_count,
             })
 
+        # ─── Workspace usage ─────────────────────────────────────
+        async def get_workspace_usage(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            """Detailed usage metrics for a workspace."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            # Must be member or admin
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            # Training jobs by status
+            training_by_status = {"running": 0, "completed": 0, "failed": 0, "queued": 0}
+            total_training_minutes = 0.0
+            try:
+                from training.jobs import training_jobs
+                for j in training_jobs.values():
+                    if j.get("workspace_id", "") == workspace_id:
+                        status = j.get("status", "unknown")
+                        if status in training_by_status:
+                            training_by_status[status] += 1
+                        # Estimate duration from timestamps
+                        started = j.get("started_at", "")
+                        ended = j.get("ended_at", "")
+                        if started and ended:
+                            from datetime import datetime as dt
+                            try:
+                                s = dt.fromisoformat(started.replace("Z", "+00:00"))
+                                e = dt.fromisoformat(ended.replace("Z", "+00:00"))
+                                total_training_minutes += (e - s).total_seconds() / 60
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+            # Dataset count and estimated size
+            dataset_count = 0
+            try:
+                from controllers.datasets import get_datasets_controller
+                ctrl = get_datasets_controller()
+                ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
+                dataset_count = len(ds_list) if ds_list else 0
+            except Exception:
+                pass
+
+            # Knowledge items
+            knowledge_count = 0
+            try:
+                from routers.kb import get_kb_router
+                kb = get_kb_router()
+                memory = kb._get_memory()
+                all_items = memory.list_all(top_k=10000)
+                knowledge_count = sum(
+                    1 for item in all_items
+                    if item.get("workspace_id", "") == workspace_id
+                )
+            except Exception:
+                pass
+
+            # API key count
+            api_key_count = 0
+            try:
+                from routers.api_keys import get_api_key_manager
+                mgr = get_api_key_manager()
+                keys = mgr.list(workspace_id=workspace_id)
+                api_key_count = len(keys) if keys else 0
+            except Exception:
+                pass
+
+            # Member breakdown by role
+            members = self._ws_repo.list_members(workspace_id)
+            role_breakdown = {}
+            for m in members:
+                r = m.role.value if hasattr(m.role, "value") else str(m.role)
+                role_breakdown[r] = role_breakdown.get(r, 0) + 1
+
+            return success_response(data={
+                "workspace_id": workspace_id,
+                "name": ws.name,
+                "members": {
+                    "total": len(members),
+                    "by_role": role_breakdown,
+                },
+                "training": {
+                    "by_status": training_by_status,
+                    "total_minutes": round(total_training_minutes, 1),
+                },
+                "datasets": dataset_count,
+                "knowledge_items": knowledge_count,
+                "api_keys": api_key_count,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -344,6 +439,7 @@ class WorkspacesRouter:
             "/{workspace_id}/members/{user_id}", remove_member, methods=["DELETE"]
         )
         router.add_api_route("/{workspace_id}/stats", get_workspace_stats, methods=["GET"])
+        router.add_api_route("/{workspace_id}/usage", get_workspace_usage, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
