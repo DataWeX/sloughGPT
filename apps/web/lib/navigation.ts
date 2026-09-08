@@ -80,6 +80,16 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/planner', labelKey: 'nav.planner', icon: 'grid', description: 'Planner board + notes' },
     ],
   },
+  {
+    labelKey: 'nav.section.admin',
+    routes: [
+      { path: '/workspace-dashboard', labelKey: 'nav.workspace_dashboard', icon: 'activity', description: 'Workspace overview' },
+      { path: '/members', labelKey: 'nav.members', icon: 'agents', description: 'Manage members' },
+      { path: '/usage', labelKey: 'nav.usage', icon: 'chart', description: 'Usage metrics' },
+      { path: '/audit-trail', labelKey: 'nav.audit_trail', icon: 'activity', description: 'Audit log' },
+      { path: '/workspace-settings', labelKey: 'nav.workspace_settings', icon: 'settings', description: 'Workspace settings' },
+    ],
+  },
 ]
 
 /** Flat route map for shortcut lookup: shortcut → path */
@@ -113,5 +123,4 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/usage': IconChart,
   '/audit-trail': IconActivity,
   '/workspace-settings': IconSettings,
-  '/workspace-api-keys': IconCode,
 }

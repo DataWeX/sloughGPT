@@ -34,6 +34,20 @@ class WorkspaceUpdateRequest(BaseModel):
     description: str | None = Field(None, max_length=1000)
 
 
+class WorkspaceSettingsRequest(BaseModel):
+    name: str | None = Field(None, max_length=200)
+    description: str | None = Field(None, max_length=1000)
+    default_model: str | None = Field(None, max_length=200)
+    data_retention_days: int | None = Field(None, ge=7, le=365)
+    max_members: int | None = Field(None, ge=2, le=500)
+    allow_sharing: bool | None = None
+
+
+class InviteMemberRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+    role: str = Field(default="user", description="Role: viewer, user, admin")
+
+
 class MemberAddRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
     role: str = Field(default="user", description="Role: viewer, user, admin")
@@ -752,6 +766,120 @@ class WorkspacesRouter:
                 "checks": checks,
             })
 
+        # ─── Get workspace settings ─────────────────────────
+        async def get_workspace_settings(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+            return success_response(data={
+                "workspace_id": ws.id,
+                "name": ws.name,
+                "description": ws.description,
+                "default_model": ws.default_model,
+                "data_retention_days": ws.data_retention_days,
+                "max_members": ws.max_members,
+                "allow_sharing": ws.allow_sharing,
+                "created_at": ws.created_at,
+                "updated_at": ws.updated_at,
+            })
+
+        # ─── Update workspace settings ──────────────────────
+        async def update_workspace_settings(
+            workspace_id: str, req: WorkspaceSettingsRequest, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            if req.name is not None:
+                ws.name = req.name
+            if req.description is not None:
+                ws.description = req.description
+            if req.default_model is not None:
+                ws.default_model = req.default_model
+            if req.data_retention_days is not None:
+                ws.data_retention_days = req.data_retention_days
+            if req.max_members is not None:
+                ws.max_members = req.max_members
+            if req.allow_sharing is not None:
+                ws.allow_sharing = req.allow_sharing
+
+            ws.updated_at = datetime.now(timezone.utc).isoformat()
+            self._ws_repo.update(ws)
+            members = self._ws_repo.list_members(workspace_id)
+            logger.info("User %s updated settings for workspace %s", user.username, workspace_id)
+            return success_response(data={
+                "workspace_id": ws.id,
+                "name": ws.name,
+                "description": ws.description,
+                "default_model": ws.default_model,
+                "data_retention_days": ws.data_retention_days,
+                "max_members": ws.max_members,
+                "allow_sharing": ws.allow_sharing,
+                "created_at": ws.created_at,
+                "updated_at": ws.updated_at,
+                "member_count": len(members),
+            })
+
+        # ─── Invite member by email ─────────────────────────
+        async def invite_member(
+            workspace_id: str, req: InviteMemberRequest, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            # Check caller is admin or owner
+            caller_member = self._ws_repo.get_member(workspace_id, user.id)
+            if not caller_member or caller_member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            # Check max members
+            members = self._ws_repo.list_members(workspace_id)
+            if len(members) >= ws.max_members:
+                raise_error(
+                    f"Workspace has reached maximum of {ws.max_members} members",
+                    "E_LIMIT_EXCEEDED",
+                    status_code=400,
+                )
+
+            # Find user by email
+            invitee = self._user_repo.get_by_email(req.email)
+            if not invitee:
+                raise_error("User not found with that email", "E_NOT_FOUND", status_code=404)
+
+            # Check if already a member
+            existing = self._ws_repo.get_member(workspace_id, invitee.id)
+            if existing:
+                raise_error("User is already a member", "E_CONFLICT", status_code=409)
+
+            # Add member
+            role = Role(req.role) if req.role in ("viewer", "user", "admin") else Role.USER
+            member = WorkspaceMember(
+                id=str(uuid.uuid4()),
+                workspace_id=workspace_id,
+                user_id=invitee.id,
+                role=role,
+            )
+            self._ws_repo.add_member(member)
+            logger.info("User %s invited %s to workspace %s", user.username, req.email, ws.name)
+            return success_response(data={
+                "user_id": invitee.id,
+                "username": invitee.username,
+                "email": req.email,
+                "role": role.value,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -768,86 +896,9 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/export", export_workspace_data, methods=["GET"])
         router.add_api_route("/import", import_workspace_data, methods=["POST"])
         router.add_api_route("/{workspace_id}/health", workspace_health_check, methods=["GET"])
-
-        # ─── Invitations ────────────────────────────────────────
-        @router.post("/{workspace_id}/invitations")
-        async def create_invitation(
-            workspace_id: str, body: dict, auth_user: dict = auth_dep
-        ) -> dict:
-            """Create a workspace invitation by email."""
-            user = self._get_user(auth_user)
-            ws = self._ws_repo.get(workspace_id)
-            if not ws:
-                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
-
-            # Must be admin or owner
-            member = self._ws_repo.get_member(workspace_id, user.id)
-            if not member or member.role not in (Role.ADMIN, Role.OWNER):
-                if not user.is_admin:
-                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
-
-            email = body.get("email", "").strip()
-            role = body.get("role", "member")
-            if not email:
-                raise_error("Email required", "E_INVALID_INPUT", status_code=400)
-
-            # Check if user already a member
-            existing_members = self._ws_repo.list_members(workspace_id)
-            for m in existing_members:
-                u = self._user_repo.get(m.user_id)
-                if u and u.email.lower() == email.lower():
-                    raise_error("User already a member", "E_INFRA_BUSY", status_code=409)
-
-            # Check for existing pending invitation
-            existing_invites = self._ws_repo.list_invitations(workspace_id)
-            for inv in existing_invites:
-                if inv.get("email", "").lower() == email.lower() and not inv.get("accepted"):
-                    raise_error("Invitation already pending", "E_INFRA_BUSY", status_code=409)
-
-            invitation = self._ws_repo.create_invitation(
-                workspace_id=workspace_id,
-                email=email,
-                role=role,
-                invited_by=user.id,
-            )
-
-            logger.info("User %s invited %s to workspace %s", user.username, email, ws.name)
-            return success_response(data=invitation)
-
-        @router.get("/{workspace_id}/invitations")
-        async def list_invitations(
-            workspace_id: str, auth_user: dict = auth_dep
-        ) -> dict:
-            """List pending invitations for a workspace."""
-            user = self._get_user(auth_user)
-            ws = self._ws_repo.get(workspace_id)
-            if not ws:
-                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
-
-            member = self._ws_repo.get_member(workspace_id, user.id)
-            if not member and not user.is_admin:
-                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
-
-            invitations = self._ws_repo.list_invitations(workspace_id)
-            return success_response(data=invitations, meta={"total": len(invitations)})
-
-        @router.delete("/{workspace_id}/invitations/{invitation_id}")
-        async def revoke_invitation(
-            workspace_id: str, invitation_id: str, auth_user: dict = auth_dep
-        ) -> dict:
-            """Revoke a pending invitation."""
-            user = self._get_user(auth_user)
-            ws = self._ws_repo.get(workspace_id)
-            if not ws:
-                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
-
-            member = self._ws_repo.get_member(workspace_id, user.id)
-            if not member or member.role not in (Role.ADMIN, Role.OWNER):
-                if not user.is_admin:
-                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
-
-            self._ws_repo.revoke_invitation(workspace_id, invitation_id)
-            return success_response(data={"revoked": True})
+        router.add_api_route("/{workspace_id}/settings", get_workspace_settings, methods=["GET"])
+        router.add_api_route("/{workspace_id}/settings", update_workspace_settings, methods=["PUT"])
+        router.add_api_route("/{workspace_id}/invite", invite_member, methods=["POST"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────

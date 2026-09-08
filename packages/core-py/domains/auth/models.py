@@ -250,6 +250,10 @@ class Workspace:
     name: str = ""
     tenant_id: str = ""
     description: str = ""
+    default_model: str = ""
+    data_retention_days: int = 90
+    max_members: int = 50
+    allow_sharing: bool = True
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
 
@@ -259,6 +263,10 @@ class Workspace:
             "name": self.name,
             "tenant_id": self.tenant_id,
             "description": self.description,
+            "default_model": self.default_model,
+            "data_retention_days": self.data_retention_days,
+            "max_members": self.max_members,
+            "allow_sharing": self.allow_sharing,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -270,6 +278,10 @@ class Workspace:
             name=data.get("name", ""),
             tenant_id=data.get("tenant_id", ""),
             description=data.get("description", ""),
+            default_model=data.get("default_model", ""),
+            data_retention_days=data.get("data_retention_days", 90),
+            max_members=data.get("max_members", 50),
+            allow_sharing=data.get("allow_sharing", True),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
         )
