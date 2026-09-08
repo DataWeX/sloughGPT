@@ -61,6 +61,8 @@ class JobStore:
         config: dict[str, Any],
         dataset: str,
         now: str,
+        user_id: str = "",
+        workspace_id: str = "",
     ) -> dict[str, Any]:
         """Build the full stored document for a new job."""
         return {
@@ -81,6 +83,8 @@ class JobStore:
             "checkpoint_path": None,
             "checkpoint_dir": None,
             "error": None,
+            "user_id": user_id,
+            "workspace_id": workspace_id,
             "created_at": now,
             "started_at": None,
             "updated_at": now,
@@ -94,13 +98,23 @@ class JobStore:
         """Convert a stored MogDB document to the job dict returned to callers."""
         return {k: v for k, v in doc.items() if k not in ("_id", "_created", "_updated")}
 
-    def create(self, job_id: str, name: str, config: dict[str, Any], dataset: str = "") -> dict:
+    def create(
+        self,
+        job_id: str,
+        name: str,
+        config: dict[str, Any],
+        dataset: str = "",
+        user_id: str = "",
+        workspace_id: str = "",
+    ) -> dict:
         """Create a new job."""
         if not self.is_available:
             return {"id": job_id, "status": "error", "error": "Job store unavailable"}
         now = datetime.now().isoformat()
         with self._lock:
-            self._jobs.insert_one(self._new_job_doc(job_id, name, config, dataset, now))
+            self._jobs.insert_one(
+                self._new_job_doc(job_id, name, config, dataset, now, user_id, workspace_id)
+            )
         return self.get(job_id)
 
     def get(self, job_id: str) -> dict | None:
@@ -110,8 +124,13 @@ class JobStore:
         doc = self._jobs.find_one({"_id": job_id})
         return self._doc_to_job(doc) if doc else None
 
-    def list(self, status: str | None = None, include_crashed: bool = True) -> list[dict]:
-        """List all jobs, optionally filtered by status."""
+    def list(
+        self,
+        status: str | None = None,
+        include_crashed: bool = True,
+        user_id: str = "",
+    ) -> list[dict]:
+        """List all jobs, optionally filtered by status and user."""
         if not self.is_available:
             return []
         query: dict[str, Any] = {}
@@ -119,7 +138,19 @@ class JobStore:
             query["status"] = status
         if not include_crashed:
             query["crashed"] = 0
+        if user_id:
+            query["user_id"] = user_id
 
+        docs = self._jobs.find(query, sort=[("created_at", -1)])
+        return [self._doc_to_job(d) for d in docs]
+
+    def list_by_workspace(self, workspace_id: str, status: str | None = None) -> list[dict]:
+        """List jobs for a workspace."""
+        if not self.is_available:
+            return []
+        query: dict[str, Any] = {"workspace_id": workspace_id}
+        if status:
+            query["status"] = status
         docs = self._jobs.find(query, sort=[("created_at", -1)])
         return [self._doc_to_job(d) for d in docs]
 

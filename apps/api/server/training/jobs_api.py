@@ -71,13 +71,24 @@ def _job_summary(job: dict) -> dict:
 
 
 @router.get("/training/jobs")
-async def list_training_jobs():
+async def list_training_jobs(
+    auth_user: dict = Depends(require_auth_if_enabled),
+):
     """List all tracked training jobs with plain-language status.
 
     Auto-purges completed/failed jobs older than 1 hour to bound memory.
+    Filters by user_id when auth is enabled.
     """
     import time as _time
     now = _time.time()
+
+    # Get jobs, filtered by user if auth is enabled
+    if auth_user and auth_user.get("sub"):
+        user_id = auth_user["sub"]
+        jobs = [j for j in training_jobs.values() if j.get("user_id", "") == user_id]
+    else:
+        jobs = list(training_jobs.values())
+
     stale = [
         jid for jid, j in training_jobs.items()
         if j.get("status") in ("completed", "failed", "stopped")
@@ -85,7 +96,7 @@ async def list_training_jobs():
     ]
     for jid in stale:
         training_jobs.pop(jid, None)
-    return [_job_summary(j) for j in training_jobs.values()]
+    return [_job_summary(j) for j in jobs]
 
 
 @router.get("/training/jobs/{job_id}")

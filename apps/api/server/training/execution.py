@@ -207,6 +207,8 @@ async def start_training(request: TrainingRequest, auth_user: dict = Depends(req
         "train_loss": None,
         "eval_loss": None,
         "loss_history": [],
+        "user_id": auth_user.get("sub", "") if auth_user else "",
+        "workspace_id": auth_user.get("workspace_id", "") if auth_user else "",
     }
     if manifest_meta is not None:
         job["manifest"] = manifest_meta
