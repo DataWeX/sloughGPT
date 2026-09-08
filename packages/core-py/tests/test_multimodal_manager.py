@@ -154,16 +154,51 @@ class TestRecognizeSpeech:
         m = MultimodalManager()
         mock_recognizer = MagicMock()
         m._speech_recognizer = mock_recognizer
-        result = m.recognize_speech(b"audio", "en")
-        mock_recognizer.recognize.assert_called_once_with(b"audio", "en")
+        # Non-silent audio (sine wave) so VAD passes — need >= 250ms at 16kHz
+        audio = np.sin(np.linspace(0, 10, 4800)) * 10000
+        audio = audio.astype(np.int16).tobytes()
+        m.recognize_speech(audio, "en")
+        mock_recognizer.recognize.assert_called_once()
 
     @patch("domains.multimodal.manager.get_speech_recognizer")
     def test_recognize_speech_no_recognizer(self, mock_get):
         m = MultimodalManager()
         mock_rec = MagicMock()
         mock_get.return_value = mock_rec
-        m.recognize_speech(b"audio")
+        audio = np.sin(np.linspace(0, 10, 4800)) * 10000
+        audio = audio.astype(np.int16).tobytes()
+        m.recognize_speech(audio)
         mock_get.assert_called_once()
+
+    def test_recognize_speech_empty_audio(self):
+        m = MultimodalManager()
+        mock_recognizer = MagicMock()
+        m._speech_recognizer = mock_recognizer
+        result = m.recognize_speech(b"", "en")
+        assert result.text == ""
+        assert result.is_valid == False
+        mock_recognizer.recognize.assert_not_called()
+
+    def test_recognize_speech_vad_silence(self):
+        m = MultimodalManager()
+        mock_recognizer = MagicMock()
+        m._speech_recognizer = mock_recognizer
+        # Very quiet audio — VAD should detect silence
+        audio = np.full(16000, 10, dtype=np.int16).tobytes()
+        result = m.recognize_speech(audio, "en")
+        assert result.text == ""
+        assert result.is_valid == False
+        mock_recognizer.recognize.assert_not_called()
+
+    def test_recognize_speech_with_audio_filter_config(self):
+        m = MultimodalManager()
+        mock_recognizer = MagicMock()
+        m._speech_recognizer = mock_recognizer
+        from domains.multimodal.audio_filter import AudioFilterConfig, FilterMode
+        m._audio_filter_config = AudioFilterConfig(mode=FilterMode.NONE)
+        audio = np.zeros(160, dtype=np.int16).tobytes()
+        m.recognize_speech(audio, "en")
+        mock_recognizer.recognize.assert_called_once()
 
 
 # ── caption_image ──────────────────────────────────────────────────────────

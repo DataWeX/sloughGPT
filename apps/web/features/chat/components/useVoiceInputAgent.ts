@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { estimateTokens } from '@/lib/format-bytes'
+import { formatSeconds } from '@/lib/time-format'
 
 export interface AudioStats {
   duration: number
@@ -152,16 +153,10 @@ export function useVoiceInputAgent(
     }
   }, [transcript, onTranscript, onSend])
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   return {
     isRecording, isPaused, duration, transcript, audioStats,
     showStats, error,
     startRecording, stopRecording, pauseRecording, resumeRecording,
-    handleSendTranscript, formatDuration, setShowStats,
+    handleSendTranscript, formatDuration: formatSeconds, setShowStats,
   }
 }

@@ -5,6 +5,7 @@ import { Button, IconMicFilled, IconPlay, IconStop } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { estimateTokens } from '@/lib/format-bytes'
+import { formatSeconds } from '@/lib/time-format'
 
 interface VoiceInputAgentProps {
   onTranscript: (text: string) => void
@@ -145,12 +146,6 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
     }
   }, [transcript, onTranscript, onSend])
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   const formatCost = (cost: number) => {
     if (cost < 0.001) return '<$0.001'
     return `$${cost.toFixed(4)}`
@@ -182,7 +177,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
             'text-3xl font-mono',
             isRecording ? 'text-destructive' : 'text-muted-foreground',
           )}>
-            {formatDuration(duration)}
+            {formatSeconds(duration)}
           </span>
         </div>
 
@@ -264,7 +259,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">Duration:</span>
-              <span className="text-[10px] font-medium">{formatDuration(audioStats.duration)}</span>
+              <span className="text-[10px] font-medium">{formatSeconds(audioStats.duration)}</span>
             </div>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">Words:</span>

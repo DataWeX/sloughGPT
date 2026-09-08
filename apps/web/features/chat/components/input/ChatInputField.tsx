@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type KeyboardEvent, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useState, memo, type KeyboardEvent, type ChangeEvent } from 'react'
 import { Textarea } from '@sloughgpt/strui'
 
 interface ChatInputFieldProps {
@@ -28,7 +28,7 @@ function autoResize(textarea: HTMLTextAreaElement | null) {
   }
 }
 
-export function ChatInputField({ value, onChange, onSend, placeholder, disabled, textareaRef, suppressEnter, onKeyDown }: ChatInputFieldProps) {
+export const ChatInputField = memo(function ChatInputField({ value, onChange, onSend, placeholder, disabled, textareaRef, suppressEnter, onKeyDown }: ChatInputFieldProps) {
   const [phIndex, setPhIndex] = useState(0)
 
   useEffect(() => {
@@ -71,4 +71,4 @@ export function ChatInputField({ value, onChange, onSend, placeholder, disabled,
       <p id="chat-input-hint" className="sr-only">Press Enter to send, Shift+Enter for new line</p>
     </>
   )
-}
+})

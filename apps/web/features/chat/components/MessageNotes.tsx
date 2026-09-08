@@ -60,7 +60,7 @@ export const MessageNotes = memo(function MessageNotes({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Add a note..."
+          placeholder="Add a note..." aria-label="Add a note"
           className="w-full text-xs bg-transparent border-0 p-0 resize-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50 min-h-[60px]"
           autoFocus
         />

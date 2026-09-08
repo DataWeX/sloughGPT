@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, memo } from 'react'
 import { Button, IconX, IconClock } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { formatTimeWithSeconds } from '@/lib/time-format'
 import type { ChatMessage } from '@/lib/chat-utils'
 
 interface ChatHistoryTimelineProps {
@@ -35,10 +36,6 @@ function groupMessagesByTime(messages: ChatMessage[]): TimeGroup[] {
   }
 
   return groups
-}
-
-function formatTimestamp(ts: number | Date): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
@@ -94,7 +91,7 @@ export const ChatHistoryTimeline = memo(function ChatHistoryTimeline({
                           {msg.content.slice(0, 60)}{msg.content.length > 60 ? '…' : ''}
                         </span>
                         <span className="text-[10px] text-muted-foreground shrink-0">
-                          {formatTimestamp(msg.timestamp)}
+                          {formatTimeWithSeconds(msg.timestamp)}
                         </span>
                       </div>
                     </button>

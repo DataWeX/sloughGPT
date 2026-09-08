@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { getAllCommands } from '@/lib/chat-commands'
 import type { ChatCommand } from '@/lib/chat-commands'
@@ -33,7 +33,7 @@ function parseArgs(value: string, commandName: string): string[] {
   return rest
 }
 
-export function SlashCommandMenu({ value, onInsert, onClose, onExecute }: SlashCommandMenuProps) {
+export const SlashCommandMenu = memo(function SlashCommandMenu({ value, onInsert, onClose, onExecute }: SlashCommandMenuProps) {
   const allCommands = useMemo(() => getAllCommands(), [])
 
   const query = value.startsWith('/') ? value.slice(1) : ''
@@ -147,4 +147,4 @@ export function SlashCommandMenu({ value, onInsert, onClose, onExecute }: SlashC
       ))}
     </div>
   )
-}
+})

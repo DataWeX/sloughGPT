@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect, memo } from 'react'
-import { Button } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 
 type SortOption = 'updated' | 'created' | 'title' | 'messages'
@@ -118,7 +117,7 @@ export const ChatSessionSearch = memo(function ChatSessionSearch({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search sessions..."
+            placeholder="Search sessions..." aria-label="Search sessions"
             className="w-full text-xs bg-transparent border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
           {query && (

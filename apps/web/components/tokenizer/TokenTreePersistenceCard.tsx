@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ActionCard, Card, CardHeader, CardTitle, CardContent, Input, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { ActionCard, Input, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type SavedTree, type TokenTreeStats } from '@/lib/token-tree-controller'
 import { useToastStore } from '@/lib/toast-store'

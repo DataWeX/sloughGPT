@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { ActionCard, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconRefresh } from '@sloughgpt/strui'
 import { tokenTreeController, type MatrixSummary } from '@/lib/token-tree-controller'

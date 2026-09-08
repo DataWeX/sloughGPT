@@ -156,7 +156,7 @@ function DatasetChip({
 }
 
 export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
-  const canAdvance = !!datasets.selectedDataset
+  const canAdvance = true
   const [importingKaggle, setImportingKaggle] = useState<string | null>(null)
   const [importingHF, setImportingHF] = useState<string | null>(null)
   const [search, setSearch] = useState('')

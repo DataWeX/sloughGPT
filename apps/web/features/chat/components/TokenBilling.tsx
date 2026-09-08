@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, memo } from 'react'
-import { Button, IconX, IconRefresh, IconCheck, IconDownload } from '@sloughgpt/strui'
+import { Button, IconRefresh } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { logger } from '@/lib/dev-log'
 import { apiGet } from '@/lib/http-client'

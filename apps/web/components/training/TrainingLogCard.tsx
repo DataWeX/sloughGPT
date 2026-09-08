@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
-import { ActionCard, Button, Skeleton, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { ActionCard, Button, Skeleton } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingJobsController } from '@/lib/training-controller'
 

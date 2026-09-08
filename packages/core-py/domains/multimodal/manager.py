@@ -19,6 +19,10 @@ from .speech import (
     TranscriptionResult,
     get_speech_recognizer,
 )
+from .audio_filter import (
+    AudioFilterConfig,
+    apply_audio_filter,
+)
 from .vision import (
     ImageCaption,
     VisualObject,
@@ -62,6 +66,7 @@ class MultimodalManager:
         self._caption_history: list = []
         self._accuracy_history: list = []
         self._embed_cache: dict = {}
+        self._audio_filter_config = AudioFilterConfig()
 
     def initialize(
         self,
@@ -152,10 +157,26 @@ class MultimodalManager:
         audio_data: bytes,
         language: str = "en",
     ) -> TranscriptionResult:
-        """Convert voice to text."""
+        """Convert voice to text.
+
+        Applies audio filter pipeline (noise gate, AGC, normalization, VAD)
+        before sending to the speech recognizer.
+        """
         if self._speech_recognizer is None:
             self._speech_recognizer = get_speech_recognizer(use_server=self._speech_server_mode)
-        return self._speech_recognizer.recognize(audio_data, language)
+
+        try:
+            audio_np = np.frombuffer(audio_data, dtype=np.int16)
+            filter_result = apply_audio_filter(audio_np, self._audio_filter_config)
+            if not filter_result.speech_detected:
+                logger.debug("VAD: no speech detected, skipping recognition")
+                return TranscriptionResult(text="", confidence=0.0, language=language, is_valid=False)
+            filtered_bytes = filter_result.audio.astype(np.int16).tobytes()
+        except Exception as e:
+            logger.warning("Audio filter failed, using raw audio: %s", e)
+            filtered_bytes = audio_data
+
+        return self._speech_recognizer.recognize(filtered_bytes, language)
 
     def _pil_to_np(self, image):
         """Convert PIL Image to (1, 224, 224, 3) numpy array, normalized to [0,1]."""

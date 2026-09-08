@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { VisionStudioDialog } from './VisionStudioDialog'
 

@@ -11,7 +11,7 @@ from domains.training.tokenizer_manager import get_tokenizer_manager
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
 
 class TokenizeRequest(BaseModel):
@@ -57,7 +57,8 @@ class TokenizerRouter:
         self.router.add_api_route("/sample", self.get_tokenization_sample, methods=["GET"])
         self.router.add_api_route("/samples", self.get_tokenization_sample, methods=["GET"])
 
-    def _require_trained(self):
+    @staticmethod
+    def _require_trained():
         mgr = get_tokenizer_manager()
         if not mgr.is_trained():
             mgr.borrow_from_autotrain()
@@ -69,208 +70,171 @@ class TokenizerRouter:
                 lowercase=True,
             )
 
-    async def _ensure_trained(self):
-        await asyncio.to_thread(self._require_trained)
+    @staticmethod
+    async def _ensure_trained():
+        await asyncio.to_thread(TokenizerRouter._require_trained)
 
-    async def get_tokenizer_stats(self) -> dict:
-        """Get tokenizer statistics."""
-        try:
-            await self._ensure_trained()
-            mgr = get_tokenizer_manager()
-            stats = await asyncio.to_thread(mgr.stats)
-            return success_response(
-                data={
-                    "vocab_size": stats["vocab_size"],
-                    "base_chars": stats.get("base_chars", 0),
-                    "merged_subwords": stats.get("merged_subwords", stats.get("subwords", 0)),
-                    "special_tokens": stats["special_tokens"],
-                    "total_merges": stats.get("total_merges", stats.get("total_merges_learned", 0)),
-                    "trained": stats.get("trained", True),
-                }
-            )
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.stats")
+    @staticmethod
+    @endpoint("tokenizer.stats")
+    async def get_tokenizer_stats() -> dict:
+        await TokenizerRouter._ensure_trained()
+        mgr = get_tokenizer_manager()
+        stats = await asyncio.to_thread(mgr.stats)
+        return success_response(
+            data={
+                "vocab_size": stats["vocab_size"],
+                "base_chars": stats.get("base_chars", 0),
+                "merged_subwords": stats.get("merged_subwords", stats.get("subwords", 0)),
+                "special_tokens": stats["special_tokens"],
+                "total_merges": stats.get("total_merges", stats.get("total_merges_learned", 0)),
+                "trained": stats.get("trained", True),
+            }
+        )
 
+    @staticmethod
+    @endpoint("tokenizer.pretokenize")
     async def pretokenize_text(
-        self, req: PretokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+        req: PretokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        """Show how text splits into pretokens before BPE encoding."""
-        try:
-            await self._ensure_trained()
-            mgr = get_tokenizer_manager()
-            return success_response(
-                data=await asyncio.to_thread(mgr.show_pretokenization, req.text)
-            )
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.pretokenize")
+        await TokenizerRouter._ensure_trained()
+        mgr = get_tokenizer_manager()
+        return success_response(
+            data=await asyncio.to_thread(mgr.show_pretokenization, req.text)
+        )
 
+    @staticmethod
+    @endpoint("tokenizer.decompose")
     async def decompose_token(
-        self, req: DecomposeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+        req: DecomposeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        """Show a token's merge tree decomposition."""
         try:
-            await self._ensure_trained()
+            await TokenizerRouter._ensure_trained()
             mgr = get_tokenizer_manager()
             return success_response(data=await asyncio.to_thread(mgr.decompose_token, req.text))
         except ValueError as e:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.decompose")
 
+    @staticmethod
+    @endpoint("tokenizer.analyze")
     async def analyze_corpus(
-        self, req: AnalyzeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+        req: AnalyzeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        """Compute token frequency and compression stats on a corpus."""
-        try:
-            await self._ensure_trained()
-            mgr = get_tokenizer_manager()
-            return success_response(data=await asyncio.to_thread(mgr.analyze_corpus, req.texts))
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.analyze")
+        await TokenizerRouter._ensure_trained()
+        mgr = get_tokenizer_manager()
+        return success_response(data=await asyncio.to_thread(mgr.analyze_corpus, req.texts))
 
+    @staticmethod
+    @endpoint("tokenizer.tokenize")
     async def tokenize_text(
-        self, req: TokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+        req: TokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        """Tokenize text into token ids."""
-        try:
-            await self._ensure_trained()
-            mgr = get_tokenizer_manager()
-            ids = await asyncio.to_thread(mgr.tokenize, req.text)
-            tok = mgr.get_tokenizer()
-            tokens = [tok.itos.get(i, "<?>") for i in ids]
-            return success_response(data={"tokens": tokens, "ids": ids})
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.tokenize")
+        await TokenizerRouter._ensure_trained()
+        mgr = get_tokenizer_manager()
+        ids = await asyncio.to_thread(mgr.tokenize, req.text)
+        tok = mgr.get_tokenizer()
+        tokens = [tok.itos.get(i, "<?>") for i in ids]
+        return success_response(data={"tokens": tokens, "ids": ids})
 
+    @staticmethod
+    @endpoint("tokenizer.detokenize")
     async def detokenize_ids(
-        self, req: DetokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+        req: DetokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
-        """Decode token ids back to text."""
-        try:
-            await self._ensure_trained()
-            mgr = get_tokenizer_manager()
-            text = await asyncio.to_thread(mgr.detokenize, req.ids)
-            return success_response(data={"text": text})
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.detokenize")
+        await TokenizerRouter._ensure_trained()
+        mgr = get_tokenizer_manager()
+        text = await asyncio.to_thread(mgr.detokenize, req.ids)
+        return success_response(data={"text": text})
 
-    async def get_vocab(self, limit: int = 50, offset: int = 0) -> dict:
-        """Get vocabulary entries."""
-        try:
-            await self._ensure_trained()
-            tok = get_tokenizer_manager().get_tokenizer()
-            total = tok.vocab_size
-            entries = []
-            for i in range(offset, min(offset + limit, total)):
-                token = tok.vocab[i]
-                entries.append({"id": i, "token": token, "is_special": token in tok.SPECIAL_TOKENS})
-            return success_response(
-                data={"entries": entries, "total": total, "offset": offset, "limit": limit}
-            )
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.vocab")
+    @staticmethod
+    @endpoint("tokenizer.vocab")
+    async def get_vocab(limit: int = 50, offset: int = 0) -> dict:
+        await TokenizerRouter._ensure_trained()
+        tok = get_tokenizer_manager().get_tokenizer()
+        total = tok.vocab_size
+        entries = []
+        for i in range(offset, min(offset + limit, total)):
+            token = tok.vocab[i]
+            entries.append({"id": i, "token": token, "is_special": token in tok.SPECIAL_TOKENS})
+        return success_response(
+            data={"entries": entries, "total": total, "offset": offset, "limit": limit}
+        )
 
-    async def get_merges(self, limit: int = 30) -> dict:
-        """Get BPE merge rules."""
-        try:
-            await self._ensure_trained()
-            tok = get_tokenizer_manager().get_tokenizer()
-            merges = getattr(tok, "merges", [])
-            result = []
-            for i, m in enumerate(merges[:limit]):
-                if isinstance(m, tuple) and len(m) == 2:
-                    result.append({"index": i, "left": m[0], "right": m[1], "token": m[0] + m[1]})
-                else:
-                    result.append({"index": i, "left": str(m), "right": "", "token": str(m)})
-            return success_response(data={"merges": result, "total": len(merges)})
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.merges")
-
-    async def train_tokenizer(
-        self, req: TrainTokenizerRequest2, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> dict:
-        """Train the BPE tokenizer on provided text corpus."""
-        try:
-            import time as _time
-
-            _t0 = _time.monotonic()
-            if req.texts:
-                lines = req.texts
+    @staticmethod
+    @endpoint("tokenizer.merges")
+    async def get_merges(limit: int = 30) -> dict:
+        await TokenizerRouter._ensure_trained()
+        tok = get_tokenizer_manager().get_tokenizer()
+        merges = getattr(tok, "merges", [])
+        result = []
+        for i, m in enumerate(merges[:limit]):
+            if isinstance(m, tuple) and len(m) == 2:
+                result.append({"index": i, "left": m[0], "right": m[1], "token": m[0] + m[1]})
             else:
-                from urllib.request import urlopen
+                result.append({"index": i, "left": str(m), "right": "", "token": str(m)})
+        return success_response(data={"merges": result, "total": len(merges)})
 
-                url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
+    @staticmethod
+    @endpoint("tokenizer.train")
+    async def train_tokenizer(
+        req: TrainTokenizerRequest2, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        import time as _time
 
-                def _fetch():
-                    with urlopen(url) as resp:
-                        return resp.read().decode("utf-8")
+        _t0 = _time.monotonic()
+        if req.texts:
+            lines = req.texts
+        else:
+            from urllib.request import urlopen
 
-                text = await asyncio.to_thread(_fetch)
-                lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
-            mgr = get_tokenizer_manager()
-            await asyncio.to_thread(mgr.train, lines, vocab_size=req.vocab_size, min_frequency=3)
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "tokenizer.train",
-                resource="bpe",
-                detail=f"elapsed={_elapsed_ms:.0f}ms",
-                vocab_size=req.vocab_size,
-                corpus_size=len(lines),
-            )
-            stats = await asyncio.to_thread(mgr.stats)
-            return success_response(
-                data={
-                    "status": "trained",
-                    "corpus_size": len(lines),
-                    "stats": stats,
-                    "elapsed_ms": round(_elapsed_ms, 1),
-                }
-            )
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.train")
+            url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
 
-    async def get_tokenization_sample(self) -> dict:
-        """Get tokenization samples for common words."""
-        try:
-            await self._ensure_trained()
-            tok = get_tokenizer_manager().get_tokenizer()
-            sample_words = [
-                "the",
-                "and",
-                "to",
-                "of",
-                "a",
-                "in",
-                "that",
-                "is",
-                "was",
-                "he",
-                "for",
-                "it",
-                "with",
-                "as",
-                "his",
-                "on",
-                "hello",
-                "world",
-                "machine",
-                "learning",
-                "neural",
-                "network",
-            ]
+            def _fetch():
+                with urlopen(url) as resp:
+                    return resp.read().decode("utf-8")
 
-            def _encode_all():
-                results = []
-                for word in sample_words:
-                    ids = tok.encode(word)
-                    tokens = [tok.itos.get(i, "<?>") for i in ids]
-                    results.append({"word": word, "ids": ids, "tokens": tokens, "count": len(ids)})
-                return results
+            text = await asyncio.to_thread(_fetch)
+            lines = [line.strip() for line in text.split("\n") if line.strip()][:2000]
+        mgr = get_tokenizer_manager()
+        await asyncio.to_thread(mgr.train, lines, vocab_size=req.vocab_size, min_frequency=3)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "tokenizer.train",
+            resource="bpe",
+            detail=f"elapsed={_elapsed_ms:.0f}ms",
+            vocab_size=req.vocab_size,
+            corpus_size=len(lines),
+        )
+        stats = await asyncio.to_thread(mgr.stats)
+        return success_response(
+            data={
+                "status": "trained",
+                "corpus_size": len(lines),
+                "stats": stats,
+                "elapsed_ms": round(_elapsed_ms, 1),
+            }
+        )
 
-            results = await asyncio.to_thread(_encode_all)
-            return success_response(data={"samples": results})
-        except Exception as e:
-            classify_and_raise(e, source="tokenizer.sample")
+    @staticmethod
+    @endpoint("tokenizer.sample")
+    async def get_tokenization_sample() -> dict:
+        await TokenizerRouter._ensure_trained()
+        tok = get_tokenizer_manager().get_tokenizer()
+        sample_words = [
+            "the", "and", "to", "of", "a", "in", "that", "is", "was", "he",
+            "for", "it", "with", "as", "his", "on", "hello", "world",
+            "machine", "learning", "neural", "network",
+        ]
+
+        def _encode_all():
+            results = []
+            for word in sample_words:
+                ids = tok.encode(word)
+                tokens = [tok.itos.get(i, "<?>") for i in ids]
+                results.append({"word": word, "ids": ids, "tokens": tokens, "count": len(ids)})
+            return results
+
+        results = await asyncio.to_thread(_encode_all)
+        return success_response(data={"samples": results})
 
 
 router = TokenizerRouter().router

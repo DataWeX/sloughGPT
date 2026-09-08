@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
+import { cn, ActionCard, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, memo } from 'react'
-import { Button, IconX, IconCheck, IconFile, IconExternalLink, IconInfo, IconChat } from '@sloughgpt/strui'
+import { Button, IconX, IconFile, IconExternalLink, IconInfo, IconChat } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
 

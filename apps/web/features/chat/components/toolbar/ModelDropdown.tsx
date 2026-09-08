@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { memo } from 'react'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 import { shortModelName } from '@/lib/chat-utils'
 
@@ -39,7 +40,7 @@ function fineTunedName(m: string): string {
   return m.split('__').join(' · ')
 }
 
-export function ModelDropdown({
+export const ModelDropdown = memo(function ModelDropdown({
   variant = 'dropdown',
   panelTitle = 'Backend Model',
 }: ModelDropdownProps) {
@@ -229,4 +230,4 @@ export function ModelDropdown({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})

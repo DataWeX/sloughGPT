@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, memo } from 'react'
 import { VoiceInput } from './VoiceInput'
 import { ImageUpload } from './ImageUpload'
 import { PDFUpload } from './PDFUpload'
@@ -23,7 +23,7 @@ interface ChatInputAccessoriesProps {
   onChange?: (value: string) => void
 }
 
-export function ChatInputAccessories({
+export const ChatInputAccessories = memo(function ChatInputAccessories({
   onImage,
   onTranscript,
   disabled,
@@ -117,4 +117,4 @@ export function ChatInputAccessories({
       />
     </div>
   )
-}
+})

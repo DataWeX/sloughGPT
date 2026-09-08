@@ -10,7 +10,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, success_response
+from schemas.common import endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.routers.security")
 
@@ -38,8 +38,9 @@ class SecurityRouter:
 
     # ── Audit logs ──
 
+    @staticmethod
+    @endpoint("security.audit_logs")
     async def get_audit_logs(
-        self,
         limit: int = Query(
             default=100, ge=1, le=10000, description="Maximum number of log entries to return"
         ),
@@ -48,100 +49,85 @@ class SecurityRouter:
         before: str | None = Query(default=None, description="ISO-8601 cursor for pagination"),
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Get audit logs, scoped to user's workspace when auth is enabled."""
-        try:
-            from infrastructure.auth import get_audit_logger
+        from infrastructure.auth import get_audit_logger
 
-            audit_logger = get_audit_logger()
+        audit_logger = get_audit_logger()
 
-            # Get workspace_id from auth
-            workspace_id = ""
-            if auth_user and auth_user.get("sub"):
-                workspace_id = auth_user.get("workspace_id", "")
+        workspace_id = ""
+        if auth_user and auth_user.get("sub"):
+            workspace_id = auth_user.get("workspace_id", "")
 
-            if history:
-                logs = await asyncio.to_thread(
-                    audit_logger.file_query,
-                    limit=limit,
-                    event_type=event_type,
-                    before=before,
-                    workspace_id=workspace_id,
-                )
-            else:
-                logs = audit_logger.logs[-limit:]
-                if event_type:
-                    logs = [l for l in logs if l.get("event_type") == event_type]
-                if workspace_id:
-                    logs = [l for l in logs if l.get("workspace_id", "") == workspace_id]
-            return success_response(data={"logs": logs, "count": len(logs)})
-        except Exception as e:
-            classify_and_raise(e, source="security.audit_logs")
+        if history:
+            logs = await asyncio.to_thread(
+                audit_logger.file_query,
+                limit=limit,
+                event_type=event_type,
+                before=before,
+                workspace_id=workspace_id,
+            )
+        else:
+            logs = audit_logger.logs[-limit:]
+            if event_type:
+                logs = [l for l in logs if l.get("event_type") == event_type]
+            if workspace_id:
+                logs = [l for l in logs if l.get("workspace_id", "") == workspace_id]
+        return success_response(data={"logs": logs, "count": len(logs)})
 
     # ── API key management ──
 
-    async def create_key(self, body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Create a new API key. The raw key is returned only in this response."""
-        try:
-            mgr = _get_key_manager()
-            name = body.get("name", "")
-            scopes = body.get("scopes", ["*"])
-            expires_at = body.get("expires_at")
-            key = mgr.create(name, scopes=scopes, expires_at=expires_at)
-            return success_response(data=key)
-        except Exception as e:
-            classify_and_raise(e, source="security.create_key")
+    @staticmethod
+    @endpoint("security.create_key")
+    async def create_key(body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        mgr = _get_key_manager()
+        name = body.get("name", "")
+        scopes = body.get("scopes", ["*"])
+        expires_at = body.get("expires_at")
+        key = mgr.create(name, scopes=scopes, expires_at=expires_at)
+        return success_response(data=key)
 
-    async def list_keys(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """List all API keys (hashes only, not raw keys)."""
-        try:
-            mgr = _get_key_manager()
-            keys = mgr.list()
-            return success_response(data={"keys": keys, "count": len(keys)})
-        except Exception as e:
-            classify_and_raise(e, source="security.list_keys")
+    @staticmethod
+    @endpoint("security.list_keys")
+    async def list_keys(auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        mgr = _get_key_manager()
+        keys = mgr.list()
+        return success_response(data={"keys": keys, "count": len(keys)})
 
-    async def get_key(self, key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Get API key details by ID."""
-        try:
-            mgr = _get_key_manager()
-            key = mgr.get(key_id)
-            if key is None:
-                raise_error("API key not found", "E_NOT_FOUND", status_code=404)
-            return success_response(data=key)
-        except Exception as e:
-            classify_and_raise(e, source="security.get_key")
+    @staticmethod
+    @endpoint("security.get_key")
+    async def get_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        mgr = _get_key_manager()
+        key = mgr.get(key_id)
+        if key is None:
+            raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=key)
 
-    async def delete_key(self, key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Revoke an API key (soft delete)."""
+    @staticmethod
+    @endpoint("security.delete_key")
+    async def delete_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             mgr = _get_key_manager()
             mgr.revoke(key_id)
             return success_response(data={"revoked": True})
         except ValueError as e:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
-        except Exception as e:
-            classify_and_raise(e, source="security.delete_key")
 
-    async def rotate_key(self, key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        """Rotate an API key: revoke the old one, create a new one."""
+    @staticmethod
+    @endpoint("security.rotate_key")
+    async def rotate_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             mgr = _get_key_manager()
             new_key = mgr.rotate(key_id)
             return success_response(data=new_key)
         except ValueError as e:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
-        except Exception as e:
-            classify_and_raise(e, source="security.rotate_key")
 
-    async def validate_key(self, body: dict) -> dict:
-        """Validate an API key (public endpoint for auth checks)."""
-        try:
-            mgr = _get_key_manager()
-            key = body.get("key", "")
-            valid = mgr.validate(key)
-            return success_response(data={"valid": valid})
-        except Exception as e:
-            classify_and_raise(e, source="security.validate_key")
+    @staticmethod
+    @endpoint("security.validate_key")
+    async def validate_key(body: dict) -> dict:
+        mgr = _get_key_manager()
+        key = body.get("key", "")
+        valid = mgr.validate(key)
+        return success_response(data={"valid": valid})
 
 
 router = SecurityRouter().router

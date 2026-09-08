@@ -2,7 +2,7 @@
 
 import { cn, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
-import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument, IconPlus, IconCheck, IconBrain, IconMicFilled } from '@sloughgpt/strui'
+import { IconMore, IconSettings, IconSearch, IconCopy, IconExport, IconDocument, IconPlus, IconCheck, IconMicFilled } from '@sloughgpt/strui'
 import { useChatToolbarContext } from '@/features/chat/contexts/ChatToolbarContext'
 
 function ShortcutHint({ keys }: { keys: string }) {

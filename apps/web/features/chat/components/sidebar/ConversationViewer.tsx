@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, memo } from 'react'
 import { cn, IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat, IconCopy, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { formatDateTimeUS } from '@/lib/time-format'
 
 interface ViewerMessage {
   id: string
@@ -21,17 +22,7 @@ interface ConversationViewerProps {
   onDelete?: () => void
 }
 
-function formatTimestamp(timestamp: number): string {
-  const date = new Date(timestamp)
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-export function ConversationViewer({
+export const ConversationViewer = memo(function ConversationViewer({
   isOpen,
   onClose,
   messages: initialMessages,
@@ -202,7 +193,7 @@ export function ConversationViewer({
                         </span>
                       )}
                       <span className="text-xs text-muted-foreground/60">
-                        {formatTimestamp(message.timestamp)}
+                        {formatDateTimeUS(message.timestamp)}
                       </span>
                     </div>
                   </div>
@@ -245,6 +236,6 @@ export function ConversationViewer({
       </div>
     </div>
   )
-}
+})
 
 export type { ViewerMessage, ConversationViewerProps }

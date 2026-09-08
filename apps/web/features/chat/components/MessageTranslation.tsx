@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, memo } from 'react'
-import { Button, IconX, IconCheck } from '@sloughgpt/strui'
+import { Button, IconX } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 

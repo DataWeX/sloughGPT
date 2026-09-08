@@ -1,7 +1,6 @@
 'use client'
 
 import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Badge } from '@sloughgpt/strui'
 import type { WorkflowStatus } from '@/lib/workflow-controller'
 import { timeAgo } from '@/lib/time-ago'
 

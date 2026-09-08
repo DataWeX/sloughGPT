@@ -109,7 +109,7 @@ export const ConversationBranching = memo(function ConversationBranching({
       <textarea
         value={editContent}
         onChange={(e) => setEditContent(e.target.value)}
-        placeholder="Enter a different prompt to branch..."
+        placeholder="Enter a different prompt to branch..." aria-label="Branch prompt"
         className="w-full text-xs bg-transparent border rounded px-2 py-1 resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 min-h-[40px]"
         autoFocus
       />

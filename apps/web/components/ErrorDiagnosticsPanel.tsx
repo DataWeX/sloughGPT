@@ -20,6 +20,7 @@ import { useState, useCallback, useMemo } from 'react'
 import { cn, Button, IconX } from '@sloughgpt/strui'
 import type { ErrorEvent } from '@/hooks/useErrorStream'
 import { timeAgo } from '@/lib/time-ago'
+import { formatTimeWithSeconds } from '@/lib/time-format'
 
 interface ErrorDiagnosticsPanelProps {
   errors: ErrorEvent[]
@@ -46,11 +47,6 @@ function levelBadge(level: ErrorEvent['level']): { label: string; color: string 
     case 'info': return { label: 'INFO', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' }
     default: return { label: level, color: 'bg-muted text-muted-foreground' }
   }
-}
-
-function formatTime(ts: number): string {
-  const d = new Date(ts)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 function copyToClipboard(text: string) {
@@ -92,7 +88,7 @@ function ErrorRow({ event, index }: { event: ErrorEvent; index: number }) {
       `Level: ${event.level}`,
       `Source: ${event.source}`,
       `Phase: ${event.phase}`,
-      `Time: ${formatTime(event.timestamp)}`,
+      `Time: ${formatTimeWithSeconds(event.timestamp)}`,
     ]
     if (event.correlationId) lines.push(`Correlation ID: ${event.correlationId}`)
     if (event.httpMethod && event.httpPath) {
@@ -217,8 +213,8 @@ function GroupedErrorRow({ group, index }: { group: GroupedError; index: number 
       `Error: ${group.message}`,
       `Level: ${group.level}`,
       `Count: ${group.count}`,
-      `First: ${formatTime(group.events[0].timestamp)}`,
-      `Latest: ${formatTime(group.latest.timestamp)}`,
+      `First: ${formatTimeWithSeconds(group.events[0].timestamp)}`,
+      `Latest: ${formatTimeWithSeconds(group.latest.timestamp)}`,
     ]
     if (group.latest.correlationId) lines.push(`Correlation ID: ${group.latest.correlationId}`)
     if (group.latest.httpMethod && group.latest.httpPath) {

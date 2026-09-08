@@ -53,6 +53,7 @@ vi.mock('@sloughgpt/strui', () => {
     DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    Spinner: () => <span data-testid="spinner">...</span>,
     IconChevronDown: () => <span data-testid="icon-chevron-down">▼</span>,
     IconCheck: () => <span data-testid="icon-check">✓</span>,
     IconRefresh: () => <span data-testid="icon-refresh">↻</span>,

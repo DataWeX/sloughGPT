@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { Input, Spinner } from '@sloughgpt/strui'
 import { IconSearch, IconX, IconMessage } from '@sloughgpt/strui'
 import { chatDB, type ChatSession, type ChatMessage as DBChatMessage } from '@/lib/db'
@@ -35,7 +35,7 @@ function snippet(content: string, query: string, maxLen = 100): React.ReactNode 
   )
 }
 
-export function ConversationSearch({ open, onClose, onNavigate }: ConversationSearchProps) {
+export const ConversationSearch = memo(function ConversationSearch({ open, onClose, onNavigate }: ConversationSearchProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -184,4 +184,4 @@ export function ConversationSearch({ open, onClose, onNavigate }: ConversationSe
       </div>
     </div>
   )
-}
+})

@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconUpload, IconX, IconRefresh, IconSend, IconDownload, IconAlert } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -11,7 +12,7 @@ interface AnalyzeTabProps {
   onSendText: (text: string) => void
 }
 
-export function AnalyzeTab({ vs, onSendText }: AnalyzeTabProps) {
+export const AnalyzeTab = memo(function AnalyzeTab({ vs, onSendText }: AnalyzeTabProps) {
   return (
     <div className="space-y-4">
       <div
@@ -143,4 +144,4 @@ export function AnalyzeTab({ vs, onSendText }: AnalyzeTabProps) {
       )}
     </div>
   )
-}
+})

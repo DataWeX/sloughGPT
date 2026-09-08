@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
 import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt, IconChart, IconDownload } from '@sloughgpt/strui'
@@ -27,7 +27,7 @@ interface ChatToolPanelProps {
   messages?: import('@/lib/chat-utils').ChatMessage[]
 }
 
-export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks, messages = [] }: ChatToolPanelProps) {
+export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks, messages = [] }: ChatToolPanelProps) {
   const [showVision, setShowVision] = useState(false)
   const ctx = useChatContext()
 
@@ -180,4 +180,4 @@ export function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemo
       )}
     </div>
   )
-}
+})

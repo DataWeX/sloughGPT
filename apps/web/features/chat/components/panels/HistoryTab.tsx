@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
@@ -9,7 +10,7 @@ interface HistoryTabProps {
   vs: UseVisionStudioReturn
 }
 
-export function HistoryTab({ vs }: HistoryTabProps) {
+export const HistoryTab = memo(function HistoryTab({ vs }: HistoryTabProps) {
   return (
     <div className="space-y-4">
       {!vs.trainingReport && <Skeleton className="h-32" />}
@@ -99,4 +100,4 @@ export function HistoryTab({ vs }: HistoryTabProps) {
       )}
     </div>
   )
-}
+})

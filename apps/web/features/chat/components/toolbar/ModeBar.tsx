@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, type JSX, type ReactNode } from 'react'
-import { cn, IconChevronDown, IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconTraining, IconBolt, IconDocument, IconMic } from '@sloughgpt/strui'
+import { useState, memo, type JSX, type ReactNode } from 'react'
+import { IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconBolt, IconDocument, IconMic, IconChevronDown, cn } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -136,7 +136,7 @@ function SubOptions({ mode, tone, type, rewriteStyle, decideStructure, difficult
   )
 }
 
-export function ModeBar({
+export const ModeBar = memo(function ModeBar({
   mode, tone, type, rewriteStyle, decideStructure, difficulty, langPair, brainstormTopic, wellnessType, createStyle,
   onModeChange, onToneChange, onTypeChange, onRewriteStyleChange, onDecideStructureChange, onDifficultyChange, onLangPairChange, onBrainstormTopicChange, onWellnessTypeChange, onCreateStyleChange,
 }: ModeBarProps): JSX.Element {
@@ -179,4 +179,4 @@ export function ModeBar({
       />
     </>
   )
-}
+})

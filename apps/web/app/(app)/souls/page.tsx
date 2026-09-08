@@ -15,6 +15,7 @@ import { soulsController, type Soul, type Checkpoint } from '@/lib/souls-control
 import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
+import { formatShortDate, formatDateTimeFull } from '@/lib/time-format'
 
 type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots' | 'analytics'
 
@@ -34,27 +35,6 @@ function traitColor(value: number): string {
   if (value >= 0.6) return 'text-primary'
   if (value >= 0.4) return 'text-warning'
   return 'text-muted-foreground'
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return iso
-  }
-}
-
-function formatDateTime(iso: string): string {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      year: 'numeric', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
-  } catch {
-    return iso
-  }
 }
 
 function sourceDir(path: string): string {
@@ -439,7 +419,7 @@ export default function SoulsPage() {
                           <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                             {soul.lineage && <span>{soul.lineage}</span>}
                             {soul.size_mb != null && soul.size_mb > 0 && <span>{soul.size_mb.toFixed(1)} MB</span>}
-                            {soul.born_at && <span>{formatDate(soul.born_at)}</span>}
+                            {soul.born_at && <span>{formatShortDate(soul.born_at)}</span>}
                             {soul.epochs_trained != null && soul.epochs_trained > 0 && <span>{soul.epochs_trained} epochs</span>}
                             {soul.final_val_loss != null && <span>val {soul.final_val_loss.toFixed(3)}</span>}
                             {soul.training_dataset && (
@@ -540,7 +520,7 @@ export default function SoulsPage() {
                           {cp.size_mb != null && <span>{cp.size_mb.toFixed(1)} MB</span>}
                           {cp.training_dataset && <span>· {cp.training_dataset.split('/').pop()}</span>}
                           {cp.training_duration_s != null && cp.training_duration_s > 0 && <span>· {cp.training_duration_s.toFixed(0)}s</span>}
-                          {cp.born_at && <span>· {formatDate(cp.born_at)}</span>}
+                          {cp.born_at && <span>· {formatShortDate(cp.born_at)}</span>}
                         </div>
                         {cp.perplexity_delta != null && cp.perplexity_delta !== 0 && (
                           <div className="flex items-center gap-3 text-xs mt-0.5">
@@ -697,7 +677,7 @@ export default function SoulsPage() {
                         <span className="font-medium truncate">{snap.name}</span>
                         {snap.saved_at && (
                           <span className="text-xs text-muted-foreground ml-2">
-                            {formatDateTime(snap.saved_at)}
+                            {formatDateTimeFull(snap.saved_at)}
                           </span>
                         )}
                       </div>
@@ -749,7 +729,7 @@ export default function SoulsPage() {
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {soul.lineage || 'Unknown lineage'} · {soul.size_mb != null ? `${soul.size_mb.toFixed(1)} MB` : '—'}
-                              {soul.born_at ? ` · ${formatDate(soul.born_at)}` : ''}
+                              {soul.born_at ? ` · ${formatShortDate(soul.born_at)}` : ''}
                             </div>
                           </div>
                           <div className="text-right">
@@ -859,7 +839,7 @@ export default function SoulsPage() {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {detailSoul.lineage && <div><span className="text-muted-foreground">Lineage:</span> <span className="font-medium">{detailSoul.lineage}</span></div>}
                     {detailSoul.base_model && <div><span className="text-muted-foreground">Base:</span> <span className="font-medium">{detailSoul.base_model}</span></div>}
-                    {detailSoul.born_at && <div><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDate(detailSoul.born_at)}</span></div>}
+                    {detailSoul.born_at && <div><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatShortDate(detailSoul.born_at)}</span></div>}
                     {(detailSoul.size_mb != null && detailSoul.size_mb > 0) && <div><span className="text-muted-foreground">Size:</span> <span className="font-medium">{detailSoul.size_mb.toFixed(1)} MB</span></div>}
                     {(detailSoul.epochs_trained != null && detailSoul.epochs_trained > 0) && <div><span className="text-muted-foreground">Epochs:</span> <span className="font-medium">{detailSoul.epochs_trained}</span></div>}
                     {detailSoul.final_train_loss != null && <div><span className="text-muted-foreground">Train loss:</span> <span className="font-medium">{detailSoul.final_train_loss.toFixed(4)}</span></div>}
@@ -1038,7 +1018,7 @@ export default function SoulsPage() {
                 {checkpointDetail.epochs != null && <div><span className="text-muted-foreground">Epochs:</span> <span className="font-mono">{checkpointDetail.epochs}</span></div>}
                 {checkpointDetail.steps != null && <div><span className="text-muted-foreground">Steps:</span> <span className="font-mono">{checkpointDetail.steps}</span></div>}
                 {checkpointDetail.training_dataset && <div className="col-span-2"><span className="text-muted-foreground">Dataset:</span> <span className="font-mono">{checkpointDetail.training_dataset}</span></div>}
-                {checkpointDetail.born_at && <div className="col-span-2"><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDateTime(checkpointDetail.born_at)}</span></div>}
+                {checkpointDetail.born_at && <div className="col-span-2"><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDateTimeFull(checkpointDetail.born_at)}</span></div>}
               </div>
               {checkpointDetail.perplexity_delta != null && checkpointDetail.perplexity_delta !== 0 && (
                 <div className="flex gap-4 pt-1 border-t border-border/30">

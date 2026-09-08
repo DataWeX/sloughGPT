@@ -41,6 +41,7 @@ import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
 import { ServingProfilesCard } from '@/components/ServingProfilesCard'
+import { AudioFilterSettingsCard } from '@/components/AudioFilterSettingsCard'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { settingsSchema } from '@/lib/validation-schemas'
@@ -781,6 +782,9 @@ export default function SettingsPage() {
 
         {/* Serving profiles */}
         <ServingProfilesCard />
+
+        {/* Audio filter */}
+        <AudioFilterSettingsCard />
 
         {/* Danger zone */}
         <Card className="border-destructive/30">

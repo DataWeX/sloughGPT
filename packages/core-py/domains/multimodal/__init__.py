@@ -70,6 +70,17 @@ from .speech import (
     get_speech_recognizer,
 )
 
+# =============================================================================
+# AUDIO FILTER
+# =============================================================================
+
+from .audio_filter import (
+    FilterMode,
+    AudioFilterConfig,
+    FilterResult,
+    apply_audio_filter,
+)
+
 
 __all__ = [
     "MultiModalConfig",
@@ -82,6 +93,10 @@ __all__ = [
     "BrowserSpeechRecognizer",
     "ServerSpeechRecognizer",
     "get_speech_recognizer",
+    "FilterMode",
+    "AudioFilterConfig",
+    "FilterResult",
+    "apply_audio_filter",
     "ImageCaption",
     "VisualObject",
     "VisionCNN",

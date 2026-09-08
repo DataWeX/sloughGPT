@@ -5,6 +5,7 @@ import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { downloadJson } from '@/lib/download-utils'
 import { formatDuration } from '@/lib/formatDuration'
+import { formatDateTimeShort } from '@/lib/time-format'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -17,14 +18,6 @@ function StatusBadge({ status }: { status: string }) {
       status === 'failed' ? 'bg-destructive/15 text-destructive' :
       'bg-muted text-muted-foreground')}>{status}</span>
   )
-}
-
-function formatDate(iso?: string | null): string {
-  if (!iso) return '—'
-  try {
-    const d = new Date(iso)
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  } catch { return iso }
 }
 
 export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast }: Props) {
@@ -146,7 +139,7 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-2">
                       {job.method && <span className="text-[10px] bg-muted px-1 py-0.5 rounded">{job.method}</span>}
-                      <span>{formatDate(job.created_at)}</span>
+                      <span>{formatDateTimeShort(job.created_at)}</span>
                     </div>
                   </div>
 

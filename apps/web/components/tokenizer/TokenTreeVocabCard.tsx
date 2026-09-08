@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { cn, ActionCard, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import {
   tokenTreeController,

@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { IconSend } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -9,7 +10,7 @@ interface GenerateTabProps {
   vs: UseVisionStudioReturn
 }
 
-export function GenerateTab({ vs }: GenerateTabProps) {
+export const GenerateTab = memo(function GenerateTab({ vs }: GenerateTabProps) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -49,4 +50,4 @@ export function GenerateTab({ vs }: GenerateTabProps) {
       )}
     </div>
   )
-}
+})

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { Button, Spinner } from '@sloughgpt/strui'
-import { IconSearch, IconX } from '@sloughgpt/strui'
+import { IconSearch } from '@sloughgpt/strui'
 import { sessionController, type Conversation } from '@/lib/session-controller'
 import { truncateMessage } from '@/lib/conversations-utils'
 
