@@ -596,6 +596,52 @@ def _prepare_provider_messages(
     return provider_messages
 
 
+async def _build_context_frame(
+    ctx_core: Any,
+    session_id: str,
+    user_msg: str,
+    corr_id: str,
+) -> tuple[Any, dict]:
+    """Build context frame from ContextCore. Returns (frame, context_info)."""
+    context_info = {}
+    frame = None
+
+    skip_context = False
+    try:
+        if get_memory_service().stats().get("total_facts", 0) == 0:
+            skip_context = True
+    except Exception as e:
+        logger.debug("Knowledge memory check failed: %s", e)
+
+    if not skip_context:
+        ctx_core.set_session_id(session_id)
+        ctx_core.add_message("user", user_msg)
+        try:
+            frame = await asyncio.wait_for(
+                ctx_core.build_context_frame(
+                    include_rag=True,
+                    include_memory=True,
+                    query=user_msg,
+                ),
+                timeout=5.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
+                corr_id,
+            )
+            frame = None
+
+        if frame is not None:
+            context_info = {
+                "layers": [l.layer_type for l in frame.layers],
+                "total_tokens": frame.total_tokens,
+                "max_tokens": frame.max_tokens,
+            }
+
+    return frame, context_info
+
+
 def _run_post_gen_tasks(
     full_response: str,
     user_msg: str,
@@ -1572,113 +1618,11 @@ class InferenceRouter:
             ctx_core = self._get_context_core()
             context_info = {}
             frame = None
-            skip_context = False
             if ctx_core and req.use_context_core:
-                try:
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=MEMORY_CHECK start",
-                        corr_id,
-                        extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "MEMORY_CHECK"}},
-                    )
-                    if (
-                        get_memory_service().stats().get("total_facts", 0) == 0
-                        and not req.knowledge
-                    ):
-                        skip_context = True
-                except Exception as e:
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=MEMORY_CHECK error=%s",
-                        corr_id,
-                        e,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "MEMORY_CHECK",
-                                "result": "ERROR",
-                                "error": str(e),
-                            },
-                        },
-                    )
-                    logger.debug("Knowledge memory check failed: %s", e)
-            logger.debug(
-                "CHAT_PIPELINE corr=%s step=MEMORY_CHECK done skip_context=%s ctx_core=%s",
-                corr_id,
-                skip_context,
-                ctx_core is not None,
-                extra={
-                    "tag": "CHAT",
-                    "context": {
-                        "corr": corr_id,
-                        "step": "MEMORY_CHECK",
-                        "result": "DONE",
-                        "skip_context": skip_context,
-                        "ctx_core": ctx_core is not None,
-                    },
-                },
-            )
-            if ctx_core and req.use_context_core and not skip_context:
-                logger.debug(
-                    "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD start session=%s",
-                    corr_id,
-                    session_id,
-                    extra={
-                        "tag": "CHAT",
-                        "context": {
-                            "corr": corr_id,
-                            "step": "CONTEXTCORE_BUILD",
-                            "session_id": session_id,
-                        },
-                    },
+                frame, context_info = await _build_context_frame(
+                    ctx_core, session_id, user_msg, corr_id,
                 )
-                ctx_core.set_session_id(session_id)
-                ctx_core.add_message("user", user_msg)
-                try:
-                    frame = await asyncio.wait_for(
-                        ctx_core.build_context_frame(
-                            include_rag=True,
-                            include_memory=True,
-                            query=user_msg,
-                        ),
-                        timeout=5.0,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
-                        corr_id,
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "CONTEXTCORE_BUILD",
-                                "result": "TIMEOUT",
-                            },
-                        },
-                    )
-                    frame = None
-                if frame is not None:
-                    context_info = {
-                        "layers": [l.layer_type for l in frame.layers],
-                        "total_tokens": frame.total_tokens,
-                        "max_tokens": frame.max_tokens,
-                    }
-                    logger.debug(
-                        "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD done layers=%d tokens=%d",
-                        corr_id,
-                        len(context_info.get("layers", [])),
-                        context_info.get("total_tokens", 0),
-                        extra={
-                            "tag": "CHAT",
-                            "context": {
-                                "corr": corr_id,
-                                "step": "CONTEXTCORE_BUILD",
-                                "result": "DONE",
-                                "layers": context_info.get("layers", []),
-                                "tokens": context_info.get("total_tokens", 0),
-                            },
-                        },
-                    )
-                    if frame.system_prompt:
+                if frame is not None and frame.system_prompt:
                         for i, m in enumerate(provider_messages):
                             if m["role"] == "system":
                                 provider_messages[i] = {
