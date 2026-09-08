@@ -1,4 +1,4 @@
-"""In-memory training job registry (replace with DB/queue for production).
+"""Persistent training job registry backed by MogDB.
 
 Completed jobs may expose a ``checkpoint`` path; native trainer ``*.soul`` embeds
 ``stoi`` / ``itos`` / ``chars`` — see ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
@@ -8,4 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-training_jobs: dict[str, dict[str, Any]] = {}
+from .job_store import PersistentTrainingJobs
+
+training_jobs: PersistentTrainingJobs = PersistentTrainingJobs()

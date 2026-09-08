@@ -325,3 +325,118 @@ def get_job_store() -> JobStore:
     if _job_store is None:
         _job_store = JobStore()
     return _job_store
+
+
+class PersistentTrainingJobs:
+    """Dict-like wrapper around JobStore for backward compatibility.
+
+    Provides the same ``training_jobs[job_id]`` interface while persisting
+    all mutations to MogDB. Falls back to an in-memory dict if JobStore
+    is unavailable.
+    """
+
+    def __init__(self):
+        self._fallback: dict[str, dict[str, Any]] = {}
+
+    def _store(self) -> JobStore | None:
+        try:
+            s = get_job_store()
+            return s if s.is_available else None
+        except Exception:
+            return None
+
+    def __getitem__(self, key: str) -> dict[str, Any]:
+        store = self._store()
+        if store:
+            doc = store.get(key)
+            if doc is not None:
+                return doc
+        return self._fallback[key]
+
+    def __setitem__(self, key: str, value: dict[str, Any]) -> None:
+        store = self._store()
+        if store:
+            existing = store.get(key)
+            if existing:
+                # Merge: update existing doc with new values
+                updates = {k: v for k, v in value.items() if k not in ("id", "_id")}
+                store.update(key, **updates)
+            else:
+                # Create new doc
+                doc = {**value, "_id": key, "id": key}
+                store._jobs.insert_one(doc)
+        else:
+            self._fallback[key] = value
+
+    def __delitem__(self, key: str) -> None:
+        store = self._store()
+        if store:
+            store.delete(key)
+        else:
+            del self._fallback[key]
+
+    def __contains__(self, key: object) -> bool:
+        store = self._store()
+        if store:
+            return store.get(str(key)) is not None
+        return key in self._fallback
+
+    def __len__(self) -> int:
+        store = self._store()
+        if store:
+            return len(store.list())
+        return len(self._fallback)
+
+    def __iter__(self):
+        store = self._store()
+        if store:
+            return iter(j["id"] for j in store.list())
+        return iter(self._fallback)
+
+    def get(self, key: str, default=None) -> dict[str, Any] | None:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def pop(self, key: str, *args):
+        store = self._store()
+        if store:
+            doc = store.get(key)
+            if doc:
+                store.delete(key)
+                return doc
+            if args:
+                return args[0]
+            raise KeyError(key)
+        return self._fallback.pop(key, *args)
+
+    def items(self):
+        store = self._store()
+        if store:
+            return [(j["id"], j) for j in store.list()]
+        return self._fallback.items()
+
+    def values(self):
+        store = self._store()
+        if store:
+            return store.list()
+        return self._fallback.values()
+
+    def keys(self):
+        store = self._store()
+        if store:
+            return [j["id"] for j in store.list()]
+        return self._fallback.keys()
+
+    def update(self, other=None, **kwargs):
+        if other:
+            for k, v in (other.items() if hasattr(other, "items") else other):
+                self[k] = v
+        for k, v in kwargs.items():
+            self[k] = v
+
+    def setdefault(self, key: str, default=None):
+        if key not in self:
+            self[key] = default if default is not None else {}
+        return self[key]
