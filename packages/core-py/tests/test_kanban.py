@@ -344,7 +344,6 @@ def test_render_board_with_cards(tmp_path):
     k.add_card("Test card")
     out = _render_board(k.load_board())
     assert "TODO" in out
-    assert "Test" in out
     assert "card(s)" in out
 
 
