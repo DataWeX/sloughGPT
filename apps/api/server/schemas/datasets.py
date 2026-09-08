@@ -12,9 +12,11 @@ class DatasetInfo(BaseModel):
     name: str
     path: str
     type: str = "text"
+    size: int = 0
     size_bytes: int = 0
     size_formatted: str = "Empty"
     num_samples: int = 0
+    samples: int = 0
     visual_metadata: dict[str, Any] | None = None
     workspace_id: str | None = None
 
