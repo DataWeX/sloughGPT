@@ -70,6 +70,34 @@ class DistillConfig:
     resume_epoch: int = 0  # starting epoch (overridden by checkpoint metadata)
     resume_step: int = 0   # starting step (overridden by checkpoint metadata)
 
+    def __post_init__(self):
+        if self.n_embed < 16:
+            raise ValueError(f"n_embed must be >= 16, got {self.n_embed}")
+        if self.n_layer < 1:
+            raise ValueError(f"n_layer must be >= 1, got {self.n_layer}")
+        if self.n_head < 1:
+            raise ValueError(f"n_head must be >= 1, got {self.n_head}")
+        if self.n_embed % self.n_head != 0:
+            raise ValueError(f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})")
+        if self.block_size < 8:
+            raise ValueError(f"block_size must be >= 8, got {self.block_size}")
+        if self.epochs < 1:
+            raise ValueError(f"epochs must be >= 1, got {self.epochs}")
+        if self.lr <= 0:
+            raise ValueError(f"lr must be > 0, got {self.lr}")
+        if self.batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {self.batch_size}")
+        if self.temperature <= 0:
+            raise ValueError(f"temperature must be > 0, got {self.temperature}")
+        if not 0 <= self.alpha <= 1:
+            raise ValueError(f"alpha must be between 0 and 1, got {self.alpha}")
+        if not 0 <= self.beta <= 1:
+            raise ValueError(f"beta must be between 0 and 1, got {self.beta}")
+        if abs(self.alpha + self.beta - 1.0) > 0.01:
+            raise ValueError(f"alpha + beta should equal 1.0, got {self.alpha + self.beta}")
+        if not self.teacher_model:
+            raise ValueError("teacher_model is required")
+
 
 class TextDataset:
     """Simple character-level text dataset for distillation."""

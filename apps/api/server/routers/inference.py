@@ -227,18 +227,30 @@ class ChatControlRequest(BaseModel):
 # In-memory store for pending control requests per session
 _chat_control_store: dict[str, dict] = {}
 _chat_control_lock = threading.Lock()
+_CHAT_CONTROL_TTL = 300  # 5 minutes
 
 
 def get_chat_control(session_id: str) -> dict | None:
     """Get and consume pending control for a session."""
     with _chat_control_lock:
-        return _chat_control_store.pop(session_id, None)
+        entry = _chat_control_store.pop(session_id, None)
+        if entry and time.time() - entry.get("_ts", 0) > _CHAT_CONTROL_TTL:
+            return None
+        return entry
 
 
 def set_chat_control(session_id: str, control: dict) -> None:
     """Set pending control for a session."""
+    import time as _time
     with _chat_control_lock:
+        control["_ts"] = _time.time()
         _chat_control_store[session_id] = control
+        # Evict expired entries
+        if len(_chat_control_store) > 100:
+            now = _time.time()
+            expired = [k for k, v in _chat_control_store.items() if now - v.get("_ts", 0) > _CHAT_CONTROL_TTL]
+            for k in expired:
+                del _chat_control_store[k]
 
 
 # Cache for partial chat responses (for Last-Event-ID reconnection)

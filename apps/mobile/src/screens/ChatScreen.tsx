@@ -201,11 +201,17 @@ export function ChatScreen() {
             paddingHorizontal={16} paddingVertical={10}
             backgroundColor={colors.errorAlpha(0.06)}
             borderBottomWidth={0.5} borderBottomColor={colors.errorAlpha(0.12)}
-            alignItems="center" gap={8}
-            onPress={a.clearError}>
+            alignItems="center" gap={8}>
             <YStack width={6} height={6} borderRadius={3} backgroundColor={colors.error} />
             <Text fontSize={12} color={colors.error} flex={1} numberOfLines={2}>{a.error}</Text>
-            <Icon name="x" size={14} color={colors.error} />
+            <YStack
+              paddingHorizontal={8} paddingVertical={4}
+              backgroundColor={colors.errorAlpha(0.12)}
+              borderRadius={6}
+              onPress={() => { a.clearError(); a.regenerate(); }}>
+              <Text fontSize={11} fontWeight="600" color={colors.error}>Retry</Text>
+            </YStack>
+            <Icon name="x" size={14} color={colors.error} onPress={a.clearError} />
           </XStack>
         )}
 
@@ -458,6 +464,14 @@ export function ChatScreen() {
         )}
 
         <ReasoningPanel visible={a.streaming && a.messages.length > 0 && !a.messages[a.messages.length - 1]?.content} />
+
+        {a.streaming && a.messages.length > 0 && a.messages[a.messages.length - 1]?.content && (
+          <XStack paddingHorizontal={16} paddingVertical={6} gap={4} alignItems="center">
+            <YStack width={4} height={4} borderRadius={2} backgroundColor={colors.primary} opacity={0.6} />
+            <YStack width={4} height={4} borderRadius={2} backgroundColor={colors.primary} opacity={0.4} />
+            <YStack width={4} height={4} borderRadius={2} backgroundColor={colors.primary} opacity={0.2} />
+          </XStack>
+        )}
 
         {a.replyTo && (
           <XStack
