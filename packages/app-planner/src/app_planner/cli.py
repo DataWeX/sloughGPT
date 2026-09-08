@@ -14,7 +14,7 @@ from pathlib import Path
 
 from app_planner import config
 from app_planner.core import NoteStore, get_note_store, reset_note_store
-from app_planner.kanban import KanbanStore
+from app_planner.kanban import KanbanStore, PRIORITIES, CARD_TYPES
 from app_planner.sync import sync_notes_to_board
 
 
@@ -276,15 +276,27 @@ def _note_sprint(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Kanban subcommands
 # ---------------------------------------------------------------------------
+# Kan board operations
+# ---------------------------------------------------------------------------
+# Kanban board operations
+# ---------------------------------------------------------------------------
+
+def _kcli(args: argparse.Namespace, *parts: str) -> int:
+    """Delegate to the kanban CLI, injecting --dir when --board-dir is set."""
+    from app_planner.kanban import cli_main as kcli
+    argv: list[str] = []
+    if args.board_dir:
+        argv += ["--dir", str(args.board_dir)]
+    argv += list(parts)
+    return kcli(argv)
+
 
 def _kanban_init(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["init", "--name", args.name, *(["--force"] if args.force else [])])
+    return _kcli(args, "init", "--name", args.name, *(["--force"] if args.force else []))
 
 
 def _kanban_add(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli([
+    return _kcli(args,
         "add", args.title,
         *(["--column", args.column] if args.column else []),
         "--priority", args.priority,
@@ -295,12 +307,11 @@ def _kanban_add(args: argparse.Namespace) -> int:
         "--tags", args.tags,
         *(["--due", args.due] if args.due else []),
         *(["--assignee", args.assignee] if args.assignee else []),
-    ])
+    )
 
 
 def _kanban_list(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    argv = ["list"]
+    argv: list[str] = ["list"]
     if args.column:
         argv += ["--column", args.column]
     if args.priority:
@@ -316,16 +327,14 @@ def _kanban_list(args: argparse.Namespace) -> int:
     if args.overdue:
         argv += ["--overdue"]
     argv += ["--limit", str(args.limit)]
-    return kcli(argv)
+    return _kcli(args, *argv)
 
 
 def _kanban_show(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["show", args.card_id])
+    return _kcli(args, "show", args.card_id)
 
 
 def _kanban_edit(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
     argv = ["edit", args.card_id]
     for flag, val in [
         ("--title", args.title),
@@ -340,77 +349,64 @@ def _kanban_edit(args: argparse.Namespace) -> int:
     ]:
         if val is not None:
             argv += [flag, str(val)]
-    return kcli(argv)
+    return _kcli(args, *argv)
 
 
 def _kanban_move(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["move", args.card_id, args.column])
+    return _kcli(args, "move", args.card_id, args.column)
 
 
 def _kanban_delete(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["delete", args.card_id])
+    return _kcli(args, "delete", args.card_id)
 
 
 def _kanban_board(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["board"])
+    return _kcli(args, "board")
 
 
 def _kanban_note(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
     sub_argv = ["note", args.note_cmd, args.card_id]
     if args.note_cmd == "add":
         sub_argv += [args.text, *(["--author", args.author] if args.author else [])]
     elif args.note_cmd == "delete":
         sub_argv += [args.note_id]
-    return kcli(sub_argv)
+    return _kcli(args, *sub_argv)
 
 
 def _kanban_columns(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["columns"])
+    return _kcli(args, "columns")
 
 
 def _kanban_column_add(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["column-add", args.name, *(["--wip", str(args.wip)] if args.wip else [])])
+    return _kcli(args, "column-add", args.name, *(["--wip", str(args.wip)] if args.wip else []))
 
 
 def _kanban_column_rename(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["column-rename", args.name, args.new_name])
+    return _kcli(args, "column-rename", args.name, args.new_name)
 
 
 def _kanban_column_rm(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["column-rm", args.name, "--move-to", args.move_to])
+    return _kcli(args, "column-rm", args.name, "--move-to", args.move_to)
 
 
 def _kanban_archive(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["archive"])
+    return _kcli(args, "archive")
 
 
 def _kanban_search(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["search", args.query, "--limit", str(args.limit)])
+    return _kcli(args, "search", args.query, "--limit", str(args.limit))
 
 
 def _kanban_stats(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["stats"])
+    return _kcli(args, "stats")
 
 
 def _kanban_export(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["export", *(["--output", args.output] if args.output else [])])
+    return _kcli(args, "export", *(["--output", args.output] if args.output else []))
 
 
 def _kanban_import(args: argparse.Namespace) -> int:
-    from app_planner.kanban import cli_main as kcli
-    return kcli(["import", args.input])
+    return _kcli(args, "import", args.input)
 
 
 # ---------------------------------------------------------------------------
@@ -501,8 +497,8 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_add = sub.add_parser("add", help="Add a card")
     p_add.add_argument("title", help="Card title")
     p_add.add_argument("--column", default="", help="Target column")
-    p_add.add_argument("--priority", default="medium", choices=["low", "medium", "high"])
-    p_add.add_argument("--type", default="task", choices=["task", "bug", "feature", "chore", "spike", "docs"])
+    p_add.add_argument("--priority", default="medium", choices=PRIORITIES)
+    p_add.add_argument("--type", default="task", choices=CARD_TYPES)
     p_add.add_argument("--effort", type=float, default=0.0, help="Effort estimate")
     p_add.add_argument("--sprint", default="", help="Sprint identifier")
     p_add.add_argument("--desc", default="", help="Description")
@@ -512,7 +508,7 @@ def cli_main(argv: list[str] | None = None) -> int:
 
     p_list = sub.add_parser("cards", help="List cards")
     p_list.add_argument("--column", default=None, help="Filter by column")
-    p_list.add_argument("--priority", default=None, choices=["low", "medium", "high"])
+    p_list.add_argument("--priority", default=None, choices=PRIORITIES)
     p_list.add_argument("--tag", default=None, help="Filter by tag")
     p_list.add_argument("--assignee", default=None, help="Filter by assignee")
     p_list.add_argument("--due-before", default="", help="Due before YYYY-MM-DD")
@@ -527,8 +523,8 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_edit.add_argument("card_id", help="Card id or prefix")
     p_edit.add_argument("--title", default=None)
     p_edit.add_argument("--desc", default=None)
-    p_edit.add_argument("--priority", default=None, choices=["low", "medium", "high"])
-    p_edit.add_argument("--type", default=None, choices=["task", "bug", "feature", "chore", "spike", "docs"])
+    p_edit.add_argument("--priority", default=None, choices=PRIORITIES)
+    p_edit.add_argument("--type", default=None, choices=CARD_TYPES)
     p_edit.add_argument("--effort", type=float, default=None, help="Effort estimate")
     p_edit.add_argument("--sprint", default=None, help="Sprint identifier")
     p_edit.add_argument("--tags", default=None)
@@ -591,7 +587,8 @@ def cli_main(argv: list[str] | None = None) -> int:
     p_import = sub.add_parser("import-board", help="Import board from JSON")
     p_import.add_argument("input", help="Input JSON file")
 
-    sub.add_parser("sync", help="Sync notes to board")
+    p_sync = sub.add_parser("sync", help="Sync notes to board")
+    p_sync.add_argument("--quiet", action="store_true", help="Only print the summary line")
     sub.add_parser("gui", help="Launch web GUI")
 
     args = parser.parse_args(argv)
@@ -667,14 +664,22 @@ def cli_main(argv: list[str] | None = None) -> int:
     # --- Meta ---
     if args.cmd == "sync":
         from app_planner.sync import cli_main as scli
-        return scli(["--notes-dir", str(args.notes_dir or config.default_notes_dir()),
-                     "--board-dir", str(args.board_dir or config.default_board_dir()),
-                     "--backend", args.backend or config.default_backend()])
+        notes_dir = args.notes_dir or config.default_notes_dir()
+        sync_args = ["--notes-dir", str(notes_dir),
+                     "--board-dir", str(args.board_dir or config.default_board_dir())]
+        if args.backend:
+            sync_args += ["--backend", args.backend]
+        if getattr(args, "quiet", False):
+            sync_args += ["--quiet"]
+        return scli(sync_args)
     if args.cmd == "gui":
         from app_planner.gui import main as gmain
-        return gmain(["--notes-dir", str(args.notes_dir or config.default_notes_dir()),
-                      "--board-dir", str(args.board_dir or config.default_board_dir()),
-                      "--backend", args.backend or config.default_backend()])
+        notes_dir = args.notes_dir or config.default_notes_dir()
+        gui_args = ["--notes-dir", str(notes_dir),
+                    "--board-dir", str(args.board_dir or config.default_board_dir())]
+        if args.backend:
+            gui_args += ["--backend", args.backend]
+        return gmain(gui_args)
 
     return 0
 

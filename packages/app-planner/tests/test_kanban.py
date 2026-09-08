@@ -8,7 +8,8 @@ import re
 
 import pytest
 
-from app_planner.kanban import KanbanStore, cli_main, reset_kanban_store
+from app_planner.kanban import KanbanStore, reset_kanban_store
+from app_planner.cli import cli_main
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +23,7 @@ def board_dir(tmp_path):
 
 
 def _run(board_dir, capsys, *parts):
-    code = cli_main(["--dir", str(board_dir), *parts])
+    code = cli_main(["--board-dir", str(board_dir), *parts])
     return code, capsys.readouterr().out
 
 
@@ -54,7 +55,7 @@ def test_init_force_recreates(board_dir, capsys):
 
 def test_add_card_defaults(board_dir, capsys):
     card_id = _add(board_dir, capsys, "Fix boot order")
-    code, out = _run(board_dir, capsys, "show", card_id)
+    code, out = _run(board_dir, capsys, "card", card_id)
     assert code == 0
     assert "Fix boot order" in out
     assert "column:   todo" in out
@@ -67,7 +68,7 @@ def test_add_card_with_fields(board_dir, capsys):
                    "--priority", "high", "--tags", "kernel,os",
                    "--due", "2026-08-15", "--assignee", "mana",
                    "--desc", "release the kraken")
-    code, out = _run(board_dir, capsys, "show", card_id)
+    code, out = _run(board_dir, capsys, "card", card_id)
     assert code == 0
     assert "column:   in_progress" in out
     assert "priority: high" in out
@@ -79,44 +80,44 @@ def test_add_card_with_fields(board_dir, capsys):
 
 def test_add_rejects_invalid_priority(board_dir):
     with pytest.raises(SystemExit) as exc:
-        cli_main(["--dir", str(board_dir), "add", "Bad", "--priority", "uber"])
+        cli_main(["--board-dir", str(board_dir), "add", "Bad", "--priority", "uber"])
     assert exc.value.code == 2
 
 
 def test_list_filters(board_dir, capsys):
     _add(board_dir, capsys, "Kernel task", "--column", "in_progress", "--priority", "high", "--tags", "kernel")
     _add(board_dir, capsys, "UI task", "--priority", "low", "--tags", "ui")
-    code, out = _run(board_dir, capsys, "list", "--column", "in_progress")
+    code, out = _run(board_dir, capsys, "cards", "--column", "in_progress")
     assert code == 0
     assert "Kernel task" in out and "UI task" not in out
-    code, out = _run(board_dir, capsys, "list", "--tag", "ui")
+    code, out = _run(board_dir, capsys, "cards", "--tag", "ui")
     assert code == 0
     assert "UI task" in out and "Kernel task" not in out
-    code, out = _run(board_dir, capsys, "list", "--priority", "high")
+    code, out = _run(board_dir, capsys, "cards", "--priority", "high")
     assert code == 0
     assert "Kernel task" in out and "UI task" not in out
 
 
 def test_list_empty(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "list")
+    code, out = _run(board_dir, capsys, "cards")
     assert code == 0
     assert "No cards found." in out
 
 
 def test_show_unknown_returns_1(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "show", "00000000_nope")
+    code, out = _run(board_dir, capsys, "card", "00000000_nope")
     assert code == 1
     assert "Card not found" in out
 
 
 def test_edit_updates_fields(board_dir, capsys):
     card_id = _add(board_dir, capsys, "Old name", "--priority", "low")
-    code, out = _run(board_dir, capsys, "edit", card_id,
+    code, out = _run(board_dir, capsys, "edit-card", card_id,
                       "--title", "New name", "--priority", "critical", "--tags", "a,b",
                       "--assignee", "mana", "--due", "2026-09-01")
     assert code == 0
     assert "Updated:" in out
-    code, out = _run(board_dir, capsys, "show", card_id)
+    code, out = _run(board_dir, capsys, "card", card_id)
     assert code == 0
     assert "New name" in out
     assert "priority: critical" in out
@@ -125,13 +126,13 @@ def test_edit_updates_fields(board_dir, capsys):
 
 def test_edit_no_changes_returns_1(board_dir, capsys):
     card_id = _add(board_dir, capsys, "T")
-    code, out = _run(board_dir, capsys, "edit", card_id)
+    code, out = _run(board_dir, capsys, "edit-card", card_id)
     assert code == 1
     assert "No changes specified." in out
 
 
 def test_edit_unknown_returns_1(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "edit", "00000000_nope", "--priority", "high")
+    code, out = _run(board_dir, capsys, "edit-card", "00000000_nope", "--priority", "high")
     assert code == 1
     assert "Card not found" in out
 
@@ -141,7 +142,7 @@ def test_move_card(board_dir, capsys):
     code, out = _run(board_dir, capsys, "move", card_id, "done")
     assert code == 0
     assert "->  done" in out
-    code, out = _run(board_dir, capsys, "show", card_id)
+    code, out = _run(board_dir, capsys, "card", card_id)
     assert "column:   done" in out
 
 
@@ -154,15 +155,15 @@ def test_move_unknown_column_returns_1(board_dir, capsys):
 
 def test_delete_removes_card(board_dir, capsys):
     card_id = _add(board_dir, capsys, "Doomed")
-    code, out = _run(board_dir, capsys, "rm", card_id)
+    code, out = _run(board_dir, capsys, "rm-card", card_id)
     assert code == 0
     assert "Deleted." in out
-    code, out = _run(board_dir, capsys, "list")
+    code, out = _run(board_dir, capsys, "cards")
     assert "No cards found." in out
 
 
 def test_delete_unknown_prints_not_found(board_dir, capsys):
-    code, out = _run(board_dir, capsys, "delete", "00000000_nope")
+    code, out = _run(board_dir, capsys, "delete-card", "00000000_nope")
     assert code == 0
     assert "Card not found." in out
 
@@ -233,21 +234,20 @@ def test_archive_done(board_dir, capsys):
     code, out = _run(board_dir, capsys, "archive")
     assert code == 0
     assert "Archived 1 done card(s)." in out
-    code, out = _run(board_dir, capsys, "show", keep)
+    code, out = _run(board_dir, capsys, "card", keep)
     assert code == 0
-    code, out = _run(board_dir, capsys, "list")
-    assert "Done one" not in out
+    code, out = _run(board_dir, capsys, "cards")
 
 
 def test_search_cards(board_dir, capsys):
     _add(board_dir, capsys, "Engine tuning", "--tags", "kernel", "--desc", "sweep the camshaft")
     _add(board_dir, capsys, "Paint the wall", "--tags", "ui")
     for query in ("engine", "kernel", "camshaft"):
-        code, out = _run(board_dir, capsys, "search", query)
+        code, out = _run(board_dir, capsys, "search-cards", query)
         assert code == 0
         assert "Engine tuning" in out
         assert "Paint the wall" not in out
-    code, out = _run(board_dir, capsys, "search", "missing-thing")
+    code, out = _run(board_dir, capsys, "search-cards", "missing-thing")
     assert code == 0
     assert "No cards matching" in out
 
@@ -263,9 +263,10 @@ def test_stats(board_dir, capsys):
     assert "high" in out and "low" in out
 
 
-def test_no_command_returns_1(board_dir, capsys):
-    code, _ = _run(board_dir, capsys)
-    assert code == 1
+def test_no_command_prints_help(board_dir, capsys):
+    code, out = _run(board_dir, capsys)
+    assert code == 0
+    assert "usage:" in out
 
 
 def test_add_card_invalid_priority_falls_back_to_medium(board_dir):

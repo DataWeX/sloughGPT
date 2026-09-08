@@ -14,7 +14,8 @@ import httpx
 import pytest
 
 from app_planner.gui import GuiHandler, GuiServer, GUI_HTML, _bind_server
-from app_planner.core import NoteStore, cli_main
+from app_planner.core import NoteStore
+from app_planner.cli import cli_main
 from app_planner.kanban import KanbanStore
 
 BACKENDS = ["file", "mogdb"]

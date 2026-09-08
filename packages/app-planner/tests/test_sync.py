@@ -7,7 +7,8 @@ import pytest
 
 from app_planner.core import NoteStore
 from app_planner.kanban import KanbanStore
-from app_planner.sync import cli_main, sync_notes_to_board
+from app_planner.cli import cli_main
+from app_planner.sync import sync_notes_to_board
 
 
 @pytest.fixture
@@ -109,7 +110,7 @@ def test_sync_cli_quiet(tmp_path, capsys):
     notes_dir = tmp_path / "notes"
     board_dir = tmp_path / "board"
     NoteStore(notes_dir=notes_dir, backend="file").create("CLI note")
-    code = cli_main(["--notes-dir", str(notes_dir), "--board-dir", str(board_dir), "--quiet"])
+    code = cli_main(["--notes-dir", str(notes_dir), "--board-dir", str(board_dir), "sync", "--quiet"])
     out = capsys.readouterr().out
     assert code == 0
     assert "1 new card(s) added, 0 moved, 1 total" in out

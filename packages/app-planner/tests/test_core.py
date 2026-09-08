@@ -10,7 +10,8 @@ import re
 import pytest
 
 from app_planner import core as core_module
-from app_planner.core import cli_main, reset_note_store
+from app_planner.core import reset_note_store
+from app_planner.cli import cli_main
 
 BACKENDS = ["file", "mogdb"]
 
