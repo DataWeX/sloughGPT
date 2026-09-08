@@ -71,7 +71,15 @@ function _flushSettings(get: () => AppStore) {
   const partial = _pendingSettings
   _pendingSettings = null
   const full = { ...get().settings, ...partial }
-  chatDB.setKV(SETTINGS_KEY, full).catch(() => {})
+  chatDB.setKV(SETTINGS_KEY, full).catch((err: any) => {
+    console.warn('Settings persistence failed:', err?.message || err)
+    if (_pendingSettings) {
+      _pendingSettings = { ..._pendingSettings, ...partial }
+    } else {
+      _pendingSettings = partial
+    }
+    _settingsTimer = setTimeout(() => _flushSettings(get), 2000)
+  })
 }
 
 export const useAppStore = create<AppStore>()((set, get) => ({

@@ -277,8 +277,13 @@ def stop_all_training() -> dict:
                 except Exception as exc:
                     logger.warning("Failed to cancel PGQ turbo job %s: %s", job_id, exc)
         get_state().running = False
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("cancel_all_training failed: %s", e)
+        try:
+            from domains.training.service import get_state
+            get_state().running = False
+        except Exception:
+            pass
 
     return {"status": "cancelling", "message": "Cancelling all training"}
 
@@ -299,7 +304,12 @@ def cancel_from_sessions() -> dict:
         if ev is not None:
             ev.set()
         get_state().running = False
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("cancel_from_sessions state reset failed: %s", e)
+        try:
+            from domains.training.service import get_state
+            get_state().running = False
+        except Exception:
+            pass
 
     return {"status": "cancelled", "message": "Cancel signal sent"}
