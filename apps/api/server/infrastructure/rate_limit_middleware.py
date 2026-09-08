@@ -3,6 +3,8 @@ FastAPI rate-limit middleware — delegates to core RateLimiter.
 
 Core owns the sliding-window logic. This file owns only HTTP concerns:
 BaseHTTPMiddleware, JSONResponse 429, header injection.
+
+Supports per-workspace rate limiting when auth is enabled.
 """
 
 from domains.infrastructure.rate_limiter import (
@@ -28,14 +30,47 @@ _ROUTE_LIMITS: dict[str, tuple[int, int]] = {
     "/mobile/train": (2, 120),
 }
 
+# Per-workspace rate limit multiplier (workspace_id -> multiplier)
+# Default is 1x. Workspace admins can be granted higher limits.
+_DEFAULT_WORKSPACE_LIMIT = 300  # requests per window
+
+
+def _extract_workspace_from_token(token: str) -> str:
+    """Best-effort extract workspace_id from JWT without full verification.
+
+    This is for rate limiting only — not authentication.
+    """
+    try:
+        import base64
+        import json
+
+        # JWT is header.payload.signature
+        parts = token.split(".")
+        if len(parts) != 3:
+            return ""
+
+        # Decode payload (second part)
+        payload = parts[1]
+        # Add padding
+        padding = 4 - len(payload) % 4
+        if padding != 4:
+            payload += "=" * padding
+
+        decoded = base64.urlsafe_b64decode(payload)
+        data = json.loads(decoded)
+        return data.get("workspace_id", "")
+    except Exception:
+        return ""
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Per-IP rate limiting via sliding window counter.
+    """Per-IP and per-workspace rate limiting via sliding window counter.
 
     Applies to all routes except health probes (always allowed).
     Localhost requests (127.0.0.1 / ::1) get 10x the limit.
     Expensive endpoints (chat/stream, inference, model load) get
     separate, stricter limits to prevent GPU OOM.
+    When auth is enabled, rate limits are also tracked per workspace.
     Exceeding ``max_requests`` in ``window_seconds`` returns 429 with
     ``Retry-After`` header.
     """
@@ -49,6 +84,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._route_limiters: dict[str, RateLimiter] = {}
         for prefix, (limit, window) in _ROUTE_LIMITS.items():
             self._route_limiters[prefix] = RateLimiter(limit, window)
+        # Per-workspace limiters: workspace_id -> RateLimiter
+        self._workspace_limiters: dict[str, RateLimiter] = {}
 
     def _match_route(self, path: str) -> tuple[str | None, RateLimiter | None]:
         """Find matching route-specific limiter."""
@@ -56,6 +93,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if path.startswith(prefix):
                 return prefix, limiter
         return None, None
+
+    def _get_workspace_limiter(self, workspace_id: str) -> RateLimiter:
+        """Get or create rate limiter for a workspace."""
+        if workspace_id not in self._workspace_limiters:
+            self._workspace_limiters[workspace_id] = RateLimiter(
+                _DEFAULT_WORKSPACE_LIMIT, self.window_seconds
+            )
+        return self._workspace_limiters[workspace_id]
+
+    def _extract_workspace_id(self, request) -> str:
+        """Extract workspace_id from Authorization header JWT."""
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return ""
+        token = auth_header[7:]
+        return _extract_workspace_from_token(token)
 
     async def dispatch(self, request, call_next):
         path = request.url.path
@@ -86,6 +139,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         RATE_LIMIT_HEADER_REMAINING: "0",
                         RATE_LIMIT_HEADER_LIMIT: str(route_limit),
                         "Retry-After": str(route_window),
+                    },
+                )
+
+        # Check workspace-specific limit
+        workspace_id = self._extract_workspace_id(request)
+        if workspace_id:
+            ws_limiter = self._get_workspace_limiter(workspace_id)
+            allowed, remaining = ws_limiter.check(workspace_id)
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Workspace rate limit exceeded. Try again later."},
+                    headers={
+                        RATE_LIMIT_HEADER_REMAINING: "0",
+                        RATE_LIMIT_HEADER_LIMIT: str(_DEFAULT_WORKSPACE_LIMIT),
+                        "Retry-After": str(self.window_seconds),
                     },
                 )
 
