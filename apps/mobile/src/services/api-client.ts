@@ -288,9 +288,9 @@ export const api = {
 
   /** Pull latest weights from a trained checkpoint. */
   pullWeights: async (checkpoint: string) => {
-    const baseUrl = await getApiUrl();
-    return fetch(
-      `${baseUrl}/training/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
-    ).then(r => r.json());
+    return request<any>(
+      'GET',
+      `/training/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
+    );
   },
 };

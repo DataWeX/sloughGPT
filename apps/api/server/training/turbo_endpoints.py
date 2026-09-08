@@ -32,6 +32,24 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
     try:
         from domains.training.service import _state, start_from_sessions_training
 
+        # Pre-flight validation
+        if req.epochs < 1:
+            raise_error(422, "epochs must be >= 1", source="training.from_sessions")
+        if req.learning_rate <= 0:
+            raise_error(422, "learning_rate must be > 0", source="training.from_sessions")
+        if req.batch_size < 1:
+            raise_error(422, "batch_size must be >= 1", source="training.from_sessions")
+        if req.n_embed < 16:
+            raise_error(422, "n_embed must be >= 16", source="training.from_sessions")
+        if req.n_layer < 1:
+            raise_error(422, "n_layer must be >= 1", source="training.from_sessions")
+        if req.n_head < 1:
+            raise_error(422, "n_head must be >= 1", source="training.from_sessions")
+        if req.n_embed % req.n_head != 0:
+            raise_error(422, f"n_embed ({req.n_embed}) must be divisible by n_head ({req.n_head})", source="training.from_sessions")
+        if req.block_size < 8:
+            raise_error(422, "block_size must be >= 8", source="training.from_sessions")
+
         config = {
             "epochs": req.epochs,
             "learning_rate": req.learning_rate,
