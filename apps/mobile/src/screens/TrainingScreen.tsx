@@ -222,8 +222,20 @@ export function TrainingScreen() {
           Alert.alert('High Toxicity', `Dataset has high toxicity (${(tox * 100).toFixed(0)}%). Please clean the data first.`);
           return;
         }
-      } catch {
-        // Quality endpoint not available, proceed without check
+      } catch (err: any) {
+        Alert.alert(
+          'Quality Check Unavailable',
+          'Could not verify dataset quality. Proceed anyway?',
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {text: 'Proceed', onPress: () => {
+              setConfig({dataset_id: selectedDataset, source_text: undefined});
+              triggerHaptic('medium');
+              start();
+            }},
+          ]
+        );
+        return;
       }
       setConfig({dataset_id: selectedDataset, source_text: undefined});
     }

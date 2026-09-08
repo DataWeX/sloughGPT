@@ -109,13 +109,32 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         config = req.model_dump()
         job_info = await asyncio.to_thread(start_turbo_training, config)
 
-        # Run in background thread
-        threading.Thread(
-            target=run_turbo_worker,
-            args=(config,),
-            name=f"turbo-train-{job_info['job_id']}",
-            daemon=True,
-        ).start()
+        # Register with CancelManager for cancellation support
+        cancel_event = threading.Event()
+        try:
+            from domains.infrastructure.cancel_manager import OpType, get_cancel_manager
+            get_cancel_manager().register(
+                op_type=OpType.TRAINING,
+                label=f"turbo:{job_info['job_id']}",
+                cancel_fn=lambda: cancel_event.set(),
+                meta={"job_id": job_info["job_id"], "method": "turbo"},
+                op_id=job_info["job_id"],
+            )
+            get_cancel_manager().start(job_info["job_id"])
+        except Exception as exc:
+            logger.warning("CancelManager registration failed for turbo %s: %s", job_info["job_id"], exc)
+
+        # Run via executor pool for proper tracking
+        from domains.training.executor import get_training_executor
+        executor = get_training_executor()
+
+        def _run():
+            try:
+                run_turbo_worker(config)
+            except Exception as e:
+                logger.exception("Turbo training job %s failed", job_info["job_id"], extra={"tag": "TRAIN"})
+
+        executor.submit(_run, job_info["job_id"])
 
         logger.info(
             "Turbo training started: job_id=%s data=%s",
