@@ -40,6 +40,16 @@ class UserUpdateRequest(BaseModel):
     display_name: str | None = Field(None, max_length=200)
 
 
+class ProfileUpdateRequest(BaseModel):
+    email: str | None = Field(None, max_length=254)
+    display_name: str | None = Field(None, max_length=200)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=8, max_length=500)
+    new_password: str = Field(..., min_length=8, max_length=500)
+
+
 class UserResponse(BaseModel):
     id: str
     username: str
@@ -180,7 +190,7 @@ class UsersRouter:
 
         # ─── Change password (self-service) ────────────────────
         async def change_password(
-            req: UserCreateRequest, auth_user: dict = auth_dep
+            req: PasswordChangeRequest, auth_user: dict = auth_dep
         ) -> dict:
             if not auth_user:
                 raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
@@ -189,13 +199,44 @@ class UsersRouter:
                 raise_error("User not found", "E_NOT_FOUND", status_code=404)
 
             from routers.auth import AuthRouter
-            if not AuthRouter._verify_password(req.password, user.password_hash):
+            if not AuthRouter._verify_password(req.current_password, user.password_hash):
                 raise_error("Current password is incorrect", "E_AUTH_MISSING", status_code=401)
 
-            user.password_hash = AuthRouter._hash_password(req.password)
+            user.password_hash = AuthRouter._hash_password(req.new_password)
             user.updated_at = datetime.now(timezone.utc).isoformat()
             self._repo.update(user)
             return success_response(data={"changed": True})
+
+        # ─── Update own profile (self-service) ─────────────────
+        async def update_profile(
+            req: ProfileUpdateRequest, auth_user: dict = auth_dep
+        ) -> dict:
+            if not auth_user:
+                raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
+            user = self._repo.get(auth_user.get("sub", ""))
+            if not user:
+                raise_error("User not found", "E_NOT_FOUND", status_code=404)
+
+            if req.email is not None:
+                existing_email = self._repo.get_by_email(req.email)
+                if existing_email and existing_email.id != user.id:
+                    raise_error("Email already registered", "E_INFRA_BUSY", status_code=409)
+                user.email = req.email
+            if req.display_name is not None:
+                user.display_name = req.display_name
+
+            user.updated_at = datetime.now(timezone.utc).isoformat()
+            self._repo.update(user)
+            return success_response(data=self._to_response(user).model_dump())
+
+        # ─── Get own profile (self-service) ────────────────────
+        async def get_profile(auth_user: dict = auth_dep) -> dict:
+            if not auth_user:
+                raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
+            user = self._repo.get(auth_user.get("sub", ""))
+            if not user:
+                raise_error("User not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data=self._to_response(user).model_dump())
 
         router.add_api_route("", list_users, methods=["GET"])
         router.add_api_route("/{user_id}", get_user, methods=["GET"])
@@ -203,6 +244,8 @@ class UsersRouter:
         router.add_api_route("/{user_id}", update_user, methods=["PUT"])
         router.add_api_route("/{user_id}", delete_user, methods=["DELETE"])
         router.add_api_route("/me/password", change_password, methods=["POST"])
+        router.add_api_route("/me/profile", update_profile, methods=["PUT"])
+        router.add_api_route("/me/profile", get_profile, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
