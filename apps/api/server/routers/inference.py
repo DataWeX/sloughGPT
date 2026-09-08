@@ -558,6 +558,166 @@ class _SessionDictSerializer(Serializer[dict]):
         return result
 
 
+def _inject_knowledge_items(knowledge_list: list[str]) -> int:
+    """Store injected knowledge items in vector store. Returns count stored."""
+    import time as _time
+
+    mem = get_knowledge_memory()
+    stored = 0
+    for k in knowledge_list:
+        if k and len(k) > 10:
+            fact = KnowledgeFact(
+                content=k,
+                topic="injected",
+                source="injected",
+                timestamp=_time.time(),
+                importance=0.7,
+            )
+            if mem.add_fact(fact):
+                stored += 1
+    return stored
+
+
+def _prepare_provider_messages(
+    messages: list[Message],
+    images: list[str] | None,
+    user_msg: str,
+) -> list[dict[str, Any]]:
+    """Build provider messages list, injecting images into the last user message."""
+    provider_messages = [{"role": m.role, "content": m.content} for m in messages]
+    if images:
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": user_msg}]
+        for img_data in images:
+            content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
+        for i in range(len(provider_messages) - 1, -1, -1):
+            if provider_messages[i]["role"] == "user":
+                provider_messages[i]["content"] = content_parts
+                break
+    return provider_messages
+
+
+def _run_post_gen_tasks(
+    full_response: str,
+    user_msg: str,
+    session_id: str,
+    start_time: "datetime.datetime",
+    req: "ChatRequest",
+    ctx_core: Any,
+    bg_tasks_lock: Any,
+    bg_tasks: Any,
+    bg_tasks_discard: Any,
+    corr_id: str,
+) -> None:
+    """Launch fire-and-forget background tasks after chat generation completes."""
+    import state as _pgs_state
+    from domains.cognitive.rag_service import get_rag_service as _pgs_rag
+
+    duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+    tokens = len(full_response.split())
+
+    def _track(task_name):
+        def _cb(fut):
+            try:
+                fut.result()
+            except Exception as e:
+                logger.debug("Post-gen task %s failed: %s", task_name, e)
+        return _cb
+
+    # RAG verification
+    if req.use_rag and full_response.strip():
+        try:
+            rag_svc = _pgs_rag()
+            if rag_svc.stats().get("total_chunks", 0) > 0:
+                t = asyncio.create_task(
+                    asyncio.to_thread(rag_svc.verify_and_ground, full_response, user_msg or "")
+                )
+                with bg_tasks_lock:
+                    bg_tasks.add(t)
+                t.add_done_callback(bg_tasks_discard)
+        except Exception as e:
+            logger.debug("RAG verification skipped: %s", e)
+
+    # Conversation capture
+    try:
+        t = asyncio.create_task(
+            asyncio.to_thread(
+                capture,
+                user_msg or "",
+                full_response,
+                model=_pgs_state.model_type or req.model,
+                tokens_generated=tokens,
+                elapsed_ms=duration_ms,
+                temperature=req.temperature,
+                meta={"session_id": session_id},
+            )
+        )
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("Failed to capture conversation: %s", e)
+
+    # Response tracking
+    try:
+        tracker = get_response_tracker()
+        t = asyncio.create_task(
+            asyncio.to_thread(
+                tracker.log,
+                user_message=user_msg or "",
+                assistant_response=full_response,
+                model=req.model,
+                config={"temperature": req.temperature, "max_tokens": req.max_tokens},
+                session_id=session_id,
+                user_id=req.user_id or "default",
+                tokens_generated=tokens,
+                duration_ms=duration_ms,
+                has_images=bool(req.images),
+            )
+        )
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("ResponseTracker.log failed: %s", e)
+
+    # Inference metrics
+    try:
+        get_server_state().record_inference(
+            tokens=tokens,
+            elapsed_ms=duration_ms,
+            model=_pgs_state.model_type or req.model,
+        )
+    except Exception as e:
+        logger.warning("Failed to record inference metrics: %s", e)
+
+    # ContextCore response
+    if ctx_core and req.use_context_core:
+        try:
+            ctx_core.add_response(full_response, model=req.model)
+        except Exception as e:
+            logger.warning("ContextCore.add_response failed: %s", e)
+
+    # Continual learner ingest
+    try:
+        t = asyncio.create_task(
+            asyncio.to_thread(get_learner().ingest_conversation, [(user_msg, full_response)])
+        )
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("Continual learner ingest failed: %s", e)
+
+    # Entity extraction
+    try:
+        t = asyncio.create_task(extract_and_store(user_msg or "", full_response))
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("Entity extraction failed: %s", e)
+
+
 class InferenceRouter:
     """OOP-style router for inference, chat, sessions, and context endpoints."""
 
@@ -1366,27 +1526,7 @@ class InferenceRouter:
 
             if req.knowledge:
                 try:
-
-                    def _store_knowledge(k_list):
-
-                        import time
-
-                        mem = get_knowledge_memory()
-                        stored = 0
-                        for k in k_list:
-                            if k and len(k) > 10:
-                                fact = KnowledgeFact(
-                                    content=k,
-                                    topic="injected",
-                                    source="injected",
-                                    timestamp=time.time(),
-                                    importance=0.7,
-                                )
-                                if mem.add_fact(fact):
-                                    stored += 1
-                        return stored
-
-                    stored = await asyncio.to_thread(_store_knowledge, req.knowledge)
+                    stored = await asyncio.to_thread(_inject_knowledge_items, req.knowledge)
                     if stored:
                         logger.info(
                             "Stored %d injected knowledge items in vector store",
@@ -1400,15 +1540,7 @@ class InferenceRouter:
                         extra={"tag": "INF", "context": {"error": str(e)}},
                     )
 
-            provider_messages = [{"role": m.role, "content": m.content} for m in req.messages]
-            if req.images:
-                content_parts = [{"type": "text", "text": user_msg}]
-                for img_data in req.images:
-                    content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
-                for i in range(len(provider_messages) - 1, -1, -1):
-                    if provider_messages[i]["role"] == "user":
-                        provider_messages[i]["content"] = content_parts
-                        break
+            provider_messages = _prepare_provider_messages(req.messages, req.images, user_msg)
 
             session_id = (
                 req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
@@ -2213,6 +2345,12 @@ class InferenceRouter:
                         extra={"tag": "INF"},
                     )
 
+                _run_post_gen_tasks(
+                    full_response, user_msg or "", session_id, start_time,
+                    req, ctx_core, self._bg_tasks_lock, self._BG_TASKS,
+                    self._bg_tasks_lock_discard, corr_id,
+                )
+
                 _memory_stored = False
                 _memory_fact = None
                 try:
@@ -2233,113 +2371,6 @@ class InferenceRouter:
                         data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
                         message="New fact remembered",
                     )
-
-                duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
-                tokens = len(full_response.split())
-
-                # ── Fire-and-forget post-gen tasks (don't block response) ──
-                def _post_gen_done(task_name):
-                    def _cb(fut):
-                        try:
-                            fut.result()
-                        except Exception as e:
-                            logger.debug("Post-gen task %s failed: %s", task_name, e)
-
-                    return _cb
-
-                # Production RAG: verify response against knowledge base
-                if req.use_rag and full_response.strip():
-                    try:
-                        rag_svc = get_rag_service()
-                        if rag_svc.stats().get("total_chunks", 0) > 0:
-                            _rag_v_task = asyncio.create_task(
-                                asyncio.to_thread(
-                                    rag_svc.verify_and_ground,
-                                    full_response,
-                                    user_msg or "",
-                                )
-                            )
-                            with self._bg_tasks_lock:
-                                self._BG_TASKS.add(_rag_v_task)
-                            _rag_v_task.add_done_callback(self._bg_tasks_lock_discard)
-                    except Exception as e:
-                        logger.debug("RAG verification skipped: %s", e)
-
-                try:
-                    _cap_task = asyncio.create_task(
-                        asyncio.to_thread(
-                            capture,
-                            user_msg or "",
-                            full_response,
-                            model=_check_state.model_type or req.model,
-                            tokens_generated=tokens,
-                            elapsed_ms=duration_ms,
-                            temperature=req.temperature,
-                            meta={"session_id": session_id},
-                        )
-                    )
-                    with self._bg_tasks_lock:
-                        self._BG_TASKS.add(_cap_task)
-                    _cap_task.add_done_callback(self._bg_tasks_lock_discard)
-                except Exception as e:
-                    logger.warning("Failed to capture conversation: %s", e)
-
-                try:
-                    tracker = get_response_tracker()
-                    _track_task = asyncio.create_task(
-                        asyncio.to_thread(
-                            tracker.log,
-                            user_message=user_msg or "",
-                            assistant_response=full_response,
-                            model=req.model,
-                            config={"temperature": req.temperature, "max_tokens": req.max_tokens},
-                            session_id=session_id,
-                            user_id=req.user_id or "default",
-                            tokens_generated=tokens,
-                            duration_ms=duration_ms,
-                            has_images=bool(req.images),
-                        )
-                    )
-                    with self._bg_tasks_lock:
-                        self._BG_TASKS.add(_track_task)
-                    _track_task.add_done_callback(self._bg_tasks_lock_discard)
-                except Exception as e:
-                    logger.warning("ResponseTracker.log failed: %s", e)
-
-                try:
-                    get_server_state().record_inference(
-                        tokens=tokens,
-                        elapsed_ms=duration_ms,
-                        model=_check_state.model_type or req.model,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to record inference metrics: %s", e)
-
-                if ctx_core and req.use_context_core:
-                    try:
-                        ctx_core.add_response(full_response, model=req.model)
-                    except Exception as e:
-                        logger.warning("ContextCore.add_response failed: %s", e)
-
-                try:
-                    _learner_task = asyncio.create_task(
-                        asyncio.to_thread(
-                            get_learner().ingest_conversation, [(user_msg, full_response)]
-                        )
-                    )
-                    with self._bg_tasks_lock:
-                        self._BG_TASKS.add(_learner_task)
-                    _learner_task.add_done_callback(self._bg_tasks_lock_discard)
-                except Exception as e:
-                    logger.warning("Continual learner ingest failed: %s", e)
-
-                try:
-                    task = asyncio.create_task(extract_and_store(user_msg or "", full_response))
-                    with self._bg_tasks_lock:
-                        self._BG_TASKS.add(task)
-                    task.add_done_callback(self._bg_tasks_lock_discard)
-                except Exception as e:
-                    logger.warning("Entity extraction failed: %s", e)
 
                 logger.info(
                     "Chat stream: generated %d chars",
