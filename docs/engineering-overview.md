@@ -254,6 +254,6 @@ sloughgpt shell
 | Web frontend | Done |
 | Mobile app | Done |
 | Gateway | Done |
-| **Multi-user / multi-tenant** | Next |
+| Multi-user / multi-tenant | Done |
 | **Cloud/edge deployment** | Next |
 | **Enterprise features** | Next |
