@@ -1,0 +1,43 @@
+{{- if .Values.hpa.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "sloughgpt.fullname" . }}-api-hpa
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "sloughgpt.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "sloughgpt.fullname" . }}-api
+  minReplicas: {{ .Values.hpa.minReplicas }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.hpa.targetCPU }}
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.hpa.targetMemory }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.hpa.scaleDown.stabilizationWindowSeconds }}
+      policies:
+      - type: Percent
+        value: {{ .Values.hpa.scaleDown.percentPerMinute }}
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: {{ .Values.hpa.scaleUp.stabilizationWindowSeconds }}
+      policies:
+      - type: Percent
+        value: {{ .Values.hpa.scaleUp.percentPerMinute }}
+        periodSeconds: 15
+      selectPolicy: Max
+{{- end }}

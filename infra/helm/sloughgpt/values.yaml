@@ -1,0 +1,174 @@
+# SloughGPT Helm values
+
+global:
+  namespace: sloughgpt
+
+# ─── Image references ──────────────────────────────────────────
+image:
+  registry: ghcr.io
+  repository: datawex/sloughgpt
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+imageWeb:
+  registry: ghcr.io
+  repository: datawex/sloughgpt-web
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# ─── API Server ────────────────────────────────────────────────
+api:
+  replicas: 2
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  gpu:
+    enabled: false
+    count: 1
+  healthcheck:
+    liveness:
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 3
+
+# ─── Web UI ────────────────────────────────────────────────────
+web:
+  replicas: 2
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  publicUrl: "https://sloughgpt.example.com"
+
+# ─── Model Server (optional) ──────────────────────────────────
+modelServer:
+  enabled: false
+  replicas: 1
+  service:
+    type: LoadBalancer
+    port: 80
+  resources:
+    requests:
+      memory: "4Gi"
+      cpu: "2000m"
+    limits:
+      memory: "8Gi"
+      cpu: "4000m"
+  gpu:
+    enabled: true
+    count: 1
+
+# ─── Ingress ───────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+  tls:
+    enabled: true
+    secretName: sloughgpt-tls
+  hosts:
+    - host: sloughgpt.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+          port: 80
+        - path: /ws
+          pathType: Prefix
+          service: api
+          port: 80
+        - path: /
+          pathType: Prefix
+          service: web
+          port: 3000
+
+# ─── Horizontal Pod Autoscaler ────────────────────────────────
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPU: 70
+  targetMemory: 80
+  scaleDown:
+    stabilizationWindowSeconds: 300
+    percentPerMinute: 10
+  scaleUp:
+    stabilizationWindowSeconds: 60
+    percentPerMinute: 100
+
+# ─── Persistent Storage ───────────────────────────────────────
+persistence:
+  models:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadOnlyMany
+    size: 10Gi
+  data:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 5Gi
+
+# ─── Config ────────────────────────────────────────────────────
+config:
+  env: "production"
+  logLevel: "INFO"
+  model:
+    name: "Qwen/Qwen2.5-0.5B-Instruct"
+    device: "cpu"
+    maxLength: "1024"
+    temperature: "0.7"
+    maxNewTokens: "200"
+  auth:
+    required: "true"
+  rateLimit:
+    windowSeconds: "60"
+    maxRequests: "100"
+
+# ─── Secrets (set via --set or external secret) ───────────────
+secrets:
+  postgresPassword: ""
+  redisPassword: ""
+  jwtSecret: ""
+  apiKey: ""
+
+# ─── RBAC ──────────────────────────────────────────────────────
+rbac:
+  enabled: true
+
+# ─── Network Policy ───────────────────────────────────────────
+networkPolicy:
+  enabled: true
+
+# ─── Monitoring (Prometheus Operator) ─────────────────────────
+monitoring:
+  enabled: false
+  serviceMonitor:
+    interval: 15s
+    scrapeTimeout: 10s
+  prometheusRule:
+    enabled: true
