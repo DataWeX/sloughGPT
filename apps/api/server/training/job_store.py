@@ -3,6 +3,7 @@
 Stores training jobs in MogDB (the project's embedded document database)
 for crash recovery. Jobs persist across server restarts.
 """
+from __future__ import annotations
 
 import builtins
 import json
