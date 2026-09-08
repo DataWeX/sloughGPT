@@ -5,8 +5,8 @@ storage backend, and status <-> column mappings used by every tool
 
 Resolution order (first match wins):
     1. Explicit CLI flag (per-command).
-    2. Environment variable (``PLANNER_NOTES_DIR``, ``PLANNER_BOARD_DIR``,
-       ``PLANNER_BACKEND``).
+    2. Environment variable (``APP_PLANNER_NOTES_DIR``, ``APP_PLANNER_BOARD_DIR``,
+       ``APP_PLANNER_BACKEND``).
     3. Repository detection: walking up from the current directory, the
        first ancestor containing ``.kanban/board.json`` is treated as the
        project root, giving ``<root>/.dev-notes`` and ``<root>/.kanban``.
@@ -91,7 +91,7 @@ def project_board_dir(root: Path) -> Path:
 
 def default_notes_dir() -> Path:
     """Notes directory: env override > project root > user config fallback."""
-    env = os.environ.get("PLANNER_NOTES_DIR")
+    env = os.environ.get("APP_PLANNER_NOTES_DIR")
     if env:
         return Path(env)
     root = find_project_root()
@@ -102,7 +102,7 @@ def default_notes_dir() -> Path:
 
 def default_board_dir() -> Path:
     """Board directory: env override > project root > user config fallback."""
-    env = os.environ.get("PLANNER_BOARD_DIR")
+    env = os.environ.get("APP_PLANNER_BOARD_DIR")
     if env:
         return Path(env)
     root = find_project_root()
@@ -114,13 +114,13 @@ def default_board_dir() -> Path:
 def default_backend(notes_dir: Path | None = None) -> str:
     """Storage backend: env override > inferred from the notes directory.
 
-    ``PLANNER_BACKEND`` wins when set to a known backend. Otherwise the
+    ``APP_PLANNER_BACKEND`` wins when set to a known backend. Otherwise the
     backend is inferred from the resolved notes directory: a MogDB journal
     (``store/notes.journal.jsonl``) selects ``mogdb``; everything else
     defaults to ``file``. Pass *notes_dir* explicitly to infer from a
     directory other than the default.
     """
-    backend = os.environ.get("PLANNER_BACKEND")
+    backend = os.environ.get("APP_PLANNER_BACKEND")
     if backend in BACKENDS:
         return backend
     dir_path = Path(notes_dir or default_notes_dir())

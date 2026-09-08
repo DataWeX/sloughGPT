@@ -1,13 +1,13 @@
 """
-planner gui — local web interface for notes and the kanban board.
+app-planner gui — local web interface for notes and the kanban board.
 
 Zero-dependency single-page app served over Python's stdlib ``http.server``.
-No framework, no CDN assets, no install step beyond the planner package.
+No framework, no CDN assets, no install step beyond the app-planner package.
 
 Usage::
 
-    planner gui [--notes-dir DIR] [--board-dir DIR] [--backend file|mogdb]
-                [--host HOST] [--port PORT] [--no-open] [--sync]
+    app-planner gui [--notes-dir DIR] [--board-dir DIR] [--backend file|mogdb]
+                    [--host HOST] [--port PORT] [--no-open] [--sync]
 
 Opens ``http://127.0.0.1:8787`` in the default browser (unless ``--no-open``).
 If the requested port is in use, the server steps to the next free port
@@ -53,7 +53,7 @@ from . import config
 from .kanban import KanbanStore, Board
 from .sync import sync_notes_to_board
 
-logger = logging.getLogger("planner.gui")
+logger = logging.getLogger("app_planner.gui")
 
 STATUS_TO_COLUMN = config.STATUS_TO_COLUMN
 COLUMN_TO_STATUS = config.COLUMN_TO_STATUS
@@ -410,7 +410,7 @@ def _bind_server(host: str, port: int, handler, note_store, kanban_store, attemp
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="planner gui",
+        prog="app-planner gui",
         description="Local web interface for notes + kanban board.",
     )
     parser.add_argument("--notes-dir", default=None, help="Notes directory (default: config/env)")

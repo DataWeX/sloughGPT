@@ -65,12 +65,12 @@ def test_find_project_root_explicit_start_ignores_package_fallback(tmp_path, mon
 
 
 def test_default_notes_dir_env_override(tmp_path, monkeypatch):
-    monkeypatch.setenv("PLANNER_NOTES_DIR", str(tmp_path / "env-notes"))
+    monkeypatch.setenv("APP_PLANNER_NOTES_DIR", str(tmp_path / "env-notes"))
     assert config.default_notes_dir() == tmp_path / "env-notes"
 
 
 def test_default_board_dir_env_override(tmp_path, monkeypatch):
-    monkeypatch.setenv("PLANNER_BOARD_DIR", str(tmp_path / "env-board"))
+    monkeypatch.setenv("APP_PLANNER_BOARD_DIR", str(tmp_path / "env-board"))
     assert config.default_board_dir() == tmp_path / "env-board"
 
 
@@ -98,12 +98,12 @@ def test_default_dirs_fall_back_to_user_config(monkeypatch):
 
 
 def test_default_backend_env_override(monkeypatch):
-    monkeypatch.setenv("PLANNER_BACKEND", "mogdb")
+    monkeypatch.setenv("APP_PLANNER_BACKEND", "mogdb")
     assert config.default_backend() == "mogdb"
 
 
 def test_default_backend_ignores_invalid_env(monkeypatch):
-    monkeypatch.setenv("PLANNER_BACKEND", "bogus")
+    monkeypatch.setenv("APP_PLANNER_BACKEND", "bogus")
     assert config.default_backend() in config.BACKENDS
 
 
@@ -123,7 +123,7 @@ def test_default_backend_infers_from_default_notes_dir(tmp_path, monkeypatch):
     (notes / "store").mkdir(parents=True)
     (notes / "store" / "notes.journal.jsonl").write_text("")
     monkeypatch.setattr(config, "default_notes_dir", lambda: notes)
-    monkeypatch.delenv("PLANNER_BACKEND", raising=False)
+    monkeypatch.delenv("APP_PLANNER_BACKEND", raising=False)
     assert config.default_backend() == "mogdb"
 
 

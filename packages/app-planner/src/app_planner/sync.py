@@ -1,9 +1,9 @@
 """
-planner sync — reconcile notes and board cards.
+app-planner sync — reconcile notes and board cards.
 
 Creates a card for every note without one and moves existing cards to the
 column matching the note's current status. Shared implementation used by the
-``planner sync`` command, the GUI Sync button (``planner gui``), and the
+``app-planner sync`` command, the GUI Sync button (``app-planner gui``), and the
 ``sync-notes-to-board`` console script.
 """
 
@@ -27,8 +27,8 @@ def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int
     stays in step with note status changes.
 
     Args:
-        note_store: planner NoteStore instance.
-        kanban_store: planner KanbanStore instance.
+        note_store: app-planner NoteStore instance.
+        kanban_store: app-planner KanbanStore instance.
 
     Returns:
         Tuple of ``(added, updated, total)`` where *added* is the number of new
@@ -71,9 +71,9 @@ def sync_notes_to_board(note_store, kanban_store: KanbanStore) -> tuple[int, int
 
 
 def cli_main(argv: list[str] | None = None) -> int:
-    """CLI entry point for ``planner sync`` / ``sync-notes-to-board``."""
+    """CLI entry point for ``app-planner sync`` / ``sync-notes-to-board``."""
     parser = argparse.ArgumentParser(
-        prog="planner sync",
+        prog="app-planner sync",
         description="Create missing board cards and move cards to match note status.",
     )
     parser.add_argument("--notes-dir", default=None, help="Notes directory")

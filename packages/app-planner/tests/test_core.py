@@ -24,8 +24,8 @@ def _isolate_store():
 @pytest.fixture(params=BACKENDS)
 def cli_env(tmp_path, monkeypatch, request):
     notes_dir = tmp_path / "notes"
-    monkeypatch.setenv("PLANNER_NOTES_DIR", str(notes_dir))
-    monkeypatch.setenv("PLANNER_BACKEND", request.param)
+    monkeypatch.setenv("APP_PLANNER_NOTES_DIR", str(notes_dir))
+    monkeypatch.setenv("APP_PLANNER_BACKEND", request.param)
     return notes_dir, request.param
 
 
@@ -215,7 +215,8 @@ def test_today_shows_created_note(cli_env, capsys, monkeypatch):
     note_id = _new(cli_env, capsys, "Today item")
     code, out = _run(cli_env, capsys, "show", note_id)
     assert code == 0
-    date_str = re.search(r"id: (\d{8})", out).group(1)
+    compact = re.search(r"id: (\d{8})", out).group(1)
+    date_str = f"{compact[:4]}-{compact[4:6]}-{compact[6:8]}"
 
     class _FakeDate:
         @classmethod
@@ -296,7 +297,8 @@ def test_timeline_groups_by_day(cli_env, capsys, monkeypatch):
     note_id = _new(cli_env, capsys, "Timeline note", "--tags", "t")
     code, out = _run(cli_env, capsys, "show", note_id)
     assert code == 0
-    date_str = re.search(r"id: (\d{8})", out).group(1)
+    compact = re.search(r"id: (\d{8})", out).group(1)
+    date_str = f"{compact[:4]}-{compact[4:6]}-{compact[6:8]}"
 
     class _FakeDate:
         @classmethod

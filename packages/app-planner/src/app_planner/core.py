@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-notes — standalone development journal.
+notes — standalone development journal, part of the app-planner CLI.
 
 File-backed note-taking with YAML frontmatter. Each note is an individual
 markdown file in ``~/.config/dev-notes/``.
 
 Usage as a module::
 
-    from notes import NoteStore
+    from app_planner.core import NoteStore
     store = NoteStore()
     note = store.create("Fix kernel boot", tags=["kernel", "bugfix"])
     store.search("kernel")
 
 Usage as a CLI::
 
-    notes new "Fix kernel boot" --tags kernel,bugfix --status done
-    notes list
-    notes search kernel
+    app-planner new "Fix kernel boot" --tags kernel,bugfix --status done
+    app-planner list
+    app-planner search kernel
 """
 
 from __future__ import annotations

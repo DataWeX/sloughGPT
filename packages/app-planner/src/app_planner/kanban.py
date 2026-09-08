@@ -1,5 +1,5 @@
 """
-kanban — kanban board with notes, built into the planner package.
+kanban — kanban board with notes, built into the app-planner package.
 
 JSON-backed board with columns, cards, and per-card notes (comments).
 Every operation is non-interactive and scriptable.
@@ -7,6 +7,7 @@ Every operation is non-interactive and scriptable.
 Usage as a module::
 
     from app_planner import KanbanStore
+
     store = KanbanStore()
     card = store.add_card("Fix boot order", column="todo", priority="high")
     store.move_card(card.id, "in_progress")
@@ -14,12 +15,12 @@ Usage as a module::
 
 Usage as a CLI::
 
-    planner kanban init
-    planner kanban add "Fix boot order" --priority high
-    planner kanban list --column todo
-    planner kanban board
-    planner kanban move <id> in_progress
-    planner kanban note add <id> "Looking into it"
+    app-planner init
+    app-planner add "Fix boot order" --priority high
+    app-planner cards --column todo
+    app-planner board
+    app-planner move <id> in_progress
+    app-planner note add <id> "Looking into it"
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from typing import Any
 
 from . import config
 
-logger = logging.getLogger("planner.kanban")
+logger = logging.getLogger("app_planner.kanban")
 
 _BOARD_FILE = "board.json"
 _MAX_ID_SLUG = 60
@@ -494,7 +495,7 @@ def _render_board(board: Board, width: int = 78) -> str:
 def cli_main(argv: list[str] | None = None) -> int:
     import argparse
 
-    parser = argparse.ArgumentParser(prog="kanban", description="Kanban board with notes")
+    parser = argparse.ArgumentParser(prog="app-planner", description="Kanban board with notes")
     parser.add_argument("--dir", default=None, help="Board directory (default: config/env)")
     sub = parser.add_subparsers(dest="cmd")
 
