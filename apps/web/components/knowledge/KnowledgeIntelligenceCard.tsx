@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Input } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle, Button, Input, Spinner } from '@sloughgpt/strui'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -229,7 +228,7 @@ export function KnowledgeIntelligenceCard() {
             <p className="text-xs font-medium text-muted-foreground">Embedder</p>
             <div className="flex gap-1">
               <Button size="sm" variant="ghost" onClick={() => void handleCheckEmbedder()} disabled={embedderLoading}>
-                <IconRefresh className={cn('h-3 w-3', embedderLoading ? 'animate-spin' : '')} />
+                <Spinner className="h-3 w-3" />
               </Button>
               <Button size="sm" variant="outline" onClick={() => void handleTrainEmbedder()} disabled={trainingEmbedder}>
                 {trainingEmbedder ? 'Training...' : 'Train'}

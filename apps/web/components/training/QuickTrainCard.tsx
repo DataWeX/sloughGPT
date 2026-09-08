@@ -2,6 +2,7 @@
 
 import { useState, memo, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { formatDuration } from '@/lib/formatDuration'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -176,13 +177,12 @@ export const QuickTrainCard = memo(function QuickTrainCard({
             </div>
           </div>
         ) : session.turboPhase === 'error' ? (
-          <div className="space-y-2 text-sm">
-            <p className="text-destructive">Turbo training failed</p>
-            {session.turboError && <p className="text-xs text-muted-foreground">{session.turboError}</p>}
-            <Button variant="outline" size="sm" onClick={session.stopTurboTrain}>
-              Dismiss
-            </Button>
-          </div>
+          <StatusBanner
+            variant="error"
+            message={session.turboError || 'Turbo training failed'}
+            dismissible={false}
+            onDismiss={session.stopTurboTrain}
+          />
         ) : (
           <div className="space-y-4">
             <DatasetSelector

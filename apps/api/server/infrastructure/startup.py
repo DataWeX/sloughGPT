@@ -649,7 +649,7 @@ class StartupOrchestrator:
                     try:
                         _fth.dump_traceback(all_threads=True, file=sys.stderr)
                     except Exception:
-                        pass
+                        logger.debug("faulthandler dump failed during import retry")
                     _tb.print_exc(file=sys.stderr)
                     # Clear import caches (not sys.modules entries) so the
                     # next import attempt re-reads from disk instead of
@@ -664,7 +664,7 @@ class StartupOrchestrator:
                 try:
                     _fth.dump_traceback(all_threads=True, file=sys.stderr)
                 except Exception:
-                    pass
+                    logger.debug("faulthandler dump failed during router registration")
                 _tb.print_exc(file=sys.stderr)
                 logger.error(
                     "Phase: router registration failed: %s",
@@ -808,7 +808,7 @@ class StartupOrchestrator:
             try:
                 await self._wandb_task
             except asyncio.CancelledError:
-                pass
+                pass  # Expected: task was cancelled during shutdown
 
     async def _shutdown_registry(self):
         """Reset model registry metrics."""

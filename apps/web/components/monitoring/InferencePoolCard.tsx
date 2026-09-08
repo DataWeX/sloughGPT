@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useState, useEffect, useCallback } from 'react'
-import { cn, Card, CardContent, Button, StatCard, KpiGrid, IconRefresh } from '@sloughgpt/strui'
+import { Card, CardContent, Button, StatCard, KpiGrid, Spinner } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { systemController, type InferencePoolStatus } from '@/lib/system-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -56,7 +56,7 @@ export const InferencePoolCard = memo(function InferencePoolCard({ onRefresh }: 
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-3 px-4">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Inference Pool</span>
         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onRefresh} disabled={loading} aria-label="Refresh inference pool">
-          <IconRefresh className={cn(loading && 'animate-spin', 'h-3 w-3')} />
+          <Spinner className="h-3 w-3" />
         </Button>
       </div>
       <CardContent className="pt-3">

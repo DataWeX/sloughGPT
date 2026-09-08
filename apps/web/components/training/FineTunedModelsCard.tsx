@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -136,10 +137,7 @@ export function FineTunedModelsCard({
             ))}
           </div>
         ) : error ? (
-          <div className="text-center py-4">
-            <p className="text-xs text-destructive mb-2">{error}</p>
-            <Button size="sm" variant="ghost" onClick={() => void fetchModels()}>Retry</Button>
-          </div>
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchModels()} />
         ) : models.length === 0 ? (
           <div className="text-center py-4 space-y-2">
             <p className="text-xs text-muted-foreground">No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.</p>

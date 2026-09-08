@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, IconRefresh, Spinner } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, Spinner } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -230,7 +230,7 @@ export default function ExportContent() {
         title="Checkpoints"
         actions={
           <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
-            <IconRefresh className={cn('h-3.5 w-3.5', loadingCheckpoints ? 'animate-spin' : '')} />
+            <Spinner className="h-3.5 w-3.5" />
           </Button>
         }
       >

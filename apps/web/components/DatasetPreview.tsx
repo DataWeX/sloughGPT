@@ -80,45 +80,45 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Preview: {datasetId}</CardTitle>
-          <div className="flex items-center gap-2">
+          <CardTitle className="text-xs">Preview: {datasetId}</CardTitle>
+          <div className="flex items-center gap-1.5">
             {validation && (
               <Badge variant={validation.valid ? 'default' : 'destructive'}>
                 {validation.valid ? 'Valid' : 'Invalid'}
               </Badge>
             )}
-             <Badge variant="outline">{totalFiles} files</Badge>
+             <Badge variant="outline" className="text-[9px]">{totalFiles} files</Badge>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div>
-            <div className="text-base font-semibold">{preview.total_samples}</div>
-            <div className="text-xs text-muted-foreground">Samples</div>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="rounded-lg bg-muted/20 px-2 py-1.5">
+            <div className="text-[11px] font-mono tabular-nums">{preview.total_samples}</div>
+            <div className="text-[9px] text-muted-foreground/60">Samples</div>
           </div>
-          <div>
-            <div className="text-base font-semibold">
+          <div className="rounded-lg bg-muted/20 px-2 py-1.5">
+            <div className="text-[11px] font-mono tabular-nums">
               {(preview.total_chars / 1024).toFixed(1)}K
             </div>
-            <div className="text-xs text-muted-foreground">Characters</div>
+            <div className="text-[9px] text-muted-foreground/60">Characters</div>
           </div>
-          <div>
-            <div className="text-base font-semibold">{languageEntries.length}</div>
-            <div className="text-xs text-muted-foreground">Languages</div>
+          <div className="rounded-lg bg-muted/20 px-2 py-1.5">
+            <div className="text-[11px] font-mono tabular-nums">{languageEntries.length}</div>
+            <div className="text-[9px] text-muted-foreground/60">Languages</div>
           </div>
-          <div>
-            <div className="text-base font-semibold">
+          <div className="rounded-lg bg-muted/20 px-2 py-1.5">
+            <div className="text-[11px] font-mono tabular-nums truncate">
               {languageEntries[0]?.[0] || '—'}
             </div>
-            <div className="text-xs text-muted-foreground">Top Language</div>
+            <div className="text-[9px] text-muted-foreground/60">Top Language</div>
           </div>
         </div>
 
         {validation && validation.warnings.length > 0 && (
-          <div className="rounded-md bg-warning/10 p-3">
-            <div className="text-sm font-medium text-warning">Warnings</div>
-            <ul className="mt-1 space-y-1 text-xs text-warning/80">
+          <div className="rounded-md bg-warning/10 p-2">
+            <div className="text-[11px] font-medium text-warning">Warnings</div>
+            <ul className="mt-0.5 space-y-px text-[10px] text-warning/80">
               {validation.warnings.map((warning, i) => (
                 <li key={i}>• {warning}</li>
               ))}
@@ -128,9 +128,9 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
 
         {languageEntries.length > 1 && (
           <figure className="space-y-1">
-            <figcaption className="text-xs font-medium text-muted-foreground">Language Distribution</figcaption>
+            <figcaption className="text-[10px] font-medium text-muted-foreground/60">Language Distribution</figcaption>
             <div
-              className="flex h-2 overflow-hidden rounded-full bg-muted"
+              className="flex h-1.5 overflow-hidden rounded-full bg-muted"
               role="img"
               aria-label={`Language distribution: ${languageEntries.slice(0, 6).map(([lang, count]) => `${lang} ${Math.round((count / totalFiles) * 100)}%`).join(', ')}`}
             >
@@ -145,7 +145,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
             </div>
             <div className="flex flex-wrap gap-1">
               {languageEntries.slice(0, 6).map(([lang, count]) => (
-                <Badge key={lang} variant="outline" className="text-xs">
+                <Badge key={lang} variant="outline" className="text-[9px]">
                   {lang}: {count}
                 </Badge>
               ))}
@@ -154,27 +154,27 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
         )}
 
         <Tabs defaultValue="samples" className="w-full">
-          <TabsList className="w-full">
-            <TabsTrigger value="samples" className="flex-1">Samples</TabsTrigger>
-            <TabsTrigger value="content" className="flex-1">Content</TabsTrigger>
+          <TabsList className="h-7 w-full">
+            <TabsTrigger value="samples" className="flex-1 text-[10px]">Samples</TabsTrigger>
+            <TabsTrigger value="content" className="flex-1 text-[10px]">Content</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="samples" className="mt-2" tabIndex={0}>
-            <ul className="max-h-64 space-y-2 overflow-y-auto">
+          <TabsContent value="samples" className="mt-1.5" tabIndex={0}>
+            <ul className="max-h-56 space-y-1 overflow-y-auto">
               {preview.samples.map((sample, i) => (
                 <li
                   key={i}
-                  className="rounded-md border bg-muted/30 p-2"
+                  className="rounded-md border border-border/40 bg-muted/20 p-2"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span className="font-mono text-[9px] text-muted-foreground/60">
                       {sample.path || `sample_${i}`}
                     </span>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-[8px]">
                       {sample.language}
                     </Badge>
                   </div>
-                  <pre className="mt-1 whitespace-pre-wrap font-mono text-xs" aria-label={`Sample ${i + 1} content preview`}>
+                  <pre className="mt-0.5 whitespace-pre-wrap font-mono text-[10px]" aria-label={`Sample ${i + 1} content preview`}>
                     {sample.content.slice(0, 200)}
                     {sample.content.length > 200 && '...'}
                   </pre>
@@ -183,7 +183,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
             </ul>
           </TabsContent>
 
-          <TabsContent value="content" className="mt-2" tabIndex={0}>
+          <TabsContent value="content" className="mt-1.5" tabIndex={0}>
             <label htmlFor="dataset-content" className="sr-only">Dataset content</label>
             <textarea
               id="dataset-content"
@@ -192,7 +192,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
                 .map((s) => `// ${s.path}\n${s.content}`)
                 .join('\n\n')
                 .slice(0, 2000)}
-              className="h-64 font-mono text-xs"
+              className="h-56 font-mono text-[10px]"
               aria-label="Full dataset content preview"
             />
           </TabsContent>
@@ -205,6 +205,7 @@ export function DatasetPreview({ datasetId, onUseForTraining }: DatasetPreviewPr
               disabled={validation ? !validation.valid : false}
               aria-disabled={validation ? !validation.valid : false}
               aria-describedby={validation && !validation.valid ? 'validation-warning' : undefined}
+              className="h-7 text-[11px]"
             >
               Use for Training
             </Button>

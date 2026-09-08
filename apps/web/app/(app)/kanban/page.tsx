@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import {
   Card, CardContent, Button, Badge, Input, Textarea,
   Dialog, DialogContent, DialogHeader, DialogTitle,
-  cn,
+  cn, Spinner,
 } from '@sloughgpt/strui'
 import {
   IconRefresh, IconPlus, IconSearch, IconEdit, IconTrash,
@@ -265,38 +265,38 @@ export default function PlannerPage() {
       subtitle="Board, notes, and sync"
       maxWidth="max-w-7xl"
       headerRight={
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={handleSync} disabled={syncing}>
-            <IconRefresh className={cn('h-4 w-4', syncing && 'animate-spin')} />
-            Sync
-          </Button>
-          <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading}>
-            <IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} />
-          </Button>
-        </div>
+         <div className="flex items-center gap-2">
+           <Button variant="ghost" size="sm" onClick={handleSync} disabled={syncing} className="h-6 text-[10px]">
+             <Spinner className="h-4 w-4" />
+             Sync
+           </Button>
+           <Button variant="ghost" size="sm" onClick={fetchAll} disabled={loading} className="h-6 text-[10px]">
+             <Spinner className="h-4 w-4" />
+           </Button>
+         </div>
       }
       toolbar={
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {/* Tab switcher */}
           <div className="flex items-center rounded-lg border border-border p-0.5">
-            <button
-              onClick={() => setTab('board')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                tab === 'board' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <IconGrid className="h-3.5 w-3.5" />
-              Board
-              <span className="text-xs opacity-70">{stats.cards}</span>
-            </button>
-            <button
-              onClick={() => setTab('notes')}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                tab === 'notes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
+             <button
+               onClick={() => setTab('board')}
+               className={cn(
+                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors',
+                 tab === 'board' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+               )}
+             >
+               <IconGrid className="h-3.5 w-3.5" />
+               Board
+               <span className="text-xs opacity-70">{stats.cards}</span>
+             </button>
+             <button
+               onClick={() => setTab('notes')}
+               className={cn(
+                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition-colors',
+                 tab === 'notes' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+               )}
+             >
               <IconDocument className="h-3.5 w-3.5" />
               Notes
               <span className="text-xs opacity-70">{stats.notes}</span>
@@ -310,7 +310,7 @@ export default function PlannerPage() {
               placeholder="Search cards and notes..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 h-9"
+              className="pl-9 h-7 text-[11px]"
             />
           </div>
 
@@ -321,31 +321,32 @@ export default function PlannerPage() {
                 variant={filterTag === null ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setFilterTag(null)}
+                className="h-6 text-[10px]"
               >
                 All
               </Button>
-              {allTags.slice(0, 8).map(tag => (
-                <Badge
-                  key={tag}
-                  variant={filterTag === tag ? 'default' : 'secondary'}
-                  className="cursor-pointer"
-                  onClick={() => setFilterTag(filterTag === tag ? null : tag)}
-                >
-                  {tag}
-                </Badge>
-              ))}
+               {allTags.slice(0, 8).map(tag => (
+                 <Badge
+                   key={tag}
+                   variant={filterTag === tag ? 'default' : 'secondary'}
+                   className="cursor-pointer rounded-full text-[9px]"
+                   onClick={() => setFilterTag(filterTag === tag ? null : tag)}
+                 >
+                   {tag}
+                 </Badge>
+               ))}
               {allTags.length > 8 && (
-                <span className="text-xs text-muted-foreground">+{allTags.length - 8}</span>
+                 <span className="text-[10px] text-muted-foreground/60">+{allTags.length - 8}</span>
               )}
             </div>
           )}
 
-          {tab === 'notes' && (
-            <Button size="sm" onClick={() => setShowNewNote(true)}>
-              <IconPlus className="h-4 w-4 mr-1" />
-              New Note
-            </Button>
-          )}
+           {tab === 'notes' && (
+             <Button size="sm" onClick={() => setShowNewNote(true)} className="h-7 text-[11px]">
+               <IconPlus className="h-4 w-4 mr-1" />
+               New Note
+             </Button>
+           )}
         </div>
       }
       loading={loading}
@@ -407,7 +408,7 @@ const BoardView = memo(function BoardView({
   onDrop: (e: React.DragEvent, column: string) => void
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-1.5">
       {columns.map(col => {
         const cards = cardsByColumn[col.name] || []
         const atWip = col.wip_limit > 0 && cards.length >= col.wip_limit
@@ -420,25 +421,25 @@ const BoardView = memo(function BoardView({
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium text-foreground">
+                 <h3 className="text-[11px] font-medium text-foreground">
                   {COLUMN_LABELS[col.name] || col.name}
                 </h3>
-                <span className={cn(
-                  'inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-xs font-medium',
-                  COLUMN_COLORS[col.name] || 'bg-muted text-muted-foreground'
-                )}>
+                 <span className={cn(
+                   'inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full text-[9px] font-medium',
+                   COLUMN_COLORS[col.name] || 'bg-muted text-muted-foreground'
+                 )}>
                   {cards.length}
                 </span>
                 {col.wip_limit > 0 && (
-                  <span className="text-xs text-muted-foreground">/ {col.wip_limit}</span>
+                   <span className="text-[10px] text-muted-foreground/60">/ {col.wip_limit}</span>
                 )}
               </div>
-              {atWip && <span className="text-xs text-warning font-medium">WIP limit</span>}
+               {atWip && <span className="text-[10px] text-warning font-medium">WIP limit</span>}
             </div>
 
             <div className="space-y-2 min-h-[4rem]">
               {cards.length === 0 && (
-                <div className="text-xs text-muted-foreground italic p-3 text-center border border-dashed border-border rounded-lg">
+                 <div className="text-[10px] text-muted-foreground/60 italic p-3 text-center border border-dashed border-border rounded-lg">
                   Drop cards here
                 </div>
               )}
@@ -452,25 +453,25 @@ const BoardView = memo(function BoardView({
                   draggable
                   onDragStart={e => onDragStart(e, card.id)}
                 >
-                  <CardContent className="p-3 space-y-2">
+                   <CardContent className="pb-2 pt-2.5 px-2.5 space-y-2">
                     <p className="text-sm font-medium text-foreground leading-snug">{card.title}</p>
                     {card.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2">{card.description}</p>
                     )}
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={cn(
-                        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider',
-                        PRIORITY_COLORS[card.priority] || 'bg-muted text-muted-foreground'
-                      )}>
+                       <span className={cn(
+                         'inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium uppercase tracking-wider',
+                         PRIORITY_COLORS[card.priority] || 'bg-muted text-muted-foreground'
+                       )}>
                         {card.priority}
                       </span>
-                      {card.tags.slice(0, 3).map(tag => (
-                        <span key={tag} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground">
-                          {tag}
-                        </span>
-                      ))}
+                       {card.tags.slice(0, 3).map(tag => (
+                         <span key={tag} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] bg-muted text-muted-foreground">
+                           {tag}
+                         </span>
+                       ))}
                       {card.tags.length > 3 && (
-                        <span className="text-[10px] text-muted-foreground">+{card.tags.length - 3}</span>
+                         <span className="text-[10px] text-muted-foreground/60">+{card.tags.length - 3}</span>
                       )}
                     </div>
                     {card.due_date && (
@@ -506,8 +507,8 @@ const NotesView = memo(function NotesView({
       <div className="flex min-h-[20vh] items-center justify-center">
         <div className="text-center space-y-2">
           <IconDocument className="h-8 w-8 mx-auto text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">No notes yet</p>
-          <p className="text-xs text-muted-foreground">Create a note to get started</p>
+           <p className="text-[10px] text-muted-foreground/60">No notes yet</p>
+           <p className="text-[10px] text-muted-foreground/60">Create a note to get started</p>
         </div>
       </div>
     )
@@ -517,7 +518,7 @@ const NotesView = memo(function NotesView({
     <div className="space-y-2">
       {notes.map(note => (
         <Card key={note.id} className="transition-shadow hover:shadow-md">
-          <CardContent className="p-4">
+           <CardContent className="pb-2 pt-2.5 px-2.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-1">
                 <p className="text-sm font-medium text-foreground leading-snug">{note.title}</p>
@@ -525,7 +526,7 @@ const NotesView = memo(function NotesView({
                   <p className="text-xs text-muted-foreground line-clamp-2">{note.body}</p>
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant={note.status === 'done' ? 'default' : 'secondary'} className="text-[10px]">
+                   <Badge variant={note.status === 'done' ? 'default' : 'secondary'} className="rounded-full text-[9px]">
                     {note.status}
                   </Badge>
                   {note.tags.map(tag => (
@@ -536,14 +537,14 @@ const NotesView = memo(function NotesView({
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(note)}>
-                  <IconEdit className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(note.id)}>
-                  <IconTrash className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+               <div className="flex items-center gap-1 shrink-0">
+                 <Button variant="ghost" size="sm" onClick={() => onEdit(note)} className="h-6 text-[10px]">
+                   <IconEdit className="h-3.5 w-3.5" />
+                 </Button>
+                 <Button variant="ghost" size="sm" onClick={() => onDelete(note.id)} className="h-6 text-[10px]">
+                   <IconTrash className="h-3.5 w-3.5" />
+                 </Button>
+               </div>
             </div>
           </CardContent>
         </Card>
@@ -587,30 +588,32 @@ const NoteDialog = memo(function NoteDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Title</label>
-            <Input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="Note title"
-              autoFocus
-            />
+            <label className="text-[11px] font-medium text-foreground">Title</label>
+             <Input
+               value={title}
+               onChange={e => setTitle(e.target.value)}
+               placeholder="Note title"
+               autoFocus
+               className="h-7 text-[11px]"
+             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+           <div className="grid grid-cols-2 gap-1.5">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Tags</label>
-              <Input
-                value={tags}
-                onChange={e => setTags(e.target.value)}
-                placeholder="comma-separated"
-              />
+               <label className="text-[11px] font-medium text-foreground">Tags</label>
+               <Input
+                 value={tags}
+                 onChange={e => setTags(e.target.value)}
+                 placeholder="comma-separated"
+                 className="h-7 text-[11px]"
+               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Status</label>
-              <select
-                value={status}
-                onChange={e => setStatus(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
+               <label className="text-[11px] font-medium text-foreground">Status</label>
+               <select
+                 value={status}
+                 onChange={e => setStatus(e.target.value)}
+                 className="flex h-7 w-full rounded-md border border-input bg-transparent px-3 text-[11px]"
+               >
                 {STATUS_OPTIONS.map(s => (
                   <option key={s} value={s}>{s}</option>
                 ))}
@@ -618,7 +621,7 @@ const NoteDialog = memo(function NoteDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Body</label>
+             <label className="text-[11px] font-medium text-foreground">Body</label>
             <Textarea
               value={body}
               onChange={e => setBody(e.target.value)}
@@ -626,13 +629,13 @@ const NoteDialog = memo(function NoteDialog({
               rows={6}
             />
           </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={!title.trim()}>
-              <IconCheck className="h-4 w-4 mr-1" />
-              {note ? 'Save' : 'Create'}
-            </Button>
-          </div>
+           <div className="flex justify-end gap-2">
+             <Button type="button" variant="ghost" onClick={onClose} className="h-6 text-[10px]">Cancel</Button>
+             <Button type="submit" disabled={!title.trim()} className="h-7 text-[11px]">
+               <IconCheck className="h-4 w-4 mr-1" />
+               {note ? 'Save' : 'Create'}
+             </Button>
+           </div>
         </form>
       </DialogContent>
     </Dialog>

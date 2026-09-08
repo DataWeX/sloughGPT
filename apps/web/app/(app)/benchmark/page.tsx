@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, cn, Spinner } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { benchmarkController, type BenchmarkResult, type LoggedBenchmarkResponse } from '@/lib/benchmark-controller'
@@ -162,7 +162,7 @@ export default function BenchmarkPage() {
               setTab(t)
               if (t === 'responses') handleLoadResponses()
             }}
-            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
+            className={cn('px-3 py-1.5 text-[10px] font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -181,15 +181,15 @@ export default function BenchmarkPage() {
             <StatCard label="Loaded" value={metrics?.model_loaded ? 'Yes' : 'No'} />
           </KpiGrid>
           <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Model Metrics</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running} aria-label="Refresh metrics">
-              <IconRefresh className={cn('h-4 w-4', running && 'animate-spin')} />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Model Metrics</CardTitle>
+              <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={running} aria-label="Refresh metrics">
+              <Spinner className="h-6 w-6 text-[10px]" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {metrics ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                 {[
                   { label: 'Model', value: String(metrics.model ?? '—') },
                   { label: 'Inferences', value: String(metrics.inference_count ?? 0) },
@@ -198,17 +198,17 @@ export default function BenchmarkPage() {
                   { label: 'Memory', value: `${metrics.memory_mb ?? 0} MB` },
                   { label: 'Loaded', value: metrics.model_loaded ? 'Yes' : 'No' },
                 ].map(s => (
-                  <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">{s.label}</div>
-                    <div className="text-sm font-mono font-medium">{s.value}</div>
-                  </div>
+                   <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center hover:bg-muted/20">
+                     <div className="text-[11px] text-muted-foreground">{s.label}</div>
+                     <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
+                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                No metrics available. Is a model loaded?
+              <div className="text-center py-6 text-[10px] text-muted-foreground/60">
+                 No metrics available. Is a model loaded?
                 <div className="mt-2">
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/models')}>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => router.push('/models')}>
                     Open Models
                   </Button>
                 </div>
@@ -226,29 +226,29 @@ export default function BenchmarkPage() {
 
       {tab === 'quality' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quality Metrics</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Quality Metrics</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {quality ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
+               <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                 {[
                   { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
                   { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
                   { label: 'Repetition', value: `${(quality.repetition_rate * 100).toFixed(1)}%`, color: quality.repetition_rate > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
                 ].map(s => (
-                  <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground">{s.label}</div>
-                    <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
-                  </div>
+                   <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center hover:bg-muted/20">
+                     <div className="text-[11px] text-muted-foreground">{s.label}</div>
+                     <div className={cn('text-[11px] font-mono font-medium tabular-nums', s.color)}>{s.value}</div>
+                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
-                <div>No quality data yet. Chat with the model to generate responses.</div>
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
-                  Open Chat
-                </Button>
+              <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
+                 <div>No quality data yet. Chat with the model to generate responses.</div>
+                 <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => router.push('/chat')}>
+                   Open Chat
+                 </Button>
               </div>
             )}
           </CardContent>
@@ -257,29 +257,29 @@ export default function BenchmarkPage() {
 
       {tab === 'responses' && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Logged Responses ({responses.length})</CardTitle>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses">
+              <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses" className="h-6 text-[10px]">
                 <IconRefresh className="h-4 w-4" />
               </Button>
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
+              <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={handleClearHistory}>
                 Clear
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {responses.length === 0 ? (
-              <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
-                <div>No responses logged yet.</div>
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
-                  Open Chat
-                </Button>
+              <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
+                 <div>No responses logged yet.</div>
+                 <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => router.push('/chat')}>
+                   Open Chat
+                 </Button>
               </div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {responses.map((r, i) => (
-                  <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                   <div key={i} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm">
                     <div className="text-xs text-muted-foreground mb-1">
                       {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
                     </div>
@@ -295,32 +295,32 @@ export default function BenchmarkPage() {
 
       {tab === 'perplexity' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Perplexity Calculator</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Perplexity Calculator</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             <Textarea
               value={pplxText}
               onChange={e => setPplxText(e.target.value)}
               placeholder="Enter text to calculate perplexity..."
               rows={3}
             />
-            <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()}>
+              <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()} className="h-7 text-[11px]">
               {pplxLoading ? 'Calculating...' : 'Calculate'}
             </Button>
             {pplxResult && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Perplexity</div>
-                  <div className="text-base font-mono font-medium">{pplxResult.perplexity}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Loss</div>
-                  <div className="text-base font-mono font-medium">{pplxResult.loss}</div>
-                </div>
-                <div className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">Tokens</div>
-                  <div className="text-base font-mono font-medium">{pplxResult.tokens}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                   <div className="rounded-lg bg-muted/20 p-2.5 text-center hover:bg-muted/20">
+                   <div className="text-[11px] text-muted-foreground">Perplexity</div>
+                   <div className="text-[11px] font-mono font-medium tabular-nums">{pplxResult.perplexity}</div>
+                 </div>
+                 <div className="rounded-lg bg-muted/20 p-2.5 text-center hover:bg-muted/20">
+                   <div className="text-[11px] text-muted-foreground">Loss</div>
+                   <div className="text-[11px] font-mono font-medium tabular-nums">{pplxResult.loss}</div>
+                 </div>
+                 <div className="rounded-lg bg-muted/20 p-2.5 text-center hover:bg-muted/20">
+                   <div className="text-[11px] text-muted-foreground">Tokens</div>
+                   <div className="text-[11px] font-mono font-medium tabular-nums">{pplxResult.tokens}</div>
                 </div>
               </div>
             )}
@@ -330,10 +330,10 @@ export default function BenchmarkPage() {
 
       {tab === 'compare' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Compare Models</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Compare Models</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
             <div className="flex flex-wrap gap-2">
               {availableModels.map(m => (
                 <button
@@ -356,13 +356,13 @@ export default function BenchmarkPage() {
                 <span className="text-xs text-muted-foreground">No models available</span>
               )}
             </div>
-            <Button size="sm" onClick={handleRunCompare} disabled={compareLoading || compareModels.length === 0}>
+            <Button size="sm" onClick={handleRunCompare} disabled={compareLoading || compareModels.length === 0} className="h-7 text-[11px]">
               {compareLoading ? 'Running benchmarks...' : `Run on ${compareModels.length} model${compareModels.length !== 1 ? 's' : ''}`}
             </Button>
             <ComparisonTableCard completedResults={compareResults} models={availableModels.filter(m => compareModels.includes(m.id))} bestMetrics={bestMetrics} />
             {compareResults.length === 0 && !compareLoading && (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                Select models above and click Run to compare them side by side.
+              <div className="text-center py-6 text-[10px] text-muted-foreground/60">
+                 Select models above and click Run to compare them side by side.
               </div>
             )}
           </CardContent>

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { IconChat, IconModels } from '@/components/icons/NavIcons'
 
 interface StatsGridProps {

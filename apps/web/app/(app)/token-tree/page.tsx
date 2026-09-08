@@ -221,12 +221,12 @@ export default function TokenTreePage() {
       title="Token Tree"
       subtitle="BPE merge tree with learned embeddings"
       headerRight={
-        <Button size="sm" variant="ghost" onClick={() => void loadStats()}>Refresh</Button>
+        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void loadStats()}>Refresh</Button>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         {stats && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {[
               { label: 'Trained', value: stats.trained ? 'Yes' : 'No' },
               { label: 'Vocab Size', value: stats.vocab_size.toLocaleString() },
@@ -236,42 +236,42 @@ export default function TokenTreePage() {
               { label: 'Compression', value: stats.embedding_compression_ratio.toFixed(2) },
               { label: 'Embed Dim', value: stats.embed_dim },
             ].map(s => (
-              <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-                <div className="text-sm font-mono font-medium">{s.value}</div>
+              <div key={s.label} className="rounded-lg bg-muted/20 p-2 text-center">
+                <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</div>
+                <div className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{s.value}</div>
               </div>
             ))}
           </div>
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Train Tree</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Train Tree</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Vocab Size</Label>
-                <Input type="number" value={vocabSize} onChange={e => setVocabSize(Number(e.target.value))} className="h-8 text-xs" />
+          <CardContent className="space-y-2 px-2.5 pb-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-0.5">
+                <Label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Vocab Size</Label>
+                <Input type="number" value={vocabSize} onChange={e => setVocabSize(Number(e.target.value))} className="h-7 text-[11px] font-mono" />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="train-texts" className="text-xs">Training Texts (one per line, optional)</Label>
-                <textarea id="train-texts" value={trainTexts} onChange={e => setTrainTexts(e.target.value)} rows={3} className="w-full rounded-md border border-input bg-background p-2 text-xs font-mono" placeholder="Leave empty to use default corpus..." />
+              <div className="space-y-0.5">
+                <Label htmlFor="train-texts" className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Training Texts (one per line, optional)</Label>
+                <textarea id="train-texts" value={trainTexts} onChange={e => setTrainTexts(e.target.value)} rows={3} className="w-full rounded-lg border border-border/40 bg-background px-2.5 py-2 text-[11px] font-mono" placeholder="Leave empty to use default corpus..." />
               </div>
             </div>
-            <Button onClick={() => void handleTrain()} disabled={loading} className="w-full">
+            <Button onClick={() => void handleTrain()} disabled={loading} className="w-full h-7 text-[11px]">
               {loading ? 'Training...' : 'Train Token Tree'}
             </Button>
           </CardContent>
         </Card>
 
-        <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        <div className="flex gap-0.5 rounded-lg border border-border/40 bg-muted/20 p-0.5">
           {tabs.map(t => (
             <button
               type="button"
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={cn('flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors', tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+              className={cn('flex-1 rounded-md px-2.5 py-1 text-[10px] font-medium transition-colors', tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground')}
             >
               {t.label}
             </button>
@@ -280,39 +280,39 @@ export default function TokenTreePage() {
 
         {tab === 'vocab' && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Vocabulary ({vocabTotal} tokens)</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Vocabulary ({vocabTotal} tokens)</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
               <div className="max-h-[400px] overflow-y-auto">
-                <table className="w-full text-xs" aria-label="Vocabulary table">
+                <table className="w-full text-[11px]" aria-label="Vocabulary table">
                   <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th scope="col" className="pb-1.5 font-medium">ID</th>
-                      <th scope="col" className="pb-1.5 font-medium">Token</th>
-                      <th scope="col" className="pb-1.5 font-medium">Freq</th>
-                      <th scope="col" className="pb-1.5 font-medium">Type</th>
+                    <tr className="border-b border-border/30 text-left text-[10px] text-muted-foreground/60">
+                      <th scope="col" className="pb-1 font-medium">ID</th>
+                      <th scope="col" className="pb-1 font-medium">Token</th>
+                      <th scope="col" className="pb-1 font-medium">Freq</th>
+                      <th scope="col" className="pb-1 font-medium">Type</th>
                     </tr>
                   </thead>
                   <tbody>
                     {vocabEntries.map(e => (
-                      <tr key={e.id} className="border-b border-border/50">
-                        <td className="py-1 font-mono text-muted-foreground">{e.id}</td>
+                      <tr key={e.id} className="border-b border-border/20">
+                        <td className="py-1 font-mono text-muted-foreground/60 tabular-nums">{e.id}</td>
                         <td className="py-1 font-mono">{e.token}</td>
-                        <td className="py-1">{e.freq}</td>
+                        <td className="py-1 font-mono tabular-nums">{e.freq}</td>
                         <td className="py-1">
-                          {e.is_special && <span className="rounded bg-warning/10 px-1 py-0.5 text-xs text-warning">special</span>}
-                          {e.is_merged && <span className="rounded bg-primary/10 px-1 py-0.5 text-xs text-primary">merged</span>}
+                          {e.is_special && <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[9px] text-warning">special</span>}
+                          {e.is_merged && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">merged</span>}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div className="flex justify-center gap-2">
-                <Button size="sm" variant="outline" disabled={vocabOffset === 0} onClick={() => void loadVocab(vocabOffset - 50)}>Previous</Button>
-                <span className="text-xs text-muted-foreground self-center">{vocabOffset + 1}-{Math.min(vocabOffset + 50, vocabTotal)} of {vocabTotal}</span>
-                <Button size="sm" variant="outline" disabled={vocabOffset + 50 >= vocabTotal} onClick={() => void loadVocab(vocabOffset + 50)}>Next</Button>
+              <div className="flex justify-center gap-1.5">
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={vocabOffset === 0} onClick={() => void loadVocab(vocabOffset - 50)}>Previous</Button>
+                <span className="text-[10px] text-muted-foreground/60 self-center font-mono tabular-nums">{vocabOffset + 1}-{Math.min(vocabOffset + 50, vocabTotal)} of {vocabTotal}</span>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" disabled={vocabOffset + 50 >= vocabTotal} onClick={() => void loadVocab(vocabOffset + 50)}>Next</Button>
               </div>
             </CardContent>
           </Card>
@@ -320,33 +320,33 @@ export default function TokenTreePage() {
 
         {tab === 'merges' && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">BPE Merge Rules</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">BPE Merge Rules</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input value={mergeQuery} onChange={e => setMergeQuery(e.target.value)} placeholder="Filter merges..." className="h-8 text-xs" onKeyDown={e => e.key === 'Enter' && void loadMerges(mergeQuery)} />
-                <Button onClick={() => void loadMerges(mergeQuery)} disabled={loading} className="shrink-0">Search</Button>
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="flex gap-1.5">
+                <Input value={mergeQuery} onChange={e => setMergeQuery(e.target.value)} placeholder="Filter merges..." className="h-7 text-[11px] flex-1" onKeyDown={e => e.key === 'Enter' && void loadMerges(mergeQuery)} />
+                <Button onClick={() => void loadMerges(mergeQuery)} disabled={loading} className="h-7 text-[11px] shrink-0">Search</Button>
               </div>
               <div className="max-h-[400px] overflow-y-auto">
-                <table className="w-full text-xs" aria-label="BPE merge rules table">
+                <table className="w-full text-[11px]" aria-label="BPE merge rules table">
                   <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <th scope="col" className="pb-1.5 font-medium">Rank</th>
-                      <th scope="col" className="pb-1.5 font-medium">Left</th>
-                      <th scope="col" className="pb-1.5 font-medium">Right</th>
-                      <th scope="col" className="pb-1.5 font-medium">Result</th>
-                      <th scope="col" className="pb-1.5 font-medium">Count</th>
+                    <tr className="border-b border-border/30 text-left text-[10px] text-muted-foreground/60">
+                      <th scope="col" className="pb-1 font-medium">Rank</th>
+                      <th scope="col" className="pb-1 font-medium">Left</th>
+                      <th scope="col" className="pb-1 font-medium">Right</th>
+                      <th scope="col" className="pb-1 font-medium">Result</th>
+                      <th scope="col" className="pb-1 font-medium">Count</th>
                     </tr>
                   </thead>
                   <tbody>
                     {merges.map(m => (
-                      <tr key={m.rank} className="border-b border-border/50">
-                        <td className="py-1 font-mono text-muted-foreground">{m.rank}</td>
+                      <tr key={m.rank} className="border-b border-border/20">
+                        <td className="py-1 font-mono text-muted-foreground/60 tabular-nums">{m.rank}</td>
                         <td className="py-1 font-mono">{m.left}</td>
                         <td className="py-1 font-mono">{m.right}</td>
                         <td className="py-1 font-mono text-primary">{m.token}</td>
-                        <td className="py-1">{m.count}</td>
+                        <td className="py-1 font-mono tabular-nums">{m.count}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -358,28 +358,28 @@ export default function TokenTreePage() {
 
         {tab === 'similar' && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Find Similar Tokens</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Find Similar Tokens</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input value={similarQuery} onChange={e => setSimilarQuery(e.target.value)} placeholder="Enter a token..." className="h-8 text-xs" onKeyDown={e => e.key === 'Enter' && void handleSimilar()} />
-                <Button onClick={() => void handleSimilar()} disabled={loading} className="shrink-0">Find</Button>
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="flex gap-1.5">
+                <Input value={similarQuery} onChange={e => setSimilarQuery(e.target.value)} placeholder="Enter a token..." className="h-7 text-[11px] flex-1" onKeyDown={e => e.key === 'Enter' && void handleSimilar()} />
+                <Button onClick={() => void handleSimilar()} disabled={loading} className="h-7 text-[11px] shrink-0">Find</Button>
               </div>
               {similarResult && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Results for &quot;{similarResult.query}&quot;</p>
-                  <div className="space-y-1">
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-muted-foreground/60">Results for &quot;{similarResult.query}&quot;</p>
+                  <div className="space-y-0.5">
                     {similarResult.neighbors.map(n => (
-                      <div key={n.id} className="flex items-center gap-3 rounded bg-muted/30 px-3 py-2">
-                        <span className="font-mono text-xs">{n.token}</span>
-                        <span className="text-xs text-muted-foreground">ID: {n.id}</span>
+                      <div key={n.id} className="flex items-center gap-2 rounded-lg bg-muted/20 px-2.5 py-1.5">
+                        <span className="font-mono text-[11px]">{n.token}</span>
+                        <span className="text-[10px] text-muted-foreground/60">ID: {n.id}</span>
                         <div className="flex-1">
-                          <div className="h-1.5 rounded-full bg-muted">
-                            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, n.score * 100)}%` }} />
+                          <div className="h-1 rounded-full bg-muted/40">
+                            <div className="h-full rounded-full bg-primary/60" style={{ width: `${Math.min(100, n.score * 100)}%` }} />
                           </div>
                         </div>
-                        <span className="font-mono text-xs text-muted-foreground">{n.score.toFixed(4)}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums">{n.score.toFixed(4)}</span>
                       </div>
                     ))}
                   </div>
@@ -391,43 +391,43 @@ export default function TokenTreePage() {
 
         {tab === 'embed' && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Token Embedding</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Token Embedding</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input value={embedQuery} onChange={e => setEmbedQuery(e.target.value)} placeholder="Enter a token..." className="h-8 text-xs" onKeyDown={e => e.key === 'Enter' && void handleEmbed()} />
-                <Button onClick={() => void handleEmbed()} disabled={loading} className="shrink-0">Get Embedding</Button>
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="flex gap-1.5">
+                <Input value={embedQuery} onChange={e => setEmbedQuery(e.target.value)} placeholder="Enter a token..." className="h-7 text-[11px] flex-1" onKeyDown={e => e.key === 'Enter' && void handleEmbed()} />
+                <Button onClick={() => void handleEmbed()} disabled={loading} className="h-7 text-[11px] shrink-0">Get Embedding</Button>
               </div>
               {embedResult && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Token</div>
-                      <div className="text-xs font-mono font-medium">{embedResult.token}</div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <div className="rounded-lg bg-muted/20 p-2 text-center">
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Token</div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">{embedResult.token}</div>
                     </div>
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Dimension</div>
-                      <div className="text-xs font-mono font-medium">{embedResult.dim}</div>
+                    <div className="rounded-lg bg-muted/20 p-2 text-center">
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Dimension</div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">{embedResult.dim}</div>
                     </div>
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Norm</div>
-                      <div className="text-xs font-mono font-medium">{embedResult.norm.toFixed(4)}</div>
+                    <div className="rounded-lg bg-muted/20 p-2 text-center">
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Norm</div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">{embedResult.norm.toFixed(4)}</div>
                     </div>
                   </div>
                   <div className="flex gap-0.5">
                     {embedResult.top.map(([val, idx], i) => (
                       <div key={i} className="flex flex-col items-center">
-                        <div className="w-4 rounded-t" style={{ height: `${Math.abs(val) * 40}px`, backgroundColor: val > 0 ? 'rgb(var(--primary))' : 'rgb(var(--destructive))' }} />
-                        <span className="text-[8px] text-muted-foreground mt-0.5">{idx}</span>
+                        <div className="w-3 rounded-t" style={{ height: `${Math.abs(val) * 32}px`, backgroundColor: val > 0 ? 'rgb(var(--primary))' : 'rgb(var(--destructive))' }} />
+                        <span className="text-[7px] text-muted-foreground/60 mt-0.5 font-mono">{idx}</span>
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-2 gap-0.5">
                     {embedResult.top.map(([val, idx], i) => (
-                      <div key={i} className="flex items-center gap-1 text-xs">
-                        <span className="text-muted-foreground">dim {idx}:</span>
-                        <span className="font-mono">{val.toFixed(4)}</span>
+                      <div key={i} className="flex items-center gap-1 text-[10px]">
+                        <span className="text-muted-foreground/60">dim {idx}:</span>
+                        <span className="font-mono tabular-nums">{val.toFixed(4)}</span>
                       </div>
                     ))}
                   </div>
@@ -439,26 +439,26 @@ export default function TokenTreePage() {
 
         {tab === 'saved' && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Saved Trees</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Saved Trees</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="Tree name..." className="h-8 text-xs" />
-                <Button onClick={() => void handleSave()} disabled={!saveName.trim()} className="shrink-0">Save Current</Button>
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="flex gap-1.5">
+                <Input value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="Tree name..." className="h-7 text-[11px] flex-1" />
+                <Button onClick={() => void handleSave()} disabled={!saveName.trim()} className="h-7 text-[11px] shrink-0">Save Current</Button>
               </div>
               {savedTrees.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No saved trees.</p>
+                <p className="text-[10px] text-muted-foreground/60">No saved trees.</p>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {savedTrees.map(t => (
-                    <div key={t.name} className="flex items-center gap-3 rounded bg-muted/30 px-3 py-2">
+                    <div key={t.name} className="flex items-center gap-2 rounded-lg bg-muted/20 px-2.5 py-1.5">
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium">{t.name}</div>
-                        <div className="text-xs text-muted-foreground">{t.vocab_size} vocab, {t.num_merges} merges</div>
+                        <div className="text-[11px] font-medium">{t.name}</div>
+                        <div className="text-[10px] text-muted-foreground/60">{t.vocab_size} vocab, {t.num_merges} merges</div>
                       </div>
-                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => void handleLoad(t.name)}>Load</Button>
-                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs text-destructive" onClick={() => void handleDeleteTree(t.name)}>Delete</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px]" onClick={() => void handleLoad(t.name)}>Load</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-1.5 text-[10px] text-destructive" onClick={() => void handleDeleteTree(t.name)}>Delete</Button>
                     </div>
                   ))}
                 </div>
@@ -469,46 +469,46 @@ export default function TokenTreePage() {
 
         {tab === 'matrix' && matrixResult && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Embedding Matrix Summary</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Embedding Matrix Summary</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-xs text-muted-foreground">Matrix Shape</div>
-                  <div className="text-xs font-mono">{matrixResult.matrix ? `${matrixResult.matrix[0]}×${matrixResult.matrix[1]}` : 'N/A'}</div>
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                <div className="rounded-lg bg-muted/20 p-2 text-center">
+                  <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Matrix Shape</div>
+                  <div className="text-[11px] font-mono tabular-nums">{matrixResult.matrix ? `${matrixResult.matrix[0]}×${matrixResult.matrix[1]}` : 'N/A'}</div>
                 </div>
-                <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-xs text-muted-foreground">Dead Tokens</div>
-                  <div className="text-xs font-mono">{matrixResult.dead_tokens}</div>
+                <div className="rounded-lg bg-muted/20 p-2 text-center">
+                  <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Dead Tokens</div>
+                  <div className="text-[11px] font-mono tabular-nums">{matrixResult.dead_tokens}</div>
                 </div>
-                <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-xs text-muted-foreground">Live Tokens</div>
-                  <div className="text-xs font-mono">{matrixResult.live_tokens}</div>
+                <div className="rounded-lg bg-muted/20 p-2 text-center">
+                  <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Live Tokens</div>
+                  <div className="text-[11px] font-mono tabular-nums">{matrixResult.live_tokens}</div>
                 </div>
-                <div className="rounded bg-muted/30 p-2 text-center">
-                  <div className="text-xs text-muted-foreground">Norm Range</div>
-                  <div className="text-xs font-mono">{matrixResult.norm_min.toFixed(3)}–{matrixResult.norm_max.toFixed(3)}</div>
+                <div className="rounded-lg bg-muted/20 p-2 text-center">
+                  <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Norm Range</div>
+                  <div className="text-[11px] font-mono tabular-nums">{matrixResult.norm_min.toFixed(3)}–{matrixResult.norm_max.toFixed(3)}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Most Energetic</p>
+                  <p className="text-[10px] text-muted-foreground/60 mb-0.5">Most Energetic</p>
                   {matrixResult.most_energetic.map(([token, id, norm], i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
+                    <div key={i} className="flex items-center gap-1.5 text-[10px]">
                       <span className="font-mono">{token}</span>
-                      <span className="text-muted-foreground">ID:{id}</span>
-                      <span className="font-mono text-primary">{norm.toFixed(3)}</span>
+                      <span className="text-muted-foreground/60">ID:{id}</span>
+                      <span className="font-mono text-primary tabular-nums">{norm.toFixed(3)}</span>
                     </div>
                   ))}
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Least Energetic</p>
+                  <p className="text-[10px] text-muted-foreground/60 mb-0.5">Least Energetic</p>
                   {matrixResult.least_energetic.map(([token, id, norm], i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs">
+                    <div key={i} className="flex items-center gap-1.5 text-[10px]">
                       <span className="font-mono">{token}</span>
-                      <span className="text-muted-foreground">ID:{id}</span>
-                      <span className="font-mono text-muted-foreground">{norm.toFixed(3)}</span>
+                      <span className="text-muted-foreground/60">ID:{id}</span>
+                      <span className="font-mono text-muted-foreground/60 tabular-nums">{norm.toFixed(3)}</span>
                     </div>
                   ))}
                 </div>
@@ -519,26 +519,26 @@ export default function TokenTreePage() {
 
         {tab === 'compare' && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Compare Tokens</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Compare Tokens</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Token A</Label>
-                  <Input value={compareA} onChange={e => setCompareA(e.target.value)} className="h-8 text-xs font-mono" />
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Token A</Label>
+                  <Input value={compareA} onChange={e => setCompareA(e.target.value)} className="h-7 text-[11px] font-mono" />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Token B</Label>
-                  <Input value={compareB} onChange={e => setCompareB(e.target.value)} className="h-8 text-xs font-mono" />
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Token B</Label>
+                  <Input value={compareB} onChange={e => setCompareB(e.target.value)} className="h-7 text-[11px] font-mono" />
                 </div>
               </div>
-              <Button onClick={() => void handleCompare()} disabled={loading || !compareA.trim() || !compareB.trim()} className="w-full">
+              <Button onClick={() => void handleCompare()} disabled={loading || !compareA.trim() || !compareB.trim()} className="w-full h-7 text-[11px]">
                 {loading ? 'Comparing...' : 'Compare'}
               </Button>
               {compareResult && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {[
                       { label: 'Shared Tokens', value: compareResult.shared_tokens },
                       { label: 'Only A', value: compareResult.only_a_tokens },
@@ -547,29 +547,29 @@ export default function TokenTreePage() {
                       { label: 'Only A Merges', value: compareResult.only_a_merges },
                       { label: 'Only B Merges', value: compareResult.only_b_merges },
                     ].map(s => (
-                      <div key={s.label} className="rounded bg-muted/30 p-2 text-center">
-                        <div className="text-xs text-muted-foreground">{s.label}</div>
-                        <div className="text-xs font-mono font-medium">{s.value}</div>
+                      <div key={s.label} className="rounded-lg bg-muted/20 p-2 text-center">
+                        <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</div>
+                        <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Shared</p>
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Shared</p>
                       {compareResult.shared_examples.map(([t, c], i) => (
-                        <div key={i} className="text-xs font-mono">{t} ({c})</div>
+                        <div key={i} className="text-[10px] font-mono">{t} ({c})</div>
                       ))}
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Only {compareResult.a.name}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Only {compareResult.a.name}</p>
                       {compareResult.only_a_examples.map(([t, c], i) => (
-                        <div key={i} className="text-xs font-mono">{t} ({c})</div>
+                        <div key={i} className="text-[10px] font-mono">{t} ({c})</div>
                       ))}
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Only {compareResult.b.name}</p>
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Only {compareResult.b.name}</p>
                       {compareResult.only_b_examples.map(([t, c], i) => (
-                        <div key={i} className="text-xs font-mono">{t} ({c})</div>
+                        <div key={i} className="text-[10px] font-mono">{t} ({c})</div>
                       ))}
                     </div>
                   </div>

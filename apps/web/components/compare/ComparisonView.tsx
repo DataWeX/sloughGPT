@@ -56,18 +56,18 @@ export function ComparisonView({
     <>
       {snapshots.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Saved Comparisons</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs">Saved Comparisons</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {snapshots.map(snap => (
-                <div key={snap.id} className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/20 px-2 py-1">
-                  <button type="button" onClick={() => onLoadSnapshot(snap)} className="text-xs font-medium hover:text-primary transition-colors">
+                <div key={snap.id} className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/20 px-1.5 py-1">
+                  <button type="button" onClick={() => onLoadSnapshot(snap)} className="text-[10px] font-medium hover:text-primary transition-colors">
                     {snap.name}
                   </button>
-                  <span className="text-xs text-muted-foreground">{new Date(snap.savedAt).toLocaleDateString()}</span>
-                  <button type="button" onClick={() => onDeleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-xs text-muted-foreground hover:text-destructive ml-1">×</button>
+                  <span className="text-[9px] text-muted-foreground/60 tabular-nums">{new Date(snap.savedAt).toLocaleDateString()}</span>
+                  <button type="button" onClick={() => onDeleteSnapshot(snap.id)} aria-label={`Delete snapshot ${snap.name}`} className="text-[10px] text-muted-foreground/60 hover:text-destructive ml-0.5">×</button>
                 </div>
               ))}
             </div>
@@ -79,15 +79,15 @@ export function ComparisonView({
 
       {completedResults.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center space-y-3">
-            <p className="text-sm text-muted-foreground">No benchmark results yet.</p>
-            <p className="text-xs text-muted-foreground/70 max-w-md mx-auto">
+          <CardContent className="py-8 text-center space-y-2">
+            <p className="text-[11px] text-muted-foreground/60">No benchmark results yet.</p>
+            <p className="text-[10px] text-muted-foreground/50 max-w-sm mx-auto">
               Run benchmarks on your models to see side-by-side comparisons. Click &ldquo;Benchmark all&rdquo; or use the benchmark button on each model card above.
             </p>
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onRunAll} disabled={loading || models.length === 0}>
+            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={onRunAll} disabled={loading || models.length === 0}>
               Benchmark all
             </Button>
-            <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground/50 pt-2">
+            <div className="flex items-center justify-center gap-3 text-[9px] text-muted-foreground/40 pt-1">
               <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">R</kbd> Benchmark all</span>
               <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+S</kbd> Save snapshot</span>
               <span><kbd className="px-1 py-0.5 rounded bg-muted/50 border border-border/50 font-mono">Ctrl+E</kbd> Export</span>
@@ -129,7 +129,7 @@ export function ComparisonHeader({
   running,
 }: ComparisonHeaderProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       {completedResults.length > 0 && (
         <>
           <div className="flex items-center gap-1">
@@ -138,19 +138,19 @@ export function ComparisonHeader({
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => onSnapshotNameChange(e.target.value)}
               placeholder="Snapshot name..."
               aria-label="Snapshot name"
-              className="h-8 w-40 text-xs"
+              className="h-6 w-36 text-[10px]"
               onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onSaveSnapshot() }}
             />
-            <Button variant="outline" size="sm" onClick={onSaveSnapshot}>Save</Button>
+            <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={onSaveSnapshot}>Save</Button>
           </div>
-          <Button variant="outline" size="sm" onClick={onExport}>
-            <IconDownload className="h-3.5 w-3.5 mr-1" />
+          <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={onExport}>
+            <IconDownload className="h-2.5 w-2.5 mr-0.5" />
             Export
           </Button>
         </>
       )}
-      <Button variant="outline" size="sm" onClick={onRunAll} disabled={loading || running.size > 0}>
-        <IconRefresh className="h-3.5 w-3.5 mr-1" /> Benchmark all
+      <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={onRunAll} disabled={loading || running.size > 0}>
+        <IconRefresh className="h-2.5 w-2.5 mr-0.5" /> Benchmark all
       </Button>
     </div>
   )

@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconChat, IconModels } from '@/components/icons/NavIcons'
 import { IconChevronRight, IconMessage, LossCurve } from '@sloughgpt/strui'

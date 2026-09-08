@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 export interface UseMessageActionsReturn {
   copied: boolean
@@ -104,7 +105,7 @@ export function useMessageActions(
       setCopied(true)
       onCopy?.(content)
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 2000)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
     }).catch(() => {
       addToast('Failed to copy', 'error')
     })

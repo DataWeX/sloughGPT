@@ -3,8 +3,9 @@
 import { useEffect, useState, useRef } from 'react'
 import { useVoiceChat, VoiceExchange, VoiceSettings } from '@/features/chat/hooks/useVoiceChat'
 import { VoiceWaveform, VoiceOrb, ListeningIndicator, ListeningBars } from '@/features/chat/components/input/VoiceWaveform'
-import { cn } from '@sloughgpt/strui'
-import { IconX, IconRefresh, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
+import { cn, Spinner } from '@sloughgpt/strui'
+import { IconX, IconSettings, IconSpeaker, IconMicFilled } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { VoiceSettingsPanel } from './VoiceSettingsPanel'
 import { VoiceTranscript } from './VoiceTranscript'
 
@@ -134,7 +135,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
             aria-label={isListening ? 'Tap to stop listening' : 'Tap to start listening'}
           >
             {isProcessing ? (
-              <IconRefresh className="h-8 w-8 animate-spin" />
+              <Spinner className="h-8 w-8" />
             ) : isSpeaking ? (
               <IconSpeaker className="h-10 w-10" />
             ) : (
@@ -159,8 +160,8 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
 
         {/* Error message */}
         {errorMessage && (
-          <div className="mt-4 px-4 py-2 rounded-lg bg-destructive/10 text-destructive text-sm max-w-md text-center">
-            {errorMessage}
+          <div className="mt-4 max-w-md w-full">
+            <StatusBanner variant="error" message={errorMessage} dismissible={false} className="text-center" />
           </div>
         )}
 

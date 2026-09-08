@@ -135,6 +135,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
           size="icon-sm"
           className="h-5 w-5"
           onClick={() => setCreating(!creating)}
+          aria-label="Create folder"
         >
           <IconPlus className="h-3 w-3" />
         </Button>
@@ -156,6 +157,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
             className="h-6 w-6"
             onClick={handleCreate}
             disabled={!newName.trim()}
+            aria-label="Confirm create folder"
           >
             <IconCheck className="h-3 w-3" />
           </Button>

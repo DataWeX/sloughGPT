@@ -7,7 +7,7 @@ import { soulsController } from '@/lib/souls-controller'
 import { useApiMonitor } from '@/lib/api-monitor-store'
 import { useErrorStore } from '@/lib/error-store'
 import { useErrorStream } from '@/hooks/useErrorStream'
-import { cn, Button, Tooltip, TooltipTrigger, TooltipContent, IconRefresh, IconX } from '@sloughgpt/strui'
+import { cn, Button, Tooltip, TooltipTrigger, TooltipContent, IconX, Spinner } from '@sloughgpt/strui'
 import { deriveArchetype } from '@/components/souls/PersonalitySummary'
 import { getUnseenCount } from '@/components/WhatsNewDialog'
 import { logger } from '@/lib/dev-log'
@@ -234,7 +234,7 @@ export function StatusBar() {
           {/* Retry & Clear buttons (only when offline/errored) */}
           {isOffline && (
             <Button variant="ghost" size="icon" className="h-5 w-5 p-0 text-destructive/70 hover:text-destructive" onClick={handleRetry} disabled={retrying} aria-label="Retry connection" title="Retry">
-              <IconRefresh className={cn("h-3 w-3", retrying && "animate-spin")} />
+              <Spinner className="h-3 w-3" />
             </Button>
           )}
           {hasFailures && (

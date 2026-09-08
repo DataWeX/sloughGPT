@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { ActionCard, Button, Skeleton, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingJobsController } from '@/lib/training-controller'
 
 const POLL_INTERVAL_MS = 5000
@@ -71,11 +72,12 @@ export const TrainingLogCard = memo(function TrainingLogCard({
       actions={
         <>
           {expanded && trainingRunning && (
-            <span className="text-[10px] text-muted-foreground animate-pulse">live</span>
+            <span className="text-[9px] text-muted-foreground/60 animate-pulse">live</span>
           )}
           <Button
             size="sm"
             variant="ghost"
+            className="h-6 text-[10px]"
             onClick={() => {
               if (!expanded) {
                 void fetchLogsLoading()
@@ -98,19 +100,16 @@ export const TrainingLogCard = memo(function TrainingLogCard({
               <Skeleton className="h-3 w-1/2" />
             </div>
           ) : error ? (
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-destructive">{error}</p>
-              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void fetchLogsLoading()}>Retry</Button>
-            </div>
+            <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchLogsLoading()} />
           ) : lines.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No logs yet.</p>
+            <p className="text-[10px] text-muted-foreground/60">No logs yet.</p>
           ) : (
             <div
               ref={scrollRef}
-              className="max-h-72 overflow-y-auto rounded bg-muted/30 p-3 font-mono text-xs leading-relaxed"
+              className="max-h-64 overflow-y-auto rounded-lg bg-muted/20 p-2.5 font-mono text-[10px] leading-relaxed"
             >
               {lines.length > MAX_VISIBLE_LINES && (
-                <div className="mb-2 text-[10px] text-muted-foreground">
+                <div className="mb-1 text-[9px] text-muted-foreground/60">
                   Showing last {MAX_VISIBLE_LINES} of {lines.length} lines
                 </div>
               )}
@@ -122,7 +121,7 @@ export const TrainingLogCard = memo(function TrainingLogCard({
           <Button
             size="sm"
             variant="ghost"
-            className="mt-2"
+            className="h-6 text-[10px] mt-1"
             onClick={fetchLogsLoading}
             disabled={loading}
           >

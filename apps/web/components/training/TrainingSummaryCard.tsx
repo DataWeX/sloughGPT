@@ -66,15 +66,15 @@ export const TrainingSummaryCard = memo(function TrainingSummaryCard({ checkpoin
   if (loading && stats.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Training summary</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Training summary</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="space-y-1">
-                <div className="h-3 w-16 animate-pulse rounded bg-muted" />
-                <div className="h-5 w-12 animate-pulse rounded bg-muted" />
+              <div key={i} className="rounded-lg bg-muted/20 p-2 space-y-1">
+                <div className="h-2 w-12 animate-pulse rounded bg-muted" />
+                <div className="h-3.5 w-10 animate-pulse rounded bg-muted" />
               </div>
             ))}
           </div>
@@ -87,15 +87,15 @@ export const TrainingSummaryCard = memo(function TrainingSummaryCard({ checkpoin
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Training summary</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs">Training summary</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
           {stats.map(s => (
-            <div key={s.label} className="space-y-0.5">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</p>
-              <p className="text-sm font-mono font-medium">{s.value}</p>
+            <div key={s.label} className="rounded-lg bg-muted/20 px-2.5 py-2">
+              <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</p>
+              <p className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{s.value}</p>
             </div>
           ))}
         </div>

@@ -14,13 +14,14 @@ export default function ShellPage() {
   return (
     <PageContainer title="Shell">
       <Card className="h-[calc(100vh-8rem)]">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="flex items-center justify-between text-[11px] font-medium">
             <span>Dait Shell</span>
-            <div className="flex gap-2">
+            <div className="flex gap-0.5">
               <Button
                 variant={mode === 'backend' ? 'default' : 'ghost'}
                 size="sm"
+                className="h-6 text-[10px]"
                 onClick={() => setMode('backend')}
               >
                 Backend
@@ -28,6 +29,7 @@ export default function ShellPage() {
               <Button
                 variant={mode === 'v86' ? 'default' : 'ghost'}
                 size="sm"
+                className="h-6 text-[10px]"
                 onClick={() => setMode('v86')}
               >
                 Browser VM
@@ -35,7 +37,7 @@ export default function ShellPage() {
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="h-[calc(100%-3rem)]">
+        <CardContent className="h-[calc(100%-3rem)] px-2.5 pb-2.5">
           {mode === 'backend' ? (
             <TerminalPanel className="h-full" />
           ) : (

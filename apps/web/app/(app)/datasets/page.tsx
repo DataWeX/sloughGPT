@@ -200,11 +200,11 @@ export default function DatasetsPage() {
 
   const headerRight = (
     <div className="flex items-center gap-2">
-      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={fetchDatasets} disabled={loading}>
-        <IconRefresh className={loading ? 'animate-spin h-3.5 w-3.5 mr-1' : 'h-3.5 w-3.5 mr-1'} />
+      <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={fetchDatasets} disabled={loading}>
+        <Spinner className="h-3.5 w-3.5 mr-1" />
         Refresh
       </Button>
-      <Button size="sm" className="h-8 text-xs" onClick={() => setImportOpen(true)}>
+      <Button size="sm" className="h-7 text-[11px]" onClick={() => setImportOpen(true)}>
         <IconPlus className="h-3.5 w-3.5 mr-1" />
         Import
       </Button>
@@ -212,15 +212,15 @@ export default function DatasetsPage() {
   )
 
   const toolbar = datasets.length > 0 ? (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-1.5">
       <Input
         placeholder="Search datasets..."
         value={search}
         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-        className="h-9 text-sm max-w-xs"
+        className="h-7 text-[11px] max-w-xs"
       />
       {searching && (
-        <span className="text-xs text-muted-foreground flex items-center gap-1.5" role="status" aria-live="polite">
+        <span className="text-[10px] text-muted-foreground flex items-center gap-1.5" role="status" aria-live="polite">
           <Spinner size="xs" />
           Searching…
         </span>
@@ -233,7 +233,7 @@ export default function DatasetsPage() {
             aria-pressed={sortBy === s}
             aria-label={`Sort by ${s}`}
             onClick={() => setSortBy(s)}
-            className={cn('text-xs px-2 py-1 rounded border transition-colors', sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
+            className={cn('text-[10px] px-2 py-1 rounded border transition-colors', sortBy === s ? 'bg-primary/15 text-primary border-primary/30' : 'border-border/40 text-muted-foreground hover:bg-muted/80')}
           >
             {s}
           </button>
@@ -241,7 +241,7 @@ export default function DatasetsPage() {
       </div>
       {datasets.length > 1 && (
         <div className="flex-1 max-w-xs">
-          <div className="text-xs text-muted-foreground mb-1">Size comparison</div>
+          <div className="text-[10px] text-muted-foreground mb-1">Size comparison</div>
           <div className="flex items-end gap-1 h-8">
             {datasets.slice(0, 8).map(ds => {
               const maxSize = Math.max(...datasets.map(d => d.size || 1))
@@ -270,10 +270,10 @@ export default function DatasetsPage() {
 
         {compareIds.size >= 2 && (
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadCompare}>
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={loadCompare}>
               Compare {compareIds.size} datasets
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => { setCompareIds(new Set()); setCompareData([]) }}>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { setCompareIds(new Set()); setCompareData([]) }}>
               Clear
             </Button>
           </div>
@@ -281,10 +281,10 @@ export default function DatasetsPage() {
 
         {compareData.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Dataset comparison</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Dataset comparison</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-2.5 pb-2.5">
               <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${compareData.length}, 1fr)` }}>
                 {compareData.map(d => (
                   <div key={d.id} className="space-y-2">
@@ -316,9 +316,9 @@ export default function DatasetsPage() {
           <DatasetListSkeleton />
         ) : fetchError && datasets.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center">
+            <CardContent className="px-2.5 pb-2.5 text-center">
               <p className="text-sm text-destructive mb-3">Could not load datasets</p>
-              <Button size="sm" variant="outline" onClick={fetchDatasets}>
+              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={fetchDatasets}>
                 <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
                 Retry
               </Button>
@@ -329,7 +329,7 @@ export default function DatasetsPage() {
             message={datasets.length === 0 ? 'No datasets yet' : 'No datasets match your search'}
             description={datasets.length === 0 ? 'Import a dataset to start training models.' : 'Try a different search term.'}
             icon={<IconPlus className="h-5 w-5" />}
-            action={<Button size="sm" onClick={() => setImportOpen(true)}>Import Dataset</Button>}
+            action={<Button size="sm" className="h-7 text-[11px]" onClick={() => setImportOpen(true)}>Import Dataset</Button>}
           />
         ) : (
           <div className="grid gap-2 max-h-[60vh] overflow-y-auto overscroll-contain">
@@ -339,7 +339,7 @@ export default function DatasetsPage() {
                 className={cn('group transition-colors', expandedId === ds.id ? 'border-primary/40 bg-primary/[0.08]' : 'hover:bg-accent/40')}
                 onClick={() => router.push(`/dataset/${encodeURIComponent(ds.id)}`)}
               >
-                  <CardContent className="flex items-center justify-between py-3 px-4">
+                  <CardContent className="flex items-center justify-between py-2.5 px-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{ds.name}</p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -384,7 +384,7 @@ export default function DatasetsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary"
                         onClick={() => router.push(`/training?dataset=${encodeURIComponent(ds.id)}`)}
                         aria-label={`Train with ${ds.name}`}
                       >
@@ -393,7 +393,7 @@ export default function DatasetsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary"
                         onClick={(e) => handleExport(ds, e)}
                         aria-label={`Export ${ds.name}`}
                       >
@@ -410,7 +410,7 @@ export default function DatasetsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        className="h-6 w-6 text-muted-foreground hover:text-primary"
                         onClick={(e) => handlePreview(ds, e)}
                         aria-label={expandedId === ds.id ? `Hide preview for ${ds.name}` : `Preview ${ds.name}`}
                       >
@@ -419,7 +419,7 @@ export default function DatasetsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive"
                         onClick={() => setPendingDelete(ds)}
                         aria-label={`Delete ${ds.name}`}
                       >
@@ -431,7 +431,7 @@ export default function DatasetsPage() {
                 {expandedId === ds.id && (
                   <div className="mt-1 rounded-lg border border-border/40 bg-muted/20 px-4 py-3 text-sm">
                     {previewLoading ? (
-                      <Skeleton className="h-16 rounded" />
+                      <Skeleton className="h-16 bg-muted/20 rounded-lg" />
                     ) : previewData && previewData.samples.length > 0 ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">

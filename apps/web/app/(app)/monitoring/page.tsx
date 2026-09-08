@@ -6,6 +6,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
 import { trainingController, type TrainingJob } from '@/lib/training-controller'
@@ -326,14 +327,7 @@ export default function SystemHealthPage() {
 
       {/* Error: fetch failed — show message with retry */}
       {!loaded && error && (
-        <Card className="p-6">
-          <CardContent className="p-0 flex flex-col items-center gap-3 text-center">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button size="sm" variant="outline" onClick={() => fetchAll(true)} disabled={refreshing}>
-              {refreshing ? 'Retrying...' : 'Retry'}
-            </Button>
-          </CardContent>
-        </Card>
+        <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => fetchAll(true)} />
       )}
 
       {/* Row 1: Status + Resources + Alerts — essential overview */}

@@ -115,6 +115,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
                     className="h-5 w-5 opacity-0 group-hover:opacity-100"
                     onClick={() => handleDeleteTemplate(template.id)}
                     title="Delete template"
+                    aria-label="Delete template"
                   >
                     <IconX className="h-3 w-3" />
                   </Button>

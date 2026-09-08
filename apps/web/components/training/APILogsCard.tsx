@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, Progress } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingController, type TrainFromSessionsParams } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { logger } from '@/lib/dev-log'
@@ -150,9 +151,9 @@ export function APILogsCard({
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Train from API logs</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {isRunning ? (
-          <div className="space-y-3" aria-live="polite" aria-atomic="true">
+          <div className="space-y-2" aria-live="polite" aria-atomic="true">
             <Progress
               value={progress}
               max={100}
@@ -160,68 +161,67 @@ export function APILogsCard({
               showValue
             />
             {loss != null && (
-              <p className="text-xs text-muted-foreground font-mono">Loss {loss.toFixed(4)}</p>
+              <p className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">Loss {loss.toFixed(4)}</p>
             )}
-            <Button variant="destructive" size="sm" onClick={stop}>
+            <Button variant="destructive" size="sm" className="h-7 text-[11px]" onClick={stop}>
               Stop
             </Button>
           </div>
         ) : phase === 'complete' && result ? (
-          <div className="space-y-3">
-            <p className="text-sm text-success font-medium">Training complete</p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <div className="space-y-2">
+            <p className="text-[11px] text-success font-medium">Training complete</p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground/60">
               {result.final_loss != null && (
                 <>
                   <span>Final loss</span>
-                  <span className="font-mono text-foreground">{result.final_loss.toFixed(4)}</span>
+                  <span className="font-mono text-foreground tabular-nums">{result.final_loss.toFixed(4)}</span>
                 </>
               )}
               {result.num_pairs != null && (
                 <>
                   <span>Training pairs</span>
-                  <span className="font-mono text-foreground">{result.num_pairs}</span>
+                  <span className="font-mono text-foreground tabular-nums">{result.num_pairs}</span>
                 </>
               )}
               {result.perplexity != null && (
                 <>
                   <span>Perplexity</span>
-                  <span className="font-mono text-foreground">{result.perplexity.toFixed(2)}</span>
+                  <span className="font-mono text-foreground tabular-nums">{result.perplexity.toFixed(2)}</span>
                 </>
               )}
             </div>
             {result.samples && result.samples.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-foreground">Samples</p>
+              <div className="space-y-0.5">
+                <p className="text-[10px] font-medium text-foreground">Samples</p>
                 {result.samples.slice(0, 3).map((s, i) => (
-                  <p key={i} className="text-xs text-muted-foreground truncate">
+                  <p key={i} className="text-[10px] text-muted-foreground/60 truncate">
                     {s.prompt} → {s.response}
                   </p>
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={loadForChat} disabled={loadingModel}>
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" className="h-7 text-[11px]" onClick={loadForChat} disabled={loadingModel}>
                 {loadingModel ? 'Loading...' : 'Load for chat'}
               </Button>
-            <Button variant="outline" size="sm" onClick={() => { setPhase('idle'); setError(null) }}>
+              <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => { setPhase('idle'); setError(null) }}>
                 Train another
               </Button>
             </div>
           </div>
         ) : phase === 'error' ? (
-          <div className="space-y-2">
-            <p className="text-sm text-destructive font-medium">Training failed</p>
-            {error && <p className="text-xs text-muted-foreground">{error}</p>}
-            <Button variant="outline" size="sm" onClick={() => setPhase('idle')}>
-              Dismiss
-            </Button>
-          </div>
+          <StatusBanner
+            variant="error"
+            message={error || 'Training failed'}
+            dismissible={false}
+            onDismiss={() => setPhase('idle')}
+          />
         ) : (
-          <div className="space-y-4">
-            <p className="text-xs text-muted-foreground">
+          <div className="space-y-3">
+            <p className="text-[10px] text-muted-foreground/60">
               Train on your chat request/response logs. No dataset needed — uses data from your API sessions.
             </p>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="api-epochs" variant="uppercase">Epochs</Label>
                 <Input
@@ -231,7 +231,7 @@ export function APILogsCard({
                   max={100}
                   value={config.epochs}
                   onChange={setNum('epochs')}
-                  className="h-8 text-xs font-mono"
+                  className="h-7 text-[11px] font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -242,7 +242,7 @@ export function APILogsCard({
                   inputMode="decimal"
                   value={config.lr}
                   onChange={setNum('lr')}
-                  className="h-8 text-xs font-mono"
+                  className="h-7 text-[11px] font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -254,7 +254,7 @@ export function APILogsCard({
                   max={512}
                   value={config.embed}
                   onChange={setNum('embed')}
-                  className="h-8 text-xs font-mono"
+                  className="h-7 text-[11px] font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -266,7 +266,7 @@ export function APILogsCard({
                   max={16}
                   value={config.heads}
                   onChange={setNum('heads')}
-                  className="h-8 text-xs font-mono"
+                  className="h-7 text-[11px] font-mono"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -278,11 +278,11 @@ export function APILogsCard({
                   max={12}
                   value={config.layers}
                   onChange={setNum('layers')}
-                  className="h-8 text-xs font-mono"
+                  className="h-7 text-[11px] font-mono"
                 />
               </div>
             </div>
-            <Button size="sm" onClick={start} disabled={starting}>
+            <Button size="sm" className="h-7 text-[11px]" onClick={start} disabled={starting}>
               {starting ? 'Starting...' : 'Start training'}
             </Button>
           </div>

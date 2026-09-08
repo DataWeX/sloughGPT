@@ -15,7 +15,7 @@ export function AppRouteHeaderLead({
   return (
     <div className="min-w-0">
       {typeof title === 'string' ? <h1 className="sl-h1">{title}</h1> : title}
-      {subtitle != null ? <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div> : null}
+      {subtitle != null ? <div className="mt-0.5 text-[11px] text-muted-foreground/60">{subtitle}</div> : null}
       {children}
     </div>
   )
@@ -45,9 +45,9 @@ export function AppRouteHeader({ left, right, className, sticky = false }: AppRo
         className,
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-2 md:gap-3">{left}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:gap-2">{left}</div>
       {right != null ? (
-        <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1.5">{right}</div>
+        <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1">{right}</div>
       ) : null}
     </header>
   )

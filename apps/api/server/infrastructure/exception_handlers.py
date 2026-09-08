@@ -212,7 +212,7 @@ def register_app_error_handler(app: FastAPI):
 
         app.add_exception_handler(AppError, _app_error_handler)
     except ImportError:
-        pass
+        logger.debug("AppError not available — structured error handler disabled")
 
 
 def register_all_handlers(app: FastAPI):
@@ -262,7 +262,7 @@ def register_all_handlers(app: FastAPI):
 
         app.add_exception_handler(AppError, _app_error_handler)
     except ImportError:
-        pass
+        logger.debug("AppError not available — structured error handling disabled")
 
     # Domain errors (legacy hierarchy — now extends AppError, kept for safety)
     try:
@@ -270,7 +270,7 @@ def register_all_handlers(app: FastAPI):
 
         app.add_exception_handler(SloughGPTDomainError, _domain_error_handler)
     except ImportError:
-        pass
+        logger.debug("SloughGPTDomainError not available — legacy handler skipped")
 
     app.add_exception_handler(ValidationError, _validation_error_handler)
     app.add_exception_handler(RequestValidationError, _request_validation_error_handler)

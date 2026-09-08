@@ -2,7 +2,7 @@
 
 import { useEffect, useState, memo } from 'react'
 import { useLocale } from '@/hooks/useLocale'
-import { cn, IconChat, IconBolt } from '@sloughgpt/strui'
+import { IconChat, IconBolt } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Atom, Waves, Bug, Lightbulb } from 'lucide-react'
 

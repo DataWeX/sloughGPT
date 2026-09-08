@@ -30,8 +30,8 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
 
   const navLinkClass = (active: boolean) =>
     cn(
-      'group relative flex min-h-11 items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-200 ease-smooth',
-      isCollapsed ? 'justify-center px-2' : 'px-3',
+      'group relative flex min-h-10 items-center gap-2.5 rounded-lg py-1.5 text-[11px] transition-colors duration-200 ease-smooth',
+      isCollapsed ? 'justify-center px-2' : 'px-2.5',
       active
         ? 'bg-primary/[0.13] font-medium text-primary dark:bg-primary/[0.11]'
         : 'text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground',
@@ -68,14 +68,14 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
             aria-label={t('sidebar.home')}
             onClick={afterNav}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60 font-mono text-sm font-bold leading-none tracking-tight text-primary-foreground shadow-sm">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60 font-mono text-[11px] font-bold leading-none tracking-tight text-primary-foreground shadow-sm">
               S
             </div>
             {!isCollapsed && (
-              <div className="flex min-w-0 flex-col justify-center gap-0.5 leading-none">
-                <span className="truncate text-sm font-semibold tracking-tight text-foreground">{t('app.name')}</span>
+              <div className="flex min-w-0 flex-col justify-center gap-px leading-none">
+                <span className="truncate text-[11px] font-semibold tracking-tight text-foreground">{t('app.name')}</span>
                 {!isDrawer && (
-                  <span className="text-[0.625rem] uppercase leading-tight tracking-wider text-muted-foreground">
+                  <span className="text-[8px] uppercase leading-tight tracking-wider text-muted-foreground/60">
                     {t('app.console')}
                   </span>
                 )}
@@ -98,7 +98,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                   <div className="my-2 border-t border-border/30 dark:border-border/40" />
                 )}
                 {!isCollapsed && (
-                  <p className="mb-1 mt-3 px-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70 first:mt-1">
+                  <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground/60 first:mt-0.5">
                     {t(section.labelKey)}
                   </p>
                 )}
@@ -136,13 +136,13 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
         </nav>
 
         {!isDrawer && (
-          <div className={cn('shrink-0 border-t border-border/50 px-3 py-3', isCollapsed && 'w-fit')}>
+          <div className={cn('shrink-0 border-t border-border/50 px-2.5 py-2.5', isCollapsed && 'w-fit')}>
             {!isCollapsed && <TrainingIndicator />}
             <ThemeSwitcher />
           </div>
         )}
         {isDrawer && (
-          <div className="shrink-0 border-t border-border/50 px-3 py-3">
+          <div className="shrink-0 border-t border-border/50 px-2.5 py-2.5">
             <TrainingIndicator />
           </div>
         )}

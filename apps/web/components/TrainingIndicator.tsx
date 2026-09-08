@@ -17,7 +17,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
       href="/training"
       prefetch={false}
       className={cn(
-        'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+        'flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] transition-colors',
         'hover:bg-primary/10',
         phase === 'error'
           ? 'text-destructive'
@@ -27,13 +27,13 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
       )}
       title="View training status"
     >
-      <div className="relative flex h-2 w-2 shrink-0">
+      <div className="relative flex h-1.5 w-1.5 shrink-0">
         {trainingRunning && (
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
         )}
         <span
           className={cn(
-            'relative inline-flex h-2 w-2 rounded-full',
+            'relative inline-flex h-1.5 w-1.5 rounded-full',
             phase === 'error'
               ? 'bg-destructive'
               : phase === 'complete'
@@ -43,7 +43,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
         />
       </div>
       <div className="min-w-0 flex-1" role="status" aria-live="polite">
-        <div className="truncate text-xs font-medium">
+        <div className="truncate text-[10px] font-medium">
           {phase === 'error'
             ? 'Training failed'
             : phase === 'complete'
@@ -51,7 +51,7 @@ export const TrainingIndicator = memo(function TrainingIndicator() {
               : `${method === 'turbo' ? 'Turbo' : 'Training'}`}
         </div>
         {trainingRunning && (
-          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-0.5 text-[9px] text-muted-foreground/60 tabular-nums">
             <span>{Math.round(progress ?? 0)}%</span>
             {loss != null && (
               <>

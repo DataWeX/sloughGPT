@@ -19,7 +19,7 @@ export function StatCard({ label, value, icon, trend, className, numeric }: Stat
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
       </div>
       <div className="flex items-baseline gap-1.5">
-        <span className={cn("text-xl font-semibold", numeric && "font-numeric")}>{value}</span>
+        <span className={cn("text-[11px] font-mono font-medium tabular-nums", numeric && "font-numeric")}>{value}</span>
         {trend && (
           <span className={cn("text-[10px]", trend.positive ? "text-green-500" : "text-red-500")}>
             {trend.positive ? '+' : ''}{trend.value}%

@@ -75,21 +75,21 @@ export class ErrorBoundary extends Component<Props, State> {
       const stackFrames = error ? formatStackTrace(error.stack) : []
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-6">
-          <div className="max-w-lg w-full space-y-6">
-            <div className="text-center space-y-3">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 text-destructive mb-2">
-                <IconAlert className="w-8 h-8" />
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <div className="max-w-md w-full space-y-4">
+            <div className="text-center space-y-2">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive mb-1">
+                <IconAlert className="w-6 h-6" />
               </div>
-              <h1 className="text-xl font-semibold flex items-center justify-center gap-2">
+              <h1 className="text-sm font-semibold flex items-center justify-center gap-1.5">
                 Something went wrong
                 {errorType && (
-                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive">
+                  <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-destructive/10 text-destructive">
                     {errorType}
                   </span>
                 )}
               </h1>
-              <p className="text-sm text-muted-foreground max-w-sm mx-auto break-words">
+              <p className="text-[11px] text-muted-foreground/60 max-w-xs mx-auto break-words">
                 {errorMessage}
               </p>
             </div>
@@ -99,7 +99,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <button
                   type="button"
                   onClick={() => this.setState({ showDetails: !this.state.showDetails })}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-[10px] text-muted-foreground/60 hover:text-foreground transition-colors"
                 >
                   {this.state.showDetails ? 'Hide details' : 'Show details'}
                 </button>
@@ -107,8 +107,8 @@ export class ErrorBoundary extends Component<Props, State> {
             )}
 
             {this.state.showDetails && error && (
-              <div className="rounded-md bg-muted p-3 text-xs font-mono max-h-48 overflow-y-auto">
-                <pre className="whitespace-pre-wrap break-all text-muted-foreground">
+              <div className="rounded-md bg-muted p-2 text-[10px] font-mono max-h-40 overflow-y-auto">
+                <pre className="whitespace-pre-wrap break-all text-muted-foreground/60">
                   {stackFrames.length > 0
                     ? stackFrames.map((frame, i) => <div key={i}>{frame}</div>)
                     : error.stack || error.message
@@ -117,11 +117,11 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
 
-            <div className="flex items-center justify-center gap-3">
-              <Button onClick={() => window.location.reload()}>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={() => window.location.reload()} size="sm" className="h-7 text-[11px]">
                 Reload page
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/'}>
+              <Button variant="outline" onClick={() => window.location.href = '/'} size="sm" className="h-7 text-[11px]">
                 Go home
               </Button>
             </div>

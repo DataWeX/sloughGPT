@@ -4,6 +4,7 @@ import { useState, useCallback, memo } from 'react'
 import { Button, IconChat, IconCopy, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface ConversationShareProps {
   messages: ChatMessage[]
@@ -38,7 +39,7 @@ export const ConversationShare = memo(function ConversationShare({
     const content = formatAsMarkdown()
     await navigator.clipboard.writeText(content)
     setCopied('clipboard')
-    setTimeout(() => setCopied(null), 2000)
+    setTimeout(() => setCopied(null), COPY_FEEDBACK_DURATION_MS)
   }, [formatAsMarkdown])
 
   const handleShareLink = useCallback(async () => {
@@ -46,7 +47,7 @@ export const ConversationShare = memo(function ConversationShare({
       const url = `${window.location.origin}/chat?session=${sessionId}`
       await navigator.clipboard.writeText(url)
       setCopied('link')
-      setTimeout(() => setCopied(null), 2000)
+      setTimeout(() => setCopied(null), COPY_FEEDBACK_DURATION_MS)
     }
   }, [sessionId])
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, memo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingJobsController, type TrainingPair, type TrainingDataStats } from '@/lib/training-controller'
 
 interface Props {
@@ -107,10 +108,7 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
         {loading && !stats ? (
           <p className="text-xs text-muted-foreground">Loading...</p>
         ) : error ? (
-          <div className="text-center py-4">
-            <p className="text-xs text-destructive mb-2">{error}</p>
-            <Button size="sm" variant="ghost" onClick={() => void fetchData()} aria-label="Retry loading training data">Retry</Button>
-          </div>
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchData()} />
         ) : stats ? (
           <div className="grid grid-cols-4 gap-2">
             <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">

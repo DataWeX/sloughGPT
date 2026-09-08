@@ -8,6 +8,7 @@ import {
   Textarea, Skeleton, cn,
 } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { TerminalPanel } from '@/components/shell/TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { filesController, type FileEntry } from '@/lib/files-controller'
@@ -198,7 +199,7 @@ function VoiceTab() {
                   Model: {status.model ?? 'none'}
                 </p>
                 {status.error && (
-                  <p className="text-xs text-red-500">{status.error}</p>
+                  <StatusBanner variant="error" message={status.error} dismissible={false} />
                 )}
               </div>
             ) : (
@@ -228,7 +229,7 @@ function VoiceTab() {
               {generating ? 'Generating...' : 'Speak'}
             </Button>
             {ttsError && (
-              <p className="text-xs text-red-500">{ttsError}</p>
+              <StatusBanner variant="error" message={ttsError} dismissible={false} />
             )}
             {lastResult && (
               <p className="text-xs text-muted-foreground">

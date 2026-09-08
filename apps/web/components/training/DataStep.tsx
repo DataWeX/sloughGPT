@@ -211,8 +211,8 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base">1. Pick your data</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-xs text-muted-foreground">
+      <CardContent className="space-y-3">
+        <p className="text-[10px] text-muted-foreground/60">
           Choose a dataset or paste text to train on. Conversation-format data (JSONL) trains better than plain text.
         </p>
 
@@ -345,27 +345,27 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
         </div>
 
         {datasets.datasetPreview && datasets.datasetPreview.samples.length > 0 && (
-          <div className="rounded-md border border-border/40 bg-muted/30 p-3 text-xs">
-            <div className="font-medium text-muted-foreground mb-2">Preview</div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+          <div className="rounded-lg border border-border/40 bg-muted/20 p-2.5 text-[10px]">
+            <div className="font-medium text-muted-foreground/60 mb-1.5">Preview</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mb-1.5">
               <div>
                 <span className="text-muted-foreground/60">Samples: </span>
-                <span className="font-numeric">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>
+                <span className="font-numeric tabular-nums">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>
               </div>
               <div>
                 <span className="text-muted-foreground/60">Characters: </span>
-                <span className="font-numeric">{(datasets.datasetPreview.total_chars ?? 0).toLocaleString()}</span>
+                <span className="font-numeric tabular-nums">{(datasets.datasetPreview.total_chars ?? 0).toLocaleString()}</span>
               </div>
               <div>
                 <span className="text-muted-foreground/60">Avg: </span>
-                <span className="font-numeric">
+                <span className="font-numeric tabular-nums">
                   {(datasets.datasetPreview.total_samples ?? 0) > 0
                     ? Math.round((datasets.datasetPreview.total_chars ?? 0) / (datasets.datasetPreview.total_samples ?? 1)).toLocaleString()
                     : 0} chars
                 </span>
               </div>
             </div>
-            <div className="space-y-1 font-numeric text-muted-foreground border-t border-border/30 pt-2">
+            <div className="space-y-0.5 font-numeric text-muted-foreground/60 border-t border-border/30 pt-1.5">
               {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
                 <div key={i} className="truncate">{sample.content}</div>
               ))}
@@ -373,12 +373,12 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
           </div>
         )}
 
-        <div className="flex items-center gap-2 pt-2">
-          <Button size="sm" onClick={onNext} disabled={!canAdvance}>
+        <div className="flex items-center gap-1.5 pt-1">
+          <Button size="sm" className="h-7 text-[11px]" onClick={onNext} disabled={!canAdvance}>
             Next: Configure
           </Button>
           {!datasets.selectedDataset && (
-            <span className="text-[11px] text-muted-foreground">Select a dataset or switch to paste text in the next step</span>
+            <span className="text-[10px] text-muted-foreground/60">Select a dataset or switch to paste text in the next step</span>
           )}
         </div>
       </CardContent>

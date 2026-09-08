@@ -192,7 +192,7 @@ def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
         if registry_health.get("healthy") and registry_health.get("default_model"):
             return True, registry_health["default_model"], registry_health
     except ImportError:
-        pass
+        logger.debug("ModelRegistry not available for health check")
 
     # Fallback: check models controller
     try:
@@ -203,7 +203,7 @@ def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
         if current:
             return True, current.get("model_id"), registry_health
     except ImportError:
-        pass
+        logger.debug("Models controller not available for health check")
 
     # Fallback: check server_state (used by autoload in lifespan)
     try:
@@ -214,7 +214,7 @@ def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
         if server_state.provider is not None:
             return True, server_state.model_type, registry_health
     except ImportError:
-        pass
+        logger.debug("Server state not available for health check")
 
     return False, None, registry_health
 
@@ -238,7 +238,7 @@ def _get_model_device() -> str | None:
         if current and current.get("device"):
             return current["device"]
     except ImportError:
-        pass
+        logger.debug("Models controller not available for device detection")
     try:
         from domains.infrastructure.model_registry import get_model_registry
 

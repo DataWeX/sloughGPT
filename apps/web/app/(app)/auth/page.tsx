@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
 import { authController, type UserInfo } from '@/lib/auth-controller'
@@ -146,7 +146,7 @@ export default function AuthPage() {
                 placeholder="Password"
                 required
               />
-              {error && <div className="text-xs text-destructive">{error}</div>}
+              {error && <StatusBanner variant="error" message={error} dismissible={false} />}
               <div className="flex items-center gap-3">
                 <Button size="sm" type="submit" disabled={loading}>
                   {loading ? 'Processing...' : mode === 'login' ? 'Login' : 'Register'}

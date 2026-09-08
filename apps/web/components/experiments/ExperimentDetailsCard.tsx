@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { experimentsController } from '@/lib/experiments-controller'
 
 interface ExperimentDetailsCardProps {
@@ -65,8 +66,7 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
       <Card data-testid="experiment-details">
         <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">{error}</p>
-          <Button variant="outline" size="sm" className="mt-2" onClick={fetchData}>Retry</Button>
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={fetchData} />
         </CardContent>
       </Card>
     )

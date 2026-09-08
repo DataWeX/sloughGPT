@@ -174,13 +174,13 @@ export default function SecurityPage() {
     return (
       <PageContainer title="Security" subtitle="Audit logs & API keys" loadingCards={4}>
         <KpiGrid>
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
-          <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent><div className="h-24 animate-pulse bg-muted/50 rounded-lg" /></CardContent></Card>
+        <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded-lg" /></CardContent></Card>
       </PageContainer>
     )
   }
@@ -201,49 +201,49 @@ export default function SecurityPage() {
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">API Keys</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">API Keys</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
+        <CardContent className="space-y-2.5">
+          <div className="flex gap-1.5">
             <Input
               value={newKeyName}
               onChange={e => setNewKeyName(e.target.value)}
               placeholder="Key name (e.g. 'ci-pipeline')"
-              className="flex-1"
+              className="flex-1 h-6 text-[10px]"
             />
-            <Button size="sm" onClick={createKey} disabled={creating || !newKeyName.trim()}>
+            <Button size="sm" className="h-6 text-[10px]" onClick={createKey} disabled={creating || !newKeyName.trim()}>
               {creating ? 'Creating...' : 'Create Key'}
             </Button>
           </div>
 
           {newKeyValue && (
-            <div className="rounded-md bg-success/10 border border-success/30 p-3">
-              <div className="text-sm font-medium text-success mb-1">New API Key (copy now)</div>
-              <code className="text-xs break-all">{newKeyValue}</code>
-              <Button size="sm" variant="ghost" className="mt-2" onClick={() => setNewKeyValue(null)}>Dismiss</Button>
+            <div className="rounded-lg bg-success/10 border border-success/30 px-2 py-1.5">
+              <div className="text-[11px] font-medium text-success mb-0.5">New API Key (copy now)</div>
+              <code className="text-[10px] break-all">{newKeyValue}</code>
+              <Button size="sm" variant="ghost" className="h-5 text-[10px] mt-1" onClick={() => setNewKeyValue(null)}>Dismiss</Button>
             </div>
           )}
 
           {activeKeys.length === 0 && revokedKeys.length === 0 ? (
-            <div className="text-center py-4 text-sm text-muted-foreground">No API keys yet. Create one above.</div>
+            <div className="text-center py-3 text-[10px] text-muted-foreground/60">No API keys yet. Create one above.</div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {activeKeys.map(k => (
-                <div key={k.id} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
-                  <div>
-                    <span className="font-medium text-sm">{k.name}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{k.key_hash}</span>
-                    <span className="text-xs text-muted-foreground ml-2">scopes: {k.scopes.join(', ')}</span>
+                <div key={k.id} className="flex items-center justify-between rounded-lg border border-border/40 px-2 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-[11px]">{k.name}</span>
+                    <span className="text-[9px] text-muted-foreground/60 ml-1.5">{k.key_hash}</span>
+                    <span className="text-[9px] text-muted-foreground/60 ml-1.5">scopes: {k.scopes.join(', ')}</span>
                   </div>
-                  <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => rotateKey(k.id)}>Rotate</Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => revokeKey(k.id)}>Revoke</Button>
+                  <div className="flex gap-0.5">
+                    <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => rotateKey(k.id)}>Rotate</Button>
+                    <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5 text-destructive" onClick={() => revokeKey(k.id)}>Revoke</Button>
                   </div>
                 </div>
               ))}
               {revokedKeys.length > 0 && (
-                <div className="text-xs text-muted-foreground mt-2">{revokedKeys.length} revoked key(s) hidden</div>
+                <div className="text-[9px] text-muted-foreground/50 mt-1">{revokedKeys.length} revoked key(s) hidden</div>
               )}
             </div>
           )}
@@ -251,12 +251,13 @@ export default function SecurityPage() {
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Audit Logs</CardTitle>
-          <div className="flex items-center gap-1">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-xs">Audit Logs</CardTitle>
+          <div className="flex items-center gap-0.5">
             <Button
               size="sm"
               variant={historyMode ? 'default' : 'ghost'}
+              className="h-6 text-[10px]"
               onClick={toggleHistory}
             >
               {historyMode ? 'Persisted' : 'Session'}
@@ -264,6 +265,7 @@ export default function SecurityPage() {
             <Button
               size="sm"
               variant="ghost"
+              className="h-6 text-[10px]"
               onClick={loadOlder}
               disabled={loadingMore || !historyMode}
             >
@@ -273,37 +275,38 @@ export default function SecurityPage() {
                 'Load older'
               )}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => fetchData(historyMode)} aria-label="Refresh audit logs">
-              <IconRefresh className="h-4 w-4" />
+            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => fetchData(historyMode)} aria-label="Refresh audit logs">
+              <IconRefresh className="h-3 w-3" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2">
           <Input
             value={filter}
             onChange={e => setFilter(e.target.value)}
             placeholder="Filter by event type..."
+            className="h-6 text-[10px]"
           />
           {filteredLogs.length === 0 ? (
-            <div className="text-center py-6 text-sm text-muted-foreground space-y-1">
+            <div className="text-center py-4 text-[10px] text-muted-foreground/60 space-y-1">
               <div>No audit logs found.</div>
-              <div className="text-xs text-muted-foreground/70">Activities are logged automatically as you use the app.</div>
+              <div className="text-[9px] text-muted-foreground/50">Activities are logged automatically as you use the app.</div>
             </div>
           ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
+            <div className="space-y-1 max-h-80 overflow-y-auto">
               {filteredLogs.map((log, i) => (
-                <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                <div key={i} className="rounded-lg border border-border/40 px-2 py-1.5 text-[10px]">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">{log.event_type}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[9px] text-muted-foreground/60 tabular-nums">
                       {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
                     </span>
                   </div>
-                  {log.resource && <div className="text-xs text-muted-foreground mt-0.5">Resource: {log.resource}</div>}
-                  {log.user && <div className="text-xs text-muted-foreground mt-0.5">User: {log.user}</div>}
-                  {log.detail && <div className="text-xs text-muted-foreground mt-0.5">{log.detail}</div>}
+                  {log.resource && <div className="text-[9px] text-muted-foreground/60 mt-0.5">Resource: {log.resource}</div>}
+                  {log.user && <div className="text-[9px] text-muted-foreground/60 mt-0.5">User: {log.user}</div>}
+                  {log.detail && <div className="text-[9px] text-muted-foreground/60 mt-0.5">{log.detail}</div>}
                   {log.extra && Object.keys(log.extra).length > 0 && (
-                    <div className="text-xs text-muted-foreground mt-0.5 font-mono">
+                    <div className="text-[9px] text-muted-foreground/60 mt-0.5 font-mono">
                       {JSON.stringify(log.extra).slice(0, 120)}
                     </div>
                   )}

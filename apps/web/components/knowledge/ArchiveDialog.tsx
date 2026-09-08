@@ -5,7 +5,7 @@ import { cn, Button, Skeleton, EmptyCard } from '@sloughgpt/strui'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@sloughgpt/strui'
-import { IconFolder, IconDownload, IconRefresh, IconChevronDown } from '@sloughgpt/strui'
+import { IconFolder, IconDownload, IconChevronDown, Spinner } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { memoryController, type MemoryArchiveStats, type MemoryArchiveRecord } from '@/lib/memory-controller'
 import { todayDateString } from '@/lib/format-bytes'
@@ -134,7 +134,7 @@ export function ArchiveDialog({ open, onOpenChange, archiveStats }: ArchiveDialo
               {exporting ? 'Exporting…' : 'Export'}
             </Button>
             <Button size="sm" variant="outline" className="h-8 text-xs" onClick={loadArchive} disabled={loading}>
-              <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
+              <Spinner className="h-3 w-3 mr-1" />
               Refresh
             </Button>
           </div>

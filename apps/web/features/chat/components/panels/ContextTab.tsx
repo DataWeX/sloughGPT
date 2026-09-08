@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { cn } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Spinner } from '@sloughgpt/strui'
 import { chatController, type ContextInspector } from '@/lib/chat-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { feedbackController } from '@/lib/feedback-controller'
@@ -104,7 +103,7 @@ export function ContextTab() {
           className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
           aria-label="Refresh context"
         >
-          <IconRefresh className={cn('h-3 w-3', loading && 'animate-spin')} />
+          <Spinner className="h-3 w-3" />
         </button>
       </div>
 

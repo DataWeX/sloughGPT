@@ -45,36 +45,36 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
       <CardHeader className="pb-3">
         <CardTitle className="text-base">4. Results</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {checkpoints.checkpoints.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-4 text-center">
+          <div className="text-[11px] text-muted-foreground/60 py-4 text-center">
             No checkpoints yet. Run a training job to see results here.
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">
+          <div className="space-y-2">
+            <div className="text-[10px] text-muted-foreground/60">
               {checkpoints.checkpoints.length} checkpoint(s) saved
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {checkpoints.checkpoints.slice(0, 10).map(cp => (
-                <div key={cp.name} className="flex items-center justify-between rounded-md border border-border/40 bg-muted/20 px-3 py-2">
+                <div key={cp.name} className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/20 px-2.5 py-2">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="text-xs font-medium truncate">{cp.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="text-[11px] font-medium truncate">{cp.name}</div>
                       {cp.source === 'turbo' && <Badge variant="warning" size="sm">Turbo</Badge>}
                        {cp.name === bestName && <Badge variant="outline" size="sm" className="text-primary border-primary/30">Best</Badge>}
                     </div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-[9px] text-muted-foreground/60 tabular-nums">
                       {cp.loss != null && <span>Loss: {cp.loss.toFixed(4)}</span>}
                       {cp.avg_quality != null && <span className="ml-2">Quality: {cp.avg_quality.toFixed(1)}/5</span>}
                       {cp.tags && cp.tags.length > 0 && <span className="ml-2">Tags: {cp.tags.join(', ')}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button size="sm" variant="ghost" onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}>
                       Load
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}>
                       Delete
                     </Button>
                   </div>
@@ -85,25 +85,25 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
         )}
 
         <div>
-          <div className="text-xs text-muted-foreground mb-2">Recent training jobs</div>
+          <div className="text-[10px] text-muted-foreground/60 mb-1.5">Recent training jobs</div>
           {checkpoints.jobs.length === 0 ? (
-            <div className="text-xs text-muted-foreground/70 py-3 text-center">
+            <div className="text-[10px] text-muted-foreground/40 py-3 text-center">
               No jobs yet. Start a training job to see activity here.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {checkpoints.jobs.slice(0, 8).map(job => {
                 const style = jobStatusStyle(job.status)
                 const line = formatJobLine(job)
                 return (
-                  <div key={job.id} className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
+                  <div key={job.id} className="flex items-center justify-between rounded-lg border border-border/40 px-2.5 py-2">
                     <div className="min-w-0">
-                      <div className="text-xs font-medium truncate">{job.name}</div>
-                      {line && <div className="text-[10px] text-muted-foreground truncate">{line}</div>}
+                      <div className="text-[11px] font-medium truncate">{job.name}</div>
+                      {line && <div className="text-[9px] text-muted-foreground/60 truncate">{line}</div>}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {job.progress > 0 && job.progress < 100 && (
-                        <span className="text-[10px] text-muted-foreground tabular-nums">{Math.round(job.progress)}%</span>
+                        <span className="text-[9px] text-muted-foreground/60 tabular-nums">{Math.round(job.progress)}%</span>
                       )}
                       <Badge size="sm" variant={style.variant}>{style.label}</Badge>
                     </div>
@@ -114,11 +114,11 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
           )}
         </div>
 
-        <div className="flex items-center gap-2 pt-2">
+        <div className="flex items-center gap-1.5 pt-1">
           {checkpoints.checkpoints.length > 0 && (
-            <Button size="sm" variant="outline" onClick={onTest}>Test model</Button>
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={onTest}>Test model</Button>
           )}
-          <Button size="sm" variant="ghost" onClick={goToTrain}>Train more</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={goToTrain}>Train more</Button>
         </div>
       </CardContent>
     </Card>

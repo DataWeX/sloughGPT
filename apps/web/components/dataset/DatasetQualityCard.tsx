@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Spinner } from '@sloughgpt/strui'
 import { datasetController, type DatasetPreview } from '@/lib/dataset-controller'
 
 interface DatasetQualityCardProps {
@@ -118,8 +118,8 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({ datasetId }
               <Badge label="Poor" variant="error" size="sm" />
             )}
           </div>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={fetchPreview} disabled={loading} aria-label="Refresh preview">
-            <IconRefresh className={loading ? 'animate-spin h-3 w-3' : 'h-3 w-3'} />
+          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={fetchPreview} disabled={loading} aria-label="Refresh preview">
+            <Spinner className="h-3 w-3" />
           </Button>
         </div>
       </CardHeader>
@@ -131,42 +131,42 @@ export const DatasetQualityCard = memo(function DatasetQualityCard({ datasetId }
             <StatCard label="Median chars" value={metrics.medianLineLength} />
           </KpiGrid>
 
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {metrics.emptyLines > 0 && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">Empty lines</span>
-                <span className="font-mono">{metrics.emptyLines} ({(metrics.emptyRatio * 100).toFixed(1)}%)</span>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground/60">Empty lines</span>
+                <span className="font-mono tabular-nums">{metrics.emptyLines} ({(metrics.emptyRatio * 100).toFixed(1)}%)</span>
               </div>
             )}
             {metrics.duplicateLines > 0 && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">Duplicates</span>
-                <span className="font-mono">{metrics.duplicateLines} ({(metrics.duplicateRatio * 100).toFixed(1)}%)</span>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground/60">Duplicates</span>
+                <span className="font-mono tabular-nums">{metrics.duplicateLines} ({(metrics.duplicateRatio * 100).toFixed(1)}%)</span>
               </div>
             )}
             {metrics.shortLines > 0 && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">Short lines (&lt;10 chars)</span>
-                <span className="font-mono">{metrics.shortLines}</span>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground/60">Short lines (&lt;10 chars)</span>
+                <span className="font-mono tabular-nums">{metrics.shortLines}</span>
               </div>
             )}
             {metrics.longLines > 0 && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">Long lines (&gt;1K chars)</span>
-                <span className="font-mono">{metrics.longLines}</span>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground/60">Long lines (&gt;1K chars)</span>
+                <span className="font-mono tabular-nums">{metrics.longLines}</span>
               </div>
             )}
             {metrics.nonAsciiLines > 0 && (
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-muted-foreground">Non-ASCII</span>
-                <span className="font-mono">{metrics.nonAsciiLines}</span>
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground/60">Non-ASCII</span>
+                <span className="font-mono tabular-nums">{metrics.nonAsciiLines}</span>
               </div>
             )}
           </div>
 
           {issues.length > 0 && (
             <div className="pt-2 border-t border-border/40">
-              <p className="text-[10px] text-muted-foreground mb-1">Issues</p>
+              <p className="text-[10px] text-muted-foreground/60 mb-1">Issues</p>
               <div className="flex flex-wrap gap-1">
                 {issues.map((issue, i) => (
                    <Badge key={i} label={issue} variant="outline" size="sm" />

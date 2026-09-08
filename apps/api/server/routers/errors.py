@@ -351,7 +351,7 @@ class ErrorsRouter:
                     if key in buckets:
                         buckets[key] += 1
                 except (ValueError, TypeError):
-                    pass
+                    logger.debug("Skipping unparseable timestamp in error trends: %s", ts)
 
             try:
                 db = _get_error_db()
@@ -367,7 +367,7 @@ class ErrorsRouter:
                         if key in buckets:
                             buckets[key] += 1
                     except (ValueError, TypeError):
-                        pass
+                        logger.debug("Skipping unparseable timestamp in mogdb trends: %s", ts)
             except Exception as e:
                 logger.warning("failed to read trends from mogdb: %s", e)
 

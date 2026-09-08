@@ -147,7 +147,7 @@ def _check_memory_pressure() -> str | None:
                 _memory_pressure_cache_ts = now
             return result
     except ImportError:
-        pass
+        logger.debug("Memory pressure module not available")
     except Exception as exc:
         logger.warning("Memory pressure check failed: %s", exc)
     with _memory_pressure_lock:

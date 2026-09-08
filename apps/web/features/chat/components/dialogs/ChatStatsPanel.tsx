@@ -1,7 +1,6 @@
 'use client'
 
 import { memo, useMemo } from 'react'
-import { cn } from '@sloughgpt/strui'
 import { IconX, IconChart } from '@sloughgpt/strui'
 import type { ChatMessage } from '../types'
 

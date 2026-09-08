@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { cn, Button, IconX } from '@sloughgpt/strui'
+import { Button, IconX } from '@sloughgpt/strui'
 import type { Note } from './types'
 
 interface NoteEditorProps {

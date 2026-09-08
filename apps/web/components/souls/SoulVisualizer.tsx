@@ -4,28 +4,20 @@ import { useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import TraitRadarChart from './TraitRadarChart'
 import PersonalitySummary from './PersonalitySummary'
+import { SOUL_GROUP_COLORS, SOUL_GROUP_LABELS, SOUL_GROUP_KEYS } from './soul-constants'
 
 interface SoulVisualizerProps {
   traitWeights: Record<string, Record<string, number>>
   currentSoulName: string | null
 }
 
-const GROUP_COLORS: Record<string, string> = {
-  personality: 'rgb(var(--primary))',
-  cognition: 'rgb(var(--chart-4))',
-  emotion: 'rgb(var(--destructive))',
-}
-
-const GROUP_LABELS: Record<string, string> = {
-  personality: 'Personality',
-  cognition: 'Cognition',
-  emotion: 'Emotion',
-}
+const GROUP_COLORS = SOUL_GROUP_COLORS
+const GROUP_LABELS = SOUL_GROUP_LABELS
 
 export default function SoulVisualizer({ traitWeights, currentSoulName }: SoulVisualizerProps) {
   const [view, setView] = useState<'summary' | 'chart'>('summary')
 
-  const groups = ['personality', 'cognition', 'emotion'] as const
+  const groups = SOUL_GROUP_KEYS
 
   if (!traitWeights || Object.keys(traitWeights).length === 0) return null
 

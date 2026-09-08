@@ -52,7 +52,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
-    const handler = () => setShowShortcuts(true)
+    const handler = () => setShowShortcuts(v => !v)
     window.addEventListener('toggle-shortcuts', handler)
     return () => window.removeEventListener('toggle-shortcuts', handler)
   }, [])
@@ -70,7 +70,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   }, [toggleConv])
 
   useEffect(() => {
-    const handler = () => setShowWhatsNew(true)
+    const handler = () => setShowWhatsNew(v => !v)
     window.addEventListener('toggle-whatsnew', handler)
     return () => window.removeEventListener('toggle-whatsnew', handler)
   }, [])
@@ -138,7 +138,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
         </Button>
         <Link
           href="/"
-          className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
+          className="min-w-0 truncate text-[11px] font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
         >
           sloughGPT
         </Link>

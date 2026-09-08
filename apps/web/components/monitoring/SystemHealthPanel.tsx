@@ -24,7 +24,7 @@ interface SystemHealthPanelProps {
 function StatusDot({ active, className }: { active: boolean; className?: string }) {
   return (
     <span className={cn(
-      'inline-block h-2 w-2 rounded-full shrink-0',
+      'inline-block h-1.5 w-1.5 rounded-full shrink-0',
       active ? 'bg-success animate-pulse' : 'bg-muted-foreground/40',
       className
     )} />
@@ -34,12 +34,12 @@ function StatusDot({ active, className }: { active: boolean; className?: string 
 function ResourceBar({ value, threshold = 80, label }: { value: number; threshold?: number; label: string }) {
   const color = value > 90 ? 'bg-destructive' : value > threshold ? 'bg-warning' : 'bg-success'
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">{label}</span>
-        <span className="text-[11px] font-mono font-medium tabular-nums">{value.toFixed(1)}%</span>
+        <span className="text-[10px] text-muted-foreground/60">{label}</span>
+        <span className="text-[10px] font-mono tabular-nums">{value.toFixed(1)}%</span>
       </div>
-      <div className="relative h-1.5 bg-muted rounded-full overflow-hidden">
+      <div className="relative h-1 bg-muted rounded-full overflow-hidden">
         <div
           className={cn('absolute inset-y-0 left-0 rounded-full transition-all duration-500', color)}
           style={{ width: `${Math.min(100, value)}%` }}
@@ -74,14 +74,14 @@ function HealthRing({ score, status }: { score: number; status: string }) {
   const offset = c - (score / 100) * c
   const color = score >= 80 ? 'rgb(var(--success, 34 197 94))' : score >= 50 ? 'rgb(var(--warning, 234 179 8))' : 'rgb(var(--destructive, 239 68 68))'
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 72, height: 72 }}>
+    <div className="relative flex items-center justify-center" style={{ width: 64, height: 64 }}>
       <svg viewBox="0 0 72 72" className="absolute inset-0 -rotate-90">
         <circle cx="36" cy="36" r={r} fill="none" stroke="rgb(var(--border))" strokeWidth="4" />
         <circle cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="4" strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round" className="transition-all duration-700" />
       </svg>
       <div className="text-center z-10">
-        <div className="text-sm font-mono font-semibold tabular-nums leading-none">{score}</div>
-        <div className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">{status}</div>
+        <div className="text-[11px] font-mono font-semibold tabular-nums leading-none">{score}</div>
+        <div className="text-[8px] text-muted-foreground/60 uppercase tracking-wider mt-0.5">{status}</div>
       </div>
     </div>
   )
@@ -89,9 +89,9 @@ function HealthRing({ score, status }: { score: number; status: string }) {
 
 function KVPair({ label, value, mono = true, muted = false }: { label: string; value: React.ReactNode; mono?: boolean; muted?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-2 py-0.5">
-      <span className="text-[11px] text-muted-foreground truncate">{label}</span>
-      <span className={cn('text-[11px] text-right truncate', mono && 'font-mono', muted && 'text-muted-foreground')}>{value}</span>
+    <div className="flex items-center justify-between gap-1.5 py-px">
+      <span className="text-[10px] text-muted-foreground/60 truncate">{label}</span>
+      <span className={cn('text-[10px] text-right truncate', mono && 'font-mono', muted && 'text-muted-foreground/60')}>{value}</span>
     </div>
   )
 }
@@ -102,18 +102,18 @@ function ExpandableStrip({ title, count, children }: { title: string; count?: nu
     <div className="border-t border-border/50">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center justify-between px-3 py-1 text-[9px] font-medium text-muted-foreground/60 uppercase tracking-wider hover:bg-muted/20 transition-colors"
         aria-expanded={open}
       >
         <span>{title}</span>
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-1.5">
           {count != null && count > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-muted text-[9px] font-mono tabular-nums">{count}</span>
+            <span className="px-1 py-0.5 rounded-full bg-muted text-[8px] font-mono tabular-nums">{count}</span>
           )}
           <span className={cn('transition-transform duration-200', open && 'rotate-180')}>&#9660;</span>
         </span>
       </button>
-      {open && <div className="px-4 pb-2">{children}</div>}
+      {open && <div className="px-3 pb-1.5">{children}</div>}
     </div>
   )
 }
@@ -125,10 +125,10 @@ function LifecycleBadge({ lifecycle }: { lifecycle: DetailedHealth['lifecycle'] 
     lifecycle.phase === 'starting' ? 'bg-primary/10 text-primary' :
     'bg-muted text-muted-foreground'
   return (
-    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium', phaseColor)}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', lifecycle.is_running ? 'bg-success' : 'bg-muted-foreground/50')} />
+    <span className={cn('inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] font-medium', phaseColor)}>
+      <span className={cn('h-1 w-1 rounded-full', lifecycle.is_running ? 'bg-success' : 'bg-muted-foreground/50')} />
       {lifecycle.phase}
-      {lifecycle.profile && lifecycle.profile !== 'unknown' && <span className="text-[9px] opacity-60">/ {lifecycle.profile}</span>}
+      {lifecycle.profile && lifecycle.profile !== 'unknown' && <span className="text-[8px] opacity-60">/ {lifecycle.profile}</span>}
     </span>
   )
 }
@@ -136,9 +136,9 @@ function LifecycleBadge({ lifecycle }: { lifecycle: DetailedHealth['lifecycle'] 
 function ProcessGuardBadge({ pg }: { pg: DetailedHealth['process_guard'] }) {
   if (!pg) return null
   return (
-    <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
+    <span className={cn('inline-flex items-center gap-1 px-1 py-0.5 rounded-full text-[9px] font-medium',
       pg.active ? 'bg-success/10 text-success' : pg.enabled ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground')}>
-      <span className={cn('h-1.5 w-1.5 rounded-full', pg.active ? 'bg-success' : 'bg-muted-foreground/50')} />
+      <span className={cn('h-1 w-1 rounded-full', pg.active ? 'bg-success' : 'bg-muted-foreground/50')} />
       guard {pg.active ? 'active' : pg.enabled ? 'armed' : 'off'}
     </span>
   )
@@ -192,12 +192,12 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
   if (!loaded) {
     return (
-      <Card className="p-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <Card className="p-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="space-y-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-5 w-20" />
+            <div key={i} className="space-y-1.5">
+              <Skeleton className="h-2.5 w-14" />
+              <Skeleton className="h-4 w-16" />
             </div>
           ))}
         </div>
@@ -208,49 +208,49 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
   return (
     <Card className="p-0 overflow-hidden" role="region" aria-label="System health dashboard">
       {/* Top bar: Health score + connection + uptime + badges */}
-      <div className="flex items-center gap-4 px-4 py-3 border-b border-border/50">
+      <div className="flex items-center gap-3 px-3 py-2.5 border-b border-border/50">
         <HealthRing score={healthScore} status={healthStatus} />
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <StatusDot active={connectionStatus === 'connected'} />
-            <span className={cn('text-xs font-medium', connColor)}>{connLabel}</span>
+            <span className={cn('text-[10px] font-medium', connColor)}>{connLabel}</span>
             {h?.is_inferencing && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-primary/10 text-primary text-[8px] font-medium">
+                <span className="inline-block h-1 w-1 rounded-full bg-primary animate-pulse" />
                 inferencing
               </span>
             )}
             <LifecycleBadge lifecycle={lifecycle} />
             <ProcessGuardBadge pg={processGuard} />
             {idleManager?.enabled && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground text-[10px] font-medium">
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-muted/50 text-muted-foreground text-[8px] font-medium">
                 idle {idleManager.idle_seconds != null ? `${Math.round(idleManager.idle_seconds)}s` : ''}
               </span>
             )}
             {lifecycle?.error && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium" title={lifecycle.error}>
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-destructive/10 text-destructive text-[8px] font-medium" title={lifecycle.error}>
                 lifecycle error
               </span>
             )}
           </div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-[10px] text-muted-foreground/60">
             Uptime <span className="font-mono tabular-nums">{formatUptime(h?.uptime_seconds ?? detailed?.uptime_seconds ?? 0)}</span>
             {detailed?.timestamp && (
-              <span className="ml-2 text-[10px] opacity-60">snapshot {timeAgo(new Date(detailed.timestamp).getTime() / 1000)}</span>
+              <span className="ml-1.5 text-[9px] text-muted-foreground/40">snapshot {timeAgo(new Date(detailed.timestamp).getTime() / 1000)}</span>
             )}
           </div>
-          {h?.health_summary && <p className="text-[11px] text-muted-foreground/70 line-clamp-1">{h.health_summary}</p>}
+          {h?.health_summary && <p className="text-[9px] text-muted-foreground/50 line-clamp-1">{h.health_summary}</p>}
         </div>
         {/* Mini sparklines */}
         {cpuHistory.length > 1 && (
-          <div className="hidden md:flex items-center gap-3 shrink-0">
+          <div className="hidden md:flex items-center gap-2 shrink-0">
             <div className="text-right">
-              <div className="text-[10px] text-muted-foreground">CPU</div>
-              <MiniSparkline data={cpuHistory} className="w-20 h-5" />
+              <div className="text-[8px] text-muted-foreground/60">CPU</div>
+              <MiniSparkline data={cpuHistory} className="w-16 h-4" />
             </div>
             <div className="text-right">
-              <div className="text-[10px] text-muted-foreground">MEM</div>
-              <MiniSparkline data={memHistory} className="w-20 h-5" />
+              <div className="text-[8px] text-muted-foreground/60">MEM</div>
+              <MiniSparkline data={memHistory} className="w-16 h-4" />
             </div>
           </div>
         )}
@@ -259,16 +259,16 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
       {/* Dense 4-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border/50">
         {/* Col 1: Resources */}
-        <div className="p-3 space-y-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Resources</span>
-            <StatusDot active={cpu != null && cpu < 80} className="!h-1.5 !w-1.5" />
+        <div className="p-2.5 space-y-2">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Resources</span>
+            <StatusDot active={cpu != null && cpu < 80} className="!h-1 !w-1" />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {cpu != null && <ResourceBar value={cpu} label="CPU" />}
             {memPct != null && <ResourceBar value={memPct} label="Memory" />}
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-px">
             {memUsed != null && memTotal != null && (
               <KVPair label="Used / Total" value={`${memUsed.toFixed(1)} / ${memTotal.toFixed(0)} GB`} />
             )}
@@ -282,7 +282,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             {sys?.rss_mb != null && <KVPair label="RSS" value={`${sys.rss_mb.toFixed(0)} MB`} />}
             {memPressure && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 {memPressure.current_mb != null && <KVPair label="Current RSS" value={`${memPressure.current_mb.toFixed(0)} MB`} muted />}
                 {memPressure.peak_mb != null && <KVPair label="Peak RSS" value={`${memPressure.peak_mb.toFixed(0)} MB`} muted />}
                 {memPressure.pressure_level && <KVPair label="Pressure" value={
@@ -295,7 +295,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             )}
             {mpsMonitor && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 <KVPair label="MPS usage" value={`${(mpsMonitor.usage * 100).toFixed(1)}%`} muted />
                 <KVPair label="MPS locked" value={mpsMonitor.locked_to_cpu ? 'CPU' : 'GPU'} muted />
               </>
@@ -304,16 +304,16 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
         </div>
 
         {/* Col 2: Model */}
-        <div className="p-3 space-y-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Model</span>
-            <StatusDot active={modelLoaded && !modelLoading} className="!h-1.5 !w-1.5" />
+        <div className="p-2.5 space-y-2">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Model</span>
+            <StatusDot active={modelLoaded && !modelLoading} className="!h-1 !w-1" />
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-px">
             <KVPair label="Status" value={
               modelLoading ? <span className="text-warning">Loading...</span> :
               modelLoaded ? <span className="text-success">Loaded</span> :
-              <span className="text-muted-foreground">Not loaded</span>
+              <span className="text-muted-foreground/60">Not loaded</span>
             } />
             {modelType && <KVPair label="Model" value={modelType} />}
             {params != null && params > 0 && (
@@ -324,7 +324,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             {gpu && (
               <>
                 <KVPair label="GPU" value={
-                  <span className={cn(gpu.backend && gpu.backend !== 'none' ? 'text-success' : 'text-muted-foreground')}>
+                  <span className={cn(gpu.backend && gpu.backend !== 'none' ? 'text-success' : 'text-muted-foreground/60')}>
                     {gpu.backend} · {gpu.tier}
                   </span>
                 } />
@@ -345,7 +345,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             )}
             {registry && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 <KVPair label="Registry" value={
                   <span className={cn(registry.healthy ? 'text-success' : 'text-destructive')}>
                     {registry.healthy ? 'Healthy' : 'Degraded'}
@@ -359,12 +359,12 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
         </div>
 
         {/* Col 3: Inference */}
-        <div className="p-3 space-y-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Inference</span>
-            <StatusDot active={(h?.tokens_per_sec ?? 0) > 0} className="!h-1.5 !w-1.5" />
+        <div className="p-2.5 space-y-2">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Inference</span>
+            <StatusDot active={(h?.tokens_per_sec ?? 0) > 0} className="!h-1 !w-1" />
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-px">
             <KVPair label="Requests" value={String(requestCount)} />
             <KVPair label="Responses" value={String(h?.inference_count ?? inf?.inference_count ?? 0)} />
             <KVPair label="Tokens/sec" value={
@@ -398,12 +398,12 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
         </div>
 
         {/* Col 4: Process & System */}
-        <div className="p-3 space-y-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Process</span>
-            <StatusDot active={true} className="!h-1.5 !w-1.5" />
+        <div className="p-2.5 space-y-2">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Process</span>
+            <StatusDot active={true} className="!h-1 !w-1" />
           </div>
-          <div className="space-y-0.5">
+          <div className="space-y-px">
             {sys?.process_cpu_percent != null && <KVPair label="Proc CPU" value={`${sys.process_cpu_percent}%`} />}
             {sys?.process_memory_percent != null && <KVPair label="Proc Memory" value={`${sys.process_memory_percent}%`} />}
             {sys?.threads != null && <KVPair label="Threads" value={sys.threads} />}
@@ -411,14 +411,14 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             {sys?.gc_gen0 != null && <KVPair label="GC Gen0/1/2" value={`${sys.gc_gen0} / ${sys.gc_gen1 ?? 0} / ${sys.gc_gen2 ?? 0}`} />}
             {trainingPool && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 <KVPair label="Train pool" value={`${trainingPool.active_jobs} / ${trainingPool.max_workers}`} muted />
                 <KVPair label="Tracked jobs" value={trainingPool.total_tracked} muted />
               </>
             )}
             {kvSessions?.enabled && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 <KVPair label="KV sessions" value={`${kvSessions.active_sessions ?? 0} / ${kvSessions.max_sessions ?? 0}`} muted />
                 <KVPair label="Cached tokens" value={formatTokens(kvSessions.cached_tokens ?? 0)} muted />
                 {kvSessions.ttl_seconds != null && <KVPair label="KV TTL" value={`${kvSessions.ttl_seconds}s`} muted />}
@@ -427,9 +427,9 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             )}
             {processGuard && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 <KVPair label="Guard" value={
-                  <span className={cn(processGuard.active ? 'text-success' : processGuard.enabled ? 'text-warning' : 'text-muted-foreground')}>
+                  <span className={cn(processGuard.active ? 'text-success' : processGuard.enabled ? 'text-warning' : 'text-muted-foreground/60')}>
                     {processGuard.active ? 'Active' : processGuard.enabled ? 'Armed' : 'Off'}
                   </span>
                 } muted />
@@ -444,7 +444,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             )}
             {info && (
               <>
-                <div className="border-t border-border/30 my-1" />
+                <div className="border-t border-border/30 my-0.5" />
                 <KVPair label="Platform" value={`${info.platform} ${info.platform_release}`} muted />
                 <KVPair label="Arch" value={info.architecture} muted />
                 <KVPair label="Cores" value={info.cpu_count} muted />
@@ -456,13 +456,13 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {/* Diagnostics strip */}
       {h && h.diagnoses.length > 0 && (
-        <div className="px-4 py-2 border-t border-border/50 bg-muted/30">
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <div className="px-3 py-1.5 border-t border-border/50 bg-muted/20">
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
             {h.diagnoses.slice(0, 6).map((d, i) => (
-              <div key={`${d.check}-${i}`} className="flex items-center gap-1.5 text-[10px]">
-                <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', d.severity === 'critical' ? 'bg-destructive' : d.severity === 'warn' ? 'bg-warning' : d.severity === 'info' ? 'bg-primary' : 'bg-success')} />
+              <div key={`${d.check}-${i}`} className="flex items-center gap-1 text-[9px]">
+                <span className={cn('h-1 w-1 rounded-full shrink-0', d.severity === 'critical' ? 'bg-destructive' : d.severity === 'warn' ? 'bg-warning' : d.severity === 'info' ? 'bg-primary' : 'bg-success')} />
                 <span className="font-medium capitalize">{d.check}</span>
-                <span className="text-muted-foreground">{d.message}</span>
+                <span className="text-muted-foreground/60">{d.message}</span>
               </div>
             ))}
           </div>
@@ -472,13 +472,13 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
       {/* Expandable detail sections */}
       {pathLatencies.length > 0 && (
         <ExpandableStrip title="Endpoint Latency" count={pathLatencies.length}>
-          <div className="space-y-1">
+          <div className="space-y-px">
             {pathLatencies.map((p) => (
-              <div key={p.path} className="flex items-center gap-2 text-[10px] py-0.5">
+              <div key={p.path} className="flex items-center gap-1.5 text-[9px] py-0.5">
                 <span className="font-mono truncate min-w-0 flex-1">{p.path}</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-muted font-mono tabular-nums">x{p.count}</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono tabular-nums">{p.avg_ms.toFixed(1)}ms</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-warning/10 text-warning font-mono tabular-nums">p95 {p.p95_ms.toFixed(1)}ms</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-muted font-mono tabular-nums">x{p.count}</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-primary/10 text-primary font-mono tabular-nums">{p.avg_ms.toFixed(1)}ms</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-warning/10 text-warning font-mono tabular-nums">p95 {p.p95_ms.toFixed(1)}ms</span>
               </div>
             ))}
           </div>
@@ -487,14 +487,14 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {modelMetrics.length > 0 && (
         <ExpandableStrip title="Model Metrics" count={modelMetrics.length}>
-          <div className="space-y-1">
+          <div className="space-y-px">
             {modelMetrics.map((m) => (
-              <div key={m.model} className="flex items-center gap-2 text-[10px] py-0.5">
+              <div key={m.model} className="flex items-center gap-1.5 text-[9px] py-0.5">
                 <span className="font-mono truncate min-w-0 flex-1">{m.model}</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-muted font-mono tabular-nums">x{m.count}</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono tabular-nums">{formatTokens(m.total_tokens)} tok</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-success/10 text-success font-mono tabular-nums">{m.tokens_per_sec.toFixed(1)} t/s</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-muted font-mono tabular-nums">avg {m.avg_tokens.toFixed(0)}</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-muted font-mono tabular-nums">x{m.count}</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-primary/10 text-primary font-mono tabular-nums">{formatTokens(m.total_tokens)} tok</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-success/10 text-success font-mono tabular-nums">{m.tokens_per_sec.toFixed(1)} t/s</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-muted font-mono tabular-nums">avg {m.avg_tokens.toFixed(0)}</span>
               </div>
             ))}
           </div>
@@ -503,16 +503,16 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {recentErrors.length > 0 && (
         <ExpandableStrip title="Recent Errors" count={recentErrors.length}>
-          <div className="space-y-1 max-h-[160px] overflow-y-auto">
+          <div className="space-y-px max-h-[140px] overflow-y-auto">
             {recentErrors.slice(0, 8).map((e, i) => (
-              <div key={`${e.ts}-${i}`} className="flex items-start gap-2 text-[10px] py-0.5 border border-destructive/20 rounded px-2 py-1">
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-mono font-medium">{e.status}</span>
+              <div key={`${e.ts}-${i}`} className="flex items-start gap-1.5 text-[9px] py-0.5 border border-destructive/20 rounded px-1.5 py-1">
+                <span className="shrink-0 px-1 py-0.5 rounded bg-destructive/10 text-destructive font-mono font-medium">{e.status}</span>
                 <span className="font-mono truncate flex-1">{e.method} {e.path}</span>
-                <span className="text-muted-foreground truncate max-w-[140px]" title={e.message}>
+                <span className="text-muted-foreground/60 truncate max-w-[120px]" title={e.message}>
                   {e.error_type && <span className="text-destructive/80">{e.error_type}: </span>}
                   {e.message}
                 </span>
-                <span className="shrink-0 text-muted-foreground/60 font-mono">{timeAgo(e.ts)}</span>
+                <span className="shrink-0 text-muted-foreground/40 font-mono tabular-nums">{timeAgo(e.ts)}</span>
               </div>
             ))}
           </div>
@@ -521,13 +521,13 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {rateViolations.length > 0 && (
         <ExpandableStrip title="Rate Violations" count={rateViolations.length}>
-          <div className="space-y-1">
+          <div className="space-y-px">
             {rateViolations.map((v, i) => (
-              <div key={`${v.path}-${i}`} className="flex items-center gap-2 text-[10px] py-0.5">
+              <div key={`${v.path}-${i}`} className="flex items-center gap-1.5 text-[9px] py-0.5">
                 <span className="font-mono truncate min-w-0 flex-1">{v.path}</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-mono tabular-nums">{v.count} hits</span>
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-muted font-mono tabular-nums">limit {v.limit}</span>
-                <span className="shrink-0 text-muted-foreground/60 font-mono">{timeAgo(v.ts)}</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-destructive/10 text-destructive font-mono tabular-nums">{v.count} hits</span>
+                <span className="shrink-0 px-1 py-0.5 rounded bg-muted font-mono tabular-nums">limit {v.limit}</span>
+                <span className="shrink-0 text-muted-foreground/40 font-mono tabular-nums">{timeAgo(v.ts)}</span>
               </div>
             ))}
           </div>
@@ -536,7 +536,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {resourceAlloc && Object.keys(resourceAlloc).length > 0 && (
         <ExpandableStrip title="Resource Allocation">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-0.5">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-px">
             {resourceAlloc.mode && <KVPair label="Mode" value={resourceAlloc.mode} />}
             {resourceAlloc.compute_threads != null && <KVPair label="Compute threads" value={resourceAlloc.compute_threads} />}
             {resourceAlloc.io_threads != null && <KVPair label="IO threads" value={resourceAlloc.io_threads} />}
@@ -557,7 +557,7 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {modelHealth && (modelHealth.perplexity != null || modelHealth.loss != null || modelHealth.quality_score != null) && (
         <ExpandableStrip title="Model Health">
-          <div className="space-y-1">
+          <div className="space-y-px">
             {modelHealth.perplexity != null && <KVPair label="Perplexity" value={modelHealth.perplexity.toFixed(3)} />}
             {modelHealth.loss != null && <KVPair label="Loss" value={modelHealth.loss.toFixed(4)} />}
             {modelHealth.quality_score != null && <KVPair label="Quality" value={
@@ -567,15 +567,15 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
             } />}
             {modelHealth.last_eval && <KVPair label="Last eval" value={timeAgo(modelHealth.last_eval)} muted />}
             {modelHealth.perplexity_trend && modelHealth.perplexity_trend.length > 1 && (
-              <div className="mt-1">
-                <span className="text-[10px] text-muted-foreground">Perplexity trend</span>
-                <MiniSparkline data={modelHealth.perplexity_trend.map(p => p.value)} className="w-full h-6 mt-0.5" />
+              <div className="mt-0.5">
+                <span className="text-[9px] text-muted-foreground/60">Perplexity trend</span>
+                <MiniSparkline data={modelHealth.perplexity_trend.map(p => p.value)} className="w-full h-5 mt-0.5" />
               </div>
             )}
             {modelHealth.loss_trend && modelHealth.loss_trend.length > 1 && (
-              <div className="mt-1">
-                <span className="text-[10px] text-muted-foreground">Loss trend</span>
-                <MiniSparkline data={modelHealth.loss_trend.map(p => p.value)} className="w-full h-6 mt-0.5" />
+              <div className="mt-0.5">
+                <span className="text-[9px] text-muted-foreground/60">Loss trend</span>
+                <MiniSparkline data={modelHealth.loss_trend.map(p => p.value)} className="w-full h-5 mt-0.5" />
               </div>
             )}
           </div>
@@ -584,14 +584,14 @@ export const SystemHealthPanel = memo(function SystemHealthPanel({
 
       {/* Model events strip */}
       {h && h.model_events.length > 0 && (
-        <div className="px-4 py-2 border-t border-border/50">
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <div className="px-3 py-1.5 border-t border-border/50">
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
             {h.model_events.slice(0, 4).map((e, i) => (
-              <div key={`${e.ts}-${i}`} className="flex items-center gap-1.5 text-[10px]">
-                <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', e.type === 'load' ? 'bg-success' : e.type === 'unload' ? 'bg-warning' : 'bg-primary')} />
+              <div key={`${e.ts}-${i}`} className="flex items-center gap-1 text-[9px]">
+                <span className={cn('h-1 w-1 rounded-full shrink-0', e.type === 'load' ? 'bg-success' : e.type === 'unload' ? 'bg-warning' : 'bg-primary')} />
                 <span className="font-medium capitalize">{e.type}</span>
-                <span className="text-muted-foreground truncate max-w-[120px]">{e.model}</span>
-                <span className="text-muted-foreground/60">{e.detail}</span>
+                <span className="text-muted-foreground/60 truncate max-w-[100px]">{e.model}</span>
+                <span className="text-muted-foreground/40">{e.detail}</span>
               </div>
             ))}
           </div>

@@ -2,9 +2,10 @@
 
 import type { ReactNode } from 'react'
 
-import { cn, Button, IconRefresh, EmptyCard } from '@sloughgpt/strui'
+import { cn, Button, EmptyCard } from '@sloughgpt/strui'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 
 interface PageContainerProps {
   /** Page title — rendered inside AppRouteHeaderLead. */
@@ -147,13 +148,7 @@ export function PageContainer({
         />
         <div className="flex min-h-[40vh] flex-col items-center justify-center px-4 py-16 text-center sm:px-0">
           <div className="max-w-sm space-y-3">
-            <p className="text-sm text-destructive">{error}</p>
-            {onRetry && (
-              <Button size="sm" variant="outline" className="h-11 min-w-[120px]" onClick={onRetry}>
-                <IconRefresh className="h-4 w-4 mr-1.5" />
-                Retry
-              </Button>
-            )}
+            <StatusBanner variant="error" message={error} dismissible={false} onRetry={onRetry} />
           </div>
         </div>
       </div>

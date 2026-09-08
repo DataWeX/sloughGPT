@@ -250,17 +250,17 @@ export default function KbPage() {
       headerRight={
         <div className="flex items-center gap-2">
           {selectedIds.size > 0 && (
-            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void handleBatchDelete()}>
+            <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={() => void handleBatchDelete()}>
               Delete {selectedIds.size}
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={() => { void loadStats(); void loadItems() }}>Refresh</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { void loadStats(); void loadItems() }}>Refresh</Button>
         </div>
       }
     >
       <div className="space-y-4">
         {stats && (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
             {[
               { label: 'Total Entries', value: stats.total_items },
               { label: 'Topics', value: stats.topics.length },
@@ -269,7 +269,7 @@ export default function KbPage() {
             ].map(s => (
               <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                 <div className="text-xs text-muted-foreground">{s.label}</div>
-                <div className="text-base font-mono font-medium">{s.value}</div>
+                <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
               </div>
             ))}
           </div>
@@ -294,7 +294,7 @@ export default function KbPage() {
               <button
                 type="button"
                 onClick={() => { setSelectedTopic(null); setPage(0) }}
-                className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors', selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
+                className={cn('rounded-full px-2.5 py-0.5 text-[9px] font-medium transition-colors', selectedTopic === null ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
               >
                 All
               </button>
@@ -303,7 +303,7 @@ export default function KbPage() {
                   key={t.name}
                   type="button"
                   onClick={() => { setSelectedTopic(t.name); setPage(0) }}
-                  className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors', selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
+                  className={cn('rounded-full px-2.5 py-0.5 text-[9px] font-medium transition-colors', selectedTopic === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}
                 >
                   {t.name} ({t.count})
                 </button>
@@ -313,12 +313,12 @@ export default function KbPage() {
             {loading ? (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-16 animate-pulse rounded bg-muted/50" />
+                  <div key={i} className="h-16 animate-pulse rounded-lg bg-muted/20" />
                 ))}
               </div>
             ) : items.length === 0 ? (
               <Card>
-                <CardContent className="py-8 text-center text-xs text-muted-foreground">No entries found.</CardContent>
+                <CardContent className="py-8 text-center text-[10px] text-muted-foreground/60">No entries found.</CardContent>
               </Card>
             ) : (
               <div className="space-y-2">
@@ -335,7 +335,7 @@ export default function KbPage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs">{item.content.slice(0, 200)}{item.content.length > 200 ? '...' : ''}</p>
                           <div className="mt-1.5 flex gap-2">
-                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{item.topic}</span>
+                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">{item.topic}</span>
                             <span className="text-xs text-muted-foreground">{item.source}</span>
                             <span className="text-xs text-muted-foreground">{item.importance.toFixed(1)} importance</span>
                           </div>
@@ -344,7 +344,7 @@ export default function KbPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-1.5 text-xs"
+                            className="h-6 px-1.5 text-[10px]"
                             onClick={() => void handleRelated(item.id)}
                           >
                             {relatedLoading === item.id ? '...' : 'Related'}
@@ -352,7 +352,7 @@ export default function KbPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-1.5 text-xs"
+                            className="h-6 px-1.5 text-[10px]"
                             onClick={() => { setEditingItem(item); setEditContent(item.content); setEditTopic(item.topic) }}
                           >
                             Edit
@@ -360,7 +360,7 @@ export default function KbPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 px-1.5 text-xs text-destructive"
+                            className="h-6 px-1.5 text-[10px] text-destructive"
                             onClick={() => void handleDelete(item.id)}
                           >
                             Delete
@@ -377,13 +377,13 @@ export default function KbPage() {
               <div className="rounded border border-border/50 bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-muted-foreground">Related items ({relatedItems.length})</p>
-                  <Button size="sm" variant="ghost" className="text-xs h-5" onClick={() => { setRelatedItems([]); setRelatedLoading(null) }}>Clear</Button>
+                  <Button size="sm" variant="ghost" className="text-[10px] h-6" onClick={() => { setRelatedItems([]); setRelatedLoading(null) }}>Clear</Button>
                 </div>
                 {relatedItems.map(ri => (
                   <div key={ri.id} className="text-xs space-y-0.5">
                     <p className="text-foreground/80">{ri.content.slice(0, 150)}{ri.content.length > 150 ? '...' : ''}</p>
                     <div className="flex gap-2">
-                      <span className="text-xs text-primary">{ri.topic}</span>
+                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">{ri.topic}</span>
                       <span className="text-xs text-muted-foreground">{ri.source}</span>
                     </div>
                   </div>
@@ -392,9 +392,9 @@ export default function KbPage() {
             )}
 
             <div className="flex justify-center gap-2">
-              <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous</Button>
+              <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)} className="h-7 text-[11px]">Previous</Button>
               <span className="text-xs text-muted-foreground self-center">Page {page + 1}</span>
-              <Button size="sm" variant="outline" disabled={items.length < 30} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <Button size="sm" variant="outline" disabled={items.length < 30} onClick={() => setPage(p => p + 1)} className="h-7 text-[11px]">Next</Button>
             </div>
           </div>
         )}
@@ -402,18 +402,18 @@ export default function KbPage() {
         {tab === 'add' && (
           <>
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Add Knowledge Entry</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Add Knowledge Entry</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-2.5 pb-2.5 space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs">Content</Label>
                 <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} rows={4} className="text-xs" placeholder="Enter knowledge content..." />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-1.5">
                 <div className="space-y-2">
                   <Label className="text-xs">Topic</Label>
-                  <Input value={newTopic} onChange={e => setNewTopic(e.target.value)} className="h-8 text-xs" />
+                  <Input value={newTopic} onChange={e => setNewTopic(e.target.value)} className="h-7 text-[11px]" />
                   {suggestResult && <p className="text-xs text-muted-foreground">Suggested: {suggestResult}</p>}
                 </div>
                 <div className="space-y-2">
@@ -432,10 +432,10 @@ export default function KbPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => void handleAdd()} disabled={loading || !newContent.trim()} className="flex-1">
+                <Button onClick={() => void handleAdd()} disabled={loading || !newContent.trim()} className="flex-1 h-7 text-[11px]">
                   {loading ? 'Adding...' : 'Add Entry'}
                 </Button>
-                <Button variant="outline" onClick={() => void handleSuggest()} disabled={!newContent.trim()}>
+                <Button variant="outline" onClick={() => void handleSuggest()} disabled={!newContent.trim()} className="h-7 text-[11px]">
                   Suggest Topic
                 </Button>
               </div>
@@ -443,20 +443,20 @@ export default function KbPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Import from URL</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Import from URL</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="px-2.5 pb-2.5 space-y-3">
               <p className="text-xs text-muted-foreground">Fetch content from a URL and add it to the knowledge base.</p>
               <div className="flex gap-2">
                 <Input
                   value={urlInput}
                   onChange={e => setUrlInput(e.target.value)}
                   placeholder="https://example.com/article"
-                  className="h-8 text-xs flex-1"
+                  className="h-7 text-[11px] flex-1"
                   onKeyDown={e => e.key === 'Enter' && void handleIngestUrl()}
                 />
-                <Button size="sm" onClick={() => void handleIngestUrl()} disabled={urlLoading || !urlInput.trim()} className="shrink-0">
+                <Button size="sm" onClick={() => void handleIngestUrl()} disabled={urlLoading || !urlInput.trim()} className="shrink-0 h-7 text-[11px]">
                   {urlLoading ? 'Importing...' : 'Import'}
                 </Button>
                </div>
@@ -464,13 +464,13 @@ export default function KbPage() {
            </Card>
 
            <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Upload File</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Upload File</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="px-2.5 pb-2.5 space-y-3">
               <p className="text-xs text-muted-foreground">Upload a text file to add its contents to the knowledge base.</p>
               <div className="flex items-center gap-2">
-                <label className="flex h-8 cursor-pointer items-center gap-2 rounded border border-border px-3 text-xs hover:bg-muted/30">
+                <label className="flex h-7 cursor-pointer items-center gap-2 rounded border border-border px-3 text-[11px] hover:bg-muted/30">
                   <input type="file" accept=".txt,.md,.json,.csv" className="hidden" onChange={e => void handleFileUpload(e)} disabled={fileLoading} />
                   {fileLoading ? 'Uploading...' : 'Choose file'}
                 </label>
@@ -483,8 +483,8 @@ export default function KbPage() {
         {tab === 'search' && (
           <div className="space-y-3">
             <div className="flex gap-2">
-              <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search knowledge..." className="h-8 text-xs" onKeyDown={e => e.key === 'Enter' && void handleSearch()} />
-              <Button onClick={() => void handleSearch()} disabled={loading} className="shrink-0">
+              <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search knowledge..." className="h-7 text-[11px]" onKeyDown={e => e.key === 'Enter' && void handleSearch()} />
+              <Button onClick={() => void handleSearch()} disabled={loading} className="shrink-0 h-7 text-[11px]">
                 {loading ? 'Searching...' : 'Search'}
               </Button>
             </div>
@@ -497,7 +497,7 @@ export default function KbPage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-xs">{item.content.slice(0, 300)}{item.content.length > 300 ? '...' : ''}</p>
                           <div className="mt-1.5 flex gap-2">
-                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{item.topic}</span>
+                            <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] text-primary">{item.topic}</span>
                             <span className="text-xs text-muted-foreground">Score: {item.score.toFixed(3)}</span>
                           </div>
                         </div>
@@ -512,18 +512,18 @@ export default function KbPage() {
 
         {tab === 'gaps' && (
           <div className="space-y-3">
-            <Button onClick={() => void handleGaps()} disabled={loading} className="w-full">
+            <Button onClick={() => void handleGaps()} disabled={loading} className="w-full h-7 text-[11px]">
               {loading ? 'Analyzing...' : 'Analyze Knowledge Gaps'}
             </Button>
             {gapsResult && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5 sm:grid-cols-2">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Identified Gaps</CardTitle>
+                  <CardHeader className="pb-2 pt-2.5 px-2.5">
+                    <CardTitle className="text-[11px] font-medium">Identified Gaps</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-2.5 pb-2.5">
                     {gapsResult.gaps.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No gaps identified.</p>
+                      <p className="text-[10px] text-muted-foreground/60">No gaps identified.</p>
                     ) : (
                       <ul className="space-y-1.5">
                         {gapsResult.gaps.map((g, i) => (
@@ -534,12 +534,12 @@ export default function KbPage() {
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Suggestions</CardTitle>
+                  <CardHeader className="pb-2 pt-2.5 px-2.5">
+                    <CardTitle className="text-[11px] font-medium">Suggestions</CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-2.5 pb-2.5">
                     {gapsResult.suggestions.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No suggestions.</p>
+                      <p className="text-[10px] text-muted-foreground/60">No suggestions.</p>
                     ) : (
                       <ul className="space-y-1.5">
                         {gapsResult.suggestions.map((s, i) => (
@@ -558,21 +558,21 @@ export default function KbPage() {
       {editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <Card className="w-full max-w-lg">
-            <CardHeader>
-              <CardTitle className="text-base">Edit Entry</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Edit Entry</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="px-2.5 pb-2.5 space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs">Content</Label>
                 <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={4} className="text-xs" />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs">Topic</Label>
-                <Input value={editTopic} onChange={e => setEditTopic(e.target.value)} className="h-8 text-xs" />
+                <Input value={editTopic} onChange={e => setEditTopic(e.target.value)} className="h-7 text-[11px]" />
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setEditingItem(null)}>Cancel</Button>
-                <Button onClick={() => void handleUpdate()}>Save</Button>
+                <Button variant="ghost" onClick={() => setEditingItem(null)} className="h-6 text-[10px]">Cancel</Button>
+                <Button onClick={() => void handleUpdate()} className="h-7 text-[11px]">Save</Button>
               </div>
             </CardContent>
           </Card>

@@ -9,7 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
@@ -18,7 +18,7 @@ import dynamicNext from 'next/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 
 const LossChart = dynamicNext(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
-import { IconTrash, IconRefresh, IconDownload } from '@sloughgpt/strui'
+import { IconTrash, IconDownload } from '@sloughgpt/strui'
 import { trainingJobsController, type TrainingJob } from '@/lib/training-controller'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
@@ -140,7 +140,7 @@ export default function TrainingJobDetailPage() {
   const headerRight = (
     <div className="flex items-center gap-1">
       <Button variant="ghost" size="sm" onClick={fetchJob} disabled={loading} aria-label="Refresh job status">
-        <IconRefresh className={loading ? 'animate-spin h-4 w-4' : 'h-4 w-4'} />
+        <Spinner className="h-4 w-4" />
       </Button>
       <Button variant="ghost" size="sm" onClick={handleExport} disabled={!job} aria-label="Export job details">
         <IconDownload className="h-4 w-4" />

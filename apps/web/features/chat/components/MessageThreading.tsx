@@ -141,6 +141,7 @@ export const MessageThreading = memo(function MessageThreading({
                     className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
                     onClick={() => handleDeleteThread(thread.id)}
                     title="Delete thread"
+                    aria-label="Delete thread"
                   >
                     <IconX className="h-3 w-3" />
                   </Button>

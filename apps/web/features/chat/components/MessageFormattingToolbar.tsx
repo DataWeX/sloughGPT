@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, memo } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface MessageFormattingToolbarProps {
   text: string
@@ -54,7 +55,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
     onCopy(text)
     setCopied(true)
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setCopied(false), 2000)
+    timerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
   }, [text, onCopy])
 
   return (

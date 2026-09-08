@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { SectionLabel } from '@/components/composed/SectionLabel'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { apiPost } from '@/lib/http-client'
 import { imagesController } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
@@ -91,7 +93,7 @@ export function ImageSection() {
   return (
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
-        <h2 className="text-base font-medium">Image Gallery</h2>
+        <SectionLabel>Image Gallery</SectionLabel>
         <span className="text-xs text-muted-foreground">{loading ? 'Loading' : `${gallery.length} images generated`}</span>
       </div>
 
@@ -132,7 +134,7 @@ export function ImageSection() {
               <span className="text-xs text-success">Generated</span>
             )}
           </div>
-          {genError && <div className="text-xs text-destructive">{genError}</div>}
+          {genError && <StatusBanner variant="error" message={genError} dismissible={false} />}
       </ActionCard>
 
       {lastGenerated && (

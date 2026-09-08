@@ -238,6 +238,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         className="h-5 w-5"
                         onClick={() => handleEdit(note.id)}
                         title="Edit"
+                        aria-label="Edit note"
                       >
                         <span className="text-[10px]">✏</span>
                       </Button>
@@ -247,6 +248,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         className="h-5 w-5"
                         onClick={() => handleDelete(note.id)}
                         title="Delete"
+                        aria-label="Delete note"
                       >
                         <span className="text-destructive text-[10px]">×</span>
                       </Button>

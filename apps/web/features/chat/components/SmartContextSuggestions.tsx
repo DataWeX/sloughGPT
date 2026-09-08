@@ -180,6 +180,7 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
         className="h-4 w-4"
         onClick={handleDismiss}
         title="Dismiss"
+        aria-label="Dismiss"
       >
         <IconX className="h-2.5 w-2.5" />
       </Button>

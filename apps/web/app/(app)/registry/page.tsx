@@ -88,29 +88,29 @@ export default function RegistryPage() {
         <RegistryHealthCard models={models} stats={stats} />
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Registered Models</CardTitle>
-            <Button size="sm" variant="ghost" onClick={fetchData} aria-label="Refresh">
-              <IconRefresh className="h-4 w-4" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Registered Models</CardTitle>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchData} aria-label="Refresh">
+              <IconRefresh className="h-3 w-3" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {filteredModels.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-[10px] text-muted-foreground/60">
                 {searchQuery ? 'No models match your search.' : 'No models registered. Load a model first.'}
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {filteredModels.map(m => (
-                  <div key={m.model_id} className="rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                  <div key={m.model_id} className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px] hover:bg-muted/20 transition-colors">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span className="font-medium truncate">{m.model_id}</span>
-                          <span className={cn('text-xs px-1 rounded', m.status === 'loaded' ? 'bg-success/10 text-success' : m.status === 'failed' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground')}>{m.status}</span>
+                          <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full', m.status === 'loaded' ? 'bg-success/10 text-success' : m.status === 'failed' ? 'bg-destructive/10 text-destructive' : 'bg-muted/40 text-muted-foreground/60')}>{m.status}</span>
                         </div>
                         {m.registered_at && (
-                          <div className="text-xs text-muted-foreground mt-0.5">
+                          <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
                             Registered {new Date(m.registered_at).toLocaleDateString()}
                           </div>
                         )}
@@ -119,6 +119,7 @@ export default function RegistryPage() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          className="h-6 text-[10px]"
                           onClick={() => setExpandedModel(expandedModel === m.model_id ? null : m.model_id)}
                         >
                           {expandedModel === m.model_id ? 'Hide' : 'Details'}
@@ -126,12 +127,12 @@ export default function RegistryPage() {
                       )}
                     </div>
                     {expandedModel === m.model_id && m.metrics && (
-                      <div className="mt-2 rounded bg-muted/30 p-2">
-                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Error Details</div>
-                        <div className="grid grid-cols-2 gap-1">
+                      <div className="mt-1.5 rounded-lg bg-muted/20 p-2">
+                        <div className="text-[9px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-0.5">Error Details</div>
+                        <div className="grid grid-cols-2 gap-0.5">
                           {Object.entries(m.metrics).map(([k, v]) => (
-                            <div key={k} className="text-xs">
-                              <span className="text-muted-foreground">{k.replace(/_/g, ' ')}: </span>
+                            <div key={k} className="text-[10px]">
+                              <span className="text-muted-foreground/60">{k.replace(/_/g, ' ')}: </span>
                               <span className="font-mono">{String(v)}</span>
                             </div>
                           ))}
@@ -147,15 +148,15 @@ export default function RegistryPage() {
 
         {bestModel && Object.keys(bestModel).filter(k => !k.startsWith('_')).length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Best Model</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Best Model</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <CardContent className="px-2.5 pb-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                 {Object.entries(bestModel).filter(([k]) => !k.startsWith('_')).map(([key, value]) => (
-                  <div key={key} className="rounded-md bg-muted/30 p-3 text-center">
-                    <div className="text-xs text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</div>
-                    <div className="text-sm font-mono font-medium">{String(value ?? '—')}</div>
+                  <div key={key} className="rounded-lg bg-muted/20 p-2 text-center">
+                    <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider capitalize">{key.replace(/_/g, ' ')}</div>
+                    <div className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{String(value ?? '—')}</div>
                   </div>
                 ))}
               </div>

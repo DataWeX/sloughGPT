@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { cn, IconChevronDown, IconCheck, IconRefresh } from '@sloughgpt/strui'
+import { cn, IconChevronDown, IconCheck, Spinner } from '@sloughgpt/strui'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -177,7 +177,7 @@ export function ModelDropdown({
                   {modelDl.percentage > 0 ? `${modelDl.percentage.toFixed(0)}%` : '...'}
                 </span>
               ) : isLoading(m) ? (
-                <IconRefresh className="h-3 w-3 animate-spin shrink-0 text-warning ml-1" />
+                <Spinner className="h-3 w-3 shrink-0 text-warning ml-1" />
               ) : isLoaded(m) ? (
                 <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />
               ) : isCached ? (
@@ -217,7 +217,7 @@ export function ModelDropdown({
                     {ft.size_mb ? `${ft.size_mb.toFixed(1)} MB` : 'local'}
                   </span>
                   {isLoading ? (
-                    <IconRefresh className="h-3 w-3 animate-spin shrink-0 text-warning ml-1" />
+                    <Spinner className="h-3 w-3 shrink-0 text-warning ml-1" />
                   ) : isLoaded ? (
                     <IconCheck className="h-3 w-3 shrink-0 text-success ml-1" />
                   ) : null}

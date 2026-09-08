@@ -233,7 +233,7 @@ class DatasetsController:
                     if "messages" in obj or "conversations" in obj:
                         is_messages = True
                 except Exception:
-                    pass
+                    logger.debug("JSON parse skipped in dataset preview")
             lower = line.lower()
             if any(lower.startswith(m) or f" {m}" in lower for m in dialogue_markers):
                 has_dialogue = True
@@ -313,7 +313,7 @@ class DatasetsController:
                     with open(meta_path) as f:
                         meta = _json.load(f)
                 except Exception:
-                    pass
+                    logger.debug("Failed to read dataset metadata from %s", meta_path)
             meta["description"] = new_desc
             import json as _json
 

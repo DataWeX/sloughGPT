@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -87,10 +88,7 @@ export function RecoveryCard({ addToast }: Props) {
           <CardTitle className="text-base">Recoverable Jobs</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button size="sm" variant="ghost" onClick={() => void fetchRecoverable()}>Retry</Button>
-          </div>
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchRecoverable()} />
         </CardContent>
       </Card>
     )

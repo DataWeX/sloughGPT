@@ -116,21 +116,21 @@ export default function InferPage() {
       title="API Playground"
       subtitle="Test inference endpoints directly"
       headerRight={
-        <div className="flex items-center gap-2">
-          <span className={cn('inline-block h-2 w-2 rounded-full', health?.model_loaded ? 'bg-success' : 'bg-destructive')} />
-          <span className="text-xs text-muted-foreground">{health?.status ?? 'checking...'}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={cn('inline-block h-1.5 w-1.5 rounded-full', health?.model_loaded ? 'bg-success' : 'bg-destructive')} />
+          <span className="text-[10px] text-muted-foreground/60">{health?.status ?? 'checking...'}</span>
         </div>
       }
     >
-      <div className="space-y-4">
-        <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+      <div className="space-y-3">
+        <div className="flex gap-0.5 rounded-lg border border-border/40 bg-muted/20 p-0.5">
           {tabs.map(t => (
             <button
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
               disabled={!t.available}
-              className={cn('flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors', tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground disabled:opacity-40')}
+              className={cn('flex-1 rounded-md px-2.5 py-1 text-[10px] font-medium transition-colors', tab === t.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground/60 hover:text-foreground disabled:opacity-40')}
             >
               {t.label}
             </button>
@@ -138,50 +138,42 @@ export default function InferPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">
               {tab === 'generate' && 'Text Generation'}
               {tab === 'embed' && 'Text Embedding'}
               {tab === 'tokenize' && 'Tokenization'}
               {tab === 'info' && 'Model Information'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-2.5 px-2.5 pb-2.5">
             {tab !== 'info' && (
-              <div className="space-y-2">
-                <Label className="text-xs">Input</Label>
+              <div className="space-y-1">
+                <Label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Input</Label>
                 <Textarea
                   value={prompt}
                   onChange={e => setPrompt(e.target.value)}
                   rows={4}
-                  className="font-mono text-xs"
+                  className="font-mono text-[11px] rounded-lg border-border/40"
                   placeholder="Enter text..."
                 />
               </div>
             )}
 
             {tab === 'generate' && (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                <div className="space-y-1">
-                  <Label className="text-xs">Max tokens</Label>
-                  <Input type="number" value={maxTokens} onChange={e => setMaxTokens(Number(e.target.value))} className="h-8 text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Temperature</Label>
-                  <Input type="number" step="0.05" value={temperature} onChange={e => setTemperature(Number(e.target.value))} className="h-8 text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Top P</Label>
-                  <Input type="number" step="0.05" value={topP} onChange={e => setTopP(Number(e.target.value))} className="h-8 text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Top K</Label>
-                  <Input type="number" value={topK} onChange={e => setTopK(Number(e.target.value))} className="h-8 text-xs" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Rep Penalty</Label>
-                  <Input type="number" step="0.05" value={repPenalty} onChange={e => setRepPenalty(Number(e.target.value))} className="h-8 text-xs" />
-                </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  { label: 'Max tokens', value: maxTokens, onChange: setMaxTokens, step: undefined },
+                  { label: 'Temperature', value: temperature, onChange: setTemperature, step: '0.05' },
+                  { label: 'Top P', value: topP, onChange: setTopP, step: '0.05' },
+                  { label: 'Top K', value: topK, onChange: setTopK, step: undefined },
+                  { label: 'Rep Penalty', value: repPenalty, onChange: setRepPenalty, step: '0.05' },
+                ].map(p => (
+                  <div key={p.label} className="space-y-0.5">
+                    <Label className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">{p.label}</Label>
+                    <Input type="number" step={p.step} value={p.value} onChange={e => p.onChange(Number(e.target.value))} className="h-7 text-[11px] font-mono" />
+                  </div>
+                ))}
               </div>
             )}
 
@@ -193,7 +185,7 @@ export default function InferPage() {
                 else void handleLoadInfo()
               }}
               disabled={loading || !health?.model_loaded}
-              className="w-full"
+              className="w-full h-7 text-[11px]"
             >
               {loading ? 'Running...' : tab === 'info' ? 'Load Info' : `Run ${tab}`}
             </Button>
@@ -202,12 +194,12 @@ export default function InferPage() {
 
         {genResult && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Result</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Result</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <pre className="max-h-[300px] overflow-y-auto rounded bg-muted/30 p-3 text-xs whitespace-pre-wrap">{genResult.text}</pre>
-              <div className="flex gap-4 text-xs text-muted-foreground">
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <pre className="max-h-[300px] overflow-y-auto rounded-lg bg-muted/20 p-2.5 text-[11px] whitespace-pre-wrap font-mono">{genResult.text}</pre>
+              <div className="flex gap-3 text-[10px] text-muted-foreground/60 font-mono tabular-nums">
                 <span>{genResult.tokens_generated} tokens</span>
                 <span>{genResult.elapsed_ms.toFixed(0)}ms</span>
                 <span>{genResult.model}</span>
@@ -218,35 +210,35 @@ export default function InferPage() {
 
         {embedResult && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Embedding</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Embedding</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-4 text-xs text-muted-foreground">
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
+              <div className="flex gap-3 text-[10px] text-muted-foreground/60 font-mono">
                 <span>{embedResult.dimensions} dimensions</span>
                 <span>{embedResult.model}</span>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-0.5">
                 {embedResult.embedding.slice(0, 20).map((v, i) => (
-                  <div key={i} className="h-8 w-3 rounded-t" style={{ backgroundColor: `rgb(${Math.round(Math.abs(v) * 255)}, ${Math.round(Math.abs(v) * 100)}, ${Math.round((1 - Math.abs(v)) * 200)})` }} title={`${i}: ${v.toFixed(4)}`} />
+                  <div key={i} className="h-6 w-2 rounded-t" style={{ backgroundColor: `rgb(${Math.round(Math.abs(v) * 255)}, ${Math.round(Math.abs(v) * 100)}, ${Math.round((1 - Math.abs(v)) * 200)})` }} title={`${i}: ${v.toFixed(4)}`} />
                 ))}
-                {embedResult.dimensions > 20 && <span className="text-xs text-muted-foreground self-end">+{embedResult.dimensions - 20}</span>}
+                {embedResult.dimensions > 20 && <span className="text-[10px] text-muted-foreground/60 self-end">+{embedResult.dimensions - 20}</span>}
               </div>
-              <pre className="max-h-[150px] overflow-y-auto rounded bg-muted/30 p-3 text-xs">{JSON.stringify(embedResult.embedding.slice(0, 10), null, 2)}{embedResult.dimensions > 10 ? '\n...' : ''}</pre>
+              <pre className="max-h-[120px] overflow-y-auto rounded-lg bg-muted/20 p-2.5 text-[10px] font-mono">{JSON.stringify(embedResult.embedding.slice(0, 10), null, 2)}{embedResult.dimensions > 10 ? '\n...' : ''}</pre>
             </CardContent>
           </Card>
         )}
 
         {tokenResult && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Tokens ({tokenResult.count})</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Tokens ({tokenResult.count})</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="px-2.5 pb-2.5">
               <div className="flex flex-wrap gap-1">
                 {tokenResult.tokens.map((t, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 rounded border border-border bg-muted/30 px-1.5 py-0.5 text-xs">
-                    <span className="font-mono text-muted-foreground">{tokenResult.ids[i]}</span>
+                  <span key={i} className="inline-flex items-center gap-0.5 rounded-md border border-border/40 bg-muted/20 px-1.5 py-0.5 text-[10px]">
+                    <span className="font-mono text-muted-foreground/60">{tokenResult.ids[i]}</span>
                     <span>{t}</span>
                   </span>
                 ))}
@@ -257,11 +249,11 @@ export default function InferPage() {
 
         {modelInfo && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Model Info</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Model Info</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <CardContent className="px-2.5 pb-2.5">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {[
                   { label: 'Model ID', value: modelInfo.model_id },
                   { label: 'Type', value: modelInfo.model_type },
@@ -273,9 +265,9 @@ export default function InferPage() {
                   { label: 'Streaming', value: modelInfo.has_streaming ? 'Yes' : 'No' },
                   { label: 'Embedding', value: modelInfo.has_embedding ? 'Yes' : 'No' },
                 ].map(item => (
-                  <div key={item.label} className="rounded bg-muted/30 p-2">
-                    <div className="text-xs text-muted-foreground">{item.label}</div>
-                    <div className="text-xs font-medium">{String(item.value)}</div>
+                  <div key={item.label} className="rounded-lg bg-muted/20 p-2">
+                    <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{item.label}</div>
+                    <div className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{String(item.value)}</div>
                   </div>
                 ))}
               </div>

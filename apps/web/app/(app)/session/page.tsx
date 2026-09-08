@@ -135,36 +135,36 @@ export default function SessionPage() {
       title="Session Inspector"
       subtitle="Debug and inspect chat session state"
       headerRight={
-        <div className="flex gap-1">
-          <Button size="sm" variant="ghost" onClick={() => { void loadSessions(); setShowCreate(!showCreate) }}>Sessions</Button>
-          <Button size="sm" variant="ghost" onClick={() => void handleLoadArchived()}>Archived</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { try { const s = await sessionController.getCurrent(); setCurrentSession(s as unknown as Record<string, unknown>) } catch { /* */ } }}>Current</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { if (!sessionId.trim()) return; try { const m = await sessionController.fetchMessages(sessionId); setFetchedMessages(m) } catch { addToast('Could not fetch messages', 'error') } }}>Messages</Button>
-          {inspector && <Button size="sm" variant="ghost" onClick={() => void handleInspect()}>Refresh</Button>}
+        <div className="flex gap-0.5">
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { void loadSessions(); setShowCreate(!showCreate) }}>Sessions</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void handleLoadArchived()}>Archived</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={async () => { try { const s = await sessionController.getCurrent(); setCurrentSession(s as unknown as Record<string, unknown>) } catch { /* */ } }}>Current</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={async () => { if (!sessionId.trim()) return; try { const m = await sessionController.fetchMessages(sessionId); setFetchedMessages(m) } catch { addToast('Could not fetch messages', 'error') } }}>Messages</Button>
+          {inspector && <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void handleInspect()}>Refresh</Button>}
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Load Session</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs">Load Session</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <Label className="text-xs">Session ID</Label>
+          <CardContent className="space-y-2">
+            <div className="space-y-1">
+              <Label className="text-[10px]">Session ID</Label>
               <Input
                 value={sessionId}
                 onChange={e => setSessionId(e.target.value)}
                 placeholder="Enter session ID..."
-                className="h-8 text-xs font-mono"
+                className="h-6 text-[10px] font-mono"
                 onKeyDown={e => e.key === 'Enter' && void handleInspect()}
               />
             </div>
-            <div className="flex gap-2">
-              <Button onClick={() => void handleInspect()} disabled={loading || !sessionId.trim()} className="flex-1">
+            <div className="flex gap-1.5">
+              <Button onClick={() => void handleInspect()} disabled={loading || !sessionId.trim()} className="flex-1 h-6 text-[10px]">
                 {loading ? 'Loading...' : 'Inspect'}
               </Button>
-              <Button onClick={() => void handleRegenerate()} disabled={regenerating || !sessionId.trim()} variant="outline" className="flex-1">
+              <Button onClick={() => void handleRegenerate()} disabled={regenerating || !sessionId.trim()} variant="outline" className="flex-1 h-6 text-[10px]">
                 {regenerating ? 'Regenerating...' : 'Regenerate Last Response'}
               </Button>
             </div>
@@ -174,9 +174,9 @@ export default function SessionPage() {
   
       {showCreate && (
         <Card>
-          <CardContent className="p-3 flex items-center gap-2">
-            <Input value={createSoul} onChange={e => setCreateSoul(e.target.value)} placeholder="Soul name (optional)" className="h-8 text-xs flex-1" />
-            <Button size="sm" onClick={() => void handleCreate()}>Create Session</Button>
+          <CardContent className="p-2 flex items-center gap-1.5">
+            <Input value={createSoul} onChange={e => setCreateSoul(e.target.value)} placeholder="Soul name (optional)" className="h-6 text-[10px] flex-1" />
+            <Button size="sm" className="h-6 text-[10px]" onClick={() => void handleCreate()}>Create Session</Button>
           </CardContent>
         </Card>
       )}
@@ -184,22 +184,22 @@ export default function SessionPage() {
       {(sessions.length > 0 || searchResults) && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center justify-between">
+            <CardTitle className="text-xs flex items-center justify-between">
               Sessions ({(searchResults ?? sessions).length})
               <div className="flex gap-1">
-                <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleSearch() }} placeholder="Search..." className="h-7 text-xs w-40" />
-                {searchResults && <Button size="sm" variant="ghost" onClick={() => { setSearchResults(null); setSearchQuery('') }}>Clear</Button>}
+                <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void handleSearch() }} placeholder="Search..." className="h-6 text-[10px] w-32" />
+                {searchResults && <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => { setSearchResults(null); setSearchQuery('') }}>Clear</Button>}
               </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1 max-h-60 overflow-auto">
+            <div className="space-y-0.5 max-h-52 overflow-auto">
               {(searchResults ?? sessions).map(s => (
-                <div key={s.id} className="flex items-center justify-between rounded px-2 py-1 hover:bg-muted/30 transition-colors text-xs">
+                <div key={s.id} className="flex items-center justify-between rounded px-1.5 py-0.5 hover:bg-muted/30 transition-colors text-[10px]">
                   <button type="button" className="text-left flex-1 truncate font-mono" onClick={() => { setSessionId(s.id); void handleInspect() }}>
                     {s.name || s.id}{s.created_at ? ` — ${new Date(s.created_at).toLocaleDateString()}` : ''}
                   </button>
-                  <Button variant="ghost" size="sm" className="text-xs h-6 text-destructive" onClick={() => void handleDelete(s.id)}>Delete</Button>
+                  <Button variant="ghost" size="sm" className="text-[10px] h-5 text-destructive" onClick={() => void handleDelete(s.id)}>Delete</Button>
                 </div>
               ))}
             </div>
@@ -209,104 +209,104 @@ export default function SessionPage() {
 
       {inspector && (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
                 { label: 'Messages', value: inspector.session.message_count },
                 { label: 'Knowledge Facts', value: inspector.knowledge.total_facts },
                 { label: 'Feedback', value: inspector.feedback.total },
                 { label: 'Inspect Time', value: `${inspector.elapsed_ms}ms` },
               ].map(s => (
-                <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">{s.label}</div>
-                  <div className="text-base font-mono font-medium">{s.value}</div>
+                <div key={s.label} className="rounded-lg bg-muted/30 p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground/60">{s.label}</div>
+                  <div className="text-[13px] font-mono font-medium tabular-nums">{s.value}</div>
                 </div>
               ))}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Workspace</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs">Workspace</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Episodic Memory</div>
-                      <div className="text-xs font-mono">{inspector.workspace.episodic_count}</div>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="rounded bg-muted/30 p-1.5 text-center">
+                      <div className="text-[10px] text-muted-foreground/60">Episodic Memory</div>
+                      <div className="text-[11px] font-mono tabular-nums">{inspector.workspace.episodic_count}</div>
                     </div>
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Sensory Buffer</div>
-                      <div className="text-xs font-mono">{inspector.workspace.sensory_buffer_size}</div>
+                    <div className="rounded bg-muted/30 p-1.5 text-center">
+                      <div className="text-[10px] text-muted-foreground/60">Sensory Buffer</div>
+                      <div className="text-[11px] font-mono tabular-nums">{inspector.workspace.sensory_buffer_size}</div>
                     </div>
                   </div>
                   {inspector.workspace.working_memory.length > 0 && (
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Working Memory</p>
-                      <div className="flex flex-wrap gap-1">
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Working Memory</p>
+                      <div className="flex flex-wrap gap-0.5">
                         {inspector.workspace.working_memory.map((m, i) => (
-                          <span key={i} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{m}</span>
+                          <span key={i} className="rounded bg-primary/10 px-1 py-px text-[10px] text-primary">{m}</span>
                         ))}
                       </div>
                     </div>
                   )}
                   {inspector.workspace.semantic_keys.length > 0 && (
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Semantic Keys</p>
-                      <div className="flex flex-wrap gap-1">
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Semantic Keys</p>
+                      <div className="flex flex-wrap gap-0.5">
                         {inspector.workspace.semantic_keys.map((k, i) => (
-                          <span key={i} className="rounded bg-muted px-1.5 py-0.5 text-xs">{k}</span>
+                          <span key={i} className="rounded bg-muted/50 px-1 py-px text-[10px]">{k}</span>
                         ))}
                       </div>
                     </div>
                   )}
                   {inspector.workspace.system_prompt && (
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">System Prompt (truncated)</p>
-                      <pre className="max-h-[100px] overflow-y-auto rounded bg-muted/30 p-2 text-xs whitespace-pre-wrap">{inspector.workspace.system_prompt}</pre>
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">System Prompt (truncated)</p>
+                      <pre className="max-h-[80px] overflow-y-auto rounded bg-muted/30 p-1.5 text-[10px] whitespace-pre-wrap">{inspector.workspace.system_prompt}</pre>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Modes & Traits</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs">Modes & Traits</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-2">
                   {Object.keys(inspector.modes).length > 0 && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {Object.entries(inspector.modes).map(([k, v]) => (
-                        <div key={k} className="rounded bg-muted/30 p-2">
-                          <div className="text-xs text-muted-foreground capitalize">{k}</div>
-                          <div className="text-xs font-medium">{v}</div>
+                        <div key={k} className="rounded bg-muted/30 p-1.5">
+                          <div className="text-[10px] text-muted-foreground/60 capitalize">{k}</div>
+                          <div className="text-[11px] font-medium">{v}</div>
                         </div>
                       ))}
                     </div>
                   )}
                   {Object.keys(inspector.traits).length > 0 && (
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Traits</p>
-                      <pre className="max-h-[150px] overflow-y-auto rounded bg-muted/30 p-2 text-xs">{JSON.stringify(inspector.traits, null, 2)}</pre>
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Traits</p>
+                      <pre className="max-h-[120px] overflow-y-auto rounded bg-muted/30 p-1.5 text-[10px]">{JSON.stringify(inspector.traits, null, 2)}</pre>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Knowledge</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs">Knowledge</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="rounded bg-muted/30 p-2 text-center">
-                    <div className="text-xs text-muted-foreground">Total Facts</div>
-                    <div className="text-base font-mono font-medium">{inspector.knowledge.total_facts}</div>
+                <CardContent className="space-y-2">
+                  <div className="rounded bg-muted/30 p-1.5 text-center">
+                    <div className="text-[10px] text-muted-foreground/60">Total Facts</div>
+                    <div className="text-[13px] font-mono font-medium tabular-nums">{inspector.knowledge.total_facts}</div>
                   </div>
                   {inspector.knowledge.topics.length > 0 && (
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Topics</p>
-                      <div className="flex flex-wrap gap-1">
+                      <p className="text-[10px] text-muted-foreground/60 mb-0.5">Topics</p>
+                      <div className="flex flex-wrap gap-0.5">
                         {inspector.knowledge.topics.map((t, i) => (
-                          <span key={i} className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">{t}</span>
+                          <span key={i} className="rounded bg-primary/10 px-1 py-px text-[10px] text-primary">{t}</span>
                         ))}
                       </div>
                     </div>
@@ -315,23 +315,23 @@ export default function SessionPage() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Feedback</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs">Feedback</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Thumbs Up</div>
-                      <div className="text-base font-mono font-medium text-success">{inspector.feedback.thumbs_up}</div>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="rounded bg-muted/30 p-1.5 text-center">
+                      <div className="text-[10px] text-muted-foreground/60">Thumbs Up</div>
+                      <div className="text-[13px] font-mono font-medium tabular-nums text-success">{inspector.feedback.thumbs_up}</div>
                     </div>
-                    <div className="rounded bg-muted/30 p-2 text-center">
-                      <div className="text-xs text-muted-foreground">Thumbs Down</div>
-                      <div className="text-base font-mono font-medium text-destructive">{inspector.feedback.thumbs_down}</div>
+                    <div className="rounded bg-muted/30 p-1.5 text-center">
+                      <div className="text-[10px] text-muted-foreground/60">Thumbs Down</div>
+                      <div className="text-[13px] font-mono font-medium tabular-nums text-destructive">{inspector.feedback.thumbs_down}</div>
                     </div>
                   </div>
-                  <div className="rounded bg-muted/30 p-2 text-center">
-                    <div className="text-xs text-muted-foreground">Approval Rate</div>
-                    <div className="text-sm font-mono font-medium">
+                  <div className="rounded bg-muted/30 p-1.5 text-center">
+                    <div className="text-[10px] text-muted-foreground/60">Approval Rate</div>
+                    <div className="text-[11px] font-mono font-medium tabular-nums">
                       {inspector.feedback.total > 0
                         ? `${((inspector.feedback.thumbs_up / inspector.feedback.total) * 100).toFixed(1)}%`
                         : 'N/A'}
@@ -343,15 +343,15 @@ export default function SessionPage() {
 
             {inspector.session.messages.length > 0 && (
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Recent Messages ({inspector.session.messages.length})</CardTitle>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs">Recent Messages ({inspector.session.messages.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  <div className="space-y-1 max-h-[240px] overflow-y-auto">
                     {inspector.session.messages.map((msg, i) => (
-                      <div key={i} className={cn('rounded p-2 text-xs', msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30')}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={cn('text-xs font-medium', msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground')}>
+                      <div key={i} className={cn('rounded p-1.5 text-[10px]', msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30')}>
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className={cn('text-[10px] font-medium', msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground/60')}>
                             {msg.role}
                           </span>
                         </div>
@@ -369,24 +369,24 @@ export default function SessionPage() {
       {currentSession && (
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Current Session</CardTitle>
-            <Button size="sm" variant="ghost" onClick={() => setCurrentSession(null)}>Close</Button>
+            <CardTitle className="text-xs">Current Session</CardTitle>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setCurrentSession(null)}>Close</Button>
           </CardHeader>
           <CardContent>
-            <pre className="rounded bg-muted p-3 text-xs overflow-auto max-h-80 whitespace-pre-wrap">{JSON.stringify(currentSession, null, 2)}</pre>
+            <pre className="rounded bg-muted/30 p-2 text-[10px] overflow-auto max-h-64 whitespace-pre-wrap">{JSON.stringify(currentSession, null, 2)}</pre>
           </CardContent>
         </Card>
       )}
       {fetchedMessages && (
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Messages ({fetchedMessages.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={() => setFetchedMessages(null)}>Close</Button>
+            <CardTitle className="text-xs">Messages ({fetchedMessages.length})</CardTitle>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setFetchedMessages(null)}>Close</Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1 max-h-80 overflow-auto">
+            <div className="space-y-0.5 max-h-64 overflow-auto">
               {fetchedMessages.map((m, i) => (
-                <div key={i} className="rounded bg-muted/30 px-2 py-1 text-xs">
+                <div key={i} className="rounded bg-muted/30 px-1.5 py-0.5 text-[10px]">
                   <span className="font-medium">{m.role}:</span> {m.content}
                 </div>
               ))}

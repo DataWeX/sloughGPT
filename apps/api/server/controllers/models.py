@@ -146,7 +146,7 @@ class ModelsController:
             monitor = get_memory_pressure_monitor()
             monitor.force_cleanup()
         except ImportError:
-            pass
+            logger.debug("Memory pressure monitor not available for cleanup")
 
         import state as server_state
 

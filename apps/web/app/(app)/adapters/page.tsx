@@ -2,8 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn } from '@sloughgpt/strui'
-import { IconRefresh, IconTrash } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn, Spinner } from '@sloughgpt/strui'
+import { IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
 import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
@@ -104,7 +104,7 @@ export default function AdaptersPage() {
   if (loading) {
     return (
       <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" loadingCards={1}>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent><div className="h-24 animate-pulse bg-muted/20 rounded-lg" /></CardContent></Card>
   
     </PageContainer>
     )
@@ -123,10 +123,10 @@ export default function AdaptersPage() {
     <PageContainer
       title="Adapters"
       subtitle="Per-user LoRA adapter management"
-      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} /></Button>}
+      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><Spinner className="h-4 w-4" /></Button>}
     >
       {aggregateResult && (
-        <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
+        <div className="rounded-md bg-primary/10 border border-primary/20 p-2 text-sm text-primary">
           {aggregateResult}
           <button type="button" className="ml-2 underline" onClick={() => setAggregateResult(null)}>Dismiss</button>
         </div>
@@ -134,11 +134,11 @@ export default function AdaptersPage() {
 
       {stats && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Adapter Stats</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Adapter Stats</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
               {[
                 { label: 'Users', value: stats.total_users },
                 { label: 'Total Size', value: `${stats.total_size_mb?.toFixed(1) ?? 0} MB` },
@@ -146,8 +146,8 @@ export default function AdaptersPage() {
                 { label: 'Avg/User', value: `${stats.avg_size_per_user_kb?.toFixed(1) ?? 0} KB` },
               ].map(s => (
                 <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">{s.label}</div>
-                  <div className="text-base font-mono font-medium">{s.value}</div>
+                  <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                  <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
                 </div>
               ))}
             </div>
@@ -158,13 +158,13 @@ export default function AdaptersPage() {
       <AdapterHealthCard adapters={adapters} />
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Actions</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Actions</CardTitle>
           <Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh">
-            <IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} />
+            <Spinner className="h-4 w-4" />
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2.5 pb-2.5">
           <div className="flex gap-2">
             <Button size="sm" onClick={handleAggregate} disabled={aggregating}>
               {aggregating ? 'Aggregating...' : 'Aggregate Best'}
@@ -177,24 +177,24 @@ export default function AdaptersPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Adapters ({adapters.length})</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Adapters ({adapters.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2.5 pb-2.5">
           {adapters.length === 0 ? (
             <div className="text-center py-6 space-y-2">
-              <p className="text-sm text-muted-foreground">No adapters yet.</p>
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+              <p className="text-[10px] text-muted-foreground/60">No adapters yet.</p>
+              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => router.push('/chat')}>
                 Start a chat
               </Button>
-              <p className="text-xs text-muted-foreground">and give feedback to create adapters.</p>
+              <p className="text-[10px] text-muted-foreground/60">and give feedback to create adapters.</p>
             </div>
           ) : (
             <div className="space-y-2">
               {adapters.map(a => (
                 <div
                   key={a.user_id}
-                  className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between rounded-lg border-border/40 p-2.5 hover:bg-muted/20 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{a.user_id}</div>
@@ -222,20 +222,20 @@ export default function AdaptersPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Evaluation</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Evaluation</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 px-2.5 pb-2.5">
           <Button size="sm" onClick={handleRunEval} disabled={runningEval}>
             {runningEval ? 'Running...' : 'Run LoRA Eval'}
           </Button>
           {evalHistory.length > 0 && (
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {evalHistory.map((r, i) => (
-                <div key={i} className="rounded-md border border-border/60 p-3 text-xs space-y-1.5">
+                <div key={i} className="rounded-lg border-border/40 p-2.5 text-xs space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{String(r.adapter_path ?? '—')}</span>
-                    <span className={cn('px-1.5 py-0.5 rounded font-medium', r.verdict === 'accept' ? 'bg-success/15 text-success' : r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>
+                    <span className={cn('rounded-full text-[9px] px-1.5 py-0.5 font-medium', r.verdict === 'accept' ? 'bg-success/15 text-success' : r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>
                       {String(r.verdict ?? '—')}
                     </span>
                     {r.timestamp && (

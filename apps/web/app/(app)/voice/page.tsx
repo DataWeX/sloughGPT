@@ -112,18 +112,16 @@ export default function VoicePage() {
       </KpiGrid>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Text-to-Speech</CardTitle>
-          <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh status">
-            <IconRefresh className="h-4 w-4" />
+        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Text-to-Speech</CardTitle>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={handleRefreshStatus} aria-label="Refresh status">
+            <IconRefresh className="h-3 w-3" />
           </Button>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground bg-muted/30 rounded-md p-2">
-              Text-to-speech requires the transformers library (not available).
-              Text is spoken using your browser&apos;s built-in speech synthesis.
-            </div>
+        <CardContent className="px-2.5 pb-2.5">
+          <div className="text-[10px] text-muted-foreground/60 bg-muted/20 rounded-lg p-2">
+            Text-to-speech requires the transformers library (not available).
+            Text is spoken using your browser&apos;s built-in speech synthesis.
           </div>
         </CardContent>
       </Card>
@@ -131,39 +129,40 @@ export default function VoicePage() {
       <VoicePresetCard onApply={(p) => setActivePreset(p)} />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Test TTS</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Test TTS</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
           <Textarea
             value={ttsText}
             onChange={e => setTtsText(e.target.value)}
             placeholder="Enter text to speak..."
             rows={3}
             aria-label="Text to speak"
+            className="text-[11px] rounded-lg border-border/40"
           />
-          <div className="flex items-center gap-3">
-            <Button size="sm" onClick={handleGenerate} disabled={generating || !ttsText.trim()}>
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="h-7 text-[11px]" onClick={handleGenerate} disabled={generating || !ttsText.trim()}>
               {generating ? 'Generating...' : 'Generate & Play'}
             </Button>
             {lastResult && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground/60 font-mono">
                 {lastResult.backend} · {lastResult.duration_ms}ms · {lastResult.sample_rate}Hz
               </span>
             )}
           </div>
           {ttsError && (
-            <div className="text-xs text-destructive">{ttsError}</div>
+            <div className="text-[10px] text-destructive">{ttsError}</div>
           )}
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">About</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">About</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground space-y-1">
+        <CardContent className="px-2.5 pb-2.5">
+          <div className="text-[10px] text-muted-foreground/60 space-y-0.5">
             <p>Text-to-speech uses HuggingFace bark-small model when available.</p>
             <p>Falls back to browser native speechSynthesis if the model is unavailable.</p>
             <p>Voice input is available in the chat page via the microphone button.</p>

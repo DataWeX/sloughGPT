@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { ActionCard, Button, Skeleton } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingJobsController, type TrainingBuild } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -99,47 +100,44 @@ export function TrainingBuildsCard({ addToast }: Props) {
   return (
     <ActionCard
       title={`Builds (${builds.length})`}
-      actions={<Button size="sm" variant="ghost" onClick={() => void fetchBuilds()}>Refresh</Button>}
+      actions={<Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void fetchBuilds()}>Refresh</Button>}
       testId="training-builds"
-      contentClassName="space-y-3"
+      contentClassName="space-y-2"
     >
         {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
           </div>
         ) : error ? (
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button size="sm" variant="ghost" onClick={() => void fetchBuilds()}>Retry</Button>
-          </div>
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchBuilds()} />
         ) : builds.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No builds found. Start training to create builds.</p>
+          <p className="text-[10px] text-muted-foreground/60">No builds found. Start training to create builds.</p>
         ) : (
           <>
-            <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => { setFilter('all'); setPage(0) }}>
+            <div className="flex flex-wrap gap-0.5">
+              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} className="h-6 text-[10px]" onClick={() => { setFilter('all'); setPage(0) }}>
                 All ({builds.length})
               </Button>
               {Object.entries(typeCounts).map(([type, count]) => (
-                <Button key={type} size="sm" variant={filter === type ? 'default' : 'ghost'} onClick={() => { setFilter(type); setPage(0) }}>
+                <Button key={type} size="sm" variant={filter === type ? 'default' : 'ghost'} className="h-6 text-[10px]" onClick={() => { setFilter(type); setPage(0) }}>
                   {BUILD_TYPE_LABELS[type] ?? type} ({count})
                 </Button>
               ))}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(b => (
-                <div key={b.name} className="flex items-center justify-between rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
+                <div key={b.name} className="flex items-center justify-between rounded-lg border border-border/40 p-2 hover:bg-muted/20 transition-colors">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate font-medium text-xs">{b.name}</p>
-                      <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground/60">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate font-medium text-[11px]">{b.name}</p>
+                      <span className="rounded-full bg-muted/50 px-1 py-px text-[8px] text-muted-foreground/60">
                         {BUILD_TYPE_LABELS[b.build_type] ?? b.build_type}
                       </span>
                     </div>
-                    <div className="flex gap-2 text-[10px] text-muted-foreground/60 mt-0.5">
+                    <div className="flex gap-1.5 text-[9px] text-muted-foreground/60 mt-0.5 tabular-nums">
                       {b.loss != null && <span>Loss {b.loss.toFixed(4)}</span>}
                       {b.epochs != null && <span>{b.epochs} epochs</span>}
                       {b.size_mb != null && <span>{b.size_mb.toFixed(1)} MB</span>}
@@ -157,13 +155,13 @@ export function TrainingBuildsCard({ addToast }: Props) {
               ))}
             </div>
             {filtered.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
-                <span className="text-[10px] text-muted-foreground">
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
+                <span className="text-[9px] text-muted-foreground/60 tabular-nums">
                   {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
                 </span>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
-                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={(page + 1) * PAGE_SIZE >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</Button>
+                <div className="flex gap-0.5">
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={(page + 1) * PAGE_SIZE >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</Button>
                 </div>
               </div>
             )}

@@ -3,6 +3,7 @@
 import { useState, useCallback, memo } from 'react'
 import { Button, IconChevronDown, IconChevronRight, IconCopy, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 export interface ContextWindowItem {
   label: string
@@ -44,7 +45,7 @@ function ContextWindowItemCard({ item, isExpanded, onToggle }: {
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(item.content)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
   }, [item.content])
 
   return (

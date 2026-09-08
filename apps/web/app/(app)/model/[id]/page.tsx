@@ -5,13 +5,14 @@ export const dynamic = 'force-dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton, KeyValueList, SettingsRow } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
 import { Breadcrumbs } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { QuantizeCard } from '@/components/model/QuantizeCard'
 import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -257,7 +258,7 @@ export default function ModelDetailPage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Metrics</CardTitle>
                 <Button size="sm" variant="outline" className="h-11 text-xs" onClick={runBenchmark} disabled={benchmarking || !isLoaded}>
-                  <IconRefresh className={cn("h-4 w-4 mr-1", benchmarking && "animate-spin")} />
+                  <Spinner className="h-4 w-4 mr-1" />
                   {benchmarking ? 'Benchmarking…' : benchmark ? 'Rerun' : 'Run benchmark'}
                 </Button>
               </div>
@@ -266,7 +267,7 @@ export default function ModelDetailPage() {
               {!isLoaded ? (
                 <p className="text-sm text-muted-foreground text-center py-4">Load this model to see live metrics.</p>
               ) : benchmark?.error ? (
-                <p className="text-sm text-destructive text-center py-4">Benchmark failed: {benchmark.error}</p>
+                <StatusBanner variant="error" message={`Benchmark failed: ${benchmark.error}`} dismissible={false} />
               ) : benchmark ? (
                 <div className="space-y-4">
                   <KpiGrid columns={4}>

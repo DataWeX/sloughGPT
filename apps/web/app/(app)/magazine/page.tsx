@@ -75,7 +75,7 @@ const accentThemes = [
 
 const typographyScale = [
   { role: 'Page Title', class: 'text-2xl md:text-3xl font-semibold', sample: 'Noir Violet', font: 'font-[family-name:var(--font-rubik)]', weight: '600' },
-  { role: 'Section Title', class: 'text-base font-medium', sample: 'Design System', font: 'font-[family-name:var(--font-rubik)]', weight: '500' },
+  { role: 'Section Title', class: 'text-[11px] font-medium', sample: 'Design System', font: 'font-[family-name:var(--font-rubik)]', weight: '500' },
   { role: 'Body', class: 'text-sm', sample: 'Warm, sophisticated, technical.', font: 'font-[family-name:var(--font-rubik)]', weight: '400' },
   { role: 'Caption', class: 'text-xs text-muted-foreground', sample: 'Last updated 2 minutes ago', font: 'font-[family-name:var(--font-rubik)]', weight: '400' },
   { role: 'Label', class: 'text-xs font-medium uppercase tracking-wider', sample: 'STATUS', font: 'font-[family-name:var(--font-rubik)]', weight: '500' },
@@ -145,7 +145,7 @@ function SectionHeader({ number, title }: { number: string; title: string }) {
   return (
     <div className="flex items-baseline gap-3 pt-2">
       <span className="font-mono text-xs text-muted-foreground">{number}</span>
-      <h2 className="text-base font-medium">{title}</h2>
+      <h2 className="text-[11px] font-medium">{title}</h2>
       <div className="h-px flex-1 bg-border" />
     </div>
   )
@@ -238,11 +238,11 @@ export default function MagazinePage() {
         <SectionHeader number="02" title="Color Palette" />
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Light Mode</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-4 gap-4 sm:grid-cols-6 md:grid-cols-9">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-9">
               {lightColors.map((c) => (
                 <Swatch key={c.name} rgb={c.rgb} label={c.label} description={c.desc} size="md" />
               ))}
@@ -251,11 +251,11 @@ export default function MagazinePage() {
         </Card>
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Dark Mode</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-4 gap-4 sm:grid-cols-6 md:grid-cols-9">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-9">
               {darkColors.map((c) => (
                 <Swatch key={c.name} rgb={c.rgb} label={c.label} description={c.desc} size="md" />
               ))}
@@ -271,7 +271,7 @@ export default function MagazinePage() {
         <SectionHeader number="03" title="Typography Scale" />
 
         <Card className="magazine-card">
-          <CardContent className="pt-4">
+          <CardContent className="pt-2.5 px-2.5 pb-2.5">
             <div className="space-y-4">
               {typographyScale.map((t) => (
                 <div key={t.role} className="flex flex-col gap-1 border-b border-border/40 pb-3 last:border-0 last:pb-0">
@@ -293,10 +293,10 @@ export default function MagazinePage() {
         </Card>
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Font Families</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-border/40 pb-2">
                 <div>
@@ -338,10 +338,10 @@ export default function MagazinePage() {
 
         {/* Buttons */}
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Buttons</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm">Primary</Button>
@@ -366,10 +366,10 @@ export default function MagazinePage() {
 
         {/* Badges */}
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Badges</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="default">Default</Badge>
               <Badge variant="secondary">Secondary</Badge>
@@ -381,12 +381,12 @@ export default function MagazinePage() {
 
         {/* Form Elements */}
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Form Elements</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-1.5 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                     Input
@@ -430,20 +430,20 @@ export default function MagazinePage() {
 
         {/* Cards */}
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Cards</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-md border border-border p-4 shadow-sm">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid gap-1.5 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 shadow-sm">
                 <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shadow SM</div>
                 <div className="mt-1 text-sm">Subtle elevation for cards at rest.</div>
               </div>
-              <div className="rounded-md border border-border p-4 shadow-md">
+              <div className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 shadow-md">
                 <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shadow MD</div>
                 <div className="mt-1 text-sm">Hover states, dropdowns.</div>
               </div>
-              <div className="rounded-md border border-border p-4 shadow-lg">
+              <div className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 shadow-lg">
                 <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shadow LG</div>
                 <div className="mt-1 text-sm">Modals, popovers.</div>
               </div>
@@ -459,10 +459,10 @@ export default function MagazinePage() {
         <SectionHeader number="05" title="Spacing & Radius" />
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Spacing Scale</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="space-y-3">
               {spacingScale.map((s) => (
                 <div key={s.token} className="flex items-center gap-3">
@@ -481,10 +481,10 @@ export default function MagazinePage() {
         </Card>
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Border Radius</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="flex flex-wrap items-end gap-4">
               {radiusScale.map((r) => (
                 <div key={r.token} className="flex flex-col items-center gap-1.5">
@@ -507,10 +507,10 @@ export default function MagazinePage() {
         </Card>
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Shadow Depth</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="flex flex-wrap items-end gap-6">
               {[
                 { token: 'shadow-sm', label: 'SM' },
@@ -541,10 +541,10 @@ export default function MagazinePage() {
         <SectionHeader number="06" title="Interactive States" />
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Button States</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="flex flex-wrap items-center gap-3">
               <Button size="sm">Default</Button>
               <Button size="sm" className="bg-primary/90">Hover</Button>
@@ -561,11 +561,11 @@ export default function MagazinePage() {
         </Card>
 
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Hover Preview</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid gap-1.5 sm:grid-cols-2">
               <button
                 type="button"
                 className={cn(
@@ -618,7 +618,7 @@ export default function MagazinePage() {
                 html.dark
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
               {[
                 { label: 'Background', rgb: '17 15 24' },
                 { label: 'Card', rgb: '28 25 38' },
@@ -685,13 +685,13 @@ export default function MagazinePage() {
         <SectionHeader number="08" title="Accent Themes" />
 
         <Card className="magazine-card">
-          <CardContent className="pt-4">
+          <CardContent className="pt-2.5 px-2.5 pb-2.5">
             <p className="mb-4 text-xs text-muted-foreground">
               Seven accent themes override <code className="font-mono text-[10px] bg-muted px-1 rounded">--primary</code> and{' '}
               <code className="font-mono text-[10px] bg-muted px-1 rounded">--ring</code> via CSS class on{' '}
               <code className="font-mono text-[10px] bg-muted px-1 rounded">&lt;html&gt;</code>.
             </p>
-            <div className="grid grid-cols-4 gap-4 sm:grid-cols-7">
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
               {accentThemes.map((t) => (
                 <Swatch key={t.name} rgb={t.rgb} label={t.label} size="lg" />
               ))}
@@ -701,15 +701,15 @@ export default function MagazinePage() {
 
         {/* Theme preview row */}
         <Card className="magazine-card">
-          <CardHeader>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <CardTitle className="text-base">Theme in Context</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid gap-1.5 sm:grid-cols-2">
               {accentThemes.map((t) => (
                 <div
                   key={t.name}
-                  className="flex items-center gap-3 rounded-md border border-border p-3"
+                  className="flex items-center gap-3 rounded-lg border border-border/40 p-2.5 hover:bg-muted/20"
                 >
                   <div
                     className="h-8 w-8 shrink-0 rounded-md shadow-sm"

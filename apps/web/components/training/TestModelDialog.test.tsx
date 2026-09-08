@@ -92,7 +92,6 @@ describe('TestModelDialog', () => {
     const result = { prompt: 'hi', response: '', model: '', tokens_generated: 0, error: 'model not loaded' }
     render(<TestModelDialog {...base} result={result} />)
     expect(screen.getByText('model not loaded')).toBeInTheDocument()
-    expect(screen.getByText('Error')).toBeInTheDocument()
   })
 
   it('shows model and token info', () => {

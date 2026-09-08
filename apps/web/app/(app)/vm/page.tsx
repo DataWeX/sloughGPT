@@ -3,10 +3,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardHeader, CardTitle, CardContent, Button, Progress, Badge, Spinner } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { chatDB } from '@/lib/db'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
@@ -825,9 +827,7 @@ export default function VMPage() {
 
         {/* Status banner */}
         {result && !result.success && result.error && (
-          <div className="bg-destructive/10 border border-destructive/30 text-destructive text-xs p-2 rounded">
-            {result.error}
-          </div>
+          <StatusBanner variant="error" message={result.error} dismissible={false} />
         )}
         {result && result.success && result.steps_executed >= clampSteps(maxSteps) && (
           <div className="bg-warning/10 border border-warning/30 text-warning text-xs p-2 rounded">
@@ -884,7 +884,7 @@ export default function VMPage() {
                         navigator.clipboard.writeText(url)
                         setCopied(true)
                         if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-                        copiedTimerRef.current = setTimeout(() => setCopied(false), 2000)
+                        copiedTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
                       }}
                     >
                       {copied ? 'Copied!' : 'Share'}
@@ -946,9 +946,7 @@ export default function VMPage() {
                   <StatusRow label="Steps" value={result.steps_executed.toLocaleString()} />
                   <StatusRow label="Time" value={`${result.elapsed_ms.toFixed(1)}ms`} />
                   {result.error && (
-                    <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
-                      {result.error}
-                    </div>
+                    <StatusBanner variant="error" message={result.error} dismissible={false} />
                   )}
                   {permissionDenied && (
                     <div className="text-xs text-warning bg-warning/10 p-2 rounded">
@@ -1459,7 +1457,7 @@ function TrainingCard({ job, onStop }: { job: VMTrainingJob | null; onStop: () =
           </div>
         )}
         {job.error && (
-          <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">{job.error}</div>
+          <StatusBanner variant="error" message={job.error} dismissible={false} />
         )}
       </CardContent>
     </Card>

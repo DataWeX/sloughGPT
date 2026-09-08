@@ -118,7 +118,7 @@ export default function CompanionPage() {
           <StatCard label="Curiosity" value={<Skeleton className="h-5 w-8" />} />
           <StatCard label="Creativity" value={<Skeleton className="h-5 w-8" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent className="px-2.5 pb-2.5"><div className="h-48 animate-pulse bg-muted/20 rounded-lg" /></CardContent></Card>
       </PageContainer>
     )
   }
@@ -142,11 +142,11 @@ export default function CompanionPage() {
         <StatCard label="Avg Trait" value={String(avgTrait)} />
       </KpiGrid>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Presets</CardTitle>
+        <Card>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Presets</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2.5 pb-2.5">
           <div className="flex flex-wrap gap-2">
             {presets.map(p => (
               <button
@@ -167,15 +167,15 @@ export default function CompanionPage() {
 
       {traits && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Personality Traits</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Personality Traits</CardTitle>
             <div className="flex gap-1.5">
               <Button size="sm" variant="ghost" onClick={handleReset} aria-label="Reset">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-2.5 pb-2.5">
             {/* Radar chart */}
             {(() => {
               const traitKeys = Object.keys(TRAIT_LABELS)
@@ -253,7 +253,7 @@ export default function CompanionPage() {
                 </div>
               )
             })()}
-            <div className="grid gap-3">
+            <div className="grid gap-1.5">
               {Object.entries(TRAIT_LABELS).map(([key, { label, color }]) => (
                 <Slider
                   key={key}
@@ -279,10 +279,10 @@ export default function CompanionPage() {
 
       {systemPrompt && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">System Prompt</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">System Prompt</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <pre className="text-xs text-muted-foreground bg-muted/30 rounded-md p-3 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">
               {systemPrompt}
             </pre>
@@ -291,15 +291,15 @@ export default function CompanionPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Test Chat</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Test Chat</CardTitle>
           {chatMessages.length > 0 && (
             <Button size="sm" variant="ghost" onClick={handleClearChat} aria-label="Clear chat history">
               Clear
             </Button>
           )}
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 px-2.5 pb-2.5">
           {chatMessages.length > 0 && (
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {chatMessages.map((msg, i) => (
@@ -324,7 +324,7 @@ export default function CompanionPage() {
             </div>
           )}
           {chatMessages.length === 0 && !chatLoading && (
-            <p className="text-xs text-muted-foreground text-center py-4">Say something to your companion...</p>
+            <p className="text-[10px] text-muted-foreground/60 text-center py-4">Say something to your companion...</p>
           )}
           <div ref={chatEndRef} />
           <div className="flex gap-2">

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { cn, Switch, Button, Slider } from '@sloughgpt/strui'
-import { IconRefresh, IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
+import { cn, Switch, Button, Slider, Spinner } from '@sloughgpt/strui'
+import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
 import { useToastStore } from '@/lib/toast-store'
@@ -199,7 +200,7 @@ export function MemoryTab() {
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-40"
             aria-label="Refresh memory"
           >
-            <IconRefresh className={cn('h-3 w-3', loading && 'animate-spin')} />
+            <Spinner className="h-3 w-3" />
           </button>
           <button
             type="button"
@@ -281,7 +282,7 @@ export function MemoryTab() {
                   {adding ? 'Saving…' : 'Save'}
                 </Button>
               </div>
-              {addError && <p className="text-[10px] text-destructive">{addError}</p>}
+              {addError && <StatusBanner variant="error" message={addError} dismissible={false} />}
             </div>
           )}
 
@@ -351,7 +352,7 @@ export function MemoryTab() {
                   Cancel
                 </Button>
               </div>
-              {editError && <p className="text-[10px] text-destructive">{editError}</p>}
+              {editError && <StatusBanner variant="error" message={editError} dismissible={false} />}
             </div>
           )}
         </>

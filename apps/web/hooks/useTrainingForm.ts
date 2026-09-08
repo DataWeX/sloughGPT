@@ -266,21 +266,6 @@ export function useTrainingForm(
       addToast('Select a dataset or paste text for native training', 'error'); return
     }
 
-    if (method === 'native') {
-      if (nativeEmbed % nativeHeads !== 0) {
-        addToast(`Embed size (${nativeEmbed}) must be divisible by heads (${nativeHeads})`, 'error'); return
-      }
-      if (nativeEmbed < 16) {
-        addToast('Embed size must be at least 16', 'error'); return
-      }
-      if (nativeLayers < 1) {
-        addToast('Layers must be at least 1', 'error'); return
-      }
-      if (nativeBlockSize < 8) {
-        addToast('Block size must be at least 8', 'error'); return
-      }
-    }
-
     const body: Record<string, unknown> = {
       name: `${method}-training-${Date.now()}`,
       model: selectedModel || 'slonet-native',

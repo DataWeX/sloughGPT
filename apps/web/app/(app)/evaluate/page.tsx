@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Button, cn } from '@sloughgpt/strui'
+import { Button, cn, Spinner } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
@@ -134,7 +134,7 @@ export default function EvaluatePage() {
         />
       )}
       <Button variant="outline" size="sm" onClick={section === 'single' ? handleRefreshMetrics : cmp.runAll} disabled={section === 'single' ? smRunning : cmp.loading || cmp.running.size > 0}>
-        <IconRefresh className={cn('h-3.5 w-3.5 mr-1', (section === 'single' ? smRunning : cmp.running.size > 0) && 'animate-spin')} />
+        <Spinner className="h-3.5 w-3.5 mr-1" />
         {section === 'single' ? 'Refresh' : 'Benchmark all'}
       </Button>
     </div>
@@ -200,15 +200,15 @@ export default function EvaluatePage() {
                 <StatCard label="Loaded" value={metrics?.model_loaded ? 'Yes' : 'No'} />
               </KpiGrid>
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="text-base">Model Metrics</CardTitle>
-                  <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={smRunning} aria-label="Refresh metrics">
-                    <IconRefresh className={cn('h-4 w-4', smRunning && 'animate-spin')} />
+                <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+                  <CardTitle className="text-[11px] font-medium">Model Metrics</CardTitle>
+                  <Button size="sm" variant="ghost" onClick={handleRefreshMetrics} disabled={smRunning} aria-label="Refresh metrics" className="h-6 text-[10px]">
+                    <Spinner className="h-4 w-4" />
                   </Button>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-2.5 pb-2.5">
                   {metrics ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                       {[
                         { label: 'Model', value: String(metrics.model ?? '—') },
                         { label: 'Responses', value: String(metrics.inference_count ?? 0) },
@@ -217,24 +217,24 @@ export default function EvaluatePage() {
                         { label: 'Memory', value: `${metrics.memory_mb ?? 0} MB` },
                         { label: 'Loaded', value: metrics.model_loaded ? 'Yes' : 'No' },
                       ].map(s => (
-                        <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                          <div className="text-xs text-muted-foreground">{s.label}</div>
-                          <div className="text-sm font-mono font-medium">{s.value}</div>
+                        <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center">
+                          <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                          <div className="text-[11px] font-mono font-medium">{s.value}</div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-6 text-sm text-muted-foreground">
+                    <div className="text-center py-6 text-[10px] text-muted-foreground/60">
                       No quality data yet. Chat with the model to generate responses.
                       <div className="mt-2">
-                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/models')}>
+                        <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/models')}>
                           Open Models
                         </Button>
                       </div>
                     </div>
                   )}
                   {stats && (
-                    <div className="mt-3 text-xs text-muted-foreground">
+                    <div className="mt-3 text-[10px] text-muted-foreground">
                       {stats.total} responses logged · avg {stats.avg_tokens?.toFixed(0) ?? 0} tokens
                     </div>
                   )}
@@ -245,27 +245,27 @@ export default function EvaluatePage() {
 
           {smTab === 'quality' && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Quality Metrics</CardTitle>
+              <CardHeader className="pb-2 pt-2.5 px-2.5">
+                <CardTitle className="text-[11px] font-medium">Quality Metrics</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2.5 pb-2.5">
                 {quality ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                     {[
                       { label: 'Coherence', value: `${(quality.coherence_score * 100).toFixed(1)}%`, color: 'text-success' },
                       { label: 'Quality', value: `${(quality.quality_score * 100).toFixed(1)}%`, color: 'text-primary' },
                       { label: 'Repetition', value: `${(quality.repetition_rate * 100).toFixed(1)}%`, color: quality.repetition_rate > 0.3 ? 'text-destructive' : 'text-muted-foreground' },
                     ].map(s => (
-                      <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
-                        <div className="text-xs text-muted-foreground">{s.label}</div>
-                        <div className={cn('text-base font-mono font-medium', s.color)}>{s.value}</div>
+                      <div key={s.label} className="rounded-lg bg-muted/20 p-2.5 text-center">
+                        <div className="text-[10px] text-muted-foreground">{s.label}</div>
+                        <div className={cn('text-[11px] font-mono font-medium', s.color)}>{s.value}</div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
+                  <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
                     <div>No quality data yet. Chat with the model to generate responses.</div>
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/chat')}>
                       Open Chat
                     </Button>
                   </div>
@@ -276,34 +276,34 @@ export default function EvaluatePage() {
 
           {smTab === 'responses' && (
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base">Logged Responses ({responses.length})</CardTitle>
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+                <CardTitle className="text-[11px] font-medium">Logged Responses ({responses.length})</CardTitle>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses">
+                  <Button size="sm" variant="ghost" onClick={handleLoadResponses} aria-label="Refresh responses" className="h-6 text-[10px]">
                     <IconRefresh className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="ghost" className="text-destructive" onClick={handleClearHistory}>
+                  <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={handleClearHistory}>
                     Clear
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-2.5 pb-2.5">
                 {responses.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-muted-foreground space-y-2">
+                  <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-2">
                     <div>No responses logged yet.</div>
-                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/chat')}>
+                    <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/chat')}>
                       Open Chat
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto">
                     {responses.map((r, i) => (
-                      <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
-                        <div className="text-xs text-muted-foreground mb-1">
+                      <div key={i} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm">
+                        <div className="text-[10px] text-muted-foreground mb-1">
                           {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
                         </div>
-                        <div className="text-xs"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
-                        <div className="text-xs mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
+                        <div className="text-[10px]"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
+                        <div className="text-[10px] mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
                       </div>
                     ))}
                   </div>
@@ -314,32 +314,32 @@ export default function EvaluatePage() {
 
           {smTab === 'perplexity' && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Perplexity Calculator</CardTitle>
+              <CardHeader className="pb-2 pt-2.5 px-2.5">
+                <CardTitle className="text-[11px] font-medium">Perplexity Calculator</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="px-2.5 pb-2.5 space-y-3">
                 <Textarea
                   value={pplxText}
                   onChange={e => setPplxText(e.target.value)}
                   placeholder="Enter text to calculate perplexity..."
                   rows={3}
                 />
-                <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()}>
+                <Button size="sm" onClick={handleCalcPerplexity} disabled={pplxLoading || !pplxText.trim()} className="h-7 text-[11px]">
                   {pplxLoading ? 'Calculating...' : 'Calculate'}
                 </Button>
                 {pplxResult && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">Perplexity</div>
-                      <div className="text-base font-mono font-medium">{pplxResult.perplexity}</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                    <div className="rounded-lg bg-muted/20 p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">Perplexity</div>
+                      <div className="text-[11px] font-mono font-medium">{pplxResult.perplexity}</div>
                     </div>
-                    <div className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">Loss</div>
-                      <div className="text-base font-mono font-medium">{pplxResult.loss}</div>
+                    <div className="rounded-lg bg-muted/20 p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">Loss</div>
+                      <div className="text-[11px] font-mono font-medium">{pplxResult.loss}</div>
                     </div>
-                    <div className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">Tokens</div>
-                      <div className="text-base font-mono font-medium">{pplxResult.tokens}</div>
+                    <div className="rounded-lg bg-muted/20 p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">Tokens</div>
+                      <div className="text-[11px] font-mono font-medium">{pplxResult.tokens}</div>
                     </div>
                   </div>
                 )}

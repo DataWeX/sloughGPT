@@ -202,10 +202,10 @@ const handleGetMerges = async () => {
       )}
 
       {!loading && !loadError && !stats && (
-        <div className="text-center py-8 text-sm text-muted-foreground">
+        <div className="text-center py-8 text-[10px] text-muted-foreground/60">
           No tokenizer data available. Train a tokenizer or try again later.
           <div className="mt-2">
-            <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/training')}>
+            <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/training')}>
               Go to Training
             </Button>
           </div>
@@ -216,7 +216,7 @@ const handleGetMerges = async () => {
 
       {tab === 'playground' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="px-2.5 pb-2.5 pt-4 space-y-3">
             <Textarea
               value={inputText}
               onChange={e => setInputText(e.target.value)}
@@ -250,16 +250,16 @@ const handleGetMerges = async () => {
 
       {tab === 'vocab' && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Vocabulary ({vocabTotal})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={() => handleLoadVocab(vocabOffset)}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Vocabulary ({vocabTotal})</CardTitle>
+            <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleLoadVocab(vocabOffset)}>
               <IconRefresh className="h-4 w-4" />
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="space-y-1 max-h-96 overflow-y-auto font-mono text-xs">
               {vocabEntries.map(e => (
-                <div key={e.id} className="flex items-center gap-3 py-0.5 border-b border-border/20">
+                <div key={e.id} className="flex items-center gap-1.5 py-0.5 border-b border-border/20">
                   <span className="w-12 text-right text-muted-foreground">{e.id}</span>
                   <span className={e.is_special ? 'text-primary font-medium' : ''}>{e.token}</span>
                 </div>
@@ -279,20 +279,20 @@ const handleGetMerges = async () => {
 
       {tab === 'samples' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Tokenization Samples</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Tokenization Samples</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {samples.length === 0 ? (
               <Button size="sm" onClick={handleLoadSamples}>Load Samples</Button>
             ) : (
               <div className="space-y-2">
                 {samples.map(s => (
-                  <div key={s.word} className="flex items-center gap-3 text-xs py-1 border-b border-border/20">
+                  <div key={s.word} className="flex items-center gap-1.5 text-xs py-1 border-b border-border/20">
                     <span className="font-medium w-24 truncate">{s.word}</span>
                     <div className="flex gap-1">
                       {s.tokens.map((t, i) => (
-                        <span key={i} className="font-mono bg-muted/50 px-1 py-0.5 rounded">{t}</span>
+                        <span key={i} className="font-mono bg-muted/20 rounded-lg px-1 py-0.5">{t}</span>
                       ))}
                     </div>
                     <span className="text-muted-foreground ml-auto">{s.count} tokens</span>
@@ -306,12 +306,12 @@ const handleGetMerges = async () => {
 
       {tab === 'train' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Train Tokenizer</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Train Tokenizer</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             {trainResult && (
-              <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">
+              <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-[11px] text-primary">
                 {trainResult}
               </div>
             )}
@@ -366,12 +366,12 @@ const handleGetMerges = async () => {
       
       {tab === 'merges' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">BPE Merges</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">BPE Merges</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             <div className="flex items-center gap-2">
-              <Input value={mergesQuery} onChange={e => setMergesQuery(e.target.value)} placeholder="Filter merges (optional)" className="h-8 text-xs flex-1" />
+              <Input value={mergesQuery} onChange={e => setMergesQuery(e.target.value)} placeholder="Filter merges (optional)" className="h-7 text-[11px] flex-1" />
               <Button size="sm" onClick={() => void handleGetMerges()}>Load Merges</Button>
             </div>
             {mergesResult && (

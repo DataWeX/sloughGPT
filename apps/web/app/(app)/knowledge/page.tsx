@@ -15,7 +15,7 @@ import { Skeleton } from '@sloughgpt/strui'
 import { KnowledgeStatsSkeleton, KnowledgeCategoryChartSkeleton, KnowledgeAdapterSkeleton, KnowledgeRAGSkeleton, KnowledgeTopicsSkeleton } from '@/components/ui/PageSkeletons'
 import { Chip } from '@sloughgpt/strui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@sloughgpt/strui'
-import { IconRefresh, IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown, IconMapPin } from '@sloughgpt/strui'
+import { IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown, IconMapPin } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { knowledgeController, type KnowledgeItem, type KnowledgeStats, type TopicCount } from '@/lib/knowledge-controller'
 import { getRAGStats, clearRAG, listRAGDocuments, syncKGToRAG, type RAGStats, type RAGDocument } from '@/lib/rag-controller'
@@ -450,7 +450,7 @@ export default function KnowledgePage() {
   const headerRight = useMemo(() => (
     <div className="flex items-center gap-2">
       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchData} disabled={loading}>
-        <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
+        <Spinner className="h-3 w-3 mr-1" />
         Refresh
       </Button>
       {items.length > 0 && (

@@ -19,6 +19,7 @@ import 'prismjs/components/prism-css'
 import 'prismjs/components/prism-sql'
 import 'prismjs/components/prism-c'
 import 'prismjs/components/prism-cpp'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface MarkdownProps {
   content: string
@@ -58,7 +59,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
   }
   const highlighted = useMemo(() => highlightCode(code, language), [code, language])
   return (

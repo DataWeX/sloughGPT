@@ -65,8 +65,10 @@ export interface Webhook {
 }
 
 export interface AutoTrainStartRequest {
+  name?: string
+  model?: string
   algo?: string
-  dataset_id?: string
+  dataset?: string
   soul_name?: string
   epochs?: number
   learning_rate?: number

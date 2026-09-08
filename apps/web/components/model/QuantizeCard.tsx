@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
 import { modelController, type QuantizationResult } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -73,10 +72,10 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
 
   return (
     <Card data-testid="quantize-card">
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-base">Quantize</CardTitle>
+          <div className="flex items-center gap-1.5">
+            <CardTitle className="text-xs">Quantize</CardTitle>
             {isQuantized && (
               <Badge
                 label={`${q?.bits ?? '?'}-bit`}
@@ -85,11 +84,11 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
               />
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs"
+              className="h-6 text-[10px]"
               onClick={() => handleQuantize(8)}
               disabled={quantizing || dequantizing}
             >
@@ -98,7 +97,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs"
+              className="h-6 text-[10px]"
               onClick={() => handleQuantize(4)}
               disabled={quantizing || dequantizing}
             >
@@ -108,7 +107,7 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 text-xs"
+                className="h-6 text-[10px]"
                 onClick={handleDequantize}
                 disabled={quantizing || dequantizing}
               >
@@ -120,33 +119,33 @@ export function QuantizeCard({ isLoaded, modelId, health, onQuantized }: Quantiz
       </CardHeader>
       <CardContent>
         {!display ? (
-          <p className="text-sm text-muted-foreground text-center py-2">
+          <p className="text-[10px] text-muted-foreground/60 text-center py-1.5">
             Quantize to reduce memory at the cost of slight quality loss.
           </p>
         ) : (
-          <div className="space-y-2 text-[11px]">
+          <div className="space-y-1 text-[10px]">
             {display.bits != null && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Precision</span>
-                <span className="font-mono">{display.bits}-bit {display.mode || 'symmetric'}</span>
+                <span className="text-muted-foreground/60">Precision</span>
+                <span className="font-mono tabular-nums">{display.bits}-bit {display.mode || 'symmetric'}</span>
               </div>
             )}
             {display.tensors != null && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Tensors</span>
-                <span className="font-mono">{display.tensors}</span>
+                <span className="text-muted-foreground/60">Tensors</span>
+                <span className="font-mono tabular-nums">{display.tensors}</span>
               </div>
             )}
             {display.avg_cosine_sim != null && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Avg quality</span>
-                <span className="font-mono">{display.avg_cosine_sim.toFixed(3)}</span>
+                <span className="text-muted-foreground/60">Avg quality</span>
+                <span className="font-mono tabular-nums">{display.avg_cosine_sim.toFixed(3)}</span>
               </div>
             )}
             {display.min_cosine_sim != null && (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Min quality</span>
-                <span className="font-mono">{display.min_cosine_sim.toFixed(3)}</span>
+                <span className="text-muted-foreground/60">Min quality</span>
+                <span className="font-mono tabular-nums">{display.min_cosine_sim.toFixed(3)}</span>
               </div>
             )}
           </div>

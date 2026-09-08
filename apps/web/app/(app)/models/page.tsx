@@ -6,8 +6,9 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { useRouter } from 'next/navigation'
 import type { ModelEntry } from '@/lib/types/models'
 import { PageContainer } from '@/components/PageContainer'
-import { Button, Card, CardContent, cn, FoldSection } from '@sloughgpt/strui'
+import { Button, Card, CardContent, FoldSection, Spinner } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
@@ -221,25 +222,15 @@ export default function ModelsPage() {
           }}>
             Export
           </Button>
-           <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={handleRefresh}><IconRefresh className={cn('w-3.5 h-3.5 mr-1', refreshing && 'animate-spin')} /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
+           <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={handleRefresh}><Spinner className="w-3.5 h-3.5 mr-1" /> {refreshing ? 'Refreshing...' : 'Refresh'}</Button>
         </div>
       }
     >
         {modelsError && models.length === 0 && (
-          <Card>
-            <CardContent className="py-4 flex items-center justify-between">
-              <span className="text-sm text-destructive">Could not load models</span>
-              <Button size="sm" variant="outline" onClick={() => refetchModels()}>Retry</Button>
-            </CardContent>
-          </Card>
+          <StatusBanner variant="error" message="Could not load models" dismissible={false} onRetry={() => refetchModels()} />
         )}
         {soulsError && souls.length === 0 && (
-          <Card>
-            <CardContent className="py-4 flex items-center justify-between">
-              <span className="text-sm text-destructive">Could not load personalities</span>
-              <Button size="sm" variant="outline" onClick={() => refetchSouls()}>Retry</Button>
-            </CardContent>
-          </Card>
+          <StatusBanner variant="error" message="Could not load personalities" dismissible={false} onRetry={() => refetchSouls()} />
         )}
 
         {/* ── Primary: Status + Personalities + Catalog ─────── */}

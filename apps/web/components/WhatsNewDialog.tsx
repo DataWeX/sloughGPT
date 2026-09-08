@@ -93,36 +93,36 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           <DialogDescription>Recent features and improvements across builds.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2 overflow-y-auto pr-1 custom-scrollbar-container">
+        <div className="space-y-1.5 overflow-y-auto pr-1 custom-scrollbar-container">
           {whatsNewItems.map(item => {
             const isUnseen = !seen.has(item.id)
             return (
               <div
                 key={item.id}
                 className={cn(
-                  "rounded-lg border p-3 transition-colors",
+                  "rounded-lg border p-2.5 transition-colors",
                   isUnseen ? "border-primary/30 bg-primary/[0.03]" : "border-border/40 bg-background"
                 )}
               >
-                <div className="flex items-start gap-2.5">
-                  <span className="text-lg leading-none mt-0.5 shrink-0 text-muted-foreground">{EMOJI_TO_ICON[item.icon] ?? <Sparkles className="h-4 w-4" />}</span>
+                <div className="flex items-start gap-2">
+                  <span className="text-sm leading-none mt-0.5 shrink-0 text-muted-foreground">{EMOJI_TO_ICON[item.icon] ?? <Sparkles className="h-3.5 w-3.5" />}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {item.href ? (
-                        <Link href={item.href} prefetch={false} onClick={() => onOpenChange(false)} className="text-sm font-medium hover:underline">
+                        <Link href={item.href} prefetch={false} onClick={() => onOpenChange(false)} className="text-[11px] font-medium hover:underline">
                           {item.title}
                         </Link>
                       ) : (
-                        <span className="text-sm font-medium">{item.title}</span>
+                        <span className="text-[11px] font-medium">{item.title}</span>
                       )}
-                      <span className="text-[10px] text-muted-foreground">{item.date}</span>
+                      <span className="text-[9px] text-muted-foreground/60">{item.date}</span>
                       {isUnseen && (
-                        <span className="text-[9px] font-medium text-primary bg-primary/10 rounded-full px-1.5 py-0.5">NEW</span>
+                        <span className="text-[8px] font-medium text-primary bg-primary/10 rounded-full px-1 py-0.5">NEW</span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{item.description}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5 leading-relaxed">{item.description}</p>
                     {item.tags && item.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
+                      <div className="flex flex-wrap gap-1 mt-1">
                         {item.tags.map(tag => (
                           <Badge key={tag} label={tag} variant="default" size="sm" />
                         ))}
@@ -135,9 +135,9 @@ export function WhatsNewDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           })}
         </div>
 
-        <div className="flex items-center justify-between pt-2 border-t border-border/30">
-          <span className="text-xs text-muted-foreground">{whatsNewItems.length} entries</span>
-          <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        <div className="flex items-center justify-between pt-1.5 border-t border-border/30">
+          <span className="text-[9px] text-muted-foreground/60">{whatsNewItems.length} entries</span>
+          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => onOpenChange(false)}>Close</Button>
         </div>
       </DialogContent>
     </Dialog>

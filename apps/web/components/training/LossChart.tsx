@@ -100,10 +100,10 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
         <button
           type="button"
           onClick={() => onExportData ?? exportLossCSV(data, rewardData)}
-          className="absolute top-1 right-1 z-10 h-5 w-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity text-muted-foreground hover:text-foreground hover:bg-muted/60"
+          className="absolute top-1 right-1 z-10 h-4 w-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity text-muted-foreground/60 hover:text-foreground hover:bg-muted/60"
           aria-label="Export chart data as CSV"
         >
-          <IconDownload className="h-3 w-3" />
+          <IconDownload className="h-2.5 w-2.5" />
         </button>
       )}
       <ResponsiveContainer width="100%" height={height}>
@@ -111,36 +111,37 @@ export const LossChart = memo(function LossChart({ data, rewardData, height = 20
         <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
         <XAxis
           dataKey="step"
-          tick={{ fontSize: 11 }}
+          tick={{ fontSize: 10 }}
           stroke="hsl(var(--muted-foreground))"
           tickLine={false}
-          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }}
+          label={{ value: 'Step', position: 'insideBottomRight', offset: -4, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }}
         />
           <YAxis
             yAxisId="loss"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 10 }}
             stroke="hsl(var(--muted-foreground))"
             tickLine={false}
             domain={['auto', 'auto']}
-            label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 4, style: { fontSize: 10, fill: 'hsl(var(--muted-foreground))' } }}
+            label={{ value: 'Loss', angle: -90, position: 'insideLeft', offset: 4, style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' } }}
           />
           {hasReward && (
             <YAxis
               yAxisId="reward"
               orientation="right"
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 10 }}
               stroke="rgb(var(--success))"
               tickLine={false}
               domain={['auto', 'auto']}
-              label={{ value: 'Reward', angle: 90, position: 'insideRight', offset: 4, style: { fontSize: 10, fill: 'rgb(var(--success))' } }}
+              label={{ value: 'Reward', angle: 90, position: 'insideRight', offset: 4, style: { fontSize: 9, fill: 'rgb(var(--success))' } }}
             />
           )}
           <Tooltip
             contentStyle={{
               backgroundColor: 'hsl(var(--background))',
               border: '1px solid hsl(var(--border))',
-              borderRadius: '4px',
-              fontSize: '12px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              padding: '6px 8px',
             }}
             labelStyle={{ color: 'hsl(var(--foreground))' }}
             labelFormatter={(label) => `Step ${label}`}

@@ -114,71 +114,60 @@ export default function CollectionsPage() {
       title="Collections"
       subtitle="Data collection pipelines"
       headerRight={
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => void fetchPipelines()}>Refresh</Button>
-          <Button size="sm" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void fetchPipelines()}>Refresh</Button>
+          <Button size="sm" className="h-6 text-[10px]" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
             {showCreate ? 'Cancel' : 'New pipeline'}
           </Button>
         </div>
       }
     >
       {stats && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Pipelines</p>
-              <p className="text-base font-medium">{stats.pipelines}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Sources</p>
-              <p className="text-base font-medium">{stats.sources}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Stores</p>
-              <p className="text-base font-medium">{stats.stores}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3">
-              <p className="text-xs text-muted-foreground">Filters</p>
-              <p className="text-base font-medium">{stats.filters}</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: 'Pipelines', value: stats.pipelines },
+            { label: 'Sources', value: stats.sources },
+            { label: 'Stores', value: stats.stores },
+            { label: 'Filters', value: stats.filters },
+          ].map(s => (
+            <Card key={s.label}>
+              <CardContent className="p-2.5">
+                <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</p>
+                <p className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{s.value}</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
       {showCreate && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Create pipeline</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Create pipeline</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="pipe-name" variant="uppercase">Name</Label>
+          <CardContent className="space-y-2 px-2.5 pb-2.5">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="pipe-name" className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Name</Label>
               <Input id="pipe-name" value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="my-pipeline" className="h-8 text-sm" />
+                placeholder="my-pipeline" className="h-7 text-[11px]" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="pipe-source" variant="uppercase">Source</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="pipe-source" className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Source</Label>
                 <select id="pipe-source" value={newSourceType} onChange={e => setNewSourceType(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+                  className="h-7 rounded-lg border border-border/40 bg-background px-2 text-[11px]">
                   {sourceTypes.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="pipe-store" variant="uppercase">Store</Label>
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="pipe-store" className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Store</Label>
                 <select id="pipe-store" value={newStoreType} onChange={e => setNewStoreType(e.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm">
+                  className="h-7 rounded-lg border border-border/40 bg-background px-2 text-[11px]">
                   {storeTypes.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             </div>
-            <Button size="sm" onClick={createPipeline} disabled={creating || !newName.trim()}>
+            <Button size="sm" className="h-7 text-[11px]" onClick={createPipeline} disabled={creating || !newName.trim()}>
               {creating ? 'Creating...' : 'Create'}
             </Button>
           </CardContent>
@@ -186,39 +175,39 @@ export default function CollectionsPage() {
       )}
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Pipelines ({pipelines.length})</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Pipelines ({pipelines.length})</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2.5 pb-2.5">
           {loading ? (
-            <div className="flex justify-center py-8">
+            <div className="flex justify-center py-6">
               <Spinner size="md" />
             </div>
           ) : pipelines.length === 0 ? (
-            <div className="text-center py-6 space-y-2">
-              <p className="text-sm text-muted-foreground">No pipelines configured.</p>
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowCreate(true)}>
+            <div className="text-center py-4 space-y-1.5">
+              <p className="text-[10px] text-muted-foreground/60">No pipelines configured.</p>
+              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setShowCreate(true)}>
                 Create Pipeline
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {pipelines.map(p => (
-                <div key={p.id} className="flex items-center justify-between rounded border p-3 text-sm">
+                <div key={p.id} className="flex items-center justify-between rounded-lg border border-border/40 p-2.5 text-[11px]">
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.name}</p>
-                    <div className="flex gap-3 text-xs text-muted-foreground">
+                    <div className="flex gap-2 text-[10px] text-muted-foreground/60">
                       <span>Source: {p.source_type}</span>
                       <span>Store: {p.store_type}</span>
                       {p.records_count != null && <span>{p.records_count} records</span>}
                       {p.last_run && <span>Last: {new Date(p.last_run).toLocaleDateString()}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => runPipeline(p.id)} disabled={runningId === p.id}>
+                  <div className="flex items-center gap-0.5">
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => runPipeline(p.id)} disabled={runningId === p.id}>
                       {runningId === p.id ? 'Running...' : 'Run'}
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deletePipeline(p.id)}>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={() => deletePipeline(p.id)}>
                       Delete
                     </Button>
                   </div>

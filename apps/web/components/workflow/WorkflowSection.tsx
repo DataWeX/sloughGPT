@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { SectionLabel } from '@/components/composed/SectionLabel'
 import { workflowController } from '@/lib/workflow-controller'
 import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
 import { WorkflowHealthCard } from '@/components/workflow/WorkflowHealthCard'
@@ -76,10 +77,10 @@ export function WorkflowSection() {
 
   return (
     <>
-      <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
-        <h2 className="text-base font-medium">Feedback Pipeline</h2>
-        <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh">
-          <IconRefresh className="h-4 w-4" />
+      <div className="flex items-center justify-between border-b border-border/30 pb-1.5 pt-0.5">
+        <SectionLabel>Feedback Pipeline</SectionLabel>
+        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={fetchStatus} aria-label="Refresh">
+          <IconRefresh className="h-3 w-3" />
         </Button>
       </div>
 
@@ -112,24 +113,24 @@ export function WorkflowSection() {
       )}
 
       {triggerMsg && (
-        <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
+        <div className="rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-[11px] text-primary">
           {triggerMsg}
-          <button type="button" className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
+          <button type="button" className="ml-1.5 text-[10px] underline text-primary/70 hover:text-primary" onClick={() => setTriggerMsg(null)}>Dismiss</button>
         </div>
       )}
 
       <ActionCard
         title="Status"
-        contentClassName="space-y-3"
+        contentClassName="space-y-2"
       >
-          <div className="flex items-center gap-3">
-            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium', status?.running
+          <div className="flex items-center gap-2">
+            <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium', status?.running
                 ? 'bg-success/15 text-success'
                 : 'bg-muted text-muted-foreground')}>
               <span className={cn('h-1.5 w-1.5 rounded-full', status?.running ? 'bg-success' : 'bg-muted-foreground/40')} />
               {status?.running ? 'Running' : 'Stopped'}
             </span>
-            <Button size="sm" onClick={handleToggle} disabled={toggling}>
+            <Button size="sm" className="h-6 text-[10px]" onClick={handleToggle} disabled={toggling}>
               {toggling ? '...' : status?.running ? 'Stop' : 'Start'}
             </Button>
           </div>
@@ -141,20 +142,20 @@ export function WorkflowSection() {
 
       {status?.config && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Configuration</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs">Configuration</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               {[
                 { label: 'Aggregate', value: `${status.config.aggregate_interval_minutes} min` },
                 { label: 'Prune', value: `${status.config.prune_interval_minutes} min` },
                 { label: 'Export', value: `${status.config.export_interval_hours} hr` },
                 { label: 'Health Check', value: `${status.config.health_check_interval_seconds}s` },
               ].map(c => (
-                <div key={c.label} className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground">{c.label}</div>
-                  <div className="text-sm font-mono font-medium">{c.value}</div>
+                <div key={c.label} className="rounded-lg bg-muted/30 p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground/60">{c.label}</div>
+                  <div className="text-[11px] font-mono font-medium tabular-nums">{c.value}</div>
                 </div>
               ))}
             </div>
@@ -164,26 +165,26 @@ export function WorkflowSection() {
 
       {status?.stats && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Stats</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs">Stats</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-xs text-muted-foreground">Feedback Recorded</div>
-                <div className="text-lg font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-muted/30 p-2 text-center">
+                <div className="text-[10px] text-muted-foreground/60">Feedback Recorded</div>
+                <div className="text-[13px] font-mono font-medium tabular-nums">{status.stats.feedback_recorded ?? 0}</div>
               </div>
-              <div className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-xs text-muted-foreground">Auto-train Steps</div>
-                <div className="text-lg font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
+              <div className="rounded-lg bg-muted/30 p-2 text-center">
+                <div className="text-[10px] text-muted-foreground/60">Auto-train Steps</div>
+                <div className="text-[13px] font-mono font-medium tabular-nums">{status.stats.auto_train_steps ?? 0}</div>
               </div>
-              <div className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-xs text-muted-foreground">Workflow Runs</div>
-                <div className="text-lg font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
+              <div className="rounded-lg bg-muted/30 p-2 text-center">
+                <div className="text-[10px] text-muted-foreground/60">Workflow Runs</div>
+                <div className="text-[13px] font-mono font-medium tabular-nums">{status.stats.workflow_runs ?? 0}</div>
               </div>
-              <div className="rounded-md bg-muted/30 p-3 text-center">
-                <div className="text-xs text-muted-foreground">DPO Train Steps</div>
-                <div className="text-lg font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
+              <div className="rounded-lg bg-muted/30 p-2 text-center">
+                <div className="text-[10px] text-muted-foreground/60">DPO Train Steps</div>
+                <div className="text-[13px] font-mono font-medium tabular-nums">{status.stats.dpo_train_steps ?? 0}</div>
               </div>
             </div>
           </CardContent>
@@ -191,16 +192,17 @@ export function WorkflowSection() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Manual Triggers</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Manual Triggers</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             {['aggregate', 'prune', 'export'].map(action => (
               <Button
                 key={action}
                 size="sm"
                 variant="outline"
+                className="h-6 text-[10px]"
                 onClick={() => handleTrigger(action)}
                 disabled={triggering}
               >

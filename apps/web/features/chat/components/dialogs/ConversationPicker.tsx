@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { cn, Button, Spinner } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { IconSearch, IconX } from '@sloughgpt/strui'
 import { sessionController, type Conversation } from '@/lib/session-controller'
 import { truncateMessage } from '@/lib/conversations-utils'

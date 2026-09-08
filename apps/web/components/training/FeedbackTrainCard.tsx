@@ -6,6 +6,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { trainingJobsController } from '@/lib/training-controller'
 import { soulsController } from '@/lib/souls-controller'
 
@@ -170,13 +171,12 @@ export function FeedbackTrainCard({ addToast }: Props) {
             </div>
           </div>
         ) : phase === 'error' ? (
-          <div className="space-y-1.5">
-            <p className="text-xs text-destructive font-medium">Training failed</p>
-            {error && <p className="text-[10px] text-muted-foreground/60">{error}</p>}
-            <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => { setPhase('idle'); setJob(null) }}>
-              Dismiss
-            </Button>
-          </div>
+          <StatusBanner
+            variant="error"
+            message={error || 'Training failed'}
+            dismissible={false}
+            onDismiss={() => { setPhase('idle'); setJob(null) }}
+          />
         ) : (
           <div className="space-y-2">
             <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={() => setShowConfig(!showConfig)}>

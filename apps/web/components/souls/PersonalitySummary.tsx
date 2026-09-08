@@ -2,23 +2,16 @@
 
 import { cn, IconHeart, IconBrain } from '@sloughgpt/strui'
 import type { ReactNode } from 'react'
+import { SOUL_GROUP_LABELS, SOUL_GROUP_COLORS, SOUL_GROUP_KEYS } from './soul-constants'
+import type { SoulGroupKey } from './soul-constants'
 
 interface PersonalitySummaryProps {
   traitWeights: Record<string, Record<string, number>>
   currentSoulName: string | null
 }
 
-const GROUP_LABELS: Record<string, string> = {
-  personality: 'Personality',
-  cognition: 'Cognition',
-  emotion: 'Emotion',
-}
-
-const GROUP_COLORS: Record<string, string> = {
-  personality: 'rgb(var(--primary))',
-  cognition: 'rgb(var(--chart-4))',
-  emotion: 'rgb(var(--destructive))',
-}
+const GROUP_LABELS = SOUL_GROUP_LABELS
+const GROUP_COLORS = SOUL_GROUP_COLORS
 
 const GROUP_ICONS: Record<string, ReactNode> = {
   personality: <IconHeart className="h-3 w-3" />,
@@ -83,7 +76,7 @@ const staggerDelay = (index: number) => ({ animationDelay: `${(index + 1) * 80}m
 export default function PersonalitySummary({ traitWeights, currentSoulName }: PersonalitySummaryProps) {
   const archetype = deriveArchetype(traitWeights)
 
-  const groups = ['personality', 'cognition', 'emotion'] as const
+  const groups = SOUL_GROUP_KEYS
 
   let totalVal = 0
   let totalCount = 0

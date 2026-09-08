@@ -93,8 +93,8 @@ export default function VectorPage() {
       title="Vector Store"
       subtitle="Manage embeddings and similarity search"
       headerRight={
-        <Button size="sm" variant="outline" onClick={fetchStats} disabled={loading}>
-          <IconRefresh className="h-3.5 w-3.5 mr-1" />
+        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={fetchStats} disabled={loading}>
+          <IconRefresh className="h-3 w-3 mr-1" />
           Refresh
         </Button>
       }
@@ -107,16 +107,16 @@ export default function VectorPage() {
       </KpiGrid>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Initialize</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Initialize</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Choose a vector store backend. ChromaDB persists to disk; in-memory is faster but does not survive restarts.</p>
-          <div className="flex gap-2">
-            <Button size="sm" variant={provider === 'in_memory' ? 'default' : 'outline'} onClick={() => handleInit('in_memory')} disabled={initializing}>
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
+          <p className="text-[10px] text-muted-foreground/60">Choose a vector store backend. ChromaDB persists to disk; in-memory is faster but does not survive restarts.</p>
+          <div className="flex gap-1">
+            <Button size="sm" variant={provider === 'in_memory' ? 'default' : 'outline'} className="h-7 text-[11px]" onClick={() => handleInit('in_memory')} disabled={initializing}>
               In Memory
             </Button>
-            <Button size="sm" variant={provider === 'chromadb' ? 'default' : 'outline'} onClick={() => handleInit('chromadb')} disabled={initializing}>
+            <Button size="sm" variant={provider === 'chromadb' ? 'default' : 'outline'} className="h-7 text-[11px]" onClick={() => handleInit('chromadb')} disabled={initializing}>
               ChromaDB
             </Button>
           </div>
@@ -124,21 +124,21 @@ export default function VectorPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Add Entries</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Add Entries</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Add text entries to the vector store. Each line becomes one entry.</p>
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
+          <p className="text-[10px] text-muted-foreground/60">Add text entries to the vector store. Each line becomes one entry.</p>
           <textarea
             value={upsertText}
             onChange={e => setUpsertText(e.target.value)}
             placeholder={"Enter text entries, one per line:\nSloughGPT is an AI framework\nIt learns from conversations\nMemory persists across sessions"}
-            className="w-full h-24 text-sm font-mono rounded-md border bg-background px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full h-20 text-[11px] font-mono rounded-lg border border-border/40 bg-background px-2.5 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
             aria-label="Vector store entries"
           />
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">{upsertText.split('\n').filter(t => t.trim()).length} entries</span>
-            <Button size="sm" onClick={handleUpsert} disabled={upserting || !upsertText.trim()}>
+            <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">{upsertText.split('\n').filter(t => t.trim()).length} entries</span>
+            <Button size="sm" className="h-7 text-[11px]" onClick={handleUpsert} disabled={upserting || !upsertText.trim()}>
               {upserting ? 'Adding...' : 'Add entries'}
             </Button>
           </div>
@@ -146,41 +146,42 @@ export default function VectorPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Similarity Search</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Similarity Search</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-2">
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
+          <div className="flex gap-1.5">
             <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search for similar text..."
+              className="h-7 text-[11px] flex-1"
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
-            <Button size="sm" onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
+            <Button size="sm" className="h-7 text-[11px]" onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
               {searching ? 'Searching...' : 'Search'}
             </Button>
           </div>
 
           {searchResults.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">{searchResults.length} results in {searchTime?.toFixed(1)}ms</p>
+            <div className="space-y-1">
+              <p className="text-[10px] text-muted-foreground/60">{searchResults.length} results in {searchTime?.toFixed(1)}ms</p>
               {searchResults.map((r, i) => (
-                <div key={r.id || i} className="border rounded-md p-3 space-y-1">
+                <div key={r.id || i} className="border border-border/40 rounded-lg p-2.5 space-y-0.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">{r.text}</span>
-                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary tabular-nums">
+                    <span className="text-[11px]">{r.text}</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-primary/10 text-primary tabular-nums">
                       {(r.score * 100).toFixed(1)}%
                     </span>
                   </div>
-                  {r.id && <p className="text-xs text-muted-foreground font-mono">{r.id}</p>}
+                  {r.id && <p className="text-[10px] text-muted-foreground/60 font-mono">{r.id}</p>}
                 </div>
               ))}
             </div>
           )}
 
           {searchResults.length === 0 && !searching && searchQuery && (
-            <p className="text-xs text-muted-foreground text-center py-4">No results found</p>
+            <p className="text-[10px] text-muted-foreground/60 text-center py-3">No results found</p>
           )}
         </CardContent>
       </Card>

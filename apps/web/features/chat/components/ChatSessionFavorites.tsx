@@ -110,6 +110,7 @@ export const ChatSessionFavorites = memo(function ChatSessionFavorites({
                         handleRemove(session.id)
                       }}
                       title="Remove from favorites"
+                      aria-label="Remove from favorites"
                     >
                       <span className="text-destructive">×</span>
                     </Button>

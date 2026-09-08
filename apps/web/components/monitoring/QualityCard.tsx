@@ -26,7 +26,7 @@ interface QualityCardProps {
 
 function QualityDot({ score }: { score: number }) {
   return (
-    <span className={cn('inline-block w-2 h-2 rounded-full', score > 0.7 ? 'bg-success' : score > 0.4 ? 'bg-warning' : 'bg-destructive')} />
+    <span className={cn('inline-block w-1.5 h-1.5 rounded-full', score > 0.7 ? 'bg-success' : score > 0.4 ? 'bg-warning' : 'bg-destructive')} />
   )
 }
 
@@ -34,8 +34,8 @@ export const QualityCard = memo(function QualityCard({ quality, stats }: Quality
   if (quality.total_responses === 0) return null
 
   return (
-    <Card className="p-3">
-      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Quality</span>
+    <Card className="p-2.5">
+      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Quality</span>
       <CardContent className="p-0">
         <KpiGrid columns={2}>
           <StatCard label="Coherence" value={quality.coherence_score.toFixed(2)} numeric icon={<QualityDot score={quality.coherence_score} />} />
@@ -43,7 +43,7 @@ export const QualityCard = memo(function QualityCard({ quality, stats }: Quality
           <StatCard label="Responses" value={quality.total_responses.toString()} numeric />
           <StatCard label="Repetition" value={(quality.repetition_rate * 100).toFixed(1) + "%"} numeric />
         </KpiGrid>
-        <div className="flex gap-3 mt-1.5 text-[11px] text-muted-foreground font-numeric">
+        <div className="flex gap-2 mt-1 text-[10px] text-muted-foreground/60 font-mono tabular-nums">
           <span>Avg: {quality.avg_length.toFixed(1)}w</span>
           <span>Empty: {(quality.empty_rate * 100).toFixed(1)}%</span>
           {stats && <span>Tokens: {stats.avg_tokens.toFixed(0)}</span>}

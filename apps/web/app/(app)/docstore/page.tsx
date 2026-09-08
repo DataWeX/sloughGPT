@@ -152,9 +152,9 @@ export default function DocstorePage() {
       title="Document store"
       subtitle="Browse and manage stored documents"
       headerRight={
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => void fetchDocs(selected)}>Refresh</Button>
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={clearCollection}>Clear</Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void fetchDocs(selected)}>Refresh</Button>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={clearCollection}>Clear</Button>
         </div>
       }
     >
@@ -164,110 +164,110 @@ export default function DocstorePage() {
             key={c}
             type="button"
             onClick={() => setSelected(c)}
-            className={cn('rounded border px-2 py-1.5 text-xs text-left transition-colors', selected === c ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-border hover:bg-muted/50')}
+            className={cn('rounded-lg border px-2 py-1.5 text-[10px] text-left transition-colors', selected === c ? 'border-primary/40 bg-primary/5 text-primary font-medium' : 'border-border/40 hover:bg-muted/20')}
           >
             <span className="block truncate">{c}</span>
             {collectionMeta[c] != null && (
-              <span className="text-xs text-muted-foreground">{collectionMeta[c]}</span>
+              <span className="text-[9px] text-muted-foreground/60 font-mono tabular-nums">{collectionMeta[c]}</span>
             )}
           </button>
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <Input
           value={searchQuery}
           onChange={e => { setSearchQuery(e.target.value); setPage(1) }}
           placeholder={`Search ${selected}...`}
-          className="h-8 text-xs"
+          className="h-7 text-[11px] flex-1"
         />
-        <Button size="sm" variant="outline" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
+        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => setShowCreate(!showCreate)} aria-pressed={showCreate}>
           {showCreate ? 'Cancel' : 'New doc'}
         </Button>
       </div>
 
       {showCreate && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Create document in {selected}</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Create document in {selected}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="doc-id" variant="uppercase">Document ID</Label>
+          <CardContent className="space-y-2 px-2.5 pb-2.5">
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="doc-id" className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Document ID</Label>
               <Input id="doc-id" value={newDocId} onChange={e => setNewDocId(e.target.value)}
-                placeholder="my-doc-id" className="h-8 text-sm font-mono" />
+                placeholder="my-doc-id" className="h-7 text-[11px] font-mono" />
             </div>
-            <div className="flex flex-col gap-1">
-              <Label htmlFor="doc-content" variant="uppercase">Content (JSON)</Label>
+            <div className="flex flex-col gap-0.5">
+              <Label htmlFor="doc-content" className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">Content (JSON)</Label>
               <textarea id="doc-content" value={newDocContent} onChange={e => setNewDocContent(e.target.value)}
-                rows={6} className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs" />
+                rows={6} className="w-full rounded-lg border border-border/40 bg-background px-2.5 py-2 font-mono text-[11px]" />
             </div>
-            <Button size="sm" onClick={createDoc}>Create</Button>
+            <Button size="sm" className="h-7 text-[11px]" onClick={createDoc}>Create</Button>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">
               {selected} ({filtered.length} docs)
-              {totalPages > 1 && <span className="text-xs text-muted-foreground font-normal ml-2">Page {page}/{totalPages}</span>}
+              {totalPages > 1 && <span className="text-[10px] text-muted-foreground/60 font-normal ml-1.5">Page {page}/{totalPages}</span>}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {loading ? (
-              <p className="text-xs text-muted-foreground">Loading...</p>
+              <p className="text-[10px] text-muted-foreground/60">Loading...</p>
             ) : pageDocs.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No documents.</p>
+              <p className="text-[10px] text-muted-foreground/60">No documents.</p>
             ) : (
-              <div className="max-h-[400px] space-y-1 overflow-y-auto">
+              <div className="max-h-[400px] space-y-0.5 overflow-y-auto">
                 {pageDocs.map(d => (
                   <button
                     key={d._id}
                     type="button"
                     onClick={() => { setSelectedDoc(d); setEditMode(false); setEditContent(JSON.stringify(d, null, 2)) }}
-                    className={cn('w-full rounded border p-2 text-left text-xs transition-colors', selectedDoc?._id === d._id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30')}
+                    className={cn('w-full rounded-lg border p-2 text-left text-[11px] transition-colors font-mono', selectedDoc?._id === d._id ? 'border-primary/40 bg-primary/5' : 'border-border/40 hover:bg-muted/20')}
                   >
-                    <span className="block truncate font-mono">{d._id}</span>
+                    <span className="block truncate">{d._id}</span>
                   </button>
                 ))}
               </div>
             )}
             {totalPages > 1 && (
-              <div className="mt-2 flex items-center gap-2">
-                <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
-                <span className="text-xs text-muted-foreground">{page}/{totalPages}</span>
-                <Button size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Prev</Button>
+                <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">{page}/{totalPages}</span>
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
               </div>
             )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
+              <CardTitle className="text-[11px] font-medium">
                 {selectedDoc ? selectedDoc._id : 'Select a document'}
               </CardTitle>
               {selectedDoc && (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                   {editMode ? (
                     <>
-                      <Button size="sm" onClick={saveDoc}>Save</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>Cancel</Button>
+                      <Button size="sm" className="h-6 text-[10px]" onClick={saveDoc}>Save</Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setEditMode(false)}>Cancel</Button>
                     </>
                   ) : (
                     <>
-                      <Button size="sm" variant="ghost" onClick={() => setEditMode(true)}>Edit</Button>
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteDoc(selectedDoc._id)}>Delete</Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setEditMode(true)}>Edit</Button>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={() => deleteDoc(selectedDoc._id)}>Delete</Button>
                     </>
                   )}
                 </div>
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {selectedDoc ? (
               editMode ? (
                 <textarea
@@ -275,15 +275,15 @@ export default function DocstorePage() {
                   value={editContent}
                   onChange={e => setEditContent(e.target.value)}
                   rows={20}
-                  className="w-full rounded-md border border-input bg-background p-3 font-mono text-xs"
+                  className="w-full rounded-lg border border-border/40 bg-background p-2.5 font-mono text-[11px]"
                 />
               ) : (
-                <pre className="max-h-[400px] overflow-y-auto rounded bg-muted/30 p-3 text-xs">
+                <pre className="max-h-[400px] overflow-y-auto rounded-lg bg-muted/20 p-2.5 text-[11px] font-mono">
                   {JSON.stringify(selectedDoc, null, 2)}
                 </pre>
               )
             ) : (
-              <p className="text-xs text-muted-foreground">Click a document to view details.</p>
+              <p className="text-[10px] text-muted-foreground/60">Click a document to view details.</p>
             )}
           </CardContent>
         </Card>

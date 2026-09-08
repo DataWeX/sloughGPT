@@ -3,6 +3,7 @@
 import { useState, useCallback, memo } from 'react'
 import { Button, IconX, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 
 interface MessageTranslationProps {
   content: string
@@ -112,7 +113,7 @@ export const MessageTranslation = memo(function MessageTranslation({
       </Button>
 
       {error && (
-        <p className="text-[10px] text-destructive">{error}</p>
+        <StatusBanner variant="error" message={error} dismissible={false} />
       )}
 
       {translated && (

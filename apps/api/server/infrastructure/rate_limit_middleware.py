@@ -63,6 +63,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if path.startswith("/health"):
             return await call_next(request)
 
+        # CORS preflight must pass through unmodified — any non-CORS response
+        # (e.g. 429) returned before CORSMiddleware adds Access-Control headers
+        # causes the browser to fire TypeError: NetworkError.
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
         is_local = client_ip in ("127.0.0.1", "::1", "localhost")
 

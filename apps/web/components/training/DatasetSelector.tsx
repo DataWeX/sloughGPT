@@ -37,18 +37,18 @@ export function DatasetSelector({
   showImport?: boolean
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       {datasets.datasets.length === 0 ? (
         <>
-          <span className="text-xs text-muted-foreground">No datasets — import one to get started.</span>
-          <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>
+          <span className="text-[10px] text-muted-foreground/60">No datasets — import one to get started.</span>
+          <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => datasets.setImportModalOpen(true)}>
             + Import
           </Button>
         </>
       ) : (
         <>
           <Select value={value} onValueChange={onChange} disabled={disabled}>
-            <SelectTrigger className="h-8 text-xs font-mono flex-1 max-w-sm" aria-label="Dataset selector">
+            <SelectTrigger className="h-7 text-[11px] font-mono flex-1 max-w-sm" aria-label="Dataset selector">
               <SelectValue placeholder="Select a dataset..." />
             </SelectTrigger>
             <SelectContent>
@@ -58,7 +58,7 @@ export function DatasetSelector({
             </SelectContent>
           </Select>
           {showImport && (
-            <Button size="sm" variant="outline" onClick={() => datasets.setImportModalOpen(true)}>
+            <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => datasets.setImportModalOpen(true)}>
               + Import
             </Button>
           )}

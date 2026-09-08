@@ -54,7 +54,7 @@ export default function RateLimitPage() {
       title="Rate Limiting"
       subtitle="Rate limit configuration and status"
       headerRight={
-        <Button size="sm" variant="ghost" onClick={() => void fetchStatus()}>Refresh</Button>
+        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void fetchStatus()}>Refresh</Button>
       }
     >
       <KpiGrid columns={3}>
@@ -68,21 +68,21 @@ export default function RateLimitPage() {
       </KpiGrid>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Check Rate Limit</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Check Rate Limit</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-xs text-muted-foreground">
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
+          <p className="text-[10px] text-muted-foreground/60">
             Simulates a request check to see if the current IP would be rate limited.
           </p>
-          <Button size="sm" onClick={() => void handleCheck()} disabled={checking}>
+          <Button size="sm" className="h-7 text-[11px]" onClick={() => void handleCheck()} disabled={checking}>
             {checking ? 'Checking...' : 'Check Now'}
           </Button>
           {checkResult && (
-            <div className="rounded bg-muted/30 px-3 py-2 text-xs space-y-1">
+            <div className="rounded-lg bg-muted/20 px-2.5 py-2 text-[11px] space-y-0.5">
               <div className="flex justify-between">
                 <span className="font-medium">Allowed: {checkResult.allowed ? 'Yes' : 'No'}</span>
-                {!checkResult.allowed && <span className="text-warning">Wait: {checkResult.wait_time.toFixed(1)}s</span>}
+                {!checkResult.allowed && <span className="text-warning font-mono tabular-nums">Wait: {checkResult.wait_time.toFixed(1)}s</span>}
               </div>
             </div>
           )}
@@ -90,11 +90,11 @@ export default function RateLimitPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Configuration</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Configuration</CardTitle>
         </CardHeader>
-        <CardContent>
-          <pre className="rounded bg-muted p-3 text-xs overflow-auto whitespace-pre-wrap">
+        <CardContent className="px-2.5 pb-2.5">
+          <pre className="rounded-lg bg-muted/20 p-2.5 text-[11px] font-mono overflow-auto whitespace-pre-wrap">
             {status ? JSON.stringify(status, null, 2) : 'Loading...'}
           </pre>
         </CardContent>

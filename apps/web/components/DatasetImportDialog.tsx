@@ -6,6 +6,7 @@ import { Label } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { Spinner, IconCheck } from '@sloughgpt/strui'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import {
   Dialog,
   DialogContent,
@@ -382,9 +383,7 @@ export function DatasetImportDialog({
           )}
 
           {di.error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive" role="alert" aria-live="assertive">
-              {di.error}
-            </div>
+            <StatusBanner variant="error" message={di.error} dismissible={false} />
           )}
 
           {di.success && (

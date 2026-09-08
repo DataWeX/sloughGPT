@@ -774,7 +774,7 @@ class ModelsRouter:
                                     try:
                                         total += f.stat().st_size
                                     except OSError:
-                                        pass
+                                        pass  # Expected: file deleted between is_file() and stat()
                         count += 1
                 return total, count
 

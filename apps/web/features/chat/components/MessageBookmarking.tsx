@@ -190,6 +190,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
                     className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
                     onClick={() => handleRemoveBookmark(bookmark.id)}
                     title="Remove bookmark"
+                    aria-label="Remove bookmark"
                   >
                     <IconX className="h-3 w-3" />
                   </Button>

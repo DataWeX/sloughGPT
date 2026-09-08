@@ -180,7 +180,7 @@ export default function ExperimentsPage() {
           <StatCard label="Auto-refresh" value={<Skeleton className="h-5 w-8" />} />
           <StatCard label="Last Created" value={<Skeleton className="h-5 w-24" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent>              <div className="h-32 animate-pulse bg-muted/20 rounded-lg" /></CardContent></Card>
       </PageContainer>
     )
   }
@@ -205,33 +205,34 @@ export default function ExperimentsPage() {
         )}
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">New Experiment</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">New Experiment</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <div className="flex gap-2">
-              <Input
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                placeholder="Experiment name"
-                onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              />
-              <Button size="sm" onClick={handleCreate} disabled={creating || !newName.trim()}>
-                {creating ? 'Creating...' : 'Create'}
+                <Input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Experiment name"
+                  onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                  className="h-7 text-[11px]"
+                />
+                <Button size="sm" className="h-7 text-[11px]" onClick={handleCreate} disabled={creating || !newName.trim()}>
+                  {creating ? 'Creating...' : 'Create'}
               </Button>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Experiments</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Experiments</CardTitle>
             <div className="flex items-center gap-2">
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search... (R refresh, N new, E export)"
-                className="h-9 w-32 text-sm"
+                className="h-7 w-32 text-[11px]"
               />
               <Button size="sm" variant="ghost" onClick={() => void handleExport()} aria-label="Export">
                 Export
@@ -244,18 +245,18 @@ export default function ExperimentsPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             {experiments.length === 0 ? (
               <div className="text-center py-6 space-y-2">
-                <p className="text-sm text-muted-foreground">No experiments yet.</p>
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(true)}>
+                <p className="text-[10px] text-muted-foreground/60">No experiments yet.</p>
+                <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setCreateDialogOpen(true)}>
                   New Experiment
                 </Button>
               </div>
             ) : (
               <>
                 <div className="flex items-center gap-2 mb-3">
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCreateDialogOpen(!createDialogOpen)} aria-pressed={createDialogOpen}>
+                  <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => setCreateDialogOpen(!createDialogOpen)} aria-pressed={createDialogOpen}>
                     {createDialogOpen ? 'Cancel' : 'New Experiment'}
                   </Button>
                 </div>
@@ -265,10 +266,10 @@ export default function ExperimentsPage() {
                       value={newName}
                       onChange={e => setNewName(e.target.value)}
                       placeholder="Experiment name"
-                      className="h-8 text-xs flex-1"
+                       className="h-7 text-[11px] flex-1"
                       onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
                     />
-                    <Button size="sm" className="h-8 text-xs" onClick={handleCreate} disabled={creating || !newName.trim()}>
+                    <Button size="sm" className="h-7 text-[11px]" onClick={handleCreate} disabled={creating || !newName.trim()}>
                       {creating ? 'Creating...' : 'Create'}
                     </Button>
                   </div>
@@ -276,10 +277,10 @@ export default function ExperimentsPage() {
                 {selectedIds.size > 0 && (
                   <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 mb-2">
                     <span className="text-sm text-destructive font-medium">{selectedIds.size} selected</span>
-                    <Button size="sm" variant="ghost" className="text-destructive h-8 text-xs ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
+                    <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px] ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
                       {batchDeleting ? 'Deleting...' : 'Delete Selected'}
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelectedIds(new Set())}>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setSelectedIds(new Set())}>
                       Clear
                     </Button>
                   </div>
@@ -298,7 +299,7 @@ export default function ExperimentsPage() {
                     .map(exp => (
                     <div
                       key={exp.id}
-                      className={cn('flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors cursor-pointer', selectedId === exp.id || selectedIds.has(exp.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 hover:bg-muted/50')}
+                       className={cn('flex items-center justify-between rounded-lg border p-2.5 text-sm transition-colors cursor-pointer hover:bg-muted/20', selectedId === exp.id || selectedIds.has(exp.id) ? 'border-primary/40 bg-primary/5' : 'border-border/40 hover:bg-muted/20')}
                       onClick={() => setSelectedId(selectedId === exp.id ? null : exp.id)}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(selectedId === exp.id ? null : exp.id); } }}
                       role="button"
@@ -315,10 +316,10 @@ export default function ExperimentsPage() {
                         <div className="font-medium truncate">{exp.id}</div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); handleComplete(exp.id) }}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={e => { e.stopPropagation(); handleComplete(exp.id) }}>
                           Done
                         </Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={e => { e.stopPropagation(); handleDelete(exp.id) }}>
+                        <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={e => { e.stopPropagation(); handleDelete(exp.id) }}>
                           <IconTrash className="h-4 w-4" />
                         </Button>
                       </div>
@@ -332,19 +333,19 @@ export default function ExperimentsPage() {
 
         {selectedId && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Log to: {selectedId}</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Log to: {selectedId}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 px-2.5 pb-2.5">
               <div className="flex gap-2">
-                <Input value={metricName} onChange={e => setMetricName(e.target.value)} placeholder="Metric name" className="flex-1" />
-                <Input value={metricValue} onChange={e => setMetricValue(e.target.value)} placeholder="Value" type="number" className="w-24" />
-                <Button size="sm" onClick={handleLogMetric} disabled={!metricName.trim() || !metricValue}>Log Metric</Button>
+                <Input value={metricName} onChange={e => setMetricName(e.target.value)} placeholder="Metric name" className="flex-1 h-7 text-[11px]" />
+                <Input value={metricValue} onChange={e => setMetricValue(e.target.value)} placeholder="Value" type="number" className="w-24 h-7 text-[11px]" />
+                <Button size="sm" className="h-7 text-[11px]" onClick={handleLogMetric} disabled={!metricName.trim() || !metricValue}>Log Metric</Button>
               </div>
               <div className="flex gap-2">
-                <Input value={paramName} onChange={e => setParamName(e.target.value)} placeholder="Param name" className="flex-1" />
-                <Input value={paramValue} onChange={e => setParamValue(e.target.value)} placeholder="Value" className="w-32" />
-                <Button size="sm" variant="outline" onClick={handleLogParam} disabled={!paramName.trim() || !paramValue}>Log Param</Button>
+                <Input value={paramName} onChange={e => setParamName(e.target.value)} placeholder="Param name" className="flex-1 h-7 text-[11px]" />
+                <Input value={paramValue} onChange={e => setParamValue(e.target.value)} placeholder="Value" className="w-32 h-7 text-[11px]" />
+                <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleLogParam} disabled={!paramName.trim() || !paramValue}>Log Param</Button>
               </div>
             </CardContent>
           </Card>

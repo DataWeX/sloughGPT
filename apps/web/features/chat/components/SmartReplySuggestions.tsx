@@ -139,6 +139,7 @@ export const SmartReplySuggestions = memo(function SmartReplySuggestions({
         className="h-5 w-5"
         onClick={handleRefresh}
         title="Refresh suggestions"
+        aria-label="Refresh suggestions"
       >
         <IconRefresh className="h-3 w-3" />
       </Button>
@@ -148,6 +149,7 @@ export const SmartReplySuggestions = memo(function SmartReplySuggestions({
         className="h-5 w-5"
         onClick={handleDismiss}
         title="Dismiss"
+        aria-label="Dismiss"
       >
         <IconX className="h-3 w-3" />
       </Button>

@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn, Spinner } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
@@ -190,7 +189,7 @@ export default function LearnPage() {
       toolbar={toolbar}
     >
       {status && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {[
             { label: 'Tokens Ingested', value: status.total_tokens_ingested },
             { label: 'Train Steps', value: status.train_steps_completed },
@@ -199,7 +198,7 @@ export default function LearnPage() {
           ].map(s => (
             <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
               <div className="text-xs text-muted-foreground">{s.label}</div>
-              <div className="text-base font-mono font-medium">{s.value}</div>
+              <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
             </div>
           ))}
         </div>
@@ -209,7 +208,7 @@ export default function LearnPage() {
 
       {tab === 'search' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="px-2.5 pb-2.5 pt-4 space-y-3">
             <p className="text-sm text-muted-foreground">Search the web, fetch articles, and learn from them.</p>
             {searchResult && (
               <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{searchResult}</div>
@@ -231,7 +230,7 @@ export default function LearnPage() {
 
       {tab === 'ingest' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="px-2.5 pb-2.5 pt-4 space-y-3">
             {ingestResult && (
               <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{ingestResult}</div>
             )}
@@ -253,26 +252,26 @@ export default function LearnPage() {
 
       {tab === 'knowledge' && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Knowledge ({knowledge.length})</CardTitle>
             <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
-              <IconRefresh className={cn('h-4 w-4', loadingKnowledge && 'animate-spin')} />
+              <Spinner className="h-4 w-4" />
             </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             <div className="flex gap-2">
               <Input value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} placeholder="Filter by topic..." />
               <Button size="sm" variant="outline" onClick={handleLoadKnowledge}>Search</Button>
             </div>
             {knowledge.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No knowledge yet. Use Search or Ingest to learn.</p>
+              <p className="text-[10px] text-muted-foreground/60">No knowledge yet. Use Search or Ingest to learn.</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {knowledge.map((f, i) => (
-                  <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                  <div key={i} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm">
                     <div className="truncate">{f.content}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {f.topic && <span className="bg-muted px-1 rounded mr-1">{f.topic}</span>}
+                      {f.topic && <span className="bg-muted px-1 rounded-full text-[9px] mr-1">{f.topic}</span>}
                       {f.source}
                     </div>
                   </div>
@@ -285,10 +284,10 @@ export default function LearnPage() {
 
       {tab === 'feeds' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">RSS Feeds</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">RSS Feeds</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             {feedMsg && (
               <div className="text-sm text-primary">{feedMsg}</div>
             )}
@@ -297,7 +296,7 @@ export default function LearnPage() {
               <Button size="sm" onClick={handleSubscribeFeed}>Subscribe</Button>
             </div>
             {feeds.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No feeds subscribed.</p>
+              <p className="text-[10px] text-muted-foreground/60">No feeds subscribed.</p>
             ) : (
               <div className="space-y-1">
                 {feeds.map((f, i) => (
@@ -314,10 +313,10 @@ export default function LearnPage() {
 
       {tab === 'train' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Train Knowledge Model</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Train Knowledge Model</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
             <p className="text-sm text-muted-foreground">Train a model on ingested knowledge to improve retrieval quality and generate better embeddings.</p>
             <Button onClick={() => void handleTrain()} disabled={training} className="w-full">
               {training ? 'Training...' : 'Start Training'}
@@ -342,10 +341,10 @@ export default function LearnPage() {
 
       {tab === 'evaluate' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Evaluate Knowledge Model</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Evaluate Knowledge Model</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
             <p className="text-sm text-muted-foreground">Run evaluation metrics on the trained knowledge model to measure retrieval accuracy and quality.</p>
             <Button onClick={() => void handleEvaluate()} disabled={evaluating} className="w-full">
               {evaluating ? 'Evaluating...' : 'Run Evaluation'}
@@ -366,10 +365,10 @@ export default function LearnPage() {
 
       {tab === 'deploy' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Deploy Knowledge Model</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Deploy Knowledge Model</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
             <p className="text-sm text-muted-foreground">Deploy the trained knowledge model to make it available for inference and retrieval.</p>
             <Button onClick={() => void handleDeploy()} disabled={deploying} className="w-full">
               {deploying ? 'Deploying...' : 'Deploy Model'}

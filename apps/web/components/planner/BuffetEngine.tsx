@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
-import { cn, Button, IconPlus, IconSearch, IconRefresh } from '@sloughgpt/strui'
+import { cn, Button, IconPlus, IconSearch, IconRefresh, Spinner } from '@sloughgpt/strui'
 import type { Card, DragState, SyncState } from './types'
 import { useOonBoard } from '@/lib/useOonBoard'
 import { oon } from '@/lib/oon'
@@ -210,7 +210,7 @@ export function BuffetEngine() {
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={refresh} disabled={loading} aria-label="Refresh board">
-              <IconRefresh className={cn('h-4 w-4', loading && 'animate-spin')} />
+              <Spinner className="h-4 w-4" />
             </Button>
             <Button
               variant="ghost"
@@ -220,7 +220,7 @@ export function BuffetEngine() {
               title="Sync notes to board"
               aria-label="Sync notes to board"
             >
-              <IconRefresh className={cn('h-4 w-4', sync.status === 'syncing' && 'animate-spin')} />
+              <Spinner className="h-4 w-4" />
             </Button>
             <Button size="sm" onClick={() => setShowCreate(true)} aria-label="Create card">
               <IconPlus className="h-4 w-4 mr-1" />

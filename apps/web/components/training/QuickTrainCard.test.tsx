@@ -15,6 +15,16 @@ vi.mock('@sloughgpt/strui', () => ({
   Input: (props: any) => <input {...props} />,
   Label: ({ children }: any) => <label>{children}</label>,
   Progress: ({ value }: any) => <div data-testid="progress">{value}</div>,
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+}))
+
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message, onDismiss }: { variant: string; message: string; onDismiss?: () => void }) => (
+    <div data-variant={variant}>
+      <span>{message}</span>
+      {onDismiss && <button onClick={onDismiss}>Dismiss</button>}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/training/DatasetSelector', () => ({
@@ -144,7 +154,6 @@ describe('QuickTrainCard', () => {
   it('shows error state with dismiss action', () => {
     const session = makeSession({ turboPhase: 'error', turboError: 'oom' })
     render(<QuickTrainCard datasets={makeDatasets() as unknown as UseTrainingDatasetsReturn} session={session} addToast={vi.fn()} />)
-    expect(screen.getByText('Turbo training failed')).toBeDefined()
     expect(screen.getByText('oom')).toBeDefined()
     fireEvent.click(screen.getByText('Dismiss'))
     expect(session.stopTurboTrain).toHaveBeenCalled()

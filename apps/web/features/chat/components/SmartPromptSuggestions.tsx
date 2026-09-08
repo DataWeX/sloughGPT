@@ -213,6 +213,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
                     handleDelete(prompt.id)
                   }}
                   title="Delete"
+                  aria-label="Delete prompt"
                 >
                   <span className="text-destructive text-[10px]">×</span>
                 </Button>

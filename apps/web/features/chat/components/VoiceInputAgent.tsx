@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, memo } from 'react'
 import { Button, IconMicFilled, IconPlay, IconStop } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { estimateTokens } from '@/lib/format-bytes'
 
 interface VoiceInputAgentProps {
@@ -253,9 +254,7 @@ export const VoiceInputAgent = memo(function VoiceInputAgent({
 
         {/* Error */}
         {error && (
-          <div className="text-center text-destructive text-xs mb-4">
-            {error}
-          </div>
+          <StatusBanner variant="error" message={error} dismissible={false} />
         )}
       </div>
 

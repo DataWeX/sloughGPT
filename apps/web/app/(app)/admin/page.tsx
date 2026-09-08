@@ -7,6 +7,7 @@ import {
 } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { apiGet } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
@@ -319,8 +320,8 @@ export default function AdminPage() {
       title="Admin"
       subtitle="Security, authentication & error monitoring"
       headerRight={
-        <Button size="sm" variant="ghost" onClick={refreshAll} aria-label="Refresh">
-          <IconRefresh className="h-4 w-4" />
+        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={refreshAll} aria-label="Refresh">
+          <IconRefresh className="h-3 w-3" />
         </Button>
       }
     >
@@ -347,12 +348,13 @@ export default function AdminPage() {
           />
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Audit Logs</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Audit Logs</CardTitle>
               <div className="flex items-center gap-1">
                 <Button
                   size="sm"
                   variant={historyMode ? 'default' : 'ghost'}
+                  className="h-6 text-[10px]"
                   onClick={toggleHistory}
                 >
                   {historyMode ? 'Persisted' : 'Session'}
@@ -360,6 +362,7 @@ export default function AdminPage() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  className="h-6 text-[10px]"
                   onClick={loadOlder}
                   disabled={loadingMore || !historyMode}
                 >
@@ -369,37 +372,38 @@ export default function AdminPage() {
                     'Load older'
                   )}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => fetchSecurity(historyMode)} aria-label="Refresh audit logs">
-                  <IconRefresh className="h-4 w-4" />
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => fetchSecurity(historyMode)} aria-label="Refresh audit logs">
+                  <IconRefresh className="h-3 w-3" />
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2 px-2.5 pb-2.5">
               <Input
                 value={filter}
                 onChange={e => setFilter(e.target.value)}
                 placeholder="Filter by event type..."
+                className="h-7 text-[11px]"
               />
               {filteredLogs.length === 0 ? (
-                <div className="text-center py-6 text-sm text-muted-foreground space-y-1">
+                <div className="text-center py-4 text-[10px] text-muted-foreground/60 space-y-0.5">
                   <div>No audit logs found.</div>
-                  <div className="text-xs text-muted-foreground/70">Activities are logged automatically as you use the app.</div>
+                  <div>Activities are logged automatically as you use the app.</div>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
+                <div className="space-y-1 max-h-96 overflow-y-auto">
                   {filteredLogs.map((log, i) => (
-                    <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                    <div key={i} className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px]">
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{log.event_type}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">
                           {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
                         </span>
                       </div>
-                      {log.resource && <div className="text-xs text-muted-foreground mt-0.5">Resource: {log.resource}</div>}
-                      {log.user && <div className="text-xs text-muted-foreground mt-0.5">User: {log.user}</div>}
-                      {log.detail && <div className="text-xs text-muted-foreground mt-0.5">{log.detail}</div>}
+                      {log.resource && <div className="text-[10px] text-muted-foreground/60 mt-0.5">Resource: {log.resource}</div>}
+                      {log.user && <div className="text-[10px] text-muted-foreground/60 mt-0.5">User: {log.user}</div>}
+                      {log.detail && <div className="text-[10px] text-muted-foreground/60 mt-0.5">{log.detail}</div>}
                       {log.extra && Object.keys(log.extra).length > 0 && (
-                        <div className="text-xs text-muted-foreground mt-0.5 font-mono">
+                        <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono">
                           {JSON.stringify(log.extra).slice(0, 120)}
                         </div>
                       )}
@@ -422,41 +426,42 @@ export default function AdminPage() {
           {currentUser ? (
             <>
               <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Current User</CardTitle>
+                <CardHeader className="pb-2 pt-2.5 px-2.5">
+                  <CardTitle className="text-[11px] font-medium">Current User</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">Username</div>
-                      <div className="text-sm font-mono font-medium">{currentUser.username}</div>
+                <CardContent className="space-y-2 px-2.5 pb-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                    <div className="rounded-lg bg-muted/20 p-2 text-center">
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Username</div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">{currentUser.username}</div>
                     </div>
-                    <div className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">Email</div>
-                      <div className="text-sm font-mono font-medium">{currentUser.email}</div>
+                    <div className="rounded-lg bg-muted/20 p-2 text-center">
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Email</div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">{currentUser.email}</div>
                     </div>
-                    <div className="rounded-md bg-muted/30 p-3 text-center">
-                      <div className="text-xs text-muted-foreground">User ID</div>
-                      <div className="text-sm font-mono font-medium truncate">{currentUser.id}</div>
+                    <div className="rounded-lg bg-muted/20 p-2 text-center">
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">User ID</div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums truncate">{currentUser.id}</div>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={handleLogout}>Logout</Button>
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleLogout}>Logout</Button>
                 </CardContent>
               </Card>
               <AuthSessionInfoCard token={token} user={currentUser} onLogout={handleLogout} />
             </>
           ) : (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">{authMode === 'login' ? 'Login' : 'Register'}</CardTitle>
+              <CardHeader className="pb-2 pt-2.5 px-2.5">
+                <CardTitle className="text-[11px] font-medium">{authMode === 'login' ? 'Login' : 'Register'}</CardTitle>
               </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAuthSubmit} className="space-y-3">
+              <CardContent className="px-2.5 pb-2.5">
+                <form onSubmit={handleAuthSubmit} className="space-y-2">
                   <Input
                     value={username}
                     onChange={e => setUsername(e.target.value)}
                     placeholder="Username"
                     aria-label="Username"
+                    className="h-7 text-[11px]"
                     required
                   />
                   {authMode === 'register' && (
@@ -466,6 +471,7 @@ export default function AdminPage() {
                       onChange={e => setEmail(e.target.value)}
                       placeholder="Email"
                       aria-label="Email"
+                      className="h-7 text-[11px]"
                       required
                     />
                   )}
@@ -475,16 +481,17 @@ export default function AdminPage() {
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Password"
                     aria-label="Password"
+                    className="h-7 text-[11px]"
                     required
                   />
-                  {authError && <div className="text-xs text-destructive">{authError}</div>}
-                  <div className="flex items-center gap-3">
-                    <Button size="sm" type="submit" disabled={authLoading}>
+                  {authError && <StatusBanner variant="error" message={authError} dismissible={false} />}
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" type="submit" className="h-7 text-[11px]" disabled={authLoading}>
                       {authLoading ? 'Processing...' : authMode === 'login' ? 'Login' : 'Register'}
                     </Button>
                     <button
                       type="button"
-                      className="text-xs text-primary hover:text-primary/80"
+                      className="text-[10px] text-primary hover:text-primary/80"
                       onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(null) }}
                     >
                       {authMode === 'login' ? 'Create account' : 'Already have an account?'}
@@ -496,19 +503,20 @@ export default function AdminPage() {
           )}
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Token Info</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Token Info</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-2.5 pb-2.5">
               {token ? (
-                <div className="space-y-2">
-                  <div className="rounded-md bg-muted/30 p-3">
-                    <div className="text-xs text-muted-foreground mb-1">JWT Token</div>
-                    <div className="text-xs font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
+                <div className="space-y-1.5">
+                  <div className="rounded-lg bg-muted/20 p-2">
+                    <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-0.5">JWT Token</div>
+                    <div className="text-[10px] font-mono break-all text-muted-foreground/60">{token.slice(0, 60)}...</div>
                   </div>
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-6 text-[10px]"
                     onClick={async () => {
                       try {
                         const data = await authController.verify(token!)
@@ -520,7 +528,7 @@ export default function AdminPage() {
                   </Button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No token. Login or register to get one.</p>
+                <p className="text-[10px] text-muted-foreground/60">No token. Login or register to get one.</p>
               )}
             </CardContent>
           </Card>
@@ -538,36 +546,36 @@ export default function AdminPage() {
           <ErrorInsightsCard grouped={grouped} recent={recent} total={total} />
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Actions</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} onClick={() => setAutoRefresh(!autoRefresh)}>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Actions</CardTitle>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} className="h-6 text-[10px]" onClick={() => setAutoRefresh(!autoRefresh)}>
                   {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={fetchErrors} aria-label="Refresh">
-                  <IconRefresh className="h-4 w-4" />
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchErrors} aria-label="Refresh">
+                  <IconRefresh className="h-3 w-3" />
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={handleExport}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <IconDownload className="h-4 w-4" />
+            <CardContent className="px-2.5 pb-2.5">
+              <div className="flex gap-1">
+                <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleExport}>
+                  <span className="inline-flex items-center gap-1">
+                    <IconDownload className="h-3 w-3" />
                     Export All
                   </span>
                 </Button>
                 {search && (
-                  <Button size="sm" variant="outline" onClick={handleExportFiltered}>
-                    <span className="inline-flex items-center gap-1.5">
-                      <IconDownload className="h-4 w-4" />
+                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleExportFiltered}>
+                    <span className="inline-flex items-center gap-1">
+                      <IconDownload className="h-3 w-3" />
                       Export Filtered
                     </span>
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={handleClear} disabled={clearing} className="text-destructive">
-                  <span className="inline-flex items-center gap-1.5">
-                    <IconTrash className="h-4 w-4" />
+                <Button size="sm" variant="outline" className="h-7 text-[11px] text-destructive" onClick={handleClear} disabled={clearing}>
+                  <span className="inline-flex items-center gap-1">
+                    <IconTrash className="h-3 w-3" />
                     {clearing ? 'Clearing...' : 'Clear All'}
                   </span>
                 </Button>
@@ -577,21 +585,21 @@ export default function AdminPage() {
 
           {trends.length > 0 && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Hourly Trend (24h)</CardTitle>
+              <CardHeader className="pb-2 pt-2.5 px-2.5">
+                <CardTitle className="text-[11px] font-medium">Hourly Trend (24h)</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-1 h-24">
+              <CardContent className="px-2.5 pb-2.5">
+                <div className="flex items-end gap-0.5 h-20">
                   {trends.map((t, i) => (
                     <div
                       key={i}
-                      className="flex-1 bg-primary/20 rounded-t min-w-[4px]"
+                      className="flex-1 bg-primary/20 rounded-t min-w-[3px]"
                       style={{ height: `${Math.max((t.count / maxTrend) * 100, 2)}%` }}
                       title={`${t.hour.split('T')[1]}: ${t.count}`}
                     />
                   ))}
                 </div>
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono mt-0.5">
                   <span>{trends[0]?.hour.split('T')[1]}</span>
                   <span>{trends[trends.length - 1]?.hour.split('T')[1]}</span>
                 </div>
@@ -600,37 +608,37 @@ export default function AdminPage() {
           )}
 
           <Card>
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
-              <CardTitle className="text-base">Grouped Errors ({grouped.length})</CardTitle>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Grouped Errors ({grouped.length})</CardTitle>
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search errors..."
-                className="h-9 w-full sm:w-48 text-sm"
+                className="h-7 w-full sm:w-40 text-[11px]"
               />
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-2.5 pb-2.5">
               {grouped.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No errors logged.</p>
+                <p className="text-[10px] text-muted-foreground/60">No errors logged.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {grouped
                     .filter(g => !search || g.message.toLowerCase().includes(search.toLowerCase()) || g.source.toLowerCase().includes(search.toLowerCase()))
                     .map(g => (
-                    <div key={g.fingerprint} className="rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
+                    <div key={g.fingerprint} className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px] hover:bg-muted/20 transition-colors">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="font-medium truncate">{g.message}</div>
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-[10px] text-muted-foreground/60">
                             {g.source} · {g.sample_url && <span className="truncate max-w-[200px] inline-block">{g.sample_url}</span>}
                             {g.sample_line != null && `:${g.sample_line}`}
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <span className="text-xs font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-full">
                             ×{g.count}
                           </span>
-                          <div className="text-xs text-muted-foreground mt-0.5">
+                          <div className="text-[9px] text-muted-foreground/60 mt-0.5 font-mono">
                             {g.latest && new Date(g.latest).toLocaleDateString()}
                           </div>
                         </div>
@@ -643,17 +651,17 @@ export default function AdminPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Recent Errors</CardTitle>
+            <CardHeader className="pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium">Recent Errors</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-2.5 pb-2.5">
               {recent.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No recent errors.</p>
+                <p className="text-[10px] text-muted-foreground/60">No recent errors.</p>
               ) : (
-                <div className="space-y-1 max-h-96 overflow-y-auto">
+                <div className="space-y-0 max-h-96 overflow-y-auto">
                   {recent.map(e => (
-                    <div key={e.id} className="flex items-start gap-2 text-xs py-1.5 border-b border-border/30 last:border-0">
-                      <span className="font-mono text-muted-foreground shrink-0 w-16">
+                    <div key={e.id} className="flex items-start gap-2 text-[10px] py-1.5 border-b border-border/20 last:border-0">
+                      <span className="font-mono text-muted-foreground/60 shrink-0 w-14 tabular-nums">
                         {e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—'}
                       </span>
                       <span className="truncate">{e.message}</span>

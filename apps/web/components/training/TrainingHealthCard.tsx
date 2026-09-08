@@ -191,12 +191,12 @@ export function TrainingHealthCard({ checkpoints, loading }: TrainingHealthCardP
       <ActionCard
         title="Training health"
         actions={
-          <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
+          <div className="h-4 w-14 animate-pulse rounded-full bg-muted" />
         }
       >
-          <div className="space-y-2">
-            <div className="h-4 w-48 animate-pulse rounded bg-muted" />
-            <div className="h-3 w-32 animate-pulse rounded bg-muted" />
+          <div className="space-y-1.5">
+            <div className="h-3 w-44 animate-pulse rounded bg-muted" />
+            <div className="h-2.5 w-28 animate-pulse rounded bg-muted" />
           </div>
       </ActionCard>
     )
@@ -208,17 +208,17 @@ export function TrainingHealthCard({ checkpoints, loading }: TrainingHealthCardP
     <ActionCard
       title="Training health"
       actions={
-        <span className={cn('text-[10px] px-2 py-0.5 rounded-full font-medium', styles.badge)}>
+        <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', styles.badge)}>
           {STATUS_LABELS[result.status]}
         </span>
       }
       className={styles.border}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5">
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-muted-foreground">{result.message}</p>
-          <p className="text-xs text-muted-foreground/60 mt-0.5">{result.recommendation}</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground/60 mt-1.5">
+          <p className="text-[11px] text-muted-foreground">{result.message}</p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">{result.recommendation}</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] text-muted-foreground/60 mt-1 tabular-nums">
             {result.bestLoss != null && (
               <span>Best loss: {result.bestLoss.toFixed(4)}</span>
             )}

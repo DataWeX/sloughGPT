@@ -1,6 +1,16 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 
+vi.mock('@/components/composed/StatusBanner', () => ({
+  StatusBanner: ({ variant, message, onRetry, onDismiss }: { variant: string; message: string; onRetry?: () => void; onDismiss?: () => void }) => (
+    <div data-variant={variant}>
+      <span>{message}</span>
+      {onRetry && <button onClick={onRetry}>Retry</button>}
+      {onDismiss && <button onClick={onDismiss}>Dismiss</button>}
+    </div>
+  ),
+}))
+
 import { TrainingErrorBanner } from './TrainingStatus'
 
 describe('TrainingErrorBanner', () => {
@@ -9,11 +19,6 @@ describe('TrainingErrorBanner', () => {
   it('renders error message', () => {
     render(<TrainingErrorBanner error="OOM killed" />)
     expect(screen.getByText('OOM killed')).toBeDefined()
-  })
-
-  it('renders training failed heading', () => {
-    render(<TrainingErrorBanner error="..." />)
-    expect(screen.getByText('Training failed')).toBeDefined()
   })
 
   it('renders Retry button when onRetry provided', () => {

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { SectionLabel } from '@/components/composed/SectionLabel'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -68,7 +70,7 @@ export function VoiceSection() {
   return (
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
-        <h2 className="text-base font-medium">Text to Speech</h2>
+        <SectionLabel>Text to Speech</SectionLabel>
       </div>
 
       {loading ? (
@@ -102,7 +104,7 @@ export function VoiceSection() {
                 <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
               </KpiGrid>
               {status.error && (
-                <div className="text-xs text-destructive bg-destructive/5 rounded-md p-2">{status.error}</div>
+                <StatusBanner variant="error" message={status.error} dismissible={false} />
               )}
             </div>
           ) : (
@@ -134,7 +136,7 @@ export function VoiceSection() {
             )}
           </div>
           {ttsError && (
-            <div className="text-xs text-destructive">{ttsError}</div>
+            <StatusBanner variant="error" message={ttsError} dismissible={false} />
           )}
         </CardContent>
       </Card>

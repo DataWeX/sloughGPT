@@ -10,6 +10,7 @@ vi.mock('@sloughgpt/strui', () => ({
   StatCard: ({ label, value, loading }: any) => <div>{loading ? 'Loading...' : `${label}: ${value}`}</div>,
   KpiGrid: ({ children }: any) => <div>{children}</div>,
   IconRefresh: ({ className }: any) => <span className={className} />,
+  Spinner: ({ className }: any) => <span className={className} />,
 }))
 
 vi.mock('@/lib/toast-store', () => ({

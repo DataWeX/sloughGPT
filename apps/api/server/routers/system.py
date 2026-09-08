@@ -168,7 +168,7 @@ class SystemRouter:
                         for line in lines:
                             yield f"data: {line.to_sse()}\n\n"
                 except (asyncio.CancelledError, GeneratorExit):
-                    pass
+                    pass  # Expected: client disconnected or stream cancelled
                 finally:
                     buf.unsubscribe(sub.name)
 

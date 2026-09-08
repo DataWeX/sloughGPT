@@ -93,36 +93,36 @@ export default function QuickImportDialog({ open, onOpenChange, onImported }: Pr
           <DialogTitle>Import Dataset</DialogTitle>
         </DialogHeader>
         {result ? (
-          <div className="space-y-3">
-            <div className="text-sm text-center py-4">
+          <div className="space-y-2">
+            <div className="text-[11px] text-center py-3">
               <p className="font-medium">Imported successfully</p>
-              <p className="text-muted-foreground mt-1">{result.message}</p>
+              <p className="text-muted-foreground/60 mt-0.5">{result.message}</p>
             </div>
-            <Button className="w-full" onClick={() => { onOpenChange(false); reset() }}>Done</Button>
+            <Button className="w-full h-7 text-[11px]" onClick={() => { onOpenChange(false); reset() }}>Done</Button>
           </div>
         ) : (
-          <div className="space-y-3">
-            <Input placeholder="Dataset name (optional)" value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} className="h-8 text-xs" />
+          <div className="space-y-2">
+            <Input placeholder="Dataset name (optional)" value={name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)} className="h-7 text-[11px]" />
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="h-8">
-                <TabsTrigger value="local" className="text-xs">Local Path</TabsTrigger>
-                <TabsTrigger value="github" className="text-xs">GitHub</TabsTrigger>
-                <TabsTrigger value="huggingface" className="text-xs">HuggingFace</TabsTrigger>
-                <TabsTrigger value="kaggle" className="text-xs">Kaggle</TabsTrigger>
-                <TabsTrigger value="url" className="text-xs">URL</TabsTrigger>
+              <TabsList className="h-7">
+                <TabsTrigger value="local" className="text-[10px]">Local Path</TabsTrigger>
+                <TabsTrigger value="github" className="text-[10px]">GitHub</TabsTrigger>
+                <TabsTrigger value="huggingface" className="text-[10px]">HuggingFace</TabsTrigger>
+                <TabsTrigger value="kaggle" className="text-[10px]">Kaggle</TabsTrigger>
+                <TabsTrigger value="url" className="text-[10px]">URL</TabsTrigger>
               </TabsList>
               <TabsContent value="local">
-                <Input placeholder="/path/to/dataset/folder" value={localPath} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalPath(e.target.value)} className="h-8 text-xs" />
+                <Input placeholder="/path/to/dataset/folder" value={localPath} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalPath(e.target.value)} className="h-7 text-[11px]" />
               </TabsContent>
               <TabsContent value="github">
-                <Input placeholder="https://github.com/user/repo" value={githubUrl} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGithubUrl(e.target.value)} className="h-8 text-xs" />
+                <Input placeholder="https://github.com/user/repo" value={githubUrl} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGithubUrl(e.target.value)} className="h-7 text-[11px]" />
               </TabsContent>
               <TabsContent value="huggingface">
-                <Input placeholder="username/dataset-name" value={hfId} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHfId(e.target.value)} className="h-8 text-xs" />
+                <Input placeholder="username/dataset-name" value={hfId} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setHfId(e.target.value)} className="h-7 text-[11px]" />
               </TabsContent>
-              <TabsContent value="kaggle" className="space-y-2">
-                <Input placeholder="owner/dataset-name" value={kaggleSlug} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKaggleSlug(e.target.value)} className="h-8 text-xs" />
-                <div className="grid grid-cols-2 gap-1.5">
+              <TabsContent value="kaggle" className="space-y-1.5">
+                <Input placeholder="owner/dataset-name" value={kaggleSlug} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setKaggleSlug(e.target.value)} className="h-7 text-[11px]" />
+                <div className="grid grid-cols-2 gap-1">
                   {randomPresets.map((p) => (
                     <button
                       key={p.slug}
@@ -130,22 +130,22 @@ export default function QuickImportDialog({ open, onOpenChange, onImported }: Pr
                       className="text-left p-1.5 rounded border border-border/50 hover:border-primary/50 hover:bg-accent/50 transition-colors"
                       onClick={() => setKaggleSlug(p.slug)}
                     >
-                      <span className="text-xs font-medium">{p.title}</span>
-                      <span className="block text-[10px] text-muted-foreground">{p.desc}</span>
+                      <span className="text-[10px] font-medium">{p.title}</span>
+                      <span className="block text-[9px] text-muted-foreground/60">{p.desc}</span>
                     </button>
                   ))}
                 </div>
               </TabsContent>
               <TabsContent value="url">
-                <Input placeholder="https://example.com/data.txt" value={url} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrl(e.target.value)} className="h-8 text-xs" />
+                <Input placeholder="https://example.com/data.txt" value={url} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrl(e.target.value)} className="h-7 text-[11px]" />
               </TabsContent>
             </Tabs>
             {importing ? (
-              <Button className="w-full h-8 text-xs" variant="outline" onClick={() => abortRef.current?.abort()}>
+              <Button className="w-full h-7 text-[11px]" variant="outline" onClick={() => abortRef.current?.abort()}>
                 Cancel Import
               </Button>
             ) : (
-              <Button className="w-full h-8 text-xs" onClick={handleImport}>
+              <Button className="w-full h-7 text-[11px]" onClick={handleImport}>
                 Import
               </Button>
             )}

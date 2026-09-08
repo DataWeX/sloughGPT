@@ -53,8 +53,8 @@ export function TrainStep({ form, datasets, onBack }: StepProps) {
       <CardHeader className="pb-3">
         <CardTitle className="text-base">3. Train</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-md bg-muted/30 border border-border/40 p-3 text-xs text-muted-foreground space-y-1">
+      <CardContent className="space-y-3">
+        <div className="rounded-lg bg-muted/20 border border-border/40 p-2.5 text-[10px] text-muted-foreground/60 space-y-0.5">
           <div className="flex items-center justify-between">
             <span>Method</span>
             <span className="font-medium text-foreground">{METHOD_LABELS[form.method]}</span>
@@ -74,18 +74,18 @@ export function TrainStep({ form, datasets, onBack }: StepProps) {
           {rows.map(row => (
             <div key={row.label} className="flex items-center justify-between">
               <span>{row.label}</span>
-              <span className="font-medium text-foreground">{row.value}</span>
+              <span className="font-medium text-foreground tabular-nums">{row.value}</span>
             </div>
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button size="sm" disabled={!form.canStart} onClick={() => form.startTraining()} className="h-8">
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" className="h-7 text-[10px]" disabled={!form.canStart} onClick={() => form.startTraining()}>
             {form.method === 'distill' && form.inputMode === 'text' && form.textInput.trim()
               ? 'Train on pasted text'
               : form.method === 'vlm' ? 'Start vision training' : 'Start training'}
           </Button>
-          <Button size="sm" variant="ghost" onClick={onBack}>Back</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={onBack}>Back</Button>
         </div>
       </CardContent>
     </Card>

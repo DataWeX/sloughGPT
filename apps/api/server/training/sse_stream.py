@@ -200,7 +200,7 @@ def build_training_sse_response(
                                 )
                                 break
                         except json.JSONDecodeError:
-                            pass
+                            logger.debug("Skipping malformed SSE JSON in training stream")
 
                 while not queue.empty():
                     try:
@@ -283,7 +283,7 @@ def stop_all_training() -> dict:
             from domains.training.service import get_state
             get_state().running = False
         except Exception:
-            pass
+            logger.debug("Failed to reset training state after cancel_all failure")
 
     return {"status": "cancelling", "message": "Cancelling all training"}
 
@@ -310,6 +310,6 @@ def cancel_from_sessions() -> dict:
             from domains.training.service import get_state
             get_state().running = False
         except Exception:
-            pass
+            logger.debug("Failed to reset training state after cancel_from_sessions failure")
 
     return {"status": "cancelled", "message": "Cancel signal sent"}

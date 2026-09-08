@@ -456,7 +456,7 @@ class InferRouter:
                     )
                     return EmbedResponse(embedding=vec, dimensions=len(vec), model=model_name)
                 except NotImplementedError:
-                    pass
+                    logger.debug("Model %s does not support embed, falling back to n-gram", model_name)
                 except Exception as e:
                     logger.debug("Model embed failed, falling back to n-gram: %s", e)
 

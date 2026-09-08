@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, memo } from 'react'
-import { Button, IconCopy, IconCheck, IconRefresh } from '@sloughgpt/strui'
+import { Button, IconCopy, IconCheck, Spinner } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { useChatSummary } from '@/features/chat/hooks/useChatSummary'
 import type { ChatMessage } from '@/lib/chat-utils'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface ConversationSummaryProps {
   messages: ChatMessage[]
@@ -24,7 +26,7 @@ export const ConversationSummary = memo(function ConversationSummary({
     if (summary) {
       await navigator.clipboard.writeText(summary)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
     }
   }
 
@@ -44,7 +46,7 @@ export const ConversationSummary = memo(function ConversationSummary({
             onClick={handleGenerate}
             disabled={isGenerating || messages.length === 0}
           >
-            <IconRefresh className={cn('h-3 w-3 mr-1', isGenerating && 'animate-spin')} />
+            <Spinner className="h-3 w-3 mr-1" />
             {isGenerating ? 'Generating...' : 'Generate'}
           </Button>
           {summary && (
@@ -62,9 +64,7 @@ export const ConversationSummary = memo(function ConversationSummary({
       </div>
 
       {error && (
-        <div className="text-xs text-destructive bg-destructive/10 rounded p-2">
-          {error}
-        </div>
+        <StatusBanner variant="error" message={error} dismissible={false} />
       )}
 
       {summary && (

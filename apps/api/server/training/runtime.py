@@ -354,4 +354,4 @@ def _register_runtime_with_core() -> None:
 
         set_training_runtime(_runtime or get_training_runtime())
     except ImportError:
-        pass
+        logger.debug("Training runtime protocol not available")

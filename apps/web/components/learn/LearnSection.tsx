@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, Spinner } from '@sloughgpt/strui'
+import { SectionLabel } from '@/components/composed/SectionLabel'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -125,27 +125,27 @@ export function LearnSection() {
 
   return (
     <>
-      <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
-        <h2 className="text-base font-medium">Continual Learning</h2>
-        <span className="text-xs text-muted-foreground">
+      <div className="flex items-center justify-between border-b border-border/30 pb-1.5 pt-0.5">
+        <SectionLabel>Continual Learning</SectionLabel>
+        <span className="text-[10px] text-muted-foreground/60 tabular-nums">
           {status ? `${status.total_tokens_ingested} tokens · ${status.feeds_subscribed} feeds` : 'Search the web and learn'}
         </span>
       </div>
 
       {loading ? (
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent><div className="h-28 animate-pulse bg-muted/50 rounded-lg" /></CardContent></Card>
       ) : (
         status && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { label: 'Tokens Ingested', value: status.total_tokens_ingested },
               { label: 'Train Steps', value: status.train_steps_completed },
               { label: 'Feeds', value: status.feeds_subscribed },
               { label: 'Buffer', value: `${status.buffer_size}/${status.buffer_capacity}` },
             ].map(s => (
-              <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-                <div className="text-lg font-mono font-medium">{s.value}</div>
+              <div key={s.label} className="rounded-lg bg-muted/30 p-2.5 text-center">
+                <div className="text-[10px] text-muted-foreground/60">{s.label}</div>
+                <div className="text-[13px] font-mono font-medium tabular-nums">{s.value}</div>
               </div>
             ))}
           </div>
@@ -154,7 +154,7 @@ export function LearnSection() {
 
       {knowledge.length > 0 && <LearningInsightsCard facts={knowledge} />}
 
-      <div className="flex gap-1 border-b border-border/30 pb-0">
+      <div className="flex gap-0.5 border-b border-border/30 pb-0">
         {(['search', 'ingest', 'knowledge', 'feeds'] as Tab[]).map(t => (
           <button
             key={t}
@@ -164,7 +164,7 @@ export function LearnSection() {
               if (t === 'knowledge') handleLoadKnowledge()
               if (t === 'feeds') handleLoadFeeds()
             }}
-            className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
+            className={cn('px-2.5 py-1 text-[10px] font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground/60 hover:text-foreground')}
           >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -173,19 +173,20 @@ export function LearnSection() {
 
       {tab === 'search' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
-            <p className="text-sm text-muted-foreground">Search the web, fetch articles, and learn from them.</p>
+          <CardContent className="pt-3 space-y-2">
+            <p className="text-[11px] text-muted-foreground/60">Search the web, fetch articles, and learn from them.</p>
             {searchResult && (
-              <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{searchResult}</div>
+              <div className="rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-[11px] text-primary">{searchResult}</div>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <Input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
                 placeholder="Search query..."
+                className="h-6 text-[10px]"
               />
-              <Button size="sm" onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
+              <Button size="sm" className="h-6 text-[10px]" onClick={handleSearch} disabled={searching || !searchQuery.trim()}>
                 {searching ? 'Searching...' : 'Search & Learn'}
               </Button>
             </div>
@@ -195,21 +196,21 @@ export function LearnSection() {
 
       {tab === 'ingest' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="pt-3 space-y-2">
             {ingestResult && (
-              <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{ingestResult}</div>
+              <div className="rounded-lg bg-primary/10 border border-primary/20 px-2.5 py-1.5 text-[11px] text-primary">{ingestResult}</div>
             )}
             <div>
-              <div className="text-xs text-muted-foreground mb-1">From URL</div>
-              <div className="flex gap-2">
-                <Input value={ingestUrl} onChange={e => setIngestUrl(e.target.value)} placeholder="https://..." />
-                <Button size="sm" onClick={handleIngestUrl} disabled={ingesting || !ingestUrl.trim()}>Ingest URL</Button>
+              <div className="text-[10px] text-muted-foreground/60 mb-1">From URL</div>
+              <div className="flex gap-1.5">
+                <Input value={ingestUrl} onChange={e => setIngestUrl(e.target.value)} placeholder="https://..." className="h-6 text-[10px]" />
+                <Button size="sm" className="h-6 text-[10px]" onClick={handleIngestUrl} disabled={ingesting || !ingestUrl.trim()}>Ingest URL</Button>
               </div>
             </div>
             <div>
-              <div className="text-xs text-muted-foreground mb-1">From Text</div>
-              <Textarea value={ingestText} onChange={e => setIngestText(e.target.value)} placeholder="Paste text to learn from..." rows={4} />
-              <Button size="sm" className="mt-1" onClick={handleIngestText} disabled={ingesting || !ingestText.trim()}>Ingest Text</Button>
+              <div className="text-[10px] text-muted-foreground/60 mb-1">From Text</div>
+              <Textarea value={ingestText} onChange={e => setIngestText(e.target.value)} placeholder="Paste text to learn from..." rows={3} className="text-[11px]" />
+              <Button size="sm" className="h-6 text-[10px] mt-1" onClick={handleIngestText} disabled={ingesting || !ingestText.trim()}>Ingest Text</Button>
             </div>
           </CardContent>
         </Card>
@@ -219,25 +220,25 @@ export function LearnSection() {
         <ActionCard
           title={`Knowledge (${knowledge.length})`}
           actions={
-            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
-              <IconRefresh className={cn('h-4 w-4', loadingKnowledge ? 'animate-spin' : '')} />
+            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
+              <Spinner className="h-3 w-3" />
             </Button>
           }
-          contentClassName="space-y-3"
+          contentClassName="space-y-2"
         >
-            <div className="flex gap-2">
-              <Input value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} placeholder="Filter by topic..." />
-              <Button size="sm" variant="outline" onClick={handleLoadKnowledge}>Search</Button>
+            <div className="flex gap-1.5">
+              <Input value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} placeholder="Filter by topic..." className="h-6 text-[10px]" />
+              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={handleLoadKnowledge}>Search</Button>
             </div>
             {knowledge.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No knowledge yet. Use Search or Ingest to learn.</p>
+              <p className="text-[11px] text-muted-foreground/60">No knowledge yet. Use Search or Ingest to learn.</p>
             ) : (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="space-y-1 max-h-80 overflow-y-auto">
                 {knowledge.map((f, i) => (
-                  <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                  <div key={i} className="rounded-lg border border-border/40 px-2.5 py-1.5 text-[10px]">
                     <div className="truncate">{f.content}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {f.topic && <span className="bg-muted px-1 rounded mr-1">{f.topic}</span>}
+                    <div className="text-[9px] text-muted-foreground/60 mt-0.5">
+                      {f.topic && <span className="bg-muted/50 px-1 rounded mr-0.5">{f.topic}</span>}
                       {f.source}
                     </div>
                   </div>
@@ -249,25 +250,25 @@ export function LearnSection() {
 
       {tab === 'feeds' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">RSS Feeds</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs">RSS Feeds</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             {feedMsg && (
-              <div className="text-sm text-primary">{feedMsg}</div>
+              <div className="text-[11px] text-primary">{feedMsg}</div>
             )}
-            <div className="flex gap-2">
-              <Input value={newFeedUrl} onChange={e => setNewFeedUrl(e.target.value)} placeholder="RSS feed URL..." />
-              <Button size="sm" onClick={handleSubscribeFeed}>Subscribe</Button>
+            <div className="flex gap-1.5">
+              <Input value={newFeedUrl} onChange={e => setNewFeedUrl(e.target.value)} placeholder="RSS feed URL..." className="h-6 text-[10px]" />
+              <Button size="sm" className="h-6 text-[10px]" onClick={handleSubscribeFeed}>Subscribe</Button>
             </div>
             {feeds.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No feeds subscribed.</p>
+              <p className="text-[11px] text-muted-foreground/60">No feeds subscribed.</p>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {feeds.map((f, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-border/20">
+                  <div key={i} className="flex items-center justify-between text-[10px] py-1 border-b border-border/20">
                     <span className="truncate">{f.url}</span>
-                    <span className="text-muted-foreground shrink-0 ml-2">{f.interval}s</span>
+                    <span className="text-muted-foreground/60 shrink-0 ml-1.5 tabular-nums">{f.interval}s</span>
                   </div>
                 ))}
               </div>

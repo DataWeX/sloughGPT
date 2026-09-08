@@ -10,12 +10,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Breadcrumbs } from '@sloughgpt/strui'
-import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh, IconClock, IconChevronDown } from '@sloughgpt/strui'
+import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconClock, IconChevronDown } from '@sloughgpt/strui'
 import { datasetController, type Dataset, type DatasetStats, type DatasetPreview as DatasetPreviewData } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
@@ -234,7 +234,7 @@ export default function DatasetDetailPage() {
         Import Data
       </Button>
        <Button variant="outline" size="sm" onClick={fetchDataset} disabled={loading}>
-        <IconRefresh className={loading ? 'animate-spin h-4 w-4 mr-1' : 'h-4 w-4 mr-1'} />
+        <Spinner className="h-4 w-4 mr-1" />
         Refresh
       </Button>
     </div>

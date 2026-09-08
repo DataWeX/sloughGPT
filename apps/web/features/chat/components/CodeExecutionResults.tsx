@@ -4,6 +4,7 @@ import { useState, useCallback, memo } from 'react'
 import { Button, IconX, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { formatDurationCompact } from '@/lib/formatDuration'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface CodeExecution {
   id: string
@@ -43,7 +44,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
   const handleCopy = useCallback(async (code: string, id: string) => {
     await navigator.clipboard.writeText(code)
     setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
+    setTimeout(() => setCopiedId(null), COPY_FEEDBACK_DURATION_MS)
   }, [])
 
   const handleToggle = useCallback((id: string) => {
@@ -100,6 +101,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
                   size="icon-sm"
                   className="absolute top-1 right-1 h-5 w-5"
                   onClick={() => handleCopy(exec.code, exec.id)}
+                  aria-label={copiedId === exec.id ? 'Copied' : 'Copy code'}
                 >
                   {copiedId === exec.id ? (
                     <IconCheck className="h-3 w-3" />

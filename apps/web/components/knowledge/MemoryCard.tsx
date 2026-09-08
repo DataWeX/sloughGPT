@@ -9,7 +9,7 @@ import { cn, Card, CardContent, CardHeader, CardTitle, Checkbox, Slider } from '
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Switch } from '@sloughgpt/strui'
-import { IconBrain, IconRefresh, IconTrash, IconPlus, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
+import { IconBrain, IconTrash, IconPlus, IconSearch, IconX, IconClock, IconEdit, Spinner } from '@sloughgpt/strui'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@sloughgpt/strui'
@@ -295,7 +295,7 @@ export const MemoryCard = memo(function MemoryCard() {
             />
           </div>
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={fetchData} disabled={loading}>
-            <IconRefresh className={loading ? 'animate-spin h-3 w-3 mr-1' : 'h-3 w-3 mr-1'} />
+            <Spinner className="h-3 w-3 mr-1" />
             Refresh
           </Button>
           <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => setPendingClear(true)} disabled={clearing || itemCount === 0}>
