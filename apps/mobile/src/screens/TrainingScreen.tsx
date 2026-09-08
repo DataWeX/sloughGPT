@@ -2,7 +2,6 @@ import React, {useEffect, useState, useRef, useCallback} from 'react';
 import {
   ScrollView,
   TextInput,
-  Modal,
   Platform,
   KeyboardAvoidingView,
   RefreshControl,
@@ -23,6 +22,9 @@ import {api} from '../services/api-client';
 import {toast} from '../services/toast';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
+import {DatasetPreviewModal} from '../components/training/DatasetPreviewModal';
+import {ImportDatasetModal} from '../components/training/ImportDatasetModal';
+import {TestModelModal} from '../components/training/TestModelModal';
 import {useHapticPress} from '../hooks/useHapticPress';
 import {triggerHaptic} from '../services/haptics';
 
@@ -39,15 +41,6 @@ const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   COMPLETE: {text: 'Complete', variant: 'success'},
   FAILED: {text: 'Failed', variant: 'error'},
 };
-
-type ImportSource = 'url' | 'github' | 'huggingface' | 'csv';
-
-const IMPORT_SOURCES: {key: ImportSource; label: string; placeholder: string}[] = [
-  {key: 'url', label: 'URL', placeholder: 'https://example.com/data.txt'},
-  {key: 'github', label: 'GitHub', placeholder: 'owner/repo or full URL'},
-  {key: 'huggingface', label: 'HuggingFace', placeholder: 'dataset-id or org/dataset'},
-  {key: 'csv', label: 'CSV', placeholder: 'https://example.com/data.csv'},
-];
 
 export function TrainingScreen() {
   const colors = useColors();
@@ -97,13 +90,6 @@ export function TrainingScreen() {
   const [previewData, setPreviewData] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importSource, setImportSource] = useState('');
-  const [importName, setImportName] = useState('');
-  const [importType, setImportType] = useState<ImportSource>('url');
-  const [importing, setImporting] = useState(false);
-  const [testPrompt, setTestPrompt] = useState('');
-  const [testResult, setTestResult] = useState('');
-  const [testLoading, setTestLoading] = useState(false);
   const [testModalVisible, setTestModalVisible] = useState(false);
   const [soulNames, setSoulNames] = useState<string[]>([]);
   const prevPhaseRef = useRef(phase);
@@ -166,26 +152,6 @@ export function TrainingScreen() {
       setPreviewVisible(true);
     } catch (e: any) {
       toast.error(e.message || 'Failed to load dataset preview');
-    }
-  };
-
-  const handleImport = async () => {
-    if (!importSource.trim()) {
-      Alert.alert('Import', 'Enter a source');
-      return;
-    }
-    setImporting(true);
-    try {
-      await importDataset(importSource.trim(), importName.trim(), importType);
-      triggerHaptic('success');
-      Alert.alert('Imported', 'Dataset imported successfully');
-      setShowImportModal(false);
-      setImportSource('');
-      setImportName('');
-    } catch (err: any) {
-      Alert.alert('Import Failed', err.message || 'Failed to import dataset');
-    } finally {
-      setImporting(false);
     }
   };
 
@@ -255,25 +221,6 @@ export function TrainingScreen() {
       Alert.alert('Error', err.message || 'Failed to load checkpoint');
     } finally {
       setLoadingCheckpoint(null);
-    }
-  };
-
-  const handleTestModel = async () => {
-    if (!testPrompt.trim()) {
-      return;
-    }
-    setTestLoading(true);
-    setTestResult('');
-    try {
-      const result = await api.post<{text: string}>('/inference/generate', {
-        prompt: testPrompt,
-        max_new_tokens: 150,
-      });
-      setTestResult(result.text || 'No response');
-    } catch (err: any) {
-      setTestResult(`Error: ${err.message || 'Failed to generate'}`);
-    } finally {
-      setTestLoading(false);
     }
   };
 
@@ -1572,330 +1519,22 @@ export function TrainingScreen() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── Dataset Preview Modal ──────────────────────────────────────── */}
-      <Modal visible={previewVisible} animationType="slide" transparent>
-        <YStack
-          flex={1}
-          backgroundColor={colors.overlay(0.4)}
-          justifyContent="flex-end">
-          <YStack
-            backgroundColor={colors.background}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}
-            maxHeight="70%">
-            <XStack
-              alignItems="center"
-              justifyContent="space-between"
-              paddingHorizontal={20}
-              paddingVertical={16}
-              borderBottomWidth={1}
-              borderBottomColor="$borderColor">
-              <Text
-                fontSize={16}
-                fontWeight="600"
-                color={colors.text}>
-                Dataset Preview
-              </Text>
-              <Pressable
-                onPress={hapticPress('light', () => setPreviewVisible(false))}
-                accessibilityLabel="Close preview">
-                <YStack
-                  width={28}
-                  height={28}
-                  borderRadius={9}
-                  alignItems="center"
-                  justifyContent="center">
-                  <Icon name="x" size={16} color={colors.textSecondary} />
-                </YStack>
-              </Pressable>
-            </XStack>
-            <ScrollView
-              style={{paddingHorizontal: 20, paddingVertical: 12}}>
-              {previewData.map((line, i) => (
-                <XStack
-                  key={i}
-                  gap={8}
-                  paddingVertical={4}
-                  borderBottomWidth={1}
-                  borderBottomColor="$borderColor">
-                  <Text
-                    fontSize={11}
-                    color={colors.textSecondary}
-                    letterSpacing={0.2}
-                    width={24}>
-                    {i + 1}
-                  </Text>
-                  <Text
-                    fontSize={13}
-                    color={colors.text}
-                    lineHeight={18}
-                    flex={1}
-                    numberOfLines={3}>
-                    {line}
-                  </Text>
-                </XStack>
-              ))}
-              {previewData.length === 0 && (
-                <Text
-                  fontSize={13}
-                  color={colors.textSecondary}
-                  lineHeight={18}
-                  textAlign="center"
-                  padding={24}>
-                  No preview available
-                </Text>
-              )}
-            </ScrollView>
-          </YStack>
-        </YStack>
-      </Modal>
+      <DatasetPreviewModal
+        visible={previewVisible}
+        onClose={() => setPreviewVisible(false)}
+        data={previewData}
+      />
 
-      {/* ── Import Dataset Modal (multi-source) ────────────────────────── */}
-      <Modal visible={showImportModal} animationType="slide" transparent>
-        <YStack
-          flex={1}
-          backgroundColor={colors.overlay(0.4)}
-          justifyContent="flex-end">
-          <YStack
-            backgroundColor={colors.background}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}>
-            <XStack
-              alignItems="center"
-              justifyContent="space-between"
-              paddingHorizontal={20}
-              paddingVertical={16}
-              borderBottomWidth={1}
-              borderBottomColor="$borderColor">
-              <Text
-                fontSize={16}
-                fontWeight="600"
-                color={colors.text}>
-                Import Dataset
-              </Text>
-              <Pressable
-                onPress={hapticPress('light', () => setShowImportModal(false))}
-                accessibilityLabel="Close import">
-                <YStack
-                  width={28}
-                  height={28}
-                  borderRadius={9}
-                  alignItems="center"
-                  justifyContent="center">
-                  <Icon name="x" size={16} color={colors.textSecondary} />
-                </YStack>
-              </Pressable>
-            </XStack>
-            <YStack padding={20} gap={16}>
-              <YStack gap={8}>
-                <Text
-                  fontSize={13}
-                  color={colors.textSecondary}
-                  fontWeight="500">
-                  Source
-                </Text>
-                <XStack gap={4} flexWrap="wrap">
-                  {IMPORT_SOURCES.map(src => (
-                    <Pill
-                      key={src.key}
-                      label={src.label}
-                      selected={importType === src.key}
-                      onPress={() => {
-                        setImportType(src.key);
-                        setImportSource('');
-                      }}
-                    />
-                  ))}
-                </XStack>
-              </YStack>
-              <YStack gap={4}>
-                <Text fontSize={13} color={colors.textSecondary}>
-                  {importType === 'github'
-                    ? 'Repository'
-                    : importType === 'huggingface'
-                    ? 'Dataset ID'
-                    : 'URL or Path'}
-                </Text>
-                <TextInput
-                  value={importSource}
-                  onChangeText={setImportSource}
-                  placeholder={
-                    IMPORT_SOURCES.find(s => s.key === importType)
-                      ?.placeholder
-                  }
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    fontSize: 15,
-                    color: colors.text,
-                    backgroundColor: colors.primaryAlpha(0.04),
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                />
-              </YStack>
-              <YStack gap={4}>
-                <Text fontSize={13} color={colors.textSecondary}>
-                  Name (optional)
-                </Text>
-                <TextInput
-                  value={importName}
-                  onChangeText={setImportName}
-                  placeholder="my-dataset"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    fontSize: 15,
-                    color: colors.text,
-                    backgroundColor: colors.primaryAlpha(0.04),
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                />
-              </YStack>
-              <YStack
-                paddingVertical={12}
-                borderRadius={10}
-                alignItems="center"
-                backgroundColor={
-                  importing || !importSource.trim()
-                    ? colors.primaryAlpha(0.3)
-                    : colors.primary
-                }
-                onPress={hapticPress('light', handleImport)}
-                disabled={importing || !importSource.trim()}
-                pressStyle={{opacity: 0.7}}>
-                {importing ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text
-                    fontSize={14}
-                    fontWeight="600"
-                    color={colors.white}>
-                    Import
-                  </Text>
-                )}
-              </YStack>
-            </YStack>
-          </YStack>
-        </YStack>
-      </Modal>
+      <ImportDatasetModal
+        visible={showImportModal}
+        onClose={() => setShowImportModal(false)}
+      />
 
-      {/* ── Test Model Modal ───────────────────────────────────────────── */}
-      <Modal visible={testModalVisible} animationType="slide" transparent>
-        <YStack
-          flex={1}
-          backgroundColor={colors.overlay(0.4)}
-          justifyContent="flex-end">
-          <YStack
-            backgroundColor={colors.background}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}
-            maxHeight="80%">
-            <XStack
-              alignItems="center"
-              justifyContent="space-between"
-              paddingHorizontal={20}
-              paddingVertical={16}
-              borderBottomWidth={1}
-              borderBottomColor="$borderColor">
-              <Text
-                fontSize={16}
-                fontWeight="600"
-                color={colors.text}>
-                Test Model
-              </Text>
-              <Pressable
-                onPress={hapticPress('light', () => {
-                  setTestModalVisible(false);
-                  setTestResult('');
-                  setTestPrompt('');
-                })}
-                accessibilityLabel="Close test">
-                <YStack
-                  width={28}
-                  height={28}
-                  borderRadius={9}
-                  alignItems="center"
-                  justifyContent="center">
-                  <Icon name="x" size={16} color={colors.textSecondary} />
-                </YStack>
-              </Pressable>
-            </XStack>
-            <YStack padding={20} gap={12}>
-              <YStack gap={4}>
-                <Text fontSize={13} color={colors.textSecondary}>
-                  Prompt
-                </Text>
-                <TextInput
-                  value={testPrompt}
-                  onChangeText={setTestPrompt}
-                  placeholder="Type a prompt to test the trained model..."
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    fontSize: 15,
-                    color: colors.text,
-                    backgroundColor: colors.primaryAlpha(0.04),
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    minHeight: 60,
-                  }}
-                />
-              </YStack>
-              <YStack
-                paddingVertical={12}
-                borderRadius={10}
-                alignItems="center"
-                backgroundColor={
-                  testLoading || !testPrompt.trim()
-                    ? colors.primaryAlpha(0.3)
-                    : colors.primary
-                }
-                onPress={hapticPress('light', handleTestModel)}
-                disabled={testLoading || !testPrompt.trim()}
-                pressStyle={{opacity: 0.7}}>
-                {testLoading ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text
-                    fontSize={14}
-                    fontWeight="600"
-                    color={colors.white}>
-                    Generate
-                  </Text>
-                )}
-              </YStack>
-              {testResult ? (
-                <YStack gap={4}>
-                  <Text fontSize={13} color={colors.textSecondary}>
-                    Response
-                  </Text>
-                  <ScrollView style={{maxHeight: 200}}>
-                  <YStack
-                    backgroundColor={colors.primaryAlpha(0.04)}
-                    borderRadius={8}
-                    padding={12}>
-                    <Text
-                      fontSize={14}
-                      color={colors.text}
-                      lineHeight={20}>
-                      {testResult}
-                    </Text>
-                  </YStack>
-                  </ScrollView>
-                </YStack>
-              ) : null}
-            </YStack>
-          </YStack>
-        </YStack>
-      </Modal>
+      <TestModelModal
+        visible={testModalVisible}
+        onClose={() => setTestModalVisible(false)}
+        checkpoint={checkpoint}
+      />
     </SafeAreaView>
   );
 }
