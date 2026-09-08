@@ -129,6 +129,26 @@ export default function WorkspacesPage() {
     }
   }
 
+  const importWorkspace = async () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json'
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        await apiPost('/workspaces/import', { workspace_data: data })
+        await fetchWorkspaces()
+        addToast('Workspace imported', 'success')
+      } catch {
+        addToast('Could not import workspace', 'error')
+      }
+    }
+    input.click()
+  }
+
   const fetchMembers = useCallback(async (wsId: string) => {
     setLoadingMembers(true)
     try {
@@ -199,7 +219,12 @@ export default function WorkspacesPage() {
         {/* Create workspace */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Create Workspace</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs">Create Workspace</CardTitle>
+              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={importWorkspace}>
+                Import from JSON
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex gap-1.5">

@@ -587,6 +587,69 @@ class WorkspacesRouter:
                 "exported_at": datetime.now(timezone.utc).isoformat(),
             })
 
+        # ─── Workspace data import ───────────────────────────────
+        class WorkspaceImportRequest(BaseModel):
+            workspace_data: dict = Field(..., description="Exported workspace data")
+
+        async def import_workspace_data(
+            req: WorkspaceImportRequest, auth_user: dict = auth_dep
+        ) -> dict:
+            """Import workspace data from export format.
+
+            Creates a new workspace with members from the export.
+            Training jobs, API keys, and data counts are informational only.
+            """
+            user = self._get_user(auth_user)
+            data = req.workspace_data
+
+            # Extract workspace info
+            ws_data = data.get("workspace", {})
+            ws_name = ws_data.get("name", "Imported Workspace")
+            ws_desc = ws_data.get("description", "")
+
+            # Create workspace
+            ws = Workspace(
+                name=f"{ws_name} (imported)",
+                description=ws_desc,
+                tenant_id=user.tenant_id,
+            )
+            self._ws_repo.create(ws)
+
+            # Add creator as owner
+            owner_member = WorkspaceMember(
+                workspace_id=ws.id,
+                user_id=user.id,
+                role=Role.OWNER,
+            )
+            self._ws_repo.add_member(owner_member)
+
+            # Import members (skip creator, already added as owner)
+            imported_members = 0
+            for m in data.get("members", []):
+                if m.get("user_id") == user.id:
+                    continue
+                try:
+                    member = WorkspaceMember(
+                        workspace_id=ws.id,
+                        user_id=m["user_id"],
+                        role=Role(m.get("role", "member")),
+                    )
+                    self._ws_repo.add_member(member)
+                    imported_members += 1
+                except Exception:
+                    pass
+
+            logger.info(
+                "User %s imported workspace %s with %d members",
+                user.username, ws.id, imported_members,
+            )
+
+            return success_response(data={
+                "workspace_id": ws.id,
+                "name": ws.name,
+                "imported_members": imported_members,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -601,6 +664,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/usage", get_workspace_usage, methods=["GET"])
         router.add_api_route("/{workspace_id}/activity", get_workspace_activity, methods=["GET"])
         router.add_api_route("/{workspace_id}/export", export_workspace_data, methods=["GET"])
+        router.add_api_route("/import", import_workspace_data, methods=["POST"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
