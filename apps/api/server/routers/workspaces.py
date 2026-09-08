@@ -769,6 +769,86 @@ class WorkspacesRouter:
         router.add_api_route("/import", import_workspace_data, methods=["POST"])
         router.add_api_route("/{workspace_id}/health", workspace_health_check, methods=["GET"])
 
+        # ─── Invitations ────────────────────────────────────────
+        @router.post("/{workspace_id}/invitations")
+        async def create_invitation(
+            workspace_id: str, body: dict, auth_user: dict = auth_dep
+        ) -> dict:
+            """Create a workspace invitation by email."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+
+            # Must be admin or owner
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            email = body.get("email", "").strip()
+            role = body.get("role", "member")
+            if not email:
+                raise_error("Email required", "E_INVALID_INPUT", status_code=400)
+
+            # Check if user already a member
+            existing_members = self._ws_repo.list_members(workspace_id)
+            for m in existing_members:
+                u = self._user_repo.get(m.user_id)
+                if u and u.email.lower() == email.lower():
+                    raise_error("User already a member", "E_INFRA_BUSY", status_code=409)
+
+            # Check for existing pending invitation
+            existing_invites = self._ws_repo.list_invitations(workspace_id)
+            for inv in existing_invites:
+                if inv.get("email", "").lower() == email.lower() and not inv.get("accepted"):
+                    raise_error("Invitation already pending", "E_INFRA_BUSY", status_code=409)
+
+            invitation = self._ws_repo.create_invitation(
+                workspace_id=workspace_id,
+                email=email,
+                role=role,
+                invited_by=user.id,
+            )
+
+            logger.info("User %s invited %s to workspace %s", user.username, email, ws.name)
+            return success_response(data=invitation)
+
+        @router.get("/{workspace_id}/invitations")
+        async def list_invitations(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            """List pending invitations for a workspace."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            invitations = self._ws_repo.list_invitations(workspace_id)
+            return success_response(data=invitations, meta={"total": len(invitations)})
+
+        @router.delete("/{workspace_id}/invitations/{invitation_id}")
+        async def revoke_invitation(
+            workspace_id: str, invitation_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            """Revoke a pending invitation."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            self._ws_repo.revoke_invitation(workspace_id, invitation_id)
+            return success_response(data={"revoked": True})
+
 
 # ─── Singleton ─────────────────────────────────────────────────
 

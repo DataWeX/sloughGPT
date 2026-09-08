@@ -33,6 +33,20 @@ interface MembersResponse {
   data: Member[]
 }
 
+interface Invitation {
+  id: string
+  email: string
+  role: string
+  invited_by: string
+  created_at: number
+  accepted: boolean
+}
+
+interface InvitationsResponse {
+  data: Invitation[]
+  meta: { total: number }
+}
+
 export default function MembersPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [selectedWs, setSelectedWs] = useState<string | null>(null)
@@ -42,6 +56,10 @@ export default function MembersPage() {
   const [addMemberId, setAddMemberId] = useState('')
   const [addMemberRole, setAddMemberRole] = useState('member')
   const [searchQuery, setSearchQuery] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('member')
+  const [inviting, setInviting] = useState(false)
+  const [invitations, setInvitations] = useState<Invitation[]>([])
   const addToast = useToastStore(s => s.addToast)
   const { currentWorkspace, switchWorkspace } = useAuthStore()
 
@@ -98,11 +116,52 @@ export default function MembersPage() {
     }
   }
 
+  const fetchInvitations = useCallback(async (wsId: string) => {
+    try {
+      const res = await apiGet<InvitationsResponse>(`/workspaces/${wsId}/invitations`)
+      setInvitations(res?.data ?? [])
+    } catch {
+      logger.warning('Could not fetch invitations')
+    }
+  }, [])
+
+  const inviteMember = async () => {
+    if (!selectedWs || !inviteEmail.trim()) return
+    setInviting(true)
+    try {
+      await apiPost(`/workspaces/${selectedWs}/invitations`, {
+        email: inviteEmail,
+        role: inviteRole,
+      })
+      setInviteEmail('')
+      await fetchInvitations(selectedWs)
+      addToast('Invitation sent', 'success')
+    } catch {
+      addToast('Could not send invitation', 'error')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const revokeInvitation = async (invitationId: string) => {
+    if (!selectedWs) return
+    try {
+      await apiDelete(`/workspaces/${selectedWs}/invitations/${invitationId}`)
+      await fetchInvitations(selectedWs)
+      addToast('Invitation revoked', 'success')
+    } catch {
+      addToast('Could not revoke invitation', 'error')
+    }
+  }
+
   useEffect(() => { fetchWorkspaces() }, [fetchWorkspaces])
 
   useEffect(() => {
-    if (selectedWs) fetchMembers(selectedWs)
-  }, [selectedWs, fetchMembers])
+    if (selectedWs) {
+      fetchMembers(selectedWs)
+      fetchInvitations(selectedWs)
+    }
+  }, [selectedWs, fetchMembers, fetchInvitations])
 
   const filteredMembers = members.filter(m =>
     m.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -198,6 +257,76 @@ export default function MembersPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Invite by email */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs">Invite by Email</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Input
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    type="email"
+                    className="flex-1 h-6 text-[10px]"
+                  />
+                  <select
+                    value={inviteRole}
+                    onChange={e => setInviteRole(e.target.value)}
+                    className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="member">Member</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <Button size="sm" className="h-6 text-[10px]" onClick={inviteMember} disabled={!inviteEmail.trim() || inviting}>
+                    {inviting ? 'Sending...' : 'Invite'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pending invitations */}
+            {invitations.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs">Pending Invitations</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1">
+                  {invitations.filter(i => !i.accepted).map(inv => (
+                    <div
+                      key={inv.id}
+                      className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium">{inv.email}</div>
+                        <div className="text-muted-foreground">
+                          Invited {new Date(inv.created_at * 1000).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                          {inv.role}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-muted text-muted-foreground">
+                          Pending
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => revokeInvitation(inv.id)}
+                        >
+                          <IconTrash className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Members list */}
             <Card>
