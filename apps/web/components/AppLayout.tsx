@@ -22,6 +22,7 @@ import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
 import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
+import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -136,6 +137,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           <IconMenu className="h-4 w-4" aria-hidden />
           <span className="sr-only">Open menu</span>
         </Button>
+        <WorkspaceSwitcher />
         <Link
           href="/"
           className="min-w-0 truncate text-[11px] font-semibold tracking-tight text-foreground hover:text-primary transition-colors"

@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiG
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
-import { authController, type UserInfo } from '@/lib/auth-controller'
+import { authController, type UserInfo, type WorkspaceInfo } from '@/lib/auth-controller'
+import { useAuthStore } from '@/lib/auth'
 import { chatDB } from '@/lib/db'
 
 type Mode = 'login' | 'register'
@@ -20,6 +21,8 @@ export default function AuthPage() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
   const [checking, setChecking] = useState(true)
   const [token, setToken] = useState<string | null>(null)
+  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
+  const { login, setWorkspaces: setStoreWorkspaces } = useAuthStore()
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +32,8 @@ export default function AuthPage() {
         setToken(saved)
         authController.getMe(saved)
           .then(d => setCurrentUser(d))
+          .then(() => authController.getWorkspaces(saved!))
+          .then(ws => { if (!cancelled) setWorkspaces(ws) })
           .catch(async () => {
             try { await chatDB.deleteKV('auth_token') } catch { /* best-effort */ }
             setToken(null)
@@ -51,6 +56,12 @@ export default function AuthPage() {
         : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
+      // Sync to zustand store
+      login(data.user, data.token)
+      // Load workspaces
+      const ws = await authController.getWorkspaces(data.token)
+      setWorkspaces(ws)
+      setStoreWorkspaces(ws)
       try {
         await chatDB.setKV('auth_token', data.token)
       } catch {
