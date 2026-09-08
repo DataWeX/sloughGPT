@@ -487,6 +487,106 @@ class WorkspacesRouter:
                 "total": len(activity),
             })
 
+        # ─── Workspace data export ───────────────────────────────
+        async def export_workspace_data(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            """Export all workspace data (members, training jobs, usage)."""
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            # Only owner or admin can export
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            # Members
+            members = self._ws_repo.list_members(workspace_id)
+            members_data = []
+            for m in members:
+                members_data.append({
+                    "user_id": m.user_id,
+                    "role": m.role.value if hasattr(m.role, "value") else str(m.role),
+                    "joined_at": m.joined_at,
+                })
+
+            # Training jobs
+            training_jobs = []
+            try:
+                from training.jobs import training_jobs as tj
+                for j in tj.values():
+                    if j.get("workspace_id", "") == workspace_id:
+                        training_jobs.append({
+                            "job_id": j.get("job_id", ""),
+                            "name": j.get("name", ""),
+                            "status": j.get("status", ""),
+                            "model": j.get("model", ""),
+                            "created_at": j.get("created_at", ""),
+                            "started_at": j.get("started_at", ""),
+                            "ended_at": j.get("ended_at", ""),
+                            "user_id": j.get("user_id", ""),
+                        })
+            except Exception:
+                pass
+
+            # API keys (metadata only, not secrets)
+            api_keys = []
+            try:
+                from routers.api_keys import get_api_key_manager
+                mgr = get_api_key_manager()
+                keys = mgr.list(workspace_id=workspace_id)
+                for k in keys:
+                    api_keys.append({
+                        "key_id": k.get("key_id", ""),
+                        "name": k.get("name", ""),
+                        "created_at": k.get("created_at", ""),
+                        "last_used_at": k.get("last_used_at", ""),
+                    })
+            except Exception:
+                pass
+
+            # Dataset count
+            dataset_count = 0
+            try:
+                from controllers.datasets import get_datasets_controller
+                ctrl = get_datasets_controller()
+                ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
+                dataset_count = len(ds_list) if ds_list else 0
+            except Exception:
+                pass
+
+            # Knowledge count
+            knowledge_count = 0
+            try:
+                from routers.kb import get_kb_router
+                kb = get_kb_router()
+                memory = kb._get_memory()
+                all_items = memory.list_all(top_k=10000)
+                knowledge_count = sum(
+                    1 for item in all_items
+                    if item.get("workspace_id", "") == workspace_id
+                )
+            except Exception:
+                pass
+
+            return success_response(data={
+                "workspace": {
+                    "id": ws.id,
+                    "name": ws.name,
+                    "description": ws.description,
+                    "tenant_id": ws.tenant_id,
+                    "created_at": ws.created_at,
+                },
+                "members": members_data,
+                "training_jobs": training_jobs,
+                "api_keys": api_keys,
+                "datasets_count": dataset_count,
+                "knowledge_count": knowledge_count,
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -500,6 +600,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/stats", get_workspace_stats, methods=["GET"])
         router.add_api_route("/{workspace_id}/usage", get_workspace_usage, methods=["GET"])
         router.add_api_route("/{workspace_id}/activity", get_workspace_activity, methods=["GET"])
+        router.add_api_route("/{workspace_id}/export", export_workspace_data, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────

@@ -92,6 +92,25 @@ export default function WorkspacesPage() {
     }
   }
 
+  const exportWorkspace = async (id: string, name: string) => {
+    try {
+      const res = await apiGet<{ data: Record<string, unknown> }>(`/workspaces/${id}/export`)
+      const data = res?.data
+      if (data) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${name.replace(/\s+/g, '_')}_export.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        addToast('Workspace exported', 'success')
+      }
+    } catch {
+      addToast('Could not export workspace', 'error')
+    }
+  }
+
   const startEdit = (ws: Workspace) => {
     setEditingWs(ws.id)
     setEditName(ws.name)
@@ -260,6 +279,14 @@ export default function WorkspacesPage() {
                           onClick={e => { e.stopPropagation(); startEdit(ws) }}
                         >
                           Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 text-[10px]"
+                          onClick={e => { e.stopPropagation(); exportWorkspace(ws.id, ws.name) }}
+                        >
+                          Export
                         </Button>
                         <Button
                           size="sm"
