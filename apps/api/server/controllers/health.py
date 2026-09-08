@@ -560,6 +560,7 @@ class HealthController:
         uptime = (datetime.now() - _health_start_time).total_seconds()
 
         gpu_info: dict[str, Any] = {}
+        degraded: list[str] = []
         try:
             from domains.slolib.gpu import get_accelerator
 
@@ -573,6 +574,7 @@ class HealthController:
             }
         except Exception as e:
             gpu_info = {"backend": "unknown", "error": str(e)}
+            degraded.append("gpu")
 
         # Add ServerState counters if available
         try:
@@ -600,6 +602,7 @@ class HealthController:
             rate_violations = ss.get_rate_limit_violations(5)
         except Exception as e:
             logger.warning("Failed to load server state for detailed health: %s", e)
+            degraded.append("server_state")
             request_count = 0
             error_count = 0
             current_soul = None
@@ -653,6 +656,7 @@ class HealthController:
             "health_history": health_history,
             "memory_history": memory_history,
             "rate_violations": rate_violations,
+            "degraded": degraded,
             "system": {
                 "cpu_percent": round(cpu, 1),
                 "memory_percent": round(mem.percent, 1),

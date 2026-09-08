@@ -1,5 +1,6 @@
 import React from 'react';
-import {Pressable, View, Text as RNText, StyleSheet} from 'react-native';
+import {Pressable, View, Text as RNText, StyleSheet, ScrollView} from 'react-native';
+import {useColors} from '../theme/colors';
 
 interface ErrorFallbackProps {
   error: Error | null;
@@ -7,51 +8,86 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({error, onRetry}: ErrorFallbackProps) {
-  const s = makeStyles();
+  const colors = useColors();
+  const s = makeStyles(colors);
   return (
     <View style={s.container}>
-      <RNText style={s.icon}>!</RNText>
-      <RNText style={s.title}>Something went wrong</RNText>
-      <RNText style={s.message}>
-        {error?.message || 'An unexpected error occurred'}
-      </RNText>
-      <Pressable onPress={onRetry} style={s.button} testID="error-retry-button">
-        <RNText style={s.buttonText}>Try Again</RNText>
-      </Pressable>
+      <ScrollView contentContainerStyle={s.scrollContent}>
+        <RNText style={s.icon}>!</RNText>
+        <RNText style={s.title}>Something went wrong</RNText>
+        <RNText style={s.message}>
+          {error?.message || 'An unexpected error occurred'}
+        </RNText>
+        {error?.stack && (
+          <View style={s.stackContainer}>
+            <ScrollView horizontal={false} style={s.stackScroll}>
+              <RNText style={s.stackTrace} selectable>
+                {error.stack}
+              </RNText>
+            </ScrollView>
+          </View>
+        )}
+        <Pressable onPress={onRetry} style={s.button} testID="error-retry-button">
+          <RNText style={s.buttonText}>Try Again</RNText>
+        </Pressable>
+      </ScrollView>
     </View>
   );
 }
 
-function makeStyles() {
+function makeStyles(colors: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#110F18',
+      backgroundColor: colors.background,
       alignItems: 'center',
       justifyContent: 'center',
       padding: 32,
     },
+    scrollContent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     icon: {
       fontSize: 48,
       marginBottom: 16,
-      color: '#EF4444',
+      color: colors.error || '#EF4444',
       fontWeight: '700',
     },
     title: {
       fontSize: 20,
       fontWeight: '600',
-      color: '#F0ECF5',
+      color: colors.text,
       marginBottom: 8,
     },
     message: {
       fontSize: 13,
-      color: '#9B95A8',
+      color: colors.textSecondary,
       textAlign: 'center',
       lineHeight: 18,
+      marginBottom: 16,
+    },
+    stackContainer: {
+      backgroundColor: colors.surface || colors.background,
+      borderWidth: 1,
+      borderColor: colors.border || 'rgba(255,255,255,0.1)',
+      borderRadius: 8,
+      padding: 12,
       marginBottom: 24,
+      maxHeight: 200,
+      width: '100%',
+    },
+    stackScroll: {
+      maxHeight: 180,
+    },
+    stackTrace: {
+      fontSize: 10,
+      fontFamily: 'monospace',
+      color: colors.textSecondary,
+      lineHeight: 14,
     },
     button: {
-      backgroundColor: '#7C52C4',
+      backgroundColor: colors.primary,
       paddingHorizontal: 20,
       paddingVertical: 12,
       borderRadius: 12,
@@ -84,7 +120,16 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    if (__DEV__) console.error('[ErrorBoundary]', error, errorInfo);
+    console.error('[ErrorBoundary]', error, errorInfo);
+    try {
+      const {api} = require('../services/api-client');
+      api.post('/mobile/errors', {
+        level: 'error',
+        message: error.message,
+        stack: error.stack,
+        componentStack: errorInfo.componentStack,
+      }).catch(() => {});
+    } catch {}
   }
 
   render() {
