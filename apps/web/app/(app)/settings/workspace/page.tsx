@@ -22,8 +22,10 @@ import {
   CardTitle,
   Input,
   Skeleton,
+  Slider,
   StatCard,
   KpiGrid,
+  Switch,
   Textarea,
 } from '@sloughgpt/strui'
 import { IconTrash } from '@/components/icons/NavIcons'
@@ -32,17 +34,21 @@ import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
 import { useLocale } from '@/hooks/useLocale'
 
-interface Workspace {
-  id: string
+interface WorkspaceSettings {
+  workspace_id: string
   name: string
   description: string
-  tenant_id: string
-  member_count: number
+  default_model: string
+  data_retention_days: number
+  max_members: number
+  allow_sharing: boolean
   created_at: string
+  updated_at: string
+  member_count?: number
 }
 
-interface WorkspaceResponse {
-  data: Workspace
+interface SettingsResponse {
+  data: WorkspaceSettings
 }
 
 interface UsageData {
@@ -71,12 +77,16 @@ export default function WorkspaceSettingsPage() {
   const addToast = useToastStore(s => s.addToast)
   const { t } = useLocale()
 
-  const [workspace, setWorkspace] = useState<Workspace | null>(null)
+  const [settings, setSettings] = useState<WorkspaceSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [defaultModel, setDefaultModel] = useState('')
+  const [retentionDays, setRetentionDays] = useState(90)
+  const [maxMembers, setMaxMembers] = useState(50)
+  const [allowSharing, setAllowSharing] = useState(true)
 
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -86,18 +96,22 @@ export default function WorkspaceSettingsPage() {
 
   const wsId = currentWorkspace?.id
 
-  const fetchWorkspace = useCallback(async () => {
+  const fetchSettings = useCallback(async () => {
     if (!wsId) return
     try {
-      const res = await apiGet<WorkspaceResponse>(`/workspaces/${wsId}`)
-      const ws = res?.data
-      if (ws) {
-        setWorkspace(ws)
-        setName(ws.name)
-        setDescription(ws.description)
+      const res = await apiGet<SettingsResponse>(`/workspaces/${wsId}/settings`)
+      const s = res?.data
+      if (s) {
+        setSettings(s)
+        setName(s.name)
+        setDescription(s.description)
+        setDefaultModel(s.default_model || '')
+        setRetentionDays(s.data_retention_days || 90)
+        setMaxMembers(s.max_members || 50)
+        setAllowSharing(s.allow_sharing)
       }
     } catch {
-      addToast('Could not load workspace', 'error')
+      addToast('Could not load workspace settings', 'error')
     } finally {
       setLoading(false)
     }
@@ -120,27 +134,34 @@ export default function WorkspaceSettingsPage() {
   }, [wsId])
 
   useEffect(() => {
-    fetchWorkspace()
+    fetchSettings()
     fetchUsage()
     fetchHealth()
-  }, [fetchWorkspace, fetchUsage, fetchHealth])
+  }, [fetchSettings, fetchUsage, fetchHealth])
 
   const handleSave = async () => {
     if (!wsId || !name.trim()) return
     setSaving(true)
     try {
-      await apiPut(`/workspaces/${wsId}`, { name: name.trim(), description: description.trim() })
-      addToast('Workspace updated', 'success')
-      await fetchWorkspace()
+      await apiPut(`/workspaces/${wsId}/settings`, {
+        name: name.trim(),
+        description: description.trim(),
+        default_model: defaultModel.trim() || null,
+        data_retention_days: retentionDays,
+        max_members: maxMembers,
+        allow_sharing: allowSharing,
+      })
+      addToast('Settings saved', 'success')
+      await fetchSettings()
     } catch {
-      addToast('Could not update workspace', 'error')
+      addToast('Could not save settings', 'error')
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async () => {
-    if (!wsId || deleteConfirm !== workspace?.name) return
+    if (!wsId || deleteConfirm !== settings?.name) return
     setDeleting(true)
     try {
       await apiDelete(`/workspaces/${wsId}`)
@@ -154,7 +175,14 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const hasChanges = workspace && (name !== workspace.name || description !== workspace.description)
+  const hasChanges = settings && (
+    name !== settings.name ||
+    description !== settings.description ||
+    defaultModel !== (settings.default_model || '') ||
+    retentionDays !== settings.data_retention_days ||
+    maxMembers !== settings.max_members ||
+    allowSharing !== settings.allow_sharing
+  )
 
   if (loading) {
     return (
@@ -165,7 +193,7 @@ export default function WorkspaceSettingsPage() {
     )
   }
 
-  if (!workspace) {
+  if (!settings) {
     return (
       <PageContainer>
         <p className="text-muted-foreground">No workspace selected.</p>
@@ -176,18 +204,17 @@ export default function WorkspaceSettingsPage() {
   return (
     <PageContainer>
       <AppRouteHeader>
-        <AppRouteHeaderLead>{workspace.name} — Settings</AppRouteHeaderLead>
+        <AppRouteHeaderLead>{settings.name} — Settings</AppRouteHeaderLead>
       </AppRouteHeader>
 
-      {/* KPIs */}
       <KpiGrid className="mb-6">
-        <StatCard label="Members" value={String(usage?.members?.total ?? workspace.member_count)} />
+        <StatCard label="Members" value={String(usage?.members?.total ?? settings.member_count ?? 0)} />
         <StatCard label="Training Jobs" value={String(usage?.training?.total ?? 0)} />
         <StatCard label="Datasets" value={String(usage?.datasets?.total ?? 0)} />
         <StatCard label="Knowledge" value={String(usage?.knowledge?.total ?? 0)} />
       </KpiGrid>
 
-      {/* General Settings */}
+      {/* General */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>General</CardTitle>
@@ -214,11 +241,75 @@ export default function WorkspaceSettingsPage() {
             />
           </div>
         </CardContent>
+      </Card>
+
+      {/* Defaults */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Defaults</CardTitle>
+          <CardDescription>Default model and policies for this workspace</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Default Model</label>
+            <Input
+              value={defaultModel}
+              onChange={e => setDefaultModel(e.target.value)}
+              placeholder="e.g. llama-3.1-8b"
+              maxLength={200}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Model used when no specific model is selected
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              Data Retention: {retentionDays} days
+            </label>
+            <Slider
+              value={[retentionDays]}
+              onValueChange={([v]) => setRetentionDays(v)}
+              min={7}
+              max={365}
+              step={1}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Training jobs and data older than this are automatically cleaned up
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium mb-1 block">
+              Max Members: {maxMembers}
+            </label>
+            <Slider
+              value={[maxMembers]}
+              onValueChange={([v]) => setMaxMembers(v)}
+              min={2}
+              max={500}
+              step={1}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Maximum number of members allowed in this workspace
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm font-medium block">Allow Sharing</label>
+              <p className="text-xs text-muted-foreground">
+                Allow members to share datasets and knowledge outside the workspace
+              </p>
+            </div>
+            <Switch
+              checked={allowSharing}
+              onCheckedChange={setAllowSharing}
+            />
+          </div>
+        </CardContent>
         <CardFooter className="flex justify-end">
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || saving}
-          >
+          <Button onClick={handleSave} disabled={!hasChanges || saving}>
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </CardFooter>
@@ -241,10 +332,10 @@ export default function WorkspaceSettingsPage() {
             </div>
             {health.checks && Object.keys(health.checks).length > 0 && (
               <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                {Object.entries(health.checks).map(([key, val]) => (
-                  <div key={key} className="flex justify-between">
-                    <span>{key}</span>
-                    <span>{val}</span>
+                {health.checks.map((check: any, i: number) => (
+                  <div key={i} className="flex justify-between">
+                    <span>{check.name}</span>
+                    <span>{check.detail}</span>
                   </div>
                 ))}
               </div>
@@ -271,7 +362,7 @@ export default function WorkspaceSettingsPage() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete workspace &ldquo;{workspace.name}&rdquo;?</AlertDialogTitle>
+                <AlertDialogTitle>Delete workspace &ldquo;{settings.name}&rdquo;?</AlertDialogTitle>
                 <AlertDialogDescription>
                   This will permanently delete the workspace, all members, training jobs, datasets,
                   and knowledge. Type the workspace name to confirm.
@@ -280,14 +371,14 @@ export default function WorkspaceSettingsPage() {
               <Input
                 value={deleteConfirm}
                 onChange={e => setDeleteConfirm(e.target.value)}
-                placeholder={workspace.name}
+                placeholder={settings.name}
                 className="mt-2"
               />
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setDeleteConfirm('')}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDelete}
-                  disabled={deleteConfirm !== workspace.name || deleting}
+                  disabled={deleteConfirm !== settings.name || deleting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
