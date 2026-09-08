@@ -8,6 +8,10 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from fastapi import APIRouter, Depends
+from infrastructure.auth import require_auth_if_enabled
+from schemas.common import raise_error, success_response
+
 logger = logging.getLogger("slo.api_keys")
 
 
@@ -38,6 +42,8 @@ class ApiKeyManager:
         name: str,
         scopes: list[str] | None = None,
         expires_at: int | None = None,
+        workspace_id: str = "",
+        user_id: str = "",
     ) -> dict[str, Any]:
         key = f"slo_{secrets.token_urlsafe(32)}"
         doc = {
@@ -46,17 +52,24 @@ class ApiKeyManager:
             "key_hash": _hash_key(key),
             "scopes": scopes or ["*"],
             "created_at": int(time.time()),
+            "workspace_id": workspace_id,
+            "user_id": user_id,
         }
         if expires_at is not None:
             doc["expires_at"] = expires_at
         doc_id = self._collection.insert_one(doc)
         doc["id"] = doc_id
         doc["revoked"] = False
-        logger.info("Created API key '%s' (id=%s)", name, doc_id)
+        logger.info("Created API key '%s' (id=%s, ws=%s)", name, doc_id, workspace_id or "global")
         return doc
 
-    def list(self) -> list[dict[str, Any]]:
-        docs = self._collection.find()
+    def list(self, workspace_id: str = "", user_id: str = "") -> list[dict[str, Any]]:
+        query: dict[str, Any] = {}
+        if workspace_id:
+            query["workspace_id"] = workspace_id
+        if user_id:
+            query["user_id"] = user_id
+        docs = self._collection.find(query)
         result = []
         for d in docs:
             entry = {
@@ -66,6 +79,8 @@ class ApiKeyManager:
                 "scopes": d.get("scopes", ["*"]),
                 "created_at": d["created_at"],
                 "revoked": d.get("revoked", False),
+                "workspace_id": d.get("workspace_id", ""),
+                "user_id": d.get("user_id", ""),
             }
             if "expires_at" in d:
                 entry["expires_at"] = d["expires_at"]
@@ -85,6 +100,8 @@ class ApiKeyManager:
             "created_at": doc["created_at"],
             "expires_at": doc.get("expires_at"),
             "revoked": doc.get("revoked", False),
+            "workspace_id": doc.get("workspace_id", ""),
+            "user_id": doc.get("user_id", ""),
         }
 
     def revoke(self, key_id: str) -> None:
@@ -99,7 +116,13 @@ class ApiKeyManager:
         if old is None:
             raise ValueError(f"API key not found: {key_id}")
         self.revoke(key_id)
-        return self.create(old["name"], scopes=old.get("scopes", ["*"]), expires_at=old.get("expires_at"))
+        return self.create(
+            old["name"],
+            scopes=old.get("scopes", ["*"]),
+            expires_at=old.get("expires_at"),
+            workspace_id=old.get("workspace_id", ""),
+            user_id=old.get("user_id", ""),
+        )
 
     def validate(self, key: str) -> bool:
         key_hash = _hash_key(key)
@@ -117,8 +140,6 @@ class ApiKeysRouter:
     """FastAPI router for API key CRUD operations."""
 
     def __init__(self, key_manager: ApiKeyManager | None = None):
-        from fastapi import APIRouter
-
         self._manager = key_manager or ApiKeyManager()
         self.router = APIRouter(prefix="/security", tags=["security"])
         self._register_routes()
@@ -131,32 +152,35 @@ class ApiKeysRouter:
         self.router.add_api_route(path="/keys/{key_id}", endpoint=self.delete_key, methods=["DELETE"])
         self.router.add_api_route(path="/keys/{key_id}/rotate", endpoint=self.rotate_key, methods=["POST"])
 
-    async def create_key(self, body: dict) -> dict:
-        from schemas.common import success_response
+    def _get_workspace_user(self, auth_user: dict) -> tuple[str, str]:
+        """Extract workspace_id and user_id from auth_user."""
+        user_id = auth_user.get("sub", "") if auth_user else ""
+        workspace_id = auth_user.get("workspace_id", "") if auth_user else ""
+        return workspace_id, user_id
 
+    async def create_key(self, body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         name = body.get("name", "")
         scopes = body.get("scopes", ["*"])
         expires_at = body.get("expires_at")
-        key = self._manager.create(name, scopes=scopes, expires_at=expires_at)
+        workspace_id, user_id = self._get_workspace_user(auth_user)
+        key = self._manager.create(
+            name, scopes=scopes, expires_at=expires_at,
+            workspace_id=workspace_id, user_id=user_id,
+        )
         return success_response(data=key)
 
-    async def list_keys(self) -> dict:
-        from schemas.common import success_response
-
-        keys = self._manager.list()
+    async def list_keys(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        workspace_id, user_id = self._get_workspace_user(auth_user)
+        keys = self._manager.list(workspace_id=workspace_id, user_id=user_id)
         return success_response(data={"keys": keys, "count": len(keys)})
 
     async def get_key(self, key_id: str) -> dict:
-        from schemas.common import raise_error, success_response
-
         key = self._manager.get(key_id)
         if key is None:
             raise_error("API key not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=key)
 
     async def delete_key(self, key_id: str) -> dict:
-        from schemas.common import raise_error, success_response
-
         try:
             self._manager.revoke(key_id)
         except ValueError as e:
@@ -164,8 +188,6 @@ class ApiKeysRouter:
         return success_response(data={"revoked": True})
 
     async def rotate_key(self, key_id: str) -> dict:
-        from schemas.common import raise_error, success_response
-
         try:
             new_key = self._manager.rotate(key_id)
         except ValueError as e:
@@ -173,8 +195,16 @@ class ApiKeysRouter:
         return success_response(data=new_key)
 
     async def validate_key(self, body: dict) -> dict:
-        from schemas.common import success_response
-
         key = body.get("key", "")
         valid = self._manager.validate(key)
         return success_response(data={"valid": valid})
+
+
+_api_keys_router: ApiKeysRouter | None = None
+
+
+def get_api_keys_router() -> ApiKeysRouter:
+    global _api_keys_router
+    if _api_keys_router is None:
+        _api_keys_router = ApiKeysRouter()
+    return _api_keys_router
