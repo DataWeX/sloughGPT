@@ -1,0 +1,15 @@
+# Dashboard files live under /etc/grafana/dashboards (see docker-compose grafana volumes).
+
+apiVersion: 1
+
+providers:
+  - name: "SloughGPT"
+    orgId: 1
+    folder: ""
+    folderUid: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/dashboards

@@ -1,59 +1,148 @@
-version: '3.8'
+# SloughGPT Production Stack
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# Services: nginx, postgres, redis, api, web, prometheus, grafana, backup
 
 services:
+  # ─── Nginx Reverse Proxy ──────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: sloughgpt-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/error:/var/www/error:ro
+      - nginx-ssl:/etc/nginx/ssl:ro
+      - certbot-www:/var/www/certbot:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - sloughgpt-net
+
+  # ─── PostgreSQL Database ──────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: sloughgpt-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sloughgpt}
+      POSTGRES_USER: ${POSTGRES_USER:-sloughgpt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_INITDB_ARGS: "--auth-host=md5 --auth-local=trust"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sloughgpt} -d ${POSTGRES_DB:-sloughgpt}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    shm_size: 256m
+    networks:
+      - sloughgpt-net
+
+  # ─── Redis Cache ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sloughgpt-redis
+    command: >
+      redis-server
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env.production}
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sloughgpt-net
+
+  # ─── API Server ───────────────────────────────────────────────
   api:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile
     container_name: sloughgpt-api
-    ports:
-      - "8000:8000"
+    image: sloughgpt/api:${VERSION:-latest}
     environment:
-      - SLO_ENV=production
-      - SLO_LOG_LEVEL=INFO
-      - SLO_HOST=0.0.0.0
-      - SLO_PORT=8000
-      - SLO_AUTO_WORKFLOW=false
-      - SLO_AUTH_REQUIRED=true
-      - SLO_CORS_ORIGINS=https://your-domain.com
+      SLO_ENV: production
+      SLO_LOG_LEVEL: ${SLO_LOG_LEVEL:-INFO}
+      SLO_HOST: "0.0.0.0"
+      SLO_PORT: "8000"
+      SLO_AUTH_REQUIRED: "${SLO_AUTH_REQUIRED:-true}"
+      SLO_API_KEY: "${SLO_API_KEY}"
+      SLO_JWT_SECRET: "${SLO_JWT_SECRET}"
+      SLO_CORS_ORIGINS: "${SLO_CORS_ORIGINS:-https://localhost}"
+      SLO_AUTO_WORKFLOW: "false"
+      SLO_HEALTH_MONITOR: "true"
+      SLO_WATCHDOG: "true"
+      SLO_RATE_LIMIT__WINDOW_SECONDS: "${SLO_RATE_LIMIT_WINDOW:-60}"
+      SLO_RATE_LIMIT__MAX_REQUESTS: "${SLO_RATE_LIMIT_MAX:-100}"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-sloughgpt}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-sloughgpt}"
+      REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379/0"
+      SLO_MODEL__NAME: "${SLO_MODEL_NAME:-Qwen/Qwen2.5-0.5B-Instruct}"
+      SLO_MODEL__DEVICE: "${SLO_MODEL_DEVICE:-cpu}"
+      SLO_MODEL__MAX_LENGTH: "${SLO_MODEL_MAX_LENGTH:-1024}"
+      SLO_MODEL__TEMPERATURE: "${SLO_MODEL_TEMPERATURE:-0.7}"
+      SLO_MODEL__MAX_NEW_TOKENS: "${SLO_MODEL_MAX_NEW_TOKENS:-200}"
+      SLO_AUTOLOAD_MODEL: "${SLO_AUTOLOAD_MODEL:-}"
+      SLO_STORAGE__DATA_DIR: /app/data
+      SLO_STORAGE__DATASETS_DIR: /app/datasets
+      SLO_STORAGE__MODELS_DIR: /app/models
     volumes:
       - api-models:/app/models
       - api-data:/app/data
       - api-datasets:/app/datasets
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
+      interval: 15s
       timeout: 10s
       retries: 3
-      start_period: 90s
+      start_period: 60s
     deploy:
       resources:
         limits:
-          memory: 4G
-          cpus: "2"
+          memory: ${API_MEMORY_LIMIT:-4G}
+          cpus: "${API_CPU_LIMIT:-2}"
     networks:
       - sloughgpt-net
 
+  # ─── Web UI (Next.js) ────────────────────────────────────────
   web:
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
     container_name: sloughgpt-web
-    ports:
-      - "3000:3000"
+    image: sloughgpt/web:${VERSION:-latest}
     environment:
-      - NEXT_PUBLIC_API_URL=https://your-domain.com
-      - NODE_ENV=production
-      - NEXTAUTH_URL=https://your-domain.com
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: "${PUBLIC_API_URL:-http://api:8000}"
+      NEXTAUTH_URL: "${NEXTAUTH_URL:-http://localhost}"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-}"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:3000"]
-      interval: 30s
+      interval: 15s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 20s
     deploy:
       resources:
         limits:
@@ -61,14 +150,83 @@ services:
           cpus: "0.5"
     networks:
       - sloughgpt-net
+
+  # ─── Prometheus ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: sloughgpt-prometheus
+    volumes:
+      - ./prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - sloughgpt-net
+
+  # ─── Grafana ──────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: sloughgpt-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env.production}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - sloughgpt-net
+
+  # ─── Automated Backup ────────────────────────────────────────
+  backup:
+    image: postgres:16-alpine
+    container_name: sloughgpt-backup
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        apk add --no-cache curl
+        echo "Starting backup cron (every 6h)..."
+        while true; do
+          echo "[$(date -Iseconds)] Running backup..."
+          pg_dump -h postgres -U ${POSTGRES_USER:-sloughgpt} ${POSTGRES_DB:-sloughgpt} | gzip > /backups/sloughgpt_$(date +%Y%m%d_%H%M%S).sql.gz
+          # Keep only last 7 days of backups
+          find /backups -name "*.sql.gz" -mtime +7 -delete
+          echo "[$(date -Iseconds)] Backup complete. Next in 6h."
+          sleep 21600
+        done
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - backup-data:/backups
+    restart: unless-stopped
     depends_on:
-      api:
+      postgres:
         condition: service_healthy
+    networks:
+      - sloughgpt-net
 
 volumes:
+  nginx-ssl:
+  postgres-data:
+  redis-data:
   api-models:
   api-data:
   api-datasets:
+  prometheus-data:
+  grafana-data:
+  certbot-www:
+  backup-data:
 
 networks:
   sloughgpt-net:
