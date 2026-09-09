@@ -8,10 +8,6 @@ setup(
     entry_points={
         "console_scripts": [
             "app-planner = app_planner.cli:cli_main",
-            "planner = app_planner.cli:cli_main",
-            "notes = app_planner.cli:cli_main",
-            "kanban = app_planner.cli:cli_main",
-            "sync-notes-to-board = app_planner.sync:cli_main",
         ],
     },
 )
