@@ -110,6 +110,16 @@ HTML_TEMPLATE = """
 <body>
     <h1>Phoneme Encoder</h1>
 
+    <div style="background: #1a1a2e; border: 1px solid #53a8b6; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+        <h3 style="color: #53a8b6; margin-top: 0;">Word of the Day</h3>
+        <p id="wotd-word" style="font-size: 1.2em; font-weight: bold; margin: 5px 0;"></p>
+        <p id="wotd-phonemes" style="color: #b8c9e0; margin: 5px 0;"></p>
+        <p id="wotd-language" style="color: #6c7a89; margin: 5px 0; font-size: 0.9em;"></p>
+        <button onclick="encodeWOTD()" style="margin-right: 5px;">Encode</button>
+        <button onclick="scoreWOTD()" style="margin-right: 5px;">Practice</button>
+        <button onclick="getNewWOTD()">New Word</button>
+    </div>
+
     <div class="input-group">
         <label for="text">Text:</label>
         <input type="text" id="text" placeholder="Enter text to encode..." value="hello world">
