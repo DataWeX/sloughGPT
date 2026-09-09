@@ -26,8 +26,19 @@ _ROUTE_LIMITS: dict[str, tuple[int, int]] = {
     "/inference/embed": (30, 60),
     "/models/load": (2, 120),
     "/models/unload": (2, 120),
-    "/training/": (3, 60),
+    "/training/start": (3, 60),
+    "/training/control/start": (3, 60),
+    "/training/turbo-start": (3, 60),
+    "/training/from-sessions-start": (3, 60),
+    "/training/stop": (5, 60),
+    "/training/control/stop": (5, 60),
+    "/training/status": (60, 60),
+    "/training/log": (60, 60),
+    "/training/checkpoints": (30, 60),
+    "/training/stream": (30, 60),
+    "/training/is-running": (60, 60),
     "/mobile/train": (2, 120),
+    "/models/": (30, 60),  # model file serving (GET)
 }
 
 # Per-workspace rate limit multiplier (workspace_id -> multiplier)

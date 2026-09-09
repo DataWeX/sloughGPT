@@ -144,3 +144,53 @@ class TestValidation:
         client = TestClient(_app(sr))
         resp = client.patch("/settings/voice", json={"noise_gate_db": 10.0})
         assert resp.status_code == 422
+
+
+class TestExportTrainingHistory:
+    def test_export_json(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/history/export?format=json")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["format"] == "json"
+        assert "outcomes" in data
+        assert "count" in data
+
+    def test_export_csv(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/history/export?format=csv")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["format"] == "csv"
+        assert "content" in data
+
+    def test_export_with_limit(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/history/export?format=json&limit=5")
+        assert resp.status_code == 200
+
+
+class TestGenerateModelCard:
+    def test_generate_card(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/model-card?name=test-model&base_model=gpt2&description=A+test+model")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "card" in data
+        assert "markdown" in data
+        assert data["card"]["model_name"] == "test-model"
+        assert "test-model" in data["markdown"]
+
+
+class TestCompareTrainingRuns:
+    def test_compare_nonexistent(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/compare?run_a=nonexistent&run_b=also_nonexistent")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data

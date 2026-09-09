@@ -859,6 +859,27 @@ class SloughGPTClient:
         response = self._request("GET", "/settings/adaptive/insights")
         return response.json()
 
+    def export_training_history(self, format: str = "json", limit: int = 0) -> Dict[str, Any]:
+        """Export training history as JSON or CSV."""
+        response = self._request("GET", f"/settings/training/history/export?format={format}&limit={limit}")
+        return response.json()
+
+    def generate_model_card(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Generate a model card from training metadata."""
+        params = {"name": name, **kwargs}
+        response = self._request("POST", "/settings/model-card", json=params)
+        return response.json()
+
+    def get_dashboard_summary(self) -> Dict[str, Any]:
+        """Get quick system summary from dashboard."""
+        response = self._request("GET", "/dashboard/summary")
+        return response.json()
+
+    def compare_training_runs(self, run_a: str, run_b: str) -> Dict[str, Any]:
+        """Compare two training runs side by side."""
+        response = self._request("GET", f"/settings/training/compare?run_a={run_a}&run_b={run_b}")
+        return response.json()
+
     # ============ VQA ============
 
     def ask_question(self, image_path: str, question: str) -> Dict[str, Any]:

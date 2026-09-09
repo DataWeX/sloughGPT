@@ -62,6 +62,7 @@ class HealthRouter:
         self.router.add_api_route(
             "/stream", self.health_stream, methods=["GET"], response_model=None
         )
+        self.router.add_api_route("/services", self.services_health, methods=["GET"])
 
     @endpoint("health.health")
     async def health(self) -> dict:
@@ -394,6 +395,42 @@ class HealthRouter:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @endpoint("health.services")
+    async def services_health(self) -> dict:
+        """Health check for all subsystems: training, settings, plugins, cloud."""
+        services = {}
+        # Training
+        try:
+            from domains.training.outcome_tracker import TrainingOutcomeTracker
+            tracker = TrainingOutcomeTracker()
+            stats = tracker.get_stats()
+            services["training"] = {"status": "ok", "total_runs": stats.get("total_runs", 0)}
+        except Exception as e:
+            services["training"] = {"status": "error", "error": str(e)}
+        # Settings
+        try:
+            from domains.settings.persistent import get_settings
+            ps = get_settings()
+            services["settings"] = {"status": "ok", "sections": list(vars(ps.settings).keys())}
+        except Exception as e:
+            services["settings"] = {"status": "error", "error": str(e)}
+        # Plugins
+        try:
+            from domains.plugins import PluginManager
+            pm = PluginManager()
+            services["plugins"] = {"status": "ok", "loaded": len(pm.list_plugins())}
+        except Exception as e:
+            services["plugins"] = {"status": "error", "error": str(e)}
+        # Adaptive engine
+        try:
+            from domains.training.adaptive_config import AdaptiveConfigEngine
+            engine = AdaptiveConfigEngine()
+            services["adaptive"] = {"status": "ok"}
+        except Exception as e:
+            services["adaptive"] = {"status": "error", "error": str(e)}
+        healthy = all(s["status"] == "ok" for s in services.values())
+        return success_response(data={"status": "healthy" if healthy else "degraded", "services": services})
 
 
 router = HealthRouter().router

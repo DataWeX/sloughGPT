@@ -150,16 +150,17 @@ def _get_health_summary() -> dict:
     """Fast health summary from existing sources."""
     try:
         import psutil
-        import state as server_state
+        from domains.infrastructure.server_state import get_server_state
 
-        model_loaded = server_state.model is not None or server_state.provider is not None
-        model_type = getattr(server_state, "model_type", None) or ""
-        uptime = server_state.uptime_seconds
-        req_count = server_state.request_count
-        err_count = server_state.error_count
-        tps = server_state.get_tokens_per_second()
-        avg_lat = server_state.get_avg_latency()
-        rpm = server_state.get_requests_per_minute()
+        ss = get_server_state()
+        model_loaded = ss.model.get() is not None or ss.provider.get() is not None
+        model_type = ss.model_type.get() if ss.model_type.get() else ""
+        uptime = ss.uptime_seconds
+        req_count = ss.request_count
+        err_count = ss.error_count
+        tps = ss.get_tokens_per_second()
+        avg_lat = ss.get_avg_latency()
+        rpm = ss.get_requests_per_minute()
 
         mem = psutil.virtual_memory()
         cpu = psutil.cpu_percent(interval=0)
@@ -214,6 +215,40 @@ class DashboardRouter:
     def _register_routes(self):
         self.router.add_api_route("/stream", self.dashboard_stream, methods=["GET"])
         self.router.add_api_route("/events", self.dashboard_events, methods=["GET"])
+        self.router.add_api_route("/summary", self.dashboard_summary, methods=["GET"])
+
+    @endpoint("dashboard.summary")
+    async def dashboard_summary(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Quick system summary: health, services, active processes."""
+        health = _get_health_summary()
+        processes = _get_active_processes()
+
+        services_ok = 0
+        services_total = 0
+        try:
+            from domains.training.outcome_tracker import TrainingOutcomeTracker
+            tracker = TrainingOutcomeTracker()
+            stats = tracker.get_stats()
+            services_total += 1
+            if stats.get("total_runs", 0) >= 0:
+                services_ok += 1
+        except Exception:
+            services_total += 1
+
+        try:
+            from domains.settings.persistent import get_settings
+            get_settings()
+            services_total += 1
+            services_ok += 1
+        except Exception:
+            services_total += 1
+
+        return success_response(data={
+            "health": health,
+            "active_processes": len(processes),
+            "processes": processes,
+            "services": {"total": services_total, "healthy": services_ok},
+        })
 
     async def dashboard_stream(self, request: Request, auth_user: dict = Depends(require_auth_if_enabled)) -> StreamingResponse:
         """SSE endpoint pushing dashboard snapshots every 2 seconds."""

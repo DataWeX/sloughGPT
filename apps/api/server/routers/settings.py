@@ -115,6 +115,21 @@ class SettingsRouter:
             "/adaptive/insights", self.get_adaptive_insights, methods=["GET"],
         )
 
+        # Training history export
+        self.router.add_api_route(
+            "/training/history/export", self.export_training_history, methods=["GET"],
+        )
+
+        # Model card generation
+        self.router.add_api_route(
+            "/model-card", self.generate_model_card, methods=["POST"],
+        )
+
+        # Training run comparison
+        self.router.add_api_route(
+            "/training/compare", self.compare_training_runs, methods=["GET"],
+        )
+
     # ── Handlers ────────────────────────────────────────────────────
 
     @endpoint("settings.get_all")
@@ -260,6 +275,73 @@ class SettingsRouter:
         engine = AdaptiveConfigEngine()
         insights = engine.get_insights(model=model)
         return success_response(data=insights)
+
+    @endpoint("settings.export_training_history")
+    async def export_training_history(
+        self,
+        format: str = "json",
+        limit: int = 0,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Export training history as JSON or CSV."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        if format == "csv":
+            csv_data = tracker.export_csv(limit=limit)
+            return success_response(data={"format": "csv", "content": csv_data, "count": len(csv_data.splitlines()) - 1})
+        return success_response(data={"format": "json", "outcomes": tracker.export_json(limit=limit), "count": len(tracker.export_json(limit=limit))})
+
+    @endpoint("settings.generate_model_card")
+    async def generate_model_card(
+        self,
+        name: str = "model",
+        base_model: str = "",
+        description: str = "",
+        dataset: str = "",
+        dataset_size: int = 0,
+        epochs: int = 0,
+        learning_rate: float = 0.0,
+        batch_size: int = 0,
+        final_loss: float = 0.0,
+        perplexity: float = 0.0,
+        quality_score: float = 0.0,
+        training_time_s: float = 0.0,
+        training_method: str = "",
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Generate a model card from training metadata."""
+        from domains.training.model_card import generate_model_card as _generate
+        card = _generate(
+            name=name,
+            base_model=base_model,
+            description=description,
+            dataset=dataset,
+            dataset_size=dataset_size,
+            epochs=epochs,
+            learning_rate=learning_rate,
+            batch_size=batch_size,
+            final_loss=final_loss,
+            perplexity=perplexity,
+            quality_score=quality_score,
+            training_time_s=training_time_s,
+            training_method=training_method,
+        )
+        return success_response(data={"card": card.to_dict(), "markdown": card.to_markdown()})
+
+    @endpoint("settings.compare_training_runs")
+    async def compare_training_runs(
+        self,
+        run_a: str,
+        run_b: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Compare two training runs side by side."""
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+        tracker = TrainingOutcomeTracker()
+        result = tracker.compare(run_a, run_b)
+        if result is None:
+            return success_response(data={"error": "One or both run IDs not found"})
+        return success_response(data=result)
 
 
 router = SettingsRouter().router

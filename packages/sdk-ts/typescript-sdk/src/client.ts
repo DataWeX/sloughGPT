@@ -912,6 +912,22 @@ export class SloughGPTClient {
     return this.request('GET', '/settings/adaptive/insights');
   }
 
+  async exportTrainingHistory(format: string = 'json', limit: number = 0): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/history/export?format=${format}&limit=${limit}`);
+  }
+
+  async generateModelCard(name: string, params: Record<string, unknown> = {}): Promise<{ card: Record<string, unknown>; markdown: string }> {
+    return this.request('POST', '/settings/model-card', { name, ...params });
+  }
+
+  async getDashboardSummary(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/dashboard/summary');
+  }
+
+  async compareTrainingRuns(runA: string, runB: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/compare?run_a=${runA}&run_b=${runB}`);
+  }
+
   // ============ VQA ============
 
   async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
