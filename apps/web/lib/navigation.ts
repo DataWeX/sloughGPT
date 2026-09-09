@@ -25,6 +25,7 @@ import {
   IconLabs,
   IconAlert,
   IconUsers,
+  IconClock,
 } from '@/components/icons/NavIcons'
 import type { ComponentType } from 'react'
 

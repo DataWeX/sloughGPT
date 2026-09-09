@@ -348,6 +348,11 @@ class BenchmarkRouter:
     @endpoint("benchmark.clear_history")
     async def clear_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear benchmark history and logged responses."""
+        from domains import get_benchmark_domain
+
+        bench = get_benchmark_domain()
+        bench.clear_history()
+        return success_response(data={"cleared": True})
 
 
 router = BenchmarkRouter().router
