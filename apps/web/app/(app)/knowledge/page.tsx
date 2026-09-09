@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
 
 import {
@@ -34,6 +35,7 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 const SEARCH_DEBOUNCE_MS = 300
 
 export default function KnowledgePage() {
+  const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const [items, setItems] = useState<KnowledgeItem[]>([])
   const [stats, setStats] = useState<KnowledgeStats | null>(null)
