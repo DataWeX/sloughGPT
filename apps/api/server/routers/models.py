@@ -108,7 +108,7 @@ class ModelsRouter:
             path="/download/qwen-gguf", endpoint=self.download_qwen_gguf, methods=["GET"]
         )
         self.router.add_api_route(
-            path="/{model_id}/file/{file_path:path}",
+            path="/file/{model_id:path}/{file_path:path}",
             endpoint=self.serve_model_file,
             methods=["GET"],
         )
@@ -866,22 +866,24 @@ class ModelsRouter:
         When the client sends ``Accept-Encoding: gzip``, the file is
         served compressed via SGZ1 format.
         """
-        from starlette.requests import Request
         from starlette.responses import StreamingResponse
 
         backend = get_backend()
         if not backend.supports_compressed_serve():
-            raise_error(501, "Compressed serving not supported")
+            raise_error("Compressed serving not supported", status_code=501)
 
         result = backend.serve_compressed(model_id, file_path)
         if result is None:
-            raise_error(404, f"File not found: {model_id}/{file_path}")
+            raise_error(f"File not found: {model_id}/{file_path}", status_code=404)
+
+        headers = dict(result.get("headers", {}))
+        if result.get("size"):
+            headers["Content-Length"] = str(result["size"])
 
         return StreamingResponse(
             result["iterator"],
             media_type="application/octet-stream",
-            headers=result["headers"],
-            content_length=result.get("size"),
+            headers=headers,
         )
 
     @endpoint("models.visual_model_load")

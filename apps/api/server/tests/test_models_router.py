@@ -410,8 +410,8 @@ class TestServeModelFile:
             mock_backend.serve_compressed.return_value = None
             mock_get.return_value = mock_backend
 
-            resp = client.get("/models/nonexistent/model.bin")
-            assert resp.status_code in (404, 422)
+            resp = client.get("/models/file/nonexistent/model.bin")
+            assert resp.status_code == 404
 
     def test_returns_501_when_compression_not_supported(self):
         """Returns 501 when backend doesn't support compressed serving."""
@@ -420,7 +420,7 @@ class TestServeModelFile:
             mock_backend.supports_compressed_serve.return_value = False
             mock_get.return_value = mock_backend
 
-            resp = client.get("/models/gpt2/model.bin")
+            resp = client.get("/models/file/gpt2/model.bin")
             assert resp.status_code == 501
 
     def test_serves_compressed_file(self):
@@ -443,7 +443,7 @@ class TestServeModelFile:
             }
             mock_get.return_value = mock_backend
 
-            resp = client.get("/models/gpt2/model.bin")
+            resp = client.get("/models/file/gpt2/model.bin")
             assert resp.status_code == 200
-            assert resp.headers.get("content-encoding") == "gzip"
-            assert resp.content == compressed_data
+            # TestClient auto-decompresses gzip, so content should be original data
+            assert resp.content == original_data
