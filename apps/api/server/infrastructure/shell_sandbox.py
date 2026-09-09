@@ -69,6 +69,59 @@ _BLOCKED_COMMANDS = frozenset(
         "telnet",
         "ftp",
         "sftp",
+        # Shell interpreters — must be blocked to prevent sandbox bypass
+        "bash",
+        "sh",
+        "zsh",
+        "ash",
+        "dash",
+        "ksh",
+        "csh",
+        "tcsh",
+        "fish",
+        "env",
+        "xargs",
+        "find",
+        "awk",
+        "sed",
+        "tee",
+        "gawk",
+        "mawk",
+        "nawk",
+        "base64",
+        "openssl",
+        "gpg",
+        "tar",
+        "zip",
+        "unzip",
+        "gzip",
+        "gunzip",
+        "bzip2",
+        "bunzip2",
+        "xz",
+        "cat",
+        "tac",
+        "cp",
+        "mv",
+        "ln",
+        "touch",
+        "mkdir",
+        "kill",
+        "killall",
+        "pkill",
+        "pgrep",
+        "ps",
+        "top",
+        "htop",
+        "strace",
+        "ltrace",
+        "ptrace",
+        "dd",
+        "sysctl",
+        "modprobe",
+        "insmod",
+        "rmmod",
+        "lsmod",
     }
 )
 
@@ -115,8 +168,9 @@ def validate_command(command: str) -> None:
     try:
         tokens = shlex.split(command)
     except ValueError:
-        # shlex.split failed (e.g., unclosed quotes) - allow it, the shell will handle
-        return
+        # shlex.split failed (e.g., unclosed quotes) — block to prevent bypass
+        logger.warning("Blocked command with malformed syntax: %s", command[:80])
+        raise ShellSecurityError("Command has invalid syntax")
 
     if not tokens:
         return

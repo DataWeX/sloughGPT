@@ -2649,21 +2649,37 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.list_sessions")
 
-    async def search_sessions(self, q: str = "", limit: int = 20) -> dict:
+    async def search_sessions(
+        self,
+        q: str = "",
+        limit: int = 20,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         try:
             """search_sessions."""
             if not q.strip():
                 return success_response(data=[], meta={"query": q, "total": 0})
             results = await asyncio.to_thread(_search_sessions_sync, q, limit)
+            # Filter by user_id if auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    results = [s for s in results if s.get("user_id", "") == user_id]
             return success_response(data=results, meta={"query": q, "total": len(results)})
 
         except Exception as e:
             classify_and_raise(e, source="inference.search_sessions")
 
-    async def get_current_session(self) -> dict:
+    async def get_current_session(
+        self, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """get_current_session."""
             sessions = await asyncio.to_thread(self._build_session_cache)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
             if not sessions:
                 return success_response(data=None)
             return success_response(data=sessions[0])
@@ -2709,12 +2725,19 @@ class InferenceRouter:
             logger.warning("Create session failed: %s", exc, extra={"tag": "INF"})
             classify_and_raise(exc, source="create_session")
 
-    async def get_session(self, session_id: str) -> dict:
+    async def get_session(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """get_session."""
             data = self._get_session(session_id)
             if not data.get("messages"):
                 raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            # Verify user owns this session when auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
             return success_response(data=data)
 
         except Exception as e:
@@ -2725,6 +2748,12 @@ class InferenceRouter:
     ) -> dict:
         try:
             """delete_session."""
+            # Verify user owns this session when auth is enabled
+            if auth_user:
+                data = self._get_session(session_id)
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
             if self._session_repo.delete(session_id):
                 self._session_memory_cache.pop(session_id, None)
                 self._session_dirty.discard(session_id)
@@ -2757,7 +2786,9 @@ class InferenceRouter:
                 "Failed to clear KV state for session %s: %s", session_id, exc, extra={"tag": "KV"}
             )
 
-    async def chat_suggestions(self) -> dict:
+    async def chat_suggestions(
+        self, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         try:
             """chat_suggestions."""
             return success_response(
