@@ -458,6 +458,30 @@ def train_chat_model(
         "itos": itos,
     }
 
+    # Record training outcome for adaptive learning
+    try:
+        import time as _outcome_time
+        from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+        outcome = TrainingOutcome(
+            run_id=f"chat_{int(_outcome_time.time() * 1000)}",
+            timestamp=_outcome_time.time(),
+            dataset="chat_pairs",
+            dataset_size=len(pairs),
+            model="slo_chat",
+            method="finetune",
+            epochs=last_epoch,
+            batch_size=config.batch_size,
+            learning_rate=config.learning_rate,
+            max_seq_length=config.block_size,
+            final_loss=float(avg_epoch_loss),
+            best_loss=float(best_loss),
+            converged=True,
+        )
+        tracker = TrainingOutcomeTracker()
+        tracker.record(outcome)
+    except Exception as exc:
+        logger.debug("Failed to record chat training outcome: %s", exc)
+
     return model, metadata
 
 

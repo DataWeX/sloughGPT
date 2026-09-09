@@ -3,6 +3,8 @@ SLO Slo Module - The Evolving Core Intelligence
 
 Modules:
 - cognitive: Sentiment analysis (standalone)
+- hd_memory: Hyperdimensional memory store
+- quantum: Quantum cognitive engine
 """
 
 from __future__ import annotations
@@ -11,13 +13,19 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .cognitive import SentimentAnalyzer
+    from .hd_memory import HDMemoryStore
+    from .quantum import QuantumCognitiveEngine
 
 __all__ = [
     "SentimentAnalyzer",
+    "HDMemoryStore",
+    "QuantumCognitiveEngine",
 ]
 
 _lazy_imports = {
     "SentimentAnalyzer": ".cognitive",
+    "HDMemoryStore": ".hd_memory",
+    "QuantumCognitiveEngine": ".quantum",
 }
 
 

@@ -46,8 +46,8 @@ class DatasetsController:
                         meta = json.loads(meta_path.read_text())
                         if meta.get("workspace_id") and meta["workspace_id"] != workspace_id:
                             continue
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to parse metadata from %s: %s", meta_path, e)
                 else:
                     # No metadata = global dataset, include in all workspaces
                     pass
@@ -75,7 +75,8 @@ class DatasetsController:
                 try:
                     json.loads(visual_meta_path.read_text())
                     dataset_type = "visual"
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to parse visual metadata from %s: %s", visual_meta_path, e)
                     dataset_type = "corpus" if has_corpus else "text"
             else:
                 dataset_type = "corpus" if has_corpus else "text"
@@ -109,8 +110,8 @@ class DatasetsController:
                     meta = json.loads(meta_path.read_text())
                     if "workspace_id" in meta:
                         dataset["workspace_id"] = meta["workspace_id"]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to parse workspace metadata from %s: %s", meta_path, e)
 
             # Filters
             if q and q.lower() not in d.name.lower() and q.lower() not in dataset["name"].lower():
@@ -237,7 +238,8 @@ class DatasetsController:
         try:
             with open(sample_file, encoding="utf-8", errors="replace") as f:
                 sample = f.read(2000)
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to read sample file %s: %s", sample_file, e)
             return f"Dataset with {size_str} of data."
 
         lines = [line.strip() for line in sample.split("\n") if line.strip()]
@@ -309,8 +311,8 @@ class DatasetsController:
             if meta_path.exists():
                 try:
                     meta = json.loads(meta_path.read_text())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to parse existing metadata from %s: %s", meta_path, e)
             meta["workspace_id"] = workspace_id
             with open(meta_path, "w") as f:
                 json.dump(meta, f, indent=2)

@@ -38,6 +38,9 @@ class ConfigRouter:
     @endpoint("config.get_generation")
     async def get_generation_config(self) -> dict:
         """Return the current generation configuration (temperature, top_p, etc)."""
+        logger.warning(
+            "DEPRECATED: GET /config/generation is deprecated. Use GET /settings/generation instead."
+        )
         ctrl = get_config_controller()
         result = ctrl.get_generation_config()
         return success_response(data=result)
@@ -47,6 +50,9 @@ class ConfigRouter:
         self, req: ConfigUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update the generation configuration with partial field changes."""
+        logger.warning(
+            "DEPRECATED: PATCH /config/generation is deprecated. Use PATCH /settings/generation instead."
+        )
         ctrl = get_config_controller()
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         result = ctrl.update_generation_config(**updates)

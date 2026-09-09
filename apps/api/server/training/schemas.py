@@ -111,6 +111,9 @@ class TrainingRequest(TrainDataSourceBody, _TrainHyperparameters):
 
     name: str = Field(..., min_length=1, max_length=200)
     model: str = Field(..., min_length=1, max_length=200)
+    algo: str | None = Field(default=None, description="Training algorithm (e.g. bpe, wordpiece)")
+    checkpoint_name: str | None = Field(default=None, description="Resume from checkpoint")
+    source_text: str | None = Field(default=None, description="Raw text input for training")
 
 
 class DistillStartRequest(BaseModel):

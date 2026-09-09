@@ -119,13 +119,21 @@ class PersistentSettings:
 
     Settings are stored as JSON and loaded on first access.
     Changes are written through immediately so they survive restarts.
+
+    Supports per-user profiles: pass user_id to get user-specific settings.
     """
 
-    def __init__(self, settings_path: Optional[Path] = None):
-        self._path = settings_path or DEFAULT_SETTINGS_PATH
+    def __init__(self, settings_path: Optional[Path] = None, user_id: Optional[str] = None):
+        if settings_path:
+            self._path = settings_path
+        elif user_id:
+            self._path = Path.home() / ".config" / "sloughgpt" / f"settings_{user_id}.json"
+        else:
+            self._path = DEFAULT_SETTINGS_PATH
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._settings: Optional[AppSettings] = None
         self._listeners: List[Callable[[AppSettings], None]] = []
+        self._user_id = user_id
 
     def load(self) -> AppSettings:
         """Load settings from disk, or return defaults."""
@@ -218,14 +226,21 @@ class PersistentSettings:
         self._notify_listeners()
         return self._settings
 
+    @classmethod
+    def for_user(cls, user_id: str) -> "PersistentSettings":
+        """Get settings instance for a specific user."""
+        return cls(user_id=user_id)
+
 
 # Singleton for convenience
 _default_settings: Optional[PersistentSettings] = None
 
 
-def get_settings() -> PersistentSettings:
-    """Get the global settings instance."""
+def get_settings(user_id: Optional[str] = None) -> PersistentSettings:
+    """Get the global settings instance, or user-specific if user_id provided."""
     global _default_settings
+    if user_id:
+        return PersistentSettings.for_user(user_id)
     if _default_settings is None:
         _default_settings = PersistentSettings()
     return _default_settings

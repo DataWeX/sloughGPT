@@ -240,6 +240,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.get("/openapi.json", include_in_schema=False)
+async def export_openapi_spec():
+    """Export the OpenAPI spec as JSON."""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=app.openapi())
+
 # GZip omitted — Starlette GZipMiddleware buffers responses, which kills SSE streaming.
 # /chat/stream and /inference/generate/stream send chunked text/event-stream that must
 # not be buffered. Non-streaming responses (health, models, etc.) are <5KB — compression

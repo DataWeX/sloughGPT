@@ -318,7 +318,7 @@ def fused_swiglu(x: np.ndarray, w1_weight: np.ndarray, w1_bias: np.ndarray,
 
 
 def efficient_cross_entropy(logits: np.ndarray, targets: np.ndarray,
-                            ignore_index: int = -100, reduction: str = "mean") -> float:
+                            ignore_index: int = -100, reduction: str = "mean"):
     """Cross-entropy with log-sum-exp stability and ignore index."""
     flat_l = logits.reshape(-1, logits.shape[-1])
     x_max = np.max(flat_l, axis=-1, keepdims=True)
@@ -327,10 +327,25 @@ def efficient_cross_entropy(logits: np.ndarray, targets: np.ndarray,
     flat_t = targets.astype(np.int64).flatten()
     valid = flat_t != ignore_index
 
-    if reduction == "mean":
-        losses = [-float(log_probs[i, int(t)]) for i, t in enumerate(flat_t[valid]) if int(t) < log_probs.shape[1]]
-        return sum(losses) / len(losses) if losses else 0.0
-    return 0.0
+    valid_indices = np.where(valid)[0]
+    valid_targets = flat_t[valid_indices]
+    valid_targets = valid_targets[valid_targets < log_probs.shape[1]]
+
+    if len(valid_targets) == 0:
+        if reduction == "none":
+            return np.zeros(len(flat_t), dtype=np.float32)
+        return 0.0
+
+    valid_log_probs = log_probs[valid_indices[:len(valid_targets)], valid_targets]
+    losses = -valid_log_probs.astype(np.float32)
+
+    if reduction == "none":
+        result = np.zeros(len(flat_t), dtype=np.float32)
+        result[valid_indices[:len(valid_targets)]] = losses
+        return result
+    if reduction == "sum":
+        return float(np.sum(losses))
+    return float(np.mean(losses))
 
 
 def chunked_matmul(a: np.ndarray, b: np.ndarray, chunk_size: int = 512) -> np.ndarray:

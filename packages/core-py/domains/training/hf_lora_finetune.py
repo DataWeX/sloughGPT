@@ -303,6 +303,33 @@ class HFLoraTrainer:
             elapsed = time.time() - start_time
             self._is_training = False
 
+            # Record training outcome for adaptive learning
+            try:
+                from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+                outcome = TrainingOutcome(
+                    run_id=f"hf_lora_{int(time.time() * 1000)}",
+                    timestamp=time.time(),
+                    dataset=getattr(self.config, 'data_path', ''),
+                    dataset_size=len(data),
+                    model=getattr(self.config, 'model_name', 'hf_model'),
+                    method="finetune",
+                    epochs=self.config.epochs,
+                    batch_size=self.config.batch_size,
+                    learning_rate=self.config.learning_rate,
+                    max_seq_length=self.config.block_size,
+                    use_lora=True,
+                    lora_rank=self.config.rank,
+                    lora_alpha=self.config.alpha,
+                    final_loss=float(best_loss) if best_loss is not None else 0.0,
+                    best_loss=float(best_loss) if best_loss is not None else 0.0,
+                    training_time_s=elapsed,
+                    converged=True,
+                )
+                tracker = TrainingOutcomeTracker()
+                tracker.record(outcome)
+            except Exception as exc:
+                logger.debug("Failed to record HF LoRA training outcome: %s", exc)
+
             return TrainResult(
                 success=True,
                 status="completed",

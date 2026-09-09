@@ -1155,6 +1155,50 @@ class MultimodalRouter:
             "spoken_phonemes": result["spoken_phonemes"],
         })
 
+    async def batch_score_pronunciation(self, request: dict) -> dict:
+        """Batch score pronunciation accuracy.
+
+        Takes an array of target/spoken pairs and returns scores for each.
+        """
+        try:
+            from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+
+            pairs = request.get("pairs", [])
+            language = request.get("language", None)
+
+            if not pairs:
+                raise_error("No pairs provided", "E_MISSING_PAIRS")
+
+            encoder = UnifiedPhonemeEncoder()
+            results = []
+
+            for pair in pairs:
+                target = pair.get("target", "")
+                spoken = pair.get("spoken", "")
+
+                if not target or not spoken:
+                    continue
+
+                result = encoder.score_pronunciation(target, spoken, language=language)
+                results.append({
+                    "target": target,
+                    "spoken": spoken,
+                    "language": encoder.current_language,
+                    "score": result["score"],
+                    "precision": result["precision"],
+                    "recall": result["recall"],
+                    "target_phonemes": result["target_phonemes"],
+                    "spoken_phonemes": result["spoken_phonemes"],
+                })
+
+            return success_response(data={
+                "count": len(results),
+                "results": results,
+            })
+        except Exception as e:
+            logger.warning("Batch pronunciation scoring failed: %s", e)
+            classify_and_raise(e, source="multimodal.batch_score_pronunciation")
+
     async def synthesize_speech(self, request: dict) -> dict:
         """Synthesize speech from text.
 

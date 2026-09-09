@@ -23,5 +23,45 @@ Training, inference, models, and infrastructure code live under **`domains/`**. 
 | `domains.feedback` | LoRA eval, per-user adapter |
 | `domains.cognitive` | Soul engine, metacognition |
 | `domains.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
+| `domains.multimodal` | Phoneme encoders, TTS, speech synthesis |
+
+### Phoneme Encoder API
+
+The phoneme encoder system supports 6 languages: English, German, French, Spanish, Italian, and Portuguese.
+
+#### CLI Usage
+
+```bash
+# Single text encoding
+python -m domains.multimodal.phoneme_encoder_cli "hello world"
+
+# Batch encoding
+python -m domains.multimodal.phoneme_encoder_cli --batch "hello" "world" "test"
+
+# Language-specific encoding
+python -m domains.multimodal.phoneme_encoder_cli --lang it "ciao mondo"
+
+# Language detection
+python -m domains.multimodal.phoneme_encoder_cli --detect "hello world"
+```
+
+#### REST API Endpoints
+
+- `POST /multimodal/encode-phonemes` — Single text encoding
+- `POST /multimodal/decode-phonemes` — Decode phoneme IDs
+- `POST /multimodal/batch-encode-phonemes` — Batch encoding
+- `POST /multimodal/score-pronunciation` — Pronunciation scoring
+- `POST /multimodal/batch-score-pronunciation` — Batch pronunciation scoring
+- `POST /multimodal/detect-language` — Language detection
+- `POST /multimodal/synthesize-speech` — TTS synthesis with speed/pitch control
+- `POST /multimodal/training` — Pronunciation training feedback
+
+#### Web Interface Features
+
+- **Encode** — Encode text to phonemes with language auto-detection
+- **TTS Synthesis** — Synthesize speech from text with speed/pitch control and audio playback
+- **Pronunciation Scoring** — Score pronunciation accuracy between target and spoken words
+- **Language Detection** — Auto-detect language from text input
+- **Pronunciation Training** — Get feedback on pronunciation with tips and suggestions
 
 See **docs/STRUCTURE.md** and **docs/AI_SOFTWARE_ENGINEERING.md**.
