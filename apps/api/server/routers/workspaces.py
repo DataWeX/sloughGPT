@@ -39,6 +39,9 @@ class WorkspaceSettingsRequest(BaseModel):
     description: str | None = Field(None, max_length=1000)
     default_model: str | None = Field(None, max_length=200)
     data_retention_days: int | None = Field(None, ge=7, le=365)
+    training_retention_days: int | None = Field(None, ge=1, le=365)
+    audit_retention_days: int | None = Field(None, ge=1, le=365)
+    dataset_retention_days: int | None = Field(None, ge=1, le=365)
     max_members: int | None = Field(None, ge=2, le=500)
     allow_sharing: bool | None = None
 
@@ -895,14 +898,19 @@ class WorkspacesRouter:
                 if not user.is_admin:
                     raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
 
-            retention_days = getattr(ws, 'data_retention_days', 90) or 90
-            cutoff = datetime.now(timezone.utc).timestamp() - (retention_days * 86400)
-            cleaned = {"training_jobs": 0, "audit_logs": 0}
+            now = datetime.now(timezone.utc).timestamp()
+            default_retention = getattr(ws, 'data_retention_days', 90) or 90
+            training_retention = getattr(ws, 'training_retention_days', None) or default_retention
+            audit_retention = getattr(ws, 'audit_retention_days', None) or default_retention
+            dataset_retention = getattr(ws, 'dataset_retention_days', None) or default_retention
+
+            cleaned = {"training_jobs": 0, "audit_logs": 0, "datasets": 0}
 
             # Clean old training jobs
             try:
                 from domains.training.repository import TrainingRepository
                 repo = TrainingRepository()
+                training_cutoff = now - (training_retention * 86400)
                 old_jobs = repo.list_by_workspace(workspace_id)
                 for job in old_jobs:
                     created = getattr(job, 'created_at', None)
@@ -911,7 +919,7 @@ class WorkspacesRouter:
                             job_ts = datetime.fromisoformat(created.replace('Z', '+00:00')).timestamp()
                         except (ValueError, TypeError):
                             continue
-                        if job_ts < cutoff:
+                        if job_ts < training_cutoff:
                             repo.delete(job.id)
                             cleaned["training_jobs"] += 1
             except Exception:
@@ -921,6 +929,7 @@ class WorkspacesRouter:
             try:
                 from infrastructure.auth import AuditLogger
                 audit = AuditLogger()
+                audit_cutoff = now - (audit_retention * 86400)
                 old_logs = audit.list(workspace_id=workspace_id, limit=10000)
                 for log in old_logs:
                     ts = log.get("timestamp", "")
@@ -929,7 +938,7 @@ class WorkspacesRouter:
                             log_ts = datetime.fromisoformat(ts.replace('Z', '+00:00')).timestamp()
                         except (ValueError, TypeError):
                             continue
-                        if log_ts < cutoff:
+                        if log_ts < audit_cutoff:
                             audit.delete(log.get("id", ""))
                             cleaned["audit_logs"] += 1
             except Exception:
@@ -940,7 +949,11 @@ class WorkspacesRouter:
                 user.username, workspace_id, cleaned,
             )
             return success_response(data={
-                "retention_days": retention_days,
+                "retention": {
+                    "training_days": training_retention,
+                    "audit_days": audit_retention,
+                    "dataset_days": dataset_retention,
+                },
                 "cleaned": cleaned,
             })
 

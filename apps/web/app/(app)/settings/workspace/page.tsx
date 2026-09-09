@@ -40,6 +40,9 @@ interface WorkspaceSettings {
   description: string
   default_model: string
   data_retention_days: number
+  training_retention_days: number
+  audit_retention_days: number
+  dataset_retention_days: number
   max_members: number
   allow_sharing: boolean
   created_at: string
@@ -85,6 +88,9 @@ export default function WorkspaceSettingsPage() {
   const [description, setDescription] = useState('')
   const [defaultModel, setDefaultModel] = useState('')
   const [retentionDays, setRetentionDays] = useState(90)
+  const [trainingRetention, setTrainingRetention] = useState(90)
+  const [auditRetention, setAuditRetention] = useState(90)
+  const [datasetRetention, setDatasetRetention] = useState(90)
   const [maxMembers, setMaxMembers] = useState(50)
   const [allowSharing, setAllowSharing] = useState(true)
 
@@ -109,6 +115,9 @@ export default function WorkspaceSettingsPage() {
         setDescription(s.description)
         setDefaultModel(s.default_model || '')
         setRetentionDays(s.data_retention_days || 90)
+        setTrainingRetention(s.training_retention_days || s.data_retention_days || 90)
+        setAuditRetention(s.audit_retention_days || s.data_retention_days || 90)
+        setDatasetRetention(s.dataset_retention_days || s.data_retention_days || 90)
         setMaxMembers(s.max_members || 50)
         setAllowSharing(s.allow_sharing)
       }
@@ -150,6 +159,9 @@ export default function WorkspaceSettingsPage() {
         description: description.trim(),
         default_model: defaultModel.trim() || null,
         data_retention_days: retentionDays,
+        training_retention_days: trainingRetention,
+        audit_retention_days: auditRetention,
+        dataset_retention_days: datasetRetention,
         max_members: maxMembers,
         allow_sharing: allowSharing,
       })
@@ -219,6 +231,9 @@ export default function WorkspaceSettingsPage() {
     description !== settings.description ||
     defaultModel !== (settings.default_model || '') ||
     retentionDays !== settings.data_retention_days ||
+    trainingRetention !== (settings.training_retention_days || settings.data_retention_days || 90) ||
+    auditRetention !== (settings.audit_retention_days || settings.data_retention_days || 90) ||
+    datasetRetention !== (settings.dataset_retention_days || settings.data_retention_days || 90) ||
     maxMembers !== settings.max_members ||
     allowSharing !== settings.allow_sharing
   )
@@ -304,7 +319,7 @@ export default function WorkspaceSettingsPage() {
 
           <div>
             <label className="text-sm font-medium mb-1 block">
-              Data Retention: {retentionDays} days
+              Default Retention: {retentionDays} days
             </label>
             <Slider
               value={[retentionDays]}
@@ -314,8 +329,47 @@ export default function WorkspaceSettingsPage() {
               step={1}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Training jobs and data older than this are automatically cleaned up
+              Default retention period for all data types
             </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-1 block">
+                Training: {trainingRetention}d
+              </label>
+              <Slider
+                value={[trainingRetention]}
+                onValueChange={([v]) => setTrainingRetention(v)}
+                min={1}
+                max={365}
+                step={1}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">
+                Audit Logs: {auditRetention}d
+              </label>
+              <Slider
+                value={[auditRetention]}
+                onValueChange={([v]) => setAuditRetention(v)}
+                min={1}
+                max={365}
+                step={1}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">
+                Datasets: {datasetRetention}d
+              </label>
+              <Slider
+                value={[datasetRetention]}
+                onValueChange={([v]) => setDatasetRetention(v)}
+                min={1}
+                max={365}
+                step={1}
+              />
+            </div>
           </div>
 
           <div>
