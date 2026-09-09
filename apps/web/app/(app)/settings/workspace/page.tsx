@@ -94,6 +94,7 @@ export default function WorkspaceSettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [cleaning, setCleaning] = useState(false)
+  const [cloning, setCloning] = useState(false)
 
   const wsId = currentWorkspace?.id
 
@@ -191,6 +192,25 @@ export default function WorkspaceSettingsPage() {
       addToast('Could not run cleanup', 'error')
     } finally {
       setCleaning(false)
+    }
+  }
+
+  const handleClone = async () => {
+    if (!wsId) return
+    setCloning(true)
+    try {
+      const res = await apiPost<{ data: { id: string; name: string; members_cloned: number } }>(
+        `/workspaces/${wsId}/clone`,
+        {}
+      )
+      const data = res?.data
+      if (data) {
+        addToast(`Cloned to "${data.name}" with ${data.members_cloned} members`, 'success')
+      }
+    } catch {
+      addToast('Could not clone workspace', 'error')
+    } finally {
+      setCloning(false)
     }
   }
 
@@ -371,9 +391,12 @@ export default function WorkspaceSettingsPage() {
             Clean up training jobs and audit logs older than {retentionDays} days
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex gap-2">
           <Button variant="outline" onClick={handleCleanup} disabled={cleaning}>
             {cleaning ? 'Cleaning...' : 'Run Cleanup Now'}
+          </Button>
+          <Button variant="outline" onClick={handleClone} disabled={cloning}>
+            {cloning ? 'Cloning...' : 'Clone Workspace'}
           </Button>
         </CardContent>
       </Card>

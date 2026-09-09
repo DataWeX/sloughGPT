@@ -1067,6 +1067,63 @@ class WorkspacesRouter:
                 "notifications": notifications[:50],
             })
 
+        # ─── Clone workspace ─────────────────────────────────
+        async def clone_workspace(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            # Create new workspace with cloned settings
+            new_ws = Workspace(
+                id=str(uuid.uuid4()),
+                name=f"{ws.name} (Copy)",
+                tenant_id=ws.tenant_id,
+                description=ws.description,
+                default_model=getattr(ws, 'default_model', ''),
+                data_retention_days=getattr(ws, 'data_retention_days', 90),
+                max_members=getattr(ws, 'max_members', 50),
+                allow_sharing=getattr(ws, 'allow_sharing', True),
+            )
+            self._ws_repo.create(new_ws)
+
+            # Clone members (except the creator who's auto-added)
+            old_members = self._ws_repo.list_members(workspace_id)
+            cloned_count = 0
+            for m in old_members:
+                if m.user_id == user.id:
+                    continue  # skip, will be added as owner
+                new_member = WorkspaceMember(
+                    id=str(uuid.uuid4()),
+                    workspace_id=new_ws.id,
+                    user_id=m.user_id,
+                    role=m.role,
+                )
+                self._ws_repo.add_member(new_member)
+                cloned_count += 1
+
+            # Add creator as owner
+            owner_member = WorkspaceMember(
+                id=str(uuid.uuid4()),
+                workspace_id=new_ws.id,
+                user_id=user.id,
+                role=Role.OWNER,
+            )
+            self._ws_repo.add_member(owner_member)
+
+            logger.info("User %s cloned workspace %s to %s", user.username, workspace_id, new_ws.id)
+            return success_response(data={
+                "id": new_ws.id,
+                "name": new_ws.name,
+                "members_cloned": cloned_count,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -1089,6 +1146,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/cleanup", cleanup_workspace_data, methods=["POST"])
         router.add_api_route("/{workspace_id}/members/bulk", bulk_import_members, methods=["POST"])
         router.add_api_route("/{workspace_id}/notifications", get_workspace_notifications, methods=["GET"])
+        router.add_api_route("/{workspace_id}/clone", clone_workspace, methods=["POST"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
