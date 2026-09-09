@@ -94,6 +94,8 @@ app-planner gui
 
 Global options: `--backend {file,mogdb}`, `--notes-dir`, `--board-dir`, `--no-sync`
 
+Environment: `APP_PLANNER_NOTES_DIR`, `APP_PLANNER_BOARD_DIR`, `APP_PLANNER_BACKEND`, `APP_PLANNER_NO_SYNC` (set to any value to disable auto-sync)
+
 ## Configuration
 
 Resolution order, first match wins:
