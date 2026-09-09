@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
-    const success = moveCard(card_id, column)
+    const workspaceId = request.headers.get('x-workspace-id') || undefined
+    const success = moveCard(card_id, column, workspaceId)
     if (!success) {
       return NextResponse.json(
         { error: 'Card not found' },

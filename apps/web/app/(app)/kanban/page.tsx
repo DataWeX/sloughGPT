@@ -11,6 +11,7 @@ import {
   IconCheck, IconX, IconClock, IconGrid, IconDocument,
 } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
+import { useAuthStore } from '@/lib/auth'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -82,6 +83,9 @@ const STATUS_OPTIONS = ['open', 'wip', 'done', 'blocked', 'review', 'todo']
 // ── Main Page ──────────────────────────────────────────────────────────
 
 export default function PlannerPage() {
+  const { currentWorkspace } = useAuthStore()
+  const wsHeaders = currentWorkspace?.id ? { 'x-workspace-id': currentWorkspace.id } : {}
+
   const [tab, setTab] = useState<Tab>('board')
   const [board, setBoard] = useState<KanbanBoard | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
@@ -99,8 +103,8 @@ export default function PlannerPage() {
     setError(null)
     try {
       const [boardRes, notesRes] = await Promise.all([
-        fetch('/api/planner/board'),
-        fetch('/api/planner/notes'),
+        fetch('/api/planner/board', { headers: wsHeaders }),
+        fetch('/api/planner/notes', { headers: wsHeaders }),
       ])
       if (boardRes.ok) {
         const bd = await boardRes.json()
@@ -115,27 +119,27 @@ export default function PlannerPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [wsHeaders])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
   const handleSync = useCallback(async () => {
     setSyncing(true)
     try {
-      const res = await fetch('/api/planner/sync', { method: 'POST' })
+      const res = await fetch('/api/planner/sync', { method: 'POST', headers: wsHeaders })
       if (res.ok) {
         await fetchAll()
       }
     } finally {
       setSyncing(false)
     }
-  }, [fetchAll])
+  }, [fetchAll, wsHeaders])
 
   const handleMoveCard = useCallback(async (cardId: string, column: string) => {
     try {
       const res = await fetch('/api/planner/board', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...wsHeaders },
         body: JSON.stringify({ id: cardId, column }),
       })
       if (res.ok && board) {
@@ -153,7 +157,7 @@ export default function PlannerPage() {
   const handleCreateNote = useCallback(async (data: { title: string; tags: string[]; status: string; body: string }) => {
     const res = await fetch('/api/planner/notes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...wsHeaders },
       body: JSON.stringify(data),
     })
     if (res.ok) {
@@ -161,12 +165,12 @@ export default function PlannerPage() {
       setNotes(prev => [note, ...prev])
       setShowNewNote(false)
     }
-  }, [])
+  }, [wsHeaders])
 
   const handleUpdateNote = useCallback(async (id: string, data: Partial<Note>) => {
     const res = await fetch(`/api/planner/notes/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...wsHeaders },
       body: JSON.stringify(data),
     })
     if (res.ok) {
@@ -174,14 +178,14 @@ export default function PlannerPage() {
       setNotes(prev => prev.map(n => n.id === id ? note : n))
       setEditingNote(null)
     }
-  }, [])
+  }, [wsHeaders])
 
   const handleDeleteNote = useCallback(async (id: string) => {
-    const res = await fetch(`/api/planner/notes/${id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/planner/notes/${id}`, { method: 'DELETE', headers: wsHeaders })
     if (res.ok) {
       setNotes(prev => prev.filter(n => n.id !== id))
     }
-  }, [])
+  }, [wsHeaders])
 
   // ── Drag handlers ──────────────────────────────────────────────────
 

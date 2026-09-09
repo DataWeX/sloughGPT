@@ -8,7 +8,8 @@ export async function PUT(
   try {
     const { id } = await params
     const data = await request.json()
-    const card = updateCard(id, data)
+    const workspaceId = request.headers.get('x-workspace-id') || undefined
+    const card = updateCard(id, data, workspaceId)
     if (!card) {
       return NextResponse.json(
         { error: 'Card not found' },
@@ -30,7 +31,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const success = deleteCard(id)
+    const workspaceId = request.headers.get('x-workspace-id') || undefined
+    const success = deleteCard(id, workspaceId)
     if (!success) {
       return NextResponse.json(
         { error: 'Card not found' },

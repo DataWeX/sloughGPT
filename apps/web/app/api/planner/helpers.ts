@@ -26,12 +26,22 @@ function findRepoRoot(): string {
 
 const REPO_ROOT = findRepoRoot()
 
-export function boardPath(): string {
-  return join(REPO_ROOT, '.kanban', 'board.jsonl')
+function kanbanDir(workspaceId?: string): string {
+  if (workspaceId) return join(REPO_ROOT, '.kanban', workspaceId)
+  return join(REPO_ROOT, '.kanban')
 }
 
-export function notesPath(): string {
-  return join(REPO_ROOT, '.dev-notes', 'store', 'notes.journal.jsonl')
+function notesDir(workspaceId?: string): string {
+  if (workspaceId) return join(REPO_ROOT, '.dev-notes', workspaceId, 'store')
+  return join(REPO_ROOT, '.dev-notes', 'store')
+}
+
+export function boardPath(workspaceId?: string): string {
+  return join(kanbanDir(workspaceId), 'board.jsonl')
+}
+
+export function notesPath(workspaceId?: string): string {
+  return join(notesDir(workspaceId), 'notes.journal.jsonl')
 }
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -79,8 +89,8 @@ export interface Note {
 
 // ── Read / Write Board ────────────────────────────────────────────────
 
-export function readBoard(): Board {
-  const bp = boardPath()
+export function readBoard(workspaceId?: string): Board {
+  const bp = boardPath(workspaceId)
   if (!existsSync(bp)) {
     return {
       name: 'Main',
@@ -121,9 +131,9 @@ export function readBoard(): Board {
   return board
 }
 
-export function writeBoard(board: Board): void {
-  const bp = boardPath()
-  const dir = join(REPO_ROOT, '.kanban')
+export function writeBoard(board: Board, workspaceId?: string): void {
+  const bp = boardPath(workspaceId)
+  const dir = kanbanDir(workspaceId)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 
   const lines: string[] = []
@@ -136,8 +146,8 @@ export function writeBoard(board: Board): void {
 
 // ── Read / Write Notes ────────────────────────────────────────────────
 
-export function readNotes(): Note[] {
-  const np = notesPath()
+export function readNotes(workspaceId?: string): Note[] {
+  const np = notesPath(workspaceId)
   if (!existsSync(np)) return []
   const raw = readFileSync(np, 'utf-8')
   const lines = raw.split('\n').filter(Boolean)
@@ -155,9 +165,9 @@ export function readNotes(): Note[] {
   return notes
 }
 
-export function writeNotes(notes: Note[]): void {
-  const np = notesPath()
-  const dir = join(REPO_ROOT, '.dev-notes', 'store')
+export function writeNotes(notes: Note[], workspaceId?: string): void {
+  const np = notesPath(workspaceId)
+  const dir = notesDir(workspaceId)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 
   const lines = notes.map((note) => JSON.stringify(note))
@@ -166,13 +176,13 @@ export function writeNotes(notes: Note[]): void {
 
 // ── Card Operations ────────────────────────────────────────────────────
 
-export function moveCard(cardId: string, column: string): boolean {
-  const board = readBoard()
+export function moveCard(cardId: string, column: string, workspaceId?: string): boolean {
+  const board = readBoard(workspaceId)
   const card = board.cards.find(c => c.id === cardId)
   if (!card) return false
   card.column = column
   card.updated_at = new Date().toISOString()
-  writeBoard(board)
+  writeBoard(board, workspaceId)
   return true
 }
 
@@ -186,8 +196,8 @@ export function createCard(data: {
   sprint?: string
   gh?: string
   column?: string
-}): BoardCard {
-  const board = readBoard()
+}, workspaceId?: string): BoardCard {
+  const board = readBoard(workspaceId)
   const now = new Date().toISOString()
   const card: BoardCard = {
     id: `card-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -206,28 +216,29 @@ export function createCard(data: {
     root_hash: '',
   }
   board.cards.push(card)
-  writeBoard(board)
+  writeBoard(board, workspaceId)
   return card
 }
 
 export function updateCard(
   id: string,
   data: Partial<Pick<BoardCard, 'title' | 'description' | 'priority' | 'tags' | 'due_date' | 'assignee' | 'column' | 'sprint' | 'gh'>>,
+  workspaceId?: string,
 ): BoardCard | null {
-  const board = readBoard()
+  const board = readBoard(workspaceId)
   const card = board.cards.find(c => c.id === id)
   if (!card) return null
   Object.assign(card, data, { updated_at: new Date().toISOString() })
-  writeBoard(board)
+  writeBoard(board, workspaceId)
   return card
 }
 
-export function deleteCard(id: string): boolean {
-  const board = readBoard()
+export function deleteCard(id: string, workspaceId?: string): boolean {
+  const board = readBoard(workspaceId)
   const idx = board.cards.findIndex(c => c.id === id)
   if (idx === -1) return false
   board.cards.splice(idx, 1)
-  writeBoard(board)
+  writeBoard(board, workspaceId)
   return true
 }
 
@@ -240,8 +251,8 @@ export function createNote(data: {
   tags?: string[]
   sprint?: string
   gh?: string
-}): Note {
-  const notes = readNotes()
+}, workspaceId?: string): Note {
+  const notes = readNotes(workspaceId)
   const now = new Date().toISOString()
   const note: Note = {
     id: `${now.replace(/[-:T]/g, '').slice(0, 15)}_${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
@@ -255,35 +266,36 @@ export function createNote(data: {
     updated_at: now,
   }
   notes.push(note)
-  writeNotes(notes)
+  writeNotes(notes, workspaceId)
   return note
 }
 
 export function updateNote(
   id: string,
   data: Partial<Pick<Note, 'title' | 'body' | 'status' | 'tags' | 'sprint' | 'gh'>>,
+  workspaceId?: string,
 ): Note | null {
-  const notes = readNotes()
+  const notes = readNotes(workspaceId)
   const note = notes.find(n => n.id === id)
   if (!note) return null
   Object.assign(note, data, { updated_at: new Date().toISOString() })
-  writeNotes(notes)
+  writeNotes(notes, workspaceId)
   return note
 }
 
-export function deleteNote(id: string): boolean {
-  const notes = readNotes()
+export function deleteNote(id: string, workspaceId?: string): boolean {
+  const notes = readNotes(workspaceId)
   const idx = notes.findIndex(n => n.id === id)
   if (idx === -1) return false
   notes.splice(idx, 1)
-  writeNotes(notes)
+  writeNotes(notes, workspaceId)
   return true
 }
 
 // ── Tags & Stats ───────────────────────────────────────────────────────
 
-export function getAllTags(): { name: string; count: number }[] {
-  const board = readBoard()
+export function getAllTags(workspaceId?: string): { name: string; count: number }[] {
+  const board = readBoard(workspaceId)
   const tagMap = new Map<string, number>()
   for (const card of board.cards) {
     for (const tag of (card.tags || [])) {
@@ -295,9 +307,9 @@ export function getAllTags(): { name: string; count: number }[] {
     .sort((a, b) => b.count - a.count)
 }
 
-export function getStats() {
-  const board = readBoard()
-  const notes = readNotes()
+export function getStats(workspaceId?: string) {
+  const board = readBoard(workspaceId)
+  const notes = readNotes(workspaceId)
   const byColumn: Record<string, number> = {}
   for (const card of board.cards) {
     byColumn[card.column] = (byColumn[card.column] || 0) + 1

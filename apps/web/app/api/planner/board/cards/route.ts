@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
-    const card = createCard(data)
+    const workspaceId = request.headers.get('x-workspace-id') || undefined
+    const card = createCard(data, workspaceId)
     return NextResponse.json({ card }, { status: 201 })
   } catch (error) {
     return NextResponse.json(

@@ -8,7 +8,8 @@ export async function PUT(
   try {
     const { id } = await params
     const data = await request.json()
-    const note = updateNote(id, data)
+    const workspaceId = request.headers.get('x-workspace-id') || undefined
+    const note = updateNote(id, data, workspaceId)
     if (!note) {
       return NextResponse.json(
         { error: 'Note not found' },
@@ -30,7 +31,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
-    const success = deleteNote(id)
+    const workspaceId = request.headers.get('x-workspace-id') || undefined
+    const success = deleteNote(id, workspaceId)
     if (!success) {
       return NextResponse.json(
         { error: 'Note not found' },
