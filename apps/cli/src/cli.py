@@ -459,100 +459,12 @@ _register_token_tree(cli)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-@cli.group(help="List, load, and delete training checkpoints")
-def checkpoint():
-    pass
+# ═══════════════════════════════════════════════════════════════════════
+# checkpoint — training checkpoint management
+# ═══════════════════════════════════════════════════════════════════════
 
-
-@checkpoint.command("list", help="List all training checkpoints")
-@click.option("--sort", type=click.Choice(["date", "size", "name"]), default="date", help="Sort order")
-@click.option("--json", "json_output", is_flag=True, help="JSON output")
-@click.pass_context
-def checkpoint_list(ctx, sort, json_output):
-    """List all saved training checkpoints.
-
-    \b
-    Examples:
-      sloughgpt checkpoint list
-      sloughgpt checkpoint list --sort size
-      sloughgpt checkpoint list --json
-    """
-    import requests
-    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.get(f"{base_url}/training/checkpoints", timeout=10)
-    if resp.status_code != 200:
-        log.error(f"Failed to list checkpoints: {resp.text}")
-        sys.exit(1)
-    checkpoints = resp.json()
-    if not checkpoints:
-        log.info("No checkpoints found")
-        return
-
-    if json_output:
-        log.json(checkpoints)
-        return
-
-    log.header(f"Training Checkpoints ({len(checkpoints)})")
-    rows = []
-    for cp in checkpoints:
-        name = cp.get("name", "unknown")
-        size = cp.get("size_mb", 0)
-        traits = cp.get("traits", {})
-        trait_str = ", ".join(f"{k}={v:.2f}" for k, v in traits.items() if v != 0.5) if traits else ""
-        rows.append([name, f"{size:.1f} MB", trait_str or "-"])
-    log.table(["Name", "Size", "Traits"], rows)
-
-
-@checkpoint.command("load", help="Load a checkpoint into the model")
-@click.argument("name")
-@click.pass_context
-def checkpoint_load(ctx, name):
-    """Load a training checkpoint into the active model.
-
-    \b
-    Example:
-      sloughgpt checkpoint load my-checkpoint.soul
-    """
-    import requests
-    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    resp = requests.post(f"{base_url}/training/checkpoints/{name}/load", timeout=30)
-    if resp.status_code == 200:
-        data = resp.json()
-        log.success(f"Loaded checkpoint: {name}")
-        for k, v in data.items():
-            if k not in ("status",):
-                log.key_value(k, str(v))
-    else:
-        log.error(f"Failed to load: {resp.text}")
-        sys.exit(1)
-
-
-@checkpoint.command("delete", help="Delete a training checkpoint")
-@click.argument("name")
-@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
-@click.pass_context
-def checkpoint_delete(ctx, name, yes, dry_run):
-    """Delete a training checkpoint.
-
-    \b
-    Example:
-      sloughgpt checkpoint delete my-checkpoint.soul
-    """
-    if not yes and not dry_run:
-        confirm(f"Delete checkpoint '{name}'?", abort=True)
-    import requests
-    base_url = f"http://{ctx.obj['host']}:{ctx.obj['port']}"
-    if dry_run:
-        log.info(f"Would delete: {name}")
-        return
-    resp = requests.delete(f"{base_url}/training/checkpoints/{name}", timeout=10)
-    if resp.status_code == 200:
-        log.success(f"Deleted: {name}")
-    else:
-        log.error(f"Failed to delete: {resp.text}")
-        sys.exit(1)
-
+from groups.checkpoint import register as _register_checkpoint
+_register_checkpoint(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
 # knowledge — semantic knowledge operations
@@ -565,110 +477,8 @@ _register_knowledge(cli)
 # experiment — ML experiment tracking
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="ML experiment tracking — create, list, log metrics")
-def experiment():
-    pass
-
-
-@experiment.command("list", help="List all experiments")
-@click.pass_context
-def experiment_list(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Failed to list experiments: {r.text}")
-        return
-    data = r.json()
-    exps = data.get("data", {}).get("experiments", [])
-    if not exps:
-        log.info("No experiments found")
-        return
-    if ctx.obj.get("json"):
-        _output(ctx, {"experiments": exps})
-    else:
-        log.header("Experiments")
-        for exp in exps:
-            log.info(f"  {exp}")
-
-
-@experiment.command("create", help="Create a new experiment")
-@click.argument("name")
-@click.pass_context
-def experiment_create(ctx, name):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments",
-                      json={"name": name}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Failed to create experiment: {r.text}")
-        return
-    data = r.json().get("data", {})
-    log.success(f"Created experiment: {data.get('id', name)}")
-
-
-@experiment.command("info", help="Show experiment details")
-@click.argument("experiment_id")
-@click.pass_context
-def experiment_info(ctx, experiment_id):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Experiment not found: {r.text}")
-        return
-    data = r.json().get("data", {})
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        log.header(f"Experiment: {experiment_id}")
-        for k, v in data.items():
-            log.key_value(k, str(v))
-
-
-@experiment.command("delete", help="Delete an experiment")
-@click.argument("experiment_id")
-@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
-@click.option("--dry-run", is_flag=True, help="Show what would be deleted")
-@click.pass_context
-def experiment_delete(ctx, experiment_id, yes, dry_run):
-    import requests
-    if dry_run:
-        log.info(f"Would delete experiment: {experiment_id}")
-        return
-    if not yes:
-        confirm(f"Delete experiment '{experiment_id}'?", abort=True)
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.delete(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}", timeout=timeout)
-    if r.status_code == 200:
-        log.success(f"Deleted experiment: {experiment_id}")
-    else:
-        log.error(f"Failed to delete: {r.text}")
-
-
-@experiment.command("metrics", help="Show experiment metrics")
-@click.argument("experiment_id")
-@click.pass_context
-def experiment_metrics(ctx, experiment_id):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/experiments/{experiment_id}/data", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Failed to get metrics: {r.text}")
-        return
-    data = r.json().get("data", {})
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        log.header(f"Metrics: {experiment_id}")
-        metrics = data.get("metrics", [])
-        if not metrics:
-            log.info("No metrics recorded yet")
-            return
-        for m in metrics[-20:]:
-            log.info(f"  {m.get('step', '?')}: {m.get('key', '?')}={m.get('value', '?')}")
-
+from groups.experiment import register as _register_experiment
+_register_experiment(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
 # error — error monitoring
@@ -688,119 +498,22 @@ _register_memory(cli)
 # personality — soul personality files
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="List, load, and manage .soul personality files")
-def personality():
-    pass
-
-
-@personality.command("list", help="List built-in personalities")
-def personality_list():
-    from commands.models import _cmd_models_personalities
-    _cmd_models_personalities(_ns())
-
-
-@personality.command("load", help="Load soul via API")
-@click.argument("path")
-@click.pass_context
-def personality_load(ctx, path):
-    from commands.models import cmd_soul
-    cmd_soul(_ns(load=path, host=ctx.obj["host"], port=ctx.obj["port"]))
-
-
-@personality.command("info", help="Inspect soul file")
-@click.argument("path")
-def personality_info(path):
-    from commands.models import cmd_soul
-    cmd_soul(_ns(info=path))
-
-
-@personality.command("create", help="Create new soul from checkpoint")
-@click.option("--checkpoint", "-m", required=True, help="Weights path")
-@click.option("--name", "-n", required=True, help="Soul name")
-@click.option("--dataset", "-d", help="Dataset citation")
-@click.option("--epochs", "-e", default=0, type=int, help="Epoch count")
-@click.option("--lineage", default="nanogpt", help="Architecture label")
-@click.option("--tags", default="", help="Comma-separated tags")
-@click.option("--output", "-o", help="Output .soul path")
-def personality_create(checkpoint, name, dataset, epochs, lineage, tags, output):
-    from commands.models import cmd_soul
-    args = _ns(
-        create=output or f"models/{name}.soul", model=checkpoint,
-        name=name, dataset=dataset, epochs=epochs, lineage=lineage, tags=tags,
-    )
-    cmd_soul(args)
-
+from groups.personality import register as _register_personality
+_register_personality(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# adapter  — list, info, merge, delete
+# adapter — per-user LoRA adapter management
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Manage per-user LoRA adapters")
-def adapter():
-    pass
-
-
-@adapter.command("list", help="List LoRA adapters")
-def adapter_list():
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="list"))
-
-
-@adapter.command("info", help="Show adapter info")
-@click.argument("user")
-def adapter_info(user):
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="info", user=user))
-
-
-@adapter.command("merge", help="Merge adapters")
-@click.option("--users", required=True, help="Comma-separated user IDs")
-def adapter_merge(users):
-    from commands.train import _cmd_user_adapters
-    _cmd_user_adapters(_ns(action="merge", users=users))
-
-
-@adapter.command("delete", help="Delete adapter")
-@click.argument("user")
-@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
-def adapter_delete(user, dry_run):
-    from commands.train import _cmd_user_adapters
-    if dry_run:
-        log.info(f"Would delete adapter for user: {user}")
-        return
-    _cmd_user_adapters(_ns(action="delete", user=user))
-
+from groups.adapter import register as _register_adapter
+_register_adapter(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# feedback  — export, prepare
+# feedback — export and prepare feedback data
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Export and prepare feedback data")
-def feedback():
-    pass
-
-
-@feedback.command("export", help="Export feedback data")
-@click.option("--format", type=click.Choice(["jsonl", "dpo"]), default="jsonl")
-@click.option("--output", default="data/training_feedback.jsonl")
-def feedback_export(fmt, output):
-    from commands.train import _cmd_feedback_export
-    args = _ns(format=fmt, output=output)
-    _cmd_feedback_export(args)
-
-
-@feedback.command("prepare", help="Prepare training data from feedback")
-@click.option("--format", type=click.Choice(["all", "dpo", "sft", "reward"]), default="all")
-@click.option("--output")
-@click.option("--stats-only", is_flag=True)
-def feedback_prepare(fmt, output, stats_only):
-    from commands.train import _cmd_feedback_train
-    args = _ns(format=fmt, output=output, stats_only=stats_only)
-    _cmd_feedback_train(args)
-
+from groups.feedback import register as _register_feedback
+_register_feedback(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
 # agent — manage and execute AI agents
