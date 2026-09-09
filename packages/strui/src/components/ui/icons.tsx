@@ -129,6 +129,16 @@ export function IconCopy({ className }: IconProps) {
   )
 }
 
+export function IconCpu({ className }: IconProps) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="5" y="5" width="14" height="14" rx="2" strokeWidth={2} />
+      <rect x="9" y="9" width="6" height="6" strokeWidth={2} />
+      <path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" strokeWidth={2} strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function IconRefresh({ className }: IconProps) {
   return (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
