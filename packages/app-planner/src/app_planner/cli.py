@@ -589,7 +589,8 @@ def cli_main(argv: list[str] | None = None) -> int:
 
     p_sync = sub.add_parser("sync", help="Sync notes to board")
     p_sync.add_argument("--quiet", action="store_true", help="Only print the summary line")
-    sub.add_parser("gui", help="Launch web GUI")
+    p_gui = sub.add_parser("gui", help="Launch web GUI",
+                           description="Local web interface for notes + kanban board.")
 
     args = parser.parse_args(argv)
 
