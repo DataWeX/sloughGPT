@@ -90,6 +90,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/workspace-settings', labelKey: 'nav.workspace_settings', icon: 'settings', description: 'Workspace settings' },
       { path: '/api-keys', labelKey: 'nav.api_keys', icon: 'code', description: 'API key management' },
       { path: '/notifications', labelKey: 'nav.notifications', icon: 'activity', description: 'Workspace notifications' },
+      { path: '/workspace-search', labelKey: 'nav.workspace_search', icon: 'search', description: 'Search workspace data' },
     ],
   },
 ]
@@ -127,4 +128,5 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/workspace-settings': IconSettings,
   '/api-keys': IconCode,
   '/notifications': IconActivity,
+  '/workspace-search': IconSearch,
 }

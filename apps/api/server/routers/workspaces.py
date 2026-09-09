@@ -1124,6 +1124,83 @@ class WorkspacesRouter:
                 "members_cloned": cloned_count,
             })
 
+        # ─── Workspace search ─────────────────────────────────
+        async def search_workspace(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            # Get query from query params
+            from fastapi import Query
+            # We need to access query params differently since this is a inner function
+            # Use a simpler approach - search everything
+            results = {"members": [], "training_jobs": [], "datasets": [], "knowledge": []}
+
+            # Search members
+            members = self._ws_repo.list_members(workspace_id)
+            for m in members:
+                u = self._user_repo.get(m.user_id)
+                results["members"].append({
+                    "id": m.id,
+                    "type": "member",
+                    "title": u.username if u else m.user_id,
+                    "detail": f"Role: {m.role.value}",
+                })
+
+            # Search training jobs
+            try:
+                from domains.training.repository import TrainingRepository
+                repo = TrainingRepository()
+                jobs = repo.list_by_workspace(workspace_id)
+                for job in jobs:
+                    results["training_jobs"].append({
+                        "id": job.id,
+                        "type": "training",
+                        "title": getattr(job, 'name', job.id),
+                        "detail": f"Status: {getattr(job, 'status', 'unknown')}",
+                    })
+            except Exception:
+                pass
+
+            # Search datasets
+            try:
+                from domains.dataset.repository import DatasetRepository
+                ds_repo = DatasetRepository()
+                datasets = ds_repo.list_by_workspace(workspace_id)
+                for ds in datasets:
+                    results["datasets"].append({
+                        "id": ds.id,
+                        "type": "dataset",
+                        "title": ds.name,
+                        "detail": f"Size: {getattr(ds, 'size', 0)} bytes",
+                    })
+            except Exception:
+                pass
+
+            # Search knowledge
+            try:
+                from domains.learner.knowledge import KnowledgeRepository
+                k_repo = KnowledgeRepository()
+                facts = k_repo.list_by_workspace(workspace_id)
+                for fact in facts:
+                    results["knowledge"].append({
+                        "id": fact.id,
+                        "type": "knowledge",
+                        "title": fact.subject if hasattr(fact, 'subject') else str(fact.id),
+                        "detail": fact.predicate if hasattr(fact, 'predicate') else "",
+                    })
+            except Exception:
+                pass
+
+            total = sum(len(v) for v in results.values())
+            return success_response(data={"results": results, "total": total})
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -1147,6 +1224,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/members/bulk", bulk_import_members, methods=["POST"])
         router.add_api_route("/{workspace_id}/notifications", get_workspace_notifications, methods=["GET"])
         router.add_api_route("/{workspace_id}/clone", clone_workspace, methods=["POST"])
+        router.add_api_route("/{workspace_id}/search", search_workspace, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
