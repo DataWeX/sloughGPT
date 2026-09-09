@@ -795,6 +795,7 @@ class MultimodalRouter:
             self._tts = TTSEngine()
         tts = self._tts
         waveform = await asyncio.to_thread(tts.text_to_waveform, text)
+        mel_spec = await asyncio.to_thread(tts.text_to_mel, text)
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wf:
             wf.setnchannels(1)
@@ -808,6 +809,11 @@ class MultimodalRouter:
                 "text": text,
                 "duration_sec": len(waveform) / tts.sample_rate,
                 "elapsed_ms": round(_elapsed_ms, 1),
+                "spectrogram": {
+                    "data": mel_spec.tolist(),
+                    "n_mels": int(mel_spec.shape[0]),
+                    "n_frames": int(mel_spec.shape[1]),
+                },
             }
         )
 
