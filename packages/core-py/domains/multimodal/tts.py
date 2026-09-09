@@ -478,6 +478,24 @@ class TTSEngine:
         self.optimizer = SloAdam(lr=1e-3)
         self._phoneme_encoder = PhonemeEncoder()
 
+    def text_to_mel(self, text: str, max_frames: int = 200) -> np.ndarray:
+        """Convert text to mel spectrogram (for visualization).
+
+        Args:
+            text: Input text string
+            max_frames: Maximum spectrogram frames
+        Returns:
+            mel_spectrogram: (n_mels, num_frames) mel spectrogram
+        """
+        if not text or not text.strip():
+            return np.zeros((self.decoder.n_mels, 1), dtype=np.float32)
+
+        phoneme_ids = self._phoneme_encoder.encode(text)
+        if phoneme_ids.shape[1] == 0:
+            return np.zeros((self.decoder.n_mels, 1), dtype=np.float32)
+
+        return self.decoder.generate(phoneme_ids, max_frames)
+
     def text_to_waveform(self, text: str, max_frames: int = 200,
                          speed: float = 1.0, pitch_shift: float = 0.0) -> np.ndarray:
         """

@@ -150,4 +150,20 @@ describe('ThemeProvider — palette', () => {
       expect(chatDB.setKV).toHaveBeenCalledWith('man_palette', 'neural-precision')
     })
   })
+
+  it('toggles mode when toggle-dark-mode event fires', async () => {
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const modes = () => container.querySelectorAll('[data-testid="mode"]')
+    const lastMode = () => modes()[modes().length - 1]
+    expect(lastMode().textContent).toBe('dark')
+    act(() => { window.dispatchEvent(new CustomEvent('toggle-dark-mode')) })
+    await waitFor(() => expect(lastMode().textContent).toBe('light'))
+    act(() => { window.dispatchEvent(new CustomEvent('toggle-dark-mode')) })
+    await waitFor(() => expect(lastMode().textContent).toBe('dark'))
+  })
+
+  it('does not toggle mode when event listener fires outside provider', () => {
+    render(<ThemeProvider><TestChild /></ThemeProvider>)
+    act(() => { window.dispatchEvent(new CustomEvent('toggle-dark-mode')) })
+  })
 })
