@@ -1145,178 +1145,42 @@ _register_world(cli)
 # vm — x86 Virtual Machine console and management
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="x86 Virtual Machine console and management")
-def vm():
-    pass
-
-
-@vm.command("status", help="Show VM status and information")
-def vm_status():
-    from commands.vm import cmd_vm
-    cmd_vm(_ns())
-
-
-@vm.command("run", help="Run assembly code in the VM")
-@click.argument("source", required=False)
-@click.option("--file", "-f", help="File containing assembly source")
-def vm_run(source, file):
-    from commands.vm import cmd_vm_run
-    cmd_vm_run(_ns(source=source, file=file))
-
-
-@vm.command("list", help="List available VM programs")
-def vm_list():
-    from commands.vm import cmd_vm_list
-    cmd_vm_list(_ns())
-
-
-@vm.command("info", help="Show detailed VM information")
-def vm_info_cmd():
-    from commands.vm import cmd_vm_info
-    cmd_vm_info(_ns())
-
-
-@vm.command("debug", help="Debug assembly code interactively or from script")
-@click.argument("source", required=False)
-@click.option("--file", "-f", help="File containing assembly source")
-@click.option("--script", "-s", help="Script file with debug commands (non-interactive)")
-def vm_debug(source, file, script):
-    from commands.vm import cmd_vm_debug
-    cmd_vm_debug(_ns(source=source, file=file, script=script))
-
+from groups.vm import register as _register_vm
+_register_vm(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# build  — Buildroot image building
+# build — Buildroot image building
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Buildroot image building for v86 browser VM")
-def build():
-    pass
-
-
-@build.command("run", help="Build a Buildroot image")
-def build_run():
-    from commands.build import cmd_build
-    cmd_build(_ns())
-
-
-@build.command("init", help="Initialize Buildroot build environment")
-@click.option("--clean", is_flag=True, help="Clean first, then set up")
-def build_init(clean):
-    from commands.build import cmd_build_init
-    cmd_build_init(_ns(clean=clean))
-
-
-@build.command("clean", help="Clean build output")
-def build_clean():
-    from commands.build import cmd_build_clean
-    cmd_build_clean(_ns())
-
-
-@build.command("status", help="Show build status")
-def build_status():
-    from commands.build import cmd_build_status
-    cmd_build_status(_ns())
-
-
-@build.command("install", help="Install image to web public directory")
-def build_install():
-    from commands.build import cmd_build_install
-    cmd_build_install(_ns())
-
+from groups.build import register as _register_build
+_register_build(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# voice  — text-to-speech and speech-to-text
+# voice — text-to-speech and speech-to-text
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Text-to-speech and speech-to-text via the API")
-def voice():
-    pass
-
-
-@voice.command("tts", help="Convert text to speech audio")
-@click.argument("text")
-@click.option("--output", "-o", help="Output file path (default: tts_output.wav)")
-@click.option("--play", is_flag=True, help="Play audio after generating")
-def voice_tts(text, output, play):
-    from commands.voice import cmd_voice_tts
-    cmd_voice_tts(_ns(text=text, output=output, play=play))
-
-
-@voice.command("stt", help="Transcribe an audio file to text")
-@click.argument("file")
-@click.option("--language", "-l", default="en", help="Audio language (default: en)")
-@click.option("--verbose", "-v", is_flag=True, help="Show confidence and language info")
-def voice_stt(file, language, verbose):
-    from commands.voice import cmd_voice_stt
-    cmd_voice_stt(_ns(file=file, language=language, verbose=verbose))
-
+from groups.voice import register as _register_voice
+_register_voice(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# security  — audit, keys
+# security — audit logs and API key management
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Security audit logs and API key management")
-def security():
-    pass
-
-
-@security.command("audit", help="Show audit logs")
-@click.option("--limit", "-n", default=20, type=int, help="Max entries")
-@click.option("--type", "event_type", default="", help="Filter by event type")
-@click.option("--history", is_flag=True, help="Read from persisted audit.log")
-@click.pass_context
-def security_audit(ctx, limit, event_type, history):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    params = {"limit": limit}
-    if event_type:
-        params["event_type"] = event_type
-    if history:
-        params["history"] = True
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/security/audit",
-                     params=params, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Audit failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    logs = data.get("data", data).get("logs", [])
-    if ctx.obj.get("json"):
-        _output(ctx, {"logs": logs})
-    else:
-        log.header(f"Audit Logs ({len(logs)} entries)")
-        for entry in logs:
-            event = entry.get("event_type", "?")
-            ts = entry.get("timestamp", "")[:19]
-            detail = entry.get("detail", "")[:60]
-            log.info(f"  [{ts}] {event} — {detail}")
-
-
-@security.command("keys", help="Show API key info")
-@click.pass_context
-def security_keys(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/security/keys", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Keys failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    info = data.get("data", data)
-    if ctx.obj.get("json"):
-        _output(ctx, info)
-    else:
-        count = info.get("count", 0)
-        configured = info.get("configured", False)
-        log.info(f"API keys configured: {configured} ({count} keys)")
-
+from groups.security import register as _register_security
+_register_security(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# docstore  — list, get, put, delete, collections
+# docstore — server-side document store
+# ═══════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════
+# security — audit logs and API key management
+# ═══════════════════════════════════════════════════════════════════════
+
+from groups.security import register as _register_security
+_register_security(cli)
+
+# ═══════════════════════════════════════════════════════════════════════
+# docstore — server-side document store
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -1412,165 +1276,18 @@ def docstore_delete(ctx, collection, doc_id, yes, dry_run):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# db  — MogDB embedded database: migrate, sync, status
+# db — MogDB embedded database: migrate, sync, status
 # ═══════════════════════════════════════════════════════════════════════
 
-
-def _db_default_dir() -> str:
-    return str(_chat_repository_root() / "data" / "mogdb")
-
-
-def _import_mogdb():
-    """Import mogdb, adding its src dir to sys.path for this session."""
-    _src = Path(__file__).resolve().parents[3] / "packages" / "mogdb" / "src"
-    if str(_src) not in sys.path:
-        sys.path.insert(0, str(_src))
-    from mogdb import MogDB
-    from mogdb.sync import sync_from_files, preview_from_files
-    return MogDB, sync_from_files, preview_from_files
-
-
-@cli.group(help="MogDB embedded database — migrate, sync, and status")
-def db():
-    pass
-
-
-@db.command("migrate", help="Import a JSON/JSONL/CSV file into a MogDB collection")
-@click.option("--file", required=True, help="Path to the source file (.json, .jsonl, or .csv)")
-@click.option("--collection", help="Target collection name (default: from filename)")
-@click.option("--db", default=None, help="MogDB data directory (default: repo data/mogdb)")
-@click.option("--key", required=True, help="Identity/key field used for dedupe")
-@click.option("--format", type=click.Choice(["json", "jsonl", "csv"]), help="Source format (default: auto-detect)")
-@click.option("--delete-missing", is_flag=True, help="Delete collection docs missing from the file")
-@click.option("--sync-dir", help="Write human-readable JSON sync files to this directory")
-@click.option("--dry-run", is_flag=True, help="Report what would change without writing")
-def db_migrate(file, collection, db, key, format, delete_missing, sync_dir, dry_run):
-    from pathlib import Path as _Path
-    _MogDB, _sync, _preview = _import_mogdb()
-    path = _Path(file)
-    if not path.exists():
-        log.error(f"source file not found: {file}")
-        sys.exit(2)
-    if collection is None:
-        collection = path.stem.replace("-", "_").replace(".", "_").lower()
-    if db is None:
-        db = _db_default_dir()
-    _database = _MogDB(db, compact_on_close=not dry_run, sync_dir=sync_dir)
-    try:
-        _col = _database.collection(collection)
-        result = (_preview if dry_run else _sync)(
-            _col, str(path), key_field=key,
-            delete_missing=delete_missing, file_format=format,
-        )
-    finally:
-        _database.close()
-    if dry_run:
-        log.info(f"dry run for {collection}:")
-    log.success(
-        f"{collection}: +{result.inserted} ~{result.updated} -{result.deleted} ={result.unchanged}"
-    )
-
-
-@db.command("sync", help="Force JSON sync for all collections")
-@click.option("--db", default=None, help="MogDB data directory (default: repo data/mogdb)")
-@click.option("--sync-dir", required=True, help="Directory holding the JSON sync files")
-def db_sync(db, sync_dir):
-    _MogDB, _, _ = _import_mogdb()
-    if db is None:
-        db = _db_default_dir()
-    _database = _MogDB(db, compact_on_close=True, sync_dir=sync_dir)
-    try:
-        names = _database.list_collections()
-        # Loading a collection with sync_dir wraps it in SyncableCollection,
-        # which immediately rewrites its JSON sync file.
-        for name in names:
-            _database.collection(name).sync()
-    finally:
-        _database.close()
-    log.success(f"synced {len(names)} collections to {sync_dir}")
-
-
-@db.command("status", help="Show MogDB collection stats")
-@click.option("--db", default=None, help="MogDB data directory (default: repo data/mogdb)")
-@click.option("--json", "as_json", is_flag=True, help="Print JSON output")
-def db_status(db, as_json):
-    _MogDB, _, _ = _import_mogdb()
-    if db is None:
-        db = _db_default_dir()
-    _database = _MogDB(db, compact_on_close=False)
-    try:
-        names = _database.list_collections()
-        rows = []
-        for name in names:
-            rows.append({"collection": name, "count": _database.collection(name).count()})
-    finally:
-        _database.close()
-    if as_json:
-        echo(json.dumps(rows, indent=2, default=str))
-    else:
-        for row in rows:
-            echo(f"{row['collection']}: {row['count']} docs")
-
+from groups.db import register as _register_db
+_register_db(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# feeds  — rss, json
+# feeds — RSS and JSON feed generation
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="RSS and JSON feed generation from dev notes")
-def feeds():
-    pass
-
-
-@feeds.command("rss", help="Generate RSS feed")
-@click.option("--tag", default="", help="Filter by tag")
-@click.option("--limit", "-n", default=20, type=int)
-@click.option("--output", "-o", help="Save to file")
-@click.pass_context
-def feeds_rss(ctx, tag, limit, output):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    params = {"limit": limit}
-    if tag:
-        params["tag"] = tag
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/feeds/rss.xml",
-                     params=params, timeout=timeout, headers={"Accept": "application/xml"})
-    if r.status_code != 200:
-        log.error(f"RSS failed: {r.status_code}")
-        sys.exit(1)
-    content = r.text
-    if output:
-        with open(output, "w") as f:
-            f.write(content)
-        log.success(f"Saved to: {output}")
-    else:
-        print(content)
-
-
-@feeds.command("json", help="Generate JSON feed")
-@click.option("--tag", default="", help="Filter by tag")
-@click.option("--limit", "-n", default=20, type=int)
-@click.option("--output", "-o", help="Save to file")
-@click.pass_context
-def feeds_json(ctx, tag, limit, output):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    params = {"limit": limit}
-    if tag:
-        params["tag"] = tag
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/feeds/feed.json",
-                     params=params, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"JSON feed failed: {r.status_code}")
-        sys.exit(1)
-    content = r.text
-    if output:
-        with open(output, "w") as f:
-            f.write(content)
-        log.success(f"Saved to: {output}")
-    else:
-        print(content)
-
+from groups.feeds import register as _register_feeds
+_register_feeds(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Entry point
