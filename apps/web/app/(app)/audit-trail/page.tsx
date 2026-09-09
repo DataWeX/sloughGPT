@@ -9,6 +9,7 @@ import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { logger } from '@/lib/dev-log'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { ChevronDown, Clock, User, FileText, Activity } from 'lucide-react'
 
 interface Activity {
   type: string
@@ -26,6 +27,7 @@ export default function AuditTrailPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
   const { currentWorkspace } = useAuthStore()
 
   const fetchActivities = useCallback(async () => {
@@ -203,34 +205,74 @@ export default function AuditTrailPage() {
             </p>
           ) : (
             filteredActivities.map((a, i) => (
-              <div key={i} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
-                      a.type === 'training' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                      a.type === 'audit' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {a.type}
-                    </span>
-                    <span className="font-medium">{a.action}</span>
+              <div
+                key={i}
+                className="rounded-md border border-transparent hover:border-border/50 transition-colors"
+              >
+                <div
+                  className="flex items-center justify-between px-3 py-2 text-[10px] hover:bg-muted/50 cursor-pointer"
+                  onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform ${expandedIdx === i ? 'rotate-180' : ''}`} />
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                        a.type === 'training' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        a.type === 'audit' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {a.type}
+                      </span>
+                      <span className="font-medium">{a.action}</span>
+                    </div>
+                    {a.detail && <div className="text-muted-foreground mt-0.5 ml-5 truncate">{a.detail}</div>}
                   </div>
-                  {a.detail && <div className="text-muted-foreground mt-0.5">{a.detail}</div>}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {a.user && <span className="text-muted-foreground">{a.user}</span>}
+                    {a.status && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                        a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                        a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {a.status}
+                      </span>
+                    )}
+                    <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  {a.user && <span className="text-muted-foreground">{a.user}</span>}
-                  {a.status && (
-                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                      a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                      a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                      a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {a.status}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
-                </div>
+                {expandedIdx === i && (
+                  <div className="px-3 pb-3 pt-1 border-t border-border/30 ml-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-[10px]">
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Type:</span>
+                        <span className="font-medium">{a.type}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Action:</span>
+                        <span className="font-medium">{a.action}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <User className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">User:</span>
+                        <span className="font-medium">{a.user || '—'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Time:</span>
+                        <span className="font-medium">{formatTime(a.timestamp)}</span>
+                      </div>
+                    </div>
+                    {a.detail && (
+                      <div className="mt-2 p-2 bg-muted/30 rounded text-[10px] font-mono whitespace-pre-wrap">
+                        {a.detail}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}

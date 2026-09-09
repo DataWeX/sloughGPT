@@ -1,17 +1,17 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from '@sloughgpt/strui'
-import { IconRefresh, IconPlay } from '@sloughgpt/strui'
+import { IconRefresh } from '@sloughgpt/strui'
 import { phonemeController, type PhonemeSynthesizeResult } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
+import WaveformCanvas from './WaveformCanvas'
 import SpectrogramCanvas from './SpectrogramCanvas'
 
 export default function SynthesisCard() {
   const [text, setText] = useState('hello world')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PhonemeSynthesizeResult | null>(null)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
   const handleSynthesize = useCallback(async () => {
@@ -26,13 +26,6 @@ export default function SynthesisCard() {
       setLoading(false)
     }
   }, [text, addToast])
-
-  const handlePlay = useCallback(() => {
-    if (!result?.audio) return
-    const audio = new Audio(result.audio)
-    audioRef.current = audio
-    audio.play().catch(() => {})
-  }, [result])
 
   return (
     <Card>
@@ -56,16 +49,11 @@ export default function SynthesisCard() {
 
         {result && (
           <div className="space-y-3 p-4 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-4">
-              <Button onClick={handlePlay} size="sm">
-                <IconPlay className="mr-2 h-4 w-4" />
-                Play
-              </Button>
-              <div className="text-sm text-muted-foreground">
-                Duration: {result.duration_sec.toFixed(2)}s | Generated in {result.elapsed_ms.toFixed(0)}ms
-              </div>
+            <div className="text-sm text-muted-foreground">
+              Duration: {result.duration_sec.toFixed(2)}s | Generated in {result.elapsed_ms.toFixed(0)}ms
             </div>
-            <audio ref={audioRef} controls className="w-full" src={result.audio} />
+            <audio controls className="w-full" src={result.audio} />
+            <WaveformCanvas audioSrc={result.audio} />
             {result.spectrogram && (
               <SpectrogramCanvas spectrogram={result.spectrogram} />
             )}

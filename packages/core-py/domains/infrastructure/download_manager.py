@@ -303,6 +303,159 @@ class DownloadManager:
                 logger.debug("Failed to record download error event: %s", exc)
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
+    async def download_with(
+        self,
+        model_id: str,
+        backend,
+        total_bytes_hint: int = 0,
+    ) -> Dict[str, Any]:
+        """Download a resource using a specific backend.
+
+        Unlike ``download()`` which uses the global backend, this method
+        uses the provided backend directly.  Useful for external downloads
+        or when switching backends per-request.
+        """
+        if backend.is_cached(model_id):
+            return {"status": "already_cached", "model_id": model_id}
+
+        backend.prepare_download(model_id)
+
+        if self.is_downloading(model_id):
+            return {"status": "already_downloading", "model_id": model_id}
+
+        total_est = backend.estimate_total(model_id) or total_bytes_hint
+
+        self._set_progress(
+            model_id,
+            status=DownloadStatus.QUEUED,
+            total_bytes=total_est,
+            started_at=time.time(),
+        )
+        self._notify_callbacks(model_id)
+
+        from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+        mgr = get_cancel_manager()
+        cancel_event = threading.Event()
+        op_id = mgr.register(
+            op_type=OpType.DOWNLOAD,
+            label=f"download:{model_id}",
+            cancel_fn=lambda: cancel_event.set(),
+        )
+        mgr.start(op_id)
+
+        task = asyncio.create_task(
+            self._download_worker_with(model_id, backend, total_est, cancel_event)
+        )
+        self._tasks[model_id] = task
+
+        try:
+            result = await task
+            if result.get("status") == "complete":
+                mgr.finish(op_id)
+            elif result.get("status") == "cancelled":
+                mgr.finish(op_id, "cancelled")
+            else:
+                mgr.finish(op_id, result.get("error", "unknown"))
+            return result
+        except asyncio.CancelledError:
+            self._set_progress(model_id, status=DownloadStatus.CANCELLED)
+            mgr.finish(op_id, "cancelled")
+            return {"status": "cancelled", "model_id": model_id}
+        except Exception as e:
+            self._set_progress(
+                model_id,
+                status=DownloadStatus.FAILED,
+                error=str(e),
+            )
+            self._notify_callbacks(model_id)
+            mgr.finish(op_id, str(e))
+            return {"status": "failed", "model_id": model_id, "error": str(e)}
+
+    async def _download_worker_with(
+        self,
+        model_id: str,
+        backend,
+        total_bytes_hint: int,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> Dict[str, Any]:
+        """Run a download using a specific backend."""
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.CANCELLED:
+                return {"status": "cancelled", "model_id": model_id}
+        self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
+        self._notify_callbacks(model_id)
+        start_time = time.time()
+
+        def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
+            try:
+                with self._lock:
+                    cur = self._downloads.get(mid)
+                    if cur and cur.status == DownloadStatus.CANCELLED:
+                        return
+                pct = (downloaded / total * 100) if total > 0 else 0
+                self._set_progress(
+                    mid,
+                    bytes_downloaded=downloaded,
+                    total_bytes=total,
+                    speed_bytes_per_sec=speed,
+                    percentage=pct,
+                    status=DownloadStatus.DOWNLOADING,
+                )
+                self._notify_callbacks(mid)
+            except Exception as e:
+                logger.warning("download_manager: progress callback failed", extra={
+                    "model_id": mid, "error": str(e),
+                })
+
+        def _file_cb(mid: str, fpath: str):
+            try:
+                self._set_progress(mid, current_file=fpath)
+                self._notify_callbacks(mid)
+            except Exception as e:
+                logger.warning("download_manager: file callback failed", extra={
+                    "model_id": mid, "file": fpath, "error": str(e),
+                })
+
+        def _do_download():
+            def _cancel_check():
+                if cancel_event and cancel_event.is_set():
+                    raise InterruptedError("Download cancelled")
+
+            def _progress_cb_inner(mid, downloaded, total, speed):
+                _cancel_check()
+                _progress_cb(mid, downloaded, total, speed)
+
+            if backend.supports_compression(model_id):
+                backend.download_compressed(model_id, _progress_cb_inner, _file_cb)
+            else:
+                backend.download(model_id, _progress_cb_inner, _file_cb)
+
+        await asyncio.to_thread(_do_download)
+
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            if entry and entry.status == DownloadStatus.CANCELLED:
+                return {"status": "cancelled", "model_id": model_id}
+
+        elapsed = time.time() - start_time
+        cache_dir = backend.get_cache_dir(model_id)
+        self._set_progress(
+            model_id,
+            status=DownloadStatus.COMPLETE,
+            completed_at=time.time(),
+            percentage=100.0,
+        )
+        self._notify_callbacks(model_id)
+
+        logger.info("Downloaded %s in %.1fs → %s", model_id, elapsed, cache_dir)
+        return {
+            "status": "complete",
+            "model_id": model_id,
+            "cache_dir": cache_dir,
+            "elapsed_seconds": round(elapsed, 1),
+        }
+
     async def _download_worker(
         self,
         model_id: str,

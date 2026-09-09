@@ -59,6 +59,8 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/training/grid-search', labelKey: 'nav.training_grid_search', icon: 'grid', description: 'Hyperparameter optimization' },
       { path: '/training/model-card', labelKey: 'nav.training_model_card', icon: 'file', description: 'Generate model cards' },
       { path: '/training/compare', labelKey: 'nav.training_compare', icon: 'compare', description: 'Compare training runs' },
+      { path: '/training/presets', labelKey: 'nav.training_presets', icon: 'zap', description: 'Quick-start training templates' },
+      { path: '/training/presets', labelKey: 'nav.training_presets', icon: 'zap', description: 'Quick-start training templates' },
       { path: '/datasets', labelKey: 'nav.datasets', shortcut: '3', icon: 'chart', description: 'Manage datasets' },
       { path: '/knowledge', labelKey: 'nav.knowledge', shortcut: '8', icon: 'search', description: 'Knowledge & memory' },
     ],
