@@ -534,3 +534,41 @@ class TestExternalServers:
             "model_id": "model",
         })
         assert resp.status_code == 404
+
+
+# ── Backend management ──────────────────────────────────────────────────────
+
+class TestBackendManagement:
+    def test_list_backends(self):
+        """List backends returns available backends."""
+        resp = client.get("/models/backends")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "hf" in data
+        assert "external" in data
+        assert data["hf"]["description"] == "HuggingFace Hub"
+
+    def test_get_active_backend(self):
+        """Get active backend returns current backend type."""
+        resp = client.get("/models/backends/active")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "type" in data
+        assert "class" in data
+
+    def test_set_active_backend_hf(self):
+        """Switch to HF backend succeeds."""
+        resp = client.post("/models/backends/active?backend_name=hf")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["type"] == "hf"
+
+    def test_set_active_backend_unknown(self):
+        """Switch to unknown backend returns 404."""
+        resp = client.post("/models/backends/active?backend_name=unknown")
+        assert resp.status_code == 404
+
+    def test_set_active_backend_external_returns_400(self):
+        """Switch to external backend returns 400 (requires server config)."""
+        resp = client.post("/models/backends/active?backend_name=external")
+        assert resp.status_code == 400
