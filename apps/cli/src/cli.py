@@ -1110,84 +1110,11 @@ _register_companion(cli)
 # images — image generation and gallery
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Image generation and gallery")
-def images():
-    pass
-
-
-@images.command("generate", help="Generate an image from text")
-@click.argument("prompt")
-@click.option("--style", type=click.Choice(["realistic", "cartoon", "watercolor", "sketch", "fantasy"]),
-              default="realistic", help="Image style")
-@click.option("--output", "-o", help="Save to file path")
-@click.pass_context
-def images_generate(ctx, prompt, style, output):
-    import requests
-    timeout = ctx.obj.get("timeout", 60)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/generate",
-                      json={"prompt": prompt, "style": style}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Generate failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        img_data = data.get("data", data)
-        img_id = img_data.get("id", "?")
-        log.success(f"Generated image: {img_id} (style={style})")
-        if output:
-            import base64
-            b64 = img_data.get("image", "")
-            if b64 and "," in b64:
-                b64 = b64.split(",", 1)[1]
-            with open(output, "wb") as f:
-                f.write(base64.b64decode(b64))
-            log.info(f"Saved to: {output}")
-
-
-@images.command("gallery", help="List generated images")
-@click.option("--limit", "-n", default=10, type=int)
-@click.pass_context
-def images_gallery(ctx, limit):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/gallery?limit={limit}", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Gallery failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    images_list = data.get("data", data).get("images", [])
-    if ctx.obj.get("json"):
-        _output(ctx, {"images": images_list})
-    else:
-        log.header("Image Gallery")
-        for img in images_list:
-            log.info(f"  {img.get('id', '?')} — {img.get('prompt', '')[:60]}")
-
-
-@images.command("styles", help="List available styles")
-@click.pass_context
-def images_styles(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/images/styles", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Styles failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    styles = data.get("data", data).get("styles", [])
-    if ctx.obj.get("json"):
-        _output(ctx, {"styles": styles})
-    else:
-        log.header("Available Styles")
-        for s in styles:
-            log.info(f"  {s}")
-
+from groups.images import register as _register_images
+_register_images(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# multimodal  — status, vision, speech, dpo, video
+# multimodal — multimodal capabilities (vision, speech, video)
 # ═══════════════════════════════════════════════════════════════════════
 
 
