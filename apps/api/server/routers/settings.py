@@ -120,6 +120,17 @@ class SettingsRouter:
             "/training/batch-status", self.get_batch_training_status, methods=["GET"],
         )
 
+        # Training presets
+        self.router.add_api_route(
+            "/training/presets", self.list_training_presets, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/presets/{preset_name}", self.get_training_preset, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/presets/{preset_name}/apply", self.apply_training_preset, methods=["POST"],
+        )
+
         # Training history export
         self.router.add_api_route(
             "/training/history/export", self.export_training_history, methods=["GET"],

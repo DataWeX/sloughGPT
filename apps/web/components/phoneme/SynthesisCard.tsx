@@ -3,13 +3,14 @@
 import { useState, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from '@sloughgpt/strui'
 import { IconRefresh, IconPlay } from '@sloughgpt/strui'
-import { phonemeController } from '@/lib/phoneme-controller'
+import { phonemeController, type PhonemeSynthesizeResult } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
+import SpectrogramCanvas from './SpectrogramCanvas'
 
 export default function SynthesisCard() {
   const [text, setText] = useState('hello world')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ audio: string; duration_sec: number; elapsed_ms: number } | null>(null)
+  const [result, setResult] = useState<PhonemeSynthesizeResult | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
@@ -65,6 +66,9 @@ export default function SynthesisCard() {
               </div>
             </div>
             <audio ref={audioRef} controls className="w-full" src={result.audio} />
+            {result.spectrogram && (
+              <SpectrogramCanvas spectrogram={result.spectrogram} />
+            )}
           </div>
         )}
       </CardContent>
