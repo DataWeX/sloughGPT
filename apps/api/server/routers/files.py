@@ -178,6 +178,39 @@ class FilesRouter:
         except Exception as e:
             logger.warning("Failed to save metadata to MogDB: %s", e)
 
+    def _upsert_file_metadata(self, file_id: str, meta: dict) -> None:
+        """Insert or update a single file's metadata in MogDB."""
+        try:
+            db = _get_db()
+            col = db.collection("files")
+            doc = {
+                "file_id": file_id,
+                "filename": meta.get("filename", ""),
+                "original_name": meta.get("original_name", ""),
+                "extension": meta.get("extension", ""),
+                "size_bytes": meta.get("size_bytes", 0),
+                "chars": meta.get("chars", 0),
+                "pages": meta.get("pages", 1),
+                "uploaded_at": meta.get("uploaded_at", 0.0),
+                "tags": meta.get("tags", []),
+            }
+            existing = col.find_one({"file_id": file_id})
+            if existing:
+                col.update_one({"file_id": file_id}, {"$set": doc})
+            else:
+                col.insert_one(doc)
+        except Exception as e:
+            logger.warning("Failed to upsert file metadata: %s", e)
+
+    def _delete_file_metadata(self, file_id: str) -> None:
+        """Delete a single file's metadata from MogDB."""
+        try:
+            db = _get_db()
+            col = db.collection("files")
+            col.delete_one({"file_id": file_id})
+        except Exception as e:
+            logger.warning("Failed to delete file metadata: %s", e)
+
     async def _async_load_metadata(self) -> dict[str, dict]:
         return await asyncio.to_thread(self._load_metadata)
 
@@ -259,8 +292,7 @@ class FilesRouter:
         except (json.JSONDecodeError, TypeError):
             tag_list = []
 
-        meta = await self._async_load_metadata()
-        meta[fid] = {
+        file_meta = {
             "filename": f"{fid}{ext}",
             "original_name": file.filename,
             "extension": ext,
@@ -270,7 +302,7 @@ class FilesRouter:
             "uploaded_at": time.time(),
             "tags": tag_list,
         }
-        await self._async_save_metadata(meta)
+        await asyncio.to_thread(self._upsert_file_metadata, fid, file_meta)
 
         safe_audit_log(
             "file.upload", resource=fid, detail=f"filename={file.filename}, size={len(contents)}"
