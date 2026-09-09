@@ -19,12 +19,11 @@ try:
 except ImportError:
     FLASK_AVAILABLE = False
 
-from domains.multimodal.phoneme_encoder import PhonemeEncoder
-from domains.multimodal.german_phoneme_encoder import GermanPhonemeEncoder
-from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder, detect_language
 
 
-app = Flask(__name__)
+if FLASK_AVAILABLE:
+    app = Flask(__name__)
 encoder = UnifiedPhonemeEncoder()
 
 
@@ -239,6 +238,44 @@ HTML_TEMPLATE = """
     </div>
 
     <div id="detect-error" class="error" style="display: none;"></div>
+
+    <h2>Word Comparison</h2>
+
+    <div class="input-group">
+        <label for="compare-word1">Word 1:</label>
+        <input type="text" id="compare-word1" placeholder="Enter first word..." value="hello">
+    </div>
+
+    <div class="input-group">
+        <label for="compare-word2">Word 2:</label>
+        <input type="text" id="compare-word2" placeholder="Enter second word..." value="world">
+    </div>
+
+    <div class="input-group">
+        <label for="compare-language">Language:</label>
+        <select id="compare-language">
+            <option value="en">English</option>
+            <option value="de">German</option>
+            <option value="fr">French</option>
+            <option value="es">Spanish</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+        </select>
+    </div>
+
+    <button onclick="compareWords()">Compare</button>
+
+    <div id="compare-result" class="result" style="display: none;">
+        <h3>Comparison Result:</h3>
+        <p><strong>Word 1:</strong> <span id="compare-word1-display"></span></p>
+        <p><strong>Word 1 Phonemes:</strong> <span id="compare-word1-phonemes" class="phoneme-list"></span></p>
+        <p><strong>Word 2:</strong> <span id="compare-word2-display"></span></p>
+        <p><strong>Word 2 Phonemes:</strong> <span id="compare-word2-phonemes" class="phoneme-list"></span></p>
+        <p><strong>Similarity:</strong> <span id="compare-similarity"></span></p>
+        <p><strong>Common Phonemes:</strong> <span id="compare-common"></span></p>
+    </div>
+
+    <div id="compare-error" class="error" style="display: none;"></div>
 
     <h2>Pronunciation Training</h2>
 
@@ -800,6 +837,74 @@ HTML_TEMPLATE = """
         document.getElementById('training-word').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 getTrainingFeedback();
+            }
+        });
+
+        // Word Comparison
+        async function compareWords() {
+            const word1 = document.getElementById('compare-word1').value;
+            const word2 = document.getElementById('compare-word2').value;
+            const language = document.getElementById('compare-language').value;
+
+            if (!word1 || !word2) {
+                document.getElementById('compare-error').textContent = 'Please enter both words';
+                document.getElementById('compare-error').style.display = 'block';
+                document.getElementById('compare-result').style.display = 'none';
+                return;
+            }
+
+            try {
+                const [res1, res2] = await Promise.all([
+                    fetch('/api/encode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: word1, language }),
+                    }),
+                    fetch('/api/encode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: word2, language }),
+                    }),
+                ]);
+
+                const data1 = await res1.json();
+                const data2 = await res2.json();
+
+                if (data1.error || data2.error) {
+                    document.getElementById('compare-error').textContent = data1.error || data2.error;
+                    document.getElementById('compare-error').style.display = 'block';
+                    document.getElementById('compare-result').style.display = 'none';
+                    return;
+                }
+
+                document.getElementById('compare-word1-display').textContent = word1;
+                document.getElementById('compare-word1-phonemes').textContent = data1.phonemes.join(' ');
+                document.getElementById('compare-word2-display').textContent = word2;
+                document.getElementById('compare-word2-phonemes').textContent = data2.phonemes.join(' ');
+
+                // Calculate similarity
+                const phonemes1 = data1.phonemes;
+                const phonemes2 = data2.phonemes;
+                const common = phonemes1.filter(p => phonemes2.includes(p));
+                const allPhonemes = [...new Set([...phonemes1, ...phonemes2])];
+                const similarity = allPhonemes.length > 0 ? (common.length / allPhonemes.length * 100).toFixed(1) : 0;
+
+                document.getElementById('compare-similarity').textContent = `${similarity}%`;
+                document.getElementById('compare-common').textContent = common.length > 0 ? common.join(' ') : 'None';
+
+                document.getElementById('compare-result').style.display = 'block';
+                document.getElementById('compare-error').style.display = 'none';
+            } catch (error) {
+                document.getElementById('compare-error').textContent = error.message;
+                document.getElementById('compare-error').style.display = 'block';
+                document.getElementById('compare-result').style.display = 'none';
+            }
+        }
+
+        // Compare on Enter key
+        document.getElementById('compare-word2').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                compareWords();
             }
         });
 

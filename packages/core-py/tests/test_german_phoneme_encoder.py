@@ -103,3 +103,40 @@ class TestGermanPhonemeEncoderRoundtrip:
             decoded = enc.decode(ids)
             assert isinstance(decoded, str)
             assert len(decoded) > 0
+
+
+class TestGermanPhonemeEncoderScore:
+    def test_score_perfect(self):
+        enc = GermanPhonemeEncoder()
+        result = enc.score_pronunciation("hallo", "hallo")
+        assert result["score"] == 1.0
+        assert result["precision"] == 1.0
+        assert result["recall"] == 1.0
+
+    def test_score_imperfect(self):
+        enc = GermanPhonemeEncoder()
+        result = enc.score_pronunciation("hallo", "helo")
+        assert 0.0 <= result["score"] <= 1.0
+        assert result["score"] < 1.0
+
+    def test_score_empty_spoken(self):
+        enc = GermanPhonemeEncoder()
+        result = enc.score_pronunciation("hallo", "")
+        assert result["score"] == 0.0
+
+    def test_score_returns_dict(self):
+        enc = GermanPhonemeEncoder()
+        result = enc.score_pronunciation("test", "test")
+        assert isinstance(result, dict)
+        assert "score" in result
+        assert "precision" in result
+        assert "recall" in result
+        assert "target_phonemes" in result
+        assert "spoken_phonemes" in result
+
+    def test_score_common_words(self):
+        enc = GermanPhonemeEncoder()
+        words = ["ich", "du", "gut", "welt"]
+        for word in words:
+            result = enc.score_pronunciation(word, word)
+            assert result["score"] == 1.0

@@ -102,3 +102,40 @@ class TestFrenchPhonemeEncoderRoundtrip:
             decoded = enc.decode(ids)
             assert isinstance(decoded, str)
             assert len(decoded) > 0
+
+
+class TestFrenchPhonemeEncoderScore:
+    def test_score_perfect(self):
+        enc = FrenchPhonemeEncoder()
+        result = enc.score_pronunciation("bonjour", "bonjour")
+        assert result["score"] == 1.0
+        assert result["precision"] == 1.0
+        assert result["recall"] == 1.0
+
+    def test_score_imperfect(self):
+        enc = FrenchPhonemeEncoder()
+        result = enc.score_pronunciation("bonjour", "bonjur")
+        assert 0.0 <= result["score"] <= 1.0
+        assert result["score"] < 1.0
+
+    def test_score_empty_spoken(self):
+        enc = FrenchPhonemeEncoder()
+        result = enc.score_pronunciation("bonjour", "")
+        assert result["score"] == 0.0
+
+    def test_score_returns_dict(self):
+        enc = FrenchPhonemeEncoder()
+        result = enc.score_pronunciation("test", "test")
+        assert isinstance(result, dict)
+        assert "score" in result
+        assert "precision" in result
+        assert "recall" in result
+        assert "target_phonemes" in result
+        assert "spoken_phonemes" in result
+
+    def test_score_common_words(self):
+        enc = FrenchPhonemeEncoder()
+        words = ["je", "tu", "bon", "merci"]
+        for word in words:
+            result = enc.score_pronunciation(word, word)
+            assert result["score"] == 1.0

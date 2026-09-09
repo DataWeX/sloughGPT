@@ -384,10 +384,10 @@ class TestLoggingRoundTrip:
         from datetime import datetime, timezone
         today = datetime.now(timezone.utc).strftime("%Y%m%d")
         log_file = domain.log_dir / f"responses_{today}.jsonl"
-        log_file.write_text('{"valid": true}\nnot json\n')
+        log_file.write_text('{"timestamp":"t","user_message":"u","assistant_response":"a","model":"m","temperature":0.5,"max_tokens":100,"session_id":"s","user_id":"u","tokens_generated":10,"duration_ms":1.0}\nnot json\n')
         responses = domain.get_recent_responses()
         assert len(responses) == 1
-        assert responses[0]["valid"] is True
+        assert responses[0]["model"] == "m"
 
     def test_empty_log_file(self, tmp_path):
         domain = ChatDomain(log_dir=str(tmp_path / "logs"))
