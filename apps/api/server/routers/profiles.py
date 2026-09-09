@@ -20,7 +20,7 @@ from domains.infrastructure.serving_profiles import (
 )
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from schemas.common import success_response
+from schemas.common import endpoint, success_response
 
 logger = logging.getLogger("slo.routers.profiles")
 
@@ -42,10 +42,12 @@ class ProfilesRouter:
         self.router.add_api_route("", self.list_profiles, methods=["GET"])
         self.router.add_api_route("/{profile_id}", self.get_profile, methods=["GET"])
 
+    @endpoint("profiles.list")
     async def list_profiles(self) -> dict:
         """List all available serving profiles."""
         return success_response(data=list_profiles())
 
+    @endpoint("profiles.get")
     async def get_profile(self, profile_id: str) -> dict:
         """Get a single profile by ID."""
         p = get_profile(profile_id)
@@ -53,14 +55,13 @@ class ProfilesRouter:
             raise HTTPException(status_code=404, detail=f"Profile {profile_id!r} not found")
         return success_response(data=p.to_dict())
 
+    @endpoint("profiles.apply")
     async def apply_profile(self, req: ApplyProfileRequest) -> dict:
         """Apply a serving profile to the running process."""
-        try:
-            result = apply_profile(req.profile_id)
-            return success_response(data=result)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        result = apply_profile(req.profile_id)
+        return success_response(data=result)
 
+    @endpoint("profiles.active")
     async def get_active_profile(self) -> dict:
         """Get the currently active profile ID."""
         profile_id = get_active_profile_id()
@@ -70,6 +71,7 @@ class ProfilesRouter:
             "profile": p.to_dict() if p else None,
         })
 
+    @endpoint("profiles.recommend")
     async def recommend_profile(self) -> dict:
         """Auto-detect and recommend the best profile for this hardware."""
         import multiprocessing

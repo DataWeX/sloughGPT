@@ -9,7 +9,7 @@ registry operations reflect the real state of loaded models.
 import time as _time
 
 from fastapi import APIRouter
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 
 class RegistryRouter:
@@ -32,64 +32,56 @@ class RegistryRouter:
 
         return get_model_registry()
 
+    @endpoint("registry.list")
     async def list_models(self) -> dict:
         """List registered models from the live registry."""
-        try:
-            _t0 = _time.monotonic()
-            reg = self._get_registry()
-            models = reg.list_models()
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "registry.list",
-                resource="models",
-                detail=f"elapsed={_elapsed_ms:.0f}ms count={len(models)}",
-            )
-            return success_response(data={"models": models, "count": len(models)})
-        except Exception as e:
-            classify_and_raise(e, source="registry.list")
+        _t0 = _time.monotonic()
+        reg = self._get_registry()
+        models = reg.list_models()
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "registry.list",
+            resource="models",
+            detail=f"elapsed={_elapsed_ms:.0f}ms count={len(models)}",
+        )
+        return success_response(data={"models": models, "count": len(models)})
 
+    @endpoint("registry.get")
     async def get_model(self, model_id: str) -> dict:
         """Get model details from the live registry."""
-        try:
-            _t0 = _time.monotonic()
-            reg = self._get_registry()
-            models = reg.list_models()
-            found = next((m for m in models if m.get("model_id") == model_id), None)
-            if not found:
-                raise_error("Model not found", "E_NOT_FOUND", status_code=404)
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log("registry.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms")
-            return success_response(data=found)
-        except Exception as e:
-            classify_and_raise(e, source="registry.get")
+        _t0 = _time.monotonic()
+        reg = self._get_registry()
+        models = reg.list_models()
+        found = next((m for m in models if m.get("model_id") == model_id), None)
+        if not found:
+            raise_error("Model not found", "E_NOT_FOUND", status_code=404)
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log("registry.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms")
+        return success_response(data=found)
 
+    @endpoint("registry.best")
     async def get_best_model(self) -> dict:
         """Get best performing model by metrics."""
-        try:
-            _t0 = _time.monotonic()
-            reg = self._get_registry()
-            health = reg.health_summary()
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "registry.best", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
-            )
-            return success_response(data=health)
-        except Exception as e:
-            classify_and_raise(e, source="registry.best")
+        _t0 = _time.monotonic()
+        reg = self._get_registry()
+        health = reg.health_summary()
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "registry.best", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
+        )
+        return success_response(data=health)
 
+    @endpoint("registry.stats")
     async def get_registry_stats(self) -> dict:
         """Retrieve aggregate statistics for the model registry."""
-        try:
-            _t0 = _time.monotonic()
-            reg = self._get_registry()
-            health = reg.health_summary()
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
-            )
-            return success_response(data=health)
-        except Exception as e:
-            classify_and_raise(e, source="registry.stats")
+        _t0 = _time.monotonic()
+        reg = self._get_registry()
+        health = reg.health_summary()
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "registry.stats", resource="health", detail=f"elapsed={_elapsed_ms:.0f}ms"
+        )
+        return success_response(data=health)
 
 
 router = RegistryRouter().router

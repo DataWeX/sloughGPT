@@ -7,7 +7,7 @@ import logging
 from controllers.config import get_config_controller
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 from schemas.config import ConfigUpdate
 
 logger = logging.getLogger("slo.routers.config")
@@ -35,32 +35,28 @@ class ConfigRouter:
             operation_id="update_generation_config_patch",
         )
 
+    @endpoint("config.get_generation")
     async def get_generation_config(self) -> dict:
         """Return the current generation configuration (temperature, top_p, etc)."""
-        try:
-            ctrl = get_config_controller()
-            result = ctrl.get_generation_config()
-            return success_response(data=result)
-        except Exception as e:
-            classify_and_raise(e, source="config.get_generation")
+        ctrl = get_config_controller()
+        result = ctrl.get_generation_config()
+        return success_response(data=result)
 
+    @endpoint("config.update_generation")
     async def update_generation_config(
         self, req: ConfigUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update the generation configuration with partial field changes."""
-        try:
-            ctrl = get_config_controller()
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            result = ctrl.update_generation_config(**updates)
-            safe_audit_log(
-                "config.generation.save",
-                resource="generation",
-                detail=str(updates),
-                **{k: str(v) for k, v in updates.items()},
-            )
-            return success_response(data=result)
-        except Exception as e:
-            classify_and_raise(e, source="config.update_generation")
+        ctrl = get_config_controller()
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        result = ctrl.update_generation_config(**updates)
+        safe_audit_log(
+            "config.generation.save",
+            resource="generation",
+            detail=str(updates),
+            **{k: str(v) for k, v in updates.items()},
+        )
+        return success_response(data=result)
 
 
 router = ConfigRouter().router
