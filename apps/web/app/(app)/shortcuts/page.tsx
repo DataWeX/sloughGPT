@@ -20,6 +20,7 @@ const shortcuts: Shortcut[] = [
   // Global
   { keys: ['Ctrl', 'K'], label: 'Command palette', category: 'Global', icon: Command },
   { keys: ['Ctrl', '?'], label: 'Show keyboard shortcuts', category: 'Global', icon: Keyboard },
+  { keys: ['Ctrl', 'Shift', 'M'], label: 'Toggle dark mode', category: 'Global', icon: Settings },
   { keys: ['Ctrl', '\\'], label: 'Toggle sidebar', category: 'Global', icon: Settings },
   { keys: ['Escape'], label: 'Cancel / dismiss / close', category: 'Global', icon: Settings },
 

@@ -85,8 +85,8 @@ export function useGlobalShortcuts() {
         window.dispatchEvent(new CustomEvent('toggle-shortcuts'))
       }
 
-      // Toggle dark mode: Ctrl+Shift+D
-      if (ctrl && e.shiftKey && e.key === 'D') {
+      // Toggle dark mode: Ctrl+Shift+M
+      if (ctrl && e.shiftKey && e.key === 'M') {
         e.preventDefault()
         closeIfOpen()
         window.dispatchEvent(new CustomEvent('toggle-dark-mode'))

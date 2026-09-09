@@ -506,7 +506,7 @@ export default function SettingsPage() {
                 ['Ctrl+K', 'Command palette'],
                 ['Ctrl+Shift+F', 'Search conversations'],
                 ['Ctrl+Shift+A', 'Open settings'],
-                ['Ctrl+Shift+D', 'Toggle dark mode'],
+                ['Ctrl+Shift+M', 'Toggle dark mode'],
                 ['?', 'Show keyboard shortcuts'],
                 ['Esc', 'Close dialog / Cancel'],
               ].map(([key, desc]) => (

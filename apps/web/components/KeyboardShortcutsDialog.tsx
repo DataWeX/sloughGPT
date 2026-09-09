@@ -52,6 +52,7 @@ const SHORTCUTS: Shortcut[] = [
   // General shortcuts
   { keys: ['?'], description: 'Show keyboard shortcuts', category: 'General' },
   { keys: ['Ctrl', 'K'], description: 'Command palette', category: 'General' },
+  { keys: ['Ctrl', 'Shift', 'M'], description: 'Toggle dark mode', category: 'General' },
 
   // Navigation shortcuts (from shared config)
   ...buildNavShortcuts(),
