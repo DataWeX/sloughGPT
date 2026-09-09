@@ -529,10 +529,13 @@ class NoteStore:
 _store: NoteStore | None = None
 
 
-def get_note_store(backend: str = "file") -> NoteStore:
+def get_note_store(backend: str = "file", notes_dir=None) -> NoteStore:
+    """Return the singleton NoteStore, recreating if backend or dir changes."""
     global _store
-    if _store is None or _store._backend != backend:
-        _store = NoteStore(backend=backend)
+    if _store is None or _store._backend != backend or (
+        notes_dir is not None and _store._dir != notes_dir
+    ):
+        _store = NoteStore(notes_dir=notes_dir, backend=backend)
     return _store
 
 

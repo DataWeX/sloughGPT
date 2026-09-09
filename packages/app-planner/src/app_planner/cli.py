@@ -9,6 +9,7 @@ a separate ``sync`` step.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -24,9 +25,12 @@ from app_planner.sync import sync_notes_to_board
 
 def _auto_sync(backend: str = "file", notes_dir: Path | None = None,
                board_dir: Path | None = None) -> tuple[int, int, int] | None:
-    """Sync notes to board unless ``APP_PLANNER_NO_SYNC`` is set."""
-    if sys.stdout.isatty() and sys.stdin.isatty():
-        return None
+    """Best-effort sync of notes to board after a mutation.
+
+    Silently skips on any error (e.g. missing board, mogdb unavailable)
+    so that note operations succeed even when the board side is broken.
+    Disable via ``--no-sync`` or ``APP_PLANNER_NO_SYNC``.
+    """
     try:
         ns = NoteStore(
             notes_dir=notes_dir or config.default_notes_dir(),
@@ -43,7 +47,10 @@ def _auto_sync(backend: str = "file", notes_dir: Path | None = None,
 # ---------------------------------------------------------------------------
 
 def _note_new(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
     note = store.create(
         args.title,
@@ -59,12 +66,16 @@ def _note_new(args: argparse.Namespace) -> int:
     assign_tag = f" @{args.assignee}" if args.assignee else ""
     print(f"Created: {note.short_id}  {note.title}{sprint_tag}{assign_tag}")
     if not args.no_sync:
-        _auto_sync(args.backend, getattr(args, "notes_dir", None), getattr(args, "board_dir", None))
+        _auto_sync(
+            args.backend or config.default_backend(notes_dir=getattr(args, "notes_dir", None)),
+            getattr(args, "notes_dir", None),
+            getattr(args, "board_dir", None),
+        )
     return 0
 
 
 def _note_list(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(backend=args.backend or config.default_backend(notes_dir=args.notes_dir), notes_dir=args.notes_dir)
     notes = store.list_notes(
         tag=args.tag,
         status=args.status,
@@ -91,7 +102,10 @@ def _note_list(args: argparse.Namespace) -> int:
 
 
 def _note_show(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     note = store.get(args.note_id)
     if note is None:
         print(f"Note not found: {args.note_id}")
@@ -119,7 +133,10 @@ def _note_show(args: argparse.Namespace) -> int:
 
 
 def _note_edit(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     kwargs: dict = {}
     if args.title is not None:
         kwargs["title"] = args.title
@@ -146,23 +163,37 @@ def _note_edit(args: argparse.Namespace) -> int:
         return 1
     print(f"Updated: {updated.short_id}  {updated.title}")
     if not args.no_sync:
-        _auto_sync(args.backend, getattr(args, "notes_dir", None), getattr(args, "board_dir", None))
+        _auto_sync(
+            args.backend or config.default_backend(notes_dir=args.notes_dir),
+            args.notes_dir,
+            args.board_dir,
+        )
     return 0
 
 
 def _note_delete(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     if store.delete(args.note_id):
         print(f"Deleted: {args.note_id}")
         if not args.no_sync:
-            _auto_sync(args.backend, getattr(args, "notes_dir", None), getattr(args, "board_dir", None))
+            _auto_sync(
+                args.backend or config.default_backend(notes_dir=args.notes_dir),
+                args.notes_dir,
+                args.board_dir,
+            )
         return 0
     print(f"Note not found: {args.note_id}")
     return 1
 
 
 def _note_search(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     results = store.search(args.query, limit=args.limit)
     if not results:
         print(f"No notes matching '{args.query}'")
@@ -175,7 +206,10 @@ def _note_search(args: argparse.Namespace) -> int:
 
 
 def _note_today(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     notes = store.today()
     if not notes:
         print("No notes today.")
@@ -189,7 +223,10 @@ def _note_today(args: argparse.Namespace) -> int:
 
 
 def _note_export(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     content = store.export_all(output_path=args.output)
     if args.output:
         print(f"Exported {store.count()} notes to {args.output}")
@@ -199,7 +236,10 @@ def _note_export(args: argparse.Namespace) -> int:
 
 
 def _note_tags(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     tag_counts: dict[str, int] = {}
     for n in store.list_notes(limit=9999):
         for tag in n.tags:
@@ -213,7 +253,10 @@ def _note_tags(args: argparse.Namespace) -> int:
 
 
 def _note_status(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     status_counts: dict[str, int] = {}
     for n in store.list_notes(limit=9999):
         status_counts[n.status] = status_counts.get(n.status, 0) + 1
@@ -229,7 +272,10 @@ def _note_status(args: argparse.Namespace) -> int:
 
 
 def _note_timeline(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     groups = store.timeline(days=args.days, tag=args.tag, status=args.status)
     if not groups:
         print("No notes in the specified range.")
@@ -248,7 +294,10 @@ def _note_timeline(args: argparse.Namespace) -> int:
 
 
 def _note_sprint(args: argparse.Namespace) -> int:
-    store = get_note_store(backend=args.backend or config.default_backend())
+    store = get_note_store(
+        backend=args.backend or config.default_backend(notes_dir=args.notes_dir),
+        notes_dir=args.notes_dir,
+    )
     notes = store.list_notes(sprint=args.sprint_name, limit=9999)
     if not notes:
         print(f"No notes for sprint '{args.sprint_name}'.")
@@ -426,7 +475,7 @@ def cli_main(argv: list[str] | None = None) -> int:
                         help="Storage backend (default: config/env)")
     parser.add_argument("--notes-dir", default=None, help="Notes directory")
     parser.add_argument("--board-dir", default=None, help="Board directory")
-    parser.add_argument("--no-sync", action="store_true",
+    parser.add_argument("--no-sync", action="store_true", default=False,
                         help="Disable auto-sync after note mutations")
 
     sub = parser.add_subparsers(dest="cmd")
@@ -597,6 +646,9 @@ def cli_main(argv: list[str] | None = None) -> int:
     if args.cmd is None:
         parser.print_help()
         return 0
+
+    if os.environ.get("APP_PLANNER_NO_SYNC"):
+        args.no_sync = True
 
     # --- Notes ---
     if args.cmd == "new":
