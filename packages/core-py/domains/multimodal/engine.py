@@ -720,6 +720,76 @@ class MultimodalEngine:
         _slonet_mod._ACCELERATOR = _saved_accel
         return MultimodalOutput(text=text, confidence=conf)
 
+    def generate_vqa(self, image_np: np.ndarray, question: str,
+                     max_len: int = 32, temperature: float = 0.8) -> MultimodalOutput:
+        """Generate an answer for a question about an image.
+
+        Encodes the question as a prefix, then autoregressively generates
+        the answer conditioned on both the image and the question tokens.
+
+        Args:
+            image_np: (1, 224, 224, 3) normalized image array
+            question: text question about the image
+            max_len: max answer length in tokens
+            temperature: sampling temperature
+        Returns:
+            MultimodalOutput with the answer text
+        """
+        self.eval()
+        _saved_rng = np.random.get_state()
+        np.random.seed(42)
+        import domains.training.slonet as _slonet_mod
+        _saved_accel = _slonet_mod._ACCELERATOR
+        _slonet_mod._ACCELERATOR = "none"
+
+        try:
+            embed, patches, _ = self._concat_modalities(image_np)
+            bos, eos = 0, 1
+            vocab_size = self.text.vocab_size
+
+            # Encode question as prefix tokens
+            q_tokens = self.text.encode(question.lower().strip())
+            tokens = [bos] + q_tokens
+
+            # Generate answer autoregressively after the question prefix
+            kv_cache = None
+            for _ in range(max_len):
+                if kv_cache is None:
+                    inp = _tensor(np.array([tokens]), requires_grad=False)
+                    start_pos = 0
+                else:
+                    inp = _tensor(np.array([[tokens[-1]]]), requires_grad=False)
+                    start_pos = kv_cache[0][0].shape[1]
+
+                logits, _, kv_cache = self.decoder.forward(
+                    embed, inp, patches, kv_cache=kv_cache, start_pos=start_pos
+                )
+                logits_2d = logits.data.reshape(-1, logits.data.shape[-1])
+                last_pos = logits_2d[-1]
+
+                if temperature > 0:
+                    probs = _softmax(_tensor(last_pos[np.newaxis, :] / temperature, requires_grad=False))
+                    probs_np = probs.data.flatten()
+                    probs_np = np.maximum(probs_np, 1e-8)
+                    probs_np /= probs_np.sum()
+                    next_tok = int(np.random.choice(len(probs_np), p=probs_np))
+                else:
+                    next_tok = int(np.argmax(last_pos))
+
+                if next_tok == eos:
+                    break
+                tokens.append(next_tok)
+
+            # Decode only the answer portion (skip question tokens)
+            answer_tokens = tokens[len(q_tokens) + 1:]
+            answer = self.text.decode(answer_tokens).strip()
+
+            conf = float(np.mean(np.abs(embed.data)))
+            return MultimodalOutput(text=answer, confidence=conf)
+        finally:
+            np.random.set_state(_saved_rng)
+            _slonet_mod._ACCELERATOR = _saved_accel
+
 
 class VisionEncoder:
     """ViT-style image encoder with patch positional embeddings.

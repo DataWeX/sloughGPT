@@ -147,7 +147,7 @@ class MultimodalManager:
             speech_to_text=server_asr_ready,
             image_caption=self._multimodal_engine is not None,
             object_detection=self._multimodal_engine is not None,
-            vqa=False,
+            vqa=self._multimodal_engine is not None,
             speech_model="whisper" if server_asr_ready else "browser",
             vision_model="slonet",
         )
@@ -488,9 +488,111 @@ class MultimodalManager:
         return self.caption_image(img)
 
     def detect_objects(self, image) -> list[VisualObject]:
-        """Detect objects in image (limited — uses caption)."""
-        cap = self.caption_image(image)
-        return [VisualObject(label=cap.text, bbox=[0, 0, 0, 0], confidence=cap.confidence)]
+        """Detect objects in image using grid-based region analysis.
+
+        Divides the image into a 3x3 grid, analyzes each region's features,
+        and returns objects with plausible bounding boxes.
+        """
+        if self._multimodal_engine is None:
+            self._multimodal_engine = get_multimodal_engine(embed_dim=256, hidden_dim=512)
+
+        try:
+            from PIL import Image
+            import numpy as np
+
+            img_np = self._pil_to_np(image)
+            engine = self._multimodal_engine
+
+            # Get full image features
+            full_embed = engine.vision.forward(img_np)
+            full_features = full_embed.data.flatten()
+
+            # Analyze 3x3 grid regions
+            h, w = img_np.shape[1], img_np.shape[2]
+            grid_h, grid_w = h // 3, w // 3
+            objects = []
+
+            for gy in range(3):
+                for gx in range(3):
+                    y1, y2 = gy * grid_h, (gy + 1) * grid_h
+                    x1, x2 = gx * grid_w, (gx + 1) * grid_w
+
+                    # Extract region
+                    region = img_np[:, y1:y2, x1:x2].copy()
+
+                    # Skip very uniform regions (low variance = likely background)
+                    region_std = np.std(region)
+                    if region_std < 5.0:
+                        continue
+
+                    # Get region features
+                    region_embed = engine.vision.forward(region)
+                    region_features = region_embed.data.flatten()
+
+                    # Compute region importance (how much it differs from average)
+                    importance = float(np.mean(np.abs(region_features)))
+
+                    # Convert to normalized bbox [x1, y1, x2, y2]
+                    bbox = [
+                        round(x1 / w, 3),
+                        round(y1 / h, 3),
+                        round(x2 / w, 3),
+                        round(y2 / h, 3),
+                    ]
+
+                    # Generate label based on region characteristics
+                    brightness = float(np.mean(region))
+                    if region_std > 30:
+                        label = "textured region"
+                    elif brightness > 180:
+                        label = "bright area"
+                    elif brightness < 75:
+                        label = "dark area"
+                    else:
+                        label = "mid-tone area"
+
+                    objects.append(VisualObject(
+                        label=label,
+                        bbox=bbox,
+                        confidence=min(0.9, importance * 2),
+                    ))
+
+            # If no regions detected, fall back to full caption
+            if not objects:
+                cap = self.caption_image(image, generate_only=True)
+                objects = [VisualObject(label=cap.text, bbox=[0.0, 0.0, 1.0, 1.0], confidence=cap.confidence)]
+
+            return objects
+
+        except Exception as e:
+            logger.debug("Object detection failed, falling back to caption: %s", e)
+            cap = self.caption_image(image, generate_only=True)
+            return [VisualObject(label=cap.text, bbox=[0.0, 0.0, 1.0, 1.0], confidence=cap.confidence)]
+
+    def ask_question(self, image, question: str) -> str:
+        """Answer a question about an image (VQA).
+
+        Args:
+            image: PIL Image
+            question: text question about the image
+        Returns:
+            Answer string
+        """
+        if self._multimodal_engine is None:
+            self._multimodal_engine = get_multimodal_engine(embed_dim=256, hidden_dim=512)
+
+        try:
+            img_np = self._pil_to_np(image)
+            result = self._multimodal_engine.generate_vqa(
+                img_np, question, max_len=32, temperature=0.8,
+            )
+            answer = result.text.strip()
+            if not answer:
+                return "I'm not sure."
+            return answer
+        except Exception as e:
+            logger.error("VQA error: %s", e, extra={"tag": "MODEL"})
+            return "I couldn't answer that."
 
     def get_browser_speech_config(self) -> dict:
         """Get config for browser Web Speech API."""

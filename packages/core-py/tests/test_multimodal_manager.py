@@ -272,6 +272,77 @@ class TestDetectObjects:
             assert objs[0].confidence >= 0.0
 
 
+# ── ask_question (VQA) ───────────────────────────────────────────────────────
+
+
+class TestAskQuestion:
+
+    def test_ask_question_returns_answer(self):
+        m = MultimodalManager()
+        m._multimodal_engine = MagicMock()
+        m._multimodal_engine.generate_vqa.return_value = MagicMock(text="red circle")
+        m._multimodal_engine.vision.forward.return_value = MagicMock(data=np.array([0.5]))
+
+        from PIL import Image
+        img = Image.new("RGB", (64, 64))
+
+        with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
+            answer = m.ask_question(img, "What shape is this?")
+            assert isinstance(answer, str)
+            assert len(answer) > 0
+            m._multimodal_engine.generate_vqa.assert_called_once()
+
+    def test_ask_question_no_engine(self):
+        m = MultimodalManager()
+
+        from PIL import Image
+        img = Image.new("RGB", (64, 64))
+
+        with patch("domains.multimodal.manager.get_multimodal_engine") as mock_get:
+            mock_engine = MagicMock()
+            mock_engine.generate_vqa.return_value = MagicMock(text="blue")
+            mock_get.return_value = mock_engine
+            with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
+                answer = m.ask_question(img, "What color?")
+                assert answer == "blue"
+
+    def test_ask_question_empty_answer(self):
+        m = MultimodalManager()
+        m._multimodal_engine = MagicMock()
+        m._multimodal_engine.generate_vqa.return_value = MagicMock(text="")
+        m._multimodal_engine.vision.forward.return_value = MagicMock(data=np.array([0.5]))
+
+        from PIL import Image
+        img = Image.new("RGB", (64, 64))
+
+        with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
+            answer = m.ask_question(img, "What?")
+            assert answer == "I'm not sure."
+
+    def test_ask_question_error(self):
+        m = MultimodalManager()
+        m._multimodal_engine = MagicMock()
+        m._multimodal_engine.generate_vqa.side_effect = RuntimeError("fail")
+
+        from PIL import Image
+        img = Image.new("RGB", (64, 64))
+
+        with patch.object(m, "_pil_to_np", return_value=np.zeros((1, 64, 64, 3), dtype=np.float32)):
+            answer = m.ask_question(img, "What?")
+            assert answer == "I couldn't answer that."
+
+    def test_capabilities_vqa(self):
+        m = MultimodalManager()
+        m._multimodal_engine = MagicMock()
+        caps = m.capabilities
+        assert caps.vqa is True
+
+    def test_capabilities_vqa_no_engine(self):
+        m = MultimodalManager()
+        caps = m.capabilities
+        assert caps.vqa is False
+
+
 # ── get_browser_speech_config ──────────────────────────────────────────────
 
 

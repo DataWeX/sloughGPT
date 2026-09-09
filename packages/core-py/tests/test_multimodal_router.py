@@ -37,6 +37,7 @@ def _mock_manager() -> MagicMock:
     caps = MagicMock()
     caps.speech_to_text = False
     caps.image_caption = True
+    caps.vqa = True
     caps.speech_model = None
     caps.vision_model = "slonet"
     mgr.capabilities = caps
@@ -137,3 +138,54 @@ class TestVideoTrainingState:
         assert video["status"] == "idle"
         assert video["current_epoch"] == 0
         assert video["current_step"] == 0
+
+
+class TestVQA:
+    @patch("routers.multimodal.get_multimodal_manager")
+    def test_ask_question(self, mock_get):
+        mgr = _mock_manager()
+        mgr.ask_question.return_value = "a red circle"
+        mock_get.return_value = mgr
+        mr = MultimodalRouter()
+        client = TestClient(_app(mr))
+
+        # Create a tiny test image
+        import io
+        from PIL import Image
+        img = Image.new("RGB", (8, 8), (255, 0, 0))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        resp = client.post(
+            "/multimodal/ask",
+            files={"file": ("test.png", buf, "image/png")},
+            data={"question": "What shape is this?"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["answer"] == "a red circle"
+        assert data["question"] == "What shape is this?"
+        assert "elapsed_ms" in data
+
+    @patch("routers.multimodal.get_multimodal_manager")
+    def test_ask_question_non_image_rejected(self, mock_get):
+        mock_get.return_value = _mock_manager()
+        mr = MultimodalRouter()
+        client = TestClient(_app(mr))
+
+        resp = client.post(
+            "/multimodal/ask",
+            files={"file": ("test.txt", b"hello", "text/plain")},
+            data={"question": "What is this?"},
+        )
+        assert resp.status_code == 400
+
+    @patch("routers.multimodal.get_multimodal_manager")
+    def test_status_includes_vqa(self, mock_get):
+        mock_get.return_value = _mock_manager()
+        mr = MultimodalRouter()
+        client = TestClient(_app(mr))
+        resp = client.get("/multimodal/status")
+        engine = resp.json()["data"]["engine"]
+        assert engine["vqa"] is True

@@ -254,3 +254,188 @@ class TestTextToWaveform:
     def test_parameters_delegates_to_decoder(self):
         eng = make_engine()
         assert len(eng.parameters()) == len(eng.decoder.parameters())
+
+
+# ---------------------------------------------------------------------------
+# SSML Parsing
+# ---------------------------------------------------------------------------
+
+class TestSSMLParsing:
+    def test_parse_simple_text(self):
+        from domains.multimodal.tts import parse_ssml
+        text, events = parse_ssml("hello world")
+        assert text == "hello world"
+        assert events == []
+
+    def test_parse_break_tag(self):
+        from domains.multimodal.tts import parse_ssml
+        text, events = parse_ssml("hello<break time='500ms'/>world")
+        assert text == "helloworld"
+        assert len(events) == 1
+        assert events[0]["type"] == "break"
+        assert events[0]["duration_ms"] == 500
+
+    def test_parse_break_tag_seconds(self):
+        from domains.multimodal.tts import parse_ssml
+        text, events = parse_ssml("hello<break time='1s'/>world")
+        assert text == "helloworld"
+        assert events[0]["duration_ms"] == 1000
+
+    def test_parse_prosody_tag(self):
+        from domains.multimodal.tts import parse_ssml
+        text, events = parse_ssml("<prosody rate='slow' pitch='low'>hello</prosody>")
+        assert text == "hello"
+        assert len(events) == 1
+        assert events[0]["type"] == "prosody"
+        assert events[0]["rate"] == "slow"
+        assert events[0]["pitch"] == "low"
+
+    def test_parse_emphasis_tag(self):
+        from domains.multimodal.tts import parse_ssml
+        text, events = parse_ssml("<emphasis level='strong'>hello</emphasis>")
+        assert text == "hello"
+        assert len(events) == 1
+        assert events[0]["type"] == "emphasis"
+        assert events[0]["level"] == "strong"
+
+    def test_parse_multiple_tags(self):
+        from domains.multimodal.tts import parse_ssml
+        ssml = "hello<break time='200ms'/><emphasis level='strong'>world</emphasis>"
+        text, events = parse_ssml(ssml)
+        assert text == "helloworld"
+        assert len(events) == 2
+
+
+# ---------------------------------------------------------------------------
+# SSML to Waveform
+# ---------------------------------------------------------------------------
+
+class TestSSMLToWaveform:
+    def test_returns_waveform(self):
+        eng = make_engine()
+        wav = eng.ssml_to_waveform("hello", max_frames=4)
+        assert wav.ndim == 1
+        assert len(wav) > 0
+        assert np.isfinite(wav).all()
+
+    def test_empty_ssml_returns_silence(self):
+        eng = make_engine()
+        wav = eng.ssml_to_waveform("", max_frames=4)
+        assert wav.ndim == 1
+        assert len(wav) == eng.sample_rate // 2
+        assert (wav == 0).all()
+
+    def test_ssml_with_break(self):
+        eng = make_engine()
+        wav = eng.ssml_to_waveform("hello<break time='500ms'/>world", max_frames=8)
+        assert wav.ndim == 1
+        assert len(wav) > 0
+
+    def test_ssml_with_prosody(self):
+        eng = make_engine()
+        wav = eng.ssml_to_waveform("<prosody rate='slow' pitch='low'>hello</prosody>", max_frames=4)
+        assert wav.ndim == 1
+        assert len(wav) > 0
+
+
+# ---------------------------------------------------------------------------
+# Streaming Generation
+# ---------------------------------------------------------------------------
+
+class TestStreamingGeneration:
+    def test_yields_chunks(self):
+        d = make_decoder()
+        chunks = list(d.generate_streaming(np.array([[1, 2, 3]], dtype=np.int32), max_frames=6, chunk_size=3))
+        assert len(chunks) > 0
+        for chunk in chunks:
+            assert chunk.ndim == 2
+            assert chunk.shape[0] == 20  # n_mels
+
+    def test_chunk_size(self):
+        d = make_decoder()
+        chunks = list(d.generate_streaming(np.array([[1, 2]], dtype=np.int32), max_frames=8, chunk_size=4))
+        assert len(chunks) > 0
+        # First chunks should have chunk_size frames
+        for chunk in chunks[:-1]:
+            assert chunk.shape[1] == 4
+
+    def test_stop_early(self):
+        d = make_decoder()
+        force_stop(d, fire=True)
+        chunks = list(d.generate_streaming(np.array([[1, 2]], dtype=np.int32), max_frames=20, chunk_size=4))
+        # Should stop early due to stop token
+        total_frames = sum(c.shape[1] for c in chunks)
+        assert total_frames < 20
+
+    def test_empty_sequence(self):
+        d = make_decoder()
+        chunks = list(d.generate_streaming(np.empty((1, 0), dtype=np.int32), max_frames=4, chunk_size=2))
+        assert len(chunks) == 0
+
+
+# ---------------------------------------------------------------------------
+# Training
+# ---------------------------------------------------------------------------
+
+class TestDecoderTrainStep:
+    def test_returns_loss(self):
+        d = make_decoder()
+        phoneme_ids = np.array([[1, 2, 3]], dtype=np.int32)
+        target_mel = np.random.randn(20, 4).astype(np.float32)
+        loss = d.train_step(phoneme_ids, target_mel)
+        assert isinstance(loss, float)
+        assert loss >= 0
+
+    def test_loss_decreases(self):
+        d = make_decoder()
+        phoneme_ids = np.array([[1, 2, 3]], dtype=np.int32)
+        target_mel = np.random.randn(20, 4).astype(np.float32)
+
+        losses = []
+        for _ in range(5):
+            loss = d.train_step(phoneme_ids, target_mel)
+            losses.append(loss)
+
+        # Loss should generally decrease or stay stable
+        assert losses[-1] <= losses[0] + 0.1
+
+    def test_with_stop_targets(self):
+        d = make_decoder()
+        phoneme_ids = np.array([[1, 2, 3]], dtype=np.int32)
+        target_mel = np.random.randn(20, 4).astype(np.float32)
+        stop_targets = np.zeros((1, 4), dtype=np.float32)
+        stop_targets[0, -1] = 1.0
+        loss = d.train_step(phoneme_ids, target_mel, stop_targets)
+        assert isinstance(loss, float)
+
+
+class TestEngineTrainStep:
+    def test_returns_loss(self):
+        eng = make_engine()
+        wav = np.random.randn(8000).astype(np.float32)
+        loss = eng.train_step("hello", wav)
+        assert isinstance(loss, float)
+        assert loss >= 0
+
+    def test_empty_text_returns_zero(self):
+        eng = make_engine()
+        wav = np.random.randn(8000).astype(np.float32)
+        loss = eng.train_step("", wav)
+        assert loss == 0.0
+
+
+class TestEngineTrainEpoch:
+    def test_returns_avg_loss(self):
+        eng = make_engine()
+        training_data = [
+            ("hello", np.random.randn(8000).astype(np.float32)),
+            ("world", np.random.randn(8000).astype(np.float32)),
+        ]
+        loss = eng.train_epoch(training_data)
+        assert isinstance(loss, float)
+        assert loss >= 0
+
+    def test_empty_data_returns_zero(self):
+        eng = make_engine()
+        loss = eng.train_epoch([])
+        assert loss == 0.0

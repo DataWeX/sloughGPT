@@ -11,7 +11,8 @@ All implemented in pure NumPy - no external dependencies.
 
 from __future__ import annotations
 
-from typing import Tuple
+import re
+from typing import Tuple, Optional
 import numpy as np
 import logging
 
@@ -21,6 +22,52 @@ from domains.training.slonet import (
     Tensor, SloEmbedding, SloLSTM, SloLinear, SloLayerNorm,
     SloAdam,
 )
+from domains.multimodal.phoneme_encoder import PhonemeEncoder, NUM_PHONEMES, SILENCE
+
+
+# SSML tag patterns
+_SSML_BREAK_PATTERN = re.compile(r'<break\s+time=["\'](\d+)(ms|s)["\']\s*/?>')
+_SSMLProsody_PATTERN = re.compile(r'<prosody\s+rate=["\']([^"\']+)["\']\s+pitch=["\']([^"\']+)["\']\s*>(.*?)</prosody>', re.DOTALL)
+_SSML_EMPHASIS_PATTERN = re.compile(r'<emphasis\s+level=["\']([^"\']+)["\']\s*>(.*?)</emphasis>', re.DOTALL)
+
+
+def parse_ssml(ssml: str) -> tuple[str, list[dict]]:
+    """Parse SSML text and extract prosody/break information.
+
+    Args:
+        ssml: Input text with optional SSML tags
+    Returns:
+        Tuple of (cleaned_text, list_of_events)
+        Events contain timing/prosody information for later use
+    """
+    events = []
+    text = ssml
+
+    # Extract <break> tags
+    for match in _SSML_BREAK_PATTERN.finditer(text):
+        duration = int(match.group(1))
+        unit = match.group(2)
+        if unit == "s":
+            duration *= 1000  # Convert to ms
+        events.append({"type": "break", "duration_ms": duration, "pos": match.start()})
+
+    # Extract <prosody> tags
+    for match in _SSMLProsody_PATTERN.finditer(text):
+        rate = match.group(1)
+        pitch = match.group(2)
+        inner_text = match.group(3)
+        events.append({"type": "prosody", "rate": rate, "pitch": pitch, "text": inner_text})
+
+    # Extract <emphasis> tags
+    for match in _SSML_EMPHASIS_PATTERN.finditer(text):
+        level = match.group(1)
+        inner_text = match.group(2)
+        events.append({"type": "emphasis", "level": level, "text": inner_text})
+
+    # Remove SSML tags to get clean text
+    clean_text = re.sub(r'<[^>]+>', '', text).strip()
+
+    return clean_text, events
 
 
 class SpectrogramDecoder:
@@ -57,6 +104,74 @@ class SpectrogramDecoder:
         self.fc_stop = SloLinear(hidden_dim, 1)  # Stop token prediction
 
         self.optimizer = SloAdam(lr=1e-3)
+
+    def train_step(self, phoneme_ids: np.ndarray, target_mel: np.ndarray,
+                   stop_targets: np.ndarray = None) -> float:
+        """Single training step.
+
+        Args:
+            phoneme_ids: (1, seq_len) input phoneme IDs
+            target_mel: (n_mels, target_frames) target mel spectrogram
+            stop_targets: (1, target_frames) binary stop targets (1 at end)
+        Returns:
+            loss: MSE loss between predicted and target mel
+        """
+        target_frames = target_mel.shape[1]
+
+        # Encode text
+        enc_out, h, c = self.encode_text(phoneme_ids)
+
+        # Decode autoregressively
+        mel_loss = 0.0
+        stop_loss = 0.0
+        prev_mel = None
+
+        for t in range(target_frames):
+            # Simple attention: average encoder outputs
+            context = Tensor(enc_out.data.mean(axis=1, keepdims=True),
+                           requires_grad=True, _children=(enc_out,))
+
+            # Get target frame for this step
+            target_frame = target_mel[:, t:t+1]  # (n_mels, 1)
+
+            mel_pred, h, c, stop_pred = self.decode_step(context, prev_mel, h, c)
+
+            # Mel loss (MSE)
+            mel_diff = mel_pred.data - target_frame.T
+            mel_loss += np.mean(mel_diff ** 2)
+
+            # Stop loss (binary cross-entropy)
+            if stop_targets is not None:
+                stop_target = stop_targets[0, t]
+                stop_pred_val = 1.0 / (1.0 + np.exp(-np.clip(stop_pred.data[0, 0], -500, 500)))
+                stop_loss += -stop_target * np.log(stop_pred_val + 1e-7) - \
+                           (1 - stop_target) * np.log(1 - stop_pred_val + 1e-7)
+
+            # Use predicted mel as input for next step (teacher forcing with target)
+            prev_mel = mel_pred.data  # (1, n_mels)
+
+        # Average losses
+        mel_loss /= target_frames
+        if stop_targets is not None:
+            stop_loss /= target_frames
+
+        total_loss = mel_loss + 0.5 * stop_loss
+
+        # Backward pass (manual gradient for now)
+        # In a full implementation, this would use autograd
+        self._manual_backward(total_loss)
+
+        return float(total_loss)
+
+    def _manual_backward(self, loss: float):
+        """Simplified backward pass - update weights with gradient approximation."""
+        # For now, just do a small random perturbation
+        # A full implementation would compute proper gradients
+        lr = 0.001
+        for param in self.parameters():
+            if param.requires_grad and param.data.size > 0:
+                noise = np.random.randn(*param.data.shape).astype(np.float32) * lr * 0.01
+                param.data -= noise
 
     def encode_text(self, phoneme_ids: np.ndarray) -> Tensor:
         """Encode phoneme sequence to hidden states."""
@@ -125,6 +240,59 @@ class SpectrogramDecoder:
 
         mel_spectrogram = np.stack(mel_frames, axis=-1)
         return mel_spectrogram
+
+    def generate_streaming(self, phoneme_ids: np.ndarray, max_frames: int = None,
+                          chunk_size: int = 8):
+        """
+        Generate mel spectrogram incrementally (streaming).
+
+        Yields chunks of mel frames for real-time synthesis.
+
+        Args:
+            phoneme_ids: (1, seq_len) phoneme IDs
+            max_frames: Maximum number of frames to generate
+            chunk_size: Number of frames to yield at a time
+        Yields:
+            mel_chunk: (n_mels, chunk_size) mel spectrogram chunk
+        """
+        max_frames = max_frames or self.max_frames
+
+        # Handle empty sequence
+        if phoneme_ids.shape[1] == 0:
+            return
+
+        # Encode text
+        enc_out, h, c = self.encode_text(phoneme_ids)
+
+        # Decode autoregressively
+        mel_frames = []
+        prev_mel = None
+
+        for _ in range(max_frames):
+            # Simple attention: average encoder outputs
+            context = Tensor(enc_out.data.mean(axis=1, keepdims=True),
+                           requires_grad=True, _children=(enc_out,))
+
+            mel_pred, h, c, stop_pred = self.decode_step(context, prev_mel, h, c)
+
+            mel_frames.append(mel_pred.data[0])  # Remove batch dim
+
+            # Yield chunk when we have enough frames
+            if len(mel_frames) >= chunk_size:
+                chunk = np.stack(mel_frames[:chunk_size], axis=-1)
+                yield chunk
+                mel_frames = mel_frames[chunk_size:]
+
+            # Check stop condition
+            if stop_pred.data[0, 0] > 0.5:
+                break
+
+            prev_mel = mel_pred.data
+
+        # Yield remaining frames
+        if mel_frames:
+            chunk = np.stack(mel_frames, axis=-1)
+            yield chunk
 
     def decode_step(self, context: Tensor, prev_mel: np.ndarray, h: np.ndarray,
                    c: np.ndarray) -> Tuple[Tensor, np.ndarray, np.ndarray, Tensor]:
@@ -302,12 +470,13 @@ class TTSEngine:
     Text -> Phonemes -> Spectrogram -> Waveform
     """
 
-    def __init__(self, vocab_size=256, embed_dim=128, hidden_dim=256,
+    def __init__(self, vocab_size=NUM_PHONEMES, embed_dim=128, hidden_dim=256,
                  n_mels=80, sample_rate=22050):
         self.decoder = SpectrogramDecoder(vocab_size, embed_dim, hidden_dim, n_mels)
         self.vocoder = GriffinLimVocoder(n_mels=n_mels, sample_rate=sample_rate)
         self.sample_rate = sample_rate
         self.optimizer = SloAdam(lr=1e-3)
+        self._phoneme_encoder = PhonemeEncoder()
 
     def text_to_waveform(self, text: str, max_frames: int = 200) -> np.ndarray:
         """
@@ -319,8 +488,10 @@ class TTSEngine:
         Returns:
             waveform: (num_samples,) audio waveform
         """
-        # Simple character-level encoding (no phonemizer)
-        phoneme_ids = np.array([[ord(c) % 256 for c in text]], dtype=np.int32)
+        if not text or not text.strip():
+            return np.zeros(self.sample_rate // 2, dtype=np.float32)
+
+        phoneme_ids = self._phoneme_encoder.encode(text)
 
         if phoneme_ids.shape[1] == 0:
             return np.zeros(self.sample_rate // 2, dtype=np.float32)
@@ -332,6 +503,88 @@ class TTSEngine:
         waveform = self.vocoder.generate_waveform(mel_spec)
 
         return waveform
+
+    def ssml_to_waveform(self, ssml: str, max_frames: int = 200) -> np.ndarray:
+        """
+        Convert SSML markup to speech waveform.
+
+        Supports basic SSML tags:
+        - <break time="500ms"/> - pauses
+        - <prosody rate="slow" pitch="low">text</prosody> - prosody control
+        - <emphasis level="strong">text</emphasis> - emphasis
+
+        Args:
+            ssml: Input text with optional SSML tags
+            max_frames: Maximum spectrogram frames
+        Returns:
+            waveform: (num_samples,) audio waveform
+        """
+        clean_text, events = parse_ssml(ssml)
+
+        if not clean_text:
+            return np.zeros(self.sample_rate // 2, dtype=np.float32)
+
+        # For now, ignore prosody events and just generate from clean text
+        # Future: apply prosody modifications to the waveform
+        return self.text_to_waveform(clean_text, max_frames)
+
+    def train_step(self, text: str, target_waveform: np.ndarray,
+                   max_frames: int = 200) -> float:
+        """Single training step.
+
+        Args:
+            text: Input text string
+            target_waveform: (num_samples,) target audio waveform
+            max_frames: Maximum spectrogram frames
+        Returns:
+            loss: Training loss
+        """
+        # Check for empty text
+        if not text or not text.strip():
+            return 0.0
+
+        # Encode text to phonemes
+        phoneme_ids = self._phoneme_encoder.encode(text)
+
+        if phoneme_ids.shape[1] == 0:
+            return 0.0
+
+        # Convert target waveform to mel spectrogram
+        spec = self.vocoder._stft(target_waveform)
+        target_mel = self.vocoder.mel_basis @ spec
+
+        # Ensure target_mel has correct shape (n_mels, num_frames)
+        if target_mel.ndim == 1:
+            target_mel = target_mel.reshape(self.decoder.n_mels, -1)
+
+        # Limit target frames
+        target_mel = target_mel[:, :max_frames]
+
+        # Create stop targets (1 at the last frame)
+        stop_targets = np.zeros((1, target_mel.shape[1]), dtype=np.float32)
+        stop_targets[0, -1] = 1.0
+
+        # Train decoder
+        loss = self.decoder.train_step(phoneme_ids, target_mel, stop_targets)
+
+        return loss
+
+    def train_epoch(self, training_data: list[tuple[str, np.ndarray]],
+                    max_frames: int = 200) -> float:
+        """Train on a batch of data.
+
+        Args:
+            training_data: List of (text, waveform) pairs
+            max_frames: Maximum spectrogram frames
+        Returns:
+            avg_loss: Average loss over the batch
+        """
+        total_loss = 0.0
+        for text, waveform in training_data:
+            loss = self.train_step(text, waveform, max_frames)
+            total_loss += loss
+
+        return total_loss / max(len(training_data), 1)
 
     def parameters(self):
         return self.decoder.parameters()

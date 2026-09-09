@@ -219,8 +219,6 @@ class LatentUNet:
         Returns:
             noise_pred: (B, out_channels, H, W) predicted noise
         """
-        x.data.shape[0]
-
         # Timestep embedding
         temb = self.timestep_embedder.forward(timesteps)
 
@@ -338,7 +336,7 @@ class LatentDiffusionModel:
         Args:
             text_embeddings: (1, seq_len, context_dim)
             num_steps: number of denoising steps
-            guidance_scale: classifier-free guidance scale
+            guidance_scale: classifier-free guidance scale (1.0 = no guidance)
         Returns:
             latents: (1, latent_dim, 7, 7) generated latents
         """
@@ -351,17 +349,28 @@ class LatentDiffusionModel:
         # Sampling timesteps
         timesteps = np.linspace(self.num_timesteps - 1, 0, num_steps, dtype=np.int32)
 
+        # Unconditional context (zeros — no text conditioning)
+        uncond_embeddings = np.zeros_like(text_embeddings)
+
+        use_cfg = guidance_scale > 1.0
+
         for i, t in enumerate(timesteps):
             t_array = np.array([t])
 
-            # Predict noise
+            # Predict noise (conditional)
             x_tensor = _tensor(x, requires_grad=False)
             context_tensor = _tensor(text_embeddings, requires_grad=False)
-            noise_pred = self.unet.forward(x_tensor, t_array, context_tensor)
+            noise_cond = self.unet.forward(x_tensor, t_array, context_tensor)
 
-            # Classifier-free guidance (if we had unconditional model)
-            # For now, just use conditional prediction
-            noise_pred_np = noise_pred.data
+            if use_cfg:
+                # Predict noise (unconditional)
+                uncond_tensor = _tensor(uncond_embeddings, requires_grad=False)
+                noise_uncond = self.unet.forward(x_tensor, t_array, uncond_tensor)
+
+                # Classifier-free guidance
+                noise_pred_np = noise_uncond.data + guidance_scale * (noise_cond.data - noise_uncond.data)
+            else:
+                noise_pred_np = noise_cond.data
 
             # DDIM update
             alpha_bar_t = self.alphas_cumprod[t]
