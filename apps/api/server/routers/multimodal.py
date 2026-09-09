@@ -124,6 +124,9 @@ class MultimodalRouter:
         self.router.add_api_route("/encode-phonemes", self.encode_phonemes, methods=["POST"])
         self.router.add_api_route("/decode-phonemes", self.decode_phonemes, methods=["POST"])
         self.router.add_api_route("/score-pronunciation", self.score_pronunciation, methods=["POST"])
+        self.router.add_api_route("/batch-encode-phonemes", self.batch_encode_phonemes, methods=["POST"])
+        self.router.add_api_route("/detect-language", self.detect_language, methods=["POST"])
+        self.router.add_api_route("/batch-score-pronunciation", self.batch_score_pronunciation, methods=["POST"])
         self.router.add_api_route("/reset", self.reset, methods=["POST"])
 
     # ── Helpers ──────────────────────────────────────────────────────
@@ -1055,6 +1058,7 @@ class MultimodalRouter:
             "decoded": decoded,
         })
 
+    @endpoint("multimodal.batch_encode_phonemes")
     async def batch_encode_phonemes(self, request: dict) -> dict:
         """Batch encode multiple texts to phoneme IDs.
 
@@ -1101,6 +1105,7 @@ class MultimodalRouter:
             logger.warning("Batch phoneme encoding failed: %s", e)
             classify_and_raise(e, source="multimodal.batch_encode_phonemes")
 
+    @endpoint("multimodal.detect_language")
     async def detect_language(self, request: dict) -> dict:
         """Detect the language of input text.
 
@@ -1155,6 +1160,7 @@ class MultimodalRouter:
             "spoken_phonemes": result["spoken_phonemes"],
         })
 
+    @endpoint("multimodal.batch_score_pronunciation")
     async def batch_score_pronunciation(self, request: dict) -> dict:
         """Batch score pronunciation accuracy.
 
@@ -1198,34 +1204,6 @@ class MultimodalRouter:
         except Exception as e:
             logger.warning("Batch pronunciation scoring failed: %s", e)
             classify_and_raise(e, source="multimodal.batch_score_pronunciation")
-
-    async def synthesize_speech(self, request: dict) -> dict:
-        """Synthesize speech from text.
-
-        Takes text and returns a waveform array.
-        """
-        try:
-            from domains.multimodal.tts import TTSEngine
-            import numpy as np
-
-            text = request.get("text", "")
-            max_frames = request.get("max_frames", 200)
-
-            if not text:
-                raise_error("No text provided", "E_MISSING_TEXT")
-
-            engine = TTSEngine()
-            waveform = engine.text_to_waveform(text, max_frames=max_frames)
-
-            return success_response(data={
-                "text": text,
-                "sample_rate": engine.sample_rate,
-                "waveform": waveform.tolist(),
-                "duration": len(waveform) / engine.sample_rate,
-            })
-        except Exception as e:
-            logger.warning("Speech synthesis failed: %s", e)
-            classify_and_raise(e, source="multimodal.synthesize_speech")
 
     # ── Reset ─────────────────────────────────────────────────────────
 
