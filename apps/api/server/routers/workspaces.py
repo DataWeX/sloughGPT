@@ -48,6 +48,10 @@ class InviteMemberRequest(BaseModel):
     role: str = Field(default="user", description="Role: viewer, user, admin")
 
 
+class BulkMemberImportRequest(BaseModel):
+    members: list[dict[str, str]] = Field(..., description="List of {user_id, role} or {email, role}")
+
+
 class MemberAddRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
     role: str = Field(default="user", description="Role: viewer, user, admin")
@@ -940,6 +944,72 @@ class WorkspacesRouter:
                 "cleaned": cleaned,
             })
 
+        # ─── Bulk member import ───────────────────────────────
+        async def bulk_import_members(
+            workspace_id: str, req: BulkMemberImportRequest, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            caller_member = self._ws_repo.get_member(workspace_id, user.id)
+            if not caller_member or caller_member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            added = 0
+            skipped = 0
+            errors = []
+
+            for i, entry in enumerate(req.members):
+                user_id = entry.get("user_id", "")
+                email = entry.get("email", "")
+                role_str = entry.get("role", "user")
+
+                # Resolve user_id from email if needed
+                if not user_id and email:
+                    target = self._user_repo.get_by_email(email)
+                    if target:
+                        user_id = target.id
+                    else:
+                        errors.append({"index": i, "email": email, "error": "User not found"})
+                        skipped += 1
+                        continue
+
+                if not user_id:
+                    errors.append({"index": i, "error": "No user_id or email provided"})
+                    skipped += 1
+                    continue
+
+                # Check if already a member
+                existing = self._ws_repo.get_member(workspace_id, user_id)
+                if existing:
+                    skipped += 1
+                    continue
+
+                # Check max members
+                members = self._ws_repo.list_members(workspace_id)
+                if len(members) >= ws.max_members:
+                    errors.append({"index": i, "user_id": user_id, "error": "Workspace full"})
+                    skipped += 1
+                    continue
+
+                role = Role(role_str) if role_str in ("viewer", "user", "admin") else Role.USER
+                member = WorkspaceMember(
+                    id=str(uuid.uuid4()),
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    role=role,
+                )
+                self._ws_repo.add_member(member)
+                added += 1
+
+            return success_response(data={
+                "added": added,
+                "skipped": skipped,
+                "errors": errors,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -960,6 +1030,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/settings", update_workspace_settings, methods=["PUT"])
         router.add_api_route("/{workspace_id}/invite", invite_member, methods=["POST"])
         router.add_api_route("/{workspace_id}/cleanup", cleanup_workspace_data, methods=["POST"])
+        router.add_api_route("/{workspace_id}/members/bulk", bulk_import_members, methods=["POST"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────

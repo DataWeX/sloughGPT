@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
-import { IconPlus, IconTrash } from '@/components/icons/NavIcons'
+import { IconPlus, IconTrash, IconUpload } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
@@ -45,6 +45,10 @@ export default function MembersPage() {
   const [inviteRole, setInviteRole] = useState('user')
   const [inviting, setInviting] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [bulkInput, setBulkInput] = useState('')
+  const [bulkRole, setBulkRole] = useState('user')
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
   const addToast = useToastStore(s => s.addToast)
   const { currentWorkspace, switchWorkspace } = useAuthStore()
 
@@ -113,6 +117,39 @@ export default function MembersPage() {
       addToast('Could not invite member', 'error')
     } finally {
       setInviting(false)
+    }
+  }
+
+  const bulkImport = async () => {
+    if (!selectedWs || !bulkInput.trim()) return
+    setBulkImporting(true)
+    try {
+      const lines = bulkInput.split('\n').map(l => l.trim()).filter(Boolean)
+      const members = lines.map(line => {
+        const parts = line.split(',').map(p => p.trim())
+        if (parts[0].includes('@')) {
+          return { email: parts[0], role: parts[1] || bulkRole }
+        }
+        return { user_id: parts[0], role: parts[1] || bulkRole }
+      })
+      const res = await apiPost<{ data: { added: number; skipped: number; errors: any[] } }>(
+        `/workspaces/${selectedWs}/members/bulk`,
+        { members }
+      )
+      const data = res?.data
+      setBulkInput('')
+      setShowBulkImport(false)
+      await fetchMembers(selectedWs)
+      if (data) {
+        addToast(`Imported ${data.added} member(s), ${data.skipped} skipped`, 'success')
+        if (data.errors?.length > 0) {
+          addToast(`${data.errors.length} error(s) during import`, 'error')
+        }
+      }
+    } catch {
+      addToast('Could not import members', 'error')
+    } finally {
+      setBulkImporting(false)
     }
   }
 
@@ -246,6 +283,57 @@ export default function MembersPage() {
                   </Button>
                 </div>
               </CardContent>
+            </Card>
+
+            {/* Bulk Import */}
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xs">Bulk Import</CardTitle>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 text-[10px]"
+                    onClick={() => setShowBulkImport(!showBulkImport)}
+                  >
+                    <IconUpload className="h-3 w-3 mr-1" />
+                    {showBulkImport ? 'Cancel' : 'Import'}
+                  </Button>
+                </div>
+              </CardHeader>
+              {showBulkImport && (
+                <CardContent className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground">
+                    One user ID or email per line. Optional role after comma (default: {bulkRole}).
+                  </p>
+                  <textarea
+                    value={bulkInput}
+                    onChange={e => setBulkInput(e.target.value)}
+                    placeholder={"user-id-1\nuser-id-2,admin\nuser@example.com,viewer"}
+                    className="w-full h-24 text-[10px] rounded-md border border-border bg-background px-2 py-1 resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={bulkRole}
+                      onChange={e => setBulkRole(e.target.value)}
+                      className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                    >
+                      <option value="viewer">Default: Viewer</option>
+                      <option value="user">Default: User</option>
+                      <option value="admin">Default: Admin</option>
+                    </select>
+                    <Button
+                      size="sm"
+                      className="h-6 text-[10px]"
+                      onClick={bulkImport}
+                      disabled={!bulkInput.trim() || bulkImporting}
+                    >
+                      <IconUpload className="h-3 w-3 mr-1" />
+                      {bulkImporting ? 'Importing...' : 'Import All'}
+                    </Button>
+                  </div>
+                </CardContent>
+              )}
             </Card>
 
             {/* Members list */}
