@@ -1,33 +1,69 @@
-"""Tests for download_manager — HF download orchestration, cache health helpers."""
+"""Tests for download_manager — generic orchestration via DownloadBackend."""
 
 import asyncio
 import sys
 import time
 import types
 from pathlib import Path
+from typing import List
 
 import pytest
 
 import domains.infrastructure.download_manager as dm
+from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
 
 
-# ── Fake hf_hub module for worker tests ───────────────────────────────────
+# ---------------------------------------------------------------------------
+# Fake backend for testing
+# ---------------------------------------------------------------------------
 
 
-def _make_fake_downcraft():
-    fake = types.ModuleType("domains.infrastructure.hf_hub")
-    calls = {"progress": [], "files": []}
+class FakeBackend(DownloadBackend):
+    """In-memory backend for unit tests."""
 
-    def download_hf_model(model_id, on_progress=None, on_file_complete=None):
-        calls["progress"].append((model_id, 500, 1000, 250.0))
-        calls["files"].append((model_id, "model.safetensors"))
+    def __init__(self):
+        self.cached: set = set()
+        self.downloaded: dict = {}
+        self.incomplete: List[str] = []
+        self.cleaned: List[str] = []
+        self.cancelled: List[str] = []
+        self._download_result = {"status": "complete", "cache_dir": "/tmp/cache"}
+        self.download_calls: list = []
+
+    def is_cached(self, resource_id, deep_check=False):
+        return resource_id in self.cached
+
+    def get_cache_dir(self, resource_id):
+        return self.downloaded.get(resource_id, {}).get("cache_dir", "/tmp/cache")
+
+    def estimate_total(self, resource_id):
+        return self.downloaded.get(resource_id, {}).get("total", 1000)
+
+    def list_files(self, resource_id):
+        return []
+
+    def download(self, resource_id, on_progress, on_file_complete):
+        self.download_calls.append(resource_id)
         if on_progress:
-            on_progress(model_id, 500, 1000, 250.0)
+            on_progress(resource_id, 500, 1000, 250.0)
         if on_file_complete:
-            on_file_complete(model_id, "model.safetensors")
+            on_file_complete(resource_id, "model.safetensors")
+        return self._download_result
 
-    fake.download_hf_model = download_hf_model
-    return fake, calls
+    def cleanup(self, resource_id):
+        self.cleaned.append(resource_id)
+        return True
+
+    def list_incomplete(self):
+        return self.incomplete
+
+    def on_cancel(self, resource_id):
+        self.cancelled.append(resource_id)
+
+
+# ---------------------------------------------------------------------------
+# TestDownloadStatus
+# ---------------------------------------------------------------------------
 
 
 class TestDownloadStatus:
@@ -37,6 +73,11 @@ class TestDownloadStatus:
         assert dm.DownloadStatus.COMPLETE.value == "complete"
         assert dm.DownloadStatus.FAILED.value == "failed"
         assert dm.DownloadStatus.CANCELLED.value == "cancelled"
+
+
+# ---------------------------------------------------------------------------
+# TestDownloadProgress
+# ---------------------------------------------------------------------------
 
 
 class TestDownloadProgress:
@@ -62,136 +103,78 @@ class TestDownloadProgress:
         assert d["percentage"] == 26.2
 
 
-class TestCacheHelpers:
-    def test_cache_dir_dashes_id(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(dm, "get_cache_dir",
-                            lambda mid: str(tmp_path / f"models--{mid.replace('/', '--')}"))
-        assert dm._cache_dir("org/model").name == "models--org--model"
-
-    def test_has_weight_files_true_over_1kb(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "snapshots" / "x").mkdir(parents=True)
-        (cache / "snapshots" / "x" / "model.safetensors").write_bytes(b"0" * 2000)
-        assert dm._has_weight_files(cache) is True
-
-    def test_has_weight_files_false_small_or_missing(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "snapshots" / "x").mkdir(parents=True)
-        (cache / "snapshots" / "x" / "tiny.bin").write_bytes(b"0" * 100)
-        assert dm._has_weight_files(cache) is False
-        assert dm._has_weight_files(tmp_path / "nope") is False
-
-    def test_has_weight_files_skips_stat_errors(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "snapshots" / "x").mkdir(parents=True)
-        (cache / "snapshots" / "x" / "model.safetensors").symlink_to(tmp_path / "missing")
-        assert dm._has_weight_files(cache) is False
-
-    def test_has_incomplete_downloads_incomplete_marker(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "blob").mkdir(parents=True)
-        (cache / "blob" / "f.incomplete").touch()
-        assert dm._has_incomplete_downloads(cache) is True
-
-    def test_has_incomplete_downloads_lock(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "blob").mkdir(parents=True)
-        (cache / "blob" / "f.lock").touch()
-        assert dm._has_incomplete_downloads(cache) is True
-
-    def test_has_incomplete_downloads_clean(self, tmp_path):
-        cache = tmp_path / "cache"
-        cache.mkdir()
-        assert dm._has_incomplete_downloads(cache) is False
-
-    def test_get_snapshot_ref(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "refs").mkdir(parents=True)
-        (cache / "refs" / "main").write_text("abc123\n")
-        assert dm._get_snapshot_ref(cache) == "abc123"
-
-    def test_get_snapshot_ref_missing(self, tmp_path):
-        assert dm._get_snapshot_ref(tmp_path / "nope") is None
-
-    def test_get_snapshot_ref_read_error(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "refs" / "main").mkdir(parents=True)
-        assert dm._get_snapshot_ref(cache) is None
-
-    def test_has_complete_snapshot(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "refs").mkdir(parents=True)
-        (cache / "refs" / "main").write_text("abc123")
-        (cache / "snapshots" / "abc123").mkdir(parents=True)
-        (cache / "snapshots" / "abc123" / "model.safetensors").write_bytes(b"0" * 2000)
-        assert dm._has_complete_snapshot(cache) is True
-
-    def test_has_complete_snapshot_no_weights(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "refs").mkdir(parents=True)
-        (cache / "refs" / "main").write_text("abc123")
-        (cache / "snapshots" / "abc123").mkdir(parents=True)
-        assert dm._has_complete_snapshot(cache) is False
-
-    def test_has_complete_snapshot_no_ref(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "snapshots" / "abc123").mkdir(parents=True)
-        assert dm._has_complete_snapshot(cache) is False
-
-    def test_has_complete_snapshot_missing_snapshot_dir(self, tmp_path):
-        cache = tmp_path / "cache"
-        (cache / "refs").mkdir(parents=True)
-        (cache / "refs" / "main").write_text("abc123")
-        assert dm._has_complete_snapshot(cache) is False
+# ---------------------------------------------------------------------------
+# TestModuleLevelFunctions
+# ---------------------------------------------------------------------------
 
 
-class TestDelegatedFunctions:
+class TestModuleLevelFunctions:
     def test_is_download_complete_delegates(self, monkeypatch):
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: True)
+        fake = FakeBackend()
+        fake.cached.add("gpt2")
+        monkeypatch.setattr(dm, "_backend", fake)
         assert dm.is_download_complete("gpt2") is True
-        assert dm.is_download_complete("gpt2", deep_check=True) is True
 
-    def test_cleanup_incomplete_removes_dir(self, tmp_path, monkeypatch):
-        cache = tmp_path / "models--gpt2"
-        cache.mkdir()
-        (cache / "blob").mkdir()
-        monkeypatch.setattr(dm, "_cache_dir", lambda mid: cache)
+    def test_cleanup_incomplete_delegates(self, monkeypatch):
+        fake = FakeBackend()
+        monkeypatch.setattr(dm, "_backend", fake)
         assert dm.cleanup_incomplete("gpt2") is True
-        assert not cache.exists()
+        assert "gpt2" in fake.cleaned
 
-    def test_cleanup_incomplete_missing_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(dm, "_cache_dir", lambda mid: tmp_path / "nope")
-        assert dm.cleanup_incomplete("gpt2") is False
+    def test_list_incomplete_models_delegates(self, monkeypatch):
+        fake = FakeBackend()
+        fake.incomplete = ["org/model_a", "org/model_b"]
+        monkeypatch.setattr(dm, "_backend", fake)
+        assert dm.list_incomplete_models() == ["org/model_a", "org/model_b"]
 
 
-class TestListIncompleteModels:
-    def test_empty_home(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        assert dm.list_incomplete_models() == []
+# ---------------------------------------------------------------------------
+# TestBackendProtocol
+# ---------------------------------------------------------------------------
 
-    def test_lists_incomplete_and_partial(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        base = tmp_path / ".cache" / "huggingface" / "hub"
-        # incomplete marker
-        inc = base / "models--org--bad"
-        (inc / "blob").mkdir(parents=True)
-        (inc / "blob" / "f.incomplete").touch()
-        # weights but no complete snapshot
-        partial = base / "models--org--partial"
-        (partial / "snapshots" / "abc").mkdir(parents=True)
-        (partial / "snapshots" / "abc" / "model.safetensors").write_bytes(b"0" * 2000)
-        # complete snapshot -> not listed
-        done = base / "models--org--done"
-        (done / "refs").mkdir(parents=True)
-        (done / "refs" / "main").write_text("commit1")
-        (done / "snapshots" / "commit1").mkdir(parents=True)
-        (done / "snapshots" / "commit1" / "model.safetensors").write_bytes(b"0" * 2000)
-        # non-model dir skipped
-        (base / "other").mkdir()
-        result = dm.list_incomplete_models()
-        assert "org/bad" in result
-        assert "org/partial" in result
-        assert "org/done" not in result
+
+class TestBackendProtocol:
+    def test_fake_backend_is_cached(self):
+        b = FakeBackend()
+        assert b.is_cached("x") is False
+        b.cached.add("x")
+        assert b.is_cached("x") is True
+
+    def test_fake_backend_download(self):
+        b = FakeBackend()
+        progress_calls = []
+        file_calls = []
+
+        def on_progress(rid, done, total, speed):
+            progress_calls.append((rid, done, total, speed))
+
+        def on_file(rid, path):
+            file_calls.append((rid, path))
+
+        result = b.download("model", on_progress, on_file)
+        assert result["status"] == "complete"
+        assert len(progress_calls) == 1
+        assert len(file_calls) == 1
+
+    def test_fake_backend_cleanup(self):
+        b = FakeBackend()
+        b.cleanup("model")
+        assert "model" in b.cleaned
+
+    def test_fake_backend_list_incomplete(self):
+        b = FakeBackend()
+        b.incomplete = ["a", "b"]
+        assert b.list_incomplete() == ["a", "b"]
+
+    def test_fake_backend_on_cancel(self):
+        b = FakeBackend()
+        b.on_cancel("model")
+        assert "model" in b.cancelled
+
+
+# ---------------------------------------------------------------------------
+# TestDownloadManager
+# ---------------------------------------------------------------------------
 
 
 class TestDownloadManager:
@@ -221,13 +204,18 @@ class TestDownloadManager:
         assert mgr.is_downloading("c") is False
         assert mgr.is_downloading("nope") is False
 
-    def test_cancel_queued(self):
+    def test_cancel_queued(self, monkeypatch):
+        fake = FakeBackend()
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
         mgr._set_progress("gpt2", status=dm.DownloadStatus.QUEUED)
         assert mgr.cancel("gpt2") is True
         assert mgr.get_progress("gpt2")["status"] == "cancelled"
+        assert "gpt2" in fake.cancelled
 
-    def test_cancel_complete_returns_false(self):
+    def test_cancel_complete_returns_false(self, monkeypatch):
+        fake = FakeBackend()
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
         mgr._set_progress("gpt2", status=dm.DownloadStatus.COMPLETE)
         assert mgr.cancel("gpt2") is False
@@ -252,152 +240,69 @@ class TestDownloadManager:
         mgr._notify_callbacks("gpt2")  # should not raise
 
     def test_download_already_cached(self, monkeypatch):
+        fake = FakeBackend()
+        fake.cached.add("gpt2")
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: True)
         result = asyncio.run(mgr.download("gpt2"))
         assert result == {"status": "already_cached", "model_id": "gpt2"}
 
     def test_download_already_downloading(self, monkeypatch):
+        fake = FakeBackend()
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
         mgr._set_progress("gpt2", status=dm.DownloadStatus.DOWNLOADING)
         result = asyncio.run(mgr.download("gpt2"))
         assert result["status"] == "already_downloading"
 
     def test_download_completes(self, monkeypatch):
+        fake = FakeBackend()
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
-        monkeypatch.setattr(dm, "list_model_files", lambda mid: [])
-
-        async def fake_worker(self, model_id, hint):
-            self._set_progress(model_id, status=dm.DownloadStatus.COMPLETE)
-            return {"status": "complete", "model_id": model_id}
-
-        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
         result = asyncio.run(mgr.download("gpt2"))
         assert result["status"] == "complete"
         assert mgr.is_downloading("gpt2") is False
 
     def test_download_failure_reported(self, monkeypatch):
-        mgr = dm.DownloadManager()
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
+        fake = FakeBackend()
 
-        async def bad_worker(self, model_id, hint):
+        def fail_download(rid, on_progress, on_file_complete):
             raise ValueError("network down")
 
-        monkeypatch.setattr(dm.DownloadManager, "_download_worker", bad_worker)
+        fake.download = fail_download
+        monkeypatch.setattr(dm, "_backend", fake)
+        mgr = dm.DownloadManager()
         result = asyncio.run(mgr.download("gpt2"))
         assert result["status"] == "failed"
         assert "network down" in result["error"]
 
     def test_download_cancelled(self, monkeypatch):
-        mgr = dm.DownloadManager()
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
+        fake = FakeBackend()
 
-        async def cancel_worker(self, model_id, hint):
+        def cancel_download(rid, on_progress, on_file_complete):
             raise asyncio.CancelledError()
 
-        monkeypatch.setattr(dm.DownloadManager, "_download_worker", cancel_worker)
+        fake.download = cancel_download
+        monkeypatch.setattr(dm, "_backend", fake)
+        mgr = dm.DownloadManager()
         result = asyncio.run(mgr.download("gpt2"))
         assert result["status"] == "cancelled"
 
     def test_is_cached(self, monkeypatch):
+        fake = FakeBackend()
+        fake.cached.add("gpt2")
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: True)
         assert mgr.is_cached("gpt2") is True
 
-    def test_cancel_downloading_cancels_task(self):
+    def test_download_calls_prepare(self, monkeypatch):
+        fake = FakeBackend()
+        monkeypatch.setattr(dm, "_backend", fake)
         mgr = dm.DownloadManager()
-        mgr._set_progress("gpt2", status=dm.DownloadStatus.DOWNLOADING)
+        asyncio.run(mgr.download("gpt2"))
+        assert "gpt2" in fake.download_calls
 
-        async def scenario():
-            t = asyncio.create_task(asyncio.sleep(10))
-            mgr._tasks["gpt2"] = t
-            ok = mgr.cancel("gpt2")
-            try:
-                await t
-            except asyncio.CancelledError:
-                pass
-            return ok
-
-        assert asyncio.run(scenario()) is True
-        assert mgr.get_progress("gpt2")["status"] == "cancelled"
-
-    def test_download_cleans_incomplete_markers(self, tmp_path, monkeypatch):
-        cache = tmp_path / "cache"
-        (cache / "blob").mkdir(parents=True)
-        (cache / "blob" / "f.incomplete").write_bytes(b"x")
-        (cache / "blob" / "f.lock").write_bytes(b"x")
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
-        monkeypatch.setattr(dm, "list_model_files", lambda mid: [])
-        monkeypatch.setattr(dm, "_cache_dir", lambda mid: cache)
-        monkeypatch.setattr(dm, "sg_state", None)
-
-        async def fake_worker(self, model_id, hint):
-            return {"status": "complete", "model_id": model_id}
-
-        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
-        mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2"))
-        assert result["status"] == "complete"
-        assert not (cache / "blob" / "f.incomplete").exists()
-        assert not (cache / "blob" / "f.lock").exists()
-
-    def test_download_ignores_unlink_errors(self, tmp_path, monkeypatch):
-        cache = tmp_path / "cache"
-        (cache / "blob").mkdir(parents=True)
-        (cache / "blob" / "f.incomplete").write_bytes(b"x")
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
-        monkeypatch.setattr(dm, "list_model_files", lambda mid: [])
-        monkeypatch.setattr(dm, "_cache_dir", lambda mid: cache)
-        monkeypatch.setattr(dm, "sg_state", None)
-
-        def broken_unlink(self):
-            raise OSError("permission denied")
-
-        monkeypatch.setattr(Path, "unlink", broken_unlink)
-
-        async def fake_worker(self, model_id, hint):
-            return {"status": "complete", "model_id": model_id}
-
-        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
-        mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2"))
-        assert result["status"] == "complete"
-
-    def test_download_estimate_fallback_on_error(self, monkeypatch):
-        monkeypatch.setattr(dm, "hf_is_download_complete", lambda mid, deep_check=False: False)
-
-        def hub_down(mid):
-            raise RuntimeError("hub down")
-
-        monkeypatch.setattr(dm, "list_model_files", hub_down)
-        monkeypatch.setattr(dm, "_cache_dir", lambda mid: Path("/tmp/nonexistent-cache-xyz"))
-        monkeypatch.setattr(dm, "sg_state", None)
-
-        async def fake_worker(self, model_id, hint):
-            return {"status": "complete", "model_id": model_id, "hint": hint}
-
-        monkeypatch.setattr(dm.DownloadManager, "_download_worker", fake_worker)
-        mgr = dm.DownloadManager()
-        result = asyncio.run(mgr.download("gpt2", total_bytes_hint=1234))
-        assert result["status"] == "complete"
-        assert mgr.get_progress("gpt2")["total_bytes"] == 1234
-
-    def test_worker_updates_progress_and_result(self, monkeypatch):
-        fake, calls = _make_fake_downcraft()
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.hf_hub", fake)
-        monkeypatch.setattr(dm, "_cache_dir", lambda mid: Path("/tmp/cache"))
-
-        mgr = dm.DownloadManager()
-        result = asyncio.run(mgr._download_worker("org/model", 1000))
-        assert result["status"] == "complete"
-        assert "cache_dir" in result
-        assert mgr.get_progress("org/model")["status"] == "complete"
-        assert mgr.get_progress("org/model")["percentage"] == 100.0
-        assert calls["files"] == [("org/model", "model.safetensors")]
-
-    def test_cleanup_stale(self, monkeypatch):
+    def test_cleanup_stale(self):
         mgr = dm.DownloadManager()
         old = time.time() - 10_000
         mgr._set_progress("old_done", status=dm.DownloadStatus.COMPLETE, completed_at=old)
@@ -419,6 +324,11 @@ class TestDownloadManager:
         assert "x" not in mgr._tasks
 
 
+# ---------------------------------------------------------------------------
+# TestSingleton
+# ---------------------------------------------------------------------------
+
+
 class TestSingleton:
     def test_get_download_manager_singleton(self, monkeypatch):
         monkeypatch.setattr(dm, "_download_manager", None)
@@ -427,20 +337,33 @@ class TestSingleton:
         assert a is b
 
 
-class TestImportFallback:
-    def test_downcraft_missing_falls_back(self, monkeypatch):
-        import importlib
+# ---------------------------------------------------------------------------
+# TestBackendManagement
+# ---------------------------------------------------------------------------
 
-        monkeypatch.setitem(sys.modules, "downcraft", None)
-        monkeypatch.setitem(sys.modules, "downcraft.downloader", None)
-        monkeypatch.setitem(sys.modules, "downcraft.state", None)
-        mod = importlib.reload(dm)
-        assert mod.sg_downloader is None
-        assert mod.sg_state is None
-        assert mod.get_cache_dir("org/model").endswith("models--org--model")
-        assert mod.hf_is_download_complete("gpt2") is False
-        assert mod.list_model_files("gpt2") == []
-        sys.modules.pop("downcraft", None)
-        sys.modules.pop("downcraft.downloader", None)
-        sys.modules.pop("downcraft.state", None)
-        importlib.reload(dm)
+
+class TestBackendManagement:
+    def test_set_and_get_backend(self, monkeypatch):
+        monkeypatch.setattr(dm, "_backend", None)
+        fake = FakeBackend()
+        dm.set_backend(fake)
+        assert dm.get_backend() is fake
+        dm.reset_backend()
+
+    def test_null_backend_fallback(self, monkeypatch):
+        import threading
+        monkeypatch.setattr(dm, "_backend", None)
+        monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
+        old_val = sys.modules.get("domains.infrastructure.hf_hub")
+        sys.modules["domains.infrastructure.hf_hub"] = None
+        try:
+            backend = dm.get_backend()
+            assert backend.is_cached("x") is False
+            assert backend.get_cache_dir("x") == ""
+            assert backend.list_incomplete() == []
+        finally:
+            if old_val is not None:
+                sys.modules["domains.infrastructure.hf_hub"] = old_val
+            else:
+                sys.modules.pop("domains.infrastructure.hf_hub", None)
+            dm._backend = None
