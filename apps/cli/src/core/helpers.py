@@ -141,10 +141,54 @@ def show_server_status(host="localhost", port=8000):
         return False
 
 
+def get_timeout(ctx, default=10):
+    """Get timeout from CLI context."""
+    return ctx.obj.get("timeout", default)
+
+
+def get_base_url(ctx):
+    """Get base API URL from CLI context."""
+    return f"http://{ctx.obj['host']}:{ctx.obj['port']}"
+
+
+def api_get(ctx, path, **kwargs):
+    """Make API GET request with timeout."""
+    import requests
+    timeout = get_timeout(ctx)
+    r = requests.get(f"{get_base_url(ctx)}{path}", timeout=timeout, **kwargs)
+    return r
+
+
+def api_post(ctx, path, **kwargs):
+    """Make API POST request with timeout."""
+    import requests
+    timeout = get_timeout(ctx)
+    r = requests.post(f"{get_base_url(ctx)}{path}", timeout=timeout, **kwargs)
+    return r
+
+
+def api_delete(ctx, path, **kwargs):
+    """Make API DELETE request with timeout."""
+    import requests
+    timeout = get_timeout(ctx)
+    r = requests.delete(f"{get_base_url(ctx)}{path}", timeout=timeout, **kwargs)
+    return r
+
+
+def output_json(ctx, data):
+    """Output JSON if --json flag is set."""
+    if ctx.obj.get("json"):
+        output(data)
+        return True
+    return False
+
+
 _RESET = "\033[0m"
 
 
 __all__ = [
     "ns", "output", "confirm", "verbose",
     "docker_action", "show_welcome_banner", "show_server_status",
+    "get_timeout", "get_base_url", "api_get", "api_post", "api_delete",
+    "output_json",
 ]

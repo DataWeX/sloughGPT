@@ -3,7 +3,7 @@ Knowledge command group — semantic knowledge operations.
 """
 
 from core.framework import click
-from core.helpers import ns as _ns
+from core.helpers import ns as _ns, api_get, api_post, output_json
 
 
 def register(cli):
@@ -21,10 +21,9 @@ def register(cli):
     @click.pass_context
     def knowledge_search(ctx, query, path, top_k, extensions):
         """Search your codebase using natural language."""
-        import requests
         exts = extensions.split(",") if extensions else None
-        r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/search-files",
-                          json={"query": query, "path": path, "top_k": top_k, "extensions": exts})
+        r = api_post(ctx, "/knowledge/search-files",
+                     json={"query": query, "path": path, "top_k": top_k, "extensions": exts})
         if r.status_code != 200:
             log.error(f"Search failed: {r.text}")
             return
@@ -42,9 +41,8 @@ def register(cli):
     @click.pass_context
     def knowledge_dedup(ctx, content, threshold):
         """Check if content already exists in the knowledge base."""
-        import requests
-        r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/check-duplicate",
-                          json={"content": content, "threshold": threshold})
+        r = api_post(ctx, "/knowledge/check-duplicate",
+                     json={"content": content, "threshold": threshold})
         if r.status_code != 200:
             log.error(f"Check failed: {r.text}")
             return
@@ -60,9 +58,7 @@ def register(cli):
     @click.pass_context
     def knowledge_categorize(ctx, content):
         """Auto-assign a topic to content based on existing categories."""
-        import requests
-        r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/categorize",
-                          json={"content": content})
+        r = api_post(ctx, "/knowledge/categorize", json={"content": content})
         if r.status_code != 200:
             log.error(f"Categorize failed: {r.text}")
             return
@@ -77,8 +73,7 @@ def register(cli):
     @click.pass_context
     def knowledge_gaps(ctx):
         """Show under-represented topics in your knowledge base."""
-        import requests
-        r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/gaps")
+        r = api_get(ctx, "/knowledge/gaps")
         if r.status_code != 200:
             log.error(f"Gaps failed: {r.text}")
             return
@@ -97,7 +92,6 @@ def register(cli):
     @click.pass_context
     def knowledge_ingest(ctx, texts, topic, file_path):
         """Bulk ingest texts with automatic deduplication."""
-        import requests
         items = list(texts)
         if file_path:
             with open(file_path) as f:
@@ -105,9 +99,8 @@ def register(cli):
         if not items:
             log.error("No texts to ingest")
             return
-        timeout = ctx.obj.get("timeout", 10)
-        r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/knowledge/bulk-ingest",
-                          json={"items": items, "topic": topic}, timeout=timeout)
+        r = api_post(ctx, "/knowledge/bulk-ingest",
+                     json={"items": items, "topic": topic})
         if r.status_code != 200:
             log.error(f"Ingest failed: {r.text}")
             return
