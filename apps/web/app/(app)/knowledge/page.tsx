@@ -885,7 +885,7 @@ export default function KnowledgePage() {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={() => { setEditingId(item.id); setEditContent(item.content); setEditTopic(item.topic || '') }}
+                          onClick={e => { e.stopPropagation(); setEditingId(item.id); setEditContent(item.content); setEditTopic(item.topic || '') }}
                           className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-primary p-1 transition-opacity"
                           aria-label="Edit knowledge"
                         >
@@ -893,7 +893,7 @@ export default function KnowledgePage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPendingDelete(item)}
+                          onClick={e => { e.stopPropagation(); setPendingDelete(item) }}
                           className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground hover:text-destructive p-1 transition-opacity"
                           aria-label="Delete knowledge"
                         >
