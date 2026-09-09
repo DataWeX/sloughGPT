@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { useRouter } from 'next/navigation'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
-import { logger } from '@/lib/dev-log'
+import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { RefreshCw, ExternalLink, ChevronRight, AlertTriangle } from 'lucide-react'
 
 interface WorkspaceStats {
   workspace_id: string
@@ -25,6 +28,8 @@ interface Activity {
   status: string
   timestamp: string
   user: string
+  job_id?: string
+  dataset_id?: string
 }
 
 interface UsageData {
@@ -35,14 +40,28 @@ interface UsageData {
   api_keys: { total: number }
 }
 
+function getActivityLink(a: Activity): string | null {
+  if (a.job_id) return `/training/queue`
+  if (a.type === 'training') return '/training/queue'
+  if (a.type === 'dataset') return '/datasets'
+  if (a.type === 'knowledge') return '/knowledge'
+  if (a.type === 'member') return '/workspaces'
+  if (a.type === 'audit') return '/audit-trail'
+  if (a.type === 'api_key') return '/api-keys'
+  return null
+}
+
 export default function WorkspaceDashboardPage() {
+  const router = useRouter()
   const [stats, setStats] = useState<WorkspaceStats | null>(null)
   const [activities, setActivities] = useState<Activity[]>([])
   const [usage, setUsage] = useState<UsageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [healthStatus, setHealthStatus] = useState<string | null>(null)
   const [checkingHealth, setCheckingHealth] = useState(false)
+  const [showAllActivities, setShowAllActivities] = useState(false)
   const { currentWorkspace } = useAuthStore()
+  const addToast = useToastStore(s => s.addToast)
 
   const runHealthCheck = useCallback(async () => {
     if (!currentWorkspace?.id) return
@@ -73,13 +92,14 @@ export default function WorkspaceDashboardPage() {
       setUsage(usageRes?.data ?? null)
       runHealthCheck()
     } catch {
-      logger.warning('Could not fetch workspace dashboard data')
+      addToast('Failed to load workspace data', 'error')
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id, runHealthCheck])
+  }, [currentWorkspace?.id, runHealthCheck, addToast])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useRefreshShortcut(fetchData)
 
   const activityByType = useMemo(() => {
     const map: Record<string, number> = {}
@@ -112,6 +132,8 @@ export default function WorkspaceDashboardPage() {
     return { type: maxType, count: max }
   }, [activityByType])
 
+  const displayedActivities = showAllActivities ? activities : activities.slice(0, 10)
+
   if (loading) {
     return (
       <PageContainer title="Workspace Dashboard">
@@ -141,14 +163,19 @@ export default function WorkspaceDashboardPage() {
       {(stats?.active_training_jobs ?? 0) > 0 && (
         <Card className="mb-4">
           <CardContent className="py-3">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-              </span>
-              <span className="text-green-600 dark:text-green-400 font-medium">
-                {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                <span className="text-green-600 dark:text-green-400 font-medium">
+                  {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
+                </span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/training/queue')}>
+                View Queue <ChevronRight className="h-3 w-3 ml-1" />
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -158,7 +185,12 @@ export default function WorkspaceDashboardPage() {
         {/* Training Status */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Training Overview</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs">Training Overview</CardTitle>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData} title="Refresh">
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -255,6 +287,9 @@ export default function WorkspaceDashboardPage() {
                   healthStatus === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
                 }`} />
                 <span className="font-medium capitalize">Workspace {healthStatus}</span>
+                {healthStatus === 'error' && (
+                  <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                )}
               </div>
               <button
                 onClick={runHealthCheck}
@@ -271,34 +306,60 @@ export default function WorkspaceDashboardPage() {
       {/* Activity feed */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs">Recent Activity</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xs">Recent Activity</CardTitle>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData} title="Refresh">
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-1">
           {activities.length === 0 ? (
             <p className="text-xs text-muted-foreground py-4 text-center">No recent activity</p>
           ) : (
-            activities.slice(0, 15).map((a, i) => (
-              <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded text-[10px] hover:bg-muted/50">
-                <div className="min-w-0 flex-1">
-                  <span className="font-medium">{a.action}</span>
-                  {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {a.user && <span className="text-muted-foreground">{a.user}</span>}
-                  {a.status && (
-                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
-                      a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                      a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                      a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {a.status}
-                    </span>
-                  )}
-                  <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
-                </div>
-              </div>
-            ))
+            <>
+              {displayedActivities.map((a, i) => {
+                const link = getActivityLink(a)
+                const Wrapper = link ? 'a' : 'div'
+                return (
+                  <Wrapper
+                    key={i}
+                    {...(link ? { href: link } : {})}
+                    className={`flex items-center justify-between px-2 py-1.5 rounded text-[10px] ${
+                      link ? 'hover:bg-muted/50 cursor-pointer' : ''
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium">{a.action}</span>
+                      {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {a.user && <span className="text-muted-foreground">{a.user}</span>}
+                      {a.status && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                          a.status === 'completed' || a.status === 'success' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                          a.status === 'failed' || a.status === 'failure' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                          a.status === 'running' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {a.status}
+                        </span>
+                      )}
+                      <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                      {link && <ExternalLink className="h-2.5 w-2.5 text-muted-foreground" />}
+                    </div>
+                  </Wrapper>
+                )
+              })}
+              {activities.length > 10 && (
+                <button
+                  onClick={() => setShowAllActivities(!showAllActivities)}
+                  className="w-full text-center text-[10px] text-muted-foreground hover:text-foreground py-2"
+                >
+                  {showAllActivities ? 'Show less' : `Show all ${activities.length} activities`}
+                </button>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

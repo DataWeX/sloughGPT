@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Input, Skeleton, Badge } from '@sloughgpt/strui'
+import { useRouter } from 'next/navigation'
+import { Card, CardHeader, CardTitle, CardContent, Input, Skeleton, Badge, Button } from '@sloughgpt/strui'
 import { IconSearch } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
+import { Users, Brain, Database, BookOpen, ExternalLink } from 'lucide-react'
 
 interface SearchResult {
   id: string
@@ -28,21 +30,35 @@ interface SearchResponse {
   }
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  member: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  training: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  dataset: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  knowledge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  member: 'Members',
-  training: 'Training Jobs',
-  dataset: 'Datasets',
-  knowledge: 'Knowledge',
+const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof Users; link: string }> = {
+  member: {
+    color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    label: 'Members',
+    icon: Users,
+    link: '/workspaces',
+  },
+  training: {
+    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    label: 'Training Jobs',
+    icon: Brain,
+    link: '/training/queue',
+  },
+  dataset: {
+    color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    label: 'Datasets',
+    icon: Database,
+    link: '/datasets',
+  },
+  knowledge: {
+    color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    label: 'Knowledge',
+    icon: BookOpen,
+    link: '/knowledge',
+  },
 }
 
 export default function WorkspaceSearchPage() {
+  const router = useRouter()
   const { currentWorkspace } = useAuthStore()
   const addToast = useToastStore(s => s.addToast)
   const [query, setQuery] = useState('')
@@ -60,7 +76,6 @@ export default function WorkspaceSearchPage() {
     try {
       const res = await apiGet<SearchResponse>(`/workspaces/${currentWorkspace.id}/search`)
       if (res?.data) {
-        // Client-side filtering since backend returns all data
         const allResults = res.data.results
         const filtered: typeof allResults = { members: [], training_jobs: [], datasets: [], knowledge: [] }
         const lowerQ = q.toLowerCase()
@@ -121,30 +136,40 @@ export default function WorkspaceSearchPage() {
         <>
           <p className="text-sm text-muted-foreground mb-4">{total} result(s) found</p>
 
-          {Object.entries(results).map(([type, items]) => (
-            items.length > 0 && (
+          {Object.entries(results).map(([type, items]) => {
+            const config = TYPE_CONFIG[type]
+            if (!config || items.length === 0) return null
+            const Icon = config.icon
+
+            return (
               <Card key={type} className="mb-4">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xs flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${TYPE_COLORS[type]}`}>
-                      {TYPE_LABELS[type]}
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${config.color}`}>
+                      <Icon className="h-3 w-3 inline mr-1" />
+                      {config.label}
                     </span>
                     <span className="text-muted-foreground">({items.length})</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1">
                   {items.map(item => (
-                    <div key={item.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
+                    <button
+                      key={item.id}
+                      onClick={() => router.push(config.link)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50 transition-colors text-left group"
+                    >
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium">{item.title}</div>
-                        {item.detail && <div className="text-muted-foreground">{item.detail}</div>}
+                        <div className="font-medium group-hover:text-primary transition-colors">{item.title}</div>
+                        {item.detail && <div className="text-muted-foreground truncate">{item.detail}</div>}
                       </div>
-                    </div>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+                    </button>
                   ))}
                 </CardContent>
               </Card>
             )
-          ))}
+          })}
 
           {total === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">

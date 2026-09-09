@@ -186,6 +186,11 @@ export interface ProcessGuardStatus {
   health: { alive: boolean; memory_mb?: number; restarts?: number } | null
 }
 
+export interface ServicesHealth {
+  status: 'healthy' | 'degraded'
+  services: Record<string, { status: string; error?: string; [key: string]: unknown }>
+}
+
 export const systemController = {
   async getMetrics(): Promise<SystemMetrics> {
     return apiGet<SystemMetrics>('/system/metrics', undefined, { silent: true })
@@ -246,5 +251,9 @@ export const systemController = {
   async setProcessGuardEnabled(enabled: boolean): Promise<ProcessGuardStatus> {
     const { apiPost } = await import('./http-client')
     return apiPost<ProcessGuardStatus>('/models/process-guard', { enabled })
+  },
+
+  async getServicesHealth(): Promise<ServicesHealth> {
+    return apiGet<ServicesHealth>('/health/services', undefined, { silent: true })
   },
 }

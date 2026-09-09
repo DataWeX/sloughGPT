@@ -93,7 +93,7 @@ describe('WorkspaceDashboardPage', () => {
 
   it('shows members count', async () => {
     render(<WorkspaceDashboardPage />)
-    await screen.findByText('Workspace Dashboard')
+    await screen.findByText('Members')
     expect(screen.getAllByText('Members').length).toBeGreaterThanOrEqual(1)
   })
 })

@@ -20,6 +20,7 @@ import { datasetController, type Dataset, type DatasetPreview as PreviewData } f
 import { formatBytes } from '@/lib/format-bytes'
 import { formatDate } from '@/lib/conversations-utils'
 import { DatasetImportDialog } from '@/components/DatasetImportDialog'
+import { DatasetDropZone } from '@/components/DatasetDropZone'
 
 export default function DatasetsPage() {
   const router = useRouter()
@@ -39,6 +40,13 @@ export default function DatasetsPage() {
   const [compareData, setCompareData] = useState<Array<{ id: string; name: string; preview: PreviewData | null }>>([])
   const [sortBy, setSortBy] = useState<'date' | 'size' | 'name'>('date')
   const [versionCounts, setVersionCounts] = useState<Record<string, number>>({})
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [editingTagsId, setEditingTagsId] = useState<string | null>(null)
+  const [editingTags, setEditingTags] = useState<string[]>([])
+  const [newTag, setNewTag] = useState('')
+  const [savingTags, setSavingTags] = useState(false)
   const [searching, setSearching] = useState(false)
 
   const fetchDatasets = useCallback(async () => {
@@ -185,6 +193,47 @@ export default function DatasetsPage() {
     })
   }
 
+  const handleRenameSave = async (id: string) => {
+    if (!editingName.trim()) { setEditingId(null); return }
+    setSavingName(true)
+    try {
+      await datasetController.update(id, { name: editingName.trim() })
+      setDatasets(prev => prev.map(ds => ds.id === id ? { ...ds, name: editingName.trim() } : ds))
+      addToast('Renamed', 'success')
+    } catch {
+      addToast('Rename failed', 'error')
+    } finally {
+      setEditingId(null)
+      setSavingName(false)
+    }
+  }
+
+  const handleTagsSave = async (id: string) => {
+    setSavingTags(true)
+    try {
+      await datasetController.update(id, { tags: editingTags })
+      setDatasets(prev => prev.map(ds => ds.id === id ? { ...ds, tags: editingTags } : ds))
+      addToast('Tags updated', 'success')
+    } catch {
+      addToast('Tag update failed', 'error')
+    } finally {
+      setEditingTagsId(null)
+      setSavingTags(false)
+    }
+  }
+
+  const addTag = () => {
+    const tag = newTag.trim().toLowerCase()
+    if (tag && !editingTags.includes(tag)) {
+      setEditingTags([...editingTags, tag])
+      setNewTag('')
+    }
+  }
+
+  const removeTag = (tag: string) => {
+    setEditingTags(editingTags.filter(t => t !== tag))
+  }
+
   const loadCompare = async () => {
     if (compareIds.size < 2) return
     const results = await Promise.all(
@@ -315,6 +364,8 @@ export default function DatasetsPage() {
           </Card>
         )}
 
+        <DatasetDropZone onUploadComplete={fetchDatasets} className="mb-4" />
+
         {loading ? (
           <DatasetListSkeleton />
         ) : fetchError && datasets.length === 0 ? (
@@ -344,7 +395,29 @@ export default function DatasetsPage() {
               >
                   <CardContent className="flex items-center justify-between py-2.5 px-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{ds.name}</p>
+                      {editingId === ds.id ? (
+                        <input
+                          autoFocus
+                          value={editingName}
+                          onChange={e => setEditingName(e.target.value)}
+                          onBlur={() => handleRenameSave(ds.id)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleRenameSave(ds.id)
+                            if (e.key === 'Escape') setEditingId(null)
+                          }}
+                          disabled={savingName}
+                          onClick={e => e.stopPropagation()}
+                          className="text-sm font-medium bg-background border border-primary/50 rounded px-1.5 py-0.5 w-full focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        />
+                      ) : (
+                        <p
+                          className="text-sm font-medium truncate cursor-pointer hover:text-primary transition-colors"
+                          onDoubleClick={e => { e.stopPropagation(); setEditingId(ds.id); setEditingName(ds.name) }}
+                          title="Double-click to rename"
+                        >
+                          {ds.name}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {ds.source && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
@@ -361,11 +434,44 @@ export default function DatasetsPage() {
                             VLM · {ds.vlm_metadata.image_count} images
                           </span>
                         )}
-                        {ds.tags && ds.tags.length > 0 && ds.tags.slice(0, 3).map(tag => (
-                          <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
-                            {tag}
-                          </span>
-                        ))}
+                        {editingTagsId === ds.id ? (
+                          <div className="flex items-center gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
+                            {editingTags.map(tag => (
+                              <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium flex items-center gap-1">
+                                {tag}
+                                <button type="button" onClick={() => removeTag(tag)} className="text-muted-foreground hover:text-destructive ml-0.5">&times;</button>
+                              </span>
+                            ))}
+                            <input
+                              type="text"
+                              value={newTag}
+                              onChange={e => setNewTag(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag() } if (e.key === 'Escape') { setEditingTagsId(null) } }}
+                              placeholder="Add tag..."
+                              className="text-xs px-1.5 py-0.5 w-16 bg-background border border-primary/50 rounded focus:outline-none focus:ring-1 focus:ring-primary/30"
+                              autoFocus
+                            />
+                            <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1" onClick={() => handleTagsSave(ds.id)} disabled={savingTags}>
+                              {savingTags ? '...' : 'Save'}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {ds.tags && ds.tags.length > 0 && ds.tags.slice(0, 3).map(tag => (
+                              <span key={tag} className="text-xs px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
+                                {tag}
+                              </span>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={e => { e.stopPropagation(); setEditingTagsId(ds.id); setEditingTags(ds.tags || []) }}
+                              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                              title="Edit tags"
+                            >
+                              {(!ds.tags || ds.tags.length === 0) ? '+ Add tags' : '+ Edit'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5">
                         <span>{formatBytes(ds.size)}</span>

@@ -86,6 +86,7 @@ export default function TrainingInsightsPage() {
   const [trendData, setTrendData] = useState<TrendData | null>(null)
   const [loading, setLoading] = useState(true)
   const [useConfigStatus, setUseConfigStatus] = useState<'idle' | 'applied'>('idle')
+  const [exportStatus, setExportStatus] = useState<'idle' | 'exporting'>('idle')
 
   const loadData = useCallback(async () => {
     setLoading(true)

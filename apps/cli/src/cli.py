@@ -62,6 +62,8 @@ from core.helpers import (
     ns as _ns, output as _output, confirm as _confirm, verbose as _verbose,
 )
 
+from core.slo_cli import _SUGGESTIONS
+
 _TTY = sys.stdout.isatty()  # re-export for backward compat
 
 

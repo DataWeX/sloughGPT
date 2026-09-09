@@ -111,4 +111,16 @@ export const settingsController = {
   async getAdaptiveInsights(): Promise<AdaptiveInsights> {
     return apiGet<AdaptiveInsights>('/settings/adaptive/insights')
   },
+
+  async exportTrainingHistory(format: string = 'json', limit: number = 0): Promise<{ format: string; outcomes?: Record<string, unknown>[]; content?: string; count: number }> {
+    return apiGet(`/settings/training/history/export?format=${format}&limit=${limit}`)
+  },
+
+  async generateModelCard(name: string, params: Record<string, unknown> = {}): Promise<{ card: Record<string, unknown>; markdown: string }> {
+    return apiPost('/settings/model-card', { name, ...params })
+  },
+
+  async compareTrainingRuns(runA: string, runB: string): Promise<{ run_a: Record<string, unknown>; run_b: Record<string, unknown>; differences: Record<string, { run_a: unknown; run_b: unknown }>; a_wins: number; b_wins: number }> {
+    return apiGet(`/settings/training/compare?run_a=${runA}&run_b=${runB}`)
+  },
 }

@@ -8,7 +8,7 @@ import { Button, Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
+import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus, type ServicesHealth } from '@/lib/system-controller'
 import { trainingController, type TrainingJob } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
@@ -81,6 +81,7 @@ export default function SystemHealthPage() {
   const [executorStatus, setExecutorStatus] = useState<ExecutorStatus | null>(null)
   const [autoTrainStatus, setAutoTrainStatus] = useState<AutoTrainStatus | null>(null)
   const [trainingJobs, setTrainingJobs] = useState<TrainingJob[]>([])
+  const [servicesHealth, setServicesHealth] = useState<ServicesHealth | null>(null)
   const MAX_HISTORY = 30
   const [inferenceRate, setInferenceRate] = useState<number>(0)
   const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
@@ -146,6 +147,8 @@ export default function SystemHealthPage() {
       if (ex != null) setExecutorStatus(ex)
       if (at != null) setAutoTrainStatus(at)
       if (Array.isArray(tj)) setTrainingJobs(tj)
+      const sh = await systemController.getServicesHealth().catch(() => null)
+      if (sh != null) setServicesHealth(sh)
       setLastUpdated(new Date().toLocaleTimeString())
       return true
     } catch (e: unknown) {
@@ -424,6 +427,22 @@ export default function SystemHealthPage() {
         <FoldSection heading="System Info" open={false}>
           <div className="space-y-3">
             <KnowledgeCard knowledgeStats={knowledgeStats} adapterStatus={adapterStatus} loaded={loaded} />
+            {servicesHealth && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className={`h-2 w-2 rounded-full ${servicesHealth.status === 'healthy' ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Services Health</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {Object.entries(servicesHealth.services).map(([name, svc]) => (
+                    <div key={name} className="flex items-center gap-2 text-sm">
+                      <div className={`h-1.5 w-1.5 rounded-full ${svc.status === 'ok' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="capitalize">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
               <DiskCard disk={disk ?? undefined} />

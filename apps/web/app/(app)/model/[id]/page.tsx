@@ -1,456 +1,222 @@
 'use client'
-import { logger } from '@/lib/dev-log'
 export const dynamic = 'force-dynamic'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
+import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button, Spinner } from '@sloughgpt/strui'
-import { Badge } from '@sloughgpt/strui'
-import { StatCard, KpiGrid, Skeleton, KeyValueList, SettingsRow } from '@sloughgpt/strui'
-import { Slider } from '@sloughgpt/strui'
-import { Breadcrumbs } from '@sloughgpt/strui'
-import { IconRefresh, IconTrash } from '@sloughgpt/strui'
-import { StatusBanner } from '@/components/composed/StatusBanner'
-import { QuantizeCard } from '@/components/model/QuantizeCard'
-import { modelController, type ModelInfo, type HealthStatus } from '@/lib/model-controller'
-import { trainingJobsController } from '@/lib/training-controller'
-import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
-import { generationConfigController, type GenerationConfig } from '@/lib/generation-config-controller'
-import { useToastStore } from '@/lib/toast-store'
-import { extractErrorMessage } from '@/lib/error-utils'
+import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
+import { useToastStore } from '@/lib/toast-store'
+import { modelDisplayName } from '@/lib/inference-display'
+import {
+  ArrowLeft, Activity, Cpu, Zap, AlertTriangle, CheckCircle,
+  Clock, BarChart3, Settings, ExternalLink
+} from 'lucide-react'
+
+interface ModelDetail {
+  model_id: string
+  status: string
+  device: string
+  is_default: boolean
+  circuit_breaker: string
+  warmup_completed: boolean
+  warmup_error: string | null
+  total_requests?: number
+  total_tokens?: number
+  avg_latency_ms?: number
+  p95_latency_ms?: number
+  p99_latency_ms?: number
+  error_count?: number
+  last_request_at?: string
+  queue_depth_total?: number
+  queue_served?: number
+  queue_avg_wait_ms?: number
+  queue_max_wait_ms?: number
+  tokens_per_sec?: number
+}
+
+const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle }> = {
+  ready: { color: 'text-green-500', icon: CheckCircle },
+  degraded: { color: 'text-yellow-500', icon: AlertTriangle },
+  error: { color: 'text-red-500', icon: AlertTriangle },
+  loading: { color: 'text-blue-500', icon: Activity },
+  unloaded: { color: 'text-muted-foreground', icon: Clock },
+}
 
 export default function ModelDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const modelId = params.id as string
   const addToast = useToastStore(s => s.addToast)
-  const modelId = decodeURIComponent((params.id as string) || '')
 
-  const [model, setModel] = useState<ModelInfo | null>(null)
-  const [isFineTuned, setIsFineTuned] = useState(false)
-  const [health, setHealth] = useState<HealthStatus | null>(null)
+  const [model, setModel] = useState<ModelDetail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [benchmark, setBenchmark] = useState<BenchmarkResult | null>(null)
-  const [benchmarking, setBenchmarking] = useState(false)
-  const [modelLogs, setModelLogs] = useState<string[]>([])
-  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
-  const [uptime, setUptime] = useState<string | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const [genConfig, setGenConfig] = useState<GenerationConfig>({
-    temperature: 0.7,
-    max_new_tokens: 256,
-    top_p: 1.0,
-    top_k: 50,
-  })
-  const [configLoading, setConfigLoading] = useState(true)
-  const [configSaving, setConfigSaving] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  const fetchModel = useCallback(async () => {
+    setLoading(true)
     try {
-      const [models, h, logsRes] = await Promise.all([
-        modelController.list(),
-        modelController.getHealth(),
-        apiGet<{ logs: string[] }>('/models/logs?limit=10').catch(() => ({ logs: [] })),
-      ])
-      setHealth(h)
-      setModelLogs(logsRes?.logs ?? [])
-      const m = models.find(m => m.id === modelId || m.name === modelId)
-      if (m) {
-        setModel(m)
-        setIsFineTuned(false)
-        setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
-        return
-      }
-      const ft = (await trainingJobsController.listFineTuned()).find(x => x.name === modelId || x.model_name === modelId)
-      if (ft) {
-        setIsFineTuned(true)
-        setModel({
-          id: ft.name,
-          name: ft.name,
-          source: 'finetuned',
-          description: `Fine-tuned from ${ft.model}${ft.dataset ? ` on ${ft.dataset}` : ''} · final loss ${ft.final_loss ?? '—'}`,
-          size_mb: ft.size_mb,
-          params: ft.epochs ? `${ft.epochs} epochs` : undefined,
-        })
-        setLoadState(h?.model_loaded && (h.model_type?.includes(modelId) ?? false) ? 'loaded' : 'idle')
-        return
-      }
-      setModel(null)
-      setIsFineTuned(false)
-      setLoadState('idle')
+      const data = await apiGet<ModelDetail>(`/registry/models/${modelId}`)
+      setModel(data)
     } catch {
-      addToast('Something went wrong loading the model', 'error')
+      addToast('Failed to load model details', 'error')
     } finally {
       setLoading(false)
     }
   }, [modelId, addToast])
 
-  useEffect(() => {
-    if (!modelId) { router.push('/models'); return }
-    fetchData()
-    generationConfigController.get().then(cfg => {
-      if (cfg && typeof cfg.temperature === 'number') setGenConfig(cfg)
-    }).catch((e) => logger.debug('Could not config load', e)).finally(() => setConfigLoading(false))
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [modelId, fetchData, router])
+  useEffect(() => { fetchModel() }, [fetchModel])
 
-  useEffect(() => {
-    if (loadState === 'loaded') {
-      const start = Date.now()
-      intervalRef.current = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - start) / 1000)
-        const h = Math.floor(elapsed / 3600)
-        const m = Math.floor((elapsed % 3600) / 60)
-        const s = elapsed % 60
-        setUptime(h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`)
-      }, 1000)
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [loadState])
-
-  const handleLoad = async () => {
-    setLoadState('loading')
-    try {
-      const result = isFineTuned
-        ? await trainingJobsController.loadFineTuned(modelId)
-        : await modelController.load(modelId)
-      setLoadState('loaded')
-      const device = (result as { device?: string }).device || 'cpu'
-      setHealth(prev => prev ? { ...prev, model_loaded: true, model_type: modelId, device } : null)
-      addToast(`Model ready: ${modelId} (${device})`, 'success')
-    } catch (err) {
-      setLoadState('error')
-      addToast(extractErrorMessage(err, `Could not load ${modelId}`), 'error')
-    }
-  }
-
-  const handleUnload = async () => {
-    try {
-      await modelController.unloadModel()
-      setLoadState('idle')
-      setHealth(prev => prev ? { ...prev, model_loaded: false, model_type: '' } : null)
-      addToast('Model stopped', 'info')
-    } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not stop model'), 'error')
-    }
-  }
-
-  const handleSaveConfig = async () => {
-    setConfigSaving(true)
-    try {
-      await generationConfigController.update(genConfig)
-      addToast('Generation config updated', 'success')
-    } catch (err) {
-      addToast(extractErrorMessage(err, 'Could not save config'), 'error')
-    } finally {
-      setConfigSaving(false)
-    }
-  }
-
-  const runBenchmark = async () => {
-    setBenchmarking(true)
-    setBenchmark(null)
-    try {
-      const result = await benchmarkController.run({ model: modelId })
-      setBenchmark(result)
-    } catch (err) {
-      setBenchmark({ error: extractErrorMessage(err, 'Could not benchmark') } as BenchmarkResult)
-      addToast(extractErrorMessage(err, 'Could not performance test'), 'error')
-    } finally {
-      setBenchmarking(false)
-    }
-  }
-
-  const formatParamCount = (params?: string | number) => {
-    if (!params) return null
-    const n = typeof params === 'string' ? parseFloat(params) : params
-    if (isNaN(n)) return null
-    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`
-    return `${n}`
-  }
-
-  if (!modelId) return null
-
-  const isLoaded = loadState === 'loaded'
-  const isThisModelLoaded = isLoaded
+  const statusCfg = model ? STATUS_CONFIG[model.status] ?? STATUS_CONFIG.unloaded : null
+  const StatusIcon = statusCfg?.icon ?? Clock
 
   return (
     <PageContainer
-      title={model?.name || modelId}
+      title={model ? modelDisplayName(model.model_id) : 'Model Details'}
+      subtitle={model ? `Status: ${model.status}` : undefined}
       loading={loading}
-      loadingContent={
-        <div className="space-y-3">
-          <Skeleton className="h-32 rounded-lg" />
-          <Skeleton className="h-48 rounded-lg" />
+      loadingCards={4}
+      headerRight={
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => router.push('/models')}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchModel}>
+            <IconRefresh className="h-4 w-4" />
+          </Button>
         </div>
       }
     >
-      <Breadcrumbs
-        items={[
-          { label: 'Models', href: '/models' },
-          { label: model?.name || modelId },
-        ]}
-        className="mb-3"
-      />
-
-      {!model ? (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-sm text-muted-foreground mb-3">Model &ldquo;{modelId}&rdquo; not found.</p>
-            <Button size="sm" onClick={() => router.push('/models')}>Browse models</Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Status card */}
+      {!loading && model && (
+        <div className="space-y-6">
           <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <CardTitle className="text-base">Status</CardTitle>
-                  <Badge
-                    label={isLoaded ? 'Loaded' : loadState === 'loading' ? 'Loading…' : loadState === 'error' ? 'Error' : 'Inactive'}
-                    variant={isLoaded ? 'success' as const : loadState === 'error' ? 'error' as const : 'warning' as const}
-                    size="sm"
-                  />
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <StatusIcon className={`h-6 w-6 ${statusCfg?.color}`} />
+                <div className="flex-1">
+                  <div className="font-medium text-lg">{modelDisplayName(model.model_id)}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {model.device} {model.is_default ? '(default)' : ''}
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {isLoaded ? (
-                    <>
-                      <Button size="sm" className="h-11 text-xs" onClick={() => router.push('/chat')}>
-                        Chat with this model
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-11 text-xs" onClick={handleUnload}>
-                         <IconTrash className="h-4 w-4 mr-1" /> Remove
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" className="h-11 text-xs" onClick={handleLoad} disabled={loadState === 'loading'}>
-                      {loadState === 'loading' ? 'Loading…' : 'Load model'}
-                    </Button>
-                  )}
-                </div>
+                <Badge variant={model.status === 'ready' ? 'default' : 'secondary'}>
+                  {model.status}
+                </Badge>
               </div>
-            </CardHeader>
-            <CardContent>
-              <KeyValueList
-                dense
-                items={[
-                  { label: 'Model ID', value: modelId, mono: true },
-                  { label: 'Source', value: model?.source || 'huggingface' },
-                  { label: 'Device', value: health?.device || '—' },
-                  ...(model?.size_gb ? [{ label: 'Size', value: `${model.size_gb.toFixed(2)} GB` }] : []),
-                  ...(model?.cached !== undefined ? [{ label: 'Cached', value: model.cached ? 'Yes' : 'No' }] : []),
-                  ...(uptime && isLoaded ? [{ label: 'Uptime', value: uptime }] : []),
-                  ...(health?.inference_count !== undefined ? [{ label: 'Inferences', value: health.inference_count.toString() }] : []),
-                ]}
-              />
             </CardContent>
           </Card>
 
-          {/* Metrics card */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <MetricCard icon={Zap} label="Total Requests" value={model.total_requests ?? 0} />
+            <MetricCard icon={BarChart3} label="Total Tokens" value={model.total_tokens ?? 0} />
+            <MetricCard icon={Activity} label="Avg Latency" value={model.avg_latency_ms ? `${model.avg_latency_ms.toFixed(1)}ms` : '—'} />
+            <MetricCard icon={Cpu} label="Tokens/sec" value={model.tokens_per_sec ? model.tokens_per_sec.toFixed(1) : '—'} />
+          </div>
+
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Metrics</CardTitle>
-                <Button size="sm" variant="outline" className="h-11 text-xs" onClick={runBenchmark} disabled={benchmarking || !isLoaded}>
-                  <Spinner className="h-4 w-4 mr-1" />
-                  {benchmarking ? 'Benchmarking…' : benchmark ? 'Rerun' : 'Run benchmark'}
-                </Button>
-              </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" /> Latency Distribution
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {!isLoaded ? (
-                <p className="text-sm text-muted-foreground text-center py-4">Load this model to see live metrics.</p>
-              ) : benchmark?.error ? (
-                <StatusBanner variant="error" message={`Benchmark failed: ${benchmark.error}`} dismissible={false} />
-              ) : benchmark ? (
-                <div className="space-y-4">
-                  <KpiGrid columns={4}>
-                    <StatCard label="Parameters" value={formatParamCount(benchmark.num_parameters) || (benchmark.num_parameters ?? 0).toLocaleString()} />
-                    <StatCard label="Memory" value={`${benchmark.memory_mb.toFixed(0)} MB`} />
-                    <StatCard label="Throughput" value={`${benchmark.throughput_tokens_per_sec.toFixed(1)} tok/s`} />
-                    <StatCard label="Avg latency" value={`${benchmark.inference_time_ms.toFixed(0)} ms`} />
-                  </KpiGrid>
-                  <KpiGrid columns={3}>
-                    <StatCard label="P50 latency" value={`${(benchmark.latency_p50_ms ?? 0).toFixed(0)} ms`} />
-                    <StatCard label="P95 latency" value={`${(benchmark.latency_p95_ms ?? 0).toFixed(0)} ms`} />
-                    <StatCard label="P99 latency" value={`${(benchmark.latency_p99_ms ?? 0).toFixed(0)} ms`} />
-                  </KpiGrid>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold">{model.p95_latency_ms ? `${model.p95_latency_ms.toFixed(1)}` : '—'}</div>
+                  <div className="text-xs text-muted-foreground">P95 (ms)</div>
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">Run a benchmark to see performance metrics.</p>
-              )}
+                <div>
+                  <div className="text-2xl font-bold">{model.p99_latency_ms ? `${model.p99_latency_ms.toFixed(1)}` : '—'}</div>
+                  <div className="text-xs text-muted-foreground">P99 (ms)</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-red-500">{model.error_count ?? 0}</div>
+                  <div className="text-xs text-muted-foreground">Errors</div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Quick test card */}
-          {isLoaded && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Quick test</CardTitle>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Clock className="h-4 w-4" /> Request Queue
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <ModelTestPrompt modelId={modelId} />
+              <CardContent className="space-y-2 text-sm">
+                <Row label="Depth" value={model.queue_depth_total ?? 0} />
+                <Row label="Served" value={model.queue_served ?? 0} />
+                <Row label="Avg Wait" value={model.queue_avg_wait_ms ? `${model.queue_avg_wait_ms.toFixed(1)}ms` : '—'} />
+                <Row label="Max Wait" value={model.queue_max_wait_ms ? `${model.queue_max_wait_ms.toFixed(1)}ms` : '—'} />
               </CardContent>
             </Card>
-          )}
 
-          {/* Generation Config card */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Settings className="h-4 w-4" /> Circuit Breaker
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <Row label="State" value={model.circuit_breaker} />
+                <Row label="Warmup" value={model.warmup_completed ? 'Complete' : 'Pending'} />
+                {model.warmup_error && (
+                  <div className="text-xs text-red-500 mt-2">{model.warmup_error}</div>
+                )}
+                {model.last_request_at && (
+                  <Row label="Last Request" value={new Date(model.last_request_at).toLocaleString()} />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Generation Config</CardTitle>
-                <Button size="sm" className="h-8 text-xs" onClick={handleSaveConfig} disabled={configLoading || configSaving}>
-                  {configSaving ? 'Saving…' : 'Save'}
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => router.push('/training/queue')}>
+                  Training Queue
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => router.push('/training/trends')}>
+                  Training Trends
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => router.push('/training/insights')}>
+                  Adaptive Insights
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => window.open(`https://huggingface.co/${model.model_id}`, '_blank')}>
+                  <ExternalLink className="h-3 w-3 mr-1" /> HuggingFace
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {configLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-6" />
-                  <Skeleton className="h-6" />
-                  <Skeleton className="h-6" />
-                  <Skeleton className="h-6" />
-                </div>
-              ) : (
-                <div className="space-y-1 divide-y divide-border">
-                  <SettingsRow title="Temperature" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.temperature}</span>}>
-                  </SettingsRow>
-                  <div className="px-1 py-2">
-                    <Slider value={[genConfig.temperature]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, temperature: v }))} min={0} max={2} step={0.1} />
-                  </div>
-                  <SettingsRow title="Max tokens" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.max_new_tokens}</span>}>
-                  </SettingsRow>
-                  <div className="px-1 py-2">
-                    <Slider value={[genConfig.max_new_tokens]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, max_new_tokens: v }))} min={1} max={4096} step={1} />
-                  </div>
-                  <SettingsRow title="Top-p" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.top_p ?? 1}</span>}>
-                  </SettingsRow>
-                  <div className="px-1 py-2">
-                    <Slider value={[genConfig.top_p ?? 1]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, top_p: v }))} min={0} max={1} step={0.05} />
-                  </div>
-                  <SettingsRow title="Top-k" control={<span className="text-xs font-mono tabular-nums w-12 text-right">{genConfig.top_k ?? 50}</span>}>
-                  </SettingsRow>
-                  <div className="px-1 py-2">
-                    <Slider value={[genConfig.top_k ?? 50]} onValueChange={([v]: number[]) => setGenConfig(p => ({ ...p, top_k: v }))} min={0} max={200} step={1} />
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
-
-          {/* Quantize card */}
-          {isLoaded && (
-            <QuantizeCard
-              isLoaded={isLoaded}
-              modelId={modelId}
-              health={health}
-              onQuantized={fetchData}
-            />
-          )}
-
-          {/* Details card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <KeyValueList
-                dense
-                items={[
-                  { label: 'Type', value: model?.type || health?.model_type || modelId },
-                  { label: 'Source', value: model?.source || 'HuggingFace' },
-                  ...(model?.params ? [{ label: 'Parameters (raw)', value: model.params }] : []),
-                  ...(health?.vocab_size ? [{ label: 'Vocabulary size', value: health.vocab_size.toLocaleString() }] : []),
-                  ...(health?.block_size ? [{ label: 'Block size (context)', value: health.block_size.toLocaleString() }] : []),
-                  ...(health?.soul_engine_active ? [{ label: 'Soul engine', value: health.soul_name || 'active' }] : []),
-                ]}
-              />
-              {model?.tags && model.tags.length > 0 && (
-                <div className="mt-3">
-                  <span className="text-xs text-muted-foreground block mb-1">Tags</span>
-                  <div className="flex flex-wrap gap-1">
-                    {model.tags.map(t => (
-                      <Badge key={t} label={t} variant={"default" as const} size="sm" />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Model activity logs */}
-          {modelLogs.length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Recent Activity</CardTitle>
-              <Button size="sm" variant="ghost" aria-label="Refresh activity logs" onClick={() => apiGet<{ logs: string[] }>('/models/logs?limit=10').then(r => setModelLogs(r.logs)).catch(() => { logger.debug('Could not activity log refresh') })}>
-                <IconRefresh className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                {modelLogs.map((log) => (
-                  <p key={log} className="text-xs font-mono text-muted-foreground/70 truncate">{log}</p>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-          )}
-        </>
+        </div>
       )}
     </PageContainer>
   )
 }
 
-function ModelTestPrompt({ modelId }: { modelId: string }) {
-  const [prompt, setPrompt] = useState('Hello, who are you?')
-  const [output, setOutput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
-
-  const handleTest = useCallback(async () => {
-    if (!prompt.trim() || loading) return
-    setLoading(true)
-    setOutput('')
-    try {
-      const { generateController } = await import('@/lib/generate-controller')
-      const data = await generateController.generate({ prompt: prompt.trim(), max_new_tokens: 200 })
-      setOutput(data.text || '')
-    } catch {
-      addToast('Could not complete test — is the model loaded?', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }, [prompt, loading, addToast])
-
+function MetricCard({ icon: Icon, label, value }: { icon: typeof Zap; label: string; value: number | string }) {
   return (
-    <div className="space-y-3">
-      <div className="flex gap-2">
-        <input
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleTest() }}
-          placeholder="Type a prompt to test..."
-          aria-label="Model test prompt"
-          className="flex-1 h-9 rounded-md border border-border/60 bg-background px-3 text-sm"
-          disabled={loading}
-        />
-        <Button size="sm" onClick={handleTest} disabled={loading || !prompt.trim()}>
-          {loading ? 'Testing…' : 'Test'}
-        </Button>
-      </div>
-      {output && (
-        <div className="rounded-md border border-border/40 bg-muted/20 p-3 text-sm text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
-          {output}
+    <Card>
+      <CardContent className="py-3">
+        <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
+          <Icon className="h-3 w-3" /> {label}
         </div>
-      )}
+        <div className="text-xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function Row({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
     </div>
   )
 }
