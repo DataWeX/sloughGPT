@@ -393,5 +393,38 @@ class SettingsRouter:
             return success_response(data={"error": "One or both run IDs not found"})
         return success_response(data=result)
 
+    @endpoint("settings.list_training_presets")
+    async def list_training_presets(self) -> dict:
+        """List all available training presets."""
+        from domains.training.presets import list_presets
+        return success_response(data={"presets": list_presets()})
+
+    @endpoint("settings.get_training_preset")
+    async def get_training_preset(self, preset_name: str) -> dict:
+        """Get a specific training preset."""
+        from domains.training.presets import get_preset
+        preset = get_preset(preset_name)
+        if not preset:
+            return success_response(data={"error": f"Preset '{preset_name}' not found"})
+        return success_response(data=preset)
+
+    @endpoint("settings.apply_training_preset")
+    async def apply_training_preset(
+        self,
+        preset_name: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Apply a training preset to current settings."""
+        from domains.training.presets import apply_preset
+        config = apply_preset(preset_name)
+        if not config:
+            return success_response(data={"error": f"Preset '{preset_name}' not found"})
+        from domains.settings.persistent import get_settings as _get
+        ps = _get()
+        ps.update("training", **config)
+        safe_audit_log("settings.apply_preset", resource="training", detail=preset_name)
+        from dataclasses import asdict
+        return success_response(data={"preset": preset_name, "applied": config, "settings": asdict(ps.settings.training)})
+
 
 router = SettingsRouter().router
