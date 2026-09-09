@@ -33,8 +33,13 @@ export default function AuditTrailPage() {
       return
     }
     try {
+      const params = new URLSearchParams()
+      if (dateFrom) params.set('from_date', dateFrom)
+      if (dateTo) params.set('to_date', dateTo)
+      if (typeFilter !== 'all') params.set('type', typeFilter)
+      const qs = params.toString()
       const res = await apiGet<{ data: { activities: Activity[] } }>(
-        `/workspaces/${currentWorkspace.id}/activity`
+        `/workspaces/${currentWorkspace.id}/activity${qs ? `?${qs}` : ''}`
       )
       setActivities(res?.data?.activities ?? [])
     } catch {
@@ -42,41 +47,25 @@ export default function AuditTrailPage() {
     } finally {
       setLoading(false)
     }
-  }, [currentWorkspace?.id])
+  }, [currentWorkspace?.id, dateFrom, dateTo, typeFilter])
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
 
   const filteredActivities = useMemo(() => {
     return activities.filter(a => {
-      // Text filter
+      // Text filter (client-side)
       if (filter) {
         const q = filter.toLowerCase()
-        const matchText = (
+        return (
           a.action.toLowerCase().includes(q) ||
           a.detail.toLowerCase().includes(q) ||
           a.type.toLowerCase().includes(q) ||
           a.user.toLowerCase().includes(q)
         )
-        if (!matchText) return false
       }
-
-      // Type filter
-      if (typeFilter !== 'all' && a.type !== typeFilter) return false
-
-      // Date range filter
-      if (dateFrom || dateTo) {
-        try {
-          const ts = new Date(a.timestamp).getTime()
-          if (dateFrom && ts < new Date(dateFrom).getTime()) return false
-          if (dateTo && ts > new Date(dateTo + 'T23:59:59').getTime()) return false
-        } catch {
-          // invalid timestamp, include it
-        }
-      }
-
       return true
     })
-  }, [activities, filter, typeFilter, dateFrom, dateTo])
+  }, [activities, filter])
 
   const exportCsv = () => {
     const headers = ['timestamp', 'type', 'action', 'detail', 'status', 'user']

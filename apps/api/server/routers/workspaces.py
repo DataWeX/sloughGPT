@@ -451,7 +451,11 @@ class WorkspacesRouter:
 
         # ─── Workspace activity log ──────────────────────────────
         async def get_workspace_activity(
-            workspace_id: str, auth_user: dict = auth_dep
+            workspace_id: str,
+            from_date: str = "",
+            to_date: str = "",
+            type: str = "",
+            auth_user: dict = auth_dep,
         ) -> dict:
             """Recent activity in a workspace (training jobs, member changes, etc.)."""
             user = self._get_user(auth_user)
@@ -498,9 +502,17 @@ class WorkspacesRouter:
             except Exception:
                 pass
 
-            # Sort by timestamp descending, limit to 50
+            # Apply filters
+            if from_date:
+                activity = [a for a in activity if a.get("timestamp", "") >= from_date]
+            if to_date:
+                activity = [a for a in activity if a.get("timestamp", "") <= to_date + "T23:59:59"]
+            if type:
+                activity = [a for a in activity if a.get("type") == type]
+
+            # Sort by timestamp descending, limit to 200
             activity.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-            activity = activity[:50]
+            activity = activity[:200]
 
             return success_response(data={
                 "workspace_id": workspace_id,
