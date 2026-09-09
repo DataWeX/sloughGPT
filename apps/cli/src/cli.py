@@ -57,7 +57,6 @@ from core.framework import (
 
 # ── CLI helpers (Docker, banner, output) ─────────────────────────────
 from core.helpers import (
-    docker_action as _docker_action,
     show_welcome_banner as _show_welcome_banner,
     show_server_status as _show_server_status,
     ns as _ns, output as _output, confirm as _confirm, verbose as _verbose,
@@ -842,49 +841,11 @@ _register_system(cli)
 # docker — container management
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Docker compose workflows")
-def docker():
-    pass
-
-
-@docker.command("start", help="Start Docker services")
-@click.option("--gpu", is_flag=True, help="Use GPU profile")
-@click.option("--dev", is_flag=True, help="Use dev profile")
-def docker_start(gpu, dev):
-    _docker_action("start", _ns(gpu=gpu, dev=dev))
-
-
-@docker.command("stop", help="Stop Docker services")
-def docker_stop():
-    _docker_action("stop", _ns())
-
-
-@docker.command("status", help="Show Docker status")
-def docker_status():
-    _docker_action("status", _ns())
-
-
-@docker.command("logs", help="Show Docker logs")
-@click.argument("service", required=False)
-def docker_logs(service):
-    _docker_action("logs", _ns(service=service))
-
-
-@docker.command("build", help="Build Docker images")
-@click.option("--no-cache", is_flag=True, help="Build without cache")
-def docker_build(no_cache):
-    _docker_action("build", _ns(no_cache=no_cache))
-
-
-@docker.command("shell", help="Shell into container")
-@click.argument("service", default="api")
-def docker_shell(service):
-    _docker_action("shell", _ns(service=service))
-
+from groups.docker import register as _register_docker
+_register_docker(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# Simulate — boot kernel, load model, run inference, dump metrics
+# simulate — boot kernel, load model, run inference, dump metrics
 # ═══════════════════════════════════════════════════════════════════════
 
 
