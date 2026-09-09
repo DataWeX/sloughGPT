@@ -86,12 +86,9 @@ class SecurityRouter:
 
     @staticmethod
     @endpoint("security.create_key")
-    async def create_key(body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    async def create_key(req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         mgr = _get_key_manager()
-        name = body.get("name", "")
-        scopes = body.get("scopes", ["*"])
-        expires_at = body.get("expires_at")
-        key = mgr.create(name, scopes=scopes, expires_at=expires_at)
+        key = mgr.create(req.name, scopes=req.scopes, expires_at=req.expires_at)
         return success_response(data=key)
 
     @staticmethod
