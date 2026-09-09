@@ -812,4 +812,70 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][0]).toContain('/session/sess-1/regenerate');
     });
   });
+
+  describe('exportTrainingHistory()', () => {
+    it('calls GET /settings/training/history/export', async () => {
+      const mockData = { format: 'json', outcomes: [], count: 0 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.exportTrainingHistory('json', 10);
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/history/export?format=json&limit=10');
+    });
+  });
+
+  describe('generateModelCard()', () => {
+    it('calls POST /settings/model-card', async () => {
+      const mockData = { card: { model_name: 'test' }, markdown: '# test' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.generateModelCard('test', { base_model: 'gpt2' });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/model-card');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('getDashboardSummary()', () => {
+    it('calls GET /dashboard/summary', async () => {
+      const mockData = { health: { model_loaded: true }, active_processes: 0, services: { total: 2, healthy: 2 } };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getDashboardSummary();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/dashboard/summary');
+    });
+  });
+
+  describe('compareTrainingRuns()', () => {
+    it('calls GET /settings/training/compare', async () => {
+      const mockData = { run_a: {}, run_b: {}, differences: {}, a_wins: 1, b_wins: 0 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.compareTrainingRuns('run-1', 'run-2');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/compare?run_a=run-1&run_b=run-2');
+    });
+  });
+
+  describe('getBatchTrainingStatus()', () => {
+    it('calls GET /settings/training/batch-status', async () => {
+      const mockData = { jobs: [], summary: { total: 0, running: 0, queued: 0, completed: 0, failed: 0 } };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getBatchTrainingStatus();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/batch-status');
+    });
+  });
 });
