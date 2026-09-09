@@ -10,9 +10,16 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.api_keys")
+
+
+class CreateKeyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    scopes: list[str] = Field(default=["*"])
+    expires_at: int | None = Field(default=None, description="Unix timestamp for key expiration")
 
 
 def _hash_key(key: str) -> str:
@@ -159,13 +166,10 @@ class ApiKeysRouter:
         return workspace_id, user_id
 
     @endpoint("api_keys.create")
-    async def create_key(self, body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        name = body.get("name", "")
-        scopes = body.get("scopes", ["*"])
-        expires_at = body.get("expires_at")
+    async def create_key(self, req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         workspace_id, user_id = self._get_workspace_user(auth_user)
         key = self._manager.create(
-            name, scopes=scopes, expires_at=expires_at,
+            req.name, scopes=req.scopes, expires_at=req.expires_at,
             workspace_id=workspace_id, user_id=user_id,
         )
         return success_response(data=key)
