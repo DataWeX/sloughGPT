@@ -40,8 +40,8 @@ class TrainingJob(BaseModel):
     completed_at: datetime | None = None
     error: str = ""
     explanation: str = ""
-    loss_history: list[float] = []
-    reward_history: list[float] = []
+    loss_history: list[dict] = []
+    reward_history: list[dict] = []
     epochs_completed: int = 0
     status_message: str = ""
 

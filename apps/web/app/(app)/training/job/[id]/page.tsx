@@ -41,6 +41,7 @@ export default function TrainingJobDetailPage() {
 
   const [job, setJob] = useState<TrainingJob | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [summaryText, setSummaryText] = useState<string | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -48,11 +49,12 @@ export default function TrainingJobDetailPage() {
   const fetchJob = useCallback(async () => {
     if (!jobId) return
     setLoading(true)
+    setFetchError(null)
     try {
       const j = await trainingJobsController.get(jobId)
       setJob(j)
     } catch {
-      addToast('Something went wrong loading the job', 'error')
+      setFetchError('Failed to load training job. Check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -171,7 +173,14 @@ export default function TrainingJobDetailPage() {
         className="mb-3"
       />
 
-      {!job ? (
+      {!loading && fetchError ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-sm text-destructive mb-2">{fetchError}</p>
+            <Button size="sm" variant="outline" onClick={fetchJob}>Retry</Button>
+          </CardContent>
+        </Card>
+      ) : !job && !loading ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">Job not found</CardContent>
         </Card>
