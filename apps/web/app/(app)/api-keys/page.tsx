@@ -138,9 +138,7 @@ export default function ApiKeysPage() {
 
   return (
     <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>API Keys</AppRouteHeaderLead>
-      </AppRouteHeader>
+      <AppRouteHeader left={<AppRouteHeaderLead title="API Keys" />} />
 
       {newKey && (
         <Card className="mb-6 border-green-500/50 bg-green-500/5">
