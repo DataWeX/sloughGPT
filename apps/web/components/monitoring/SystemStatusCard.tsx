@@ -17,6 +17,9 @@ interface SystemStatusCardProps {
 
 export const SystemStatusCard = memo(function SystemStatusCard({ liveHealth, detailed, connectionStatus, inferenceRate, loaded }: SystemStatusCardProps) {
   const apiOk = (liveHealth?.health_status ?? detailed?.status) === 'healthy'
+  const apiDegraded = (liveHealth?.health_status ?? detailed?.status) === 'degraded'
+  const apiLabel = !loaded ? '' : apiOk ? 'Healthy' : apiDegraded ? 'Degraded' : 'Error'
+  const apiDotClass = !loaded ? 'bg-warning' : apiOk ? 'bg-success' : apiDegraded ? 'bg-warning' : 'bg-destructive'
   const modelLoaded = liveHealth?.model_loaded ?? detailed?.model_loaded ?? false
   const modelLoading = liveHealth?.model_loading ?? detailed?.model_loading ?? false
   const params = liveHealth?.num_parameters != null
@@ -67,8 +70,8 @@ export const SystemStatusCard = memo(function SystemStatusCard({ liveHealth, det
         <KpiGrid columns={2}>
           <StatCard
             label="API"
-            value={!loaded ? <Skeleton className="h-5 w-16" /> : <span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-            icon={<span className={cn('inline-block w-2 h-2 rounded-full', !loaded ? 'bg-warning' : apiOk ? 'bg-success' : 'bg-destructive')} />}
+            value={!loaded ? <Skeleton className="h-5 w-16" /> : <span className="font-mono">{apiLabel}</span>}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', apiDotClass)} />}
           />
           <StatCard
             label="Model"

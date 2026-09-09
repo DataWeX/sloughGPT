@@ -154,6 +154,21 @@ class ModelsRouter:
             methods=["POST"],
         )
         self.router.add_api_route(
+            path="/backends",
+            endpoint=self.list_backends,
+            methods=["GET"],
+        )
+        self.router.add_api_route(
+            path="/backends/active",
+            endpoint=self.get_active_backend,
+            methods=["GET"],
+        )
+        self.router.add_api_route(
+            path="/backends/active",
+            endpoint=self.set_active_backend,
+            methods=["POST"],
+        )
+        self.router.add_api_route(
             path="/visual-load", endpoint=self.visual_model_load, methods=["POST"]
         )
         self.router.add_api_route(path="/quantize", endpoint=self.quantize_model, methods=["POST"])
@@ -1037,6 +1052,85 @@ class ModelsRouter:
                 logger.info("External download completed: %s", model_id)
         except Exception as e:
             logger.warning("External download failed for %s: %s", model_id, e)
+
+    # ── Backend management ───────────────────────────────────────────────
+
+    @endpoint("models.list_backends")
+    async def list_backends(
+        self,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """List available download backends."""
+        from domains.infrastructure.download_manager import get_backend
+
+        backend = get_backend()
+        backends = {
+            "hf": {
+                "name": "hf",
+                "description": "HuggingFace Hub",
+                "active": isinstance(backend, type) and backend.__name__ == "HFDownloadBackend",
+            },
+            "external": {
+                "name": "external",
+                "description": "External HTTP servers",
+                "active": False,
+            },
+        }
+
+        # Check if current backend is external
+        try:
+            from domains.infrastructure.external_download import ExternalDownloadBackend
+            if isinstance(backend, ExternalDownloadBackend):
+                backends["hf"]["active"] = False
+                backends["external"]["active"] = True
+        except ImportError:
+            pass
+
+        return success_response(data=backends)
+
+    @endpoint("models.get_active_backend")
+    async def get_active_backend(
+        self,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Get the currently active download backend."""
+        from domains.infrastructure.download_manager import get_backend
+
+        backend = get_backend()
+        backend_type = "hf"
+
+        try:
+            from domains.infrastructure.external_download import ExternalDownloadBackend
+            if isinstance(backend, ExternalDownloadBackend):
+                backend_type = "external"
+        except ImportError:
+            pass
+
+        return success_response(data={
+            "type": backend_type,
+            "class": type(backend).__name__,
+        })
+
+    @endpoint("models.set_active_backend")
+    async def set_active_backend(
+        self,
+        backend_name: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Switch the active download backend."""
+        from domains.infrastructure.download_manager import set_backend, reset_backend
+
+        if backend_name == "hf":
+            reset_backend()
+            return success_response(data={"type": "hf"}, message="switched_to_hf")
+        elif backend_name == "external":
+            # External backend requires server configuration
+            raise_error(
+                "Use /models/external/download for external server downloads",
+                status_code=400,
+            )
+        else:
+            raise_error(f"Unknown backend: {backend_name}", status_code=404)
 
     @endpoint("models.visual_model_load")
     async def visual_model_load(
