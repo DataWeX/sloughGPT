@@ -903,6 +903,64 @@ class SloughGPTClient:
         result = self.chat([ChatMessage.user(user_message)])
         return result.message.content
 
+    # ============ OpenWebUI Integration ============
+
+    def openwebui_datasets(self) -> list:
+        """List datasets for OpenWebUI panel."""
+        return self._request("GET", "/openwebui/datasets")["datasets"]
+
+    def openwebui_checkpoints(self) -> list:
+        """List checkpoints for OpenWebUI panel."""
+        return self._request("GET", "/openwebui/checkpoints")["checkpoints"]
+
+    def openwebui_start_training(self, dataset_id: str, method: str = "finetune") -> dict:
+        """Start training from OpenWebUI panel."""
+        return self._request("POST", "/openwebui/training/start", json={"dataset_id": dataset_id, "method": method})
+
+    def openwebui_stop_training(self) -> dict:
+        """Stop training from OpenWebUI panel."""
+        return self._request("POST", "/openwebui/training/stop")
+
+    def openwebui_training_status(self) -> dict:
+        """Get training status for OpenWebUI panel."""
+        return self._request("GET", "/openwebui/training/status")
+
+    # ============ Cloud Training ============
+
+    def cloud_training_jobs(self, limit: int = 10) -> list:
+        """List cloud training jobs."""
+        return self._request("GET", f"/cloud-training/jobs?limit={limit}")["jobs"]
+
+    def cloud_training_submit(self, provider: str = "local", dataset_id: str = "") -> dict:
+        """Submit a cloud training job."""
+        return self._request("POST", "/cloud-training/submit", json={"provider": provider, "dataset_id": dataset_id})
+
+    def cloud_training_status(self, job_id: str) -> dict:
+        """Get cloud training job status."""
+        return self._request("GET", f"/cloud-training/{job_id}/status")
+
+    def cloud_training_cancel(self, job_id: str) -> dict:
+        """Cancel a cloud training job."""
+        return self._request("POST", f"/cloud-training/{job_id}/cancel")
+
+    # ============ Plugins ============
+
+    def plugins_list(self) -> list:
+        """List loaded plugins."""
+        return self._request("GET", "/plugins")["plugins"]
+
+    def plugins_enable(self, plugin_name: str) -> dict:
+        """Enable a plugin."""
+        return self._request("POST", f"/plugins/{plugin_name}/enable")
+
+    def plugins_disable(self, plugin_name: str) -> dict:
+        """Disable a plugin."""
+        return self._request("POST", f"/plugins/{plugin_name}/disable")
+
+    def plugins_reload(self) -> dict:
+        """Reload plugins."""
+        return self._request("POST", "/plugins/reload")
+
 
 class SimpleTracker:
     """Simple context manager for tracking metrics."""

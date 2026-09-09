@@ -960,6 +960,68 @@ export class SloughGPTClient {
     });
     return result.message.content;
   }
+
+  // ============ OpenWebUI Integration ============
+
+  async openwebuiDatasets(): Promise<any[]> {
+    const response = await this.request('GET', '/openwebui/datasets');
+    return response.datasets;
+  }
+
+  async openwebuiCheckpoints(): Promise<any[]> {
+    const response = await this.request('GET', '/openwebui/checkpoints');
+    return response.checkpoints;
+  }
+
+  async openwebuiStartTraining(datasetId: string, method: string = 'finetune'): Promise<any> {
+    return this.request('POST', '/openwebui/training/start', { dataset_id: datasetId, method });
+  }
+
+  async openwebuiStopTraining(): Promise<any> {
+    return this.request('POST', '/openwebui/training/stop');
+  }
+
+  async openwebuiTrainingStatus(): Promise<any> {
+    return this.request('GET', '/openwebui/training/status');
+  }
+
+  // ============ Cloud Training ============
+
+  async cloudTrainingJobs(limit: number = 10): Promise<any[]> {
+    const response = await this.request('GET', `/cloud-training/jobs?limit=${limit}`);
+    return response.jobs;
+  }
+
+  async cloudTrainingSubmit(provider: string = 'local', datasetId: string = ''): Promise<any> {
+    return this.request('POST', '/cloud-training/submit', { provider, dataset_id: datasetId });
+  }
+
+  async cloudTrainingStatus(jobId: string): Promise<any> {
+    return this.request('GET', `/cloud-training/${jobId}/status`);
+  }
+
+  async cloudTrainingCancel(jobId: string): Promise<any> {
+    return this.request('POST', `/cloud-training/${jobId}/cancel`);
+  }
+
+  // ============ Plugins ============
+
+  async pluginsList(): Promise<any[]> {
+    const response = await this.request('GET', '/plugins');
+    return response.plugins;
+  }
+
+  async pluginsEnable(pluginName: string): Promise<any> {
+    return this.request('POST', `/plugins/${pluginName}/enable`);
+  }
+
+  async pluginsDisable(pluginName: string): Promise<any> {
+    return this.request('POST', `/plugins/${pluginName}/disable`);
+  }
+
+  async pluginsReload(): Promise<any> {
+    return this.request('POST', '/plugins/reload');
+  }
 }
 
 export default SloughGPTClient;
