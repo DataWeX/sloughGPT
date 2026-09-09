@@ -337,6 +337,12 @@ class TrainerConfig:
     # Early stopping (0 = disabled; stop if no improvement for N evals)
     early_stopping_patience: int = 5
 
+    # EWC (Elastic Weight Consolidation) — prevents catastrophic forgetting
+    use_ewc: bool = False
+    ewc_lambda: float = 1000.0  # Regularization strength
+    ewc_num_samples: int = 200  # Samples for Fisher estimation
+    ewc_ema_decay: float = 0.9  # EMA decay for Fisher estimation
+
     # Device — SloNet training is pure numpy and always runs on the CPU.
     device: str = "cpu"
 
@@ -939,6 +945,20 @@ class SloughGPTTrainer:
             logger.info("LoRA params: %d (%.1f%%)", lora_params, 100 * lora_params / total,
                 extra={"tag": "TRAIN"},)
 
+        # Initialize EWC if enabled (prevents catastrophic forgetting)
+        self._ewc = None
+        if self.config.use_ewc:
+            from domains.training.ewc import EwcContinualLearner, EWCParameters
+            ewc_params = EWCParameters(
+                lambda_ewc=self.config.ewc_lambda,
+                num_samples=self.config.ewc_num_samples,
+                ema_decay=self.config.ewc_ema_decay,
+            )
+            self._ewc = EwcContinualLearner(self.model, params=ewc_params)
+            logger.info("EWC enabled: lambda=%.1f samples=%d",
+                self.config.ewc_lambda, self.config.ewc_num_samples,
+                extra={"tag": "TRAIN"},)
+
     def _create_optimizer(self):
         """Create SloAdamW optimizer with decoupled weight decay."""
         from domains.training.slonet import SloAdamW
@@ -1002,6 +1022,11 @@ class SloughGPTTrainer:
         y = data[idx[:, None] + offsets + 1]
         return x, y
 
+    def _get_train_loader(self, num_batches: int = 10):
+        """Generate training batches for EWC Fisher estimation."""
+        for _ in range(num_batches):
+            yield self.get_batch("train")
+
     def train_step(self) -> Dict[str, float]:
         """Execute a single training step on the pure numpy SloNet path."""
         model = self.training_model
@@ -1025,6 +1050,12 @@ class SloughGPTTrainer:
             return {"loss": self._ema_loss or 0.0, "raw_loss": loss_val, "skipped": True}
 
         self._nan_count = 0
+
+        # Add EWC penalty if enabled (prevents forgetting previous tasks)
+        if self._ewc is not None and self._ewc.task_snapshots:
+            ewc_loss, ewc_stats = self._ewc.ewc_loss()
+            loss = loss + ewc_loss
+
         (loss * scale_factor).backward()
         self.accumulation_step += 1
         raw_loss = loss.item() / scale_factor
@@ -1548,6 +1579,23 @@ class SloughGPTTrainer:
 
         self._is_training = False
 
+        # Save EWC snapshot after training (for continual learning)
+        if self._ewc is not None:
+            try:
+                def _loss_fn(model, batch):
+                    x, y = batch
+                    _, loss = model(x, y)
+                    return loss
+                self._ewc.save_task_snapshot(
+                    task_id=f"task_{int(time.time())}",
+                    task_name=f"train_{getattr(self.config, 'dataset', 'unknown')}",
+                    train_loader=self._get_train_loader(),
+                    loss_fn=_loss_fn,
+                )
+                logger.info("EWC snapshot saved after training", extra={"tag": "TRAIN"})
+            except Exception as exc:
+                logger.debug("EWC snapshot save failed: %s", exc)
+
         # final_loss: prefer best eval loss, fall back to last train loss
         final_loss = self._best_val_loss
         if final_loss is None or (isinstance(final_loss, float) and final_loss == float("inf")):
@@ -1568,6 +1616,37 @@ class SloughGPTTrainer:
             p = Path(best)
             checkpoint_name = p.name
             model_path = str(p)
+
+        # Record training outcome for adaptive learning
+        try:
+            from domains.training.outcome_tracker import TrainingOutcome, TrainingOutcomeTracker
+            import time as _outcome_time
+            outcome = TrainingOutcome(
+                run_id=f"train_{int(_outcome_time.time() * 1000)}",
+                timestamp=_outcome_time.time(),
+                dataset=getattr(self.config, 'dataset', ''),
+                dataset_size=getattr(self, '_dataset_size', 0),
+                model=getattr(self.config, 'model', 'slnet'),
+                method="finetune" if getattr(self.config, 'use_lora', False) else "distill",
+                epochs=getattr(self.config, 'epochs', 0),
+                batch_size=getattr(self.config, 'batch_size', 0),
+                learning_rate=getattr(self.config, 'learning_rate', 0.0),
+                max_seq_length=getattr(self.config, 'block_size', 0),
+                warmup_steps=getattr(self.config, 'warmup_steps', 0),
+                weight_decay=getattr(self.config, 'weight_decay', 0.0),
+                use_lora=getattr(self.config, 'use_lora', False),
+                lora_rank=getattr(self.config, 'lora_rank', 0),
+                lora_alpha=getattr(self.config, 'lora_alpha', 0),
+                final_loss=float(final_loss) if final_loss is not None else 0.0,
+                best_loss=float(self._best_val_loss) if self._best_val_loss is not None else 0.0,
+                training_time_s=time.time() - self._start_time if hasattr(self, '_start_time') else 0.0,
+                converged=not self._early_stopped and self._last_train_loss is not None,
+                early_stopped=self._early_stopped,
+            )
+            tracker = TrainingOutcomeTracker()
+            tracker.record(outcome)
+        except Exception as exc:
+            logger.debug("Failed to record training outcome: %s", exc)
 
         return TrainResult(
             success=True,

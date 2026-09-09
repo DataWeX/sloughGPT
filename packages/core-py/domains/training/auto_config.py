@@ -249,6 +249,32 @@ def auto_configure(
         explanation=explanation,
     )
 
+    # Try adaptive engine — if history exists, use learned recommendations
+    try:
+        from domains.training.adaptive_config import AdaptiveConfigEngine
+        engine = AdaptiveConfigEngine()
+        adaptive = engine.recommend(
+            dataset_size=analysis.word_count,
+            model=model,
+            method=method,
+        )
+        if adaptive.based_on_runs >= 3 and adaptive.confidence > 0.5:
+            config.learning_rate = adaptive.learning_rate
+            config.batch_size = adaptive.batch_size
+            config.epochs = adaptive.epochs
+            config.warmup_steps = adaptive.warmup_steps
+            config.lora_rank = adaptive.lora_rank
+            config.lora_alpha = adaptive.lora_alpha
+            config.explanation += f"\n\nAdaptive: {adaptive.reason}"
+            logger.info(
+                "Adaptive override: lr=%.2e bs=%d epochs=%d (from %d runs)",
+                adaptive.learning_rate, adaptive.batch_size,
+                adaptive.epochs, adaptive.based_on_runs,
+                extra={"tag": "TRAIN"},
+            )
+    except Exception:
+        pass  # Fall back to static config
+
     logger.info(
         "Auto-config: dataset=%s, method=%s, model=%s, epochs=%d, rl=%s",
         dataset, method, model, epochs, rl_post_train,
