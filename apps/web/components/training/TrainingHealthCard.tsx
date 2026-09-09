@@ -1,11 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
 
 interface TrainingHealthCardProps {
   checkpoints: Checkpoint[]
+  onTrainMore?: () => void
 }
 
 type HealthStatus = 'improving' | 'stagnant' | 'diverging' | 'no-data'
@@ -77,11 +78,30 @@ const STATUS_LABELS: Record<HealthStatus, string> = {
   'no-data': 'No data',
 }
 
-export function TrainingHealthCard({ checkpoints }: TrainingHealthCardProps) {
+export function TrainingHealthCard({ checkpoints, onTrainMore }: TrainingHealthCardProps) {
   const result = useMemo(() => analyze(checkpoints), [checkpoints])
   const styles = STATUS_STYLES[result.status]
 
-  if (checkpoints.length === 0) return null
+  if (checkpoints.length === 0) {
+    return (
+      <Card className={STATUS_STYLES['no-data'].border}>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Training health</CardTitle>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES['no-data'].badge}`}>
+            {STATUS_LABELS['no-data']}
+          </span>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">{result.message}</p>
+          {onTrainMore && (
+            <Button size="sm" variant="outline" className="mt-3" onClick={onTrainMore}>
+              Train your first model
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className={styles.border}>

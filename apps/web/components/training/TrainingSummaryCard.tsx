@@ -1,11 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
 
 interface TrainingSummaryCardProps {
   checkpoints: Checkpoint[]
+  onTrainMore?: () => void
 }
 
 function fmtDuration(totalS: number): string {
@@ -61,10 +62,31 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   return stats
 }
 
-export function TrainingSummaryCard({ checkpoints }: TrainingSummaryCardProps) {
+export function TrainingSummaryCard({ checkpoints, onTrainMore }: TrainingSummaryCardProps) {
   const stats = useMemo(() => computeStats(checkpoints), [checkpoints])
 
-  if (stats.length === 0) return null
+  if (stats.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Training summary</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-6">
+            <p className="text-sm text-muted-foreground">No checkpoints saved yet</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">
+              Train a model to see loss, duration, and performance stats here.
+            </p>
+            {onTrainMore && (
+              <Button size="sm" variant="outline" className="mt-3" onClick={onTrainMore}>
+                Train your first model
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>
