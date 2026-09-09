@@ -35,11 +35,18 @@ export interface PhonemeDetectResult {
   supported_languages: string[]
 }
 
+export interface MelSpectrogram {
+  data: number[][]
+  n_mels: number
+  n_frames: number
+}
+
 export interface PhonemeSynthesizeResult {
   audio: string
   text: string
   duration_sec: number
   elapsed_ms: number
+  spectrogram: MelSpectrogram
 }
 
 export type PhonemeLanguage = 'en' | 'de' | 'fr' | 'es' | 'it' | 'pt'

@@ -773,7 +773,8 @@ export default function KnowledgePage() {
               {displayItems.map(item => (
                 <div
                   key={item.id}
-                  className={cn('group relative p-4 rounded-lg border text-sm leading-relaxed transition-colors', selectedIds.has(item.id) ? 'bg-primary/[0.06] border-primary/30' : editingId === item.id ? 'bg-primary/[0.04] border-primary/30' : 'bg-card border-border/60 hover:bg-muted/30')}
+                  className={cn('group relative p-4 rounded-lg border text-sm leading-relaxed transition-colors cursor-pointer', selectedIds.has(item.id) ? 'bg-primary/[0.06] border-primary/30' : editingId === item.id ? 'bg-primary/[0.04] border-primary/30' : 'bg-card border-border/60 hover:bg-muted/30')}
+                  onClick={() => router.push(`/knowledge/${item.id}`)}
                 >
                   <div className="flex items-start gap-2">
                     <Checkbox
@@ -781,6 +782,7 @@ export default function KnowledgePage() {
                       onCheckedChange={() => toggleSelect(item.id)}
                       aria-label={`Select knowledge item`}
                       className="mt-0.5 rounded border-border shrink-0"
+                      onClick={e => e.stopPropagation()}
                     />
                     <div className="flex-1 min-w-0">
                       {editingId === item.id ? (
