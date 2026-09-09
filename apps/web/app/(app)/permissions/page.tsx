@@ -76,9 +76,7 @@ export default function PermissionsPage() {
 
   return (
     <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>Permissions</AppRouteHeaderLead>
-      </AppRouteHeader>
+      <AppRouteHeader left={<AppRouteHeaderLead title="Permissions" />} />
 
       {/* Role-Permission Matrix */}
       <Card className="mb-6">

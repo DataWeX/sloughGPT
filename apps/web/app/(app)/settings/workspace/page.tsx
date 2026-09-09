@@ -257,9 +257,7 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>{settings.name} — Settings</AppRouteHeaderLead>
-      </AppRouteHeader>
+      <AppRouteHeader left={<AppRouteHeaderLead title={`${settings.name} — Settings`} />} />
 
       <KpiGrid className="mb-6">
         <StatCard label="Members" value={String(usage?.members?.total ?? settings.member_count ?? 0)} />
