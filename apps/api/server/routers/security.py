@@ -58,6 +58,9 @@ class SecurityRouter:
     ) -> dict:
         from infrastructure.auth import get_audit_logger
 
+        if auth_user and auth_user.get("role") not in ("owner", "admin"):
+            raise_error("Admin access required", code="auth/forbidden", status=403)
+
         audit_logger = get_audit_logger()
 
         workspace_id = ""
@@ -78,8 +81,6 @@ class SecurityRouter:
                 logs = [l for l in logs if l.get("event_type") == event_type]
             if workspace_id:
                 logs = [l for l in logs if l.get("workspace_id", "") == workspace_id]
-        if auth_user.get("role") not in ("owner", "admin"):
-            raise_error("Admin access required", code="auth/forbidden", status=403)
         return success_response(data={"logs": logs, "count": len(logs)})
 
     # ── API key management ──

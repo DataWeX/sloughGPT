@@ -392,8 +392,7 @@ class FilesRouter:
             file_path.unlink(missing_ok=True)
         except Exception as e:
             logger.warning("Failed to delete file %s: %s", file_path, e)
-        del meta[file_id]
-        await self._async_save_metadata(meta)
+        await asyncio.to_thread(self._delete_file_metadata, file_id)
         safe_audit_log("file.delete", resource=file_id)
         return success_response(data={"deleted": file_id})
 
@@ -413,8 +412,7 @@ class FilesRouter:
             raise_error("File not found on disk", "E_NOT_FOUND", status_code=404)
         # Update chars count
         m["chars"] = len(text)
-        meta[file_id] = m
-        await self._async_save_metadata(meta)
+        await asyncio.to_thread(self._upsert_file_metadata, file_id, m)
         # Integrate with RAG service
         facts_stored = 0
         try:
