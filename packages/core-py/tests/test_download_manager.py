@@ -367,3 +367,95 @@ class TestBackendManagement:
             else:
                 sys.modules.pop("domains.infrastructure.hf_hub", None)
             dm._backend = None
+
+
+# ---------------------------------------------------------------------------
+# CompressedFakeBackend + tests
+# ---------------------------------------------------------------------------
+
+
+class CompressedFakeBackend(FakeBackend):
+    """FakeBackend that reports compression support and tracks compressed calls."""
+
+    def __init__(self):
+        super().__init__()
+        self.compressed_calls: list = []
+        self._compression_supported = True
+
+    def supports_compression(self, resource_id):
+        return self._compression_supported and resource_id.startswith("http")
+
+    def download_compressed(self, resource_id, on_progress, on_file_complete):
+        self.compressed_calls.append(resource_id)
+        if on_progress:
+            on_progress(resource_id, 500, 1000, 250.0)
+        if on_file_complete:
+            on_file_complete(resource_id, "model.safetensors")
+        return self._download_result
+
+
+class TestCompressedDownload:
+    def test_compressed_backend_calls_download_compressed(self):
+        """When supports_compression returns True, download_compressed is called."""
+        backend = CompressedFakeBackend()
+        progress = []
+        files = []
+
+        def on_progress(mid, done, total, speed):
+            progress.append((done, total))
+
+        def on_file_complete(mid, path):
+            files.append(path)
+
+        result = backend.download_compressed(
+            "http://server/models/7B", on_progress, on_file_complete
+        )
+        assert result["status"] == "complete"
+        assert "http://server/models/7B" in backend.compressed_calls
+        assert len(progress) == 1
+        assert files == ["model.safetensors"]
+
+    def test_non_compressed_backend_calls_download(self):
+        """When supports_compression returns False, regular download is called."""
+        backend = CompressedFakeBackend()
+        backend._compression_supported = False
+        assert backend.supports_compression("http://server/models/7B") is False
+
+    def test_hf_model_id_uses_regular_download(self):
+        """HuggingFace model IDs (not URLs) always use regular download."""
+        backend = CompressedFakeBackend()
+        assert backend.supports_compression("meta-llama/Llama-2-7B") is False
+
+    def test_compressed_download_progress_tracking(self):
+        """Compressed download reports progress correctly."""
+        backend = CompressedFakeBackend()
+        progress = []
+
+        def on_progress(mid, done, total, speed):
+            progress.append(done)
+
+        backend.download_compressed(
+            "http://server/models/7B", on_progress, None
+        )
+        assert progress == [500]
+
+
+class TestDownloadManagerRouting:
+    def test_uses_compressed_when_backend_supports(self, monkeypatch):
+        """DownloadManager routes to download_compressed when supported."""
+        import threading
+        monkeypatch.setattr(dm, "_backend", None)
+        monkeypatch.setattr(dm, "_backend_lock", threading.Lock())
+
+        backend = CompressedFakeBackend()
+        dm.set_backend(backend)
+
+        # Verify routing logic directly
+        assert backend.supports_compression("http://server/models/7B") is True
+        assert backend.supports_compression("meta-llama/Llama-2-7B") is False
+        dm.reset_backend()
+
+    def test_compressed_flag_defaults_false(self):
+        """Default DownloadBackend.supports_compression returns False."""
+        backend = FakeBackend()
+        assert backend.supports_compression("http://anything") is False

@@ -40,7 +40,7 @@ class TestStatus:
                 with patch("downcraft.__main__.state.get_state") as mock_state:
                     st = PersistentState(state_dir=Path(td) / "state")
                     key = "https://example.com/f.bin"
-                    st.create(key, cache_dir="")
+                    st.create(key, dest_dir="")
                     st.update_file_progress(
                         key,
                         file_path="f.bin",
@@ -66,8 +66,8 @@ class TestList:
         with tempfile.TemporaryDirectory() as td:
             with patch("downcraft.__main__.state.get_state") as mock_state:
                 st = PersistentState(state_dir=Path(td) / "state")
-                st.create("https://example.com/a.bin", cache_dir="")
-                st.create("https://example.com/b.bin", cache_dir="")
+                st.create("https://example.com/a.bin", dest_dir="")
+                st.create("https://example.com/b.bin", dest_dir="")
                 mock_state.return_value = st
                 cli.cmd_list(type("A", (), {}))
                 out = capsys.readouterr().out

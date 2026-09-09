@@ -176,5 +176,49 @@ class TrainingOutcomeTracker:
 
         return max(0.0, min(1.0, score))
 
+    def export_json(self, limit: int = 0) -> List[Dict[str, Any]]:
+        """Export outcomes as a list of dicts (JSON-serializable)."""
+        outcomes = self.load_outcomes()
+        if limit > 0:
+            outcomes = outcomes[-limit:]
+        return [o.to_dict() for o in outcomes]
+
+    def export_csv(self, limit: int = 0) -> str:
+        """Export outcomes as CSV string."""
+        outcomes = self.load_outcomes()
+        if limit > 0:
+            outcomes = outcomes[-limit:]
+        if not outcomes:
+            return ""
+        fields = list(outcomes[0].to_dict().keys())
+        lines = [",".join(fields)]
+        for o in outcomes:
+            row = o.to_dict()
+            lines.append(",".join(str(row.get(f, "")).replace(",", ";") for f in fields))
+        return "\n".join(lines)
+
+    def compare(self, run_id_a: str, run_id_b: str) -> Optional[Dict[str, Any]]:
+        """Compare two training runs side by side."""
+        outcomes = self.load_outcomes()
+        a = next((o for o in outcomes if o.run_id == run_id_a), None)
+        b = next((o for o in outcomes if o.run_id == run_id_b), None)
+        if not a or not b:
+            return None
+
+        diff = {}
+        for field_name in TrainingOutcome.__dataclass_fields__:
+            va = getattr(a, field_name)
+            vb = getattr(b, field_name)
+            if va != vb:
+                diff[field_name] = {"run_a": va, "run_b": vb}
+
+        return {
+            "run_a": a.to_dict(),
+            "run_b": b.to_dict(),
+            "differences": diff,
+            "a_wins": sum(1 for k, v in diff.items() if k in ("final_loss", "best_loss", "perplexity", "training_time_s") and v["run_a"] < v["run_b"]) + (1 if a.quality_score > b.quality_score else 0),
+            "b_wins": sum(1 for k, v in diff.items() if k in ("final_loss", "best_loss", "perplexity", "training_time_s") and v["run_a"] > v["run_b"]) + (1 if b.quality_score > a.quality_score else 0),
+        }
+
 
 __all__ = ["TrainingOutcome", "TrainingOutcomeTracker", "DEFAULT_HISTORY_PATH"]

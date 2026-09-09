@@ -341,3 +341,112 @@ class TestEdgeCases:
         decompressed, r2 = decompress_bytes(compressed)
         assert decompressed == data
         assert r1.sha256 == r2.sha256
+
+
+# ── CompressedDownloader roundtrip (serve → download → verify) ────────────────
+
+class TestCompressedDownloaderRoundtrip:
+    def test_known_size_compresses_smaller(self, tmp_path):
+        """Create a file with known size, compress, download, verify smaller on wire."""
+        from domains.infrastructure.compressed_transfer import CompressedDownloader
+
+        # 1MB of repeated data — compresses very well
+        original_data = b"ABCDEFGHIJ" * (1024 * 1024 // 10)
+        original_size = len(original_data)
+        src = tmp_path / "model.bin"
+        src.write_bytes(original_data)
+
+        # Compress to a stream (simulates server sending SGZ1)
+        compressed_stream = io.BytesIO()
+        result = compress_stream(
+            io.BytesIO(original_data),
+            compressed_stream,
+            include_header=True,
+        )
+        compressed_size = compressed_stream.tell()
+        compressed_stream.seek(0)
+
+        # Download + decompress via CompressedDownloader
+        dest = tmp_path / "downloaded" / "model.bin"
+        downloader = CompressedDownloader()
+        dl_result = downloader.download_from_stream(
+            compressed_stream,
+            dest,
+            expected_sha256=result.sha256,
+        )
+
+        assert dl_result.success is True
+        assert dest.exists()
+        assert dest.read_bytes() == original_data
+        assert dest.stat().st_size == original_size
+        # Compressed must be smaller on the wire
+        assert compressed_size < original_size
+
+    def test_various_sizes_compress_and_verify(self, tmp_path):
+        """Roundtrip across sizes from 1KB to 512KB with compressible data."""
+        from domains.infrastructure.compressed_transfer import CompressedDownloader
+
+        for size in [1024, 10_240, 102_400, 512_000]:
+            # Use repeated pattern (compressible) for each size
+            original_data = b"X" * size
+            src = tmp_path / f"file_{size}.bin"
+            src.write_bytes(original_data)
+
+            compressed_stream = io.BytesIO()
+            result = compress_stream(
+                io.BytesIO(original_data),
+                compressed_stream,
+                include_header=True,
+            )
+            compressed_size = compressed_stream.tell()
+            compressed_stream.seek(0)
+
+            dest = tmp_path / "out" / f"file_{size}.bin"
+            downloader = CompressedDownloader()
+            dl_result = downloader.download_from_stream(
+                compressed_stream,
+                dest,
+                expected_sha256=result.sha256,
+            )
+
+            assert dl_result.success is True
+            assert dest.read_bytes() == original_data
+            assert dest.stat().st_size == size
+            assert compressed_size < size
+
+    def test_compressed_bandwidth_savings(self, tmp_path):
+        """Verify compressed transfer uses less bandwidth than raw."""
+        from domains.infrastructure.compressed_transfer import CompressedDownloader
+
+        # Highly compressible data (text-like, repeated)
+        line = b"The quick brown fox jumps over the lazy dog. "
+        original_data = line * (1_000_000 // len(line) + 1)
+        original_data = original_data[:1_000_000]  # exactly 1MB
+        original_size = len(original_data)
+
+        src = tmp_path / "text_model.bin"
+        src.write_bytes(original_data)
+
+        compressed_stream = io.BytesIO()
+        result = compress_stream(
+            io.BytesIO(original_data),
+            compressed_stream,
+            include_header=True,
+        )
+        compressed_size = compressed_stream.tell()
+        compressed_stream.seek(0)
+
+        dest = tmp_path / "downloaded_text.bin"
+        downloader = CompressedDownloader()
+        dl_result = downloader.download_from_stream(
+            compressed_stream,
+            dest,
+            expected_sha256=result.sha256,
+        )
+
+        assert dl_result.success is True
+        assert dest.read_bytes() == original_data
+        # Should achieve at least 30% savings on repeated text
+        ratio = compressed_size / original_size
+        assert ratio < 0.7, f"Compression ratio {ratio:.2f} too high for text data"
+        assert compressed_size < original_size

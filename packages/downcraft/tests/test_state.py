@@ -15,9 +15,9 @@ class TestPersistentState:
         with tempfile.TemporaryDirectory() as td:
             st = PersistentState(Path(td))
             ms = st.create("test-model", "/tmp/cache")
-            assert ms.model_id == "test-model"
+            assert ms.key == "test-model"
             assert ms.status == "queued"
-            assert ms.cache_dir == "/tmp/cache"
+            assert ms.dest_dir == "/tmp/cache"
             assert st.get("test-model") is ms
 
     def test_get_nonexistent(self):
@@ -100,7 +100,7 @@ class TestPersistentState:
             ms = st2.get("m1")
             assert ms is not None
             assert ms.status == "complete"
-            assert ms.cache_dir == "/cache"
+            assert ms.dest_dir == "/cache"
 
     def test_persistence_with_file_progress(self):
         with tempfile.TemporaryDirectory() as td:
@@ -123,7 +123,7 @@ class TestPersistentState:
 
     def test_model_state_properties(self):
         ms = ModelState(
-            model_id="test",
+            key="test",
             status="downloading",
             files={
                 "a": FileProgress(path="a", url="u", bytes_downloaded=30, total_bytes=100),
@@ -137,7 +137,7 @@ class TestPersistentState:
         assert ms.files_total == 2
 
     def test_model_state_percentage_zero(self):
-        ms = ModelState(model_id="test", status="queued")
+        ms = ModelState(key="test", status="queued")
         assert ms.percentage == 0.0
         assert ms.files_completed == 0
 

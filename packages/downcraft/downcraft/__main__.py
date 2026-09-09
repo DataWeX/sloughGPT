@@ -100,7 +100,7 @@ def cmd_status(args: argparse.Namespace):
 
     mb_dl = ms.bytes_downloaded / (1024 * 1024)
     mb_total = ms.total_bytes / (1024 * 1024)
-    print(f"Key:      {ms.model_id}")
+    print(f"Key:      {ms.key}")
     print(f"Status:   {ms.status}")
     print(f"Progress: {mb_dl:.0f} / {mb_total:.0f} MB ({ms.percentage}%)")
     print(f"Files:    {ms.files_completed}/{ms.files_total}")
@@ -119,7 +119,7 @@ def cmd_list(args: argparse.Namespace):
     for ms in models:
         mb_dl = ms.bytes_downloaded / (1024 * 1024)
         mb_total = ms.total_bytes / (1024 * 1024)
-        key = ms.model_id[:50]
+        key = ms.key[:50]
         print(f"{key:50s} {ms.status:12s} {mb_dl:8.0f}/{mb_total:.0f} MB ({ms.percentage:5.1f}%)")
 
 

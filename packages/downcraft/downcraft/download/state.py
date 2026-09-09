@@ -1,7 +1,7 @@
 """
 Persistent download state — survives process restarts and power loss.
 
-Tracks per-model download progress in a JSON file at
+Tracks per-download progress in a JSON file at
 ``~/.downcraft/state.json``, flushed to disk after every chunk.
 """
 
@@ -35,13 +35,13 @@ class FileProgress:
 
 @dataclass
 class ModelState:
-    model_id: str
+    key: str
     status: str = "queued"  # queued | downloading | complete | failed
     files: Dict[str, FileProgress] = field(default_factory=dict)
     started_at: float = 0.0
     completed_at: Optional[float] = None
     error: str = ""
-    cache_dir: str = ""
+    dest_dir: str = ""
 
     @property
     def total_bytes(self) -> int:
@@ -89,37 +89,37 @@ class PersistentState:
     # Public API
     # ------------------------------------------------------------------
 
-    def get(self, model_id: str) -> Optional[ModelState]:
+    def get(self, key: str) -> Optional[ModelState]:
         with self._mutex:
-            return self._models.get(model_id)
+            return self._models.get(key)
 
     def list(self) -> List[ModelState]:
         with self._mutex:
             return list(self._models.values())
 
-    def create(self, model_id: str, cache_dir: str) -> ModelState:
+    def create(self, key: str, dest_dir: str) -> ModelState:
         with self._mutex:
-            existing = self._models.get(model_id)
+            existing = self._models.get(key)
             if existing is not None:
                 # Preserve per-file progress across restarts/resumes so a
-                # new download() call continues, not restarts, the model.
-                if cache_dir:
-                    existing.cache_dir = cache_dir
+                # new download() call continues, not restarts.
+                if dest_dir:
+                    existing.dest_dir = dest_dir
                 self._mark_dirty()
                 return existing
             st = ModelState(
-                model_id=model_id,
+                key=key,
                 status="queued",
                 started_at=time.time(),
-                cache_dir=cache_dir,
+                dest_dir=dest_dir,
             )
-            self._models[model_id] = st
+            self._models[key] = st
             self._mark_dirty()
             return st
 
-    def set_status(self, model_id: str, status: str, error: str = ""):
+    def set_status(self, key: str, status: str, error: str = ""):
         with self._mutex:
-            st = self._models.get(model_id)
+            st = self._models.get(key)
             if st is None:
                 return
             st.status = status
@@ -131,7 +131,7 @@ class PersistentState:
 
     def update_file_progress(
         self,
-        model_id: str,
+        key: str,
         file_path: str,
         url: str,
         bytes_downloaded: int,
@@ -140,7 +140,7 @@ class PersistentState:
         complete: bool = False,
     ):
         with self._mutex:
-            st = self._models.get(model_id)
+            st = self._models.get(key)
             if st is None:
                 return
             fp = st.files.get(file_path)
@@ -171,9 +171,9 @@ class PersistentState:
                 st.status = "downloading"
             self._mark_dirty()
 
-    def remove(self, model_id: str):
+    def remove(self, key: str):
         with self._mutex:
-            self._models.pop(model_id, None)
+            self._models.pop(key, None)
             self._mark_dirty()
 
     def flush(self):
@@ -201,35 +201,35 @@ class PersistentState:
             return
         try:
             data = json.loads(self._state_file.read_text())
-            for mid, d in data.get("models", {}).items():
+            for key, d in data.get("models", {}).items():
                 files = {}
                 for fp_d in d.get("files", []):
                     fp = FileProgress(**fp_d)
                     files[fp.path] = fp
                 st = ModelState(
-                    model_id=mid,
+                    key=key,
                     status=d.get("status", "queued"),
                     files=files,
                     started_at=d.get("started_at", 0.0),
                     completed_at=d.get("completed_at"),
                     error=d.get("error", ""),
-                    cache_dir=d.get("cache_dir", ""),
+                    dest_dir=d.get("cache_dir", ""),
                 )
-                self._models[mid] = st
+                self._models[key] = st
         except Exception as e:
             logger.warning("Failed to load state from %s: %s", self._state_file, e)
 
     def _write(self):
         self._state_dir.mkdir(parents=True, exist_ok=True)
         models_out = {}
-        for mid, st in self._models.items():
-            models_out[mid] = {
+        for key, st in self._models.items():
+            models_out[key] = {
                 "status": st.status,
                 "files": [asdict(f) for f in st.files.values()],
                 "started_at": st.started_at,
                 "completed_at": st.completed_at,
                 "error": st.error,
-                "cache_dir": st.cache_dir,
+                "cache_dir": st.dest_dir,
             }
         tmp = str(self._state_file) + ".tmp"
         with open(tmp, "w") as f:

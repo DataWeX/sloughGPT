@@ -371,7 +371,10 @@ class DownloadManager:
                 _cancel_check()
                 _progress_cb(mid, downloaded, total, speed)
 
-            backend.download(model_id, _progress_cb_inner, _file_cb)
+            if backend.supports_compression(model_id):
+                backend.download_compressed(model_id, _progress_cb_inner, _file_cb)
+            else:
+                backend.download(model_id, _progress_cb_inner, _file_cb)
 
         await asyncio.to_thread(_do_download)
 

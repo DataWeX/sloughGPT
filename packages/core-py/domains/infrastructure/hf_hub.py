@@ -485,7 +485,7 @@ def download_hf_model(
             return {
                 "status": "already_cached",
                 "model_id": model_id,
-                "cache_dir": existing.cache_dir,
+                "cache_dir": existing.dest_dir,
             }
         logger.warning(
             "%s marked complete in state but files missing on disk; redownloading",
@@ -1145,6 +1145,74 @@ class HFDownloadBackend(DownloadBackend):
             on_file_complete=on_file_complete,
         )
 
+    def supports_compression(self, resource_id: str) -> bool:
+        """Check if the external server supports SGZ1 compression.
+
+        Returns True for URLs that point to servers known to support
+        SGZ1 (e.g. other sloughGPT instances). Returns False for
+        standard HuggingFace model IDs.
+        """
+        if resource_id.startswith(("http://", "https://")):
+            return True
+        return False
+
+    def download_compressed(
+        self,
+        resource_id: str,
+        on_progress,
+        on_file_complete,
+    ) -> Dict:
+        """Download using SGZ1 compression for external servers.
+
+        Used when supports_compression() returns True. Downloads each
+        file via CompressedDownloader and decompresses on-the-fly.
+        """
+        from domains.infrastructure.compressed_transfer import CompressedDownloader
+
+        downloader = CompressedDownloader()
+        files = self.list_files(resource_id)
+        cache_dir = Path(get_cache_dir(resource_id))
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        total_size = sum(f.size for f in files)
+        bytes_done = 0
+        start_time = time.monotonic()
+
+        for f in files:
+            dest = cache_dir / f.path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+
+            url = f.download_url or f"{resource_id.rstrip('/')}/{f.path}"
+
+            def _progress(bytes_written: int, expected: int, _file=f):
+                current = bytes_done + bytes_written
+                elapsed = max(time.monotonic() - start_time, 0.001)
+                speed = current / elapsed
+                on_progress(resource_id, current, total_size, speed)
+
+            result = downloader.download_from_url(
+                url,
+                dest,
+                expected_sha256=f.checksum or None,
+                on_progress=_progress,
+            )
+
+            if not result.success:
+                return {
+                    "status": "error",
+                    "cache_dir": str(cache_dir),
+                    "error": result.error,
+                }
+
+            bytes_done += f.size
+            on_file_complete(resource_id, str(dest))
+
+        return {
+            "status": "completed",
+            "cache_dir": str(cache_dir),
+            "total_bytes": total_size,
+        }
+
     def cleanup(self, resource_id: str) -> bool:
         cache_dir = Path(get_cache_dir(resource_id))
         if not cache_dir.exists():
@@ -1185,3 +1253,21 @@ class HFDownloadBackend(DownloadBackend):
                 f.unlink()
             except OSError:
                 pass
+
+    def supports_compressed_serve(self) -> bool:
+        return True
+
+    def serve_compressed(self, resource_id: str, file_path: str) -> Optional[Dict]:
+        """Serve a cached model file with SGZ1 compression.
+
+        Resolves the file in the HF cache (snapshot or flat layout),
+        then uses CompressedFileServer to compress on-the-fly.
+        """
+        from domains.infrastructure.compressed_transfer import CompressedFileServer
+
+        resolved = resolve_cached_path(resource_id, file_path, hf_home=self._hf_home)
+        if resolved is None or not resolved.is_file():
+            return None
+
+        server = CompressedFileServer()
+        return server.serve(resolved)

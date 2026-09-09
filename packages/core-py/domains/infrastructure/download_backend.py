@@ -97,3 +97,27 @@ class DownloadBackend(ABC):
 
     def on_cancel(self, resource_id: str) -> None:
         """Hook called when a download is cancelled.  Override to update state."""
+
+    def supports_compression(self, resource_id: str) -> bool:
+        """Whether the external server supports SGZ1 compression for this resource.
+
+        When True, the download path should use ``CompressedDownloader``
+        to fetch compressed data and decompress on-the-fly.
+        """
+        return False
+
+    def supports_compressed_serve(self) -> bool:
+        """Whether this backend can serve files with SGZ1 compression.
+
+        When True, ``serve_compressed()`` returns a StreamingResponse
+        for use with the API server.
+        """
+        return False
+
+    def serve_compressed(self, resource_id: str, file_path: str) -> Optional[Dict]:
+        """Serve a cached file with on-the-fly SGZ1 compression.
+
+        Returns dict with ``iterator``, ``headers``, ``size`` keys
+        for use with Starlette/FastAPI StreamingResponse, or None
+        if the file is not available or compression is not supported.
+        """
