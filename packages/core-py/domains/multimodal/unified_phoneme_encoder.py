@@ -60,7 +60,7 @@ _LANG_PATTERNS = {
            "sabato", "domenica",
            "uno", "due", "tre", "quattro", "cinque", "sei", "sette",
            "otto", "nove", "dieci"],
-    "pt": ["eu", "tu", "ele", "ela", "nos", "voce", "eles", "elas",
+    "pt": ["eu", "ele", "ela", "nos", "voce", "eles", "elas",
            "sou", "eres", "e", "somos", "sao",
            "tenho", "ten", "mae", "nao", "sim", "oi", "ola",
            "obrigado", "obrigada", "por favor", "bem", "mal",
@@ -183,6 +183,47 @@ class UnifiedPhonemeEncoder:
         if lang not in self._encoders:
             raise ValueError(f"Unsupported language: {lang}")
         return self._encoders[lang].score_pronunciation(target, spoken)
+
+    def encode_batch(self, texts: list[str], language: Optional[str] = None) -> list[dict]:
+        """Batch encode multiple texts.
+
+        Args:
+            texts: List of input text strings
+            language: Optional language code. If None, auto-detects for each text.
+        Returns:
+            List of dictionaries with encoding results
+        """
+        results = []
+        for text in texts:
+            if language:
+                ids = self.encode(text, language=language)
+                lang = language
+            else:
+                ids = self.encode(text)
+                lang = self.current_language
+
+            phonemes = self.decode_phonemes(ids, language=lang)
+            decoded = self.decode(ids, language=lang)
+
+            results.append({
+                "text": text,
+                "language": lang,
+                "phonemes": phonemes,
+                "ids": ids.flatten().tolist(),
+                "decoded": decoded,
+            })
+
+        return results
+
+    def detect_language(self, text: str) -> str:
+        """Detect the language of input text.
+
+        Args:
+            text: Input text string
+        Returns:
+            Language code ("en", "de", "fr", "es", "it", or "pt")
+        """
+        return detect_language(text)
 
     @property
     def supported_languages(self) -> list[str]:

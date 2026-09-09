@@ -162,6 +162,106 @@ _SPANISH_PRONUNCIATION_DICT: dict[str, list[str]] = {
     "ocho": ["OW", "CH", "OW"],
     "nueve": ["N", "UW", "EH", "V", "EH"],
     "diez": ["D", "I", "EH", "S"],
+    # Additional common Spanish words
+    "comer": ["K", "OW", "M", "EH", "R"],
+    "beber": ["B", "EH", "B", "EH", "R"],
+    "dormir": ["D", "OW", "R", "M", "I", "R"],
+    "caminar": ["K", "AH", "M", "I", "N", "AH", "R"],
+    "correr": ["K", "OW", "R", "R", "EH", "R"],
+    "nadar": ["N", "AH", "D", "AH", "R"],
+    "volar": ["V", "OW", "L", "AH", "R"],
+    "cantar": ["K", "AH", "N", "T", "AH", "R"],
+    "bailar": ["B", "AY", "L", "AH", "R"],
+    "jugar": ["H", "UW", "G", "AH", "R"],
+    "trabajar": ["T", "R", "AH", "B", "AH", "H", "AH", "R"],
+    "estudiar": ["EH", "S", "T", "UW", "D", "I", "AH", "R"],
+    "aprender": ["AH", "P", "R", "EH", "N", "D", "EH", "R"],
+    "hablar": ["AH", "B", "L", "AH", "R"],
+    "escuchar": ["EH", "S", "K", "UW", "CH", "AH", "R"],
+    "oír": ["OW", "I", "R"],
+    "ver": ["B", "EH", "R"],
+    "mirar": ["M", "I", "R", "AH", "R"],
+    "tocar": ["T", "OW", "K", "AH", "R"],
+    "sentir": ["S", "EH", "N", "T", "I", "R"],
+    "oler": ["OW", "L", "EH", "R"],
+    "probar": ["P", "R", "OW", "B", "AH", "R"],
+    "tomar": ["T", "OW", "M", "AH", "R"],
+    "dar": ["D", "AH", "R"],
+    "recibir": ["R", "EH", "S", "I", "B", "I", "R"],
+    "comprar": ["K", "OW", "M", "P", "R", "AH", "R"],
+    "vender": ["B", "EH", "N", "D", "EH", "R"],
+    "pagar": ["P", "AH", "G", "AH", "R"],
+    "contar": ["K", "OW", "N", "T", "AH", "R"],
+    "medir": ["M", "EH", "D", "I", "R"],
+    "cortar": ["K", "OW", "R", "T", "AH", "R"],
+    "romper": ["R", "OW", "M", "P", "EH", "R"],
+    "arreglar": ["AH", "R", "R", "EH", "G", "L", "AH", "R"],
+    "limpiar": ["L", "I", "M", "P", "I", "AH", "R"],
+    "cocinar": ["K", "OW", "S", "I", "N", "AH", "R"],
+    "hervir": ["EH", "R", "V", "I", "R"],
+    "freír": ["F", "R", "EH", "I", "R"],
+    "congelar": ["K", "OW", "N", "H", "EH", "L", "AH", "R"],
+    "descongelar": ["D", "EH", "S", "K", "OW", "N", "H", "EH", "L", "AH", "R"],
+    "cerrar": ["S", "EH", "R", "R", "AH", "R"],
+    "abrir": ["AH", "B", "R", "I", "R"],
+    "entrar": ["EH", "N", "T", "R", "AH", "R"],
+    "salir": ["S", "AH", "L", "I", "R"],
+    "ir": ["I", "R"],
+    "venir": ["B", "EH", "N", "I", "R"],
+    "volver": ["B", "OW", "L", "B", "EH", "R"],
+    "regresar": ["R", "EH", "G", "R", "EH", "S", "AH", "R"],
+    "subir": ["S", "UW", "B", "I", "R"],
+    "bajar": ["B", "AH", "H", "AH", "R"],
+    "caer": ["K", "AH", "EH", "R"],
+    "nadar": ["N", "AH", "D", "AH", "R"],
+    "volar": ["V", "OW", "L", "AH", "R"],
+    "caminar": ["K", "AH", "M", "I", "N", "AH", "R"],
+    "correr": ["K", "OW", "R", "R", "EH", "R"],
+    "nadar": ["N", "AH", "D", "AH", "R"],
+    "volar": ["V", "OW", "L", "AH", "R"],
+    "cantar": ["K", "AH", "N", "T", "AH", "R"],
+    "bailar": ["B", "AY", "L", "AH", "R"],
+    "jugar": ["H", "UW", "G", "AH", "R"],
+    "trabajar": ["T", "R", "AH", "B", "AH", "H", "AH", "R"],
+    "estudiar": ["EH", "S", "T", "UW", "D", "I", "AH", "R"],
+    "aprender": ["AH", "P", "R", "EH", "N", "D", "EH", "R"],
+    "hablar": ["AH", "B", "L", "AH", "R"],
+    "escuchar": ["EH", "S", "K", "UW", "CH", "AH", "R"],
+    "oír": ["OW", "I", "R"],
+    "ver": ["B", "EH", "R"],
+    "mirar": ["M", "I", "R", "AH", "R"],
+    "tocar": ["T", "OW", "K", "AH", "R"],
+    "sentir": ["S", "EH", "N", "T", "I", "R"],
+    "oler": ["OW", "L", "EH", "R"],
+    "probar": ["P", "R", "OW", "B", "AH", "R"],
+    "tomar": ["T", "OW", "M", "AH", "R"],
+    "dar": ["D", "AH", "R"],
+    "recibir": ["R", "EH", "S", "I", "B", "I", "R"],
+    "comprar": ["K", "OW", "M", "P", "R", "AH", "R"],
+    "vender": ["B", "EH", "N", "D", "EH", "R"],
+    "pagar": ["P", "AH", "G", "AH", "R"],
+    "contar": ["K", "OW", "N", "T", "AH", "R"],
+    "medir": ["M", "EH", "D", "I", "R"],
+    "cortar": ["K", "OW", "R", "T", "AH", "R"],
+    "romper": ["R", "OW", "M", "P", "EH", "R"],
+    "arreglar": ["AH", "R", "R", "EH", "G", "L", "AH", "R"],
+    "limpiar": ["L", "I", "M", "P", "I", "AH", "R"],
+    "cocinar": ["K", "OW", "S", "I", "N", "AH", "R"],
+    "hervir": ["EH", "R", "V", "I", "R"],
+    "freír": ["F", "R", "EH", "I", "R"],
+    "congelar": ["K", "OW", "N", "H", "EH", "L", "AH", "R"],
+    "descongelar": ["D", "EH", "S", "K", "OW", "N", "H", "EH", "L", "AH", "R"],
+    "cerrar": ["S", "EH", "R", "R", "AH", "R"],
+    "abrir": ["AH", "B", "R", "I", "R"],
+    "entrar": ["EH", "N", "T", "R", "AH", "R"],
+    "salir": ["S", "AH", "L", "I", "R"],
+    "ir": ["I", "R"],
+    "venir": ["B", "EH", "N", "I", "R"],
+    "volver": ["B", "OW", "L", "B", "EH", "R"],
+    "regresar": ["R", "EH", "G", "R", "EH", "S", "AH", "R"],
+    "subir": ["S", "UW", "B", "I", "R"],
+    "bajar": ["B", "AH", "H", "AH", "R"],
+    "caer": ["K", "AH", "EH", "R"],
 }
 
 
@@ -321,6 +421,51 @@ class SpanishPhonemeEncoder:
             f"Decoded:   {decoded!r}",
         ]
         return "\n".join(lines)
+
+    def score_pronunciation(self, target: str, spoken: str) -> dict:
+        """Score how well a spoken word matches the target pronunciation.
+
+        Uses phoneme-level comparison to evaluate pronunciation accuracy.
+        """
+        target_ids = self.encode(target).flatten()
+        spoken_ids = self.encode(spoken).flatten()
+
+        target_phonemes = [SPANISH_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
+        spoken_phonemes = [SPANISH_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+
+        lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
+        target_len = len(target_phonemes)
+        spoken_len = len(spoken_phonemes)
+
+        precision = lcs_len / spoken_len if spoken_len > 0 else 0.0
+        recall = lcs_len / target_len if target_len > 0 else 0.0
+
+        if precision + recall > 0:
+            f1 = 2 * precision * recall / (precision + recall)
+        else:
+            f1 = 0.0
+
+        return {
+            "score": f1,
+            "precision": precision,
+            "recall": recall,
+            "target_phonemes": target_phonemes,
+            "spoken_phonemes": spoken_phonemes,
+            "target_len": target_len,
+            "spoken_len": spoken_len,
+        }
+
+    def _lcs_length(self, a: list, b: list) -> int:
+        """Calculate length of longest common subsequence."""
+        m, n = len(a), len(b)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if a[i-1] == b[j-1]:
+                    dp[i][j] = dp[i-1][j-1] + 1
+                else:
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+        return dp[m][n]
 
     @property
     def vocab_size(self) -> int:

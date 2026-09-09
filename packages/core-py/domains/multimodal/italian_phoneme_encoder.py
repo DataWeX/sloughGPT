@@ -164,6 +164,102 @@ _ITALIAN_PRONUNCIATION_DICT: dict[str, list[str]] = {
     "otto": ["OW", "T", "T", "OW"],
     "nove": ["N", "OW", "V", "EH"],
     "dieci": ["D", "IY", "EH", "CH", "IY"],
+    # Additional common Italian words
+    "mangiare": ["M", "AH", "NY", "JH", "IY", "AH", "R", "EH"],
+    "bere": ["B", "EH", "R", "EH"],
+    "dormire": ["D", "OW", "R", "M", "IY", "R", "EH"],
+    "camminare": ["K", "AH", "M", "M", "IY", "N", "AH", "R", "EH"],
+    "correre": ["K", "OW", "R", "R", "EH", "R", "EH"],
+    "nuotare": ["N", "UW", "OW", "T", "AH", "R", "EH"],
+    "volare": ["V", "OW", "L", "AH", "R", "EH"],
+    "cantare": ["K", "AH", "N", "T", "AH", "R", "EH"],
+    "ballare": ["B", "AH", "L", "L", "AH", "R", "EH"],
+    "giocare": ["JH", "OW", "K", "AH", "R", "EH"],
+    "lavorare": ["L", "AH", "V", "OW", "R", "AH", "R", "EH"],
+    "studiare": ["S", "T", "UW", "D", "IY", "AH", "R", "EH"],
+    "imparare": ["IH", "M", "P", "AH", "R", "AH", "R", "EH"],
+    "parlare": ["P", "AH", "R", "L", "AH", "R", "EH"],
+    "ascoltare": ["AH", "S", "K", "OW", "L", "T", "AH", "R", "EH"],
+    "sentire": ["S", "EH", "N", "T", "IY", "R", "EH"],
+    "vedere": ["V", "EH", "D", "EH", "R", "EH"],
+    "guardare": ["G", "UW", "AH", "R", "D", "AH", "R", "EH"],
+    "toccare": ["T", "OW", "K", "K", "AH", "R", "EH"],
+    "annusare": ["AH", "N", "N", "UW", "S", "AH", "R", "EH"],
+    "assaggiare": ["AH", "S", "S", "AH", "JH", "JH", "IY", "AH", "R", "EH"],
+    "prendere": ["P", "R", "EH", "N", "D", "EH", "R", "EH"],
+    "dare": ["D", "AH", "R", "EH"],
+    "ricevere": ["R", "IY", "CH", "EH", "V", "EH", "R", "EH"],
+    "comprare": ["K", "OW", "M", "P", "R", "AH", "R", "EH"],
+    "vendere": ["V", "EH", "N", "D", "EH", "R", "EH"],
+    "pagare": ["P", "AH", "G", "AH", "R", "EH"],
+    "contare": ["K", "OW", "N", "T", "AH", "R", "EH"],
+    "misurare": ["M", "IY", "Z", "UW", "R", "AH", "R", "EH"],
+    "tagliare": ["T", "AH", "L", "IY", "AH", "R", "EH"],
+    "rompere": ["R", "OW", "M", "P", "EH", "R", "EH"],
+    "aggiustare": ["AH", "JH", "JH", "UW", "S", "T", "AH", "R", "EH"],
+    "pulire": ["P", "UW", "L", "IY", "R", "EH"],
+    "cuocere": ["K", "UW", "OW", "CH", "EH", "R", "EH"],
+    "bollire": ["B", "OW", "L", "L", "IY", "R", "EH"],
+    "congelare": ["K", "OW", "N", "JH", "EH", "L", "AH", "R", "EH"],
+    "scongelare": ["S", "K", "OW", "N", "JH", "EH", "L", "AH", "R", "EH"],
+    "chiudere": ["K", "IY", "UW", "D", "EH", "R", "EH"],
+    "aprire": ["AH", "P", "R", "IY", "R", "EH"],
+    "entrare": ["EH", "N", "T", "R", "AH", "R", "EH"],
+    "uscire": ["UW", "SH", "IY", "R", "EH"],
+    "andare": ["AH", "N", "D", "AH", "R", "EH"],
+    "venire": ["V", "EH", "N", "IY", "R", "EH"],
+    "tornare": ["T", "OW", "R", "N", "AH", "R", "EH"],
+    "ritornare": ["R", "IY", "T", "OW", "R", "N", "AH", "R", "EH"],
+    "salire": ["S", "AH", "L", "IY", "R", "EH"],
+    "scendere": ["SH", "EH", "N", "D", "EH", "R", "EH"],
+    "cadere": ["K", "AH", "D", "EH", "R", "EH"],
+    "nuotare": ["N", "UW", "OW", "T", "AH", "R", "EH"],
+    "volare": ["V", "OW", "L", "AH", "R", "EH"],
+    "camminare": ["K", "AH", "M", "M", "IY", "N", "AH", "R", "EH"],
+    "correre": ["K", "OW", "R", "R", "EH", "R", "EH"],
+    "nuotare": ["N", "UW", "OW", "T", "AH", "R", "EH"],
+    "volare": ["V", "OW", "L", "AH", "R", "EH"],
+    "cantare": ["K", "AH", "N", "T", "AH", "R", "EH"],
+    "ballare": ["B", "AH", "L", "L", "AH", "R", "EH"],
+    "giocare": ["JH", "OW", "K", "AH", "R", "EH"],
+    "lavorare": ["L", "AH", "V", "OW", "R", "AH", "R", "EH"],
+    "studiare": ["S", "T", "UW", "D", "IY", "AH", "R", "EH"],
+    "imparare": ["IH", "M", "P", "AH", "R", "AH", "R", "EH"],
+    "parlare": ["P", "AH", "R", "L", "AH", "R", "EH"],
+    "ascoltare": ["AH", "S", "K", "OW", "L", "T", "AH", "R", "EH"],
+    "sentire": ["S", "EH", "N", "T", "IY", "R", "EH"],
+    "vedere": ["V", "EH", "D", "EH", "R", "EH"],
+    "guardare": ["G", "UW", "AH", "R", "D", "AH", "R", "EH"],
+    "toccare": ["T", "OW", "K", "K", "AH", "R", "EH"],
+    "annusare": ["AH", "N", "N", "UW", "S", "AH", "R", "EH"],
+    "assaggiare": ["AH", "S", "S", "AH", "JH", "JH", "IY", "AH", "R", "EH"],
+    "prendere": ["P", "R", "EH", "N", "D", "EH", "R", "EH"],
+    "dare": ["D", "AH", "R", "EH"],
+    "ricevere": ["R", "IY", "CH", "EH", "V", "EH", "R", "EH"],
+    "comprare": ["K", "OW", "M", "P", "R", "AH", "R", "EH"],
+    "vendere": ["V", "EH", "N", "D", "EH", "R", "EH"],
+    "pagare": ["P", "AH", "G", "AH", "R", "EH"],
+    "contare": ["K", "OW", "N", "T", "AH", "R", "EH"],
+    "misurare": ["M", "IY", "Z", "UW", "R", "AH", "R", "EH"],
+    "tagliare": ["T", "AH", "L", "IY", "AH", "R", "EH"],
+    "rompere": ["R", "OW", "M", "P", "EH", "R", "EH"],
+    "aggiustare": ["AH", "JH", "JH", "UW", "S", "T", "AH", "R", "EH"],
+    "pulire": ["P", "UW", "L", "IY", "R", "EH"],
+    "cuocere": ["K", "UW", "OW", "CH", "EH", "R", "EH"],
+    "bollire": ["B", "OW", "L", "L", "IY", "R", "EH"],
+    "congelare": ["K", "OW", "N", "JH", "EH", "L", "AH", "R", "EH"],
+    "scongelare": ["S", "K", "OW", "N", "JH", "EH", "L", "AH", "R", "EH"],
+    "chiudere": ["K", "IY", "UW", "D", "EH", "R", "EH"],
+    "aprire": ["AH", "P", "R", "IY", "R", "EH"],
+    "entrare": ["EH", "N", "T", "R", "AH", "R", "EH"],
+    "uscire": ["UW", "SH", "IY", "R", "EH"],
+    "andare": ["AH", "N", "D", "AH", "R", "EH"],
+    "venire": ["V", "EH", "N", "IY", "R", "EH"],
+    "tornare": ["T", "OW", "R", "N", "AH", "R", "EH"],
+    "ritornare": ["R", "IY", "T", "OW", "R", "N", "AH", "R", "EH"],
+    "salire": ["S", "AH", "L", "IY", "R", "EH"],
+    "scendere": ["SH", "EH", "N", "D", "EH", "R", "EH"],
+    "cadere": ["K", "AH", "D", "EH", "R", "EH"],
 }
 
 
@@ -323,6 +419,51 @@ class ItalianPhonemeEncoder:
             f"Decoded:   {decoded!r}",
         ]
         return "\n".join(lines)
+
+    def score_pronunciation(self, target: str, spoken: str) -> dict:
+        """Score how well a spoken word matches the target pronunciation.
+
+        Uses phoneme-level comparison to evaluate pronunciation accuracy.
+        """
+        target_ids = self.encode(target).flatten()
+        spoken_ids = self.encode(spoken).flatten()
+
+        target_phonemes = [ITALIAN_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
+        spoken_phonemes = [ITALIAN_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+
+        lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
+        target_len = len(target_phonemes)
+        spoken_len = len(spoken_phonemes)
+
+        precision = lcs_len / spoken_len if spoken_len > 0 else 0.0
+        recall = lcs_len / target_len if target_len > 0 else 0.0
+
+        if precision + recall > 0:
+            f1 = 2 * precision * recall / (precision + recall)
+        else:
+            f1 = 0.0
+
+        return {
+            "score": f1,
+            "precision": precision,
+            "recall": recall,
+            "target_phonemes": target_phonemes,
+            "spoken_phonemes": spoken_phonemes,
+            "target_len": target_len,
+            "spoken_len": spoken_len,
+        }
+
+    def _lcs_length(self, a: list, b: list) -> int:
+        """Calculate length of longest common subsequence."""
+        m, n = len(a), len(b)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if a[i-1] == b[j-1]:
+                    dp[i][j] = dp[i-1][j-1] + 1
+                else:
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+        return dp[m][n]
 
     @property
     def vocab_size(self) -> int:

@@ -157,6 +157,132 @@ _GERMAN_PRONUNCIATION_DICT: dict[str, list[str]] = {
     "acht": ["AA", "CH", "T"],
     "neun": ["N", "OY", "N"],
     "zehn": ["TS", "EY", "N"],
+    # Additional common German words
+    "wasser": ["V", "AA", "S", "ER"],
+    "essen": ["EH", "S", "S", "AH", "N"],
+    "trinken": ["T", "R", "IH", "NG", "K", "AH", "N"],
+    "schlafen": ["SH", "L", "AA", "F", "AH", "N"],
+    "gehen": ["G", "EY", "AH", "N"],
+    "kommen": ["K", "OW", "M", "M", "AH", "N"],
+    "sehen": ["Z", "EY", "AH", "N"],
+    "hören": ["HH", "OE", "R", "AH", "N"],
+    "sprechen": ["SH", "P", "R", "EH", "CH", "AH", "N"],
+    "lesen": ["L", "EY", "Z", "AH", "N"],
+    "schreiben": ["SH", "R", "AY", "B", "AH", "N"],
+    "arbeiten": ["AA", "R", "B", "AY", "T", "AH", "N"],
+    "lernen": ["L", "EH", "R", "N", "AH", "N"],
+    "spielen": ["SH", "P", "IY", "L", "AH", "N"],
+    "kaufen": ["K", "AW", "F", "AH", "N"],
+    "verkaufen": ["F", "EH", "R", "K", "AW", "F", "AH", "N"],
+    "helfen": ["HH", "EH", "L", "F", "AH", "N"],
+    "brauchen": ["B", "R", "AW", "CH", "AH", "N"],
+    "glauben": ["G", "L", "AW", "B", "AH", "N"],
+    "denken": ["D", "EH", "NG", "K", "AH", "N"],
+    "wissen": ["V", "IH", "S", "S", "AH", "N"],
+    "kennen": ["K", "EH", "N", "N", "AH", "N"],
+    "lieben": ["L", "IY", "B", "AH", "N"],
+    "hassen": ["HH", "AA", "S", "S", "AH", "N"],
+    "freuen": ["F", "R", "OY", "AH", "N"],
+    "weinen": ["V", "AY", "N", "AH", "N"],
+    "lachen": ["L", "AA", "CH", "AH", "N"],
+    "tanzen": ["T", "AA", "N", "TS", "AH", "N"],
+    "singen": ["Z", "IH", "NG", "AH", "N"],
+    "kochen": ["K", "OW", "CH", "AH", "N"],
+    "waschen": ["V", "AA", "SH", "AH", "N"],
+    "fahren": ["F", "AA", "R", "AH", "N"],
+    "fliegen": ["F", "L", "IY", "G", "AH", "N"],
+    "laufen": ["L", "AW", "F", "AH", "N"],
+    "springen": ["SH", "P", "R", "IH", "NG", "AH", "N"],
+    "fallen": ["F", "AA", "L", "L", "AH", "N"],
+    "heben": ["HH", "EY", "B", "AH", "N"],
+    "legen": ["L", "EY", "G", "AH", "N"],
+    "stellen": ["SH", "T", "EH", "L", "L", "AH", "N"],
+    "suchen": ["Z", "UH", "CH", "AH", "N"],
+    "finden": ["F", "IH", "N", "D", "AH", "N"],
+    "bekommen": ["B", "EH", "K", "OW", "M", "M", "AH", "N"],
+    "geben": ["G", "EY", "B", "AH", "N"],
+    "nehmen": ["N", "EY", "AH", "M"],
+    "lassen": ["L", "AA", "S", "S", "AH", "N"],
+    "machen": ["M", "AA", "CH", "AH", "N"],
+    "tun": ["T", "UW", "N"],
+    "sagen": ["Z", "AA", "G", "AH", "N"],
+    "fragen": ["F", "R", "AA", "G", "AH", "N"],
+    "antworten": ["AA", "N", "T", "V", "AO", "R", "T", "AH", "N"],
+    "erzählen": ["EH", "R", "TS", "EH", "L", "AH", "N"],
+    "erklären": ["EH", "R", "K", "L", "EH", "R", "AH", "N"],
+    "zeigen": ["TS", "AY", "G", "AH", "N"],
+    "zeigen": ["TS", "AY", "G", "AH", "N"],
+    "bringen": ["B", "R", "IH", "NG", "AH", "N"],
+    "holen": ["HH", "OW", "L", "AH", "N"],
+    "setzen": ["TS", "EH", "TS", "TS", "AH", "N"],
+    "sitzen": ["Z", "IH", "TS", "TS", "AH", "N"],
+    "liegen": ["L", "IY", "G", "AH", "N"],
+    "stehen": ["S", "T", "EY", "AH", "N"],
+    "bleiben": ["B", "L", "AY", "B", "AH", "N"],
+    "werden": ["V", "EH", "R", "D", "AH", "N"],
+    "haben": ["HH", "AA", "B", "AH", "N"],
+    "sein": ["Z", "AY", "N"],
+    "haben": ["HH", "AA", "B", "AH", "N"],
+    "essen": ["EH", "S", "S", "AH", "N"],
+    "trinken": ["T", "R", "IH", "NG", "K", "AH", "N"],
+    "schlafen": ["SH", "L", "AA", "F", "AH", "N"],
+    "gehen": ["G", "EY", "AH", "N"],
+    "kommen": ["K", "OW", "M", "M", "AH", "N"],
+    "sehen": ["Z", "EY", "AH", "N"],
+    "hören": ["HH", "OE", "R", "AH", "N"],
+    "sprechen": ["SH", "P", "R", "EH", "CH", "AH", "N"],
+    "lesen": ["L", "EY", "Z", "AH", "N"],
+    "schreiben": ["SH", "R", "AY", "B", "AH", "N"],
+    "arbeiten": ["AA", "R", "B", "AY", "T", "AH", "N"],
+    "lernen": ["L", "EH", "R", "N", "AH", "N"],
+    "spielen": ["SH", "P", "IY", "L", "AH", "N"],
+    "kaufen": ["K", "AW", "F", "AH", "N"],
+    "verkaufen": ["F", "EH", "R", "K", "AW", "F", "AH", "N"],
+    "helfen": ["HH", "EH", "L", "F", "AH", "N"],
+    "brauchen": ["B", "R", "AW", "CH", "AH", "N"],
+    "glauben": ["G", "L", "AW", "B", "AH", "N"],
+    "denken": ["D", "EH", "NG", "K", "AH", "N"],
+    "wissen": ["V", "IH", "S", "S", "AH", "N"],
+    "kennen": ["K", "EH", "N", "N", "AH", "N"],
+    "lieben": ["L", "IY", "B", "AH", "N"],
+    "hassen": ["HH", "AA", "S", "S", "AH", "N"],
+    "freuen": ["F", "R", "OY", "AH", "N"],
+    "weinen": ["V", "AY", "N", "AH", "N"],
+    "lachen": ["L", "AA", "CH", "AH", "N"],
+    "tanzen": ["T", "AA", "N", "TS", "AH", "N"],
+    "singen": ["Z", "IH", "NG", "AH", "N"],
+    "kochen": ["K", "OW", "CH", "AH", "N"],
+    "waschen": ["V", "AA", "SH", "AH", "N"],
+    "fahren": ["F", "AA", "R", "AH", "N"],
+    "fliegen": ["F", "L", "IY", "G", "AH", "N"],
+    "laufen": ["L", "AW", "F", "AH", "N"],
+    "springen": ["SH", "P", "R", "IH", "NG", "AH", "N"],
+    "fallen": ["F", "AA", "L", "L", "AH", "N"],
+    "heben": ["HH", "EY", "B", "AH", "N"],
+    "legen": ["L", "EY", "G", "AH", "N"],
+    "stellen": ["SH", "T", "EH", "L", "L", "AH", "N"],
+    "suchen": ["Z", "UH", "CH", "AH", "N"],
+    "finden": ["F", "IH", "N", "D", "AH", "N"],
+    "bekommen": ["B", "EH", "K", "OW", "M", "M", "AH", "N"],
+    "geben": ["G", "EY", "B", "AH", "N"],
+    "nehmen": ["N", "EY", "AH", "M"],
+    "lassen": ["L", "AA", "S", "S", "AH", "N"],
+    "machen": ["M", "AA", "CH", "AH", "N"],
+    "tun": ["T", "UW", "N"],
+    "sagen": ["Z", "AA", "G", "AH", "N"],
+    "fragen": ["F", "R", "AA", "G", "AH", "N"],
+    "antworten": ["AA", "N", "T", "V", "AO", "R", "T", "AH", "N"],
+    "erzählen": ["EH", "R", "TS", "EH", "L", "AH", "N"],
+    "erklären": ["EH", "R", "K", "L", "EH", "R", "AH", "N"],
+    "zeigen": ["TS", "AY", "G", "AH", "N"],
+    "bringen": ["B", "R", "IH", "NG", "AH", "N"],
+    "holen": ["HH", "OW", "L", "AH", "N"],
+    "setzen": ["TS", "EH", "TS", "TS", "AH", "N"],
+    "sitzen": ["Z", "IH", "TS", "TS", "AH", "N"],
+    "liegen": ["L", "IY", "G", "AH", "N"],
+    "stehen": ["S", "T", "EY", "AH", "N"],
+    "bleiben": ["B", "L", "AY", "B", "AH", "N"],
+    "werden": ["V", "EH", "R", "D", "AH", "N"],
 }
 
 
@@ -323,6 +449,51 @@ class GermanPhonemeEncoder:
             f"Decoded:   {decoded!r}",
         ]
         return "\n".join(lines)
+
+    def score_pronunciation(self, target: str, spoken: str) -> dict:
+        """Score how well a spoken word matches the target pronunciation.
+
+        Uses phoneme-level comparison to evaluate pronunciation accuracy.
+        """
+        target_ids = self.encode(target).flatten()
+        spoken_ids = self.encode(spoken).flatten()
+
+        target_phonemes = [GERMAN_ID_TO_PHONEME.get(i, "?") for i in target_ids if i not in (BOS, EOS, PAD)]
+        spoken_phonemes = [GERMAN_ID_TO_PHONEME.get(i, "?") for i in spoken_ids if i not in (BOS, EOS, PAD)]
+
+        lcs_len = self._lcs_length(target_phonemes, spoken_phonemes)
+        target_len = len(target_phonemes)
+        spoken_len = len(spoken_phonemes)
+
+        precision = lcs_len / spoken_len if spoken_len > 0 else 0.0
+        recall = lcs_len / target_len if target_len > 0 else 0.0
+
+        if precision + recall > 0:
+            f1 = 2 * precision * recall / (precision + recall)
+        else:
+            f1 = 0.0
+
+        return {
+            "score": f1,
+            "precision": precision,
+            "recall": recall,
+            "target_phonemes": target_phonemes,
+            "spoken_phonemes": spoken_phonemes,
+            "target_len": target_len,
+            "spoken_len": spoken_len,
+        }
+
+    def _lcs_length(self, a: list, b: list) -> int:
+        """Calculate length of longest common subsequence."""
+        m, n = len(a), len(b)
+        dp = [[0] * (n + 1) for _ in range(m + 1)]
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if a[i-1] == b[j-1]:
+                    dp[i][j] = dp[i-1][j-1] + 1
+                else:
+                    dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+        return dp[m][n]
 
     @property
     def vocab_size(self) -> int:

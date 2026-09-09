@@ -7,6 +7,7 @@ Usage:
     python -m domains.multimodal.phoneme_encoder_cli --batch "hello" "world" "test"
     python -m domains.multimodal.phoneme_encoder_cli --lang it "ciao mondo"
     python -m domains.multimodal.phoneme_encoder_cli --lang pt "ola mundo"
+    python -m domains.multimodal.phoneme_encoder_cli --detect "hello world"
 """
 
 import sys
@@ -23,6 +24,7 @@ def main():
         print("Usage: python -m domains.multimodal.phoneme_encoder_cli <text>")
         print("       python -m domains.multimodal.phoneme_encoder_cli --batch <text1> <text2> ...")
         print("       python -m domains.multimodal.phoneme_encoder_cli --lang <lang> <text>")
+        print("       python -m domains.multimodal.phoneme_encoder_cli --detect <text>")
         print()
         print("Languages: en, de, fr, es, it, pt")
         sys.exit(1)
@@ -32,12 +34,16 @@ def main():
     # Parse arguments
     language = None
     batch_mode = False
+    detect_mode = False
     texts = []
 
     i = 1
     while i < len(sys.argv):
         if sys.argv[i] == "--batch":
             batch_mode = True
+            i += 1
+        elif sys.argv[i] == "--detect":
+            detect_mode = True
             i += 1
         elif sys.argv[i] == "--lang" and i + 1 < len(sys.argv):
             language = sys.argv[i + 1]
@@ -46,7 +52,16 @@ def main():
             texts.append(sys.argv[i])
             i += 1
 
-    if batch_mode:
+    if detect_mode:
+        if not texts:
+            print("Error: No text provided for language detection")
+            sys.exit(1)
+
+        text = " ".join(texts)
+        detected = detect_language(text)
+        print(f"Detected language: {detected}")
+        print(f"Supported languages: {', '.join(enc.supported_languages)}")
+    elif batch_mode:
         if not texts:
             print("Error: No texts provided for batch encoding")
             sys.exit(1)

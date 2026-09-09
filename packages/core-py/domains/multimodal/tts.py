@@ -478,13 +478,16 @@ class TTSEngine:
         self.optimizer = SloAdam(lr=1e-3)
         self._phoneme_encoder = PhonemeEncoder()
 
-    def text_to_waveform(self, text: str, max_frames: int = 200) -> np.ndarray:
+    def text_to_waveform(self, text: str, max_frames: int = 200,
+                         speed: float = 1.0, pitch_shift: float = 0.0) -> np.ndarray:
         """
         Convert text to speech waveform.
 
         Args:
             text: Input text string
             max_frames: Maximum spectrogram frames
+            speed: Speech rate (1.0 = normal, <1.0 = slower, >1.0 = faster)
+            pitch_shift: Pitch shift in semitones (0.0 = normal)
         Returns:
             waveform: (num_samples,) audio waveform
         """
@@ -499,10 +502,38 @@ class TTSEngine:
         # Generate mel spectrogram
         mel_spec = self.decoder.generate(phoneme_ids, max_frames)
 
+        # Apply speed adjustment
+        if speed != 1.0:
+            mel_spec = self._adjust_speed(mel_spec, speed)
+
+        # Apply pitch shift
+        if pitch_shift != 0.0:
+            mel_spec = self._shift_pitch(mel_spec, pitch_shift)
+
         # Convert to waveform
         waveform = self.vocoder.generate_waveform(mel_spec)
 
         return waveform
+
+    def _adjust_speed(self, mel_spec: np.ndarray, speed: float) -> np.ndarray:
+        """Adjust speech speed by resampling the mel spectrogram."""
+        import scipy.ndimage
+        # Resample along time axis
+        return scipy.ndimage.zoom(mel_spec, (1, 1/speed), order=1)
+
+    def _shift_pitch(self, mel_spec: np.ndarray, semitones: float) -> np.ndarray:
+        """Shift pitch by shifting mel frequency bins."""
+        shift_bins = int(semitones)
+        if shift_bins == 0:
+            return mel_spec
+
+        shifted = np.roll(mel_spec, shift_bins, axis=0)
+        # Zero out rolled-in content
+        if shift_bins > 0:
+            shifted[:shift_bins, :] = 0
+        else:
+            shifted[shift_bins:, :] = 0
+        return shifted
 
     def ssml_to_waveform(self, ssml: str, max_frames: int = 200) -> np.ndarray:
         """
