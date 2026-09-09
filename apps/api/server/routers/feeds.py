@@ -22,6 +22,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
+from schemas.common import endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -198,6 +199,7 @@ class FeedsRouter:
         self.router.add_api_route("/rss.xml", self.rss_feed, methods=["GET"])
         self.router.add_api_route("/feed.json", self.json_feed, methods=["GET"])
 
+    @endpoint("feeds.rss")
     async def rss_feed(
         self,
         tag: str | None = Query(None, description="Filter by tag"),
@@ -229,6 +231,7 @@ class FeedsRouter:
             },
         )
 
+    @endpoint("feeds.json")
     async def json_feed(
         self,
         tag: str | None = Query(None, description="Filter by tag"),
