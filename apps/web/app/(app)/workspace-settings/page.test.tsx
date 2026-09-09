@@ -55,7 +55,8 @@ describe('WorkspaceSettingsPage', () => {
 
   it('renders page header', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
+    expect(screen.getAllByText('Workspace Settings').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows loading skeleton initially', async () => {
@@ -66,27 +67,27 @@ describe('WorkspaceSettingsPage', () => {
 
   it('fetches settings on mount', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(mockApiGet).toHaveBeenCalledWith('/workspaces/ws-1/settings')
   })
 
   it('displays general section', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(screen.getAllByText('General').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByDisplayValue('Test Workspace')).toBeTruthy()
   })
 
   it('displays defaults section', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(screen.getAllByText('Defaults').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByDisplayValue('llama-3.2-3b')).toBeTruthy()
   })
 
   it('displays limits section', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(screen.getAllByText('Limits').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Data Retention (days)').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Max Members').length).toBeGreaterThanOrEqual(1)
@@ -94,20 +95,20 @@ describe('WorkspaceSettingsPage', () => {
 
   it('displays sharing section', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(screen.getAllByText('Sharing').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Allow data sharing').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows save button', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(screen.getAllByText('Save Settings').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows no changes initially', async () => {
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
     expect(screen.getAllByText('No changes').length).toBeGreaterThanOrEqual(1)
   })
 
@@ -115,7 +116,7 @@ describe('WorkspaceSettingsPage', () => {
     const user = userEvent.setup()
     mockApiPut.mockResolvedValueOnce({})
     render(<WorkspaceSettingsPage />)
-    await screen.findByText('Workspace Settings')
+    await screen.findAllByText('Workspace Settings')
 
     const nameInput = screen.getByDisplayValue('Test Workspace')
     await user.clear(nameInput)
