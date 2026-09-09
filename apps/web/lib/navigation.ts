@@ -89,6 +89,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/audit-trail', labelKey: 'nav.audit_trail', icon: 'activity', description: 'Audit log' },
       { path: '/workspace-settings', labelKey: 'nav.workspace_settings', icon: 'settings', description: 'Workspace settings' },
       { path: '/api-keys', labelKey: 'nav.api_keys', icon: 'code', description: 'API key management' },
+      { path: '/notifications', labelKey: 'nav.notifications', icon: 'activity', description: 'Workspace notifications' },
     ],
   },
 ]
@@ -125,4 +126,5 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/audit-trail': IconActivity,
   '/workspace-settings': IconSettings,
   '/api-keys': IconCode,
+  '/notifications': IconActivity,
 }

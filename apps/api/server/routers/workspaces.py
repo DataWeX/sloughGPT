@@ -1010,6 +1010,63 @@ class WorkspacesRouter:
                 "errors": errors,
             })
 
+        # ─── Workspace notifications ──────────────────────────
+        async def get_workspace_notifications(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            notifications = []
+
+            # Recent training job events
+            try:
+                from domains.training.repository import TrainingRepository
+                repo = TrainingRepository()
+                jobs = repo.list_by_workspace(workspace_id)
+                for job in jobs[-20:]:  # last 20
+                    status = getattr(job, 'status', '')
+                    if status in ('completed', 'failed'):
+                        notifications.append({
+                            "type": "training",
+                            "title": f"Training job {status}",
+                            "detail": getattr(job, 'name', job.id),
+                            "status": status,
+                            "timestamp": getattr(job, 'updated_at', getattr(job, 'created_at', '')),
+                        })
+            except Exception:
+                pass
+
+            # Recent member changes from audit log
+            try:
+                from infrastructure.auth import AuditLogger
+                audit = AuditLogger()
+                logs = audit.list(workspace_id=workspace_id, limit=50)
+                for log in logs:
+                    action = log.get("action", "")
+                    if "member" in action or "invite" in action:
+                        notifications.append({
+                            "type": "member",
+                            "title": action.replace("_", " ").title(),
+                            "detail": log.get("detail", ""),
+                            "status": "info",
+                            "timestamp": log.get("timestamp", ""),
+                        })
+            except Exception:
+                pass
+
+            # Sort by timestamp descending
+            notifications.sort(key=lambda n: n.get("timestamp", ""), reverse=True)
+
+            return success_response(data={
+                "notifications": notifications[:50],
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -1031,6 +1088,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/invite", invite_member, methods=["POST"])
         router.add_api_route("/{workspace_id}/cleanup", cleanup_workspace_data, methods=["POST"])
         router.add_api_route("/{workspace_id}/members/bulk", bulk_import_members, methods=["POST"])
+        router.add_api_route("/{workspace_id}/notifications", get_workspace_notifications, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
