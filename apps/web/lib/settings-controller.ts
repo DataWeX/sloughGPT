@@ -127,4 +127,16 @@ export const settingsController = {
   async getBatchTrainingStatus(): Promise<{ jobs: Array<Record<string, unknown>>; summary: { total: number; running: number; queued: number; completed: number; failed: number } }> {
     return apiGet('/settings/training/batch-status')
   },
+
+  async listTrainingPresets(): Promise<{ presets: Array<Record<string, unknown>> }> {
+    return apiGet('/settings/training/presets')
+  },
+
+  async getTrainingPreset(name: string): Promise<Record<string, unknown>> {
+    return apiGet(`/settings/training/presets/${name}`)
+  },
+
+  async applyTrainingPreset(name: string): Promise<{ preset: string; applied: Record<string, unknown> }> {
+    return apiPost(`/settings/training/presets/${name}/apply`)
+  },
 }

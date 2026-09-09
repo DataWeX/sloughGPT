@@ -4,13 +4,14 @@ Uses ModelsController for business logic
 """
 
 import asyncio
+import json
 import logging
 import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict
 
 from controllers.models import get_models_controller
 from fastapi import APIRouter, Depends
@@ -64,6 +65,21 @@ class ProcessGuardRequest(BaseModel):
     enabled: bool
 
 
+class ExternalServerRequest(BaseModel):
+    """Request body for POST /models/external/servers."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    url: str = Field(..., min_length=1, max_length=500)
+    compressed: bool = Field(default=True)
+
+
+class ExternalDownloadRequest(BaseModel):
+    """Request body for POST /models/external/download."""
+
+    server: str = Field(..., min_length=1, max_length=100)
+    model_id: str = Field(..., min_length=1, max_length=200)
+
+
 class ModelsRouter:
     """Models Router - MVC View layer."""
 
@@ -111,6 +127,31 @@ class ModelsRouter:
             path="/file/{model_id:path}/{file_path:path}",
             endpoint=self.serve_model_file,
             methods=["GET"],
+        )
+        self.router.add_api_route(
+            path="/external/servers",
+            endpoint=self.list_external_servers,
+            methods=["GET"],
+        )
+        self.router.add_api_route(
+            path="/external/servers",
+            endpoint=self.register_external_server,
+            methods=["POST"],
+        )
+        self.router.add_api_route(
+            path="/external/servers/{name}",
+            endpoint=self.remove_external_server,
+            methods=["DELETE"],
+        )
+        self.router.add_api_route(
+            path="/external/models",
+            endpoint=self.list_external_models,
+            methods=["GET"],
+        )
+        self.router.add_api_route(
+            path="/external/download",
+            endpoint=self.download_external_model,
+            methods=["POST"],
         )
         self.router.add_api_route(
             path="/visual-load", endpoint=self.visual_model_load, methods=["POST"]
@@ -885,6 +926,117 @@ class ModelsRouter:
             media_type="application/octet-stream",
             headers=headers,
         )
+
+    # ── External server management ───────────────────────────────────────
+
+    _external_servers: Dict[str, Dict] = {}
+
+    @endpoint("models.list_external_servers")
+    async def list_external_servers(
+        self,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """List registered external model servers."""
+        return success_response(data=self._external_servers)
+
+    @endpoint("models.register_external_server")
+    async def register_external_server(
+        self,
+        req: ExternalServerRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Register an external model server for downloads."""
+        self._external_servers[req.name] = {
+            "url": req.url,
+            "compressed": req.compressed,
+        }
+        logger.info("Registered external server: %s at %s", req.name, req.url)
+        return success_response(
+            data={"name": req.name, "url": req.url, "compressed": req.compressed},
+            message="registered",
+        )
+
+    @endpoint("models.remove_external_server")
+    async def remove_external_server(
+        self,
+        name: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Remove a registered external server."""
+        if name not in self._external_servers:
+            raise_error(f"Server not found: {name}", status_code=404)
+        del self._external_servers[name]
+        logger.info("Removed external server: %s", name)
+        return success_response(data={"name": name}, message="removed")
+
+    @endpoint("models.list_external_models")
+    async def list_external_models(
+        self,
+        server: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """List available models from an external server."""
+        if server not in self._external_servers:
+            raise_error(f"Server not found: {server}", status_code=404)
+
+        from domains.infrastructure.external_download import ExternalDownloadBackend
+
+        cfg = self._external_servers[server]
+        backend = ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
+
+        import urllib.request
+        import urllib.error
+
+        try:
+            url = f"{cfg['url']}/models"
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                models = json.loads(resp.read())
+        except Exception as e:
+            raise_error(f"Failed to list models from {server}: {e}", status_code=502)
+
+        return success_response(data={"server": server, "models": models})
+
+    @endpoint("models.download_external")
+    async def download_external_model(
+        self,
+        req: ExternalDownloadRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Download a model from an external server."""
+        if req.server not in self._external_servers:
+            raise_error(f"Server not found: {req.server}", status_code=404)
+
+        from domains.infrastructure.external_download import ExternalDownloadBackend
+
+        cfg = self._external_servers[req.server]
+        backend = ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
+
+        from domains.infrastructure.download_manager import get_download_manager
+
+        mgr = get_download_manager()
+        if mgr.is_downloading(req.model_id):
+            return success_response(
+                data={"model_id": req.model_id}, message="already_downloading"
+            )
+
+        asyncio.create_task(self._run_external_download(backend, req.model_id))
+        return success_response(
+            data={"model_id": req.model_id, "server": req.server},
+            message="download_started",
+        )
+
+    async def _run_external_download(self, backend, model_id: str):
+        """Background task that runs the external download."""
+        from domains.infrastructure.download_manager import get_download_manager
+
+        mgr = get_download_manager()
+        try:
+            result = await mgr.download(model_id)
+            if result.get("status") == "completed":
+                logger.info("External download completed: %s", model_id)
+        except Exception as e:
+            logger.warning("External download failed for %s: %s", model_id, e)
 
     @endpoint("models.visual_model_load")
     async def visual_model_load(

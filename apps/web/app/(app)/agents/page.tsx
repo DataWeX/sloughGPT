@@ -672,7 +672,12 @@ export default function AgentsPage() {
                             className="mt-1 rounded border-border"
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium">{agent.name}</p>
+                            <p
+                              className="text-[11px] font-medium cursor-pointer hover:text-primary transition-colors"
+                              onClick={() => router.push(`/agents/${agent.id}`)}
+                            >
+                              {agent.name}
+                            </p>
                             {agent.description && (
                               <p className="text-[10px] text-muted-foreground mt-0.5">{agent.description}</p>
                             )}

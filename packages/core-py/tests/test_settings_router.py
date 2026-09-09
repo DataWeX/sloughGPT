@@ -208,3 +208,43 @@ class TestBatchTrainingStatus:
         assert "total" in data["summary"]
         assert "running" in data["summary"]
         assert isinstance(data["jobs"], list)
+
+
+class TestTrainingPresets:
+    def test_list_presets(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/presets")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "presets" in data
+        assert len(data["presets"]) > 0
+        assert "name" in data["presets"][0]
+        assert "model" in data["presets"][0]
+
+    def test_get_preset(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/presets/quick-finetune")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["name"] == "Quick Fine-Tune"
+        assert data["model"] == "gpt2"
+
+    def test_get_preset_not_found(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/presets/nonexistent")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "error" in data
+
+    def test_apply_preset(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.post("/settings/training/presets/quick-finetune/apply")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["preset"] == "quick-finetune"
+        assert "applied" in data
+        assert "settings" in data

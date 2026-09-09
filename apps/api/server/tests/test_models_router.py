@@ -6,6 +6,7 @@ Tests for models router — list, current, hf, cache-usage, export-formats.
 Only registers the models router to avoid pulling in heavy dependencies.
 """
 
+import json
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -13,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from routers.models import router as models_router
+from routers.models import router as models_router, ModelsRouter
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -447,3 +448,89 @@ class TestServeModelFile:
             assert resp.status_code == 200
             # TestClient auto-decompresses gzip, so content should be original data
             assert resp.content == original_data
+
+
+# ── External server management ──────────────────────────────────────────────
+
+class TestExternalServers:
+    def test_list_empty(self):
+        """List servers returns empty when none registered."""
+        ModelsRouter._external_servers.clear()
+        resp = client.get("/models/external/servers")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data == {}
+
+    def test_register_and_list(self):
+        """Register a server and verify it appears in list."""
+        ModelsRouter._external_servers.clear()
+        resp = client.post("/models/external/servers", json={
+            "name": "lab-server",
+            "url": "http://192.168.1.100:8000",
+            "compressed": True,
+        })
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["name"] == "lab-server"
+
+        resp = client.get("/models/external/servers")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert "lab-server" in data
+        assert data["lab-server"]["url"] == "http://192.168.1.100:8000"
+
+    def test_remove_server(self):
+        """Remove a registered server."""
+        ModelsRouter._external_servers.clear()
+        client.post("/models/external/servers", json={
+            "name": "temp",
+            "url": "http://localhost:9000",
+        })
+        resp = client.delete("/models/external/servers/temp")
+        assert resp.status_code == 200
+
+        resp = client.get("/models/external/servers")
+        assert "temp" not in _data(resp)
+
+    def test_remove_nonexistent_returns_404(self):
+        """Removing non-existent server returns 404."""
+        ModelsRouter._external_servers.clear()
+        resp = client.delete("/models/external/servers/nope")
+        assert resp.status_code == 404
+
+    def test_list_external_models(self):
+        """List models from external server."""
+        ModelsRouter._external_servers.clear()
+        client.post("/models/external/servers", json={
+            "name": "peer",
+            "url": "http://localhost:8000",
+        })
+
+        mock_models = [{"model_id": "llama-7b"}, {"model_id": "mistral-7b"}]
+        with patch("urllib.request.urlopen") as mock_open:
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = json.dumps(mock_models).encode()
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            mock_open.return_value = mock_resp
+
+            resp = client.get("/models/external/models?server=peer")
+            assert resp.status_code == 200
+            data = _data(resp)
+            assert data["server"] == "peer"
+            assert len(data["models"]) == 2
+
+    def test_list_external_models_unknown_server(self):
+        """List models from unknown server returns 404."""
+        ModelsRouter._external_servers.clear()
+        resp = client.get("/models/external/models?server=unknown")
+        assert resp.status_code == 404
+
+    def test_download_external_unknown_server(self):
+        """Download from unknown server returns 404."""
+        ModelsRouter._external_servers.clear()
+        resp = client.post("/models/external/download", json={
+            "server": "unknown",
+            "model_id": "model",
+        })
+        assert resp.status_code == 404

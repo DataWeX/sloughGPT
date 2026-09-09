@@ -69,6 +69,32 @@ describe('phonemeController', () => {
     })
   })
 
+  describe('synthesize', () => {
+    it('returns spectrogram with audio', async () => {
+      mockApiPost.mockResolvedValueOnce({
+        audio: 'data:audio/wav;base64,abc123',
+        text: 'hello',
+        duration_sec: 1.5,
+        elapsed_ms: 120,
+        spectrogram: {
+          data: [[0.1, 0.2], [0.3, 0.4]],
+          n_mels: 2,
+          n_frames: 2,
+        },
+      })
+
+      const result = await phonemeController.synthesize('hello')
+
+      expect(result.audio).toBe('data:audio/wav;base64,abc123')
+      expect(result.duration_sec).toBe(1.5)
+      expect(result.spectrogram).toEqual({
+        data: [[0.1, 0.2], [0.3, 0.4]],
+        n_mels: 2,
+        n_frames: 2,
+      })
+    })
+  })
+
   describe('detectLanguage', () => {
     it('detects language', async () => {
       mockApiPost.mockResolvedValueOnce({

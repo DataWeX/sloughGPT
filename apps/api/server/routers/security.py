@@ -10,9 +10,16 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.routers.security")
+
+
+class CreateKeyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    scopes: list[str] = Field(default=["*"])
+    expires_at: int | None = Field(default=None, description="Unix timestamp for key expiration")
 
 
 def _get_key_manager():

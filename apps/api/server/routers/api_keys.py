@@ -16,7 +16,7 @@ logger = logging.getLogger("slo.api_keys")
 
 
 def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()[:16]
+    return hashlib.sha256(key.encode()).hexdigest()
 
 
 class ApiKeyManager:

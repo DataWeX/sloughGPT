@@ -878,4 +878,44 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/batch-status');
     });
   });
+
+  describe('listTrainingPresets()', () => {
+    it('calls GET /settings/training/presets', async () => {
+      const mockData = { presets: [{ name: 'quick-finetune', model: 'gpt2' }] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listTrainingPresets();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/presets');
+    });
+  });
+
+  describe('getTrainingPreset()', () => {
+    it('calls GET /settings/training/presets/:name', async () => {
+      const mockData = { name: 'Quick Fine-Tune', model: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTrainingPreset('quick-finetune');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/presets/quick-finetune');
+    });
+  });
+
+  describe('applyTrainingPreset()', () => {
+    it('calls POST /settings/training/presets/:name/apply', async () => {
+      const mockData = { preset: 'quick-finetune', applied: {} };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.applyTrainingPreset('quick-finetune');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/presets/quick-finetune/apply');
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
 });

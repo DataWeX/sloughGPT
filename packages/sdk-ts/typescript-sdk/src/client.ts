@@ -932,6 +932,18 @@ export class SloughGPTClient {
     return this.request('GET', '/settings/training/batch-status');
   }
 
+  async listTrainingPresets(): Promise<{ presets: Array<Record<string, unknown>> }> {
+    return this.request('GET', '/settings/training/presets');
+  }
+
+  async getTrainingPreset(name: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/presets/${name}`);
+  }
+
+  async applyTrainingPreset(name: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/settings/training/presets/${name}/apply`);
+  }
+
   // ============ VQA ============
 
   async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
