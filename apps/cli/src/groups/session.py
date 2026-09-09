@@ -4,6 +4,8 @@ Session command group — chat session management.
 
 from core.framework import click
 from core.helpers import ns as _ns, api_get, output_json
+from domains.logging import get_global
+log = get_global()
 
 
 def register(cli):

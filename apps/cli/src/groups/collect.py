@@ -4,6 +4,8 @@ Collect command group — collect data from files, URLs, RSS feeds, and APIs.
 
 from core.framework import click
 from core.helpers import ns as _ns
+from domains.logging import get_global
+log = get_global()
 
 
 def register(cli):

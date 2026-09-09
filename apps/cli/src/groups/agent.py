@@ -4,6 +4,8 @@ Agent command group — manage and execute AI agents.
 
 from core.framework import click
 from core.helpers import ns as _ns, api_get, api_post, api_delete, output_json, confirm
+from domains.logging import get_global
+log = get_global()
 
 
 def register(cli):
