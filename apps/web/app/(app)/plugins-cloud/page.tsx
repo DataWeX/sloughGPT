@@ -42,7 +42,7 @@ export default function PluginsCloudPage() {
   const [submitting, setSubmitting] = useState(false)
   const [provider, setProvider] = useState('local')
   const [datasetId, setDatasetId] = useState('')
-  const { addToast } = useToastStore()
+  const addToast = useToastStore(s => s.addToast)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -64,17 +64,17 @@ export default function PluginsCloudPage() {
 
   const startJob = async () => {
     if (!datasetId) {
-      addToast({ title: 'Dataset required', type: 'error' })
+      addToast('Dataset required', 'error')
       return
     }
     setSubmitting(true)
     try {
       await apiPost('/cloud-training/submit', { provider, dataset_id: datasetId })
-      addToast({ title: 'Job submitted', type: 'success' })
+      addToast('Job submitted', 'success')
       setDatasetId('')
       loadData()
     } catch (err) {
-      addToast({ title: 'Failed to submit', type: 'error' })
+      addToast('Failed to submit', 'error')
     } finally {
       setSubmitting(false)
     }

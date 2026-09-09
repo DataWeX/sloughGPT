@@ -8,6 +8,7 @@ import { apiGet, apiPut, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface UserProfile {
   id: string
@@ -49,6 +50,8 @@ export default function ProfilePage() {
       setLoading(false)
     }
   }, [])
+
+  useRefreshShortcut(fetchProfile)
 
   const updateProfile = async () => {
     setSaving(true)

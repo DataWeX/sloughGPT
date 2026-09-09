@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label, cn } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import {
   tokenTreeController,
   type TokenTreeStats,
@@ -55,6 +56,8 @@ export default function TokenTreePage() {
       setStats(s)
     } catch { /* silent */ }
   }, [])
+
+  useRefreshShortcut(loadStats)
 
   useEffect(() => { void loadStats() }, [loadStats])
 

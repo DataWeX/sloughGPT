@@ -7,6 +7,7 @@ import { StatusBanner } from '@/components/composed/StatusBanner'
 import { vmController, type VMRunResult, type VMRegister, type VMTrainingJob } from '@/lib/vm-controller'
 import { datasetController } from '@/lib/dataset-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { chatDB } from '@/lib/db'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
@@ -533,6 +534,7 @@ export default function VMPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trainingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useRefreshShortcut(() => { window.location.reload() })
 
   useEffect(() => {
     return () => {

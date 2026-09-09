@@ -10,6 +10,7 @@ import { imagesController, type GalleryImage, type ImageStyle } from '@/lib/imag
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface Style {
   key: string
@@ -45,6 +46,8 @@ export default function ImagesPage() {
       setLoading(false)
     }
   }
+
+  useRefreshShortcut(fetchData)
 
   useEffect(() => { fetchData() }, [])
 

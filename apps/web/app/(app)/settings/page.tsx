@@ -43,6 +43,7 @@ import { formatUptime } from '@/lib/chat-utils'
 import { ServingProfilesCard } from '@/components/ServingProfilesCard'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { settingsSchema } from '@/lib/validation-schemas'
 
 const WEB_VERSION = '3.0.0'
@@ -112,6 +113,8 @@ export default function SettingsPage() {
       setHealthError(true)
     }
   }, [])
+
+  useRefreshShortcut(fetchHealth)
 
   useEffect(() => { fetchHealth() }, [fetchHealth])
 

@@ -12,6 +12,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiPost } from '@/lib/http-client'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import dynamicNext from 'next/dynamic'
 import CapabilitiesCard from '@/components/multimodal/CapabilitiesCard'
 import ImageTrainingCard from '@/components/multimodal/ImageTrainingCard'
@@ -101,6 +102,8 @@ export default function MultimodalPage() {
       logger.error('Could not dpo status poll', { exception: String(err) })
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchAll)
 
   useEffect(() => { fetchAll() }, [fetchAll])
   useEffect(() => () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current) }, [])

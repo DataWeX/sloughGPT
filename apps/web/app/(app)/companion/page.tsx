@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn, Slider } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -8,6 +9,7 @@ import { companionController, type CompanionTraits, type CompanionPreset } from 
 import { CompanionInsightsCard } from '@/components/companion/CompanionInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
   warmth: { label: 'Warmth', color: 'bg-warning/15 text-warning' },
@@ -18,6 +20,7 @@ const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
 }
 
 export default function CompanionPage() {
+  const router = useRouter()
   const [traits, setTraits] = useState<CompanionTraits | null>(null)
   const [presets, setPresets] = useState<CompanionPreset[]>([])
   const [systemPrompt, setSystemPrompt] = useState('')
@@ -29,6 +32,7 @@ export default function CompanionPage() {
   const [error, setError] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const addToast = useToastStore(s => s.addToast)
+  useRefreshShortcut(() => router.refresh())
 
   useEffect(() => {
     let ignore = false

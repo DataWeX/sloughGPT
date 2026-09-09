@@ -11,6 +11,7 @@ import { apiPost } from '@/lib/http-client'
 import { BenchmarkInsightsCard } from '@/components/benchmark/BenchmarkInsightsCard'
 import ComparisonTableCard from '@/components/compare/ComparisonTableCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'metrics' | 'quality' | 'responses' | 'perplexity' | 'compare'
 
@@ -79,6 +80,8 @@ export default function BenchmarkPage() {
       setRunning(false)
     }
   }
+
+  useRefreshShortcut(handleRefreshMetrics)
 
   const handleLoadResponses = async () => {
     try {

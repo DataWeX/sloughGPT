@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
 import { ExperimentDetailsCard } from '@/components/experiments/ExperimentDetailsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function ExperimentsPage() {
   const [experiments, setExperiments] = useState<Awaited<ReturnType<typeof experimentsController.list>>>([])
@@ -38,12 +39,13 @@ export default function ExperimentsPage() {
     }
   }
 
+  useRefreshShortcut(fetchExperiments)
+
   useEffect(() => { fetchExperiments() }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchExperiments() }
       if (e.key === 'n' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setCreateDialogOpen(true) }
       if (e.key === 'e' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void handleExport() }
       if (e.key === 'Escape') { setSelectedId(null); setSelectedIds(new Set()); setCreateDialogOpen(false) }

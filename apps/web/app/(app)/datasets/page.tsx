@@ -15,6 +15,7 @@ import { Skeleton } from '@sloughgpt/strui'
 import { DatasetListSkeleton } from '@/components/ui/PageSkeletons'
 import { IconRefresh, IconPlus, IconTrash, IconChevronDown, IconDownload, IconPlay } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { datasetController, type Dataset, type DatasetPreview as PreviewData } from '@/lib/dataset-controller'
 import { formatBytes } from '@/lib/format-bytes'
 import { formatDate } from '@/lib/conversations-utils'
@@ -53,6 +54,8 @@ export default function DatasetsPage() {
       setLoading(false)
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchDatasets)
 
   useEffect(() => {
     fetchDatasets()

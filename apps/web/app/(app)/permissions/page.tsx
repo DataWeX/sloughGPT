@@ -7,6 +7,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface PermissionsResponse {
   data: {
@@ -62,6 +63,8 @@ export default function PermissionsPage() {
       setLoading(false)
     }
   }, [currentWorkspace?.id, addToast])
+
+  useRefreshShortcut(fetchPermissions)
 
   useEffect(() => { fetchPermissions() }, [fetchPermissions])
 

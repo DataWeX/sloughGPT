@@ -8,6 +8,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface Activity {
   type: string
@@ -48,6 +49,8 @@ export default function AuditTrailPage() {
       setLoading(false)
     }
   }, [currentWorkspace?.id, dateFrom, dateTo, typeFilter])
+
+  useRefreshShortcut(fetchActivities)
 
   useEffect(() => { fetchActivities() }, [fetchActivities])
 

@@ -21,6 +21,7 @@ import { TokenTreeLineageCard } from '@/components/tokenizer/TokenTreeLineageCar
 import { TokenTreeCompareCard } from '@/components/tokenizer/TokenTreeCompareCard'
 import { TokenTreePlaygroundCard } from '@/components/tokenizer/TokenTreePlaygroundCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'playground' | 'vocab' | 'samples' | 'train' | 'analyze' | 'decompose' | 'detokenize' | 'pretokenize' | 'merges'
 
@@ -52,6 +53,7 @@ export default function TokenizerPage() {
   const [pretokenizeResult, setPretokenizeResult] = useState<Record<string, unknown> | null>(null)
   const [treeVersion, setTreeVersion] = useState(0)
   const addToast = useToastStore(s => s.addToast)
+  useRefreshShortcut(() => router.refresh())
 
   useEffect(() => {
     tokenizerController.getStats().then(s => {

@@ -13,6 +13,7 @@ import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
 import { ErrorInsightsCard } from '@/components/errors/ErrorInsightsCard'
 import { authController, type UserInfo } from '@/lib/auth-controller'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { errorsController } from '@/lib/errors-controller'
 import { downloadJson } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
@@ -281,6 +282,8 @@ export default function AdminPage() {
       await fetchErrors()
     }
   }
+
+  useRefreshShortcut(refreshAll)
 
   // ── Derived state ───────────────────────────────────────────────────────────
   const filteredLogs = filter.trim()

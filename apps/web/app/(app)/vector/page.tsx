@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { vectorController, type VectorSearchResult } from '@/lib/vector-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function VectorPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -32,6 +33,8 @@ export default function VectorPage() {
       setLoading(false)
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchStats)
 
   useEffect(() => { fetchStats() }, [fetchStats])
 

@@ -16,6 +16,7 @@ import { EmptyCard, KpiGrid, StatCard, IconRefresh, IconCopy, cn, Skeleton } fro
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconPlus, IconTrash, IconClock } from '@/components/icons/NavIcons'
 import { agentsController, type Agent, type OrchestrateTask, type AgentRun } from '@/lib/agents-controller'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useToastStore } from '@/lib/toast-store'
 import { downloadJson } from '@/lib/download-utils'
 import { todayDateString } from '@/lib/format-bytes'
@@ -131,6 +132,8 @@ export default function AgentsPage() {
     }
     setLoading(false)
   }, [addToast])
+
+  useRefreshShortcut(fetchAgents)
 
   useEffect(() => { fetchAgents() }, [fetchAgents])
 

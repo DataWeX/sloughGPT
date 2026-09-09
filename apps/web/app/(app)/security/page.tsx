@@ -8,6 +8,7 @@ import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { SecurityOverviewCard } from '@/components/security/SecurityOverviewCard'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface AuditLog {
   event_type: string
@@ -93,6 +94,8 @@ export default function SecurityPage() {
       setLoading(false)
     }
   }, [fetchKeys])
+
+  useRefreshShortcut(fetchData)
 
   const toggleHistory = () => {
     const next = !historyMode

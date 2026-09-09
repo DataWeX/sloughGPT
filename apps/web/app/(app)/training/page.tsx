@@ -34,6 +34,7 @@ import { TrainingLiveChart } from '@/components/training/TrainingLiveChart'
 import { TrainingHistoryView } from '@/components/training/TrainingHistoryView'
 import { TrainingAnalyticsCard } from '@/components/training/TrainingAnalyticsCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type ManualTab = 'train' | 'results' | 'settings'
 
@@ -56,6 +57,11 @@ export default function TrainingPage() {
   const [completedSteps, setCompletedSteps] = useState<Set<'data' | 'configure' | 'train' | 'results'>>(new Set())
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
+  useRefreshShortcut(() => {
+    void datasets.fetchDatasets()
+    void checkpoints.fetchCheckpoints()
+    void checkpoints.fetchJobs()
+  })
 
   // ===== Visibility-based polling pause =====
   const visibilityRef = useRef<boolean>(true)

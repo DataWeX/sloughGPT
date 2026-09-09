@@ -30,6 +30,7 @@ import { IconPlus, IconTrash, IconRefresh } from '@/components/icons/NavIcons'
 import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface ApiKey {
   id: string
@@ -72,6 +73,8 @@ export default function ApiKeysPage() {
       setLoading(false)
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchKeys)
 
   useEffect(() => {
     fetchKeys()

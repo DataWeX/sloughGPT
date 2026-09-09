@@ -8,6 +8,7 @@ import { Skeleton } from '@sloughgpt/strui'
 import { MemoryPageSkeleton } from '@/components/ui/PageSkeletons'
 import { useToastStore } from '@/lib/toast-store'
 import { memoryController, type MemoryItem, type MemoryConfigResult, type MemoryArchiveStats } from '@/lib/memory-controller'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 function importanceColor(i: number): string {
   if (i >= 0.8) return 'text-foreground font-medium'
@@ -51,6 +52,8 @@ export default function MemoryPage() {
       setLoading(false)
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchAll)
 
   const handleRemember = useCallback(async () => {
     if (!rememberContent.trim()) return

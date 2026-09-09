@@ -14,11 +14,13 @@ import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { filesController, type FileEntry } from '@/lib/files-controller'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { authFetch } from '@/lib/http-client'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type DevTab = 'shell' | 'files' | 'voice' | 'api'
 
 export default function DeveloperPage() {
   const [tab, setTab] = useState<DevTab>('shell')
+  useRefreshShortcut(() => { window.location.reload() })
 
   return (
     <PageContainer title="Developer" subtitle="Terminal, files & voice tools">

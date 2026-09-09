@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDia
 import { IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
 import { AdapterHealthCard } from '@/components/adapters/AdapterHealthCard'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -35,6 +36,8 @@ export default function AdaptersPage() {
       addToast(extractErrorMessage(e, 'Could not refresh adapters'), 'error')
     }
   }
+
+  useRefreshShortcut(refreshData)
 
   useEffect(() => {
     let ignore = false

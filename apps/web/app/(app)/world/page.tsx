@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Label } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import {
   worldController,
   type RenderConfig,
@@ -42,6 +43,8 @@ export default function WorldPage() {
       // silently fail
     }
   }, [])
+
+  useRefreshShortcut(loadStats)
 
   useEffect(() => { void loadStats() }, [loadStats])
 

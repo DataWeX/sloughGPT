@@ -17,6 +17,7 @@ import { modelDisplayName } from '@/lib/inference-display'
 import { modelController } from '@/lib/model-controller'
 import { soulsController } from '@/lib/souls-controller'
 import { benchmarkController, type BenchmarkResult } from '@/lib/benchmark-controller'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import ModelStatusCard from '@/components/models/ModelStatusCard'
 import ComposableLayersCard from '@/components/models/ComposableLayersCard'
 import PersonalitiesCard from '@/components/models/PersonalitiesCard'
@@ -107,6 +108,7 @@ export default function ModelsPage() {
   const [cacheUsage, setCacheUsage] = useState<{ total_gb: number; model_count: number } | null>(null)
   const [compareResults, setCompareResults] = useState<Record<string, BenchmarkResult | null>>({})
   const [compareRunning, setCompareRunning] = useState<Set<string>>(new Set())
+  useRefreshShortcut(() => router.refresh())
   const [compareLoading, setCompareLoading] = useState(true)
 
   const compareModels: ModelEntry[] = useMemo(() => {
@@ -166,6 +168,8 @@ export default function ModelsPage() {
     setRefreshing(false)
     addToast('Refreshed', 'success')
   }, [refetchModels, refetchSouls, refetchCurrentSoul, refetchCheckpoints, refreshHealth, fetchTraitWeights, addToast])
+
+  useRefreshShortcut(handleRefresh)
 
   const handleModelLoaded = useCallback(async () => {
     await refreshHealth()

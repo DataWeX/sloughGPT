@@ -29,6 +29,7 @@ import { downloadJson } from '@/lib/download-utils'
 import { todayDateString, MS_PER_SECOND } from '@/lib/format-bytes'
 import { knowledgeSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -98,6 +99,8 @@ export default function KnowledgePage() {
       setLoading(false)
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchData)
 
   useEffect(() => { fetchData() }, [fetchData])
 

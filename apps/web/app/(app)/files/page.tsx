@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function FilesPage() {
   const [files, setFiles] = useState<FileEntry[]>([])
@@ -33,6 +34,8 @@ export default function FilesPage() {
       setLoading(false)
     }
   }, [])
+
+  useRefreshShortcut(fetchFiles)
 
   useEffect(() => { fetchFiles() }, [fetchFiles])
 
