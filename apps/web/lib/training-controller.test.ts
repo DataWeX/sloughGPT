@@ -181,21 +181,6 @@ describe('trainingJobsController.startLoraFinetune', () => {
   })
 })
 
-describe('trainingJobsController.startQuick', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /training/quick', async () => {
-    apiClient.apiPost.mockResolvedValue({ job_id: 'q1', status: 'ok', config: {}, explanation: 'done' })
-    const result = await trainingJobsController.startQuick({ dataset: 'shakespeare' })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/quick', {
-      dataset: 'shakespeare',
-      name: undefined,
-      model: undefined,
-    })
-    expect(result.job_id).toBe('q1')
-  })
-})
-
 describe('trainingJobsController.getSummary', () => {
   beforeEach(() => { vi.clearAllMocks() })
 

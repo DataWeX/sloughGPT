@@ -92,6 +92,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
       { path: '/notifications', labelKey: 'nav.notifications', icon: 'activity', description: 'Workspace notifications' },
       { path: '/workspace-search', labelKey: 'nav.workspace_search', icon: 'search', description: 'Search workspace data' },
       { path: '/permissions', labelKey: 'nav.permissions', icon: 'settings', description: 'Role permissions' },
+      { path: '/shared-data', labelKey: 'nav.shared_data', icon: 'users', description: 'Cross-workspace data sharing' },
     ],
   },
 ]
@@ -131,4 +132,5 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/notifications': IconActivity,
   '/workspace-search': IconSearch,
   '/permissions': IconSettings,
+  '/shared-data': IconUsers,
 }

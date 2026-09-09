@@ -1263,6 +1263,116 @@ class WorkspacesRouter:
                 "member_permissions": member_perms,
             })
 
+        # ─── Data Sharing ───────────────────────────────────────
+        class ShareDataRequest(BaseModel):
+            resource_type: str = Field(..., description="Dataset, knowledge, or api_key")
+            resource_id: str = Field(..., min_length=1)
+            target_workspace_id: str = Field(..., min_length=1)
+            permission: str = Field(default="read", description="Read or admin")
+
+        async def share_data(req: ShareDataRequest, auth_user: dict = auth_dep) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(req.target_workspace_id)
+            if not ws:
+                raise_error("Target workspace not found", "E_NOT_FOUND", status_code=404)
+            if req.resource_type not in ("dataset", "knowledge", "api_key"):
+                raise_error("Invalid resource type", "E_VALIDATION", status_code=422)
+            if req.permission not in ("read", "admin"):
+                raise_error("Invalid permission", "E_VALIDATION", status_code=422)
+            # Check source workspace membership
+            source_ws_id = auth_user.get("workspace_id", "")
+            if not source_ws_id:
+                raise_error("No workspace context", "E_AUTH_MISSING", status_code=400)
+            member = self._ws_repo.get_member(source_ws_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                raise_error("Admin or owner role required", "E_AUTH_MISSING", status_code=403)
+            if req.target_workspace_id == source_ws_id:
+                raise_error("Cannot share with same workspace", "E_VALIDATION", status_code=422)
+
+            share_id = str(uuid.uuid4())
+            doc = {
+                "id": share_id,
+                "resource_type": req.resource_type,
+                "resource_id": req.resource_id,
+                "source_workspace_id": source_ws_id,
+                "target_workspace_id": req.target_workspace_id,
+                "permission": req.permission,
+                "shared_by": user.id,
+                "shared_at": datetime.now(timezone.utc).isoformat(),
+            }
+            # Store in MogDB
+            from infrastructure.mogdb import get_mogdb
+            db = get_mogdb()
+            db.insert("workspace_shares", doc)
+
+            safe_audit_log("workspace.share", resource=source_ws_id, user_id=user.id,
+                           detail=f"{req.resource_type}:{req.resource_id} -> {req.target_workspace_id}")
+            return success_response(data=doc)
+
+        async def list_shared_data(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            from infrastructure.mogdb import get_mogdb
+            db = get_mogdb()
+            shares = list(db.find("workspace_shares", {
+                "$or": [
+                    {"source_workspace_id": workspace_id},
+                    {"target_workspace_id": workspace_id},
+                ]
+            }))
+            return success_response(data={"shares": shares})
+
+        async def revoke_share(share_id: str, workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            user = self._get_user(auth_user)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                raise_error("Admin or owner role required", "E_AUTH_MISSING", status_code=403)
+            from infrastructure.mogdb import get_mogdb
+            db = get_mogdb()
+            doc = db.find_one("workspace_shares", {"id": share_id})
+            if not doc:
+                raise_error("Share not found", "E_NOT_FOUND", status_code=404)
+            if doc["source_workspace_id"] != workspace_id:
+                raise_error("Not authorized to revoke this share", "E_AUTH_MISSING", status_code=403)
+            db.delete("workspace_shares", {"id": share_id})
+            safe_audit_log("workspace.unshare", resource=workspace_id, user_id=user.id,
+                           detail=f"Revoked share {share_id}")
+            return success_response(data={"revoked": share_id})
+
+        async def get_shared_datasets(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            from infrastructure.mogdb import get_mogdb
+            from controllers.datasets import get_datasets_controller
+            db = get_mogdb()
+            shares = list(db.find("workspace_shares", {
+                "target_workspace_id": workspace_id,
+                "resource_type": "dataset",
+            }))
+            ctrl = get_datasets_controller()
+            results = []
+            for s in shares:
+                ds_list = ctrl.list_datasets(workspace_id=s["source_workspace_id"])
+                for ds in ds_list:
+                    if ds.get("id") == s["resource_id"]:
+                        results.append({"share": s, "dataset": ds})
+                        break
+            return success_response(data={"datasets": results})
+
+        async def get_shared_knowledge(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            from infrastructure.mogdb import get_mogdb
+            db = get_mogdb()
+            shares = list(db.find("workspace_shares", {
+                "target_workspace_id": workspace_id,
+                "resource_type": "knowledge",
+            }))
+            return success_response(data={"knowledge": shares})
+
+        async def get_shared_api_keys(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            from infrastructure.mogdb import get_mogdb
+            db = get_mogdb()
+            shares = list(db.find("workspace_shares", {
+                "target_workspace_id": workspace_id,
+                "resource_type": "api_key",
+            }))
+            return success_response(data={"api_keys": shares})
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -1288,6 +1398,12 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/clone", clone_workspace, methods=["POST"])
         router.add_api_route("/{workspace_id}/search", search_workspace, methods=["GET"])
         router.add_api_route("/{workspace_id}/permissions", get_workspace_permissions, methods=["GET"])
+        router.add_api_route("/{workspace_id}/share", share_data, methods=["POST"])
+        router.add_api_route("/{workspace_id}/shared", list_shared_data, methods=["GET"])
+        router.add_api_route("/{workspace_id}/share/{share_id}", revoke_share, methods=["DELETE"])
+        router.add_api_route("/{workspace_id}/shared/datasets", get_shared_datasets, methods=["GET"])
+        router.add_api_route("/{workspace_id}/shared/knowledge", get_shared_knowledge, methods=["GET"])
+        router.add_api_route("/{workspace_id}/shared/api-keys", get_shared_api_keys, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────

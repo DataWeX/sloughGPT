@@ -317,14 +317,6 @@ export const trainingJobsController = {
     return apiPost('/training/lora-finetune', params)
   },
 
-  async startQuick(params: {
-    dataset: string
-    name?: string
-    model?: string
-  }): Promise<{ job_id: string; status: string; config: Record<string, unknown>; explanation: string }> {
-    return apiPost('/training/quick', params)
-  },
-
   async getSummary(jobId: string): Promise<{ job_id: string; summary: string; status: string; model: string; dataset: string }> {
     return apiGet(`/training/jobs/${jobId}/summary`)
   },
