@@ -1,4 +1,4 @@
-.PHONY: api api-daemon api-stop web tsc lint test-py test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test setup-git
+.PHONY: api api-daemon api-stop web tsc lint test-py test-planner test-py-training test-web test dev install build precommit test-repo-root colab-smoke colab-test setup-git
 
 # ── Dev Servers ──────────────────────────────────────────
 api:
@@ -58,6 +58,10 @@ test-web-changed:
 	cd apps/web && npm run test:changed
 
 test: test-py-fast test-web-lib
+
+# ── Planner Tests ─────────────────────────────────────────
+test-planner:
+	PYTHONPATH=packages/app-planner/src:packages/mogdb/src python3 -m pytest packages/app-planner/tests/ -x -q $(ARGS)
 
 # ── Build ────────────────────────────────────────────────
 build: quant-core
