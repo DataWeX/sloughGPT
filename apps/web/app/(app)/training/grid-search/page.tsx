@@ -115,19 +115,16 @@ export default function GridSearchPage() {
       setRuns(prev => prev.map(r => r.id === run.id ? { ...r, status: 'running' } : r))
 
       try {
-        const result = await trainingJobsController.start({
-          dataset_id: selectedDataset,
-          method: 'distill',
+        const result = await trainingJobsController.startAutoTrain({
+          dataset: selectedDataset,
           epochs: parseInt(String(run.params.epochs || '5')),
           learning_rate: parseFloat(String(run.params.learning_rate || '1e-3')),
-          batch_size: parseInt(String(run.params.batch_size || '32')),
         })
 
         setRuns(prev => prev.map(r => r.id === run.id ? {
           ...r,
           status: 'completed',
-          jobId: result.job_id,
-          result: { loss: Math.random() * 0.5 + 0.1 }
+          result: { loss: Math.random() * 0.5 + 0.1, ...result }
         } : r))
       } catch {
         setRuns(prev => prev.map(r => r.id === run.id ? { ...r, status: 'failed' } : r))
