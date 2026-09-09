@@ -61,11 +61,10 @@ describe('ApiKeysPage', () => {
     await screen.findByText('API Keys')
   })
 
-  it('shows loading skeleton initially', async () => {
+  it('shows loading skeleton initially', () => {
     mockApiGet.mockReturnValue(new Promise(() => {}))
     render(<ApiKeysPage />)
-    await screen.findAllByText('API Keys')
-    // Skeleton is rendered during loading (no data yet)
+    // PageContainer always renders the title
     expect(screen.getAllByText('API Keys').length).toBeGreaterThanOrEqual(1)
   })
 

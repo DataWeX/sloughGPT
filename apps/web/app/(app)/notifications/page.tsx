@@ -8,7 +8,6 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
-import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface Notification {
   type: string
@@ -45,8 +44,6 @@ export default function NotificationsPage() {
       setLoading(false)
     }
   }, [currentWorkspace?.id, addToast])
-
-  useRefreshShortcut(fetchNotifications)
 
   useEffect(() => { fetchNotifications() }, [fetchNotifications])
 

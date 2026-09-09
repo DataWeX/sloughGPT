@@ -1,48 +1,111 @@
 """
-Model Download Manager — wraps ``downcraft`` for HuggingFace model downloads
-with cross-session resume, persistent state, and progress tracking.
+Download Manager — generic orchestration for pluggable download backends.
 
-Delegates all actual HTTP work to ``downcraft`` (generic HTTP downloader
-with Range-header resume).  This module exists only to integrate with the
-existing server API (``DownloadManager`` singleton, progress callbacks, etc.).
+Delegates source-specific logic (cache resolution, file listing, download
+execution) to a ``DownloadBackend`` implementation.  This module handles
+only scheduling, progress tracking, cancellation, and stale cleanup.
+
+The default backend is ``HFDownloadBackend`` (HuggingFace models), but any
+``DownloadBackend`` implementation can be injected via ``set_backend()``.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import shutil
 import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger("slo.infrastructure.download_manager")
 
-try:
-    from downcraft import downloader as sg_downloader
-    from downcraft import state as sg_state
-    from domains.infrastructure.hf_hub import (
-        get_cache_dir,
-        is_download_complete as hf_is_download_complete,
-        list_model_files,
-    )
-except ImportError:
-    logger.warning("downcraft not available — download management disabled",
-        extra={"op": "download.start"})
-    sg_downloader = None
-    sg_state = None
-    def get_cache_dir(model_id: str) -> str:
-        return str(Path.home() / ".cache" / "huggingface" / "hub" / f"models--{model_id.replace('/', '--')}")
-    def hf_is_download_complete(model_id: str, deep_check: bool = False) -> bool:
+# ---------------------------------------------------------------------------
+# Backend (pluggable)
+# ---------------------------------------------------------------------------
+
+_backend = None
+_backend_lock = threading.Lock()
+
+
+def get_backend():
+    """Return the current download backend, lazily initializing the HF default."""
+    global _backend
+    if _backend is None:
+        with _backend_lock:
+            if _backend is None:
+                try:
+                    from domains.infrastructure.hf_hub import HFDownloadBackend
+                    _backend = HFDownloadBackend()
+                except ImportError:
+                    from domains.infrastructure.download_backend import DownloadBackend
+                    _backend = _NullBackend()
+    return _backend
+
+
+def set_backend(backend) -> None:
+    """Override the download backend (for testing or alternative sources)."""
+    global _backend
+    with _backend_lock:
+        _backend = backend
+
+
+def reset_backend() -> None:
+    """Reset to default (HF) backend."""
+    global _backend
+    with _backend_lock:
+        _backend = None
+
+
+class _NullBackend:
+    """Fallback when no backend is available — all operations are no-ops."""
+
+    def is_cached(self, resource_id, deep_check=False):
         return False
-    def list_model_files(model_id: str) -> List[str]:
+
+    def get_cache_dir(self, resource_id):
+        return ""
+
+    def estimate_total(self, resource_id):
+        return 0
+
+    def list_files(self, resource_id):
         return []
 
-# Re-export for backward compat
-HF_CACHE_DIR = Path.home() / ".cache" / "huggingface" / "hub"
+    def download(self, resource_id, on_progress, on_file_complete):
+        return {"status": "failed", "error": "no backend configured"}
+
+    def cleanup(self, resource_id):
+        return False
+
+    def list_incomplete(self):
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience — delegate to backend
+# ---------------------------------------------------------------------------
+
+
+def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
+    """Check if a model is fully cached on disk."""
+    return get_backend().is_cached(model_id, deep_check=deep_check)
+
+
+def cleanup_incomplete(model_id: str) -> bool:
+    """Remove an incomplete/partial download."""
+    return get_backend().cleanup(model_id)
+
+
+def list_incomplete_models() -> List[str]:
+    """Scan cache and return resource IDs with incomplete downloads."""
+    return get_backend().list_incomplete()
+
+
+# ---------------------------------------------------------------------------
+# Status / Progress
+# ---------------------------------------------------------------------------
 
 
 class DownloadStatus(str, Enum):
@@ -88,112 +151,15 @@ class DownloadProgress:
 
 
 # ---------------------------------------------------------------------------
-# Re-export cache health helpers (using downcraft under the hood)
+# DownloadManager — generic orchestration
 # ---------------------------------------------------------------------------
 
-def _cache_dir(model_id: str) -> Path:
-    """Get the HF cache directory path for a model."""
-    return Path(get_cache_dir(model_id))
-
-
-def _has_weight_files(cache_dir: Path) -> bool:
-    """Check if a cache dir has any model weight files (safetensors or bin > 1KB)."""
-    for ext in ("*.safetensors", "*.bin"):
-        for f in cache_dir.rglob(ext):
-            try:
-                if f.stat().st_size > 1_000:
-                    return True
-            except OSError:
-                continue
-    return False
-
-
-def _has_incomplete_downloads(cache_dir: Path) -> bool:
-    """Check for in-progress or interrupted download markers."""
-    incomplete = list(cache_dir.rglob("*.incomplete"))
-    if incomplete:
-        return True
-    locks = list(cache_dir.rglob("*.lock"))
-    return len(locks) > 0
-
-
-def _get_snapshot_ref(cache_dir: Path) -> Optional[str]:
-    refs_main = cache_dir / "refs" / "main"
-    if not refs_main.exists():
-        return None
-    try:
-        return refs_main.read_text().strip()
-    except Exception:
-        return None
-
-
-def _has_complete_snapshot(cache_dir: Path) -> bool:
-    commit = _get_snapshot_ref(cache_dir)
-    if not commit:
-        return False
-    snapshot_dir = cache_dir / "snapshots" / commit
-    if not snapshot_dir.exists():
-        return False
-    return _has_weight_files(snapshot_dir)
-
-
-def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
-    """Check if a model is fully downloaded.
-
-    Delegates to ``domains.infrastructure.hf_hub.is_download_complete`` for the
-    canonical check (respects ``HF_HOME`` env var and uses proper
-    cache directory resolution).
-
-    Args:
-        model_id: HuggingFace model ID
-        deep_check: If True, verifies every expected weight file exists
-            via Hub API (network call). Skip for batch listing.
-    """
-    return hf_is_download_complete(model_id, deep_check=deep_check)
-
-
-def cleanup_incomplete(model_id: str) -> bool:
-    """Remove an incomplete/partial download from HF cache."""
-    cache_dir = _cache_dir(model_id)
-    if not cache_dir.exists():
-        return False
-    logger.warning("Removing incomplete cache for %s: %s", model_id, cache_dir,
-        extra={"op": "download.start", "download": {"resource": model_id}})
-    shutil.rmtree(str(cache_dir), ignore_errors=True)
-    # Also clean persistent state
-    if sg_state is not None:
-        sg_state.get_state().remove(model_id)
-    return True
-
-
-def list_incomplete_models() -> List[str]:
-    """Scan HF cache and return model IDs with incomplete downloads."""
-    base = Path.home() / ".cache" / "huggingface" / "hub"
-    if not base.exists():
-        return []
-    result = []
-    for entry in sorted(base.iterdir()):
-        if not entry.name.startswith("models--") or not entry.is_dir():
-            continue
-        model_id = entry.name[len("models--"):].replace("--", "/")
-        if _has_incomplete_downloads(entry):
-            result.append(model_id)
-        elif not _has_complete_snapshot(entry) and _has_weight_files(entry):
-            result.append(model_id)
-    return result
-
-
-# ---------------------------------------------------------------------------
-# DownloadManager — wraps downcraft for backward-compatible API
-# ---------------------------------------------------------------------------
 
 class DownloadManager:
-    """
-    Download manager singleton.
+    """Download manager singleton.
 
-    Wraps ``downcraft`` to provide the existing server API
-    (``download()``, ``is_cached()``, ``get_progress()``, etc.)
-    with the addition of cross-session resume via persistent state.
+    Orchestrates downloads via a pluggable ``DownloadBackend``.
+    Handles scheduling, progress tracking, cancellation, and stale cleanup.
     """
 
     def __init__(self):
@@ -221,8 +187,8 @@ class DownloadManager:
             )
 
     def is_cached(self, model_id: str) -> bool:
-        """Whether the model is fully cached on disk (survives restart)."""
-        return is_download_complete(model_id)
+        """Whether the resource is fully cached on disk (survives restart)."""
+        return get_backend().is_cached(model_id)
 
     def cancel(self, model_id: str) -> bool:
         with self._lock:
@@ -232,8 +198,7 @@ class DownloadManager:
                 task = self._tasks.pop(model_id, None)
                 if task and not task.done():
                     task.cancel()
-                if sg_state is not None:
-                    sg_state.get_state().set_status(model_id, "cancelled")
+                get_backend().on_cancel(model_id)
                 return True
             return False
 
@@ -268,36 +233,21 @@ class DownloadManager:
         model_id: str,
         total_bytes_hint: int = 0,
     ) -> Dict[str, Any]:
-        """Download a HuggingFace model using downcraft (with cross-session resume).
-
-        Unlike the old implementation (which cleaned up and restarted on every
-        resume), this delegates to ``downcraft`` which preserves partial
-        downloads across restarts via ``~/.downcraft/state.json``.
+        """Download a resource via the configured backend.
 
         Registers with CancelManager so downloads appear in /operations.
         """
-        if is_download_complete(model_id):
+        backend = get_backend()
+
+        if backend.is_cached(model_id):
             return {"status": "already_cached", "model_id": model_id}
 
-        # Clean up incomplete HF cache markers, then let downcraft resume
-        cache_dir = _cache_dir(model_id)
-        if cache_dir.exists():
-            incomplete = list(cache_dir.rglob("*.incomplete")) + list(cache_dir.rglob("*.lock"))
-            for f in incomplete:
-                try:
-                    f.unlink()
-                except OSError:
-                    pass
+        backend.prepare_download(model_id)
 
         if self.is_downloading(model_id):
             return {"status": "already_downloading", "model_id": model_id}
 
-        # Estimate total from Hub API
-        try:
-            files = list_model_files(model_id)
-            total_est = sum(f.size for f in files if not f.is_ignored) or total_bytes_hint
-        except Exception:
-            total_est = total_bytes_hint
+        total_est = backend.estimate_total(model_id) or total_bytes_hint
 
         self._set_progress(
             model_id,
@@ -307,7 +257,6 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
-        # Register with CancelManager
         from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
         mgr = get_cancel_manager()
         cancel_event = threading.Event()
@@ -318,7 +267,6 @@ class DownloadManager:
         )
         mgr.start(op_id)
 
-        asyncio.get_event_loop()
         task = asyncio.create_task(self._download_worker(model_id, total_est, cancel_event))
         self._tasks[model_id] = task
 
@@ -334,7 +282,6 @@ class DownloadManager:
         except asyncio.CancelledError:
             self._set_progress(model_id, status=DownloadStatus.CANCELLED)
             mgr.finish(op_id, "cancelled")
-            # Record dashboard event
             try:
                 from domains.infrastructure.event_buffer import get_event_buffer
                 get_event_buffer().record("DOWNLOAD", f"{model_id} cancelled")
@@ -349,7 +296,6 @@ class DownloadManager:
             )
             self._notify_callbacks(model_id)
             mgr.finish(op_id, str(e))
-            # Record dashboard event
             try:
                 from domains.infrastructure.event_buffer import get_event_buffer
                 get_event_buffer().record("ERROR", f"download {model_id} failed: {str(e)[:40]}")
@@ -357,8 +303,13 @@ class DownloadManager:
                 logger.debug("Failed to record download error event: %s", exc)
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
-    async def _download_worker(self, model_id: str, total_bytes_hint: int, cancel_event: Optional[threading.Event] = None):
-        """Run the downcraft in a thread executor, updating progress."""
+    async def _download_worker(
+        self,
+        model_id: str,
+        total_bytes_hint: int,
+        cancel_event: Optional[threading.Event] = None,
+    ):
+        """Run the backend download in a thread executor, updating progress."""
         with self._lock:
             entry = self._downloads.get(model_id)
             if entry and entry.status == DownloadStatus.CANCELLED:
@@ -367,7 +318,6 @@ class DownloadManager:
         self._notify_callbacks(model_id)
         start_time = time.time()
 
-        # Record dashboard event with size info
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
             size_str = ""
@@ -380,7 +330,7 @@ class DownloadManager:
         except Exception as exc:
             logger.debug("Failed to record download start event: %s", exc)
 
-        def _progress_cb_orig(mid: str, downloaded: int, total: int, speed: float):
+        def _progress_cb(mid: str, downloaded: int, total: int, speed: float):
             try:
                 with self._lock:
                     cur = self._downloads.get(mid)
@@ -411,21 +361,17 @@ class DownloadManager:
                 })
 
         def _do_download():
-            from domains.infrastructure.hf_hub import download_hf_model
+            backend = get_backend()
 
             def _cancel_check():
                 if cancel_event and cancel_event.is_set():
                     raise InterruptedError("Download cancelled")
 
-            def _progress_cb(mid, downloaded, total, speed):
+            def _progress_cb_inner(mid, downloaded, total, speed):
                 _cancel_check()
-                _progress_cb_orig(mid, downloaded, total, speed)
+                _progress_cb(mid, downloaded, total, speed)
 
-            download_hf_model(
-                model_id,
-                on_progress=_progress_cb,
-                on_file_complete=_file_cb,
-            )
+            backend.download(model_id, _progress_cb_inner, _file_cb)
 
         await asyncio.to_thread(_do_download)
 
@@ -435,7 +381,7 @@ class DownloadManager:
                 return {"status": "cancelled", "model_id": model_id}
 
         elapsed = time.time() - start_time
-        cache_dir = _cache_dir(model_id)
+        cache_dir = get_backend().get_cache_dir(model_id)
         self._set_progress(
             model_id,
             status=DownloadStatus.COMPLETE,
@@ -444,7 +390,6 @@ class DownloadManager:
         )
         self._notify_callbacks(model_id)
 
-        # Record dashboard event
         try:
             from domains.infrastructure.event_buffer import get_event_buffer
             get_event_buffer().record("DOWNLOAD", f"{model_id} complete ({elapsed:.1f}s)")
@@ -461,7 +406,7 @@ class DownloadManager:
         return {
             "status": "complete",
             "model_id": model_id,
-            "cache_dir": str(cache_dir),
+            "cache_dir": cache_dir,
             "elapsed_seconds": round(elapsed, 1),
         }
 
@@ -481,6 +426,10 @@ class DownloadManager:
                 del self._downloads[mid]
                 self._tasks.pop(mid, None)
 
+
+# ---------------------------------------------------------------------------
+# Singleton
+# ---------------------------------------------------------------------------
 
 _download_manager: Optional[DownloadManager] = None
 _download_manager_lock = threading.Lock()

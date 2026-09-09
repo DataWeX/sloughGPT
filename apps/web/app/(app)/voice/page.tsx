@@ -1,13 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
 import { useToastStore } from '@/lib/toast-store'
-import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function VoicePage() {
   const [status, setStatus] = useState<VoiceStatus | null>(null)
@@ -21,21 +20,20 @@ export default function VoicePage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const handleRefreshStatus = useCallback(async () => {
-    try {
-      const d = await voiceController.getStatus()
-      setStatus(d)
-    } catch {
-      addToast('Could not load voice status', 'error')
-    }
-  }, [addToast])
-
-  useRefreshShortcut(handleRefreshStatus)
-
   useEffect(() => {
-    handleRefreshStatus()
+    voiceController.getStatus()
+      .then(d => setStatus(d))
+      .catch(() => { addToast('Could not load voice status', 'error') })
       .finally(() => setLoading(false))
-  }, [handleRefreshStatus])
+  }, [])
+
+  const handleRefreshStatus = async () => {
+    try {
+      setStatus(await voiceController.getStatus())
+    } catch {
+      addToast('Could not refresh voice status', 'error')
+    }
+  }
 
   const handleGenerate = async () => {
     if (!ttsText.trim()) return

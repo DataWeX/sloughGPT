@@ -7,7 +7,6 @@ import { PageContainer } from '@/components/PageContainer'
 import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
 import { useToastStore } from '@/lib/toast-store'
-import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function RegistryPage() {
   const [models, setModels] = useState<RegisteredModel[]>([])
@@ -34,8 +33,6 @@ export default function RegistryPage() {
       setLoading(false)
     }
   }, [])
-
-  useRefreshShortcut(fetchData)
 
   useEffect(() => { fetchData() }, [fetchData])
 

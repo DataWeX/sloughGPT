@@ -16,7 +16,6 @@ import { SoulPersonalityCard } from '@/components/souls/SoulPersonalityCard'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
 import { formatShortDate, formatDateTimeFull } from '@/lib/time-format'
-import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'souls' | 'checkpoints' | 'weights' | 'snapshots' | 'analytics'
 
@@ -153,8 +152,6 @@ export default function SoulsPage() {
     setCheckpoints(c.checkpoints)
     setSnapshots(snaps)
   }, [])
-
-  useRefreshShortcut(loadData)
 
   useEffect(() => {
     loadData().finally(() => setLoading(false))

@@ -11,7 +11,6 @@ import { WorkflowSection } from '@/components/workflow/WorkflowSection'
 import { feedbackConversationsController } from '@/lib/feedback-conversations-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
-import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 type Tab = 'stats' | 'conversations' | 'training'
 
@@ -63,7 +62,7 @@ export default function FeedbackPage() {
     }
   }, [addToast])
 
-  const handleRefreshStats = useCallback(async () => {
+  const handleRefreshStats = async () => {
     const [s, w, t] = await Promise.all([
       feedbackController.getFeedbackStats().catch((e) => { logger.warning('Could not feedback stats refresh', e); return null }),
       feedbackController.getWorkflowStatus().catch((e) => { logger.warning('Could not workflow status refresh', e); return null }),
@@ -72,9 +71,7 @@ export default function FeedbackPage() {
     setStats(s)
     setWorkflow(w)
     setTrainStats(t)
-  }, [])
-
-  useRefreshShortcut(handleRefreshStats)
+  }
 
   const handleLoadConversations = async () => {
     try {

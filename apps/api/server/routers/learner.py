@@ -164,13 +164,14 @@ class LearnerRouter:
         _t0 = _time.monotonic()
         from domains.learner import get_learner
 
-        learner = get_learner()
-        if text:
-            learner.ingest_text(text)
-        if conversations:
-            pairs = [(c[0], c[1]) for c in conversations if len(c) >= 2]
-            learner.ingest_conversation(pairs)
-        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        try:
+            learner = get_learner()
+            if text:
+                learner.ingest_text(text)
+            if conversations:
+                pairs = [(c[0], c[1]) for c in conversations if len(c) >= 2]
+                learner.ingest_conversation(pairs)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
             safe_audit_log(
                 "learner.ingest",
                 detail=f"elapsed={_elapsed_ms:.0f}ms text={'yes' if text else 'no'} conversations={'yes' if conversations else 'no'}",
