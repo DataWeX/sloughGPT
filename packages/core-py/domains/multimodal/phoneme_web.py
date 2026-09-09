@@ -218,6 +218,9 @@ HTML_TEMPLATE = """
     <h2>Pronunciation History</h2>
     <div id="history-container" style="margin-top: 10px;">
         <button onclick="clearHistory()" style="margin-bottom: 10px;">Clear History</button>
+        <button onclick="exportHistory()" style="margin-bottom: 10px;">Export History</button>
+        <button onclick="document.getElementById('import-history').click()" style="margin-bottom: 10px;">Import History</button>
+        <input type="file" id="import-history" accept=".json" style="display: none;" onchange="importHistory(event)">
         <div id="history-list" style="max-height: 300px; overflow-y: auto;"></div>
     </div>
 
@@ -571,6 +574,46 @@ HTML_TEMPLATE = """
             pronunciationHistory = [];
             localStorage.removeItem('pronunciationHistory');
             renderHistory();
+        }
+
+        function exportHistory() {
+            const data = JSON.stringify(pronunciationHistory, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pronunciation-history-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importHistory(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        pronunciationHistory = [...imported, ...pronunciationHistory];
+                        if (pronunciationHistory.length > 50) {
+                            pronunciationHistory = pronunciationHistory.slice(0, 50);
+                        }
+                        localStorage.setItem('pronunciationHistory', JSON.stringify(pronunciationHistory));
+                        renderHistory();
+                        alert(`Imported ${imported.length} entries.`);
+                    } else {
+                        alert('Invalid file format.');
+                    }
+                } catch (error) {
+                    alert('Error reading file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
         }
 
         // Initialize history on page load

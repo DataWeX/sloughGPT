@@ -782,3 +782,139 @@ async def get_training_recommendation(
             },
             "tips": ["Could not analyze dataset. Using default configuration."],
         })
+
+
+# ── Training Trends ─────────────────────────────────────────────────────
+
+
+@router.get("/training/trends")
+async def get_training_trends(
+    model: str = "",
+    dataset: str = "",
+    limit: int = 100,
+):
+    """Get training history trends for the version tracker page.
+
+    Returns quality-over-time data, per-model breakdowns, and summary stats
+    from the outcome tracker JSONL file.
+    """
+    from schemas.common import success_response
+
+    try:
+        from domains.training.outcome_tracker import TrainingOutcomeTracker
+
+        tracker = TrainingOutcomeTracker()
+        outcomes = tracker.load_outcomes()
+
+        # Filter
+        if model:
+            outcomes = [o for o in outcomes if o.model == model]
+        if dataset:
+            outcomes = [o for o in outcomes if o.dataset == dataset]
+
+        # Sort by timestamp
+        outcomes.sort(key=lambda o: o.timestamp)
+
+        # Cap to limit
+        if len(outcomes) > limit:
+            outcomes = outcomes[-limit:]
+
+        if not outcomes:
+            return success_response(data={
+                "runs": [],
+                "models": [],
+                "summary": {
+                    "total_runs": 0,
+                    "avg_quality": 0,
+                    "best_quality": 0,
+                    "avg_loss": 0,
+                    "trend": "stable",
+                },
+            })
+
+        # Build run list
+        runs = []
+        for o in outcomes:
+            runs.append({
+                "run_id": o.run_id,
+                "timestamp": o.timestamp,
+                "dataset": o.dataset,
+                "dataset_size": o.dataset_size,
+                "model": o.model,
+                "method": o.method,
+                "epochs": o.epochs,
+                "batch_size": o.batch_size,
+                "learning_rate": o.learning_rate,
+                "final_loss": o.final_loss,
+                "best_loss": o.best_loss,
+                "perplexity": o.perplexity,
+                "converged": o.converged,
+                "early_stopped": o.early_stopped,
+                "quality_score": o.quality_score,
+                "training_time_s": o.training_time_s,
+            })
+
+        # Per-model breakdown
+        model_map: dict[str, list] = {}
+        for r in runs:
+            m = r["model"] or "unknown"
+            model_map.setdefault(m, []).append(r)
+
+        models = []
+        for model_name, model_runs in model_map.items():
+            qualities = [r["quality_score"] for r in model_runs]
+            losses = [r["final_loss"] for r in model_runs if r["final_loss"] > 0]
+            models.append({
+                "model": model_name,
+                "total_runs": len(model_runs),
+                "avg_quality": sum(qualities) / len(qualities) if qualities else 0,
+                "best_quality": max(qualities) if qualities else 0,
+                "avg_loss": sum(losses) / len(losses) if losses else 0,
+                "latest_quality": model_runs[-1]["quality_score"],
+                "improving": len(model_runs) >= 2 and model_runs[-1]["quality_score"] > model_runs[0]["quality_score"],
+            })
+
+        models.sort(key=lambda m: m["best_quality"], reverse=True)
+
+        # Summary
+        all_qualities = [r["quality_score"] for r in runs]
+        all_losses = [r["final_loss"] for r in runs if r["final_loss"] > 0]
+
+        # Trend detection: compare last 3 vs first 3
+        trend = "stable"
+        if len(runs) >= 6:
+            first_3 = sum(r["quality_score"] for r in runs[:3]) / 3
+            last_3 = sum(r["quality_score"] for r in runs[-3:]) / 3
+            delta = last_3 - first_3
+            if delta > 0.05:
+                trend = "improving"
+            elif delta < -0.05:
+                trend = "declining"
+
+        summary = {
+            "total_runs": len(runs),
+            "avg_quality": sum(all_qualities) / len(all_qualities) if all_qualities else 0,
+            "best_quality": max(all_qualities) if all_qualities else 0,
+            "avg_loss": sum(all_losses) / len(all_losses) if all_losses else 0,
+            "trend": trend,
+        }
+
+        return success_response(data={
+            "runs": runs,
+            "models": models,
+            "summary": summary,
+        })
+
+    except Exception as e:
+        logger.warning("Failed to load training trends: %s", e)
+        return success_response(data={
+            "runs": [],
+            "models": [],
+            "summary": {
+                "total_runs": 0,
+                "avg_quality": 0,
+                "best_quality": 0,
+                "avg_loss": 0,
+                "trend": "stable",
+            },
+        })
