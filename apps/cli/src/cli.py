@@ -1131,122 +1131,18 @@ _register_meta_weights(cli)
 # learn — continual learning from web, feeds, and knowledge
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Continual learning from web, feeds, and knowledge")
-def learn():
-    pass
-
-
-@learn.command("search", help="Search web and learn from results")
-@click.argument("query")
-@click.option("--max-results", type=int, default=5, help="Max results")
-@click.pass_context
-def learn_search(ctx, query, max_results):
-    import requests
-    timeout = ctx.obj.get("timeout", 60)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/search",
-                      json={"query": query, "max_results": max_results}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Search failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        info = data.get("data", data)
-        log.info(f"Tokens ingested: {info.get('tokens_ingested', 0)}")
-        log.info(f"New facts: {info.get('new_facts', 0)}")
-        log.info(f"Rejected: {info.get('rejected', 0)}")
-
-
-@learn.command("status", help="Show learner status")
-@click.pass_context
-def learn_status(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/status", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Status failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    stats = data.get("data", data)
-    if ctx.obj.get("json"):
-        _output(ctx, stats)
-    else:
-        log.header("Learner Status")
-        for k, v in stats.items():
-            log.info(f"  {k}: {v}")
-
-
-@learn.command("knowledge", help="Query learned knowledge")
-@click.argument("query", required=False)
-@click.option("--topic", default="", help="Filter by topic")
-@click.pass_context
-def learn_knowledge(ctx, query, topic):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    params = {}
-    if query:
-        params["q"] = query
-    if topic:
-        params["topic"] = topic
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/knowledge",
-                     params=params, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Knowledge query failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    facts = data.get("data", data).get("facts", [])
-    if ctx.obj.get("json"):
-        _output(ctx, {"facts": facts})
-    else:
-        log.header("Learned Knowledge")
-        for f in facts[:20]:
-            topic = f.get("topic", "?")
-            text = f.get("text", "")[:80]
-            log.info(f"  [{topic}] {text}")
-
-
-@learn.command("train", help="Force a training step")
-@click.pass_context
-def learn_train(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 60)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/train", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Train failed: {r.text}")
-        sys.exit(1)
-    log.success("Training step completed")
-
-
-@learn.command("ingest", help="Ingest raw text")
-@click.argument("text")
-@click.pass_context
-def learn_ingest(ctx, text):
-    import requests
-    timeout = ctx.obj.get("timeout", 30)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/learn/ingest",
-                      json={"text": text}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Ingest failed: {r.text}")
-        sys.exit(1)
-    log.success("Text ingested")
-
+from groups.learn import register as _register_learn
+_register_learn(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# World rendering
-# ═══════════════════════════════════════════════════════════════════════
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# world  — Render and simulate the programmable world
+# world — Render and simulate the programmable world
 # ═══════════════════════════════════════════════════════════════════════
 
 from groups.world import register as _register_world
 _register_world(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# vm  — Virtual Machine
+# vm — x86 Virtual Machine console and management
 # ═══════════════════════════════════════════════════════════════════════
 
 
