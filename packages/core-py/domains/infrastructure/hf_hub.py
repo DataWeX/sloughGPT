@@ -1085,3 +1085,103 @@ def list_missing_files(
         elif hf_file.checksum and not verify_file(local_path, hf_file.checksum):
             missing.append(hf_file.path)
     return missing
+
+
+# ---------------------------------------------------------------------------
+# HFDownloadBackend — DownloadBackend implementation for HuggingFace models
+# ---------------------------------------------------------------------------
+
+import shutil
+
+from domains.infrastructure.download_backend import DownloadBackend, FileEstimate
+
+
+class HFDownloadBackend(DownloadBackend):
+    """HuggingFace-specific download backend.
+
+    Implements the ``DownloadBackend`` protocol using the existing
+    ``hf_hub`` module functions.  All HF knowledge (Hub REST API,
+    cache layout, snapshot resolution, LFS checksums) lives here.
+    """
+
+    def is_cached(self, resource_id: str, deep_check: bool = False) -> bool:
+        return is_download_complete(resource_id, deep_check=deep_check)
+
+    def get_cache_dir(self, resource_id: str) -> str:
+        return str(get_cache_dir(resource_id))
+
+    def estimate_total(self, resource_id: str) -> int:
+        try:
+            files = list_model_files(resource_id)
+            return sum(f.size for f in files if not f.is_ignored)
+        except Exception:
+            return 0
+
+    def list_files(self, resource_id: str) -> List[FileEstimate]:
+        try:
+            files = list_model_files(resource_id)
+        except Exception:
+            return []
+        return [
+            FileEstimate(
+                path=f.path,
+                size=f.size,
+                checksum=f.checksum,
+                download_url=f.download_url,
+            )
+            for f in files
+            if not f.is_ignored
+        ]
+
+    def download(
+        self,
+        resource_id: str,
+        on_progress,
+        on_file_complete,
+    ) -> Dict:
+        return download_hf_model(
+            resource_id,
+            on_progress=on_progress,
+            on_file_complete=on_file_complete,
+        )
+
+    def cleanup(self, resource_id: str) -> bool:
+        cache_dir = Path(get_cache_dir(resource_id))
+        if not cache_dir.exists():
+            return False
+        logger.warning(
+            "Removing incomplete cache for %s: %s", resource_id, cache_dir,
+            extra={"op": "download.start", "download": {"resource": resource_id}},
+        )
+        shutil.rmtree(str(cache_dir), ignore_errors=True)
+        from downcraft import state as dc_state
+        dc_state.get_state().remove(resource_id)
+        return True
+
+    def list_incomplete(self) -> List[str]:
+        base = Path.home() / ".cache" / "huggingface" / "hub"
+        if not base.exists():
+            return []
+        result: List[str] = []
+        for entry in sorted(base.iterdir()):
+            if not entry.name.startswith("models--") or not entry.is_dir():
+                continue
+            mid = entry.name[len("models--"):].replace("--", "/")
+            if _has_incomplete_downloads(entry):
+                result.append(mid)
+            elif not _has_complete_snapshot(entry) and _has_weight_files(entry):
+                result.append(mid)
+        return result
+
+    def prepare_download(self, resource_id: str) -> None:
+        cache_dir = Path(get_cache_dir(resource_id))
+        if not cache_dir.exists():
+            return
+        incomplete = list(cache_dir.rglob("*.incomplete")) + list(
+            cache_dir.rglob("*.lock")
+        )
+        for f in incomplete:
+            try:
+                f.unlink()
+            except OSError:
+                pass
