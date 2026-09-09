@@ -21,6 +21,7 @@ export interface CommandContext {
   renameConversation: (name: string) => void
   searchConversations: (query: string) => void
   recordFeedback?: (params: { userMessage: string; assistantResponse: string; rating: 'thumbs_up' | 'thumbs_down' }) => Promise<boolean>
+  getMessages?: () => Array<{ role: string; content: string }>
 }
 
 export interface CommandResult {
@@ -175,8 +176,9 @@ const commands: ChatCommand[] = [
       }
       const rating = sentiment === 'positive' ? 'thumbs_up' : 'thumbs_down'
       if (ctx.recordFeedback) {
-        const lastAssistant = 'last-assistant-content'
-        const lastUser = 'last-user-content'
+        const messages = ctx.getMessages?.() || []
+        const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')?.content || ''
+        const lastUser = [...messages].reverse().find(m => m.role === 'user')?.content || ''
         await ctx.recordFeedback({
           userMessage: lastUser,
           assistantResponse: lastAssistant,

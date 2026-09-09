@@ -316,6 +316,8 @@ export function useChatPageController(
       searchConversations: (query: string) => {
         ui.setShowConversationSearch(true)
       },
+      recordFeedback,
+      getMessages: () => chat.messages.map(m => ({ role: m.role, content: m.content })),
     }
     try {
       await cmd.execute(args, context)

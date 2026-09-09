@@ -106,7 +106,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         e.preventDefault()
         d.onDuplicateConversation?.()
       }
-      if ((foreKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'm' && e.shiftKey) {
         e.preventDefault()
         d.onToggleBookmarks?.()
       }
@@ -114,7 +114,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         e.preventDefault()
         d.onApproveTool?.()
       }
-      if ((foreKey || e.ctrlKey) && e.key === 'n') {
+      if ((foreKey || e.ctrlKey) && e.key === 'd' && !e.shiftKey) {
         e.preventDefault()
         d.onDenyTool?.()
       }
@@ -126,7 +126,7 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         e.preventDefault()
         d.onAddNoteToLastMessage?.()
       }
-      if ((foreKey || e.ctrlKey) && e.key === 'f' && e.shiftKey) {
+      if ((foreKey || e.ctrlKey) && e.key === 'o' && e.shiftKey) {
         e.preventDefault()
         d.onOpenNoteSearch?.()
       }

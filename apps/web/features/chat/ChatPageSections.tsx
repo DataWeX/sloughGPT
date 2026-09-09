@@ -6,6 +6,7 @@ import { memo, useCallback, useMemo } from 'react'
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
 import { generationConfigController } from '@/lib/generation-config-controller'
 import { ChatArea, ErrorBanner } from '@/features/chat/components'
+import { ToolApprovalDialog } from '@/features/chat/components/ToolApprovalDialog'
 import { ContextInjectionBar } from '@/features/chat/components/ContextInjectionBar'
 import { ImageDropZone } from '@/features/chat/components/layout/ImageDropZone'
 import { ModeBar } from '@/features/chat/components/toolbar/ModeBar'
@@ -251,6 +252,15 @@ export const ChatChatSection = memo(function ChatChatSection({ controller }: Cha
             <ContextInjectionBar
               onInject={chat.injectContext}
               disabled={!chat.loading}
+            />
+          </div>
+        )}
+        {chat.pendingToolApproval && (
+          <div className="px-4 py-2">
+            <ToolApprovalDialog
+              toolName={chat.pendingToolApproval.toolName}
+              args={chat.pendingToolApproval.args}
+              onApprove={(approved) => chat.handleToolApproval(approved)}
             />
           </div>
         )}
