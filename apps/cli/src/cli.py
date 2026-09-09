@@ -1117,65 +1117,11 @@ _register_images(cli)
 # multimodal — multimodal capabilities (vision, speech, video)
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Multimodal capabilities (vision, speech, video)")
-def multimodal():
-    pass
-
-
-@multimodal.command("status", help="Show multimodal engine status")
-@click.pass_context
-def multimodal_status(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/status", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Status failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    stats = data.get("data", data)
-    if ctx.obj.get("json"):
-        _output(ctx, stats)
-    else:
-        log.header("Multimodal Status")
-        for k, v in stats.items():
-            log.info(f"  {k}: {v}")
-
-
-@multimodal.command("dpo", help="Trigger DPO training")
-@click.option("--max-pairs", type=int, default=6, help="Max preference pairs")
-@click.option("--lr", type=float, default=5e-6, help="Learning rate")
-@click.pass_context
-def multimodal_dpo(ctx, max_pairs, lr):
-    import requests
-    timeout = ctx.obj.get("timeout", 60)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/dpo/trigger",
-                      json={"max_pairs": max_pairs, "learning_rate": lr}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"DPO failed: {r.text}")
-        sys.exit(1)
-    log.success("DPO training triggered")
-
-
-@multimodal.command("video-train", help="Train video model")
-@click.argument("data_path")
-@click.option("--epochs", type=int, default=5)
-@click.option("--batch-size", type=int, default=2)
-@click.pass_context
-def multimodal_video_train(ctx, data_path, epochs, batch_size):
-    import requests
-    timeout = ctx.obj.get("timeout", 120)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/multimodal/video/train",
-                      json={"data_path": data_path, "epochs": epochs, "batch_size": batch_size},
-                      timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Video train failed: {r.text}")
-        sys.exit(1)
-    log.success("Video training started")
-
+from groups.multimodal import register as _register_multimodal
+_register_multimodal(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# meta-weights  — get, stats
+# meta-weights — feedback-driven meta-weight adaptation
 # ═══════════════════════════════════════════════════════════════════════
 
 
