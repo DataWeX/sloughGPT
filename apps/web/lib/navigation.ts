@@ -53,6 +53,8 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/chat', labelKey: 'nav.chat', shortcut: '1', icon: 'chat', description: 'Open chat' },
       { path: '/training', labelKey: 'nav.training', shortcut: '2', icon: 'training', description: 'Train models' },
+      { path: '/training/trends', labelKey: 'nav.training_trends', icon: 'chart', description: 'Training quality trends' },
+      { path: '/training/insights', labelKey: 'nav.training_insights', icon: 'sparkle', description: 'Adaptive learning intelligence' },
       { path: '/datasets', labelKey: 'nav.datasets', shortcut: '3', icon: 'chart', description: 'Manage datasets' },
       { path: '/knowledge', labelKey: 'nav.knowledge', shortcut: '8', icon: 'search', description: 'Knowledge & memory' },
     ],
@@ -79,6 +81,7 @@ export const NAV_SECTIONS: NavSectionDef[] = [
     routes: [
       { path: '/feedback', labelKey: 'nav.feedback', icon: 'activity', description: 'Feedback analytics' },
       { path: '/planner', labelKey: 'nav.planner', icon: 'grid', description: 'Planner board + notes' },
+      { path: '/plugins-cloud', labelKey: 'nav.plugins_cloud', icon: 'settings', description: 'Plugins & cloud training' },
     ],
   },
   {
@@ -113,6 +116,9 @@ export const ALL_ROUTES: NavRoute[] = NAV_SECTIONS.flatMap(s => s.routes)
 export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   '/chat': IconChat,
   '/training': IconTraining,
+  '/training/trends': IconChart,
+  '/training/insights': IconSparkle,
+  '/training/queue': IconClock,
   '/datasets': IconChart,
   '/knowledge': IconBookmark,
   '/models': IconModels,
