@@ -1103,92 +1103,11 @@ _register_collect(cli)
 # companion — AI companion management and chat
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="AI companion management and chat")
-def companion():
-    pass
-
-
-@companion.command("status", help="Show companion status")
-@click.pass_context
-def companion_status(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/status", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Status failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    stats = data.get("data", data)
-    if ctx.obj.get("json"):
-        _output(ctx, stats)
-    else:
-        log.header("Companion Status")
-        for k, v in stats.items():
-            log.info(f"  {k}: {v}")
-
-
-@companion.command("chat", help="Chat with companion")
-@click.argument("message")
-@click.option("--user-name", default="", help="Your name")
-@click.option("--mood", default="", help="Your current mood")
-@click.pass_context
-def companion_chat(ctx, message, user_name, mood):
-    import requests
-    timeout = ctx.obj.get("timeout", 30)
-    payload = {"message": message}
-    if user_name:
-        payload["user_name"] = user_name
-    if mood:
-        payload["user_mood"] = mood
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/chat",
-                      json=payload, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Chat failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        resp = data.get("data", data).get("response", str(data))
-        log.info(resp)
-
-
-@companion.command("personality", help="Show companion personality")
-@click.pass_context
-def companion_personality(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/personality", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        p = data.get("data", data)
-        log.header("Companion Personality")
-        for k, v in p.items():
-            log.info(f"  {k}: {v}")
-
-
-@companion.command("preset", help="Use a preset personality")
-@click.argument("name")
-@click.pass_context
-def companion_preset(ctx, name):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/companion/preset",
-                      json={"preset": name}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Preset failed: {r.text}")
-        sys.exit(1)
-    log.success(f"Applied preset: {name}")
-
+from groups.companion import register as _register_companion
+_register_companion(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# images  — generate, gallery, styles
+# images — image generation and gallery
 # ═══════════════════════════════════════════════════════════════════════
 
 
