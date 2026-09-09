@@ -18,7 +18,8 @@ from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import (
-    classify_and_raise,
+    endpoint,
+classify_and_raise,
     raise_error,
     safe_audit_log,
     success_response,
@@ -243,6 +244,7 @@ class ModelsRouter:
                         result.append(w[0].upper() + w[1:])
         return " ".join(result)
 
+    @endpoint("models.list_models")
     async def list_models(self) -> dict:
         """List available/loaded models with plain-language descriptions."""
 
@@ -290,6 +292,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.list")
 
+    @endpoint("models.load_model")
     async def load_model(
         self,
         req: LoadModelRequest,
@@ -324,46 +327,41 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.load")
 
+    @endpoint("models.unload_model")
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Unload current model"""
-        try:
-            ctrl = get_models_controller()
-            model_id = ctrl._current_model
-            if not model_id:
-                try:
-                    from domains.infrastructure.model_registry import get_model_registry
-
-                    model_id = get_model_registry().default_id
-                except Exception as e:
-                    logger.warning("Failed to get default model_id for unload: %s", e)
-            result = ctrl.unload_model()
+        ctrl = get_models_controller()
+        model_id = ctrl._current_model
+        if not model_id:
             try:
-                from domains.infrastructure.server_state import get_server_state
+                from domains.infrastructure.model_registry import get_model_registry
 
-                ss = get_server_state()
-                ss.record_model_event("unload", model_id or "unknown")
+                model_id = get_model_registry().default_id
             except Exception as e:
-                logger.warning("Failed to record model unload event: %s", e)
-            safe_audit_log(
-                "model.unload",
-                resource=model_id or "unknown",
-                detail=result.get("status", "unknown"),
-            )
-            return wrap_controller_result(result)
-        except Exception as e:
-            classify_and_raise(e, source="models.unload")
+                logger.warning("Failed to get default model_id for unload: %s", e)
+        result = ctrl.unload_model()
+        try:
+            from domains.infrastructure.server_state import get_server_state
 
+            ss = get_server_state()
+            ss.record_model_event("unload", model_id or "unknown")
+        except Exception as e:
+            logger.warning("Failed to record model unload event: %s", e)
+        safe_audit_log(
+            "model.unload",
+            resource=model_id or "unknown",
+            detail=result.get("status", "unknown"),
+        )
+        return wrap_controller_result(result)
+    @endpoint("models.current_model")
     async def current_model(self) -> dict:
         """Get current model info"""
-        try:
-            ctrl = get_models_controller()
-            model = ctrl.get_current_model()
-            if not model:
-                raise_error("No model loaded", "E_NOT_FOUND")
-            return success_response(data=model)
-        except Exception as e:
-            classify_and_raise(e, source="models.current")
-
+        ctrl = get_models_controller()
+        model = ctrl.get_current_model()
+        if not model:
+            raise_error("No model loaded", "E_NOT_FOUND")
+        return success_response(data=model)
+    @endpoint("models.list_hf_models")
     async def list_hf_models(
         self,
         q: str | None = None,
@@ -462,21 +460,17 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.hf_list")
 
+    @endpoint("models.get_model_logs")
     async def get_model_logs(self, limit: int = 50, model_filter: str | None = None) -> dict:
         """Get model request logs (for debugging/monitoring)."""
-        try:
-            from state import model_request_logger as _logger
+        from state import model_request_logger as _logger
 
-            if _logger:
-                return success_response(
-                    data=_logger.get_logs(limit=limit, model=model_filter), meta=_logger.get_stats()
-                )
-            return success_response(data=[], meta={})
-        except ImportError:
-            return success_response(data=[], meta={})
-        except Exception as e:
-            classify_and_raise(e, source="models.logs")
-
+        if _logger:
+            return success_response(
+                data=_logger.get_logs(limit=limit, model=model_filter), meta=_logger.get_stats()
+            )
+        return success_response(data=[], meta={})
+    @endpoint("models.export_model")
     async def export_model(
         self, request: ExportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -521,15 +515,13 @@ class ModelsRouter:
             logger.warning("Export model failed: %s", e)
             classify_and_raise(e, source="export_model")
 
+    @endpoint("models.get_export_formats")
     async def get_export_formats(self) -> dict:
         """Get list of supported export formats."""
-        try:
-            from domains.training.export import list_export_formats
+        from domains.training.export import list_export_formats
 
-            return success_response(data=list_export_formats())
-        except Exception as e:
-            classify_and_raise(e, source="models.export_formats")
-
+        return success_response(data=list_export_formats())
+    @endpoint("models.start_download")
     async def start_download(
         self, req: DownloadRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
@@ -652,33 +644,28 @@ class ModelsRouter:
                         "CancelManager.finish failed for download exception %s: %s", model_id, exc
                     )
 
+    @endpoint("models.get_download_status")
     async def get_download_status(self, model_id: str) -> dict[str, Any]:
         """Get download progress for a specific model."""
-        try:
-            from domains.infrastructure.download_manager import get_download_manager
+        from domains.infrastructure.download_manager import get_download_manager
 
-            mgr = get_download_manager()
-            progress = mgr.get_progress(model_id)
-            if progress is None:
-                cached = mgr.is_cached(model_id)
-                return success_response(
-                    data={"model_id": model_id, "cached": cached}, message="not_found"
-                )
-            return success_response(data=progress)
-        except Exception as e:
-            classify_and_raise(e, source="models.download_status")
-
+        mgr = get_download_manager()
+        progress = mgr.get_progress(model_id)
+        if progress is None:
+            cached = mgr.is_cached(model_id)
+            return success_response(
+                data={"model_id": model_id, "cached": cached}, message="not_found"
+            )
+        return success_response(data=progress)
+    @endpoint("models.list_downloads")
     async def list_downloads(self) -> dict[str, Any]:
         """List all active and recent downloads."""
-        try:
-            from domains.infrastructure.download_manager import get_download_manager
+        from domains.infrastructure.download_manager import get_download_manager
 
-            mgr = get_download_manager()
-            mgr.cleanup_stale()
-            return success_response(data=mgr.list_downloads())
-        except Exception as e:
-            classify_and_raise(e, source="models.downloads_list")
-
+        mgr = get_download_manager()
+        mgr.cleanup_stale()
+        return success_response(data=mgr.list_downloads())
+    @endpoint("models.cancel_download")
     async def cancel_download(
         self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
@@ -694,6 +681,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.download_cancel")
 
+    @endpoint("models.verify_download")
     async def verify_download(
         self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
@@ -730,6 +718,7 @@ class ModelsRouter:
             logger.warning("Verify download failed (model=%s): %s", model_id, e)
             classify_and_raise(e, source="verify_download")
 
+    @endpoint("models.retry_download")
     async def retry_download(
         self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
@@ -755,6 +744,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.retry_download")
 
+    @endpoint("models.cache_usage")
     async def cache_usage(self) -> dict[str, Any]:
         try:
             """Total disk usage of the HuggingFace model cache (fast — walks blobs/ only)."""
@@ -800,6 +790,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.cache_usage")
 
+    @endpoint("models.download_qwen_gguf")
     async def download_qwen_gguf(self) -> dict:
         """Download Qwen2.5-0.5B-Instruct GGUF (Q4_K_M) from HuggingFace Hub.
 
@@ -856,6 +847,7 @@ class ModelsRouter:
             logger.warning("Download GGUF failed: %s", e)
             classify_and_raise(e, source="download_gguf")
 
+    @endpoint("models.visual_model_load")
     async def visual_model_load(
         self,
         model_dir: str = "",
@@ -891,6 +883,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.visual_model_load")
 
+    @endpoint("models.quantize_model")
     async def quantize_model(
         self, req: QuantizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -1031,74 +1024,72 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.quantize_model")
 
+    @endpoint("models.dequantize_model")
     async def dequantize_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
-        try:
-            """Reset quantized model back to float32 weights.
+        """Reset quantized model back to float32 weights.
 
-            Clears quantization state from all linear layers. The model
-            returns to its original float32 precision.
+        Clears quantization state from all linear layers. The model
+        returns to its original float32 precision.
 
-            Returns:
-                Status report with number of layers reset.
-            """
-            from domains.models.provider import get_provider
+        Returns:
+            Status report with number of layers reset.
+        """
+        from domains.models.provider import get_provider
 
-            provider = get_provider("slonet")
-            model_type = "slonet"
+        provider = get_provider("slonet")
+        model_type = "slonet"
 
-            if provider is None:
-                provider = get_provider("hf-default")
-                model_type = "huggingface"
+        if provider is None:
+            provider = get_provider("hf-default")
+            model_type = "huggingface"
 
-            if provider is None:
-                raise_error("No model loaded", "E_BAD_REQUEST")
+        if provider is None:
+            raise_error("No model loaded", "E_BAD_REQUEST")
 
-            model = getattr(provider, "_model", None)
-            if model is None:
-                raise_error("Provider has no model", "E_BAD_REQUEST")
+        model = getattr(provider, "_model", None)
+        if model is None:
+            raise_error("Provider has no model", "E_BAD_REQUEST")
 
-            # Clear quantization state
-            if model_type == "slonet":
-                from domains.infrastructure.quantization import walk_slo_linears
+        # Clear quantization state
+        if model_type == "slonet":
+            from domains.infrastructure.quantization import walk_slo_linears
 
-                layers = walk_slo_linears(model)
-                for name, module in layers.items():
+            layers = walk_slo_linears(model)
+            for name, module in layers.items():
+                module._quant_info = None
+        else:
+            from domains.infrastructure.quantization import walk_hf_linears
+
+            layers = walk_hf_linears(model)
+            for name, module in layers.items():
+                if hasattr(module, "_quant_info"):
                     module._quant_info = None
-            else:
-                from domains.infrastructure.quantization import walk_hf_linears
+                    # Restore original forward if we patched it
+                    if hasattr(module, "_orig_forward"):
+                        module.forward = module._orig_forward
+                        del module._orig_forward
+                    if hasattr(module, "_ql"):
+                        del module._ql
 
-                layers = walk_hf_linears(model)
-                for name, module in layers.items():
-                    if hasattr(module, "_quant_info"):
-                        module._quant_info = None
-                        # Restore original forward if we patched it
-                        if hasattr(module, "_orig_forward"):
-                            module.forward = module._orig_forward
-                            del module._orig_forward
-                        if hasattr(module, "_ql"):
-                            del module._ql
+        # Clear the quantization engine
+        provider._quant_engine = None
 
-            # Clear the quantization engine
-            provider._quant_engine = None
+        safe_audit_log(
+            "model.dequantize",
+            resource=self._audit_model_id(provider),
+            detail=f"model_type={model_type}",
+            layers_reset=len(layers),
+        )
 
-            safe_audit_log(
-                "model.dequantize",
-                resource=self._audit_model_id(provider),
-                detail=f"model_type={model_type}",
-                layers_reset=len(layers),
-            )
+        return success_response(
+            data={
+                "dequantized": True,
+                "model_type": model_type,
+                "layers_reset": len(layers),
+            }
+        )
 
-            return success_response(
-                data={
-                    "dequantized": True,
-                    "model_type": model_type,
-                    "layers_reset": len(layers),
-                }
-            )
-
-        except Exception as e:
-            classify_and_raise(e, source="models.dequantize_model")
-
+    @endpoint("models.set_precision")
     async def set_precision(
         self, req: PrecisionRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -1191,65 +1182,54 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.set_precision")
 
+    @endpoint("models.get_catalog")
     async def get_catalog(self) -> dict:
-        try:
-            """Get the persistent model catalog."""
-            from domains.infrastructure.model_catalog import get_model_catalog
+        """Get the persistent model catalog."""
+        from domains.infrastructure.model_catalog import get_model_catalog
 
-            catalog = get_model_catalog()
-            return success_response(data=catalog.list_all())
+        catalog = get_model_catalog()
+        return success_response(data=catalog.list_all())
 
-        except Exception as e:
-            classify_and_raise(e, source="models.get_catalog")
-
+    @endpoint("models.get_catalog_stats")
     async def get_catalog_stats(self) -> dict:
-        try:
-            """Get catalog statistics."""
-            from domains.infrastructure.model_catalog import get_model_catalog
+        """Get catalog statistics."""
+        from domains.infrastructure.model_catalog import get_model_catalog
 
-            catalog = get_model_catalog()
-            return success_response(data=catalog.stats())
+        catalog = get_model_catalog()
+        return success_response(data=catalog.stats())
 
-        except Exception as e:
-            classify_and_raise(e, source="models.get_catalog_stats")
-
+    @endpoint("models.get_conversion_status")
     async def get_conversion_status(self, model_id: str | None = None) -> dict:
-        try:
-            """Get model conversion/download status.
+        """Get model conversion/download status.
 
-            Without model_id: returns all active conversions.
-            With model_id: returns status for that specific model.
-            """
-            from domains.infrastructure.conversion_tracker import get_tracker
+        Without model_id: returns all active conversions.
+        With model_id: returns status for that specific model.
+        """
+        from domains.infrastructure.conversion_tracker import get_tracker
 
-            tracker = get_tracker()
+        tracker = get_tracker()
 
-            if model_id:
-                status = tracker.get(model_id)
-                if not status:
-                    return success_response(
-                        data={"model_id": model_id, "stage": "idle", "progress": 0}
-                    )
-                return success_response(data=status)
+        if model_id:
+            status = tracker.get(model_id)
+            if not status:
+                return success_response(
+                    data={"model_id": model_id, "stage": "idle", "progress": 0}
+                )
+            return success_response(data=status)
 
-            return success_response(data=tracker.get_active())
+        return success_response(data=tracker.get_active())
 
-        except Exception as e:
-            classify_and_raise(e, source="models.get_conversion_status")
-
+    @endpoint("models.get_process_guard")
     async def get_process_guard(self) -> dict:
-        try:
-            """Get ProcessGuard status.
+        """Get ProcessGuard status.
 
-            Returns enabled state, whether a guard is actively running, the
-            guarded model id, and the guard health snapshot.
-            """
-            ctrl = get_models_controller()
-            return success_response(data=ctrl.get_process_guard_status())
+        Returns enabled state, whether a guard is actively running, the
+        guarded model id, and the guard health snapshot.
+        """
+        ctrl = get_models_controller()
+        return success_response(data=ctrl.get_process_guard_status())
 
-        except Exception as e:
-            classify_and_raise(e, source="models.get_process_guard")
-
+    @endpoint("models.set_process_guard")
     async def set_process_guard(
         self, req: ProcessGuardRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -1271,49 +1251,47 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.set_process_guard")
 
+    @endpoint("models.get_engine_status")
     async def get_engine_status(self) -> dict:
-        try:
-            """Get standalone inference engine status.
+        """Get standalone inference engine status.
 
-            Returns whether the engine subprocess is enabled, its PID, whether
-            the client is connected, the model id, and the last 20 lines of stderr.
-            """
-            import state as server_state
+        Returns whether the engine subprocess is enabled, its PID, whether
+        the client is connected, the model id, and the last 20 lines of stderr.
+        """
+        import state as server_state
 
-            proc = getattr(server_state, "_inference_engine_proc", None)
-            provider = getattr(server_state, "provider", None)
-            stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
-            from domains.infrastructure.inference_client import InferenceClient
+        proc = getattr(server_state, "_inference_engine_proc", None)
+        provider = getattr(server_state, "provider", None)
+        stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
+        from domains.infrastructure.inference_client import InferenceClient
 
-            is_client = isinstance(provider, InferenceClient)
-            pid = proc.pid if proc is not None else None
-            alive = proc.poll() is None if proc is not None else False
-            health = {}
-            metrics = {}
-            if is_client and alive:
-                try:
-                    health = await asyncio.to_thread(provider.health)
-                    metrics = health.get("metrics", {})
-                except Exception as exc:
-                    import logging
-                    logging.getLogger("slo.models").warning(
-                        "Provider health check failed: %s", exc)
-                    health = {"type": "error", "error": str(exc)}
-            return success_response(
-                data={
-                    "enabled": is_client,
-                    "pid": pid,
-                    "alive": alive,
-                    "model_id": getattr(provider, "model_id", None) if is_client else None,
-                    "health": health,
-                    "metrics": metrics,
-                    "stderr_tail": stderr_tail[-20:],
-                }
-            )
+        is_client = isinstance(provider, InferenceClient)
+        pid = proc.pid if proc is not None else None
+        alive = proc.poll() is None if proc is not None else False
+        health = {}
+        metrics = {}
+        if is_client and alive:
+            try:
+                health = await asyncio.to_thread(provider.health)
+                metrics = health.get("metrics", {})
+            except Exception as exc:
+                import logging
+                logging.getLogger("slo.models").warning(
+                    "Provider health check failed: %s", exc)
+                health = {"type": "error", "error": str(exc)}
+        return success_response(
+            data={
+                "enabled": is_client,
+                "pid": pid,
+                "alive": alive,
+                "model_id": getattr(provider, "model_id", None) if is_client else None,
+                "health": health,
+                "metrics": metrics,
+                "stderr_tail": stderr_tail[-20:],
+            }
+        )
 
-        except Exception as e:
-            classify_and_raise(e, source="models.get_engine_status")
-
+    @endpoint("models.reload_engine")
     async def reload_engine(
         self, req: dict[str, Any], auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -1344,6 +1322,7 @@ class ModelsRouter:
         except Exception as e:
             classify_and_raise(e, source="models.reload_engine")
 
+    @endpoint("models.debug_providers")
     async def debug_providers(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Diagnostic endpoint: full provider chain status.
 
@@ -1400,6 +1379,7 @@ class ModelsRouter:
         )
 
     @staticmethod
+    @endpoint("models.memory_cleanup")
     async def memory_cleanup(auth_user: dict = Depends(require_auth_if_enabled)):
         """Force an immediate memory cleanup cycle.
 
@@ -1407,26 +1387,18 @@ class ModelsRouter:
         releases idle model weights, runs malloc_trim, and stops guard
         subprocesses. Returns the cleanup result and current memory stats.
         """
-        try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+        from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
 
-            monitor = get_memory_pressure_monitor()
-            result = monitor.force_cleanup()
-            stats = monitor.stats()
-            return success_response(data={"cleanup": result, "stats": stats})
-        except Exception as exc:
-            classify_and_raise(exc, source="models.memory_cleanup")
-
+        monitor = get_memory_pressure_monitor()
+        result = monitor.force_cleanup()
+        stats = monitor.stats()
+        return success_response(data={"cleanup": result, "stats": stats})
     @staticmethod
+    @endpoint("models.memory_pressure")
     async def memory_pressure(auth_user: dict = Depends(require_auth_if_enabled)):
         """Return current memory pressure stats (level, thresholds, counters)."""
-        try:
-            from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
+        from domains.infrastructure.memory_pressure import get_memory_pressure_monitor
 
-            monitor = get_memory_pressure_monitor()
-            return success_response(data=monitor.stats())
-        except Exception as exc:
-            classify_and_raise(exc, source="models.memory_pressure")
-
-
+        monitor = get_memory_pressure_monitor()
+        return success_response(data=monitor.stats())
 router = ModelsRouter().router

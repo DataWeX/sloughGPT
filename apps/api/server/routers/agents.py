@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -82,15 +82,13 @@ class AgentsRouter:
 
         return get_agent_system()
 
+    @endpoint("agents.list_agents")
     async def list_agents(self) -> dict:
         """List all agents stored in the agent system."""
-        try:
-            system = self._get_system()
-            agents = await asyncio.to_thread(system.list)
-            return success_response(data=[AgentOut(**a).model_dump() for a in agents])
-        except Exception as e:
-            classify_and_raise(e, source="agents.list")
-
+        system = self._get_system()
+        agents = await asyncio.to_thread(system.list)
+        return success_response(data=[AgentOut(**a).model_dump() for a in agents])
+    @endpoint("agents.create_agent")
     async def create_agent(
         self, req: AgentCreate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -132,16 +130,14 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.create_agent")
 
+    @endpoint("agents.get_agent")
     async def get_agent(self, agent_id: str) -> dict:
         """Get a specific agent by ID."""
-        try:
-            result = self._get_system().get(agent_id)
-            if result is None:
-                raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
-            return success_response(data=AgentOut(**result).model_dump())
-        except Exception as e:
-            classify_and_raise(e, source="agents.get")
-
+        result = self._get_system().get(agent_id)
+        if result is None:
+            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=AgentOut(**result).model_dump())
+    @endpoint("agents.update_agent")
     async def update_agent(
         self, agent_id: str, req: AgentUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -164,6 +160,7 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.update")
 
+    @endpoint("agents.delete_agent")
     async def delete_agent(
         self, agent_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -176,6 +173,7 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.delete")
 
+    @endpoint("agents.execute_agent")
     async def execute_agent(
         self, agent_id: str, req: ExecuteRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -201,6 +199,7 @@ class AgentsRouter:
 
     # ── Orchestration ─────────────────────────────────────────────────────
 
+    @endpoint("agents.orchestrate_agents")
     async def orchestrate_agents(
         self,
         req: OrchestrateRequest,
@@ -398,31 +397,24 @@ class AgentsRouter:
         except Exception as e:
             classify_and_raise(e, source="agents.orchestrate_agents")
 
+    @endpoint("agents.list_runs")
     async def list_runs(self, limit: int = 20) -> dict:
-        try:
-            """List orchestration run history, newest first."""
-            from domains.agents.run_history import get_agent_run_store
+        """List orchestration run history, newest first."""
+        from domains.agents.run_history import get_agent_run_store
 
-            runs = await asyncio.to_thread(
-                get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200))
-            )
-            return success_response(data={"runs": runs, "count": len(runs)})
+        runs = await asyncio.to_thread(
+            get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200))
+        )
+        return success_response(data={"runs": runs, "count": len(runs)})
 
-        except Exception as e:
-            classify_and_raise(e, source="agents.list_runs")
-
+    @endpoint("agents.get_run")
     async def get_run(self, run_id: str) -> dict:
-        try:
-            """Return a single orchestration run record."""
-            from domains.agents.run_history import get_agent_run_store
+        """Return a single orchestration run record."""
+        from domains.agents.run_history import get_agent_run_store
 
-            record = await asyncio.to_thread(get_agent_run_store().get, run_id)
-            if record is None:
-                raise_error("Run not found", "E_NOT_FOUND", status_code=404)
-            return success_response(data=record)
-
-        except Exception as e:
-            classify_and_raise(e, source="agents.get_run")
-
+        record = await asyncio.to_thread(get_agent_run_store().get, run_id)
+        if record is None:
+            raise_error("Run not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=record)
 
 router = AgentsRouter().router

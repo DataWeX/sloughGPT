@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 from domains.infrastructure.errors import AppError
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 
 
 def _numpy_perplexity(model, ids):
@@ -149,6 +149,7 @@ class BenchmarkRouter:
         except Exception as e:
             raise_error(str(e), "E_DOMAIN", details={"model": model})
 
+    @endpoint("benchmark.run_benchmark")
     async def run_benchmark(
         self, model: str = "gpt2", auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -162,6 +163,7 @@ class BenchmarkRouter:
         except Exception as e:
             classify_and_raise(e, source="benchmark.run_benchmark")
 
+    @endpoint("benchmark.get_model_metrics")
     async def get_model_metrics(self, model: str = "gpt2") -> dict:
         """Return real-time metrics for the currently loaded model.
 
@@ -179,17 +181,8 @@ class BenchmarkRouter:
             Reads the ModelsController for inference counters.
             Returns model_loaded=False if no provider is resident.
         """
-        try:
-            _t0 = _time.monotonic()
-            result = self._get_model_metrics(model)
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "benchmark.metrics", resource=model, detail=f"elapsed={_elapsed_ms:.0f}ms"
-            )
-            return success_response(data=result)
-        except Exception as e:
-            classify_and_raise(e, source="benchmark.get_model_metrics")
 
+    @endpoint("benchmark.get_benchmark_by_id")
     async def get_benchmark_by_id(self, model_id: str) -> dict:
         """Return benchmark results for a specific model.
 
@@ -204,17 +197,8 @@ class BenchmarkRouter:
         Side effects:
             Reads the ServerState singleton for the active provider.
         """
-        try:
-            _t0 = _time.monotonic()
-            result = self._get_model_metrics(model_id)
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "benchmark.get", resource=model_id, detail=f"elapsed={_elapsed_ms:.0f}ms"
-            )
-            return success_response(data=result)
-        except Exception as e:
-            classify_and_raise(e, source="benchmark.get_benchmark_by_id")
 
+    @endpoint("benchmark.calculate_perplexity")
     async def calculate_perplexity(
         self,
         text: str = "Sample text for evaluation",
@@ -273,6 +257,7 @@ class BenchmarkRouter:
             logger.warning("Perplexity benchmark failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
+    @endpoint("benchmark.get_quality_metrics")
     async def get_quality_metrics(
         self,
         limit: int = 50,
@@ -301,6 +286,7 @@ class BenchmarkRouter:
             logger.warning("Quality metrics failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
+    @endpoint("benchmark.get_logged_responses")
     async def get_logged_responses(
         self,
         limit: int = 20,
@@ -341,6 +327,7 @@ class BenchmarkRouter:
             logger.warning("Logged responses failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
+    @endpoint("benchmark.get_tracker_stats")
     async def get_tracker_stats(self) -> dict[str, Any]:
         """Get response tracker statistics - uses BenchmarkDomain."""
         _t0 = _time.monotonic()
@@ -358,18 +345,9 @@ class BenchmarkRouter:
             logger.warning("Tracker stats failed: %s", e)
             classify_and_raise(e, source="benchmark")
 
+    @endpoint("benchmark.clear_history")
     async def clear_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear benchmark history and logged responses."""
-        try:
-            from domains import get_benchmark_domain
-
-            bench = get_benchmark_domain()
-            bench.clear_history()
-            safe_audit_log("benchmark.clear_history")
-            return success_response(data={"status": "ok", "cleared": True})
-        except Exception as e:
-            logger.warning("Clear history failed: %s", e)
-            classify_and_raise(e, source="benchmark")
 
 
 router = BenchmarkRouter().router

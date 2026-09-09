@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 
 # ---------- rate limiting for auth endpoints ----------
 
@@ -214,6 +214,7 @@ class AuthRouter:
     def _register_routes(self):
         current_user_dep = Depends(self._get_current_user)
 
+        @endpoint("auth.login")
         async def login(req: LoginRequest, request: Request) -> dict:
             """Authenticate a user with username and password.
 
@@ -268,6 +269,7 @@ class AuthRouter:
                 ),
             )
 
+        @endpoint("auth.register")
         async def register(req: RegisterRequest, request: Request) -> dict:
             """Register a new user account with username, email, and password.
 
@@ -320,6 +322,7 @@ class AuthRouter:
                 ),
             )
 
+        @endpoint("auth.get_me")
         async def get_me(current_user: dict = current_user_dep) -> dict:
             """Return the current authenticated user's profile.
 
@@ -336,6 +339,7 @@ class AuthRouter:
             """
             return UserInfo(**current_user)
 
+        @endpoint("auth.create_token")
         async def create_token(token_request: TokenRequest, request: Request) -> dict:
             """Create a JWT access token from a valid API key.
 
@@ -374,6 +378,7 @@ class AuthRouter:
                 access_token=token, token_type="bearer", expires_in=exp_hours * 3600
             )
 
+        @endpoint("auth.verify_token")
         async def verify_token(authorization: str | None = Header(None)) -> dict:
             """Verify whether a JWT bearer token is valid and not expired.
 
@@ -402,6 +407,7 @@ class AuthRouter:
                 data={"valid": True, "subject": payload.get("sub"), "expires": payload.get("exp")}
             )
 
+        @endpoint("auth.refresh_token")
         async def refresh_token(authorization: str | None = Header(None)) -> dict:
             """Issue a new JWT token from an existing valid token.
 

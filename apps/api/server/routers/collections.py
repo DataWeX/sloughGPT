@@ -14,7 +14,7 @@ from domains.infrastructure.errors import AppError
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.collections")
 
@@ -62,33 +62,31 @@ class CollectionsRouter:
         self.router.add_api_route("/{pipeline_id}/collect", self.collect, methods=["POST"])
         self.router.add_api_route("/{pipeline_id}/records", self.get_records, methods=["GET"])
 
+    @endpoint("collections.list_pipelines")
     async def list_pipelines(self) -> dict:
         """List all registered collection pipelines."""
-        try:
-            from domains.collections import get_registry
+        from domains.collections import get_registry
 
-            registry = get_registry()
-            pipelines = registry.list_pipelines()
-            sources = registry.list_sources()
-            stores = registry.list_stores()
-            filters = registry.list_filters()
-            return success_response(
-                data={
-                    "pipelines": pipelines,
-                    "sources": sources,
-                    "stores": stores,
-                    "filters": filters,
-                    "counts": {
-                        "pipelines": len(pipelines),
-                        "sources": len(sources),
-                        "stores": len(stores),
-                        "filters": len(filters),
-                    },
-                }
-            )
-        except Exception as e:
-            classify_and_raise(e, source="collections.list_pipelines")
-
+        registry = get_registry()
+        pipelines = registry.list_pipelines()
+        sources = registry.list_sources()
+        stores = registry.list_stores()
+        filters = registry.list_filters()
+        return success_response(
+            data={
+                "pipelines": pipelines,
+                "sources": sources,
+                "stores": stores,
+                "filters": filters,
+                "counts": {
+                    "pipelines": len(pipelines),
+                    "sources": len(sources),
+                    "stores": len(stores),
+                    "filters": len(filters),
+                },
+            }
+        )
+    @endpoint("collections.create_pipeline")
     async def create_pipeline(
         self, req: PipelineConfigRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -130,6 +128,7 @@ class CollectionsRouter:
             logger.warning("Create pipeline failed: %s", e)
             classify_and_raise(e, source="create_pipeline")
 
+    @endpoint("collections.run_pipeline")
     async def run_pipeline(
         self,
         name: str = Query(..., description="Pipeline name"),
@@ -167,6 +166,7 @@ class CollectionsRouter:
             logger.warning("Run pipeline failed: %s", e)
             classify_and_raise(e, source="run_pipeline")
 
+    @endpoint("collections.collect_direct")
     async def collect_direct(
         self, req: CollectRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -217,40 +217,33 @@ class CollectionsRouter:
             logger.warning("Direct collect failed: %s", e)
             classify_and_raise(e, source="collect_direct")
 
+    @endpoint("collections.get_stats")
     async def get_stats(self) -> dict:
         """Get overall collection stats."""
-        try:
-            from domains.collections.registry import get_registry
+        from domains.collections.registry import get_registry
 
-            registry = get_registry()
-            stats = registry.stats()
-            return success_response(data=stats)
-        except Exception as e:
-            classify_and_raise(e, source="collections.get_stats")
-
+        registry = get_registry()
+        stats = registry.stats()
+        return success_response(data=stats)
+    @endpoint("collections.get_pipeline")
     async def get_pipeline(self, pipeline_id: str) -> dict:
         """Get details of a specific pipeline."""
-        try:
-            from domains.collections.registry import get_registry
+        from domains.collections.registry import get_registry
 
-            registry = get_registry()
-            pipeline = registry.get_pipeline(pipeline_id)
-            if not pipeline:
-                raise_error(
-                    f"Pipeline '{pipeline_id}' not found", code="E_NOT_FOUND", status_code=404
-                )
-            return success_response(
-                data={
-                    "id": pipeline_id,
-                    "name": getattr(pipeline, "name", pipeline_id),
-                    "stats": pipeline.stats,
-                }
+        registry = get_registry()
+        pipeline = registry.get_pipeline(pipeline_id)
+        if not pipeline:
+            raise_error(
+                f"Pipeline '{pipeline_id}' not found", code="E_NOT_FOUND", status_code=404
             )
-        except AppError as e:
-            classify_and_raise(e, source="collections.get_pipeline")
-        except Exception as e:
-            classify_and_raise(e, source="get_pipeline")
-
+        return success_response(
+            data={
+                "id": pipeline_id,
+                "name": getattr(pipeline, "name", pipeline_id),
+                "stats": pipeline.stats,
+            }
+        )
+    @endpoint("collections.delete_pipeline")
     async def delete_pipeline(
         self, pipeline_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -269,6 +262,7 @@ class CollectionsRouter:
         except Exception as e:
             classify_and_raise(e, source="collections.delete_pipeline")
 
+    @endpoint("collections.collect")
     async def collect(
         self, pipeline_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -295,6 +289,7 @@ class CollectionsRouter:
         except Exception as e:
             classify_and_raise(e, source="collect")
 
+    @endpoint("collections.get_records")
     async def get_records(
         self,
         pipeline_id: str,

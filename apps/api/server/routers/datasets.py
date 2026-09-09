@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.ssrf import validate_url_not_private as _validate_url_not_private
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 from schemas.datasets import (
     BatchImportRequest,
     CSVImportRequest,
@@ -157,6 +157,7 @@ class DatasetsRouter:
 
         return DataImporter(output_dir=str(self._DATASETS_DIR))
 
+    @endpoint("datasets.list_datasets")
     async def list_datasets(
         self,
         q: str | None = Query(None, description="Search query"),
@@ -184,6 +185,7 @@ class DatasetsRouter:
             count=len(datasets),
         )
 
+    @endpoint("datasets.import_from_local")
     async def import_from_local(
         self, request: LocalImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -239,6 +241,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (local) failed: %s", e)
                 classify_and_raise(e, source="dataset_import_local")
 
+    @endpoint("datasets.import_from_github")
     async def import_from_github(
         self, request: GitHubImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -283,6 +286,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (github) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
+    @endpoint("datasets.import_from_huggingface")
     async def import_from_huggingface(
         self, request: HuggingFaceImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -326,6 +330,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (huggingface) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
+    @endpoint("datasets.import_from_url")
     async def import_from_url(
         self, request: URLImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -385,6 +390,7 @@ class DatasetsRouter:
                 logger.warning("Dataset import (url) failed: %s", e)
                 classify_and_raise(e, source="dataset_handler")
 
+    @endpoint("datasets.import_from_kaggle")
     async def import_from_kaggle(
         self, request: KaggleImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -464,6 +470,7 @@ class DatasetsRouter:
             logger.warning("Dataset import (kaggle) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
+    @endpoint("datasets.import_from_csv")
     async def import_from_csv(
         self, request: CSVImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -532,6 +539,7 @@ class DatasetsRouter:
             logger.warning("Dataset import (csv) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
+    @endpoint("datasets.batch_import")
     async def batch_import(
         self, request: BatchImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -652,6 +660,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.batch_import")
 
+    @endpoint("datasets.search_books")
     async def search_books(
         self,
         q: str = Query(..., description="Search by title or ISBN"),
@@ -667,6 +676,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="search_books")
 
+    @endpoint("datasets.search_github")
     async def search_github(
         self, q: str = Query(..., description="Search query"), limit: int = Query(10, ge=1, le=50)
     ) -> dict:
@@ -706,6 +716,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="search_github")
 
+    @endpoint("datasets.import_from_isbn")
     async def import_from_isbn(
         self, request: ISBNImportRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -744,6 +755,7 @@ class DatasetsRouter:
             logger.warning("Dataset import (isbn) failed: %s", e)
             classify_and_raise(e, source="dataset_handler")
 
+    @endpoint("datasets.search_datasets")
     async def search_datasets(
         self, q: str = Query(..., min_length=1, max_length=500, description="Search query")
     ) -> dict:
@@ -769,59 +781,54 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.search_datasets")
 
+    @endpoint("datasets.get_dataset")
     async def get_dataset(self, dataset_id: str) -> dict:
-        try:
-            """Return full details for a single dataset by its ID.
+        """Return full details for a single dataset by its ID.
 
-            Args:
-                dataset_id: The unique dataset identifier (alphanumeric,
-                    hyphens, underscores only).
+        Args:
+            dataset_id: The unique dataset identifier (alphanumeric,
+                hyphens, underscores only).
 
-            Returns:
-                DatasetInfo with id, name, description, created_at,
-                updated_at, row_count, and other metadata fields.
+        Returns:
+            DatasetInfo with id, name, description, created_at,
+            updated_at, row_count, and other metadata fields.
 
-            Side effects:
-                Validates dataset_id format (raises 422 on invalid chars).
-                Raises 404 if no dataset with the given ID is found.
-            """
-            self._validate_dataset_id(dataset_id)
-            ctrl = get_datasets_controller()
-            dataset = ctrl.get_dataset(dataset_id)
-            if not dataset:
-                raise_error("Dataset not found", "E_NOT_FOUND")
-            return DatasetInfo(**dataset)
+        Side effects:
+            Validates dataset_id format (raises 422 on invalid chars).
+            Raises 404 if no dataset with the given ID is found.
+        """
+        self._validate_dataset_id(dataset_id)
+        ctrl = get_datasets_controller()
+        dataset = ctrl.get_dataset(dataset_id)
+        if not dataset:
+            raise_error("Dataset not found", "E_NOT_FOUND")
+        return DatasetInfo(**dataset)
 
-        except Exception as e:
-            classify_and_raise(e, source="datasets.get_dataset")
-
+    @endpoint("datasets.get_dataset_stats")
     async def get_dataset_stats(self, dataset_id: str) -> dict:
-        try:
-            """Return aggregate statistics for a dataset.
+        """Return aggregate statistics for a dataset.
 
-            Args:
-                dataset_id: The unique dataset identifier (alphanumeric,
-                    hyphens, underscores only).
+        Args:
+            dataset_id: The unique dataset identifier (alphanumeric,
+                hyphens, underscores only).
 
-            Returns:
-                DatasetStats with fields like format, row_count,
-                avg_length, total_chars, and import_method.
+        Returns:
+            DatasetStats with fields like format, row_count,
+            avg_length, total_chars, and import_method.
 
-            Side effects:
-                Validates dataset_id format (raises 422 on invalid chars).
-                Reads the dataset's input file from disk to compute stats.
-                Raises 404 if the dataset is not found or has no data.
-            """
-            self._validate_dataset_id(dataset_id)
-            ctrl = get_datasets_controller()
-            stats = ctrl.get_dataset_stats(dataset_id)
-            if not stats:
-                raise_error("Dataset not found", "E_NOT_FOUND")
-            return DatasetStats(**stats)
+        Side effects:
+            Validates dataset_id format (raises 422 on invalid chars).
+            Reads the dataset's input file from disk to compute stats.
+            Raises 404 if the dataset is not found or has no data.
+        """
+        self._validate_dataset_id(dataset_id)
+        ctrl = get_datasets_controller()
+        stats = ctrl.get_dataset_stats(dataset_id)
+        if not stats:
+            raise_error("Dataset not found", "E_NOT_FOUND")
+        return DatasetStats(**stats)
 
-        except Exception as e:
-            classify_and_raise(e, source="datasets.get_dataset_stats")
-
+    @endpoint("datasets.create_dataset")
     async def create_dataset(
         self, req: DatasetCreate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -842,6 +849,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.create_dataset")
 
+    @endpoint("datasets.update_dataset")
     async def update_dataset(
         self,
         dataset_id: str,
@@ -878,6 +886,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.update_dataset")
 
+    @endpoint("datasets.delete_dataset")
     async def delete_dataset(
         self, dataset_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -907,6 +916,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.delete_dataset")
 
+    @endpoint("datasets.create_version")
     async def create_version(
         self, dataset_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -923,17 +933,15 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.create_version")
 
+    @endpoint("datasets.list_versions")
     async def list_versions(self, dataset_id: str) -> dict:
-        try:
-            """List all version timestamps for a dataset."""
-            self._validate_dataset_id(dataset_id)
-            ctrl = get_datasets_controller()
-            versions = ctrl.list_versions(dataset_id)
-            return VersionListResponse(versions=versions, count=len(versions))
+        """List all version timestamps for a dataset."""
+        self._validate_dataset_id(dataset_id)
+        ctrl = get_datasets_controller()
+        versions = ctrl.list_versions(dataset_id)
+        return VersionListResponse(versions=versions, count=len(versions))
 
-        except Exception as e:
-            classify_and_raise(e, source="datasets.list_versions")
-
+    @endpoint("datasets.restore_version")
     async def restore_version(
         self, dataset_id: str, timestamp: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -950,6 +958,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.restore_version")
 
+    @endpoint("datasets.add_dataset_data")
     async def add_dataset_data(
         self,
         dataset_id: str,
@@ -984,6 +993,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.add_dataset_data")
 
+    @endpoint("datasets.preview_dataset")
     async def preview_dataset(
         self,
         dataset_id: str,
@@ -1015,6 +1025,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.preview_dataset")
 
+    @endpoint("datasets.export_dataset")
     async def export_dataset(
         self,
         dataset_id: str,
@@ -1053,6 +1064,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.export_dataset")
 
+    @endpoint("datasets.quality_dataset")
     async def quality_dataset(
         self,
         dataset_id: str,
@@ -1109,6 +1121,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.quality_dataset")
 
+    @endpoint("datasets.create_dataset_from_chat")
     async def create_dataset_from_chat(
         self, req: FromChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -1167,6 +1180,7 @@ class DatasetsRouter:
         except Exception as e:
             classify_and_raise(e, source="datasets.create_dataset_from_chat")
 
+    @endpoint("datasets.convert_to_messages")
     async def convert_to_messages(
         self,
         dataset_id: str,

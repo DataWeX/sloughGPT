@@ -13,7 +13,7 @@ import psutil
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.system")
 
@@ -48,6 +48,7 @@ class SystemRouter:
             "/inference-pool", self.get_inference_pool_status, methods=["GET"]
         )
 
+    @endpoint("system.get_metrics")
     async def get_metrics(self) -> dict:
         """Get system metrics (cached for 2s)."""
         try:
@@ -87,6 +88,7 @@ class SystemRouter:
         except Exception as e:
             classify_and_raise(e, source="system.metrics")
 
+    @endpoint("system.get_info")
     async def get_info(self) -> dict:
         """Retrieve host system information including platform and CPU details."""
         try:
@@ -114,6 +116,7 @@ class SystemRouter:
         except Exception as e:
             classify_and_raise(e, source="system.info")
 
+    @endpoint("system.get_disk")
     async def get_disk(self) -> dict:
         """Retrieve disk usage statistics for the root filesystem."""
         try:
@@ -132,16 +135,14 @@ class SystemRouter:
         except Exception as e:
             classify_and_raise(e, source="system.disk")
 
+    @endpoint("system.get_lifecycle_status")
     async def get_lifecycle_status(self) -> dict:
         """Get the current lifecycle manager state."""
-        try:
-            from domains.infrastructure.lifecycle import get_lifecycle_manager
+        from domains.infrastructure.lifecycle import get_lifecycle_manager
 
-            mgr = get_lifecycle_manager()
-            return success_response(data=mgr.get_results())
-        except Exception as exc:
-            classify_and_raise(exc, source="system.lifecycle")
-
+        mgr = get_lifecycle_manager()
+        return success_response(data=mgr.get_results())
+    @endpoint("system.stream_output")
     async def stream_output(
         self, request: Request, tail: int = Query(50, ge=0, le=500)
     ) -> AsyncGenerator[str, None]:
@@ -177,76 +178,65 @@ class SystemRouter:
         except Exception as e:
             classify_and_raise(e, source="system.stream_output")
 
+    @endpoint("system.tail_output")
     async def tail_output(self, n: int = Query(100, ge=1, le=1000)) -> dict:
         """Get last N lines of server output."""
-        try:
-            from domains.infrastructure.output_buffer import get_server_buffer
+        from domains.infrastructure.output_buffer import get_server_buffer
 
-            buf = get_server_buffer()
-            return success_response(
-                data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq}
-            )
-        except Exception as e:
-            classify_and_raise(e, source="system.tail_output")
-
+        buf = get_server_buffer()
+        return success_response(
+            data={"lines": buf.tail_dicts(n), "size": buf.count, "seq": buf.seq}
+        )
+    @endpoint("system.get_executor_status")
     async def get_executor_status(self) -> dict:
         """Get TrainingExecutor pool status and job list."""
-        try:
-            from domains.training.executor import _instance
+        from domains.training.executor import _instance
 
-            if _instance is None:
-                return success_response(
-                    data={
-                        "initialized": False,
-                        "active_jobs": 0,
-                        "max_workers": 0,
-                        "total_tracked": 0,
-                        "jobs": [],
-                    }
-                )
+        if _instance is None:
             return success_response(
                 data={
-                    "initialized": True,
-                    "active_jobs": _instance.active_count(),
-                    "max_workers": _instance._max_workers,
-                    "total_tracked": len(_instance._jobs),
-                    "jobs": _instance.list_jobs(),
+                    "initialized": False,
+                    "active_jobs": 0,
+                    "max_workers": 0,
+                    "total_tracked": 0,
+                    "jobs": [],
                 }
             )
-        except Exception as e:
-            classify_and_raise(e, source="system.executor_status")
-
+        return success_response(
+            data={
+                "initialized": True,
+                "active_jobs": _instance.active_count(),
+                "max_workers": _instance._max_workers,
+                "total_tracked": len(_instance._jobs),
+                "jobs": _instance.list_jobs(),
+            }
+        )
+    @endpoint("system.get_executor_job")
     async def get_executor_job(self, job_id: str) -> dict:
         """Get metadata for a single training job by ID."""
-        try:
-            from domains.training.executor import _instance
+        from domains.training.executor import _instance
 
-            if _instance is None:
-                raise_error("executor not initialized", "E_INFRA_STARTUP")
-            status = _instance.status(job_id)
-            if status is None:
-                raise_error(f"job {job_id} not found", "E_NOT_FOUND")
-            return success_response(data=status)
-        except Exception as e:
-            classify_and_raise(e, source="system.executor_job")
-
+        if _instance is None:
+            raise_error("executor not initialized", "E_INFRA_STARTUP")
+        status = _instance.status(job_id)
+        if status is None:
+            raise_error(f"job {job_id} not found", "E_NOT_FOUND")
+        return success_response(data=status)
+    @endpoint("system.get_executor_job_result")
     async def get_executor_job_result(self, job_id: str) -> dict:
         """Get shape/dtype summary for a completed job's trained weights."""
-        try:
-            from domains.training.executor import _instance
+        from domains.training.executor import _instance
 
-            if _instance is None:
-                raise_error("executor not initialized", "E_INFRA_STARTUP")
-            summary = _instance.result_summary(job_id)
-            if summary is None:
-                info = _instance.status(job_id)
-                if info is None:
-                    raise_error(f"job {job_id} not found", "E_NOT_FOUND")
-                raise_error("job not completed or has no weight result", "E_DOMAIN")
-            return success_response(data=summary)
-        except Exception as e:
-            classify_and_raise(e, source="system.executor_job_result")
-
+        if _instance is None:
+            raise_error("executor not initialized", "E_INFRA_STARTUP")
+        summary = _instance.result_summary(job_id)
+        if summary is None:
+            info = _instance.status(job_id)
+            if info is None:
+                raise_error(f"job {job_id} not found", "E_NOT_FOUND")
+            raise_error("job not completed or has no weight result", "E_DOMAIN")
+        return success_response(data=summary)
+    @endpoint("system.purge_executor_jobs")
     async def purge_executor_jobs(
         self,
         max_age_s: float = Query(3600.0, gt=0),
@@ -268,6 +258,7 @@ class SystemRouter:
         except Exception as e:
             classify_and_raise(e, source="system.executor_purge")
 
+    @endpoint("system.cancel_executor_job")
     async def cancel_executor_job(
         self, job_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -285,21 +276,17 @@ class SystemRouter:
         except Exception as e:
             classify_and_raise(e, source="system.executor_cancel")
 
+    @endpoint("system.get_inference_pool_status")
     async def get_inference_pool_status(self) -> dict:
         """Retrieve the InferencePool worker pool status."""
-        try:
-            from infrastructure.inference_pool import InferencePool
+        from infrastructure.inference_pool import InferencePool
 
-            pool = await InferencePool.get_instance()
-            return success_response(
-                data={
-                    "initialized": True,
-                    "max_workers": pool._max_workers,
-                    "queue_timeout": pool._queue_timeout,
-                }
-            )
-        except Exception as exc:
-            classify_and_raise(exc, source="system.inference_pool")
-
-
+        pool = await InferencePool.get_instance()
+        return success_response(
+            data={
+                "initialized": True,
+                "max_workers": pool._max_workers,
+                "queue_timeout": pool._queue_timeout,
+            }
+        )
 router = SystemRouter().router

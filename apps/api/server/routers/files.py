@@ -15,7 +15,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
-from schemas.common import raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.files")
 
@@ -190,6 +190,7 @@ class FilesRouter:
 
     # ── Endpoints ──
 
+    @endpoint("files.list_files")
     async def list_files(
         self,
         sort: str = Query("uploaded_at", description="Sort field"),
@@ -221,6 +222,7 @@ class FilesRouter:
         items.sort(key=lambda x: getattr(x, sort, 0), reverse=reverse)
         return FileListResponse(files=items, total=len(items))
 
+    @endpoint("files.upload_file")
     async def upload_file(
         self,
         file: UploadFile = File(...),
@@ -280,6 +282,7 @@ class FilesRouter:
             size_bytes=len(contents),
         )
 
+    @endpoint("files.search_files")
     async def search_files(
         self,
         q: str = Query(..., min_length=1, description="Search query"),
@@ -313,6 +316,7 @@ class FilesRouter:
         items.sort(key=lambda x: x.uploaded_at, reverse=True)
         return FileListResponse(files=items, total=len(items))
 
+    @endpoint("files.get_file")
     async def get_file(self, file_id: str) -> dict:
         """Get file details including content."""
         meta = await self._async_load_metadata()
@@ -336,6 +340,7 @@ class FilesRouter:
             text=text,
         )
 
+    @endpoint("files.delete_file")
     async def delete_file(
         self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -354,6 +359,7 @@ class FilesRouter:
         safe_audit_log("file.delete", resource=file_id)
         return success_response(data={"deleted": file_id})
 
+    @endpoint("files.ingest_file")
     async def ingest_file(
         self, file_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:

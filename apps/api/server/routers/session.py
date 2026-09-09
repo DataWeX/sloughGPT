@@ -15,7 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
 from pydantic import BaseModel
-from schemas.common import classify_and_raise, safe_audit_log, success_response
+from schemas.common import endpoint, classify_and_raise, safe_audit_log, success_response
 
 from config import ServerConfig
 
@@ -66,6 +66,7 @@ class SessionRouter:
 
         return SessionCore.get_messages(session_id)
 
+    @endpoint("session.set_session_context")
     async def set_session_context(
         self,
         session_id: str,
@@ -91,6 +92,7 @@ class SessionRouter:
         except Exception as e:
             classify_and_raise(e, source="session.set_session_context")
 
+    @endpoint("session.get_session_messages")
     async def get_session_messages(self, session_id: str) -> dict:
         """Return stored conversation messages for a session.
 
@@ -105,6 +107,7 @@ class SessionRouter:
             logger.warning("Get session messages failed: %s", e)
             classify_and_raise(e, source="session_get_messages")
 
+    @endpoint("session.get_session_inspector")
     async def get_session_inspector(self, session_id: str) -> dict:
         """Return aggregated context state for the UI context inspector.
 
@@ -212,6 +215,7 @@ class SessionRouter:
             logger.warning("Session inspector failed: %s", e)
             classify_and_raise(e, source="session_inspector")
 
+    @endpoint("session.regenerate_session")
     async def regenerate_session(
         self, session_id: str, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> StreamingResponse:

@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log
+from schemas.common import endpoint, classify_and_raise, raise_error, safe_audit_log
 
 from config import ServerConfig
 
@@ -195,6 +195,7 @@ class InferRouter:
 
     # --- Endpoints ---
 
+    @endpoint("infer.infer")
     async def infer(
         self, req: InferRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> InferResponse:
@@ -275,6 +276,7 @@ class InferRouter:
             logger.warning("Inference failed: %s", e)
             classify_and_raise(e, source="infer")
 
+    @endpoint("infer.infer_stream")
     async def infer_stream(
         self,
         req: InferRequest,
@@ -429,6 +431,7 @@ class InferRouter:
         except Exception as e:
             classify_and_raise(e, source="infer.infer_stream")
 
+    @endpoint("infer.infer_embed")
     async def infer_embed(
         self, req: EmbedRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> EmbedResponse:
@@ -482,6 +485,7 @@ class InferRouter:
         except Exception as e:
             classify_and_raise(e, source="infer.infer_embed")
 
+    @endpoint("infer.infer_tokenize")
     async def infer_tokenize(
         self, req: TokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> TokenizeResponse:
@@ -526,6 +530,7 @@ class InferRouter:
         except Exception as e:
             classify_and_raise(e, source="infer.infer_tokenize")
 
+    @endpoint("infer.infer_detokenize")
     async def infer_detokenize(
         self, req: DetokenizeRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> DetokenizeResponse:
@@ -568,65 +573,59 @@ class InferRouter:
         except Exception as e:
             classify_and_raise(e, source="infer.infer_detokenize")
 
+    @endpoint("infer.infer_health")
     async def infer_health(self) -> InferHealthResponse:
-        try:
-            """Engine health — whether a model is loaded and what capabilities it has."""
-            model = self._get_model_interface()
-            if model is None:
-                return InferHealthResponse(
-                    status="no_model",
-                    model_loaded=False,
-                    has_streaming=False,
-                    has_embedding=False,
-                )
-
-            info = model.info() if hasattr(model, "info") else None
+        """Engine health — whether a model is loaded and what capabilities it has."""
+        model = self._get_model_interface()
+        if model is None:
             return InferHealthResponse(
-                status="ready",
-                model_loaded=True,
-                model_id=info.model_id if info else "unknown",
-                engine_type=info.model_type if info else type(model).__name__,
-                has_streaming=info.has_streaming if info else hasattr(model, "generate_stream"),
-                has_embedding=info.has_embedding if info else hasattr(model, "embed"),
+                status="no_model",
+                model_loaded=False,
+                has_streaming=False,
+                has_embedding=False,
             )
 
-        except Exception as e:
-            classify_and_raise(e, source="infer.infer_health")
+        info = model.info() if hasattr(model, "info") else None
+        return InferHealthResponse(
+            status="ready",
+            model_loaded=True,
+            model_id=info.model_id if info else "unknown",
+            engine_type=info.model_type if info else type(model).__name__,
+            has_streaming=info.has_streaming if info else hasattr(model, "generate_stream"),
+            has_embedding=info.has_embedding if info else hasattr(model, "embed"),
+        )
 
+    @endpoint("infer.infer_info")
     async def infer_info(self) -> InferInfoResponse:
-        try:
-            """Metadata about the currently loaded model."""
-            model = self._get_model_interface()
-            if model is None:
-                raise_error("No model loaded", "E_BAD_REQUEST", status_code=503)
+        """Metadata about the currently loaded model."""
+        model = self._get_model_interface()
+        if model is None:
+            raise_error("No model loaded", "E_BAD_REQUEST", status_code=503)
 
-            info = model.info() if hasattr(model, "info") else None
-            if info is None:
-                return InferInfoResponse(
-                    model_id="unknown",
-                    model_type=type(model).__name__,
-                    num_parameters=model.num_parameters()
-                    if hasattr(model, "num_parameters")
-                    else 0,
-                )
-
+        info = model.info() if hasattr(model, "info") else None
+        if info is None:
             return InferInfoResponse(
-                model_id=info.model_id,
-                model_type=info.model_type,
-                num_parameters=info.num_parameters,
-                vocab_size=info.vocab_size,
-                max_context=info.max_context,
-                num_layers=info.num_layers,
-                has_tokenizer=info.has_tokenizer,
-                has_streaming=info.has_streaming,
-                has_embedding=info.has_embedding,
-                extra=info.extra,
+                model_id="unknown",
+                model_type=type(model).__name__,
+                num_parameters=model.num_parameters()
+                if hasattr(model, "num_parameters")
+                else 0,
             )
+
+        return InferInfoResponse(
+            model_id=info.model_id,
+            model_type=info.model_type,
+            num_parameters=info.num_parameters,
+            vocab_size=info.vocab_size,
+            max_context=info.max_context,
+            num_layers=info.num_layers,
+            has_tokenizer=info.has_tokenizer,
+            has_streaming=info.has_streaming,
+            has_embedding=info.has_embedding,
+            extra=info.extra,
+        )
 
         # --- SSE helpers (local, avoid import issues) ---
-
-        except Exception as e:
-            classify_and_raise(e, source="infer.infer_info")
 
     def _sse_token(
         self,
