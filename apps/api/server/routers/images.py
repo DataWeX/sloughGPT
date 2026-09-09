@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.images")
 
@@ -308,6 +308,7 @@ class ImagesRouter:
 
     # ── Endpoints ─────────────────────────────────────────────────────────
 
+    @endpoint("images.generate_image")
     async def generate_image(
         self,
         request: GenerateRequest,
@@ -318,66 +319,56 @@ class ImagesRouter:
         import time as _time
 
         _t0 = _time.monotonic()
-        try:
-            image_bytes = self._generate_image(request.prompt, request.style)
+        image_bytes = self._generate_image(request.prompt, request.style)
 
-            image_path = self._save_image(image_bytes, request.style)
+        image_path = self._save_image(image_bytes, request.style)
 
-            base64_image = base64.b64encode(image_bytes).decode("utf-8")
-            data_url = f"data:image/png;base64,{base64_image}"
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            safe_audit_log(
-                "images.generate",
-                resource=request.prompt[:80],
-                detail=f"style={request.style} elapsed={_elapsed_ms:.0f}ms",
-            )
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        data_url = f"data:image/png;base64,{base64_image}"
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "images.generate",
+            resource=request.prompt[:80],
+            detail=f"style={request.style} elapsed={_elapsed_ms:.0f}ms",
+        )
 
-            return GenerateResponse(
-                image=data_url,
-                style=request.style,
-                prompt=request.prompt,
-                id=image_path.split("/")[-1].replace(".png", ""),
-            )
+        return GenerateResponse(
+            image=data_url,
+            style=request.style,
+            prompt=request.prompt,
+            id=image_path.split("/")[-1].replace(".png", ""),
+        )
 
-        except Exception as e:
-            _elapsed_ms = (_time.monotonic() - _t0) * 1000
-            logger.warning("Image generation failed: %s (elapsed=%.0fms)", e, _elapsed_ms)
-            classify_and_raise(e, source="images_generate")
-
+    @endpoint("images.list_gallery")
     async def list_gallery(self) -> dict:
         """List all generated images in the gallery."""
-        try:
-            gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
+        gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
-            def _scan_gallery():
-                if not gallery_dir.exists():
-                    return []
-                images = []
-                for filepath in sorted(
-                    gallery_dir.glob("generated_*.png"),
-                    key=lambda x: x.stat().st_mtime,
-                    reverse=True,
-                ):
-                    images.append(
-                        {
-                            "id": filepath.stem,
-                            "path": f"/data/gallery/{filepath.name}",
-                            "created": int(filepath.stat().st_mtime),
-                        }
-                    )
-                return images[:50]
+        def _scan_gallery():
+            if not gallery_dir.exists():
+                return []
+            images = []
+            for filepath in sorted(
+                gallery_dir.glob("generated_*.png"),
+                key=lambda x: x.stat().st_mtime,
+                reverse=True,
+            ):
+                images.append(
+                    {
+                        "id": filepath.stem,
+                        "path": f"/data/gallery/{filepath.name}",
+                        "created": int(filepath.stat().st_mtime),
+                    }
+                )
+            return images[:50]
 
-            images = await asyncio.to_thread(_scan_gallery)
-            return success_response(data={"images": images})
-        except Exception as e:
-            classify_and_raise(e, source="images.gallery")
+        images = await asyncio.to_thread(_scan_gallery)
+        return success_response(data={"images": images})
 
+    @endpoint("images.list_styles")
     async def list_styles(self) -> dict:
         """List available image generation styles."""
-        try:
-            return success_response(data={"styles": list(self.STYLES.items())})
-        except Exception as e:
-            classify_and_raise(e, source="images.styles")
+        return success_response(data={"styles": list(self.STYLES.items())})
 
 
 def hex_to_rgb(hex_color: str) -> tuple:

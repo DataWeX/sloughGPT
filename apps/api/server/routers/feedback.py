@@ -10,7 +10,7 @@ from controllers.feedback import get_feedback_controller
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 from schemas.feedback import (
     ConversationCreate,
     ConversationResponse,
@@ -82,60 +82,53 @@ class FeedbackRouter:
         )
         self.router.add_api_route("/{message_id}", self.get_feedback, methods=["GET"])
 
+    @endpoint("feedback.record_feedback_workflow")
     async def record_feedback_workflow(self, req: WorkflowFeedbackRequest) -> dict:
         """Record user feedback (workflow variant used by frontend feedback store)."""
-        try:
-            from controllers.feedback import get_feedback_controller
+        from controllers.feedback import get_feedback_controller
 
-            ctrl = get_feedback_controller()
-            feedback = ctrl.record_feedback(
-                message_id=req.conversation_id,
-                rating=req.rating,
-                session_id=req.conversation_id,
-                message_content=req.assistant_response,
-                user_message=req.user_message,
-                assistant_response=req.assistant_response,
-            )
-            safe_audit_log(
-                "feedback.record_workflow",
-                resource=req.conversation_id,
-                detail=f"rating={req.rating}",
-            )
-            return FeedbackResponse(
-                status="ok",
-                feedback_id=feedback.get("feedback_id", ""),
-                message_id=req.conversation_id,
-                rating=req.rating,
-                timestamp=feedback.get("timestamp", ""),
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to record workflow feedback (conversation=%s): %s", req.conversation_id, e
-            )
-            classify_and_raise(e, source="feedback.record_workflow")
+        ctrl = get_feedback_controller()
+        feedback = ctrl.record_feedback(
+            message_id=req.conversation_id,
+            rating=req.rating,
+            session_id=req.conversation_id,
+            message_content=req.assistant_response,
+            user_message=req.user_message,
+            assistant_response=req.assistant_response,
+        )
+        safe_audit_log(
+            "feedback.record_workflow",
+            resource=req.conversation_id,
+            detail=f"rating={req.rating}",
+        )
+        return FeedbackResponse(
+            status="ok",
+            feedback_id=feedback.get("feedback_id", ""),
+            message_id=req.conversation_id,
+            rating=req.rating,
+            timestamp=feedback.get("timestamp", ""),
+        )
 
+    @endpoint("feedback.record")
     async def record_feedback(
         self, req: FeedbackRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Record user feedback and pipe into learning systems."""
-        try:
-            ctrl = get_feedback_controller()
-            feedback = ctrl.record_feedback(
-                message_id=req.message_id,
-                rating=req.rating,
-                session_id=req.session_id,
-                message_content=req.message_content,
-                user_message=getattr(req, "user_message", None),
-                assistant_response=getattr(req, "assistant_response", None),
-            )
-            safe_audit_log(
-                "feedback.record", resource=req.message_id, detail=f"rating={req.rating}"
-            )
-            return FeedbackResponse(**feedback).model_dump()
-        except Exception as e:
-            logger.error("Failed to record feedback (message=%s): %s", req.message_id, e)
-            classify_and_raise(e, source="feedback.record")
+        ctrl = get_feedback_controller()
+        feedback = ctrl.record_feedback(
+            message_id=req.message_id,
+            rating=req.rating,
+            session_id=req.session_id,
+            message_content=req.message_content,
+            user_message=getattr(req, "user_message", None),
+            assistant_response=getattr(req, "assistant_response", None),
+        )
+        safe_audit_log(
+            "feedback.record", resource=req.message_id, detail=f"rating={req.rating}"
+        )
+        return FeedbackResponse(**feedback).model_dump()
 
+    @endpoint("feedback.get_stats")
     async def get_feedback_stats(self) -> dict:
         """Retrieve aggregate feedback statistics across all conversations."""
         global _feedback_stats_cache
@@ -146,35 +139,31 @@ class FeedbackRouter:
                 and (now - _feedback_stats_cache[0]) < _FEEDBACK_STATS_CACHE_TTL
             ):
                 return _feedback_stats_cache[1]
-        try:
-            ctrl = get_feedback_controller()
-            stats = ctrl.get_stats()
-            result = FeedbackStats(**stats)
-            with _feedback_stats_lock:
-                _feedback_stats_cache = (now, result)
-            return result.model_dump()
-        except Exception as e:
-            classify_and_raise(e, source="feedback.get_stats")
+        ctrl = get_feedback_controller()
+        stats = ctrl.get_stats()
+        result = FeedbackStats(**stats)
+        with _feedback_stats_lock:
+            _feedback_stats_cache = (now, result)
+        return result.model_dump()
 
+    @endpoint("feedback.create_conversation")
     async def create_conversation(
         self, req: ConversationCreate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Create a new conversation to associate feedback with."""
-        try:
-            ctrl = get_feedback_controller()
-            conv = ctrl.create_conversation(
-                name=req.name,
-                session_id=req.session_id,
-            )
-            safe_audit_log(
-                "feedback.conversation_create",
-                resource=getattr(conv, "id", "unknown"),
-                detail=f"name={req.name}",
-            )
-            return conv if isinstance(conv, dict) else conv.model_dump()
-        except Exception as e:
-            classify_and_raise(e, source="feedback.create_conversation")
+        ctrl = get_feedback_controller()
+        conv = ctrl.create_conversation(
+            name=req.name,
+            session_id=req.session_id,
+        )
+        safe_audit_log(
+            "feedback.conversation_create",
+            resource=getattr(conv, "id", "unknown"),
+            detail=f"name={req.name}",
+        )
+        return conv if isinstance(conv, dict) else conv.model_dump()
 
+    @endpoint("feedback.list_conversations")
     async def list_conversations(
         self,
         limit: int = Query(
@@ -182,23 +171,19 @@ class FeedbackRouter:
         ),
     ) -> dict:
         """List all conversations sorted by most recent first."""
-        try:
-            ctrl = get_feedback_controller()
-            return ctrl.list_conversations(limit=limit)
-        except Exception as e:
-            classify_and_raise(e, source="feedback.list_conversations")
+        ctrl = get_feedback_controller()
+        return ctrl.list_conversations(limit=limit)
 
+    @endpoint("feedback.get_conversation")
     async def get_conversation(self, conv_id: str) -> dict:
         """Retrieve a single conversation by its unique ID."""
-        try:
-            ctrl = get_feedback_controller()
-            conv = ctrl.get_conversation(conv_id)
-            if not conv:
-                raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
-            return conv
-        except Exception as e:
-            classify_and_raise(e, source="feedback.get_conversation")
+        ctrl = get_feedback_controller()
+        conv = ctrl.get_conversation(conv_id)
+        if not conv:
+            raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
+        return conv
 
+    @endpoint("feedback.update_conversation")
     async def update_conversation(
         self,
         conv_id: str,
@@ -206,38 +191,31 @@ class FeedbackRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Update a conversation's metadata (name, session_id, etc.)."""
-        try:
-            ctrl = get_feedback_controller()
-            conv = ctrl.update_conversation(conv_id, req.model_dump(exclude_unset=True))
-            if not conv:
-                raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
-            safe_audit_log("feedback.conversation_update", resource=conv_id)
-            return conv
-        except Exception as e:
-            classify_and_raise(e, source="feedback.update_conversation")
+        ctrl = get_feedback_controller()
+        conv = ctrl.update_conversation(conv_id, req.model_dump(exclude_unset=True))
+        if not conv:
+            raise_error("Conversation not found", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("feedback.conversation_update", resource=conv_id)
+        return conv
 
+    @endpoint("feedback.delete_conversation")
     async def delete_conversation(
         self, conv_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete a conversation and its associated feedback records."""
-        try:
-            ctrl = get_feedback_controller()
-            ctrl.delete_conversation(conv_id)
-            safe_audit_log("feedback.conversation_delete", resource=conv_id)
-            return success_response(data={"status": "deleted", "id": conv_id})
-        except Exception as e:
-            classify_and_raise(e, source="feedback.delete_conversation")
+        ctrl = get_feedback_controller()
+        ctrl.delete_conversation(conv_id)
+        safe_audit_log("feedback.conversation_delete", resource=conv_id)
+        return success_response(data={"status": "deleted", "id": conv_id})
 
+    @endpoint("feedback.get_feedback")
     async def get_feedback(self, message_id: str) -> dict:
         """Get feedback for a message."""
-        try:
-            ctrl = get_feedback_controller()
-            feedback = ctrl.get_feedback(message_id)
-            if not feedback:
-                raise_error("Feedback not found", "E_NOT_FOUND", status_code=404)
-            return feedback
-        except Exception as e:
-            classify_and_raise(e, source="feedback.get_feedback")
+        ctrl = get_feedback_controller()
+        feedback = ctrl.get_feedback(message_id)
+        if not feedback:
+            raise_error("Feedback not found", "E_NOT_FOUND", status_code=404)
+        return feedback
 
 
 router = FeedbackRouter().router
