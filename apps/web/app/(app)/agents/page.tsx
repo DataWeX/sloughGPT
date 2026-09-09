@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import {
@@ -73,6 +74,7 @@ function getAgentTaskStats(tasks: OrchestrateTask[]): Record<string, { completed
 }
 
 export default function AgentsPage() {
+  const router = useRouter()
   const addToast = useToastStore(s => s.addToast)
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
