@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { metaWeightsController, type MetaWeights, type MetaWeightStats } from '@/lib/meta-weights-controller'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function MetaWeightsPage() {
   const addToast = useToastStore(s => s.addToast)
@@ -26,6 +27,8 @@ export default function MetaWeightsPage() {
       setLoading(false)
     }
   }, [addToast])
+
+  useRefreshShortcut(fetchStats)
 
   useEffect(() => { fetchStats() }, [fetchStats])
 

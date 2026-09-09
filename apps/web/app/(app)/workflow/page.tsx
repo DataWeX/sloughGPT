@@ -8,6 +8,7 @@ import { workflowController } from '@/lib/workflow-controller'
 import { WorkflowPipeline } from '@/components/workflow/WorkflowPipeline'
 import { WorkflowHealthCard } from '@/components/workflow/WorkflowHealthCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function WorkflowPage() {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof workflowController.status>> | null>(null)
@@ -27,6 +28,8 @@ export default function WorkflowPage() {
       setLoading(false)
     }
   }, [])
+
+  useRefreshShortcut(fetchStatus)
 
   useEffect(() => { fetchStatus() }, [fetchStatus])
 

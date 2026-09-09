@@ -12,6 +12,7 @@ import {
 } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { useAuthStore } from '@/lib/auth'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -120,6 +121,8 @@ export default function PlannerPage() {
       setLoading(false)
     }
   }, [wsHeaders])
+
+  useRefreshShortcut(fetchAll)
 
   useEffect(() => { fetchAll() }, [fetchAll])
 

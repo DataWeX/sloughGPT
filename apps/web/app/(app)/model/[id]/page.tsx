@@ -21,6 +21,7 @@ import { generationConfigController, type GenerationConfig } from '@/lib/generat
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { apiGet } from '@/lib/http-client'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function ModelDetailPage() {
   const params = useParams()
@@ -86,6 +87,8 @@ export default function ModelDetailPage() {
       setLoading(false)
     }
   }, [modelId, addToast])
+
+  useRefreshShortcut(fetchData)
 
   useEffect(() => {
     if (!modelId) { router.push('/models'); return }

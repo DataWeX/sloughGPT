@@ -8,6 +8,7 @@ import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/http-client'
 import { useToastStore } from '@/lib/toast-store'
 import { logger } from '@/lib/dev-log'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 interface User {
   id: string
@@ -50,6 +51,8 @@ export default function UsersAdminPage() {
       setLoading(false)
     }
   }, [])
+
+  useRefreshShortcut(fetchUsers)
 
   const createUser = async () => {
     if (!newUsername.trim() || !newEmail.trim() || !newPassword.trim()) return
