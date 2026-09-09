@@ -132,6 +132,23 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </div>
             )}
 
+            {/* Tokenizer selection */}
+            {form.method !== 'finetune' && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokenizer</label>
+                <div className="flex items-center gap-1" role="radiogroup" aria-label="Tokenizer algorithm">
+                  <ToggleGroup type="single" value={form.algo} onValueChange={(v) => { if (v) form.setAlgo(v) }}>
+                    <ToggleGroupItem value="bpe" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">BPE</ToggleGroupItem>
+                    <ToggleGroupItem value="unigram" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Unigram</ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+                <p className="text-[10px] text-muted-foreground/60">
+                  {form.algo === 'bpe' && 'Byte Pair Encoding — fast, deterministic tokenization. Best for most use cases.'}
+                  {form.algo === 'unigram' && 'Unigram — probabilistic segmentation with subword regularization. Better for noisy data.'}
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="train-epochs" variant="uppercase">Epochs</Label>
