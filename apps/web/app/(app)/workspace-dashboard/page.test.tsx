@@ -18,6 +18,16 @@ vi.mock('@/lib/dev-log', () => ({
   logger: { warning: vi.fn(), log: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+    back: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+}))
+
 import WorkspaceDashboardPage from './page'
 
 describe('WorkspaceDashboardPage', () => {
