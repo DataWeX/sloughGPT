@@ -822,6 +822,68 @@ class SloughGPTClient:
         response = self._request("GET", "/benchmark/stats")
         return response.json()
 
+    # ============ Settings ============
+
+    def get_settings(self) -> Dict[str, Any]:
+        """Get all user settings."""
+        response = self._request("GET", "/settings")
+        return response.json()
+
+    def get_generation_settings(self) -> Dict[str, Any]:
+        """Get generation settings."""
+        response = self._request("GET", "/settings/generation")
+        return response.json()
+
+    def update_generation_settings(self, **kwargs) -> Dict[str, Any]:
+        """Update generation settings."""
+        response = self._request("PATCH", "/settings/generation", json=kwargs)
+        return response.json()
+
+    def get_voice_settings(self) -> Dict[str, Any]:
+        """Get voice settings."""
+        response = self._request("GET", "/settings/voice")
+        return response.json()
+
+    def update_voice_settings(self, **kwargs) -> Dict[str, Any]:
+        """Update voice settings."""
+        response = self._request("PATCH", "/settings/voice", json=kwargs)
+        return response.json()
+
+    def reset_settings(self) -> Dict[str, Any]:
+        """Reset all settings to defaults."""
+        response = self._request("POST", "/settings/reset")
+        return response.json()
+
+    def get_adaptive_insights(self) -> Dict[str, Any]:
+        """Get adaptive training insights."""
+        response = self._request("GET", "/settings/adaptive/insights")
+        return response.json()
+
+    # ============ VQA ============
+
+    def ask_question(self, image_path: str, question: str) -> Dict[str, Any]:
+        """Ask a question about an image (VQA)."""
+        with open(image_path, "rb") as f:
+            files = {"file": (image_path, f, "image/png")}
+            data = {"question": question}
+            response = self._request("POST", "/multimodal/ask", files=files, data=data)
+            return response.json()
+
+    def detect_objects(self, image_path: str) -> Dict[str, Any]:
+        """Detect objects in an image."""
+        with open(image_path, "rb") as f:
+            files = {"file": (image_path, f, "image/png")}
+            response = self._request("POST", "/multimodal/detect", files=files)
+            return response.json()
+
+    def analyze_pdf(self, pdf_path: str, question: str = "Analyze this document.") -> Dict[str, Any]:
+        """Analyze a PDF document."""
+        with open(pdf_path, "rb") as f:
+            files = {"file": (pdf_path, f, "application/pdf")}
+            data = {"question": question}
+            response = self._request("POST", "/multimodal/pdf/upload", files=files, data=data)
+            return response.json()
+
     # ============ Context Manager ============
 
     def __enter__(self):

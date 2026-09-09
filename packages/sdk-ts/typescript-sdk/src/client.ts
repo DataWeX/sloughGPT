@@ -882,6 +882,71 @@ export class SloughGPTClient {
     return this.request('GET', '/benchmark/stats');
   }
 
+  // ============ Settings ============
+
+  async getSettings(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings');
+  }
+
+  async getGenerationSettings(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings/generation');
+  }
+
+  async updateGenerationSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('PATCH', '/settings/generation', updates);
+  }
+
+  async getVoiceSettings(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings/voice');
+  }
+
+  async updateVoiceSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('PATCH', '/settings/voice', updates);
+  }
+
+  async resetSettings(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/settings/reset');
+  }
+
+  async getAdaptiveInsights(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings/adaptive/insights');
+  }
+
+  // ============ VQA ============
+
+  async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
+    const fd = new FormData();
+    fd.append('file', imageFile);
+    fd.append('question', question);
+    return this.request('POST', '/multimodal/ask', fd);
+  }
+
+  async detectObjects(imageFile: File): Promise<{ objects: Array<{ label: string; bbox: number[]; confidence: number }> }> {
+    const fd = new FormData();
+    fd.append('file', imageFile);
+    return this.request('POST', '/multimodal/detect', fd);
+  }
+
+  async analyzePdf(pdfFile: File, question?: string): Promise<{ analysis: string; filename: string }> {
+    const fd = new FormData();
+    fd.append('file', pdfFile);
+    fd.append('question', question || 'Analyze this document.');
+    return this.request('POST', '/multimodal/pdf/upload', fd);
+  }
+
+  async processVideo(videoFile: File, numFrames: number = 16): Promise<{ caption: string; num_frames: number }> {
+    const fd = new FormData();
+    fd.append('file', videoFile);
+    fd.append('num_frames', String(numFrames));
+    return this.request('POST', '/multimodal/process-video', fd);
+  }
+
+  async synthesizeSpeech(text: string): Promise<{ audio: string; text: string; duration_sec: number }> {
+    const fd = new FormData();
+    fd.append('text', text);
+    return this.request('POST', '/multimodal/synthesize-speech', fd);
+  }
+
   // ============ Convenience Methods ============
 
   async quickGenerate(prompt: string): Promise<string> {
