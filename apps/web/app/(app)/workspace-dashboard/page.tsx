@@ -114,7 +114,7 @@ export default function WorkspaceDashboardPage() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer title="Workspace Dashboard">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -122,12 +122,10 @@ export default function WorkspaceDashboardPage() {
   }
 
   return (
-    <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>
-          {stats?.name ?? currentWorkspace?.name ?? 'Workspace'} — Dashboard
-        </AppRouteHeaderLead>
-      </AppRouteHeader>
+    <PageContainer title="Workspace Dashboard">
+      <AppRouteHeader
+        left={<AppRouteHeaderLead title={`${stats?.name ?? currentWorkspace?.name ?? 'Workspace'} — Dashboard`} />}
+      />
 
       {/* KPIs */}
       <KpiGrid className="mb-6">
