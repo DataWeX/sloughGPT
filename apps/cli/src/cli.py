@@ -1124,55 +1124,11 @@ _register_multimodal(cli)
 # meta-weights — feedback-driven meta-weight adaptation
 # ═══════════════════════════════════════════════════════════════════════
 
-
-@cli.group(help="Feedback-driven meta-weight adaptation")
-def meta_weights():
-    pass
-
-
-@meta_weights.command("get", help="Get meta-weight adjustments")
-@click.argument("message")
-@click.option("--k", type=int, default=5, help="Number of similar samples")
-@click.pass_context
-def meta_weights_get(ctx, message, k):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.post(f"http://{ctx.obj['host']}:{ctx.obj['port']}/meta-weights/get",
-                      json={"user_message": message, "k": k}, timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    if ctx.obj.get("json"):
-        _output(ctx, data)
-    else:
-        w = data.get("data", data)
-        log.header("Meta-Weights")
-        for k, v in w.items():
-            log.info(f"  {k}: {v}")
-
-
-@meta_weights.command("stats", help="Show meta-weight statistics")
-@click.pass_context
-def meta_weights_stats(ctx):
-    import requests
-    timeout = ctx.obj.get("timeout", 10)
-    r = requests.get(f"http://{ctx.obj['host']}:{ctx.obj['port']}/meta-weights/stats", timeout=timeout)
-    if r.status_code != 200:
-        log.error(f"Stats failed: {r.text}")
-        sys.exit(1)
-    data = r.json()
-    stats = data.get("data", data)
-    if ctx.obj.get("json"):
-        _output(ctx, stats)
-    else:
-        log.header("Meta-Weight Stats")
-        for k, v in stats.items():
-            log.info(f"  {k}: {v}")
-
+from groups.meta_weights import register as _register_meta_weights
+_register_meta_weights(cli)
 
 # ═══════════════════════════════════════════════════════════════════════
-# learn  — search, feed, status, train, knowledge
+# learn — continual learning from web, feeds, and knowledge
 # ═══════════════════════════════════════════════════════════════════════
 
 
