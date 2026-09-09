@@ -23,7 +23,7 @@ import { formatElapsed } from '@/lib/formatDuration'
 import { agentSchema, agentExecuteSchema, orchestrateSchema } from '@/lib/validation-schemas'
 import { logger } from '@/lib/dev-log'
 
-const AVAILABLE_TOOLS = ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'image_analysis', 'data_analysis']
+const AVAILABLE_TOOLS = ['code_execution', 'file_read', 'file_search', 'web_search', 'knowledge_retrieval', 'image_analysis', 'data_analysis', 'citation']
 
 const AGENT_TEMPLATES = [
   { name: 'Researcher', desc: 'Finds information from the web and documents', instructions: 'You are a thorough researcher. Search for accurate, up-to-date information and present findings clearly with sources.', tools: ['web_search', 'knowledge_retrieval'] },
@@ -31,7 +31,7 @@ const AGENT_TEMPLATES = [
   { name: 'Analyst', desc: 'Analyzes data and generates insights', instructions: 'You are a data analyst. Examine datasets, identify patterns, compute statistics, and present clear visualizations and insights.', tools: ['data_analysis', 'file_read'] },
   { name: 'Writer', desc: 'Creates structured written content', instructions: 'You are a skilled writer. Produce clear, well-organized content. Adapt tone to the audience. Ensure accuracy.', tools: ['knowledge_retrieval'] },
   { name: 'Vision Assistant', desc: 'Analyzes images and visual data', instructions: 'You are a vision expert. Analyze images carefully, describe what you see, identify objects, text, and patterns.', tools: ['image_analysis'] },
-  { name: 'Full Stack', desc: 'Handles all aspects of a task', instructions: 'You are a versatile full-stack assistant. Use whatever tools are needed to complete the task: search, code, analyze, or write.', tools: ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'data_analysis'] },
+  { name: 'Full Stack', desc: 'Handles all aspects of a task', instructions: 'You are a versatile full-stack assistant. Use whatever tools are needed to complete the task: search, code, analyze, or write.', tools: ['web_search', 'code_execution', 'file_read', 'knowledge_retrieval', 'data_analysis', 'file_search'] },
 ]
 
 type RunStatus = 'completed' | 'failed' | 'running' | string
@@ -91,6 +91,7 @@ export default function AgentsPage() {
   const [execAgentId, setExecAgentId] = useState<string | null>(null)
   const [execPrompt, setExecPrompt] = useState('')
   const [execResult, setExecResult] = useState<string | null>(null)
+  const [execToolsUsed, setExecToolsUsed] = useState<Array<{ tool: string; result: unknown }>>([])
   const [pendingDelete, setPendingDelete] = useState<Agent | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [execRunning, setExecRunning] = useState(false)
@@ -357,11 +358,13 @@ export default function AgentsPage() {
     setExecErrors({})
     setExecRunning(true)
     setExecResult(null)
+    setExecToolsUsed([])
     try {
       const res = await agentsController.execute(id, execPrompt)
       setExecResult(res.response)
+      setExecToolsUsed(res.tools_used || [])
     } catch {
-      setExecResult('Could not execution')
+      setExecResult('Could not execute agent')
     }
     setExecRunning(false)
   }
@@ -724,6 +727,15 @@ export default function AgentsPage() {
                             </div>
                             {execResult && (
                               <div className="rounded-lg bg-muted p-3">
+                                {execToolsUsed.length > 0 && (
+                                  <div className="mb-2 flex flex-wrap gap-1">
+                                    {execToolsUsed.map((t, i) => (
+                                      <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                                        {t.tool.replace(/_/g, ' ')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                                 <p className="text-[10px] font-medium text-muted-foreground mb-1">Response</p>
                                 <p className="text-[11px] whitespace-pre-wrap">{execResult}</p>
                               </div>

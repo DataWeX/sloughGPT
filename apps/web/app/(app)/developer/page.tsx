@@ -13,6 +13,7 @@ import { TerminalPanel } from '@/components/shell/TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { filesController, type FileEntry } from '@/lib/files-controller'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
+import { authFetch } from '@/lib/http-client'
 
 type DevTab = 'shell' | 'files' | 'voice' | 'api'
 
@@ -298,11 +299,7 @@ function ApiTab() {
       if (authHeader.trim()) {
         headers['Authorization'] = authHeader.trim()
       }
-      const opts: RequestInit = { method, headers }
-      if (body && method !== 'GET') {
-        opts.body = body
-      }
-      const res = await fetch(`${baseUrl}${path}`, opts)
+      const res = await authFetch(`${baseUrl}${path}`, { method, headers, body: body && method !== 'GET' ? body : undefined, noAuth: true })
       const elapsed = Date.now() - start
       setResponseStatus(res.status)
       setResponseTime(elapsed)

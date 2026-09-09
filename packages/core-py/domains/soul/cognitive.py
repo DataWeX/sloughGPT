@@ -28,11 +28,6 @@ try:
 except ImportError:
     FoundationSLO = SLOConfig = Experience = Thought = EvolutionStage = None
 
-try:
-    from ..infrastructure import RAGEngine, SpacedRepetitionScheduler, SLOKnowledgeGraph
-except ImportError:
-    RAGEngine = SpacedRepetitionScheduler = SLOKnowledgeGraph = None
-
 logger = logging.getLogger("slo.soul.cognitive")
 
 
