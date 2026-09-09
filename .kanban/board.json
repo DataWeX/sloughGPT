@@ -24,6 +24,28 @@
   ],
   "cards": [
     {
+      "id": "20260909_034501_complete-unified-app-planner-cli",
+      "title": "Complete unified app-planner CLI",
+      "description": "Completed unified CLI consolidation:\n\n1. Added _kcli() helper in cli.py that injects --dir from --board-dir into kanban handlers\n2. Fixed priority/type choices in unified CLI to use PRIORITIES/CARD_TYPES from kanban module (was hardcoded, missing 'critical')\n3. Fixed sync/gui handlers to only pass --backend when explicitly set (was incorrectly assuming mogdb for temp dirs)\n4. Added --quiet support to sync subcommand\n5. Updated all 4 test files to import cli_main from app_planner.cli: test_core.py, test_gui.py, test_kanban.py, test_sync.py\n6. Updated kanban tests to use unified CLI command names (cards, card, edit-card, rm-card, delete-card, search-cards)\n7. Fixed test_render_board_with_cards for truncated table rendering\n8. Fixed test_no_command_returns_1 \u2192 test_no_command_prints_help (unified CLI prints help, returns 0)\n9. Installed missing pytest deps (pydantic, numpy, pyyaml)\n10. All 282 tests pass",
+      "column": "done",
+      "priority": "medium",
+      "card_type": "task",
+      "effort": 0.0,
+      "tags": [
+        "cli",
+        "planner",
+        "tests"
+      ],
+      "created_at": "2026-09-09T03:45:01.578455+00:00",
+      "updated_at": "2026-09-09T03:45:01.578455+00:00",
+      "due_date": "",
+      "assignee": "",
+      "sprint": "",
+      "blocked_by": [],
+      "notes": [],
+      "history": []
+    },
+    {
       "id": "20260909_034110_cli-test-card",
       "title": "CLI test card",
       "description": "Created via unified CLI",
