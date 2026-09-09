@@ -33,7 +33,7 @@ import { voiceController } from '@/lib/voice-controller'
 describe('DeveloperPage', () => {
   beforeEach(() => {
     vi.mocked(filesController.list).mockResolvedValue([])
-    vi.mocked(voiceController.getStatus).mockResolvedValue(null)
+    vi.mocked(voiceController.getStatus).mockResolvedValue({ server_tts: false, model: null, error: null })
   })
 
   afterEach(() => {
