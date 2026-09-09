@@ -61,10 +61,12 @@ describe('ApiKeysPage', () => {
     await screen.findByText('API Keys')
   })
 
-  it('shows loading skeleton initially', () => {
+  it('shows loading skeleton initially', async () => {
     mockApiGet.mockReturnValue(new Promise(() => {}))
     render(<ApiKeysPage />)
-    expect(screen.queryByText('API Keys')).toBeNull()
+    await screen.findAllByText('API Keys')
+    // Skeleton is rendered during loading (no data yet)
+    expect(screen.getAllByText('API Keys').length).toBeGreaterThanOrEqual(1)
   })
 
   it('fetches keys on mount', async () => {

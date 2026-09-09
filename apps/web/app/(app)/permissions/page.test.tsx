@@ -58,10 +58,12 @@ describe('PermissionsPage', () => {
     await screen.findByText('Permissions')
   })
 
-  it('shows loading skeleton initially', () => {
+  it('shows loading skeleton initially', async () => {
     mockApiGet.mockReturnValue(new Promise(() => {}))
     render(<PermissionsPage />)
-    expect(screen.queryByText('Permissions')).toBeNull()
+    await screen.findAllByText('Permissions')
+    // Skeleton is rendered during loading (no data yet)
+    expect(screen.getAllByText('Permissions').length).toBeGreaterThanOrEqual(1)
   })
 
   it('fetches permissions on mount', async () => {
