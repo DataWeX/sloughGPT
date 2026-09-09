@@ -255,14 +255,12 @@ class TestWorldPerception:
         events = self.perception.ingest_records(records)
         assert len(events) == 1
 
-    @pytest.mark.skip(reason="Bug: perception.py:127 calls store.list() which does not exist on MemoryStore (should be read_all())")
     def test_ingest_source(self):
         records = [Record(content="x"), Record(content="y")]
         source = _FixedSource(records)
         events = self.perception.ingest_source(source)
         assert len(events) == 2
 
-    @pytest.mark.skip(reason="Bug: perception.py:127 calls store.list() which does not exist on MemoryStore (should be read_all())")
     def test_ingest_source_with_store(self):
         records = [Record(content="x")]
         source = _FixedSource(records)

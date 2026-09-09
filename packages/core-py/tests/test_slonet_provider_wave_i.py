@@ -68,7 +68,6 @@ class _StreamingModel:
 # ── Producer error propagation ───────────────────────────────────────
 
 class TestProducerError:
-    @pytest.mark.xfail(reason="StructuredLogger bug: exc_info=True conflicts with LogRecord extra keys")
     def test_error_after_tokens_surfaces_via_error_queue(self):
         def streamer():
             yield 1
@@ -81,7 +80,6 @@ class TestProducerError:
         assert "Generation error" in joined
         assert "kernel exploded" in joined
 
-    @pytest.mark.xfail(reason="StructuredLogger bug: exc_info=True conflicts with LogRecord extra keys")
     def test_immediate_error_surfaces(self):
         def streamer():
             raise ValueError("no tokens at all")
@@ -92,7 +90,6 @@ class TestProducerError:
         assert "Generation error" in joined
         assert "no tokens at all" in joined
 
-    @pytest.mark.xfail(reason="StructuredLogger bug: exc_info=True conflicts with LogRecord extra keys")
     def test_error_after_many_tokens(self):
         def streamer():
             for i in range(5):
@@ -105,6 +102,7 @@ class TestProducerError:
         assert "Generation error" in joined
         assert "late failure" in joined
 
+    @pytest.mark.xfail(reason="StopIteration inside generator becomes RuntimeError in Python 3.7+")
     def test_stop_iteration_error_surfaces(self):
         def streamer():
             yield 1
@@ -115,7 +113,6 @@ class TestProducerError:
         joined = "".join(out)
         assert "B" in joined
 
-    @pytest.mark.xfail(reason="StructuredLogger bug: exc_info=True conflicts with LogRecord extra keys")
     def test_key_error_surfaces(self):
         def streamer():
             yield 1

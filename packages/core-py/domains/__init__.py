@@ -111,6 +111,7 @@ class DomainException(AppError):
 
 
 __all__ = [
+    "AppError",
     "ChatDomain",
     "get_chat_domain",
     "BenchmarkDomain",

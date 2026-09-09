@@ -28833,7 +28833,6 @@ class TestCmdExportV2:
         assert repl._last_exit_code == 0
 
 
-@pytest.mark.skip(reason="no _cmd_unset command")
 class TestCmdUnset:
     def testUnsetVar(self, repl):
         repl._env["MY_TEST_VAR"] = "testval"
@@ -28853,7 +28852,6 @@ class TestCmdUnset:
         assert repl._last_exit_code == 1
 
 
-@pytest.mark.skip(reason="no _cmd_setenv command")
 class TestCmdSetenv:
     def testSetenv(self, repl):
         repl._cmd_setenv("MY_TEST_VAR testval")
