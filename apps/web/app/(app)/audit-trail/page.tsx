@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
-import { IconRefresh } from '@/components/icons/NavIcons'
+import { IconRefresh, IconDownload } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { apiGet } from '@/lib/http-client'
@@ -53,6 +53,26 @@ export default function AuditTrailPage() {
       a.user.toLowerCase().includes(q)
     )
   })
+
+  const exportCsv = () => {
+    const headers = ['timestamp', 'type', 'action', 'detail', 'status', 'user']
+    const rows = filteredActivities.map(a => [
+      a.timestamp,
+      a.type,
+      a.action,
+      `"${(a.detail || '').replace(/"/g, '""')}"`,
+      a.status,
+      a.user,
+    ])
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `audit-trail-${currentWorkspace?.id || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   const formatTime = (ts: string) => {
     if (!ts) return ''
@@ -107,6 +127,10 @@ export default function AuditTrailPage() {
               <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={fetchActivities}>
                 <IconRefresh className="h-3 w-3 mr-1" />
                 Refresh
+              </Button>
+              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={exportCsv} disabled={filteredActivities.length === 0}>
+                <IconDownload className="h-3 w-3 mr-1" />
+                Export CSV
               </Button>
             </div>
           </CardContent>
