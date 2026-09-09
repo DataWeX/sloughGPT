@@ -8,6 +8,7 @@ import { apiPost, apiGet, streamSSE } from './http-client'
 import { modelController, type ModelStatus } from './model-controller'
 import { logger } from './dev-log'
 import { PUBLIC_API_URL } from './config'
+import { useToastStore } from './toast-store'
 
 const _log = logger.child('chat-controller')
 
@@ -56,8 +57,7 @@ export const chatController = {
     } catch (err) {
       _log.warning('chat endpoint failed, falling back to /inference/generate', { error: err instanceof Error ? err.message : String(err) })
       try {
-        const { toast } = await import('@/components/ui')
-        toast.info('Using basic mode — conversation context unavailable')
+        useToastStore.getState().addToast('Using basic mode — conversation context unavailable', 'info')
       } catch {}
       const fallback = await apiPost<{ text?: string }>(
         '/inference/generate',
