@@ -80,6 +80,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(PALETTE_STORAGE_KEY, palette)
   }, [theme, mode, palette, mounted])
 
+  // Listen for Ctrl+Shift+D dark mode toggle
+  useEffect(() => {
+    const handler = () => setMode(mode === 'dark' ? 'light' : 'dark')
+    window.addEventListener('toggle-dark-mode', handler)
+    return () => window.removeEventListener('toggle-dark-mode', handler)
+  }, [mode, setMode])
+
   return (
     <ThemeContext.Provider value={{ theme, mode, palette, setTheme, setMode, setPalette }}>
       {children}

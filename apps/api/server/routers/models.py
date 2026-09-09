@@ -30,6 +30,7 @@ from schemas.models import LoadModelRequest, ModelInfo, ModelStatus
 logger = logging.getLogger(__name__)
 
 from domains.infrastructure.model_size import compute_model_size_gb, format_size_gb, is_model_cached
+from domains.infrastructure.download_manager import get_backend
 
 # Module-level so tests can patch ``routers.models._hf_cache_dir``; resolved at call time.
 _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
@@ -105,6 +106,11 @@ class ModelsRouter:
         self.router.add_api_route(path="/cache-usage", endpoint=self.cache_usage, methods=["GET"])
         self.router.add_api_route(
             path="/download/qwen-gguf", endpoint=self.download_qwen_gguf, methods=["GET"]
+        )
+        self.router.add_api_route(
+            path="/{model_id}/file/{file_path:path}",
+            endpoint=self.serve_model_file,
+            methods=["GET"],
         )
         self.router.add_api_route(
             path="/visual-load", endpoint=self.visual_model_load, methods=["POST"]
@@ -846,6 +852,37 @@ class ModelsRouter:
         except Exception as e:
             logger.warning("Download GGUF failed: %s", e)
             classify_and_raise(e, source="download_gguf")
+
+    @endpoint("models.serve_model_file")
+    async def serve_model_file(
+        self,
+        model_id: str,
+        file_path: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ):
+        """Serve a cached model file with optional SGZ1 compression.
+
+        External clients can download model files from this endpoint.
+        When the client sends ``Accept-Encoding: gzip``, the file is
+        served compressed via SGZ1 format.
+        """
+        from starlette.requests import Request
+        from starlette.responses import StreamingResponse
+
+        backend = get_backend()
+        if not backend.supports_compressed_serve():
+            raise_error(501, "Compressed serving not supported")
+
+        result = backend.serve_compressed(model_id, file_path)
+        if result is None:
+            raise_error(404, f"File not found: {model_id}/{file_path}")
+
+        return StreamingResponse(
+            result["iterator"],
+            media_type="application/octet-stream",
+            headers=result["headers"],
+            content_length=result.get("size"),
+        )
 
     @endpoint("models.visual_model_load")
     async def visual_model_load(

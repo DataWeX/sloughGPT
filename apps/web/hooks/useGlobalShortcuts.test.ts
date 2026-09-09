@@ -134,6 +134,24 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).not.toHaveBeenCalled()
   })
 
+  it('Ctrl+Shift+D dispatches toggle-dark-mode', () => {
+    const fn = vi.fn()
+    window.addEventListener('toggle-dark-mode', fn)
+    renderHook(() => useGlobalShortcuts())
+    keydown('D', { ctrl: true, shift: true })
+    expect(fn).toHaveBeenCalledTimes(1)
+    window.removeEventListener('toggle-dark-mode', fn)
+  })
+
+  it('Ctrl+D without shift does not toggle dark mode', () => {
+    const fn = vi.fn()
+    window.addEventListener('toggle-dark-mode', fn)
+    renderHook(() => useGlobalShortcuts())
+    keydown('D', { ctrl: true })
+    expect(fn).not.toHaveBeenCalled()
+    window.removeEventListener('toggle-dark-mode', fn)
+  })
+
   it('removes event listener on unmount', () => {
     const fn = vi.fn()
     window.addEventListener('toggle-shortcuts', fn)

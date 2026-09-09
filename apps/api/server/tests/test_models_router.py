@@ -397,3 +397,53 @@ class TestProcessGuard:
     def test_rejects_non_boolean(self, mock_controller):
         resp = client.post("/models/process-guard", json={"enabled": [1, 2, 3]})
         assert resp.status_code == 422
+
+
+# ── serve_model_file ────────────────────────────────────────────────────────
+
+class TestServeModelFile:
+    def test_returns_404_when_file_not_found(self):
+        """Returns 404 when the file doesn't exist in cache."""
+        with patch("routers.models.get_backend") as mock_get:
+            mock_backend = MagicMock()
+            mock_backend.supports_compressed_serve.return_value = True
+            mock_backend.serve_compressed.return_value = None
+            mock_get.return_value = mock_backend
+
+            resp = client.get("/models/nonexistent/model.bin")
+            assert resp.status_code in (404, 422)
+
+    def test_returns_501_when_compression_not_supported(self):
+        """Returns 501 when backend doesn't support compressed serving."""
+        with patch("routers.models.get_backend") as mock_get:
+            mock_backend = MagicMock()
+            mock_backend.supports_compressed_serve.return_value = False
+            mock_get.return_value = mock_backend
+
+            resp = client.get("/models/gpt2/model.bin")
+            assert resp.status_code == 501
+
+    def test_serves_compressed_file(self):
+        """Returns compressed file stream when backend supports it."""
+        import gzip
+
+        original_data = b"X" * 1024
+        compressed_data = gzip.compress(original_data)
+
+        def mock_iterator():
+            yield compressed_data
+
+        with patch("routers.models.get_backend") as mock_get:
+            mock_backend = MagicMock()
+            mock_backend.supports_compressed_serve.return_value = True
+            mock_backend.serve_compressed.return_value = {
+                "iterator": mock_iterator(),
+                "headers": {"Content-Encoding": "gzip"},
+                "size": len(compressed_data),
+            }
+            mock_get.return_value = mock_backend
+
+            resp = client.get("/models/gpt2/model.bin")
+            assert resp.status_code == 200
+            assert resp.headers.get("content-encoding") == "gzip"
+            assert resp.content == compressed_data
