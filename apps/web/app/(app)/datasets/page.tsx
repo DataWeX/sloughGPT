@@ -139,6 +139,77 @@ export default function DatasetsPage() {
     }
   }
 
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<Set<string>>(new Set())
+  const [bulkTagIds, setBulkTagIds] = useState<Set<string>>(new Set())
+  const [bulkTagValue, setBulkTagValue] = useState('')
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkTagging, setBulkTagging] = useState(false)
+
+  const toggleBulkSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setCompareIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAll = () => {
+    setCompareIds(new Set(filtered.map(ds => ds.id)))
+  }
+
+  const clearSelection = () => {
+    setCompareIds(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    if (compareIds.size === 0) return
+    setBulkDeleting(true)
+    const ids = Array.from(compareIds)
+    const toDelete = datasets.filter(d => ids.includes(d.id))
+
+    setDatasets(prev => prev.filter(d => !ids.includes(d.id)))
+    setCompareIds(new Set())
+
+    try {
+      await Promise.all(ids.map(id => datasetController.delete(id)))
+      addToast(`Deleted ${ids.length} dataset(s)`, 'success')
+    } catch {
+      setDatasets(prev => [...toDelete, ...prev])
+      addToast('Some deletions failed', 'error')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
+
+  const handleBulkTag = async () => {
+    if (compareIds.size === 0 || !bulkTagValue.trim()) return
+    setBulkTagging(true)
+    const ids = Array.from(compareIds)
+    const tag = bulkTagValue.trim().toLowerCase()
+
+    try {
+      await Promise.all(ids.map(id => {
+        const ds = datasets.find(d => d.id === id)
+        const newTags = [...new Set([...(ds?.tags || []), tag])]
+        return datasetController.update(id, { tags: newTags })
+      }))
+
+      setDatasets(prev => prev.map(ds =>
+        ids.includes(ds.id) ? { ...ds, tags: [...new Set([...(ds.tags || []), tag])] } : ds
+      ))
+
+      addToast(`Added tag "${tag}" to ${ids.length} dataset(s)`, 'success')
+      setBulkTagValue('')
+      setBulkTagIds(new Set())
+    } catch {
+      addToast('Some tag operations failed', 'error')
+    } finally {
+      setBulkTagging(false)
+    }
+  }
+
   const handleExport = async (ds: Dataset, e: React.MouseEvent) => {
     e.stopPropagation()
     try {
@@ -329,6 +400,35 @@ export default function DatasetsPage() {
               Clear
             </Button>
           </div>
+        )}
+
+        {compareIds.size > 0 && (
+          <Card className="mb-4 border-primary/30 bg-primary/5">
+            <CardContent className="py-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-xs font-medium">{compareIds.size} selected</span>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={selectAll}>Select All</Button>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearSelection}>Clear</Button>
+                </div>
+                <div className="flex items-center gap-1 ml-auto">
+                  <Input
+                    value={bulkTagValue}
+                    onChange={e => setBulkTagValue(e.target.value)}
+                    placeholder="Tag name..."
+                    className="h-6 w-24 text-[10px]"
+                    onKeyDown={e => { if (e.key === 'Enter') handleBulkTag() }}
+                  />
+                  <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={handleBulkTag} disabled={bulkTagging || !bulkTagValue.trim()}>
+                    {bulkTagging ? '...' : 'Add Tag'}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] text-destructive border-destructive/30 hover:bg-destructive/10" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                    {bulkDeleting ? '...' : `Delete ${compareIds.size}`}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {compareData.length > 0 && (
