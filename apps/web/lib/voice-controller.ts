@@ -3,7 +3,6 @@
  */
 
 import { apiGet, apiPost } from './http-client'
-import { audioFilterController, type AudioFilterResult } from './audio-filter-controller'
 
 export interface VoiceStatus {
   server_tts: boolean
@@ -35,10 +34,6 @@ class VoiceController {
       audio.onerror = (e) => reject(e)
       audio.play().catch(reject)
     })
-  }
-
-  async processAudioFilter(audioBlob: Blob): Promise<AudioFilterResult> {
-    return audioFilterController.processAudio(audioBlob)
   }
 }
 

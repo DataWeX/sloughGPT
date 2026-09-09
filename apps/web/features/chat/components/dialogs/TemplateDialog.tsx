@@ -120,7 +120,7 @@ export const TemplateDialog = memo(function TemplateDialog({
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Template content (prompt, system message, etc.)" aria-label="Template content"
+              placeholder="Template content (prompt, system message, etc.)" aria-label="Template content" aria-label="Template content"
               rows={3}
               className="w-full px-3 py-1.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
             />

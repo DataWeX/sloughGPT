@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { formatBytes } from '@/lib/format-bytes'
 
 interface Download {
   model_id: string
@@ -14,13 +15,6 @@ interface Download {
   bytes_downloaded: number
   total_bytes: number
   speed_bps: number
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
 function formatSpeed(bps: number): string {

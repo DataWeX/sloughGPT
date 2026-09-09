@@ -109,6 +109,7 @@ class MultimodalRouter:
         self.router.add_api_route("/dpo", self.trigger_dpo, methods=["POST"])
         self.router.add_api_route("/analyze", self.analyze_image, methods=["POST"])
         self.router.add_api_route("/detect", self.detect_objects, methods=["POST"])
+        self.router.add_api_route("/ask", self.ask_question, methods=["POST"])
         self.router.add_api_route("/pdf/upload", self.analyze_pdf, methods=["POST"])
         self.router.add_api_route("/process-video", self.process_video, methods=["POST"])
         self.router.add_api_route("/transcribe", self.transcribe_audio, methods=["POST"])
@@ -120,6 +121,9 @@ class MultimodalRouter:
             "/checkpoints/{name}/load", self.load_checkpoint, methods=["POST"]
         )
         self.router.add_api_route("/checkpoints/{name}", self.delete_checkpoint, methods=["DELETE"])
+        self.router.add_api_route("/encode-phonemes", self.encode_phonemes, methods=["POST"])
+        self.router.add_api_route("/decode-phonemes", self.decode_phonemes, methods=["POST"])
+        self.router.add_api_route("/score-pronunciation", self.score_pronunciation, methods=["POST"])
         self.router.add_api_route("/reset", self.reset, methods=["POST"])
 
     # ── Helpers ──────────────────────────────────────────────────────
@@ -203,6 +207,7 @@ class MultimodalRouter:
                     "engine": {
                         "speech_to_text": caps.speech_to_text,
                         "image_caption": caps.image_caption,
+                        "vqa": caps.vqa,
                         "speech_model": caps.speech_model,
                         "vision_model": caps.vision_model,
                         "status": "trained"
@@ -653,6 +658,39 @@ class MultimodalRouter:
         except Exception as e:
             classify_and_raise(e, source="multimodal_detect_objects")
 
+    async def ask_question(
+        self,
+        file: UploadFile = File(...),
+        question: str = Form(...),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """ask_question — VQA: answer a question about an image."""
+        import time as _time
+
+        _t0 = _time.monotonic()
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise_error("Only image files accepted", "E_BAD_REQUEST")
+        mgr = self._ensure_initialized()
+        try:
+            contents = await file.read()
+            import io
+
+            from PIL import Image
+
+            img = Image.open(io.BytesIO(contents)).convert("RGB")
+            answer = await asyncio.to_thread(mgr.ask_question, img, question)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            return success_response(
+                data={
+                    "answer": answer,
+                    "question": question,
+                    "elapsed_ms": round(_elapsed_ms, 1),
+                }
+            )
+        except Exception as e:
+            logger.warning("Multimodal VQA failed: %s", e)
+            classify_and_raise(e, source="multimodal_ask_question")
+
     async def analyze_pdf(
         self,
         file: UploadFile = File(...),
@@ -1026,6 +1064,104 @@ class MultimodalRouter:
         except Exception as e:
             logger.warning("Multimodal delete checkpoint failed: %s", e)
             classify_and_raise(e, source="multimodal_delete_checkpoint")
+
+    # ── Phoneme Encoding ─────────────────────────────────────────────
+
+    async def encode_phonemes(self, request: dict) -> dict:
+        """Encode text to phoneme IDs.
+
+        Supports English, German, French, Spanish, Italian, and Portuguese with auto-detection.
+        """
+        try:
+            from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+
+            text = request.get("text", "")
+            language = request.get("language", None)
+
+            if not text:
+                raise_error("No text provided", "E_MISSING_TEXT")
+
+            encoder = UnifiedPhonemeEncoder()
+            ids = encoder.encode(text, language=language)
+            phonemes = encoder.decode_phonemes(ids, language=encoder.current_language)
+            decoded = encoder.decode(ids, language=encoder.current_language)
+
+            return success_response(data={
+                "text": text,
+                "language": encoder.current_language,
+                "phonemes": phonemes,
+                "ids": ids.flatten().tolist(),
+                "decoded": decoded,
+            })
+        except ValueError as e:
+            raise_error(str(e), "E_UNSUPPORTED_LANGUAGE")
+        except Exception as e:
+            logger.warning("Phoneme encoding failed: %s", e)
+            classify_and_raise(e, source="multimodal.encode_phonemes")
+
+    async def decode_phonemes(self, request: dict) -> dict:
+        """Decode phoneme IDs back to text.
+
+        Takes an array of phoneme IDs and returns the decoded text.
+        """
+        try:
+            from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+            import numpy as np
+
+            ids = request.get("ids", [])
+            language = request.get("language", "en")
+
+            if not ids:
+                raise_error("No IDs provided", "E_MISSING_IDS")
+
+            encoder = UnifiedPhonemeEncoder()
+            ids_array = np.array([ids], dtype=np.int32)
+            decoded = encoder.decode(ids_array, language=language)
+            phonemes = encoder.decode_phonemes(ids_array, language=language)
+
+            return success_response(data={
+                "ids": ids,
+                "language": language,
+                "phonemes": phonemes,
+                "decoded": decoded,
+            })
+        except ValueError as e:
+            raise_error(str(e), "E_UNSUPPORTED_LANGUAGE")
+        except Exception as e:
+            logger.warning("Phoneme decoding failed: %s", e)
+            classify_and_raise(e, source="multimodal.decode_phonemes")
+
+    async def score_pronunciation(self, request: dict) -> dict:
+        """Score pronunciation accuracy.
+
+        Compares target and spoken text at the phoneme level.
+        """
+        try:
+            from domains.multimodal.unified_phoneme_encoder import UnifiedPhonemeEncoder
+
+            target = request.get("target", "")
+            spoken = request.get("spoken", "")
+            language = request.get("language", None)
+
+            if not target or not spoken:
+                raise_error("Both target and spoken text required", "E_MISSING_TEXT")
+
+            encoder = UnifiedPhonemeEncoder()
+            result = encoder.score_pronunciation(target, spoken, language=language)
+
+            return success_response(data={
+                "target": target,
+                "spoken": spoken,
+                "language": encoder.current_language,
+                "score": result["score"],
+                "precision": result["precision"],
+                "recall": result["recall"],
+                "target_phonemes": result["target_phonemes"],
+                "spoken_phonemes": result["spoken_phonemes"],
+            })
+        except Exception as e:
+            logger.warning("Pronunciation scoring failed: %s", e)
+            classify_and_raise(e, source="multimodal.score_pronunciation")
 
     # ── Reset ─────────────────────────────────────────────────────────
 

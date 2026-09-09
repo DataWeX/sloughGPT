@@ -133,7 +133,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
           <textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
-            placeholder="Prompt text..."
+            placeholder="Prompt text..." aria-label="Prompt text"
             className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
             rows={3}
           />

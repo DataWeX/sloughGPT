@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
 import { timeAgo } from '@/lib/time-ago'
@@ -9,7 +9,7 @@ interface ChatSessionStatsCardProps {
   sessionId: string | null
 }
 
-export function ChatSessionStatsCard({ sessionId }: ChatSessionStatsCardProps) {
+export const ChatSessionStatsCard = memo(function ChatSessionStatsCard({ sessionId }: ChatSessionStatsCardProps) {
   const [stats, setStats] = useState<{ totalSessions: number; totalMessages: number; avgMessages: number; lastActive: number | null } | null>(null)
 
   useEffect(() => {
@@ -67,4 +67,4 @@ export function ChatSessionStatsCard({ sessionId }: ChatSessionStatsCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

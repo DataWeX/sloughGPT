@@ -56,6 +56,7 @@ def get_all_routers() -> list[APIRouter]:
         "system",
         "souls",
         "config",
+        "settings",
         "security",
         "metrics",
         "datasets",

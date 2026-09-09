@@ -17,7 +17,7 @@ interface VisionTabContentProps {
   onSendText: (text: string) => void
 }
 
-export function VisionTabContent({
+export const VisionTabContent = memo(function VisionTabContent({
   visionImagesLearned,
   visionTrained,
   visionStatus,
@@ -107,4 +107,4 @@ export function VisionTabContent({
       />
     </>
   )
-}
+})

@@ -49,7 +49,7 @@ export const ChatExportTemplates = memo(function ChatExportTemplates({
             value={customName}
             onChange={(e) => setCustomName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSaveCustom()}
-            placeholder="Template name..."
+            placeholder="Template name..." aria-label="Template name"
             className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
           <select

@@ -3,6 +3,7 @@ import { apiGet, apiPost } from './http-client'
 export interface MultimodalCapabilities {
   speech_to_text: boolean
   image_caption: boolean
+  vqa: boolean
   speech_model: string | null
   vision_model: string | null
   images_learned: number
@@ -48,6 +49,7 @@ interface UnifiedStatus {
   engine: {
     speech_to_text: boolean
     image_caption: boolean
+    vqa: boolean
     speech_model: string | null
     vision_model: string | null
     status: string
@@ -85,6 +87,7 @@ export const multimodalController = {
     return {
       speech_to_text: s.engine.speech_to_text,
       image_caption: s.engine.image_caption,
+      vqa: s.engine.vqa,
       speech_model: s.engine.speech_model,
       vision_model: s.engine.vision_model,
       images_learned: s.learning.images_learned,
@@ -207,5 +210,27 @@ export const multimodalController = {
 
   async resetModel(): Promise<{ status: string; message: string }> {
     return apiPost('/multimodal/reset')
+  },
+
+  async askQuestion(file: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('question', question)
+    return apiPost('/multimodal/ask', fd, { raw: true })
+  },
+
+  async detectObjects(file: File): Promise<{ objects: Array<{ label: string; bbox: number[]; confidence: number }> }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiPost('/multimodal/detect', fd, { raw: true })
+  },
+
+  async analyzePdf(file: File, question?: string, opts?: { perPage?: boolean; maxNewTokens?: number }): Promise<{ analysis: string; filename: string; pages_analyzed: number; method: string }> {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('question', question || 'Analyze this document and summarize its contents.')
+    fd.append('per_page', String(opts?.perPage ?? false))
+    if (opts?.maxNewTokens != null) fd.append('max_new_tokens', String(opts.maxNewTokens))
+    return apiPost('/multimodal/pdf/upload', fd, { raw: true })
   },
 }

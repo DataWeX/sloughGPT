@@ -91,7 +91,7 @@ export const ThreadPanel = memo(function ThreadPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Reply in thread..."
+            placeholder="Reply in thread..." aria-label="Reply in thread"
             className="flex-1 text-xs bg-transparent border border-border/30 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
           />
           <Button

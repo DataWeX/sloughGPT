@@ -147,7 +147,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Folder name..."
+            placeholder="Folder name..." aria-label="Folder name"
             className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
