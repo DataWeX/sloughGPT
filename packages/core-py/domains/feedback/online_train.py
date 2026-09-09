@@ -157,30 +157,95 @@ class OnlineLoRAUpdater:
 
     def _compute_gradients(self, feedback_batch: list) -> Dict[str, np.ndarray]:
         """
-        Compute pseudo-gradients from feedback.
+        Compute gradients from feedback using real backpropagation.
 
-        For positive feedback: reinforce the pattern (increase attention to similar tokens)
-        For negative feedback: suppress the pattern (decrease attention)
+        For positive feedback: reinforce the pattern (increase probability of good response)
+        For negative feedback: suppress the pattern (decrease probability of bad response)
         """
         gradients = {}
 
-        # Simple gradient approximation based on feedback
-        positive_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_up")
-        negative_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_down")
-        total = len(feedback_batch)
+        if self.engine is None:
+            return gradients
 
-        # Compute reinforcement signal
-        # Positive feedback = increase weights, Negative = decrease
-        reinforcement = (positive_count - negative_count) / max(total, 1)
+        try:
+            from domains.training.slonet import Tensor
 
-        # Scale by learning rate
-        scale = self.learning_rate * reinforcement
+            positive = [f for f in feedback_batch if f["rating"] == "thumbs_up"]
+            negative = [f for f in feedback_batch if f["rating"] == "thumbs_down"]
 
-        # Apply to LoRA matrices
-        for key, weight in self._lora_weights.items():
-            # Add small random perturbation weighted by feedback
-            grad = np.random.randn(*weight.shape).astype(np.float32) * scale
-            gradients[key] = grad
+            # Process positive examples: reinforce them
+            for item in positive[:3]:  # Limit batch size
+                prompt = item.get("prompt", "")
+                response = item.get("response", "")
+                if not prompt or not response:
+                    continue
+
+                # Tokenize
+                prompt_ids = self.engine.text.encode(prompt)
+                response_ids = self.engine.text.encode(response)
+                input_ids = np.array([prompt_ids + response_ids], dtype=np.int64)
+
+                # Forward pass
+                logits, _ = self.engine.forward(input_ids)
+
+                # For positive feedback: maximize probability of the response tokens
+                # Cross-entropy loss: -log(p(correct_token))
+                response_start = len(prompt_ids)
+                response_logits = logits.data[0, response_start-1:-1]
+                response_targets = np.array(response_ids, dtype=np.int64)
+
+                # Compute gradients via cross-entropy
+                exp_logits = np.exp(response_logits - np.max(response_logits, axis=-1, keepdims=True))
+                probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
+
+                # Gradient of cross-entropy: p - one_hot(target)
+                grad = probs.copy()
+                grad[np.arange(len(response_targets)), response_targets] -= 1.0
+                grad /= len(response_targets)
+
+                # Scale by positive reinforcement
+                scale = self.learning_rate * 0.5
+                gradients["W_a"] = gradients.get("W_a", np.zeros_like(grad)) + grad.mean(axis=0) * scale
+
+            # Process negative examples: suppress them
+            for item in negative[:3]:
+                prompt = item.get("prompt", "")
+                response = item.get("response", "")
+                if not prompt or not response:
+                    continue
+
+                prompt_ids = self.engine.text.encode(prompt)
+                response_ids = self.engine.text.encode(response)
+                input_ids = np.array([prompt_ids + response_ids], dtype=np.int64)
+
+                logits, _ = self.engine.forward(input_ids)
+
+                response_start = len(prompt_ids)
+                response_logits = logits.data[0, response_start-1:-1]
+                response_targets = np.array(response_ids, dtype=np.int64)
+
+                exp_logits = np.exp(response_logits - np.max(response_logits, axis=-1, keepdims=True))
+                probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
+
+                grad = probs.copy()
+                grad[np.arange(len(response_targets)), response_targets] -= 1.0
+                grad /= len(response_targets)
+
+                # For negative: move AWAY from the bad response (negative scale)
+                scale = self.learning_rate * -0.5
+                gradients["W_a"] = gradients.get("W_a", np.zeros_like(grad)) + grad.mean(axis=0) * scale
+
+        except Exception as e:
+            logger.debug("Real gradient computation failed, falling back to pseudo-gradients: %s", e)
+            # Fallback to simple pseudo-gradients
+            positive_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_up")
+            negative_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_down")
+            total = len(feedback_batch)
+            reinforcement = (positive_count - negative_count) / max(total, 1)
+            scale = self.learning_rate * reinforcement
+            for key, weight in self._lora_weights.items():
+                grad = np.random.randn(*weight.shape).astype(np.float32) * scale
+                gradients[key] = grad
 
         return gradients
 

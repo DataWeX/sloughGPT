@@ -177,14 +177,21 @@ class StructuredLogger:
         exc_info = extra_dict.pop("exc_info", None)
         stack_info = extra_dict.pop("stack_info", None)
         stacklevel = extra_dict.pop("stacklevel", None)
+
+        # Build kwargs, only including non-None optional fields
+        log_kwargs: dict[str, Any] = {}
+        if extra_dict:
+            log_kwargs["extra"] = extra_dict
+        if exc_info is not None:
+            log_kwargs["exc_info"] = exc_info
+        if stack_info is not None:
+            log_kwargs["stack_info"] = stack_info
+        log_kwargs["stacklevel"] = stacklevel or 1
+
         if args:
-            self._logger.log(level, msg, *args, extra=extra_dict,
-                             exc_info=exc_info, stack_info=stack_info,
-                             stacklevel=stacklevel or 1)
+            self._logger.log(level, msg, *args, **log_kwargs)
         else:
-            self._logger.log(level, msg, extra=extra_dict,
-                             exc_info=exc_info, stack_info=stack_info,
-                             stacklevel=stacklevel or 1)
+            self._logger.log(level, msg, **log_kwargs)
 
     def debug(self, msg: str, *args: Any, **extra: Any) -> None:
         self._log(logging.DEBUG, msg, *args, **extra)
