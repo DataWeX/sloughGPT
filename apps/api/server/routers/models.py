@@ -1032,8 +1032,8 @@ class ModelsRouter:
 
         mgr = get_download_manager()
         try:
-            result = await mgr.download(model_id)
-            if result.get("status") == "completed":
+            result = await mgr.download_with(model_id, backend)
+            if result.get("status") == "complete":
                 logger.info("External download completed: %s", model_id)
         except Exception as e:
             logger.warning("External download failed for %s: %s", model_id, e)

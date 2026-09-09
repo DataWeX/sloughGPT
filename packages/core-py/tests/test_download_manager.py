@@ -459,3 +459,50 @@ class TestDownloadManagerRouting:
         """Default DownloadBackend.supports_compression returns False."""
         backend = FakeBackend()
         assert backend.supports_compression("http://anything") is False
+
+
+class TestDownloadWith:
+    def test_download_with_uses_specific_backend(self):
+        """download_with uses the provided backend, not the global one."""
+        global_backend = FakeBackend()
+        specific_backend = FakeBackend()
+        specific_backend._download_result = {
+            "status": "complete",
+            "cache_dir": "/tmp/specific",
+        }
+
+        dm.set_backend(global_backend)
+        try:
+            mgr = dm.get_download_manager()
+            result = asyncio.get_event_loop().run_until_complete(
+                mgr.download_with("model-x", specific_backend)
+            )
+            assert result["status"] == "complete"
+            assert result["cache_dir"] == "/tmp/specific"
+            assert "model-x" in specific_backend.download_calls
+            assert "model-x" not in global_backend.download_calls
+        finally:
+            dm.reset_backend()
+
+    def test_download_with_already_cached(self):
+        """download_with returns already_cached when resource is cached."""
+        backend = FakeBackend()
+        backend.cached.add("cached-model")
+
+        mgr = dm.get_download_manager()
+        result = asyncio.get_event_loop().run_until_complete(
+            mgr.download_with("cached-model", backend)
+        )
+        assert result["status"] == "already_cached"
+
+    def test_download_with_uses_compressed_when_supported(self):
+        """download_with routes to download_compressed when backend supports it."""
+        backend = CompressedFakeBackend()
+
+        mgr = dm.get_download_manager()
+        result = asyncio.get_event_loop().run_until_complete(
+            mgr.download_with("http://server/model", backend)
+        )
+        assert result["status"] == "complete"
+        assert "http://server/model" in backend.compressed_calls
+        assert "http://server/model" not in backend.download_calls
