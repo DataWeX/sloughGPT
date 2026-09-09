@@ -71,6 +71,8 @@ class SecurityRouter:
                 logs = [l for l in logs if l.get("event_type") == event_type]
             if workspace_id:
                 logs = [l for l in logs if l.get("workspace_id", "") == workspace_id]
+        if auth_user.get("role") not in ("owner", "admin"):
+            raise_error("Admin access required", code="auth/forbidden", status=403)
         return success_response(data={"logs": logs, "count": len(logs)})
 
     # ── API key management ──
@@ -99,6 +101,8 @@ class SecurityRouter:
         key = mgr.get(key_id)
         if key is None:
             raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+        if auth_user.get("sub") != key.get("user_id") and auth_user.get("role") != "admin":
+            raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
         return success_response(data=key)
 
     @staticmethod
@@ -106,6 +110,11 @@ class SecurityRouter:
     async def delete_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             mgr = _get_key_manager()
+            key = mgr.get(key_id)
+            if key is None:
+                raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+            if auth_user.get("sub") != key.get("user_id") and auth_user.get("role") != "admin":
+                raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
             mgr.revoke(key_id)
             return success_response(data={"revoked": True})
         except ValueError as e:
@@ -116,6 +125,11 @@ class SecurityRouter:
     async def rotate_key(key_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         try:
             mgr = _get_key_manager()
+            key = mgr.get(key_id)
+            if key is None:
+                raise_error("API key not found", "E_NOT_FOUND", status_code=404)
+            if auth_user.get("sub") != key.get("user_id") and auth_user.get("role") != "admin":
+                raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
             new_key = mgr.rotate(key_id)
             return success_response(data=new_key)
         except ValueError as e:
@@ -123,7 +137,7 @@ class SecurityRouter:
 
     @staticmethod
     @endpoint("security.validate_key")
-    async def validate_key(body: dict) -> dict:
+    async def validate_key(body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         mgr = _get_key_manager()
         key = body.get("key", "")
         valid = mgr.validate(key)

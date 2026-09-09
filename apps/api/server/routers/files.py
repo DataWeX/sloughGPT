@@ -196,6 +196,7 @@ class FilesRouter:
         sort: str = Query("uploaded_at", description="Sort field"),
         order: str = Query("desc", description="asc or desc"),
         tag: str | None = Query(None, description="Filter by tag"),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """List all uploaded files with metadata."""
         meta = await self._async_load_metadata()
@@ -287,6 +288,7 @@ class FilesRouter:
         self,
         q: str = Query(..., min_length=1, description="Search query"),
         tag: str | None = Query(None, description="Filter by tag"),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Search uploaded files by name substring match."""
         query = q.lower()
@@ -317,7 +319,11 @@ class FilesRouter:
         return FileListResponse(files=items, total=len(items))
 
     @endpoint("files.get_file")
-    async def get_file(self, file_id: str) -> dict:
+    async def get_file(
+        self,
+        file_id: str,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Get file details including content."""
         meta = await self._async_load_metadata()
         if file_id not in meta:

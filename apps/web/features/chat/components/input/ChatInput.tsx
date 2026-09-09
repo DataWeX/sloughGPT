@@ -80,10 +80,10 @@ export const ChatInput = memo(function ChatInput({
       setHistory(newHistory)
       setHistoryIndex(-1)
       setDraft('')
-    }
-    onSend()
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+      onSend()
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+      }
     }
   }, [onSend, value, history])
 

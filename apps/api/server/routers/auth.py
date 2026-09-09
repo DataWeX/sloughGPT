@@ -295,6 +295,9 @@ class AuthRouter:
             existing = self._users.find_one({"username": req.username})
             if existing:
                 raise_error("Username already exists", "E_INFRA_BUSY", status_code=409)
+            existing_email = self._users.find_one({"email": req.email})
+            if existing_email:
+                raise_error(f"A user with email {req.email} already exists", code="user/exists", status=409)
             uid = str(uuid.uuid4())
             user_data = {
                 "username": req.username,
@@ -367,7 +370,7 @@ class AuthRouter:
                     extra={"action": "token_create", "status": "failure"},
                 )
                 raise_error("Invalid API key", "E_AUTH_MISSING", status_code=401)
-            token = jwt_auth.create_token(user_id=token_request.api_key[:8])
+            token = jwt_auth.create_token(user_id=token_request.api_key)
             audit_logger.log(
                 "auth_success",
                 client_ip,

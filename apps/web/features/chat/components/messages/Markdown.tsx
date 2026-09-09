@@ -129,11 +129,12 @@ function parseMarkdown(text: string): React.ReactNode[] {
 
     // Table detection: look for header row, separator row, then data rows
     if (line.includes('|') && i + 1 < lines.length && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1])) {
-      const headerCells = line.split('|').map(c => c.trim()).filter(Boolean)
+      const splitCells = (row: string) => row.split('|').slice(1, -1).map(c => c.trim())
+      const headerCells = splitCells(line)
       i += 2 // skip header + separator
       const rows: string[][] = []
       while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
-        rows.push(lines[i].split('|').map(c => c.trim()).filter(Boolean))
+        rows.push(splitCells(lines[i]))
         i++
       }
       nodes.push(
@@ -351,10 +352,12 @@ function parseInline(text: string): React.ReactNode[] {
         parts.push(remaining.slice(0, idx))
         remaining = remaining.slice(idx)
       }
+      const href = match[2]
+      const isSafeUrl = /^(https?:|mailto:|#|\/)/i.test(href)
       parts.push(
         <a
           key={key++}
-          href={match[2]}
+          href={isSafeUrl ? href : '#'}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary underline underline-offset-2 hover:text-primary/80"
