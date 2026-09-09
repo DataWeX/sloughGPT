@@ -194,3 +194,17 @@ class TestCompareTrainingRuns:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert "error" in data
+
+
+class TestBatchTrainingStatus:
+    def test_batch_status_returns_structure(self):
+        sr = SettingsRouter()
+        client = TestClient(_app(sr))
+        resp = client.get("/settings/training/batch-status")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "jobs" in data
+        assert "summary" in data
+        assert "total" in data["summary"]
+        assert "running" in data["summary"]
+        assert isinstance(data["jobs"], list)

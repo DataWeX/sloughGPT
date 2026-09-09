@@ -115,6 +115,11 @@ class SettingsRouter:
             "/adaptive/insights", self.get_adaptive_insights, methods=["GET"],
         )
 
+        # Batch training status
+        self.router.add_api_route(
+            "/training/batch-status", self.get_batch_training_status, methods=["GET"],
+        )
+
         # Training history export
         self.router.add_api_route(
             "/training/history/export", self.export_training_history, methods=["GET"],
@@ -275,6 +280,40 @@ class SettingsRouter:
         engine = AdaptiveConfigEngine()
         insights = engine.get_insights(model=model)
         return success_response(data=insights)
+
+    @endpoint("settings.get_batch_training_status")
+    async def get_batch_training_status(self) -> dict:
+        """Get status of all training jobs (running, queued, completed, failed)."""
+        try:
+            from training.jobs import training_jobs
+        except ImportError:
+            return success_response(data={"jobs": [], "summary": {"total": 0, "running": 0, "queued": 0, "completed": 0, "failed": 0}})
+
+        jobs = []
+        summary = {"total": 0, "running": 0, "queued": 0, "completed": 0, "failed": 0}
+        for job_id, job in training_jobs.items():
+            status = job.get("status", "unknown")
+            summary["total"] += 1
+            if status in ("running", "starting"):
+                summary["running"] += 1
+            elif status == "queued":
+                summary["queued"] += 1
+            elif status == "completed":
+                summary["completed"] += 1
+            elif status == "failed":
+                summary["failed"] += 1
+            jobs.append({
+                "job_id": job_id,
+                "name": job.get("name", job_id[:8]),
+                "model": job.get("model", ""),
+                "dataset": job.get("dataset", ""),
+                "status": status,
+                "progress": job.get("progress", 0),
+                "current_step": job.get("current_step", ""),
+                "total_steps": job.get("total_steps", ""),
+                "created_at": job.get("created_at", 0),
+            })
+        return success_response(data={"jobs": jobs, "summary": summary})
 
     @endpoint("settings.export_training_history")
     async def export_training_history(

@@ -880,6 +880,11 @@ class SloughGPTClient:
         response = self._request("GET", f"/settings/training/compare?run_a={run_a}&run_b={run_b}")
         return response.json()
 
+    def get_batch_training_status(self) -> Dict[str, Any]:
+        """Get status of all training jobs."""
+        response = self._request("GET", "/settings/training/batch-status")
+        return response.json()
+
     # ============ VQA ============
 
     def ask_question(self, image_path: str, question: str) -> Dict[str, Any]:

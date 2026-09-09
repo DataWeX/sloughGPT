@@ -928,6 +928,10 @@ export class SloughGPTClient {
     return this.request('GET', `/settings/training/compare?run_a=${runA}&run_b=${runB}`);
   }
 
+  async getBatchTrainingStatus(): Promise<{ jobs: Array<Record<string, unknown>>; summary: { total: number; running: number; queued: number; completed: number; failed: number } }> {
+    return this.request('GET', '/settings/training/batch-status');
+  }
+
   // ============ VQA ============
 
   async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
