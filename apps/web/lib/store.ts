@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { chatDB } from '@/lib/db'
 import { trackEvent } from '@/lib/dev-log'
+import { settingsController, type AllSettings } from '@/lib/settings-controller'
 
 export interface AppSettings {
   apiUrl: string
@@ -17,6 +18,12 @@ export interface AppSettings {
   customContext: string
   collapsibleMessageLength: number
   autoApproveTools: boolean
+  trainingPreferredModel: string
+  trainingPreferredMethod: string
+  trainingMaxCheckpoints: number
+  trainingAutoTrain: boolean
+  trainingAutoTrainThreshold: number
+  trainingEnableTracking: boolean
 }
 
 export interface InjectedKnowledge {
@@ -60,6 +67,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customContext: '',
   collapsibleMessageLength: 500,
   autoApproveTools: false,
+  trainingPreferredModel: 'slo-1.6b',
+  trainingPreferredMethod: 'finetune',
+  trainingMaxCheckpoints: 10,
+  trainingAutoTrain: false,
+  trainingAutoTrainThreshold: 0.8,
+  trainingEnableTracking: true,
 }
 
 let _settingsTimer: ReturnType<typeof setTimeout> | null = null
@@ -94,6 +107,7 @@ export const useAppStore = create<AppStore>()((set, get) => ({
     _pendingSettings = { ...(_pendingSettings ?? {}), ...partial }
     if (_settingsTimer) clearTimeout(_settingsTimer)
     _settingsTimer = setTimeout(() => _flushSettings(get), DEBOUNCE_MS)
+    _pushToBackend(partial).catch(() => {})
   },
 
   setModelReadiness: (readiness) => {
@@ -180,4 +194,38 @@ export function getKnowledgeContext(): string {
   ]
   if (allKnowledge.length === 0) return ''
   return `\n\n[IMPORTANT KNOWLEDGE - Use this information when responding:]\n${allKnowledge.map((k) => `• ${k.content}`).join('\n')}\n[/IMPORTANT KNOWLEDGE]`
+}
+
+let _backendSyncing = false
+
+export async function syncWithBackend() {
+  if (_backendSyncing) return
+  _backendSyncing = true
+  try {
+    const backend = await settingsController.getAll()
+    if (!backend) return
+    const current = useAppStore.getState().settings
+    const merged: AppSettings = {
+      ...current,
+      defaultTemp: backend.generation?.temperature ?? current.defaultTemp,
+      defaultTopP: backend.generation?.top_p ?? current.defaultTopP,
+      defaultTopK: backend.generation?.top_k ?? current.defaultTopK,
+      defaultMaxTokens: backend.generation?.max_new_tokens ?? current.defaultMaxTokens,
+    }
+    useAppStore.setState({ settings: merged })
+  } catch {
+    // backend unreachable — keep local settings
+  } finally {
+    _backendSyncing = false
+  }
+}
+
+function _pushToBackend(partial: Partial<AppSettings>) {
+  const backendUpdates: Record<string, unknown> = {}
+  if ('defaultTemp' in partial) backendUpdates.temperature = partial.defaultTemp
+  if ('defaultTopP' in partial) backendUpdates.top_p = partial.defaultTopP
+  if ('defaultTopK' in partial) backendUpdates.top_k = partial.defaultTopK
+  if ('defaultMaxTokens' in partial) backendUpdates.max_new_tokens = partial.defaultMaxTokens
+  if (Object.keys(backendUpdates).length === 0) return Promise.resolve()
+  return settingsController.updateGeneration(backendUpdates)
 }

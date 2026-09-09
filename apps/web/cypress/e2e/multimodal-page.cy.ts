@@ -31,3 +31,32 @@ describe('Multimodal page', () => {
     cy.get('input[aria-label="Image generation prompt"]').should('have.value', 'A cat in a spacesuit')
   })
 })
+
+describe('VQA flow', () => {
+  beforeEach(() => {
+    cy.on('uncaught:exception', () => false)
+    cy.mockAll()
+    cy.visit('/multimodal')
+  })
+
+  it('shows VQA section', () => {
+    cy.contains('Visual Question Answering').scrollIntoView().should('be.visible')
+  })
+
+  it('accepts a question input', () => {
+    cy.get('input[aria-label="Question"]').scrollIntoView().type('What is in this image?')
+    cy.get('input[aria-label="Question"]').should('have.value', 'What is in this image?')
+  })
+})
+
+describe('Object detection flow', () => {
+  beforeEach(() => {
+    cy.on('uncaught:exception', () => false)
+    cy.mockAll()
+    cy.visit('/multimodal')
+  })
+
+  it('shows object detection section', () => {
+    cy.contains('Object Detection').scrollIntoView().should('be.visible')
+  })
+})

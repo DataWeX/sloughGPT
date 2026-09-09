@@ -84,7 +84,7 @@ const STATUS_OPTIONS = ['open', 'wip', 'done', 'blocked', 'review', 'todo']
 
 export default function PlannerPage() {
   const { currentWorkspace } = useAuthStore()
-  const wsHeaders = currentWorkspace?.id ? { 'x-workspace-id': currentWorkspace.id } : {}
+  const wsHeaders: Record<string, string> = currentWorkspace?.id ? { 'x-workspace-id': currentWorkspace.id } : {}
 
   const [tab, setTab] = useState<Tab>('board')
   const [board, setBoard] = useState<KanbanBoard | null>(null)

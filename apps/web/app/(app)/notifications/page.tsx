@@ -69,7 +69,7 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer title="Notifications">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -77,10 +77,8 @@ export default function NotificationsPage() {
   }
 
   return (
-    <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>Notifications</AppRouteHeaderLead>
-      </AppRouteHeader>
+    <PageContainer title="Notifications">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Notifications" />} />
 
       <KpiGrid className="mb-6">
         <StatCard label="Total" value={notifications.length} />

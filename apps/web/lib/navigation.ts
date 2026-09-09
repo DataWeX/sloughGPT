@@ -24,6 +24,7 @@ import {
   IconGrid,
   IconLabs,
   IconAlert,
+  IconUsers,
 } from '@/components/icons/NavIcons'
 import type { ComponentType } from 'react'
 

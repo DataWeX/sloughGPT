@@ -89,10 +89,8 @@ export default function WorkspaceSettingsPage() {
 
   if (loading) {
     return (
-      <PageContainer>
-        <AppRouteHeader>
-          <AppRouteHeaderLead>Workspace Settings</AppRouteHeaderLead>
-        </AppRouteHeader>
+      <PageContainer title="Workspace Settings">
+        <AppRouteHeader left={<AppRouteHeaderLead title="Workspace Settings" />} />
         <div className="space-y-4">
           <Skeleton className="h-40" />
           <Skeleton className="h-60" />
@@ -103,10 +101,8 @@ export default function WorkspaceSettingsPage() {
 
   if (!settings) {
     return (
-      <PageContainer>
-        <AppRouteHeader>
-          <AppRouteHeaderLead>Workspace Settings</AppRouteHeaderLead>
-        </AppRouteHeader>
+      <PageContainer title="Workspace Settings">
+        <AppRouteHeader left={<AppRouteHeaderLead title="Workspace Settings" />} />
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             No workspace selected. Use the workspace switcher to select one.
@@ -117,10 +113,8 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>Workspace Settings</AppRouteHeaderLead>
-      </AppRouteHeader>
+    <PageContainer title="Workspace Settings">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Workspace Settings" />} />
 
       <div className="space-y-6">
         {/* General */}

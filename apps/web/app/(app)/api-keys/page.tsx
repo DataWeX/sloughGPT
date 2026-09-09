@@ -129,7 +129,7 @@ export default function ApiKeysPage() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer title="API Keys">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -137,7 +137,7 @@ export default function ApiKeysPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer title="API Keys">
       <AppRouteHeader left={<AppRouteHeaderLead title="API Keys" />} />
 
       {newKey && (

@@ -6,6 +6,7 @@ export interface UserInfo {
   email: string
   role: string
   status: string
+  tenant_id: string
 }
 
 export interface WorkspaceInfo {

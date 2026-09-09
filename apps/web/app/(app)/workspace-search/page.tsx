@@ -95,10 +95,8 @@ export default function WorkspaceSearchPage() {
   }, [query, search])
 
   return (
-    <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>Workspace Search</AppRouteHeaderLead>
-      </AppRouteHeader>
+    <PageContainer title="Workspace Search">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Workspace Search" />} />
 
       <Card className="mb-6">
         <CardContent className="py-3">

@@ -107,7 +107,7 @@ export default function AuditTrailPage() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer title="Audit Trail">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -115,10 +115,8 @@ export default function AuditTrailPage() {
   }
 
   return (
-    <PageContainer>
-      <AppRouteHeader>
-        <AppRouteHeaderLead>Audit Trail</AppRouteHeaderLead>
-      </AppRouteHeader>
+    <PageContainer title="Audit Trail">
+      <AppRouteHeader left={<AppRouteHeaderLead title="Audit Trail" />} />
 
       <KpiGrid className="mb-6">
         <StatCard label="Total Events" value={activities.length} />

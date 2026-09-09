@@ -94,7 +94,7 @@ export default function SharedDataPage() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer title="Shared Data">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -102,9 +102,9 @@ export default function SharedDataPage() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer title="Shared Data">
       <AppRouteHeader
-        left={<AppRouteHeaderLead>Shared Data</AppRouteHeaderLead>}
+        left={<AppRouteHeaderLead title="Shared Data" />}
         right={
           <Button size="sm" className="h-6 text-[10px]" onClick={() => setShowShareDialog(true)}>
             Share Data

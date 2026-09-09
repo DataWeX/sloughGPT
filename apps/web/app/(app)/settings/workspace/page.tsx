@@ -240,7 +240,7 @@ export default function WorkspaceSettingsPage() {
 
   if (loading) {
     return (
-      <PageContainer>
+      <PageContainer title="Workspace Settings">
         <Skeleton className="h-8 w-64 mb-4" />
         <Skeleton className="h-64 w-full" />
       </PageContainer>
@@ -249,14 +249,14 @@ export default function WorkspaceSettingsPage() {
 
   if (!settings) {
     return (
-      <PageContainer>
+      <PageContainer title="Workspace Settings">
         <p className="text-muted-foreground">No workspace selected.</p>
       </PageContainer>
     )
   }
 
   return (
-    <PageContainer>
+    <PageContainer title="Workspace Settings">
       <AppRouteHeader left={<AppRouteHeaderLead title={`${settings.name} — Settings`} />} />
 
       <KpiGrid className="mb-6">
@@ -423,10 +423,10 @@ export default function WorkspaceSettingsPage() {
             </div>
             {health.checks && Object.keys(health.checks).length > 0 && (
               <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                {health.checks.map((check: any, i: number) => (
+                {Object.entries(health.checks).map(([name, detail], i) => (
                   <div key={i} className="flex justify-between">
-                    <span>{check.name}</span>
-                    <span>{check.detail}</span>
+                    <span>{name}</span>
+                    <span>{detail}</span>
                   </div>
                 ))}
               </div>
@@ -486,8 +486,11 @@ export default function WorkspaceSettingsPage() {
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setDeleteConfirm('')}>Cancel</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={handleDelete}
-                  disabled={deleteConfirm !== settings.name || deleting}
+                  onClick={() => {
+                    if (deleteConfirm === settings.name && !deleting) {
+                      handleDelete().catch(() => {})
+                    }
+                  }}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
