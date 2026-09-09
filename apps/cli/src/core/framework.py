@@ -638,7 +638,7 @@ def run_group(group: Group, ctx: Context, args: List[str],
     cmd_name = args[0]
     cmd_args = args[1:]
     path = f"{full_path} {cmd_name}" if full_path else cmd_name
-    return resolve_and_run(group, ctx, cmd_name, cmd_args, full_path=path)
+    return resolve_and_run(group, ctx, cmd_name, cmd_args, full_path=full_path)
 
 def run(group: Group, args: Optional[List[str]] = None,
         categories: Optional[Dict] = None,
