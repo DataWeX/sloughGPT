@@ -54,7 +54,7 @@ describe('OutputCard', () => {
       lines: [],
       streaming: false,
       clear: vi.fn(),
-      scrollRef: { current: null },
+      scrollRef: { current: null } as unknown as React.RefObject<HTMLDivElement>,
       paused: false,
       togglePause: vi.fn(),
       exportLines: vi.fn(),

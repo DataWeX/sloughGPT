@@ -523,6 +523,59 @@ HTML_TEMPLATE = """
             ctx.restore();
         }
 
+        // Pronunciation History
+        let pronunciationHistory = JSON.parse(localStorage.getItem('pronunciationHistory') || '[]');
+
+        function addToHistory(target, spoken, score, phonemes) {
+            const entry = {
+                timestamp: new Date().toISOString(),
+                target,
+                spoken,
+                score,
+                phonemes
+            };
+            pronunciationHistory.unshift(entry);
+            if (pronunciationHistory.length > 50) {
+                pronunciationHistory = pronunciationHistory.slice(0, 50);
+            }
+            localStorage.setItem('pronunciationHistory', JSON.stringify(pronunciationHistory));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('history-list');
+            if (pronunciationHistory.length === 0) {
+                container.innerHTML = '<p style="color: #666;">No pronunciation attempts yet.</p>';
+                return;
+            }
+
+            let html = '';
+            pronunciationHistory.forEach((entry, index) => {
+                const scorePercent = (entry.score * 100).toFixed(1);
+                const scoreColor = entry.score >= 0.8 ? '#4caf50' : entry.score >= 0.5 ? '#ff9800' : '#f44336';
+                const time = new Date(entry.timestamp).toLocaleTimeString();
+                html += `
+                    <div style="padding: 8px; margin: 5px 0; background: #1a1a2e; border-radius: 4px; border-left: 3px solid ${scoreColor};">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span><strong>${entry.target}</strong> → ${entry.spoken}</span>
+                            <span style="color: ${scoreColor};">${scorePercent}%</span>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">${time}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function clearHistory() {
+            pronunciationHistory = [];
+            localStorage.removeItem('pronunciationHistory');
+            renderHistory();
+        }
+
+        // Initialize history on page load
+        renderHistory();
+
         // Synthesize on Enter key
         document.getElementById('tts-text').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -557,6 +610,9 @@ HTML_TEMPLATE = """
                     document.getElementById('spoken-phonemes').textContent = data.spoken_phonemes.join(' ');
                     document.getElementById('score-result').style.display = 'block';
                     document.getElementById('score-error').style.display = 'none';
+
+                    // Add to history
+                    addToHistory(target, spoken, data.score, data.target_phonemes);
                 }
             } catch (error) {
                 document.getElementById('score-error').textContent = error.message;

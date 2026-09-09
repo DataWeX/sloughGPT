@@ -137,7 +137,7 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] text-muted-foreground uppercase tracking-wider">Tokenizer</label>
                 <div className="flex items-center gap-1" role="radiogroup" aria-label="Tokenizer algorithm">
-                  <ToggleGroup type="single" value={form.algo} onValueChange={(v) => { if (v) form.setAlgo(v) }}>
+                  <ToggleGroup type="single" value={form.algo} onValueChange={(v) => { if (v && typeof v === 'string') form.setAlgo(v) }}>
                     <ToggleGroupItem value="bpe" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">BPE</ToggleGroupItem>
                     <ToggleGroupItem value="unigram" className="px-3 py-1 rounded-md text-[11px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-medium">Unigram</ToggleGroupItem>
                   </ToggleGroup>

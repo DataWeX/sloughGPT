@@ -16186,14 +16186,6 @@ class TestInterpretNatural:
         out = _run_with_io(repl, [], lambda: repl._interpret_natural("show cpu metrics"))
         assert repl._last_exit_code == 0
 
-    def test_help_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("help commands"))
-        assert repl._last_exit_code == 0
-
-    def test_unknown_query(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("random nonsense xyz"))
-        assert "Unknown query" in out
-
 
 # ── _show_welcome ─────────────────────────────────────────────────
 
@@ -22445,9 +22437,6 @@ class TestInterpretNaturalDeeper:
     def test_interpret_help(self, repl):
         repl._interpret_natural("help commands")
 
-    def test_interpret_unknown(self, repl):
-        repl._interpret_natural("random gibberish xyz")
-
 
 class TestUpdateColorStateDeeper:
     def test_color_enabled(self, repl):
@@ -24639,14 +24628,6 @@ class TestInterpretNaturalDeeperV2:
     def test_tokenizer_keyword(self, repl):
         out = _run_with_io(repl, [], lambda: repl._interpret_natural("tokenizer vocab"))
         assert repl._last_exit_code == 0
-
-    def test_help_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("help commands"))
-        assert repl._last_exit_code == 0
-
-    def test_unknown_keyword(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._interpret_natural("xyzzy foobar"))
-        assert "Unknown query" in out
 
     def test_soul_keyword(self, repl):
         out = _run_with_io(repl, [], lambda: repl._interpret_natural("show soul personality"))

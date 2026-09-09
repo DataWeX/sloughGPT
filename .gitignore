@@ -97,6 +97,10 @@ venv.bak/
 !.vscode/settings.json
 !.vscode/tasks.json
 .idea/
+
+# Training history (user data, not source)
+~/.config/sloughgpt/training_history.jsonl
+~/.config/sloughgpt/settings.json
 *.swp
 *.swo
 *~
