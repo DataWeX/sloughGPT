@@ -1214,6 +1214,55 @@ class WorkspacesRouter:
             total = sum(len(v) for v in results.values())
             return success_response(data={"results": results, "total": total})
 
+        # ─── Permissions matrix ───────────────────────────────
+        async def get_workspace_permissions(
+            workspace_id: str, auth_user: dict = auth_dep
+        ) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+
+            from domains.auth.models import ROLE_PERMISSIONS, Permission
+
+            # Build permission matrix
+            roles = {}
+            for role, perms in ROLE_PERMISSIONS.items():
+                roles[role.value] = {
+                    "name": role.value,
+                    "permissions": [p.value for p in perms],
+                }
+
+            # All available permissions grouped by category
+            all_permissions = {}
+            for perm in Permission:
+                category = perm.value.split(":")[0]
+                if category not in all_permissions:
+                    all_permissions[category] = []
+                all_permissions[category].append(perm.value)
+
+            # Member permissions summary
+            members = self._ws_repo.list_members(workspace_id)
+            member_perms = []
+            for m in members:
+                u = self._user_repo.get(m.user_id)
+                perms = ROLE_PERMISSIONS.get(m.role, set())
+                member_perms.append({
+                    "user_id": m.user_id,
+                    "username": u.username if u else "",
+                    "role": m.role.value,
+                    "permissions": [p.value for p in perms],
+                })
+
+            return success_response(data={
+                "roles": roles,
+                "all_permissions": all_permissions,
+                "member_permissions": member_perms,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -1238,6 +1287,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/notifications", get_workspace_notifications, methods=["GET"])
         router.add_api_route("/{workspace_id}/clone", clone_workspace, methods=["POST"])
         router.add_api_route("/{workspace_id}/search", search_workspace, methods=["GET"])
+        router.add_api_route("/{workspace_id}/permissions", get_workspace_permissions, methods=["GET"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
