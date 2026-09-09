@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.shell_sandbox import ShellSecurityError, validate_command
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log
 
 logger = logging.getLogger("slo.api.shell")
 
@@ -84,6 +84,7 @@ def _sse_line(
 
 
 @router.post("/exec", response_model=ShellExecResponse)
+@endpoint("shell.exec")
 async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     """Execute a shell command and return captured output.
 
@@ -118,6 +119,7 @@ async def exec_command(req: ShellExecRequest, auth_user: dict = Depends(require_
 
 
 @router.post("/exec/stream")
+@endpoint("shell.exec_stream")
 async def exec_command_stream(
     req: ShellExecRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
 ):

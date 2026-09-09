@@ -9,7 +9,7 @@ import time as _time
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.meta_weights")
 
@@ -42,6 +42,7 @@ class MetaWeightsRouter:
         )
         self.router.add_api_route("/stats", self.get_meta_weight_stats, methods=["GET"])
 
+    @endpoint("meta_weights.get")
     async def get_meta_weights(
         self,
         request: GetMetaWeightsRequest,
@@ -85,6 +86,7 @@ class MetaWeightsRouter:
         except Exception as e:
             classify_and_raise(e, source="meta_weights.get")
 
+    @endpoint("meta_weights.stats")
     async def get_meta_weight_stats(self, req: Request) -> dict:
         """Get meta-weight system statistics."""
         try:
@@ -98,6 +100,7 @@ class MetaWeightsRouter:
         except Exception as e:
             classify_and_raise(e, source="meta_weights.stats")
 
+    @endpoint("meta_weights.ping")
     async def ping(self) -> dict:
         """
         Health probe for the meta-weights system.
@@ -108,10 +111,7 @@ class MetaWeightsRouter:
         Side effects:
             - none
         """
-        try:
-            return success_response(data={"status": "ok"})
-        except Exception as e:
-            classify_and_raise(e, source="meta_weights.ping")
+        return success_response(data={"status": "ok"})
 
 
 router = MetaWeightsRouter().router

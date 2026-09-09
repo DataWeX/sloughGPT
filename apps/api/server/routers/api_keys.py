@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import raise_error, success_response
+from schemas.common import endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.api_keys")
 
@@ -158,6 +158,7 @@ class ApiKeysRouter:
         workspace_id = auth_user.get("workspace_id", "") if auth_user else ""
         return workspace_id, user_id
 
+    @endpoint("api_keys.create")
     async def create_key(self, body: dict, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         name = body.get("name", "")
         scopes = body.get("scopes", ["*"])
@@ -169,17 +170,20 @@ class ApiKeysRouter:
         )
         return success_response(data=key)
 
+    @endpoint("api_keys.list")
     async def list_keys(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         workspace_id, user_id = self._get_workspace_user(auth_user)
         keys = self._manager.list(workspace_id=workspace_id, user_id=user_id)
         return success_response(data={"keys": keys, "count": len(keys)})
 
+    @endpoint("api_keys.get")
     async def get_key(self, key_id: str) -> dict:
         key = self._manager.get(key_id)
         if key is None:
             raise_error("API key not found", "E_NOT_FOUND", status_code=404)
         return success_response(data=key)
 
+    @endpoint("api_keys.delete")
     async def delete_key(self, key_id: str) -> dict:
         try:
             self._manager.revoke(key_id)
@@ -187,6 +191,7 @@ class ApiKeysRouter:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
         return success_response(data={"revoked": True})
 
+    @endpoint("api_keys.rotate")
     async def rotate_key(self, key_id: str) -> dict:
         try:
             new_key = self._manager.rotate(key_id)
@@ -194,6 +199,7 @@ class ApiKeysRouter:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
         return success_response(data=new_key)
 
+    @endpoint("api_keys.validate")
     async def validate_key(self, body: dict) -> dict:
         key = body.get("key", "")
         valid = self._manager.validate(key)

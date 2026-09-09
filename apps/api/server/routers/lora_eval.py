@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 _VALID_ADAPTER_PATH = re.compile(r"^[\w\-/]+\.npz$")
 _ADAPTER_BASE = Path("data/user_adapters").resolve()
@@ -25,6 +25,7 @@ class LoraEvalRouter:
         self.router.add_api_route("/history", self.get_eval_history, methods=["GET"])
         self.router.add_api_route("/aggregate", self.trigger_aggregation, methods=["POST"])
 
+    @endpoint("lora_eval.run")
     async def run_eval(
         self,
         adapter_path: str = "data/user_adapters/best_aggregated.npz",
@@ -110,6 +111,7 @@ class LoraEvalRouter:
             logging.getLogger("slo.lora_eval").warning("LoRA eval run failed: %s", e)
             classify_and_raise(e, source="lora_eval_run")
 
+    @endpoint("lora_eval.history")
     async def get_eval_history(
         self,
         limit: int = Query(default=20, ge=1, le=100),
@@ -135,6 +137,7 @@ class LoraEvalRouter:
         except Exception as e:
             raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
 
+    @endpoint("lora_eval.aggregate")
     async def trigger_aggregation(
         self,
         top_k: int = Query(default=10, ge=1, le=50),

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 
 class VectorStoreConfig(BaseModel):
@@ -64,6 +64,7 @@ class VectorRouter:
         except Exception as e:
             classify_and_raise(e, source="vector.get_vector_store")
 
+    @endpoint("vector.init")
     async def init_vector_store(
         self, config: VectorStoreConfig, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -119,6 +120,7 @@ class VectorRouter:
             logger.warning("Vector store init failed: %s", e)
             classify_and_raise(e, source="vector")
 
+    @endpoint("vector.get_stats")
     async def get_stats(self) -> dict:
         try:
             """get_stats."""
@@ -132,6 +134,7 @@ class VectorRouter:
         except Exception as e:
             classify_and_raise(e, source="vector.get_stats")
 
+    @endpoint("vector.upsert_vectors")
     async def upsert_vectors(
         self, request: UpsertRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -175,6 +178,7 @@ class VectorRouter:
         except Exception as e:
             classify_and_raise(e, source="vector.upsert_vectors")
 
+    @endpoint("vector.search_vectors")
     async def search_vectors(
         self, request: SearchRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -201,6 +205,7 @@ class VectorRouter:
         except Exception as e:
             classify_and_raise(e, source="vector.search_vectors")
 
+    @endpoint("vector.ingest_status")
     async def ingest_status(self) -> dict:
         try:
             """ingest_status."""

@@ -20,7 +20,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import success_response
+from schemas.common import classify_and_raise, endpoint, success_response
 
 logger = logging.getLogger("slo.dashboard")
 
@@ -252,16 +252,13 @@ class DashboardRouter:
             },
         )
 
+    @endpoint("dashboard.events")
     async def dashboard_events(self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Return the last N dashboard events as JSON."""
-        try:
-            from domains.infrastructure.event_buffer import get_event_buffer
+        from domains.infrastructure.event_buffer import get_event_buffer
 
-            events = get_event_buffer().recent(n)
-            return success_response(data={"events": events, "count": len(events)})
-        except Exception as e:
-            from schemas.common import classify_and_raise
-            classify_and_raise(e, source="dashboard.events")
+        events = get_event_buffer().recent(n)
+        return success_response(data={"events": events, "count": len(events)})
 
 
 router = DashboardRouter().router

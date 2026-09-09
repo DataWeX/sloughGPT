@@ -10,7 +10,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.user_adapters")
 
@@ -62,6 +62,7 @@ class UserAdaptersRouter:
         self.router.add_api_route("/{user_id}", self.delete_user_adapter, methods=["DELETE"])
         self.router.add_api_route("/prune", self.prune_low_quality_adapters, methods=["POST"])
 
+    @endpoint("user_adapters.list")
     async def list_adapters(self) -> dict:
         """List all per-user LoRA adapters with aggregate statistics."""
         global _list_cache
@@ -81,6 +82,7 @@ class UserAdaptersRouter:
             logger.warning("List adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.list")
 
+    @endpoint("user_adapters.get")
     async def get_adapter(self, user_id: str) -> dict:
         """Retrieve a specific user's LoRA adapter metadata."""
         try:
@@ -95,6 +97,7 @@ class UserAdaptersRouter:
             logger.warning("Get adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.get")
 
+    @endpoint("user_adapters.update")
     async def update_adapter(
         self,
         user_id: str,
@@ -112,6 +115,7 @@ class UserAdaptersRouter:
             logger.warning("Update adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.update")
 
+    @endpoint("user_adapters.reset")
     async def reset_adapter(
         self, user_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -126,6 +130,7 @@ class UserAdaptersRouter:
             logger.warning("Reset adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.reset")
 
+    @endpoint("user_adapters.merge")
     async def merge_adapters(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Merge all per-user LoRA adapters into a single combined adapter."""
         try:
@@ -138,6 +143,7 @@ class UserAdaptersRouter:
             logger.warning("Merge adapters failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.merge")
 
+    @endpoint("user_adapters.aggregate")
     async def aggregate_best(
         self, req: AggregateBestRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -183,6 +189,7 @@ class UserAdaptersRouter:
             logger.warning("Aggregate best failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.aggregate")
 
+    @endpoint("user_adapters.quality")
     async def get_quality(
         self, min_feedback_count: int = 3, max_age_days: int | None = None
     ) -> dict:
@@ -199,6 +206,7 @@ class UserAdaptersRouter:
             logger.warning("Quality report failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.quality")
 
+    @endpoint("user_adapters.delete")
     async def delete_user_adapter(
         self, user_id: str, req: Request, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
@@ -213,6 +221,7 @@ class UserAdaptersRouter:
             logger.warning("Delete adapter failed: %s", exc)
             classify_and_raise(exc, source="user_adapters.delete")
 
+    @endpoint("user_adapters.prune")
     async def prune_low_quality_adapters(
         self,
         request: PruneAdaptersRequest,

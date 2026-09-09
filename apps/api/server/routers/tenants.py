@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from domains.auth.models import Role, Tenant, User, UserRole
 from domains.auth.repositories import TenantRepository, UserRepository
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.tenants")
 
@@ -86,6 +86,7 @@ class TenantsRouter:
         auth_dep = Depends(require_auth_if_enabled)
 
         # ─── List tenants ──────────────────────────────────────
+        @endpoint("tenants.list")
         async def list_tenants(auth_user: dict = auth_dep) -> dict:
             admin = self._require_admin(auth_user)
             if admin.role == Role.OWNER:
@@ -100,6 +101,7 @@ class TenantsRouter:
             )
 
         # ─── Get tenant ────────────────────────────────────────
+        @endpoint("tenants.get")
         async def get_tenant(tenant_id: str, auth_user: dict = auth_dep) -> dict:
             admin = self._require_admin(auth_user)
             if admin.role != Role.OWNER and admin.tenant_id != tenant_id:
@@ -110,6 +112,7 @@ class TenantsRouter:
             return success_response(data=self._to_response(tenant).model_dump())
 
         # ─── Create tenant ─────────────────────────────────────
+        @endpoint("tenants.create")
         async def create_tenant(req: TenantCreateRequest, auth_user: dict = auth_dep) -> dict:
             self._require_admin(auth_user)
             existing = self._repo.get_by_slug(req.slug)
@@ -129,6 +132,7 @@ class TenantsRouter:
             return success_response(data=self._to_response(tenant).model_dump())
 
         # ─── Update tenant ─────────────────────────────────────
+        @endpoint("tenants.update")
         async def update_tenant(
             tenant_id: str, req: TenantUpdateRequest, auth_user: dict = auth_dep
         ) -> dict:
@@ -151,6 +155,7 @@ class TenantsRouter:
             return success_response(data=self._to_response(tenant).model_dump())
 
         # ─── Delete tenant ─────────────────────────────────────
+        @endpoint("tenants.delete")
         async def delete_tenant(tenant_id: str, auth_user: dict = auth_dep) -> dict:
             admin = self._require_admin(auth_user)
             if admin.role != Role.OWNER:
@@ -163,6 +168,7 @@ class TenantsRouter:
             return success_response(data={"deleted": True})
 
         # ─── Get tenant stats ──────────────────────────────────
+        @endpoint("tenants.stats")
         async def get_tenant_stats(tenant_id: str, auth_user: dict = auth_dep) -> dict:
             admin = self._require_admin(auth_user)
             if admin.role != Role.OWNER and admin.tenant_id != tenant_id:

@@ -25,7 +25,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Path, Query
 from infrastructure.auth import require_auth_if_enabled
 from mogdb import MogDB
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.docstore")
 
@@ -96,6 +96,7 @@ class DocStoreRouter:
             )
         return None
 
+    @endpoint("docstore.list")
     def list_docs(
         self,
         collection: str = Path(...),
@@ -106,31 +107,27 @@ class DocStoreRouter:
         limit: int | None = Query(default=None, gt=0, description="Max results"),
     ) -> dict:
         """List all documents in a collection, optionally sorted/limited."""
-        try:
-            err = self._validate(collection)
-            if err:
-                return err
-            sort_by = [(sort, direction)] if sort else None
-            docs = _collection(collection).find(sort=sort_by, limit=limit)
-            return success_response(data=[_strip_meta(d) for d in docs])
-        except Exception as e:
-            classify_and_raise(e, source="docstore.list")
+        err = self._validate(collection)
+        if err:
+            return err
+        sort_by = [(sort, direction)] if sort else None
+        docs = _collection(collection).find(sort=sort_by, limit=limit)
+        return success_response(data=[_strip_meta(d) for d in docs])
 
+    @endpoint("docstore.get")
     def get_doc(
         self,
         collection: str = Path(...),
         doc_id: str = Path(...),
     ) -> dict:
         """Get a single document by ``doc_id``."""
-        try:
-            err = self._validate(collection)
-            if err:
-                return err
-            doc = _collection(collection).find_one({"_id": doc_id})
-            return success_response(data=_strip_meta(doc) if doc else None)
-        except Exception as e:
-            classify_and_raise(e, source="docstore.get")
+        err = self._validate(collection)
+        if err:
+            return err
+        doc = _collection(collection).find_one({"_id": doc_id})
+        return success_response(data=_strip_meta(doc) if doc else None)
 
+    @endpoint("docstore.put")
     def put_doc(
         self,
         collection: str = Path(...),
@@ -166,6 +163,7 @@ class DocStoreRouter:
             )
             classify_and_raise(e, source="docstore.put")
 
+    @endpoint("docstore.patch")
     def patch_doc(
         self,
         collection: str = Path(...),
@@ -174,19 +172,17 @@ class DocStoreRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Merge fields into an existing document (no-op if it does not exist)."""
-        try:
-            err = self._validate(collection)
-            if err:
-                return err
-            update = dict(body)
-            update.pop("_id", None)
-            if not update:
-                return success_response(data={"modified": 0})
-            modified = _collection(collection).update_one({"_id": doc_id}, {"$set": update})
-            return success_response(data={"modified": modified})
-        except Exception as e:
-            classify_and_raise(e, source="docstore.patch")
+        err = self._validate(collection)
+        if err:
+            return err
+        update = dict(body)
+        update.pop("_id", None)
+        if not update:
+            return success_response(data={"modified": 0})
+        modified = _collection(collection).update_one({"_id": doc_id}, {"$set": update})
+        return success_response(data={"modified": modified})
 
+    @endpoint("docstore.delete")
     def delete_doc(
         self,
         collection: str = Path(...),
@@ -194,30 +190,26 @@ class DocStoreRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Delete a single document by ``doc_id``."""
-        try:
-            err = self._validate(collection)
-            if err:
-                return err
-            deleted = _collection(collection).delete_one({"_id": doc_id})
-            safe_audit_log("docstore.delete", resource=f"{collection}/{doc_id}")
-            return success_response(data={"deleted": bool(deleted)})
-        except Exception as e:
-            classify_and_raise(e, source="docstore.delete")
+        err = self._validate(collection)
+        if err:
+            return err
+        deleted = _collection(collection).delete_one({"_id": doc_id})
+        safe_audit_log("docstore.delete", resource=f"{collection}/{doc_id}")
+        return success_response(data={"deleted": bool(deleted)})
 
+    @endpoint("docstore.clear")
     def clear_collection(
         self, collection: str = Path(...), auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Delete every document in a collection."""
-        try:
-            err = self._validate(collection)
-            if err:
-                return err
-            _collection(collection).drop()
-            safe_audit_log("docstore.clear", resource=collection)
-            return success_response(data={"cleared": True})
-        except Exception as e:
-            classify_and_raise(e, source="docstore.clear")
+        err = self._validate(collection)
+        if err:
+            return err
+        _collection(collection).drop()
+        safe_audit_log("docstore.clear", resource=collection)
+        return success_response(data={"cleared": True})
 
+    @endpoint("docstore.bulk_put")
     def bulk_put(
         self,
         collection: str = Path(...),
@@ -225,31 +217,28 @@ class DocStoreRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Upsert many documents in one request."""
-        try:
-            err = self._validate(collection)
-            if err:
-                return err
-            docs = body.get("docs")
-            if not isinstance(docs, list):
-                raise_error("body.docs must be an array", code="E_BAD_REQUEST")
-            coll = _collection(collection)
-            count = 0
-            for raw in docs:
-                if not isinstance(raw, dict):
-                    continue
-                doc_id = raw.get("id")
-                if not doc_id:
-                    continue
-                doc = dict(raw)
-                doc["_id"] = doc_id
-                if coll.find_one({"_id": doc_id}):
-                    coll.delete_one({"_id": doc_id})
-                coll.insert_one(doc)
-                count += 1
-            safe_audit_log("docstore.bulk_put", resource=collection, detail=f"imported={count}")
-            return success_response(data={"imported": count})
-        except Exception as e:
-            classify_and_raise(e, source="docstore.bulk_put")
+        err = self._validate(collection)
+        if err:
+            return err
+        docs = body.get("docs")
+        if not isinstance(docs, list):
+            raise_error("body.docs must be an array", code="E_BAD_REQUEST")
+        coll = _collection(collection)
+        count = 0
+        for raw in docs:
+            if not isinstance(raw, dict):
+                continue
+            doc_id = raw.get("id")
+            if not doc_id:
+                continue
+            doc = dict(raw)
+            doc["_id"] = doc_id
+            if coll.find_one({"_id": doc_id}):
+                coll.delete_one({"_id": doc_id})
+            coll.insert_one(doc)
+            count += 1
+        safe_audit_log("docstore.bulk_put", resource=collection, detail=f"imported={count}")
+        return success_response(data={"imported": count})
 
 
 router = DocStoreRouter().router

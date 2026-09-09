@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from domains.auth.models import Role, User, UserRole
 from domains.auth.repositories import UserRepository
 from infrastructure.auth import get_jwt_auth, require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.users")
 
@@ -101,6 +101,7 @@ class UsersRouter:
         auth_dep = Depends(require_auth_if_enabled)
 
         # ─── List users ────────────────────────────────────────
+        @endpoint("users.list")
         async def list_users(auth_user: dict = auth_dep) -> dict:
             self._require_admin(auth_user)
             users = self._repo.list_by_tenant(auth_user.get("tenant_id", ""))
@@ -110,6 +111,7 @@ class UsersRouter:
             )
 
         # ─── Get user ──────────────────────────────────────────
+        @endpoint("users.get")
         async def get_user(user_id: str, auth_user: dict = auth_dep) -> dict:
             admin = self._require_admin(auth_user)
             # Users can read their own profile
@@ -121,6 +123,7 @@ class UsersRouter:
             return success_response(data=self._to_response(user).model_dump())
 
         # ─── Create user ───────────────────────────────────────
+        @endpoint("users.create")
         async def create_user(req: UserCreateRequest, auth_user: dict = auth_dep) -> dict:
             self._require_admin(auth_user)
             existing = self._repo.get_by_username(req.username)
@@ -150,6 +153,7 @@ class UsersRouter:
             return success_response(data=self._to_response(user).model_dump())
 
         # ─── Update user ───────────────────────────────────────
+        @endpoint("users.update")
         async def update_user(
             user_id: str, req: UserUpdateRequest, auth_user: dict = auth_dep
         ) -> dict:
@@ -177,6 +181,7 @@ class UsersRouter:
             return success_response(data=self._to_response(user).model_dump())
 
         # ─── Delete user ───────────────────────────────────────
+        @endpoint("users.delete")
         async def delete_user(user_id: str, auth_user: dict = auth_dep) -> dict:
             admin = self._require_admin(auth_user)
             if admin.id == user_id:
@@ -189,6 +194,7 @@ class UsersRouter:
             return success_response(data={"deleted": True})
 
         # ─── Change password (self-service) ────────────────────
+        @endpoint("users.change_password")
         async def change_password(
             req: PasswordChangeRequest, auth_user: dict = auth_dep
         ) -> dict:
@@ -208,6 +214,7 @@ class UsersRouter:
             return success_response(data={"changed": True})
 
         # ─── Update own profile (self-service) ─────────────────
+        @endpoint("users.update_profile")
         async def update_profile(
             req: ProfileUpdateRequest, auth_user: dict = auth_dep
         ) -> dict:
@@ -230,6 +237,7 @@ class UsersRouter:
             return success_response(data=self._to_response(user).model_dump())
 
         # ─── Get own profile (self-service) ────────────────────
+        @endpoint("users.get_profile")
         async def get_profile(auth_user: dict = auth_dep) -> dict:
             if not auth_user:
                 raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)

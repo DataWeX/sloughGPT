@@ -14,7 +14,7 @@ from domains.infrastructure.errors import AppError
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.api.self_train")
 
@@ -45,6 +45,7 @@ class SelfTrainRouter:
         self.router.add_api_route("/stop", self.stop_self_train, methods=["POST"])
         self.router.add_api_route("/status", self.get_self_train_status, methods=["GET"])
 
+    @endpoint("self_train.start")
     async def start_self_train(
         self,
         req: SelfTrainRequest | None = None,
@@ -101,6 +102,7 @@ class SelfTrainRouter:
             logger.warning("Self-training start failed: %s", e)
             classify_and_raise(e, source="self_train_start")
 
+    @endpoint("self_train.stop")
     async def stop_self_train(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Stop the running self-training subprocess."""
         try:
@@ -125,6 +127,7 @@ class SelfTrainRouter:
         except Exception as e:
             classify_and_raise(e, source="self_train.stop")
 
+    @endpoint("self_train.status")
     async def get_self_train_status(self) -> dict:
         """Check the current status of the self-training subprocess."""
         try:

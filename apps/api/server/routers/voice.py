@@ -9,7 +9,7 @@ import time as _time
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.voice")
 
@@ -105,6 +105,7 @@ class VoiceRouter:
         )
         self.router.add_api_route("/status", self.voice_status, methods=["GET"])
 
+    @endpoint("voice.tts")
     async def text_to_speech(
         self, request: TTSRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> TTSResponse:
@@ -152,6 +153,7 @@ class VoiceRouter:
         except Exception as e:
             classify_and_raise(e, source="voice.text_to_speech")
 
+    @endpoint("voice.status")
     async def voice_status(self) -> dict:
         """Check if server-side TTS model is available."""
         try:

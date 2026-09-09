@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, safe_audit_log, success_response
+from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.settings")
 
@@ -117,175 +117,149 @@ class SettingsRouter:
 
     # ── Handlers ────────────────────────────────────────────────────
 
+    @endpoint("settings.get_all")
     async def get_settings(self) -> dict:
         """Get all user settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            ps = _get()
-            return success_response(data=ps.to_dict())
-        except Exception as e:
-            classify_and_raise(e, source="settings.get_all")
+        from domains.settings.persistent import get_settings as _get
+        ps = _get()
+        return success_response(data=ps.to_dict())
 
+    @endpoint("settings.get_generation")
     async def get_generation(self) -> dict:
         """Get generation settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            s = _get().settings.generation
-            from dataclasses import asdict
-            return success_response(data=asdict(s))
-        except Exception as e:
-            classify_and_raise(e, source="settings.get_generation")
+        from domains.settings.persistent import get_settings as _get
+        s = _get().settings.generation
+        from dataclasses import asdict
+        return success_response(data=asdict(s))
 
+    @endpoint("settings.update_generation")
     async def update_generation(
         self, req: GenerationSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update generation settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            if not updates:
-                return success_response(data={"message": "No changes"})
-            ps = _get()
-            ps.update("generation", **updates)
-            safe_audit_log("settings.update", resource="generation", detail=str(updates))
-            from dataclasses import asdict
-            return success_response(data=asdict(ps.settings.generation))
-        except Exception as e:
-            classify_and_raise(e, source="settings.update_generation")
+        from domains.settings.persistent import get_settings as _get
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return success_response(data={"message": "No changes"})
+        ps = _get()
+        ps.update("generation", **updates)
+        safe_audit_log("settings.update", resource="generation", detail=str(updates))
+        from dataclasses import asdict
+        return success_response(data=asdict(ps.settings.generation))
 
+    @endpoint("settings.get_training")
     async def get_training(self) -> dict:
         """Get training settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            s = _get().settings.training
-            from dataclasses import asdict
-            return success_response(data=asdict(s))
-        except Exception as e:
-            classify_and_raise(e, source="settings.get_training")
+        from domains.settings.persistent import get_settings as _get
+        s = _get().settings.training
+        from dataclasses import asdict
+        return success_response(data=asdict(s))
 
+    @endpoint("settings.update_training")
     async def update_training(
         self, req: TrainingSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update training settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            if not updates:
-                return success_response(data={"message": "No changes"})
-            ps = _get()
-            ps.update("training", **updates)
-            safe_audit_log("settings.update", resource="training", detail=str(updates))
-            from dataclasses import asdict
-            return success_response(data=asdict(ps.settings.training))
-        except Exception as e:
-            classify_and_raise(e, source="settings.update_training")
+        from domains.settings.persistent import get_settings as _get
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return success_response(data={"message": "No changes"})
+        ps = _get()
+        ps.update("training", **updates)
+        safe_audit_log("settings.update", resource="training", detail=str(updates))
+        from dataclasses import asdict
+        return success_response(data=asdict(ps.settings.training))
 
+    @endpoint("settings.get_adaptive")
     async def get_adaptive(self) -> dict:
         """Get adaptive settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            s = _get().settings.adaptive
-            from dataclasses import asdict
-            return success_response(data=asdict(s))
-        except Exception as e:
-            classify_and_raise(e, source="settings.get_adaptive")
+        from domains.settings.persistent import get_settings as _get
+        s = _get().settings.adaptive
+        from dataclasses import asdict
+        return success_response(data=asdict(s))
 
+    @endpoint("settings.update_adaptive")
     async def update_adaptive(
         self, req: AdaptiveSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update adaptive settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            if not updates:
-                return success_response(data={"message": "No changes"})
-            ps = _get()
-            ps.update("adaptive", **updates)
-            safe_audit_log("settings.update", resource="adaptive", detail=str(updates))
-            from dataclasses import asdict
-            return success_response(data=asdict(ps.settings.adaptive))
-        except Exception as e:
-            classify_and_raise(e, source="settings.update_adaptive")
+        from domains.settings.persistent import get_settings as _get
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return success_response(data={"message": "No changes"})
+        ps = _get()
+        ps.update("adaptive", **updates)
+        safe_audit_log("settings.update", resource="adaptive", detail=str(updates))
+        from dataclasses import asdict
+        return success_response(data=asdict(ps.settings.adaptive))
 
+    @endpoint("settings.get_voice")
     async def get_voice(self) -> dict:
         """Get voice settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            s = _get().settings.voice
-            from dataclasses import asdict
-            return success_response(data=asdict(s))
-        except Exception as e:
-            classify_and_raise(e, source="settings.get_voice")
+        from domains.settings.persistent import get_settings as _get
+        s = _get().settings.voice
+        from dataclasses import asdict
+        return success_response(data=asdict(s))
 
+    @endpoint("settings.update_voice")
     async def update_voice(
         self, req: VoiceSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update voice settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            if not updates:
-                return success_response(data={"message": "No changes"})
-            ps = _get()
-            ps.update("voice", **updates)
-            safe_audit_log("settings.update", resource="voice", detail=str(updates))
-            from dataclasses import asdict
-            return success_response(data=asdict(ps.settings.voice))
-        except Exception as e:
-            classify_and_raise(e, source="settings.update_voice")
+        from domains.settings.persistent import get_settings as _get
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return success_response(data={"message": "No changes"})
+        ps = _get()
+        ps.update("voice", **updates)
+        safe_audit_log("settings.update", resource="voice", detail=str(updates))
+        from dataclasses import asdict
+        return success_response(data=asdict(ps.settings.voice))
 
+    @endpoint("settings.get_ui")
     async def get_ui(self) -> dict:
         """Get UI settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            s = _get().settings.ui
-            from dataclasses import asdict
-            return success_response(data=asdict(s))
-        except Exception as e:
-            classify_and_raise(e, source="settings.get_ui")
+        from domains.settings.persistent import get_settings as _get
+        s = _get().settings.ui
+        from dataclasses import asdict
+        return success_response(data=asdict(s))
 
+    @endpoint("settings.update_ui")
     async def update_ui(
         self, req: UISettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update UI settings."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            updates = {k: v for k, v in req.model_dump().items() if v is not None}
-            if not updates:
-                return success_response(data={"message": "No changes"})
-            ps = _get()
-            ps.update("ui", **updates)
-            safe_audit_log("settings.update", resource="ui", detail=str(updates))
-            from dataclasses import asdict
-            return success_response(data=asdict(ps.settings.ui))
-        except Exception as e:
-            classify_and_raise(e, source="settings.update_ui")
+        from domains.settings.persistent import get_settings as _get
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return success_response(data={"message": "No changes"})
+        ps = _get()
+        ps.update("ui", **updates)
+        safe_audit_log("settings.update", resource="ui", detail=str(updates))
+        from dataclasses import asdict
+        return success_response(data=asdict(ps.settings.ui))
 
+    @endpoint("settings.reset")
     async def reset_settings(
         self, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Reset all settings to defaults."""
-        try:
-            from domains.settings.persistent import get_settings as _get
-            ps = _get()
-            ps.reset()
-            safe_audit_log("settings.reset", resource="all")
-            return success_response(data={"status": "reset", "message": "All settings restored to defaults"})
-        except Exception as e:
-            classify_and_raise(e, source="settings.reset")
+        from domains.settings.persistent import get_settings as _get
+        ps = _get()
+        ps.reset()
+        safe_audit_log("settings.reset", resource="all")
+        return success_response(data={"status": "reset", "message": "All settings restored to defaults"})
 
+    @endpoint("settings.adaptive_insights")
     async def get_adaptive_insights(self) -> dict:
         """Get adaptive training insights from history."""
-        try:
-            from domains.training.adaptive_config import AdaptiveConfigEngine
-            from domains.settings.persistent import get_settings as _get
-            ps = _get()
-            model = ps.settings.training.preferred_model or "gpt2"
-            engine = AdaptiveConfigEngine()
-            insights = engine.get_insights(model=model)
-            return success_response(data=insights)
-        except Exception as e:
-            classify_and_raise(e, source="settings.adaptive_insights")
+        from domains.training.adaptive_config import AdaptiveConfigEngine
+        from domains.settings.persistent import get_settings as _get
+        ps = _get()
+        model = ps.settings.training.preferred_model or "gpt2"
+        engine = AdaptiveConfigEngine()
+        insights = engine.get_insights(model=model)
+        return success_response(data=insights)
 
 
 router = SettingsRouter().router

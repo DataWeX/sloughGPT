@@ -21,7 +21,7 @@ from domains.billing.token_service import (
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import raise_error, success_response
+from schemas.common import endpoint, raise_error, success_response
 
 logger = logging.getLogger("slo.routers.tokens")
 
@@ -43,6 +43,7 @@ class CheckRequest(BaseModel):
 
 
 @router.get("/balance")
+@endpoint("tokens.balance")
 async def get_balance(auth_user: dict = Depends(require_auth_if_enabled)):
     try:
         service = get_token_billing_service()
@@ -54,6 +55,7 @@ async def get_balance(auth_user: dict = Depends(require_auth_if_enabled)):
 
 
 @router.get("/usage/summary")
+@endpoint("tokens.usage_summary")
 async def get_usage_summary(auth_user: dict = Depends(require_auth_if_enabled)):
     try:
         service = get_token_billing_service()
@@ -64,6 +66,7 @@ async def get_usage_summary(auth_user: dict = Depends(require_auth_if_enabled)):
 
 
 @router.get("/usage/history")
+@endpoint("tokens.usage_history")
 async def get_usage_history(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -79,6 +82,7 @@ async def get_usage_history(
 
 
 @router.post("/topup")
+@endpoint("tokens.topup")
 async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     try:
         service = get_token_billing_service()
@@ -90,6 +94,7 @@ async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require
 
 
 @router.post("/upgrade")
+@endpoint("tokens.upgrade")
 async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     try:
         tier = Tier(request.tier)
@@ -110,6 +115,7 @@ async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(requir
 
 
 @router.post("/check")
+@endpoint("tokens.check")
 async def check_tokens(request: CheckRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     try:
         service = get_token_billing_service()
