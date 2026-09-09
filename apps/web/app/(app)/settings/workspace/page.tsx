@@ -29,7 +29,7 @@ import {
   Textarea,
 } from '@sloughgpt/strui'
 import { IconTrash } from '@/components/icons/NavIcons'
-import { apiGet, apiPut, apiDelete } from '@/lib/http-client'
+import { apiGet, apiPut, apiDelete, apiPost } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
 import { useLocale } from '@/hooks/useLocale'
@@ -93,6 +93,7 @@ export default function WorkspaceSettingsPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
 
   const wsId = currentWorkspace?.id
 
@@ -172,6 +173,24 @@ export default function WorkspaceSettingsPage() {
     } finally {
       setDeleting(false)
       setDeleteConfirm('')
+    }
+  }
+
+  const handleCleanup = async () => {
+    if (!wsId) return
+    setCleaning(true)
+    try {
+      const res = await apiPost<{ data: { retention_days: number; cleaned: Record<string, number> } }>(
+        `/workspaces/${wsId}/cleanup`,
+        {}
+      )
+      const cleaned = res?.data?.cleaned ?? {}
+      const total = Object.values(cleaned).reduce((a, b) => a + b, 0)
+      addToast(`Cleanup complete: ${total} items removed`, 'success')
+    } catch {
+      addToast('Could not run cleanup', 'error')
+    } finally {
+      setCleaning(false)
     }
   }
 
@@ -343,6 +362,21 @@ export default function WorkspaceSettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Data Retention Cleanup */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Data Retention</CardTitle>
+          <CardDescription>
+            Clean up training jobs and audit logs older than {retentionDays} days
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button variant="outline" onClick={handleCleanup} disabled={cleaning}>
+            {cleaning ? 'Cleaning...' : 'Run Cleanup Now'}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Danger Zone */}
       <Card className="border-destructive">

@@ -880,6 +880,66 @@ class WorkspacesRouter:
                 "role": role.value,
             })
 
+        # ─── Cleanup expired data ─────────────────────────────
+        async def cleanup_workspace_data(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+            user = self._get_user(auth_user)
+            ws = self._ws_repo.get(workspace_id)
+            if not ws:
+                raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
+            member = self._ws_repo.get_member(workspace_id, user.id)
+            if not member or member.role not in (Role.ADMIN, Role.OWNER):
+                if not user.is_admin:
+                    raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
+
+            retention_days = getattr(ws, 'data_retention_days', 90) or 90
+            cutoff = datetime.now(timezone.utc).timestamp() - (retention_days * 86400)
+            cleaned = {"training_jobs": 0, "audit_logs": 0}
+
+            # Clean old training jobs
+            try:
+                from domains.training.repository import TrainingRepository
+                repo = TrainingRepository()
+                old_jobs = repo.list_by_workspace(workspace_id)
+                for job in old_jobs:
+                    created = getattr(job, 'created_at', None)
+                    if created:
+                        try:
+                            job_ts = datetime.fromisoformat(created.replace('Z', '+00:00')).timestamp()
+                        except (ValueError, TypeError):
+                            continue
+                        if job_ts < cutoff:
+                            repo.delete(job.id)
+                            cleaned["training_jobs"] += 1
+            except Exception:
+                pass
+
+            # Clean old audit logs
+            try:
+                from infrastructure.auth import AuditLogger
+                audit = AuditLogger()
+                old_logs = audit.list(workspace_id=workspace_id, limit=10000)
+                for log in old_logs:
+                    ts = log.get("timestamp", "")
+                    if ts:
+                        try:
+                            log_ts = datetime.fromisoformat(ts.replace('Z', '+00:00')).timestamp()
+                        except (ValueError, TypeError):
+                            continue
+                        if log_ts < cutoff:
+                            audit.delete(log.get("id", ""))
+                            cleaned["audit_logs"] += 1
+            except Exception:
+                pass
+
+            logger.info(
+                "User %s cleaned workspace %s: %s",
+                user.username, workspace_id, cleaned,
+            )
+            return success_response(data={
+                "retention_days": retention_days,
+                "cleaned": cleaned,
+            })
+
         router.add_api_route("", list_workspaces, methods=["GET"])
         router.add_api_route("/{workspace_id}", get_workspace, methods=["GET"])
         router.add_api_route("", create_workspace, methods=["POST"])
@@ -899,6 +959,7 @@ class WorkspacesRouter:
         router.add_api_route("/{workspace_id}/settings", get_workspace_settings, methods=["GET"])
         router.add_api_route("/{workspace_id}/settings", update_workspace_settings, methods=["PUT"])
         router.add_api_route("/{workspace_id}/invite", invite_member, methods=["POST"])
+        router.add_api_route("/{workspace_id}/cleanup", cleanup_workspace_data, methods=["POST"])
 
 
 # ─── Singleton ─────────────────────────────────────────────────
