@@ -885,6 +885,21 @@ class SloughGPTClient:
         response = self._request("GET", "/settings/training/batch-status")
         return response.json()
 
+    def list_training_presets(self) -> Dict[str, Any]:
+        """List all available training presets."""
+        response = self._request("GET", "/settings/training/presets")
+        return response.json()
+
+    def get_training_preset(self, name: str) -> Dict[str, Any]:
+        """Get a specific training preset."""
+        response = self._request("GET", f"/settings/training/presets/{name}")
+        return response.json()
+
+    def apply_training_preset(self, name: str) -> Dict[str, Any]:
+        """Apply a training preset to current settings."""
+        response = self._request("POST", f"/settings/training/presets/{name}/apply")
+        return response.json()
+
     # ============ VQA ============
 
     def ask_question(self, image_path: str, question: str) -> Dict[str, Any]:
