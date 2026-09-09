@@ -466,6 +466,7 @@ class TestDownloadWith:
         """download_with uses the provided backend, not the global one."""
         global_backend = FakeBackend()
         specific_backend = FakeBackend()
+        specific_backend.downloaded = {"model-x": {"cache_dir": "/tmp/specific"}}
         specific_backend._download_result = {
             "status": "complete",
             "cache_dir": "/tmp/specific",
