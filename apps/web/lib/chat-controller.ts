@@ -56,8 +56,8 @@ export const chatController = {
     } catch (err) {
       _log.warning('chat endpoint failed, falling back to /inference/generate', { error: err instanceof Error ? err.message : String(err) })
       try {
-        const { toast } = await import('@/components/ui')
-        toast.info('Using basic mode — conversation context unavailable')
+        const { useToastStore } = await import('./toast-store')
+        useToastStore.getState().addToast('Using basic mode — conversation context unavailable', 'info')
       } catch {}
       const fallback = await apiPost<{ text?: string }>(
         '/inference/generate',
