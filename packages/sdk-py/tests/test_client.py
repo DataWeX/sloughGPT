@@ -371,3 +371,327 @@ class TestWorkspaces:
         result = client.add_workspace_member("w1", "user-1", "admin")
         client._mock_request.assert_called_once()
         assert result["added"] is True
+
+
+class TestGetToken:
+    def test_exchange_api_key(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"access_token": "jwt-123", "token_type": "bearer"})
+        result = client.get_token("my-api-key")
+        client._mock_request.assert_called_once_with("POST", "/auth/token", json={"api_key": "my-api-key"})
+        assert result["access_token"] == "jwt-123"
+
+
+class TestHealth:
+    def test_health(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"status": "healthy", "model_loaded": True, "model_type": "gpt2"})
+        result = client.health()
+        client._mock_request.assert_called_once_with("GET", "/health")
+        assert result.status == "healthy"
+
+    def test_liveness(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"alive": True})
+        result = client.liveness()
+        client._mock_request.assert_called_once_with("GET", "/health/live")
+        assert result["alive"] is True
+
+    def test_readiness(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"ready": True})
+        result = client.readiness()
+        client._mock_request.assert_called_once_with("GET", "/health/ready")
+        assert result["ready"] is True
+
+    def test_detailed_health(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"status": "ok", "uptime": 1000})
+        result = client.detailed_health()
+        client._mock_request.assert_called_once_with("GET", "/health/detailed")
+        assert result["uptime"] == 1000
+
+    def test_info(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"name": "sloughgpt", "version": "1.0", "model": {"type": "gpt2", "loaded": True}})
+        result = client.info()
+        client._mock_request.assert_called_once_with("GET", "/info")
+        assert result.version == "1.0"
+
+
+class TestSettings:
+    def test_get_settings(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"generation": {"temperature": 0.7}})
+        result = client.get_settings()
+        client._mock_request.assert_called_once_with("GET", "/settings")
+        assert result["generation"]["temperature"] == 0.7
+
+    def test_get_generation_settings(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"temperature": 0.8, "top_p": 0.9})
+        result = client.get_generation_settings()
+        client._mock_request.assert_called_once_with("GET", "/settings/generation")
+        assert result["temperature"] == 0.8
+
+    def test_update_generation_settings(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"temperature": 0.5})
+        result = client.update_generation_settings(temperature=0.5)
+        client._mock_request.assert_called_once()
+        assert result["temperature"] == 0.5
+
+    def test_get_voice_settings(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"noise_gate_db": -40})
+        result = client.get_voice_settings()
+        client._mock_request.assert_called_once_with("GET", "/settings/voice")
+        assert result["noise_gate_db"] == -40
+
+    def test_update_voice_settings(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"noise_gate_db": -35})
+        result = client.update_voice_settings(noise_gate_db=-35)
+        client._mock_request.assert_called_once()
+        assert result["noise_gate_db"] == -35
+
+    def test_reset_settings(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"reset": True})
+        result = client.reset_settings()
+        client._mock_request.assert_called_once_with("POST", "/settings/reset")
+        assert result["reset"] is True
+
+    def test_get_adaptive_insights(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"exploration_rate": 0.3, "confidence": 0.8})
+        result = client.get_adaptive_insights()
+        client._mock_request.assert_called_once_with("GET", "/settings/adaptive/insights")
+        assert result["confidence"] == 0.8
+
+
+class TestModels:
+    def test_list_models(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"models": [{"model_id": "gpt2", "name": "GPT-2"}], "count": 1})
+        result = client.list_models()
+        client._mock_request.assert_called_once_with("GET", "/models")
+        assert len(result) == 1
+
+    def test_load_model(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"loaded": True, "model_id": "gpt2"})
+        result = client.load_model("gpt2")
+        client._mock_request.assert_called_once()
+        assert result["loaded"] is True
+
+    def test_unload_model(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"unloaded": True})
+        result = client.unload_model()
+        client._mock_request.assert_called_once_with("POST", "/models/unload")
+        assert result["unloaded"] is True
+
+    def test_get_current_model(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"model_id": "gpt2", "loaded": True})
+        result = client.get_current_model()
+        client._mock_request.assert_called_once_with("GET", "/models/current")
+        assert result["model_id"] == "gpt2"
+
+    def test_list_hf_models(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"models": [{"id": "gpt2"}]})
+        result = client.list_hf_models(query="gpt", limit=5)
+        client._mock_request.assert_called_once()
+        assert len(result) == 1
+
+
+class TestSessions:
+    def test_create_session(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"session_id": "s1", "created_at": "2026-09-10"})
+        result = client.create_session()
+        client._mock_request.assert_called_once_with("POST", "/chat/sessions")
+        assert result["session_id"] == "s1"
+
+    def test_list_sessions(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"sessions": [{"session_id": "s1"}]})
+        result = client.list_sessions()
+        client._mock_request.assert_called_once_with("GET", "/chat/sessions")
+        assert len(result) == 1
+
+    def test_get_session(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"session_id": "s1", "messages": []})
+        result = client.get_session("s1")
+        client._mock_request.assert_called_once_with("GET", "/chat/sessions/s1")
+        assert result["session_id"] == "s1"
+
+    def test_delete_session(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"deleted": True})
+        result = client.delete_session("s1")
+        client._mock_request.assert_called_once_with("DELETE", "/chat/sessions/s1")
+        assert result["deleted"] is True
+
+    def test_get_session_messages(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"messages": [{"role": "user", "content": "hi"}]})
+        result = client.get_session_messages("s1")
+        client._mock_request.assert_called_once()
+        assert len(result) == 1
+
+
+class TestKnowledge:
+    def test_list_knowledge(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"items": [{"id": "k1", "content": "test"}]})
+        result = client.list_knowledge()
+        client._mock_request.assert_called_once_with("GET", "/knowledge")
+        assert len(result) == 1
+
+    def test_add_knowledge(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "k2", "content": "new fact"})
+        result = client.add_knowledge("new fact", topic="ai")
+        client._mock_request.assert_called_once()
+        assert result["content"] == "new fact"
+
+    def test_delete_knowledge(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"deleted": True})
+        result = client.delete_knowledge("k1")
+        client._mock_request.assert_called_once()
+        assert result["deleted"] is True
+
+    def test_search_knowledge(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"results": [{"id": "k1", "score": 0.95}]})
+        result = client.search_knowledge("machine learning")
+        client._mock_request.assert_called_once()
+        assert len(result) == 1
+
+
+class TestDatasets:
+    def test_list_datasets(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"datasets": [{"dataset_id": "d1", "name": "train"}], "count": 1})
+        result = client.list_datasets()
+        client._mock_request.assert_called_once_with("GET", "/datasets")
+        assert len(result) == 1
+
+    def test_get_dataset(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "d1", "name": "train", "rows": 100})
+        result = client.get_dataset("d1")
+        client._mock_request.assert_called_once_with("GET", "/datasets/d1")
+        assert result.id == "d1"
+
+    def test_get_dataset_stats(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"rows": 100, "columns": 5, "size_bytes": 1024})
+        result = client.get_dataset_stats("d1")
+        client._mock_request.assert_called_once_with("GET", "/datasets/d1/stats")
+        assert result["rows"] == 100
+
+
+class TestExperiments:
+    def test_create_experiment(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "exp1", "name": "test"})
+        result = client.create_experiment("test", description="testing")
+        client._mock_request.assert_called_once()
+        assert result["name"] == "test"
+
+    def test_list_experiments(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"experiments": [{"id": "exp1"}]})
+        result = client.list_experiments()
+        client._mock_request.assert_called_once_with("GET", "/experiments")
+        assert len(result) == 1
+
+    def test_get_experiment(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "exp1", "name": "test"})
+        result = client.get_experiment("exp1")
+        client._mock_request.assert_called_once_with("GET", "/experiments/exp1")
+        assert result["id"] == "exp1"
+
+    def test_log_metric(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"logged": True})
+        result = client.log_metric("exp1", "accuracy", 0.95)
+        client._mock_request.assert_called_once()
+        assert result["logged"] is True
+
+    def test_log_param(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"logged": True})
+        result = client.log_param("exp1", "lr", 0.001)
+        client._mock_request.assert_called_once()
+        assert result["logged"] is True
+
+
+class TestRateLimit:
+    def test_get_rate_limit_status(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"requests_remaining": 100, "reset_at": "2026-09-10T12:00:00Z"})
+        result = client.get_rate_limit_status()
+        client._mock_request.assert_called_once_with("GET", "/rate-limit/status")
+        assert result["requests_remaining"] == 100
+
+    def test_check_rate_limit(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"limited": False})
+        result = client.check_rate_limit()
+        client._mock_request.assert_called_once_with("GET", "/rate-limit/check")
+        assert result["limited"] is False
+
+
+class TestAuditLog:
+    def test_get_audit_log(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"logs": [{"action": "login", "timestamp": "2026-09-10"}]})
+        result = client.get_audit_log()
+        client._mock_request.assert_called_once_with("GET", "/security/audit")
+        assert len(result) == 1
+
+
+class TestRegistry:
+    def test_list_registry_models(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"models": [{"model_id": "m1"}]})
+        result = client.list_registry_models()
+        client._mock_request.assert_called_once_with("GET", "/registry/models")
+        assert len(result) == 1
+
+    def test_get_registry_model(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"model_id": "m1", "score": 0.9})
+        result = client.get_registry_model("m1")
+        client._mock_request.assert_called_once_with("GET", "/registry/models/m1")
+        assert result["model_id"] == "m1"
+
+    def test_get_registry_best(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"model_id": "best-m", "score": 0.99})
+        result = client.get_registry_best()
+        client._mock_request.assert_called_once_with("GET", "/registry/best")
+        assert result["model_id"] == "best-m"
+
+    def test_get_registry_stats(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"total_models": 5, "avg_score": 0.85})
+        result = client.get_registry_stats()
+        client._mock_request.assert_called_once_with("GET", "/registry/stats")
+        assert result["total_models"] == 5
+
+
+class TestBenchmark:
+    def test_run_benchmark(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"job_id": "b1", "status": "running"})
+        result = client.run_benchmark({"model": "gpt2", "dataset": "test"})
+        client._mock_request.assert_called_once()
+        assert result["status"] == "running"
+
+    def test_get_benchmark_metrics(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"metrics": [{"name": "latency", "value": 50}]})
+        result = client.get_benchmark_metrics()
+        client._mock_request.assert_called_once_with("GET", "/benchmark/metrics")
+        assert len(result) == 1
+
+    def test_get_benchmark_stats(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"total_runs": 10, "avg_latency": 45})
+        result = client.get_benchmark_stats()
+        client._mock_request.assert_called_once_with("GET", "/benchmark/stats")
+        assert result["total_runs"] == 10
+
+
+class TestTokenizer:
+    def test_get_tokenizer_stats(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"vocab_size": 50257, "token_count": 1000})
+        result = client.get_tokenizer_stats()
+        client._mock_request.assert_called_once_with("GET", "/tokenizer/stats")
+        assert result["vocab_size"] == 50257
+
+
+class TestFeedback:
+    def test_record_feedback(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"recorded": True})
+        result = client.record_feedback("s1", "msg1", score=5, tags=["helpful"])
+        client._mock_request.assert_called_once()
+        assert result["recorded"] is True
+
+    def test_get_workflow_status(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"active": True, "pending": 0})
+        result = client.get_workflow_status()
+        client._mock_request.assert_called_once_with("GET", "/workflow/status")
+        assert result["active"] is True
+
+
+class TestMetrics:
+    def test_metrics(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"requests_total": 100, "requests_success": 95})
+        result = client.metrics()
+        client._mock_request.assert_called_once_with("GET", "/metrics")
+        assert result.requests_total == 100

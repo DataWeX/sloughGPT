@@ -1380,4 +1380,483 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][1].method).toBe('POST');
     });
   });
+
+  describe('Auth', () => {
+    it('getToken calls POST /auth/token', async () => {
+      const mockData = { access_token: 'jwt-123', token_type: 'bearer' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getToken('my-api-key');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Health', () => {
+    it('health calls GET /health', async () => {
+      const mockData = { status: 'healthy', model_loaded: true, model_type: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.health();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/health');
+    });
+
+    it('liveness calls GET /health/live', async () => {
+      const mockData = { status: 'alive' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.liveness();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/health/live');
+    });
+
+    it('readiness calls GET /health/ready', async () => {
+      const mockData = { status: 'ready', model_loaded: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.readiness();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/health/ready');
+    });
+
+    it('detailedHealth calls GET /health/detailed', async () => {
+      const mockData = { status: 'ok', uptime: 1000 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.detailedHealth();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/health/detailed');
+    });
+
+    it('info calls GET /info', async () => {
+      const mockData = { name: 'sloughgpt', version: '1.0', model: { type: 'gpt2', loaded: true } };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.info();
+
+      expect(result.version).toBe('1.0');
+      expect(result.model.type).toBe('gpt2');
+      expect(mockFetch.mock.calls[0][0]).toContain('/info');
+    });
+  });
+
+  describe('Settings', () => {
+    it('getSettings calls GET /settings', async () => {
+      const mockData = { generation: { temperature: 0.7 } };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getSettings();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings');
+    });
+
+    it('getGenerationSettings calls GET /settings/generation', async () => {
+      const mockData = { temperature: 0.8, top_p: 0.9 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getGenerationSettings();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/generation');
+    });
+
+    it('updateGenerationSettings calls PATCH /settings/generation', async () => {
+      const mockData = { temperature: 0.5 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.updateGenerationSettings({ temperature: 0.5 });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+    });
+
+    it('getVoiceSettings calls GET /settings/voice', async () => {
+      const mockData = { noise_gate_db: -40 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getVoiceSettings();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/voice');
+    });
+
+    it('updateVoiceSettings calls PATCH /settings/voice', async () => {
+      const mockData = { noise_gate_db: -35 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.updateVoiceSettings({ noise_gate_db: -35 });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+    });
+
+    it('resetSettings calls POST /settings/reset', async () => {
+      const mockData = { reset: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.resetSettings();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getAdaptiveInsights calls GET /settings/adaptive/insights', async () => {
+      const mockData = { exploration_rate: 0.3, confidence: 0.8 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getAdaptiveInsights();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/adaptive/insights');
+    });
+  });
+
+  describe('Models', () => {
+    it('listModels calls GET /models', async () => {
+      const mockData = [{ model_id: 'gpt2', name: 'GPT-2' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listModels();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/models');
+    });
+
+    it('loadModel calls POST /models/load', async () => {
+      const mockData = { status: 'loaded', model_id: 'gpt2' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.loadModel('gpt2');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('unloadModel calls POST /models/unload', async () => {
+      const mockData = { status: 'unloaded' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.unloadModel();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getCurrentModel calls GET /models/current', async () => {
+      const mockData = { model_id: 'gpt2', loaded: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getCurrentModel();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/models/current');
+    });
+  });
+
+  describe('Sessions', () => {
+    it('createSession calls POST /chat/sessions', async () => {
+      const mockData = { session_id: 's1', created_at: '2026-09-10' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.createSession();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('listSessions calls GET /chat/sessions', async () => {
+      const mockData = [{ session_id: 's1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listSessions();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/chat/sessions');
+    });
+
+    it('getSession calls GET /chat/sessions/{id}', async () => {
+      const mockData = { session_id: 's1', messages: [] };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getSession('s1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/chat/sessions/s1');
+    });
+
+    it('deleteSession calls DELETE /chat/sessions/{id}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteSession('s1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+  });
+
+  describe('Knowledge', () => {
+    it('listKnowledge calls GET /knowledge', async () => {
+      const mockData = [{ id: 'k1', content: 'test' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listKnowledge();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/knowledge');
+    });
+
+    it('addKnowledge calls POST /knowledge', async () => {
+      const mockData = { id: 'k2', content: 'new fact' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.addKnowledge('new fact', 'ai');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('deleteKnowledge calls DELETE /knowledge/{id}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteKnowledge('k1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('searchKnowledge calls GET /knowledge/search', async () => {
+      const mockData = [{ id: 'k1', content: 'test', relevance: 0.95 }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.searchKnowledge('machine learning');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/knowledge/search');
+    });
+  });
+
+  describe('Datasets', () => {
+    it('listDatasets calls GET /datasets', async () => {
+      const mockData = [{ id: 'd1', name: 'train' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listDatasets();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/datasets');
+    });
+
+    it('getDataset calls GET /datasets/{id}', async () => {
+      const mockData = { id: 'd1', name: 'train', rows: 100 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getDataset('d1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/datasets/d1');
+    });
+
+    it('getDatasetStats calls GET /datasets/{id}/stats', async () => {
+      const mockData = { rows: 100, columns: 5, size_bytes: 1024 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getDatasetStats('d1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/datasets/d1/stats');
+    });
+  });
+
+  describe('Experiments', () => {
+    it('listExperiments calls GET /experiments', async () => {
+      const mockData = [{ experiment_id: 'exp1', name: 'test' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listExperiments();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/experiments');
+    });
+
+    it('getExperiment calls GET /experiments/{id}', async () => {
+      const mockData = { experiment_id: 'exp1', name: 'test' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getExperiment('exp1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/experiments/exp1');
+    });
+
+    it('logMetric calls POST /experiments/{id}/log_metric', async () => {
+      mockFetch.mockResolvedValue(createMockResponse(undefined));
+
+      const client = new SloughGPTClient();
+      await client.logMetric('exp1', 'accuracy', 0.95);
+
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+      expect(mockFetch.mock.calls[0][0]).toContain('/experiments/exp1/log_metric');
+    });
+  });
+
+  describe('Audit Log', () => {
+    it('getAuditLog calls GET /security/audit', async () => {
+      const mockData = [{ action: 'login', timestamp: '2026-09-10' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getAuditLog();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/security/audit');
+    });
+  });
+
+  describe('Registry', () => {
+    it('listRegistryModels calls GET /registry/models', async () => {
+      const mockData = [{ model_id: 'm1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listRegistryModels();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/models');
+    });
+
+    it('getRegistryBest calls GET /registry/best', async () => {
+      const mockData = { model_id: 'best-m', score: 0.99 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getRegistryBest();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/best');
+    });
+
+    it('getRegistryStats calls GET /registry/stats', async () => {
+      const mockData = { total_models: 5, avg_score: 0.85 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getRegistryStats();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/registry/stats');
+    });
+  });
+
+  describe('Benchmark', () => {
+    it('getBenchmarkMetrics calls GET /benchmark/metrics', async () => {
+      const mockData = [{ name: 'latency', value: 50 }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getBenchmarkMetrics();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/benchmark/metrics');
+    });
+
+    it('getBenchmarkStats calls GET /benchmark/stats', async () => {
+      const mockData = { total_runs: 10, avg_latency: 45 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getBenchmarkStats();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/benchmark/stats');
+    });
+  });
+
+  describe('Tokenizer', () => {
+    it('getTokenizerStats calls GET /tokenizer/stats', async () => {
+      const mockData = { vocab_size: 50257, num_tokens: 1000 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTokenizerStats();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/tokenizer/stats');
+    });
+  });
+
+  describe('Feedback', () => {
+    it('recordFeedback calls POST /feedback/workflow-record', async () => {
+      const mockData = { recorded: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.recordFeedback({ session_id: 's1', message_id: 'm1', score: 5, tags: ['helpful'] });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getWorkflowStatus calls GET /workflow/status', async () => {
+      const mockData = { active: true, pending: 0 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getWorkflowStatus();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/workflow/status');
+    });
+  });
+
+  describe('Metrics', () => {
+    it('metrics calls GET /metrics', async () => {
+      const mockData = { cpu_percent: 50, memory_percent: 60, disk_percent: 30, uptime_seconds: 1000 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.metrics();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/metrics');
+    });
+  });
 });

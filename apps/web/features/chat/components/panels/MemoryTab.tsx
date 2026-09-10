@@ -33,6 +33,7 @@ export function MemoryTab() {
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null)
+  const [addError, setAddError] = useState<string | null>(null)
 
   useEffect(() => {
     if (pendingSseFact) {

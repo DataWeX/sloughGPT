@@ -144,10 +144,11 @@ describe('settingsController.getBatchTrainingStatus', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs batch status', async () => {
-    apiClient.apiGet.mockResolvedValue({ total: 5, completed: 3, failed: 1 })
+    const mockData = { jobs: [], summary: { total: 5, running: 0, queued: 0, completed: 3, failed: 1 } }
+    apiClient.apiGet.mockResolvedValue(mockData)
     const result = await settingsController.getBatchTrainingStatus()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/training/batch-status')
-    expect(result.total).toBe(5)
+    expect(result.summary.total).toBe(5)
   })
 })
 
