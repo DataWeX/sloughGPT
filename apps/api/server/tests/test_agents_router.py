@@ -74,10 +74,11 @@ class TestCreateAgent:
         assert "id" in data
 
     def test_create_auto_generates_id_from_name(self):
-        resp = self.client.post("/agents", json={"name": "My Cool Agent", "description": "x"})
+        aid = _unique_id("auto")
+        resp = self.client.post("/agents", json={"name": f"{aid} Agent", "description": "x"})
         assert resp.status_code == 201
         data = _d(resp)
-        assert data["id"] == "my-cool-agent"
+        assert data["id"] == f"{aid}-agent"
 
     def test_create_duplicate_returns_409(self):
         aid = _unique_id("dup")
