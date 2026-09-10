@@ -191,19 +191,24 @@ export default function TrainingPage() {
           </Card>
         )}
 
-        <TrainingSummaryCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
+        {/* Summary / health / pipeline hidden for first-time users to reduce clutter */}
+        {(form.allJobs.length > 0 || checkpoints.checkpoints.length > 0) && (
+          <>
+            <TrainingSummaryCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
 
-        <TrainingHealthCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
+            <TrainingHealthCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
 
-        {/* Pipeline */}
-        <TrainingPipeline
-          form={form}
-          datasets={datasets}
-          session={session}
-          checkpoints={checkpoints}
-          onTest={() => test.setTestDialogOpen(true)}
-          addToast={addToast}
-        />
+            {/* Pipeline */}
+            <TrainingPipeline
+              form={form}
+              datasets={datasets}
+              session={session}
+              checkpoints={checkpoints}
+              onTest={() => test.setTestDialogOpen(true)}
+              addToast={addToast}
+            />
+          </>
+        )}
 
         {/* Fast train (turbo) */}
         <TurboCard datasets={datasets} session={session} addToast={addToast} />
