@@ -6,7 +6,7 @@ Replaces the in-memory config controller with a persistent backend.
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, safe_audit_log, success_response

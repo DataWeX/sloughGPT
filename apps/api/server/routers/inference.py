@@ -23,7 +23,7 @@ from domains.learner.entity_extractor import extract_and_store
 from domains.learner.knowledge import KnowledgeFact, get_knowledge_memory
 from domains.memory.memory_service import get_memory_service
 from domains.models.provider import KnowledgeProcessor, apply_processors, get_provider
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
@@ -1352,6 +1352,205 @@ class InferenceRouter:
             )
 
         return StreamingResponse(generate(), media_type="text/event-stream")
+
+    async def ws_generate(self, websocket: WebSocket) -> None:
+        """WebSocket endpoint for real-time token streaming.
+
+        Protocol:
+          1. Client connects and sends auth message: {"api_key": "..."} or {"token": "..."}
+          2. Server responds: {"status": "authenticated"} or {"status": "error", "error": "..."}
+          3. Client sends generate requests: {"prompt": "...", "max_tokens": 100, "temperature": 0.8}
+          4. Server streams tokens: {"token": "..."}
+          5. Server sends completion: {"done": true, "status": "done", "text": "...full text"}
+          6. Server sends error: {"status": "error", "error": "..."}
+        """
+        await websocket.accept()
+
+        auth_user = None
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            msg = json.loads(raw)
+        except (asyncio.TimeoutError, json.JSONDecodeError) as e:
+            try:
+                await websocket.send_json({"status": "error", "error": f"Invalid auth message: {e}"})
+            except Exception:
+                pass
+            await websocket.close()
+            return
+
+        api_key = msg.get("api_key") or msg.get("token")
+        if not api_key:
+            try:
+                await websocket.send_json({"status": "error", "error": "Missing api_key or token"})
+            except Exception:
+                pass
+            await websocket.close()
+            return
+
+        import os as _ws_os
+        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in ("true", "1", "yes")
+
+        if auth_required:
+            from infrastructure.auth import get_jwt_auth
+            jwt_auth = get_jwt_auth()
+            try:
+                auth_user = jwt_auth.verify_token(api_key)
+            except Exception:
+                try:
+                    await websocket.send_json({"status": "error", "error": "Invalid token"})
+                except Exception:
+                    pass
+                await websocket.close()
+                return
+        else:
+            from routers.api_keys import ApiKeyManager
+            try:
+                _key_mgr = ApiKeyManager()
+                if not _key_mgr.validate(api_key):
+                    try:
+                        await websocket.send_json({"status": "error", "error": "Invalid API key"})
+                    except Exception:
+                        pass
+                    await websocket.close()
+                    return
+            except Exception as e:
+                logger.debug("API key validation skipped (manager unavailable): %s", e)
+
+        try:
+            await websocket.send_json({"status": "authenticated"})
+        except Exception:
+            return
+
+        logger.info("WebSocket /ws/generate connected", extra={"tag": "INF"})
+
+        while True:
+            try:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+            except WebSocketDisconnect:
+                logger.info("WebSocket /ws/generate disconnected", extra={"tag": "INF"})
+                return
+            except json.JSONDecodeError as e:
+                try:
+                    await websocket.send_json({"status": "error", "error": f"Invalid JSON: {e}"})
+                except Exception:
+                    return
+                continue
+
+            if msg.get("type") == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    return
+                continue
+
+            prompt = msg.get("prompt")
+            if not prompt:
+                try:
+                    await websocket.send_json({"status": "error", "error": "Missing prompt field"})
+                except Exception:
+                    return
+                continue
+
+            max_tokens = msg.get("max_tokens", 256)
+            temperature = msg.get("temperature", 0.7)
+            top_p = msg.get("top_p", 0.85)
+            top_k = msg.get("top_k", 40)
+            repetition_penalty = msg.get("repetition_penalty", 1.15)
+
+            import state as _ws_gen_state
+            from startup_progress import STARTUP_PHASE
+
+            if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
+                try:
+                    await websocket.send_json({
+                        "status": "error",
+                        "error": "Model still loading — please wait.",
+                    })
+                except Exception:
+                    return
+                continue
+
+            mem_err = _check_memory_pressure()
+            if mem_err:
+                try:
+                    await websocket.send_json({"status": "error", "error": mem_err})
+                except Exception:
+                    return
+                continue
+
+            provider = get_provider("default")
+            if provider is None:
+                try:
+                    await websocket.send_json({
+                        "status": "error",
+                        "error": "No provider available — load a model first",
+                    })
+                except Exception:
+                    return
+                continue
+
+            provider_messages = [{"role": "user", "content": prompt}]
+            gen_params = _apply_meta_weights(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                user_message=prompt,
+            )
+
+            collected: list[str] = []
+            try:
+                async for token in provider.chat_stream(
+                    provider_messages,
+                    max_tokens=max_tokens,
+                    **gen_params,
+                ):
+                    if token:
+                        collected.append(token)
+                        try:
+                            await websocket.send_json({"token": token})
+                        except Exception:
+                            logger.info("WebSocket client disconnected during stream", extra={"tag": "INF"})
+                            return
+
+                full_text = "".join(collected)
+                try:
+                    await websocket.send_json({
+                        "done": True,
+                        "status": "done",
+                        "text": full_text,
+                    })
+                except Exception:
+                    return
+
+                token_count = _count_tokens(full_text, _ws_gen_state)
+                actual_model = _ws_gen_state.model_type or msg.get("model", "default")
+                try:
+                    get_server_state().record_inference(
+                        tokens=token_count,
+                        elapsed_ms=0,
+                        model=actual_model,
+                    )
+                except Exception as e:
+                    logger.warning("Failed to record inference metrics: %s", e)
+                try:
+                    capture(
+                        prompt,
+                        full_text,
+                        model=actual_model,
+                        tokens_generated=token_count,
+                        temperature=temperature,
+                    )
+                except Exception as e:
+                    logger.warning("Failed to capture conversation: %s", e)
+
+            except Exception as e:
+                logger.warning("WebSocket generate failed: %s", e, extra={"tag": "INF"})
+                try:
+                    await websocket.send_json({"status": "error", "error": str(e)})
+                except Exception:
+                    return
 
     async def get_info(self) -> dict:
         try:
@@ -3062,6 +3261,7 @@ class InferenceRouter:
         r.add_api_route("/cancel/{op_id}", self.cancel_operation, methods=["POST"])
         r.add_api_route("/cancel-all", self.cancel_all_operations, methods=["POST"])
         r.add_api_route("/operations/purge", self.purge_operations, methods=["POST"])
+        r.add_api_websocket_route("/ws/generate", self.ws_generate)
 
 
 _instance = InferenceRouter()
