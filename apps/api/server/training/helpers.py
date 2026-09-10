@@ -49,9 +49,7 @@ def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
     """Set job status and notify CancelManager so operations store stays in sync."""
     job = training_jobs.get(job_id)
     if job is not None:
-        job["status"] = status
-        if error:
-            job["error"] = error
+        training_jobs[job_id] = {**job, "status": status, **({"error": error} if error else {})}
     try:
         from domains.infrastructure.cancel_manager import OpStatus, get_cancel_manager
 

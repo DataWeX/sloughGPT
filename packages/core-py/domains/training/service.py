@@ -22,6 +22,7 @@ from .state import (  # noqa: F401
     MAX_CHECKPOINT_DISK_MB,
     VALID_CKPT_NAME,
     SOU_MAGIC,
+    _state,
     TrainingState,
     get_state,
     get_turbo_state,
@@ -81,3 +82,18 @@ from .stream import (  # noqa: F401
     process_training_completion,
     cleanup_stream_state,
 )
+
+
+async def get_log() -> list[str]:
+    """Read recent training log lines."""
+    import logging
+    from pathlib import Path
+
+    log_file = Path(REPO_ROOT) / "logs" / "training.log"
+    if not log_file.exists():
+        return []
+    try:
+        lines = log_file.read_text().strip().splitlines()
+        return lines[-100:]
+    except Exception:
+        return []
