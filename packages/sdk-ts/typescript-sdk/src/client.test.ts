@@ -1136,4 +1136,31 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][1].method).toBe('POST');
     });
   });
+
+  describe('getAutoTrainStatus()', () => {
+    it('calls GET /settings/training/auto-train/status', async () => {
+      const mockData = { enabled: true, threshold: 10 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getAutoTrainStatus();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/auto-train/status');
+    });
+  });
+
+  describe('updateAutoTrainConfig()', () => {
+    it('calls PATCH /settings/training/auto-train/config', async () => {
+      const mockData = { enabled: true, threshold: 20 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.updateAutoTrainConfig({ threshold: 20 });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/auto-train/config');
+      expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+    });
+  });
 });

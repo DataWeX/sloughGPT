@@ -804,6 +804,29 @@ class SloughGPTClient:
         response = self._request("GET", "/registry/stats")
         return _unwrap_response(response.json())
 
+    # ============ Auto-train ============
+
+    def get_auto_train_status(self) -> Dict[str, Any]:
+        """Get auto-trainer status and configuration."""
+        response = self._request("GET", "/settings/training/auto-train/status")
+        return _unwrap_response(response.json())
+
+    def update_auto_train_config(
+        self,
+        threshold: Optional[int] = None,
+        interval_s: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Update auto-trainer configuration at runtime."""
+        params: Dict[str, Any] = {}
+        if threshold is not None:
+            params["threshold"] = threshold
+        if interval_s is not None:
+            params["interval_s"] = interval_s
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"/settings/training/auto-train/config{f'?{qs}' if qs else ''}"
+        response = self._request("PATCH", url)
+        return _unwrap_response(response.json())
+
     # ============ Benchmark ============
 
     def run_benchmark(self, config: Dict[str, Any]) -> Dict[str, Any]:
@@ -1306,6 +1329,27 @@ class AsyncSloughGPTClient:
     async def get_registry_stats(self) -> Dict[str, Any]:
         """Get live model registry statistics."""
         return _unwrap_response(await self._request("GET", "/registry/stats"))
+
+    # ── Auto-train ─────────────────────────────────────────────
+
+    async def get_auto_train_status(self) -> Dict[str, Any]:
+        """Get auto-trainer status and configuration."""
+        return _unwrap_response(await self._request("GET", "/settings/training/auto-train/status"))
+
+    async def update_auto_train_config(
+        self,
+        threshold: Optional[int] = None,
+        interval_s: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Update auto-trainer configuration at runtime."""
+        params: Dict[str, Any] = {}
+        if threshold is not None:
+            params["threshold"] = threshold
+        if interval_s is not None:
+            params["interval_s"] = interval_s
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        url = f"/settings/training/auto-train/config{f'?{qs}' if qs else ''}"
+        return _unwrap_response(await self._request("PATCH", url))
 
     async def __aenter__(self):
         return self

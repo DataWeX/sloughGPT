@@ -847,6 +847,22 @@ export class SloughGPTClient {
     return this.unwrap(data) as Record<string, unknown>;
   }
 
+  // ============ Auto-train ============
+
+  async getAutoTrainStatus(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/settings/training/auto-train/status');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams();
+    if (params.threshold !== undefined) qs.set('threshold', String(params.threshold));
+    if (params.interval_s !== undefined) qs.set('interval_s', String(params.interval_s));
+    const q = qs.toString();
+    const data = await this.request<Record<string, unknown>>('PATCH', `/settings/training/auto-train/config${q ? `?${q}` : ''}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
   // ============ Auth ============
 
   async getToken(apiKey: string): Promise<unknown> {
