@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
+from schemas.common import endpoint, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.settings")
 
@@ -201,6 +201,14 @@ class SettingsRouter:
         # Training run duplicate
         self.router.add_api_route(
             "/training/runs/{run_id}/duplicate", self.duplicate_training_run, methods=["POST"],
+        )
+
+        # Auto-train status + config
+        self.router.add_api_route(
+            "/training/auto-train/status", self.auto_train_status, methods=["GET"],
+        )
+        self.router.add_api_route(
+            "/training/auto-train/config", self.auto_train_config, methods=["PATCH"],
         )
 
     # ── Handlers ────────────────────────────────────────────────────
@@ -729,6 +737,33 @@ class SettingsRouter:
         count = tracker.bulk_bookmark(ids, bookmarked)
         safe_audit_log("settings.bulk_bookmark", resource="training", detail=f"{count} runs bookmark={bookmarked}")
         return success_response(data={"updated_count": count, "bookmarked": bookmarked})
+
+    # ── Auto-train ───────────────────────────────────────────────────
+
+    @endpoint("settings.auto_train_status")
+    async def auto_train_status(self) -> dict:
+        """Get auto-trainer status and configuration."""
+        from domains.training.auto_trainer import get_auto_trainer
+        trainer = get_auto_trainer()
+        return success_response(data=trainer.status())
+
+    @endpoint("settings.auto_train_config")
+    async def auto_train_config(
+        self,
+        threshold: int | None = Query(None, ge=1, le=100),
+        interval_s: int | None = Query(None, ge=30, le=3600),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Update auto-trainer configuration at runtime."""
+        from domains.training.auto_trainer import get_auto_trainer
+        trainer = get_auto_trainer()
+        if threshold is not None:
+            trainer.threshold = threshold
+        if interval_s is not None:
+            trainer.interval_s = interval_s
+        safe_audit_log("settings.auto_train_config", resource="training",
+                       detail=f"threshold={threshold} interval={interval_s}")
+        return success_response(data=trainer.status())
 
 
 router = SettingsRouter().router

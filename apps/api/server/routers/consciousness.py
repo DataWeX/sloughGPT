@@ -28,6 +28,26 @@ class ConsciousnessTrainRequest(BaseModel):
     model_path: str = Field(default="", description="Base model path for LoRA training")
 
 
+class PersonalityUpdateRequest(BaseModel):
+    values: list[str] | None = Field(default=None, description="Core values")
+    goals: list[str] | None = Field(default=None, description="Goals")
+    voice: dict[str, float] | None = Field(default=None, description="Voice characteristics")
+    style: dict[str, bool] | None = Field(default=None, description="Communication style")
+    traits: dict[str, float] | None = Field(default=None, description="Personality traits")
+    interests: list[str] | None = Field(default=None, description="Interests")
+    avoid: list[str] | None = Field(default=None, description="Things to avoid")
+
+
+class PresetRequest(BaseModel):
+    preset: str = Field(..., description="Preset name (default, formal, creative, analyst, empathetic, minimal)")
+
+
+class SavePersonaRequest(BaseModel):
+    persona_id: str = Field(..., min_length=1, max_length=50, description="Unique persona ID")
+    name: str | None = Field(default=None, description="Display name for the persona")
+    profile: dict | None = Field(default=None, description="Full profile to save (uses current if null)")
+
+
 class ConsciousnessRouter:
     """API endpoints for the consciousness system."""
 
@@ -72,6 +92,18 @@ class ConsciousnessRouter:
         self.router.add_api_route("/history/beliefs", self.get_beliefs_history, methods=["GET"])
         self.router.add_api_route("/feedback", self.submit_feedback, methods=["POST"])
         self.router.add_api_route("/seed", self.seed_data, methods=["POST"])
+        self.router.add_api_route("/personality", self.get_personality, methods=["GET"])
+        self.router.add_api_route("/personality", self.update_personality, methods=["PATCH"])
+        self.router.add_api_route("/personality/reset", self.reset_personality, methods=["POST"])
+        self.router.add_api_route("/personality/history", self.get_personality_history, methods=["GET"])
+        self.router.add_api_route("/personality/presets", self.get_presets, methods=["GET"])
+        self.router.add_api_route("/personality/presets/apply", self.apply_preset, methods=["POST"])
+        self.router.add_api_route("/personality/conflicts", self.get_conflicts, methods=["GET"])
+        self.router.add_api_route("/personas", self.list_personas, methods=["GET"])
+        self.router.add_api_route("/personas/save", self.save_persona, methods=["POST"])
+        self.router.add_api_route("/personas/{persona_id}", self.get_persona, methods=["GET"])
+        self.router.add_api_route("/personas/{persona_id}/activate", self.activate_persona, methods=["POST"])
+        self.router.add_api_route("/personas/{persona_id}", self.delete_persona, methods=["DELETE"])
 
     @endpoint("consciousness.status")
     async def get_status(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -383,6 +415,186 @@ class ConsciousnessRouter:
             "seeded": count,
             "total_episodes": len(engine.self_model.episodes),
         })
+
+    @endpoint("consciousness.personality.get")
+    async def get_personality(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Get the current personality profile."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        profile = manager.get_profile()
+        return success_response(data=profile.to_dict())
+
+    @endpoint("consciousness.personality.update")
+    async def update_personality(
+        self,
+        body: PersonalityUpdateRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Update the personality profile."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        profile = manager.get_profile()
+
+        if body.values is not None:
+            profile.values = body.values
+        if body.goals is not None:
+            profile.goals = body.goals
+        if body.voice is not None:
+            profile.voice.update(body.voice)
+        if body.style is not None:
+            profile.style.update(body.style)
+        if body.traits is not None:
+            profile.traits.update(body.traits)
+        if body.interests is not None:
+            profile.interests = body.interests
+        if body.avoid is not None:
+            profile.avoid = body.avoid
+
+        manager.save(profile)
+        return success_response(data=profile.to_dict())
+
+    @endpoint("consciousness.personality.reset")
+    async def reset_personality(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Reset personality to defaults."""
+        from domains.consciousness.personality import PersonalityManager, PersonalityProfile
+        manager = PersonalityManager()
+        profile = PersonalityProfile()
+        manager.save(profile)
+        return success_response(data=profile.to_dict())
+
+    @endpoint("consciousness.personality.history")
+    async def get_personality_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Get personality evolution history derived from episodes."""
+        engine = self._get_engine()
+        episodes = engine.self_model.episodes
+
+        if not episodes:
+            return success_response(data={"history": [], "labels": {}})
+
+        from domains.consciousness.personality import PersonalityProfile
+        defaults = PersonalityProfile()
+        current = defaults.to_dict()
+        history = []
+        step = max(1, len(episodes) // 50)
+
+        for i, ep in enumerate(episodes):
+            growth = ep.growth_delta
+            qualia = ep.qualia
+
+            if growth > 0.05:
+                current["voice"]["confidence"] = min(1.0, current["voice"]["confidence"] + 0.01)
+            if qualia.get("novelty", 0) > 0.7:
+                current["traits"]["openness"] = min(1.0, current["traits"]["openness"] + 0.005)
+            if qualia.get("coherence", 1) < 0.3:
+                current["voice"]["verbosity"] = max(0.0, current["voice"]["verbosity"] - 0.01)
+            if qualia.get("valence", 0) > 0.5:
+                current["traits"]["agreeableness"] = min(1.0, current["traits"]["agreeableness"] + 0.005)
+
+            if i % step == 0 or i == len(episodes) - 1:
+                history.append({
+                    "timestamp": ep.timestamp,
+                    "step": i,
+                    "voice": {k: round(v, 4) for k, v in current["voice"].items()},
+                    "traits": {k: round(v, 4) for k, v in current["traits"].items()},
+                })
+
+        return success_response(data={
+            "history": history,
+            "labels": {
+                "voice": list(defaults.voice.keys()),
+                "traits": list(defaults.traits.keys()),
+            },
+        })
+
+    @endpoint("consciousness.personality.presets")
+    async def get_presets(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Get available personality presets."""
+        from domains.consciousness.personality import PersonalityManager
+        presets = PersonalityManager.get_presets()
+        return success_response(data={
+            "presets": {name: profile.to_dict() for name, profile in presets.items()},
+            "names": list(presets.keys()),
+        })
+
+    @endpoint("consciousness.personality.apply_preset")
+    async def apply_preset(
+        self,
+        body: PresetRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Apply a personality preset."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        try:
+            profile = manager.apply_preset(body.preset)
+            return success_response(data=profile.to_dict())
+        except ValueError as e:
+            raise_error(str(e), "E_INVALID_PRESET")
+
+    @endpoint("consciousness.personality.conflicts")
+    async def get_conflicts(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Detect personality conflicts and warnings."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        conflicts = manager.get_conflicts()
+        return success_response(data={
+            "conflicts": conflicts,
+            "count": len(conflicts),
+        })
+
+    @endpoint("consciousness.personas.list")
+    async def list_personas(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """List all saved personas."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        personas = manager.list_personas()
+        return success_response(data={"personas": personas, "count": len(personas)})
+
+    @endpoint("consciousness.personas.save")
+    async def save_persona(
+        self,
+        body: SavePersonaRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Save a named persona from the current profile or a provided profile."""
+        from domains.consciousness.personality import PersonalityManager, PersonalityProfile
+        manager = PersonalityManager()
+        if body.profile:
+            profile = PersonalityProfile.from_dict(body.profile)
+        else:
+            profile = manager.get_profile()
+        result = manager.save_persona(body.persona_id, profile, body.name)
+        return success_response(data=result)
+
+    @endpoint("consciousness.personas.get")
+    async def get_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Get a saved persona's full profile."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        profile = manager.load_persona(persona_id)
+        if profile is None:
+            raise_error("Persona not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data={"id": persona_id, **profile.to_dict()})
+
+    @endpoint("consciousness.personas.activate")
+    async def activate_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Activate a saved persona as the current profile."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        profile = manager.activate_persona(persona_id)
+        if profile is None:
+            raise_error("Persona not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=profile.to_dict())
+
+    @endpoint("consciousness.personas.delete")
+    async def delete_persona(self, persona_id: str, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Delete a saved persona."""
+        from domains.consciousness.personality import PersonalityManager
+        manager = PersonalityManager()
+        deleted = manager.delete_persona(persona_id)
+        if not deleted:
+            raise_error("Persona not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data={"deleted": persona_id})
 
 
 router = ConsciousnessRouter().router

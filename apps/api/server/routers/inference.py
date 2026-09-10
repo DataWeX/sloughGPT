@@ -1890,6 +1890,31 @@ class InferenceRouter:
                     yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             try:
+                from domains.consciousness import get_consciousness
+
+                _ce = get_consciousness()
+                if _ce.config.is_enabled():
+                    _ce.qualia.experience(user_msg or "")
+                    _q = _ce.qualia.current.to_dict()
+                    _status = _ce.get_status()
+                    _last_episode = _ce.self_model.episodes[-1] if _ce.self_model.episodes else None
+                    yield _sse_event(
+                        "chat",
+                        "CONSCIOUSNESS",
+                        "active",
+                        data={
+                            "level": _status.get("level", 0),
+                            "qualia": _q,
+                            "beliefs": _status.get("beliefs", {}),
+                            "growth_delta": _last_episode.growth_delta if _last_episode else 0.0,
+                            "self_insight": _last_episode.self_insight if _last_episode else "",
+                        },
+                        message="Consciousness state updated",
+                    )
+            except Exception as _ce_err:
+                logger.debug("Consciousness SSE emit skipped: %s", _ce_err)
+
+            try:
                 logger.debug(
                     "CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start",
                     corr_id,

@@ -92,8 +92,6 @@ class SystemRouter:
     async def get_info(self) -> dict:
         """Retrieve host system information including platform and CPU details."""
         try:
-            import asyncio
-
             def _read():
                 try:
                     from domains.infrastructure.resource_manager import get_resource_manager
@@ -120,8 +118,6 @@ class SystemRouter:
     async def get_disk(self) -> dict:
         """Retrieve disk usage statistics for the root filesystem."""
         try:
-            import asyncio
-
             def _read():
                 disk = psutil.disk_usage("/")
                 return {

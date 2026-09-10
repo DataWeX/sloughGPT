@@ -416,7 +416,6 @@ class MobileRouter:
 
             return get_training_controller().list_checkpoints()
         except Exception as exc:
-            import logging
             logging.getLogger("slo.mobile").warning("Failed to list checkpoints: %s", exc)
             return []
 
@@ -1087,7 +1086,6 @@ class MobileRouter:
         self, body: MobileTrainRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Train the SloNet model on conversation pairs from the mobile app."""
-        import time as _time
         from pathlib import Path
 
         if len(body.pairs) < 5:
