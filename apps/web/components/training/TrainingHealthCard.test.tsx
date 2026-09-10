@@ -9,9 +9,11 @@ function mkCp(overrides: Partial<Checkpoint> = {}): Checkpoint {
 }
 
 describe('TrainingHealthCard', () => {
-  it('returns null for empty checkpoints', () => {
-    const { container } = render(<TrainingHealthCard checkpoints={[]} />)
-    expect(container.innerHTML).toBe('')
+  it('shows empty state for no checkpoints', () => {
+    render(<TrainingHealthCard checkpoints={[]} />)
+    expect(screen.getByText('Training health')).toBeTruthy()
+    expect(screen.getByText('No data')).toBeTruthy()
+    expect(screen.getByText(/Need at least 2/)).toBeTruthy()
   })
 
   it('shows no-data when only 1 checkpoint with loss', () => {

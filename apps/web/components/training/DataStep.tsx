@@ -157,11 +157,13 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
         )}
 
         <div className="flex items-center gap-2 pt-2">
-          <Button size="sm" onClick={onNext}>
+          <Button size="sm" onClick={onNext} disabled={!canAdvance}>
             Next: Configure
           </Button>
           {!canAdvance && (
-            <span className="text-[11px] text-muted-foreground">Select a dataset or switch to paste text in the next step</span>
+            <span className="text-[11px] text-muted-foreground">
+              Select a dataset or paste training text to continue
+            </span>
           )}
         </div>
       </CardContent>

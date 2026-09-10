@@ -176,9 +176,25 @@ export default function TrainingPage() {
           <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
         </KpiGrid>
 
-        <TrainingSummaryCard checkpoints={checkpoints.checkpoints} />
+        {/* First-time user welcome */}
+        {form.allJobs.length === 0 && checkpoints.checkpoints.length === 0 && (
+          <div className="border border-dashed border-border rounded-lg">
+            <div className="py-6 text-center">
+              <p className="text-sm font-medium">Welcome to training</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+                Pick a dataset or paste training text, configure parameters, and run your first training job.
+                Your trained models and checkpoints will appear here.
+              </p>
+              <Button size="sm" className="mt-3" onClick={() => form.setInputMode('dataset')}>
+                Start training
+              </Button>
+            </div>
+          </div>
+        )}
 
-        <TrainingHealthCard checkpoints={checkpoints.checkpoints} />
+        <TrainingSummaryCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
+
+        <TrainingHealthCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
 
         {/* Pipeline */}
         <TrainingPipeline

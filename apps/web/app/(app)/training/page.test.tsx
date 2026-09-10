@@ -53,7 +53,7 @@ const mockCheckpoints = vi.hoisted(() => ({
   handleLoadCheckpoint: vi.fn(), handleDeleteCheckpoint: vi.fn(),
 }))
 const mockForm = vi.hoisted(() => ({
-  canStart: true, inputMode: 'dataset', allJobs: [] as any[], startTraining: vi.fn(),
+  canStart: true, inputMode: 'dataset', allJobs: [] as any[], startTraining: vi.fn(), setInputMode: vi.fn(),
 }))
 const mockTest = vi.hoisted(() => ({
   testDialogOpen: false, testPrompt: '', testResult: null, testLoading: false,
@@ -122,6 +122,13 @@ describe('TrainingPage', () => {
     expect(screen.getByTestId('stat-Running').textContent).toContain('0')
     expect(screen.getByTestId('stat-Completed').textContent).toContain('0')
     expect(screen.getByTestId('stat-Saved versions').textContent).toContain('0')
+  })
+
+  it('shows welcome banner for first-time users with no jobs or checkpoints', async () => {
+    render(<Page />)
+    await waitFor(() => { expect(screen.getByText('Welcome to training')).toBeTruthy() })
+    const buttons = screen.getAllByText('Start training')
+    expect(buttons.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows stat counts derived from jobs and checkpoints', async () => {
