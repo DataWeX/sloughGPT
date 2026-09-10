@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, cn } from '@sloughgpt/strui'
 
 interface ChecklistItem {

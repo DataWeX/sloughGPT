@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { IconChat, IconModels } from '@/components/icons/NavIcons'
+import { KpiGrid, StatCard, StatusDot } from '@sloughgpt/strui'
+import { IconModels, IconBrain, IconActivity, IconUsers } from '@sloughgpt/strui'
 
 interface StatsGridProps {
   apiStatus: string
@@ -15,67 +14,49 @@ interface StatsGridProps {
 
 export function StatsGrid({ apiStatus, modelCount, currentSoul, modelStatus, inferenceCount, t }: StatsGridProps) {
   const loading = apiStatus === 'loading'
+  
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <Card className="flex flex-col justify-between">
-        <CardHeader className="pb-1 px-4 pt-4">
-          <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.status')}</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4 px-4">
-          {loading ? (
-            <div className="h-6 w-20 animate-pulse rounded bg-muted" />
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/40" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-              </span>
-              <p className="text-sm font-semibold">Online</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      <Card className="flex flex-col justify-between">
-        <CardHeader className="pb-1 px-4 pt-4">
-          <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.models')}</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4 px-4">
-          {loading ? (
-            <div className="h-6 w-12 animate-pulse rounded bg-muted" />
-          ) : (
-            <p className="text-sm font-semibold tabular-nums">{modelCount !== null ? modelCount : '\u2014'}</p>
-          )}
-        </CardContent>
-      </Card>
-      <Card className="flex flex-col justify-between">
-        <CardHeader className="pb-1 px-4 pt-4">
-          <CardDescription className="text-xs font-medium text-muted-foreground">{t('home.stats.personality')}</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4 px-4">
-          {loading ? (
-            <div className="h-6 w-24 animate-pulse rounded bg-muted" />
-          ) : (
-            <p className="text-sm font-semibold truncate">{currentSoul?.name || '\u2014'}</p>
-          )}
-        </CardContent>
-      </Card>
-      <Card className="bg-gradient-to-br from-accent/5 to-transparent border-accent/20 flex flex-col justify-between">
-        <CardHeader className="pb-1 px-4 pt-4">
-          <CardDescription className="text-xs font-medium text-muted-foreground">Active</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-4 px-4">
-          {loading ? (
-            <div className="h-6 w-32 animate-pulse rounded bg-muted" />
-          ) : (
-            <>
-              <p className="text-sm font-semibold truncate">{modelStatus.loaded ? `${modelStatus.model} + ${currentSoul?.name || 'default'}` : 'Not loaded'}</p>
-              {inferenceCount !== null && inferenceCount !== undefined && (
-                <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{inferenceCount} conversations</p>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    <KpiGrid columns={4}>
+      <StatCard
+        label={t('home.stats.status')}
+        value={loading ? '—' : 'Online'}
+        icon={
+          <StatusDot 
+            tone={loading ? 'muted' : 'success'} 
+            pulse={!loading} 
+          />
+        }
+        loading={loading}
+        className="transition-all duration-200 hover:shadow-md hover:shadow-success/10"
+      />
+      <StatCard
+        label={t('home.stats.models')}
+        value={loading ? '—' : (modelCount ?? '—')}
+        icon={<IconModels className="h-4 w-4" />}
+        loading={loading}
+        numeric={!loading && modelCount !== null}
+        className="transition-all duration-200 hover:shadow-md hover:shadow-primary/10"
+      />
+      <StatCard
+        label={t('home.stats.personality')}
+        value={loading ? '—' : (currentSoul?.name ?? '—')}
+        icon={<IconBrain className="h-4 w-4" />}
+        loading={loading}
+        description={currentSoul?.traits?.[0]}
+        className="transition-all duration-200 hover:shadow-md hover:shadow-accent/10"
+      />
+      <StatCard
+        label="Active"
+        value={loading ? '—' : (modelStatus.loaded ? 'Loaded' : 'Not loaded')}
+        icon={<IconActivity className="h-4 w-4" />}
+        loading={loading}
+        description={
+          inferenceCount !== null && inferenceCount !== undefined
+            ? `${inferenceCount} conversations`
+            : undefined
+        }
+        className="transition-all duration-200 hover:shadow-md hover:shadow-accent/10"
+      />
+    </KpiGrid>
   )
 }

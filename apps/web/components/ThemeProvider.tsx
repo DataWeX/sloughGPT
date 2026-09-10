@@ -103,12 +103,12 @@ export function useTheme() {
 }
 
 /** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* */
-export const THEMES: { id: StoredThemeId; name: string; color: string }[] = [
-  { id: 'blue', name: 'Periwinkle', color: '#5a82dc' },
-  { id: 'purple', name: 'Lilac', color: '#9b6cd6' },
-  { id: 'pink', name: 'Rose', color: '#da82aa' },
-  { id: 'red', name: 'Coral', color: '#e67882' },
-  { id: 'orange', name: 'Peach', color: '#ec9b5a' },
-  { id: 'green', name: 'Mint', color: '#48b282' },
-  { id: 'teal', name: 'Dew', color: '#48a6c8' },
+export const THEMES: { id: StoredThemeId; name: string; color: string; aura: string }[] = [
+  { id: 'blue', name: 'Periwinkle', color: '#5a82dc', aura: 'Calm ocean, trustworthy' },
+  { id: 'purple', name: 'Lilac', color: '#9b6cd6', aura: 'Ethereal lilac, mystical' },
+  { id: 'pink', name: 'Rose', color: '#da82aa', aura: 'Soft rose, delicate' },
+  { id: 'red', name: 'Coral', color: '#e67882', aura: 'Warm coral, energetic' },
+  { id: 'orange', name: 'Peach', color: '#ec9b5a', aura: 'Peachy bread crust, warm bakery' },
+  { id: 'green', name: 'Mint', color: '#48b282', aura: 'Fresh mint, natural' },
+  { id: 'teal', name: 'Dew', color: '#48a6c8', aura: 'Cool dew, refreshing' },
 ]

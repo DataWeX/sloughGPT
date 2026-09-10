@@ -129,7 +129,7 @@ export function StatusBar() {
           {hasFailures && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="sl-badge sl-badge-destructive cursor-help">
+                <span className="sl-badge sl-badge-destructive cursor-help" role="status">
                   {failureCount} fail{failureCount !== 1 ? 's' : ''}
                 </span>
               </TooltipTrigger>

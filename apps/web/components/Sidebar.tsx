@@ -7,6 +7,7 @@ import { IconClose } from '@/components/icons/NavIcons'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { TrainingIndicator } from './TrainingIndicator'
+import { ConsciousnessSidebarWidget } from './consciousness/ConsciousnessSidebarWidget'
 import { useLocale } from '@/hooks/useLocale'
 import { NAV_SECTIONS, SIDEBAR_ICONS } from '@/lib/navigation'
 
@@ -129,6 +130,11 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                       </li>
                     )
                   })}
+                  {!isCollapsed && t('nav.section.ai') === t(section.labelKey) && (
+                    <li className="mt-0.5">
+                      <ConsciousnessSidebarWidget />
+                    </li>
+                  )}
                 </ul>
               </div>
             ))}
