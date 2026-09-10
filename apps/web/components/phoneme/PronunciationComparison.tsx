@@ -68,7 +68,7 @@ export default function PronunciationComparison() {
         similarity,
       })
     } catch {
-      addToast({ type: 'error', message: 'Failed to encode words' })
+      addToast('Failed to encode words', 'error')
     } finally {
       setLoading(false)
     }

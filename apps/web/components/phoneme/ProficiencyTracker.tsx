@@ -40,7 +40,7 @@ export default function ProficiencyTracker() {
     history.forEach(entry => {
       const lang = entry.language
       if (!langData[lang]) langData[lang] = { scores: [], count: 0, streak: 0 }
-      langData[lang].scores.push(...entry.scores)
+      langData[lang].scores.push(entry.score)
       langData[lang].count++
     })
 

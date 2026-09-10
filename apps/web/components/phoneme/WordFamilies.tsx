@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@sloughgpt/strui'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
-import { usePhonemeStore } from '@/lib/phoneme-store'
+import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
 import { toIPA } from '@/lib/phoneme-controller'
 
 interface WordFamily {
@@ -13,7 +13,7 @@ interface WordFamily {
   count: number
 }
 
-function groupByEnding(history: NonNullable<ReturnType<typeof usePhonemeStore.getState>['history']>): WordFamily[] {
+function groupByEnding(history: HistoryEntry[]): WordFamily[] {
   const familyMap: Record<string, { phonemes: string[]; words: Set<string> }> = {}
 
   history.forEach(entry => {
@@ -25,7 +25,7 @@ function groupByEnding(history: NonNullable<ReturnType<typeof usePhonemeStore.ge
       if (!familyMap[ending]) {
         familyMap[ending] = { phonemes: phonemes.slice(-endLen), words: new Set() }
       }
-      familyMap[ending].words.add(entry.targetWord)
+      familyMap[ending].words.add(entry.target)
     }
   })
 

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
-import { IconRefresh, IconVolume2 } from '@sloughgpt/strui'
+import { IconRefresh, IconSpeaker } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
 
@@ -22,7 +22,7 @@ export default function AudioPronunciationGuide({ word = 'hello', lang = 'en' }:
     if (!word.trim()) return
     setLoading(true)
     try {
-      const res = await phonemeController.synthesize(word, lang)
+      const res = await phonemeController.synthesize(word)
       const audioBlob = base64ToBlob(res.audio, 'audio/wav')
       const url = URL.createObjectURL(audioBlob)
       setAudioUrl(url)
@@ -83,7 +83,7 @@ export default function AudioPronunciationGuide({ word = 'hello', lang = 'en' }:
           {audioUrl && (
             <>
               <Button onClick={isPlaying ? handleStop : handlePlay} variant="secondary">
-                <IconVolume2 className="mr-2 h-4 w-4" />
+                <IconSpeaker className="mr-2 h-4 w-4" />
                 {isPlaying ? 'Stop' : 'Play'}
               </Button>
             </>

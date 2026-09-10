@@ -63,7 +63,7 @@ export default function PhonemeNetwork() {
       phonemes.forEach((p, i) => {
         if (!phonemeStats[p]) phonemeStats[p] = { total: 0, correct: 0 }
         phonemeStats[p].total++
-        const score = entry.scores[i] ?? entry.scores[0] ?? 0
+        const score = entry.score
         if (score >= 0.8) phonemeStats[p].correct++
       })
 

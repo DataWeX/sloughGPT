@@ -101,13 +101,12 @@ export default function PronunciationGame() {
     try {
       const encoded = await phonemeController.encode(currentWord, language)
       addToHistory({
-        targetWord: currentWord,
-        spokenWord: userInput.trim(),
+        target: currentWord,
+        spoken: userInput.trim(),
         targetPhonemes: encoded.phonemes,
         spokenPhonemes: encoded.phonemes,
-        scores: isCorrect ? [1.0] : [0.0],
+        score: isCorrect ? 1.0 : 0.0,
         language,
-        timestamp: new Date().toISOString(),
       })
     } catch {}
 

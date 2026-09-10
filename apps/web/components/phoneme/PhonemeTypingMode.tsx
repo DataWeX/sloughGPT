@@ -60,19 +60,18 @@ export default function PhonemeTypingMode() {
     setGameState('result')
 
     addToHistory({
-      targetWord: challenge.phonemes.join('-'),
-      spokenWord: userInput,
+      target: challenge.phonemes.join('-'),
+      spoken: userInput,
       targetPhonemes: challenge.phonemes,
       spokenPhonemes: userPhonemes,
-      scores: isCorrect ? [1.0] : [0.3],
+      score: isCorrect ? 1.0 : 0.3,
       language: 'en',
-      timestamp: new Date().toISOString(),
     })
 
-    addToast({
-      type: isCorrect ? 'success' : 'warning',
-      message: isCorrect ? 'Correct!' : `Expected: ${challenge.phonemes.join(' ')}`,
-    })
+    addToast(
+      isCorrect ? 'Correct!' : `Expected: ${challenge.phonemes.join(' ')}`,
+      isCorrect ? 'success' : 'error',
+    )
   }, [challenge, userInput, addToHistory, addToast])
 
   const insertPhoneme = useCallback((phoneme: string) => {

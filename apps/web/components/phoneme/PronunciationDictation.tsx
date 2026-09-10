@@ -55,20 +55,19 @@ export default function PronunciationDictation() {
     try {
       const result = await phonemeController.encode(currentWord, language)
       addToHistory({
-        targetWord: currentWord,
-        spokenWord: userInput.trim(),
+        target: currentWord,
+        spoken: userInput.trim(),
         targetPhonemes: result.phonemes,
         spokenPhonemes: result.phonemes,
-        scores: isCorrect ? [1.0] : [0.3],
+        score: isCorrect ? 1.0 : 0.3,
         language,
-        timestamp: new Date().toISOString(),
       })
     } catch {}
 
-    addToast({
-      type: isCorrect ? 'success' : 'warning',
-      message: isCorrect ? 'Correct!' : `The word was "${currentWord}"`,
-    })
+    addToast(
+      isCorrect ? 'Correct!' : `The word was "${currentWord}"`,
+      isCorrect ? 'success' : 'error',
+    )
   }, [userInput, currentWord, language, addToHistory, addToast])
 
   return (

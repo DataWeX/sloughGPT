@@ -44,7 +44,7 @@ export default function CustomWordList() {
     if (!trimmed) return
 
     if (words.some(w => w.word === trimmed && w.language === language)) {
-      addToast({ type: 'warning', message: `"${trimmed}" already in your list` })
+      addToast(`"${trimmed}" already in your list`, 'error')
       return
     }
 
@@ -61,9 +61,9 @@ export default function CustomWordList() {
       setWords(updated)
       saveCustomWords(updated)
       setNewWord('')
-      addToast({ type: 'success', message: `Added "${trimmed}"` })
+      addToast(`Added "${trimmed}"`, 'success')
     } catch (err) {
-      addToast({ type: 'error', message: `Failed to encode "${trimmed}"` })
+      addToast(`Failed to encode "${trimmed}"`, 'error')
     }
   }, [newWord, language, words, addToast])
 
@@ -71,13 +71,13 @@ export default function CustomWordList() {
     const updated = words.filter(w => w.id !== id)
     setWords(updated)
     saveCustomWords(updated)
-    addToast({ type: 'info', message: 'Word removed' })
+    addToast('Word removed', 'info')
   }, [words, addToast])
 
   const clearAll = useCallback(() => {
     setWords([])
     saveCustomWords([])
-    addToast({ type: 'info', message: 'All custom words cleared' })
+    addToast('All custom words cleared', 'info')
   }, [addToast])
 
   const groupedWords = words.reduce<Record<string, CustomWord[]>>((acc, w) => {

@@ -26,15 +26,22 @@ export default function PronunciationSpeed() {
   const stats = useMemo(() => {
     const langData: Record<string, { times: number[]; count: number }> = {}
 
-    history.forEach(entry => {
-      if (!entry.duration) return
+    const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp)
+
+    sorted.forEach((entry, i) => {
       const lang = entry.language
       if (!langData[lang]) langData[lang] = { times: [], count: 0 }
-      langData[lang].times.push(entry.duration)
+      if (i > 0 && sorted[i - 1].language === lang) {
+        const gap = entry.timestamp - sorted[i - 1].timestamp
+        if (gap > 0 && gap < 120000) {
+          langData[lang].times.push(gap)
+        }
+      }
       langData[lang].count++
     })
 
     return Object.entries(langData)
+      .filter(([, data]) => data.times.length > 0)
       .map(([lang, data]) => {
         const avgTime = data.times.reduce((a, b) => a + b, 0) / data.times.length
         const fastestTime = Math.min(...data.times)

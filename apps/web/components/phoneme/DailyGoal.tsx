@@ -41,7 +41,7 @@ export default function DailyGoal() {
 
   const todayCount = useMemo(() => {
     const today = getToday()
-    return history.filter(e => e.timestamp?.startsWith(today)).length
+    return history.filter(e => new Date(e.timestamp).toISOString().startsWith(today)).length
   }, [history])
 
   useEffect(() => {

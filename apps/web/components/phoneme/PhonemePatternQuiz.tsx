@@ -68,7 +68,7 @@ export default function PhonemePatternQuiz() {
       })
       setGameState('playing')
     } catch {
-      addToast({ type: 'error', message: 'Failed to encode word' })
+      addToast('Failed to encode word', 'error')
     }
   }, [language, addToast])
 
@@ -93,19 +93,18 @@ export default function PhonemePatternQuiz() {
     setGameState('revealed')
 
     addToHistory({
-      targetWord: question.word,
-      spokenWord: question.word,
+      target: question.word,
+      spoken: question.word,
       targetPhonemes: question.phonemes,
       spokenPhonemes: question.phonemes,
-      scores: isCorrect ? [1.0] : [0.3],
+      score: isCorrect ? 1.0 : 0.3,
       language,
-      timestamp: new Date().toISOString(),
     })
 
-    addToast({
-      type: isCorrect ? 'success' : 'warning',
-      message: isCorrect ? `Correct! ${question.word} is ${question.correctPattern}` : `The pattern was ${question.correctPattern}`,
-    })
+    addToast(
+      isCorrect ? `Correct! ${question.word} is ${question.correctPattern}` : `The pattern was ${question.correctPattern}`,
+      isCorrect ? 'success' : 'error',
+    )
   }, [question, language, addToHistory, addToast])
 
   return (

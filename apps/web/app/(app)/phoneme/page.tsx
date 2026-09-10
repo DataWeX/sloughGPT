@@ -41,6 +41,8 @@ import ConfusionMatrix from '@/components/phoneme/ConfusionMatrix'
 import PracticeCalendar from '@/components/phoneme/PracticeCalendar'
 import PronunciationGame from '@/components/phoneme/PronunciationGame'
 import PhonemeNetwork from '@/components/phoneme/PhonemeNetwork'
+import PronunciationRecording from '@/components/phoneme/PronunciationRecording'
+import PhonemeQuizAdvanced from '@/components/phoneme/PhonemeQuizAdvanced'
 import PhonemeReference from '@/components/phoneme/PhonemeReference'
 import TabErrorBoundary from '@/components/phoneme/TabErrorBoundary'
 import { usePhonemeShortcuts } from '@/hooks/usePhonemeShortcuts'
@@ -166,11 +168,13 @@ export default function PhonemePage() {
               <TabErrorBoundary tabName="Practice"><PracticeCard /></TabErrorBoundary>
               <TabErrorBoundary tabName="Daily Goal"><DailyGoal /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Game"><PronunciationGame /></TabErrorBoundary>
+              <TabErrorBoundary tabName="Recording"><PronunciationRecording /></TabErrorBoundary>
               <TabErrorBoundary tabName="Word of the Day"><WordOfDayCard /></TabErrorBoundary>
               <TabErrorBoundary tabName="Minimal Pairs"><MinimalPairsCard /></TabErrorBoundary>
               <TabErrorBoundary tabName="Rhyme Finder"><RhymeFinder /></TabErrorBoundary>
               <TabErrorBoundary tabName="Dictation"><PronunciationDictation /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pattern Quiz"><PhonemePatternQuiz /></TabErrorBoundary>
+              <TabErrorBoundary tabName="Advanced Quiz"><PhonemeQuizAdvanced /></TabErrorBoundary>
               <TabErrorBoundary tabName="Phoneme Typing"><PhonemeTypingMode /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Coach"><PronunciationCoach /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Tips"><PronunciationTips /></TabErrorBoundary>

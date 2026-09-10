@@ -29,7 +29,7 @@ export default function PracticeCalendar() {
     const dayCounts: Record<string, number> = {}
     history.forEach(entry => {
       if (entry.timestamp) {
-        const day = entry.timestamp.split('T')[0]
+        const day = new Date(entry.timestamp).toISOString().split('T')[0]
         dayCounts[day] = (dayCounts[day] || 0) + 1
       }
     })

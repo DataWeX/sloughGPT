@@ -8,6 +8,7 @@ import { useToastStore } from '@/lib/toast-store'
 
 export default function ProgressExport() {
   const history = usePhonemeStore(s => s.history)
+  const addToHistory = usePhonemeStore(s => s.addToHistory)
   const addToast = useToastStore(s => s.addToast)
 
   const exportData = useCallback(() => {
@@ -23,7 +24,7 @@ export default function ProgressExport() {
     a.download = `phoneme-progress-${new Date().toISOString().split('T')[0]}.json`
     a.click()
     URL.revokeObjectURL(url)
-    addToast({ type: 'success', message: `Exported ${history.length} entries` })
+    addToast(`Exported ${history.length} entries`, 'success')
   }, [history, addToast])
 
   const importData = useCallback(() => {
@@ -36,33 +37,38 @@ export default function ProgressExport() {
 
       try {
         const text = await file.text()
-        const data = JSON.parse(text)
+        const data: { history: Array<{ target: string; spoken: string; language: string; targetPhonemes: string[]; spokenPhonemes: string[]; score: number }> } = JSON.parse(text)
 
         if (!data.history || !Array.isArray(data.history)) {
-          addToast({ type: 'error', message: 'Invalid file format' })
+          addToast('Invalid file format', 'error')
           return
         }
 
-        const store = usePhonemeStore.getState()
-        const existing = store.history
-        const existingWords = new Set(existing.map(h => `${h.targetWord}-${h.language}-${h.spokenWord}`))
+        const existingWords = new Set(history.map(h => `${h.target}-${h.language}-${h.spoken}`))
 
         let imported = 0
         for (const entry of data.history) {
-          const key = `${entry.targetWord}-${entry.language}-${entry.spokenWord}`
+          const key = `${entry.target}-${entry.language}-${entry.spoken}`
           if (!existingWords.has(key)) {
-            store.addToHistory(entry)
+            addToHistory({
+              target: entry.target,
+              spoken: entry.spoken,
+              targetPhonemes: entry.targetPhonemes,
+              spokenPhonemes: entry.spokenPhonemes,
+              score: entry.score,
+              language: entry.language,
+            })
             imported++
           }
         }
 
-        addToast({ type: 'success', message: `Imported ${imported} new entries (${data.history.length - imported} duplicates skipped)` })
+        addToast(`Imported ${imported} new entries (${data.history.length - imported} duplicates skipped)`, 'success')
       } catch {
-        addToast({ type: 'error', message: 'Failed to parse file' })
+        addToast('Failed to parse file', 'error')
       }
     }
     input.click()
-  }, [addToast])
+  }, [addToast, history, addToHistory])
 
   return (
     <Card>
