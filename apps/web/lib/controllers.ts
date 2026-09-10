@@ -26,6 +26,8 @@ export { ingestDocument, queryRAG, verifyRAG, listRAGDocuments, getRAGStats, cle
 export { operationsController } from './operations-controller'
 export { phonemeController } from './phoneme-controller'
 export { dashboardController } from './dashboard-controller'
+export { settingsController } from './settings-controller'
+export { pluginsCloudController } from './plugins-cloud-controller'
 
 export type { ModelInfo, ModelStatus, ModelLoadResponse, HealthStatus } from './model-controller'
 export type { TrainingJob, TrainingStatus, RecoverableJob, Webhook, WebhookStats } from './training-controller'
