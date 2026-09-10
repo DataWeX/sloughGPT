@@ -4,8 +4,7 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Button } from '@sloughgpt/strui'
-import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { Button, StatCard, KpiGrid, Card, CardContent } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -178,8 +177,8 @@ export default function TrainingPage() {
 
         {/* First-time user welcome */}
         {form.allJobs.length === 0 && checkpoints.checkpoints.length === 0 && (
-          <div className="border border-dashed border-border rounded-lg">
-            <div className="py-6 text-center">
+          <Card className="border-dashed">
+            <CardContent className="py-6 text-center">
               <p className="text-sm font-medium">Welcome to training</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
                 Pick a dataset or paste training text, configure parameters, and run your first training job.
@@ -188,8 +187,8 @@ export default function TrainingPage() {
               <Button size="sm" className="mt-3" onClick={() => form.setInputMode('dataset')}>
                 Start training
               </Button>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
         <TrainingSummaryCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
