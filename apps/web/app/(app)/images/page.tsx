@@ -9,6 +9,9 @@ import { StatusBanner } from '@/components/composed/StatusBanner'
 import { imagesController, type GalleryImage, type ImageStyle } from '@/lib/images-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { ImageGalleryInsightsCard } from '@/components/images/ImageGalleryInsightsCard'
+import { ImageUploaderCard } from '@/components/images/ImageUploaderCard'
+import { ImageComparisonCard } from '@/components/images/ImageComparisonCard'
+import { ImageHistoryCard, recordImageGeneration } from '@/components/images/ImageHistoryCard'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
@@ -158,6 +161,21 @@ export default function ImagesPage() {
       </Card>
 
       {gallery.length > 0 && <ImageGalleryInsightsCard gallery={gallery} styles={styles} />}
+
+      <ImageUploaderCard onUpload={(img) => addToast(`Uploaded ${img.name}`, 'success')} />
+
+      <ImageComparisonCard
+        images={gallery.slice(0, 10).map(g => ({
+          id: g.id,
+          label: g.path.split('/').pop() ?? g.id,
+          src: `${PUBLIC_API_URL}/static/${g.path}`,
+        }))}
+      />
+
+      <ImageHistoryCard onReUse={(p, s) => {
+        setPrompt(p)
+        setSelectedStyle(s as ImageStyle)
+      }} />
     </PageContainer>
   )
 }
