@@ -32,6 +32,8 @@ import DailyGoal from '@/components/phoneme/DailyGoal'
 import ProficiencyTracker from '@/components/phoneme/ProficiencyTracker'
 import PronunciationDictation from '@/components/phoneme/PronunciationDictation'
 import PhonemePatternQuiz from '@/components/phoneme/PhonemePatternQuiz'
+import WordDifficultyRanker from '@/components/phoneme/WordDifficultyRanker'
+import PhonemeTypingMode from '@/components/phoneme/PhonemeTypingMode'
 import PhonemeReference from '@/components/phoneme/PhonemeReference'
 import TabErrorBoundary from '@/components/phoneme/TabErrorBoundary'
 import { usePhonemeShortcuts } from '@/hooks/usePhonemeShortcuts'
@@ -161,6 +163,7 @@ export default function PhonemePage() {
               <TabErrorBoundary tabName="Rhyme Finder"><RhymeFinder /></TabErrorBoundary>
               <TabErrorBoundary tabName="Dictation"><PronunciationDictation /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pattern Quiz"><PhonemePatternQuiz /></TabErrorBoundary>
+              <TabErrorBoundary tabName="Phoneme Typing"><PhonemeTypingMode /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Coach"><PronunciationCoach /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Tips"><PronunciationTips /></TabErrorBoundary>
               <TabErrorBoundary tabName="Custom Words"><CustomWordList /></TabErrorBoundary>
@@ -204,6 +207,7 @@ export default function PhonemePage() {
                 <TabErrorBoundary tabName="Phoneme Frequency"><PhonemeFrequency /></TabErrorBoundary>
               </div>
               <TabErrorBoundary tabName="Language Proficiency"><ProficiencyTracker /></TabErrorBoundary>
+              <TabErrorBoundary tabName="Word Difficulty"><WordDifficultyRanker /></TabErrorBoundary>
               <TabErrorBoundary tabName="Phoneme Clusters"><PhonemeClusters /></TabErrorBoundary>
               <TabErrorBoundary tabName="Word Families"><WordFamilies /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Patterns"><PronunciationPatterns /></TabErrorBoundary>

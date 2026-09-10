@@ -225,8 +225,7 @@ class TestBulkBookmark:
 class TestAutoTrainStatus:
     def test_get_auto_train_status(self, client):
         client._mock_request.return_value = MagicMock(json=lambda: {"enabled": True, "threshold": 10})
-        import asyncio
-        result = asyncio.run(client.get_auto_train_status())
+        result = client.get_auto_train_status()
         client._mock_request.assert_called_once()
         assert result["enabled"] is True
         assert result["threshold"] == 10
@@ -235,7 +234,6 @@ class TestAutoTrainStatus:
 class TestAutoTrainConfig:
     def test_update_auto_train_config(self, client):
         client._mock_request.return_value = MagicMock(json=lambda: {"enabled": True, "threshold": 20})
-        import asyncio
-        result = asyncio.run(client.update_auto_train_config(threshold=20))
+        result = client.update_auto_train_config(threshold=20)
         client._mock_request.assert_called_once()
         assert result["threshold"] == 20
