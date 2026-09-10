@@ -7,6 +7,9 @@ import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
+import { AutoTrainStatusCard } from '@/components/auto-train/AutoTrainStatusCard'
+import { AutoTrainConfigCard } from '@/components/auto-train/AutoTrainConfigCard'
+import { AutoTrainHistoryCard } from '@/components/auto-train/AutoTrainHistoryCard'
 import { Zap, Play, Pause, Settings, Clock, Database, AlertCircle, CheckCircle } from 'lucide-react'
 
 interface AutoTrainStatus {
@@ -98,149 +101,19 @@ export default function AutoTrainPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${status?.enabled ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                    {status?.enabled ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{status?.enabled ? 'Enabled' : 'Disabled'}</p>
-                    <p className="text-xs text-muted-foreground">Auto-train status</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                    <Database className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{stats?.pending || 0} pending</p>
-                    <p className="text-xs text-muted-foreground">{stats?.total || 0} total pairs</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
-                    <Zap className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Threshold: {status?.threshold || 10}</p>
-                    <p className="text-xs text-muted-foreground">Min pairs to trigger</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          <AutoTrainStatusCard status={status} stats={stats} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Settings className="h-4 w-4" /> Configuration
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Pair Threshold</label>
-                  <Input
-                    type="number"
-                    min={10}
-                    max={10000}
-                    value={threshold}
-                    onChange={(e) => setThreshold(parseInt(e.target.value) || 10)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Minimum conversation pairs before auto-training triggers
-                  </p>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Check Interval (seconds)</label>
-                  <Input
-                    type="number"
-                    min={30}
-                    max={3600}
-                    value={intervalS}
-                    onChange={(e) => setIntervalS(parseInt(e.target.value) || 120)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    How often to check for new training data
-                  </p>
-                </div>
-                <Button onClick={handleUpdateConfig} disabled={updating}>
-                  {updating ? 'Saving...' : 'Save Configuration'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Clock className="h-4 w-4" /> Last Training Run
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {status?.last_train ? (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Started:</span>
-                      <span>{formatDate(status.last_train.started_at)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Completed:</span>
-                      <span>{formatDate(status.last_train.completed_at)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Pairs used:</span>
-                      <span>{status.last_train.pairs_used}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Checkpoint:</span>
-                      <Badge variant="secondary">{status.last_train.checkpoint}</Badge>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No training runs yet</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <AutoTrainConfigCard
+              threshold={status?.threshold}
+              intervalS={120}
+              onSave={async (t, i) => {
+                await fetch(`/settings/training/auto-train/config?threshold=${t}&interval_s=${i}`, { method: 'PATCH' })
+                fetchData()
+              }}
+            />
+            <AutoTrainHistoryCard lastTrain={status?.last_train ?? null} />
           </div>
-
-          {stats && Object.keys(stats.by_quality || {}).length > 0 && (
-            <Card className="mt-6">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Data Quality Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3">
-                  {Object.entries(stats.by_quality).map(([quality, count]) => (
-                    <div key={quality} className="flex items-center gap-2">
-                      <Badge className={
-                        quality === 'good' ? 'bg-green-100 text-green-800' :
-                        quality === 'bad' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }>
-                        {quality}
-                      </Badge>
-                      <span className="text-sm font-medium">{count as number}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </>
       )}
     </PageContainer>
