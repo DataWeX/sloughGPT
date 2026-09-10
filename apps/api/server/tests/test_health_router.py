@@ -209,3 +209,42 @@ class TestHealthRouter:
             from domains.models.provider import _providers
 
             _providers.pop("slonet-native", None)
+
+    def test_model_health(self):
+        """GET /health/model returns model health status."""
+        resp = client.get("/health/model")
+        assert resp.status_code == 200
+        data = self._data(resp)
+        assert "status" in data
+
+    def test_health_summary(self):
+        """GET /health/summary returns aggregated health info."""
+        resp = client.get("/health/summary")
+        assert resp.status_code == 200
+        data = self._data(resp)
+        assert "status" in data
+        assert "score" in data
+        assert "diagnoses" in data
+
+    def test_services_health(self):
+        """GET /health/services returns service status."""
+        resp = client.get("/health/services")
+        assert resp.status_code == 200
+        data = self._data(resp)
+        assert isinstance(data, dict)
+
+    def test_all_endpoints_with_model_health(self):
+        """All health endpoints return 200."""
+        for path in (
+            "/health",
+            "/health/live",
+            "/health/ready",
+            "/health/detailed",
+            "/health/startup-progress",
+            "/health/debug",
+            "/health/model",
+            "/health/summary",
+            "/health/services",
+        ):
+            resp = client.get(path)
+            assert resp.status_code == 200, f"{path} returned {resp.status_code}"
