@@ -211,4 +211,40 @@ export const settingsController = {
     const ids = runIds.join(',')
     return apiPost(`/settings/training/runs/bulk/bookmark?run_ids=${encodeURIComponent(ids)}&bookmarked=${bookmarked}`)
   },
+
+  async exportPresets(): Promise<{ built_in: Record<string, unknown>; custom: Record<string, unknown> }> {
+    return apiGet('/settings/training/presets/export')
+  },
+
+  async importPresets(data: Record<string, unknown>, overwrite: boolean = false): Promise<{ imported: number }> {
+    return apiPost(`/settings/training/presets/import?overwrite=${overwrite}`, data)
+  },
+
+  async savePreset(preset: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return apiPost('/settings/training/presets/save', preset)
+  },
+
+  async deletePreset(presetName: string): Promise<{ deleted: string }> {
+    return apiDelete(`/settings/training/presets/${encodeURIComponent(presetName)}`)
+  },
+
+  async backupSettings(): Promise<Record<string, unknown>> {
+    return apiGet('/settings/backup')
+  },
+
+  async restoreSettings(data: Record<string, unknown>): Promise<{ restored_fields: number }> {
+    return apiPost('/settings/restore', data)
+  },
+
+  async getAutoTrainStatus(): Promise<Record<string, unknown>> {
+    return apiGet('/settings/training/auto-train/status')
+  },
+
+  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams()
+    if (params.threshold !== undefined) qs.set('threshold', String(params.threshold))
+    if (params.interval_s !== undefined) qs.set('interval_s', String(params.interval_s))
+    const q = qs.toString()
+    return apiPatch(`/settings/training/auto-train/config${q ? `?${q}` : ''}`)
+  },
 }

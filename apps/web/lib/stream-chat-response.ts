@@ -3,6 +3,7 @@
 import { streamSSE } from '@/lib/http-client'
 import { useErrorStore } from '@/lib/error-store'
 import { logger } from '@/lib/dev-log'
+import { emitConsciousness } from '@/lib/consciousness-bus'
 
 const _log = logger.child('stream-chat-response')
 
@@ -48,6 +49,7 @@ interface StreamChatParams {
     hallucinated_claims: number
   }) => void
   onControl?: (event: { action: string; tool?: string; approved?: boolean; context?: string }) => void
+  onConsciousness?: (event: { level: number; qualia: Record<string, number>; beliefs: Record<string, number>; growth_delta: number; self_insight: string }) => void
 }
 
 function buildBody(params: StreamChatParams) {
@@ -145,6 +147,19 @@ export async function streamChatResponse(params: StreamChatParams): Promise<void
             approved: d.approved as boolean | undefined,
             context: d.context as string | undefined,
           })
+          continue
+        }
+
+        if (event.phase === 'CONSCIOUSNESS') {
+          const evt = {
+            level: typeof d.level === 'number' ? d.level : 0,
+            qualia: (d.qualia && typeof d.qualia === 'object') ? d.qualia as Record<string, number> : {},
+            beliefs: (d.beliefs && typeof d.beliefs === 'object') ? d.beliefs as Record<string, number> : {},
+            growth_delta: typeof d.growth_delta === 'number' ? d.growth_delta : 0,
+            self_insight: typeof d.self_insight === 'string' ? d.self_insight : '',
+          }
+          emitConsciousness(evt)
+          params.onConsciousness?.(evt)
           continue
         }
 
