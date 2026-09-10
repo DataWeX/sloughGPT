@@ -314,8 +314,8 @@ class WorkspacesRouter:
                 ctrl = get_datasets_controller()
                 datasets = ctrl.list_datasets(workspace_id=workspace_id)
                 dataset_count = len(datasets)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Dataset count unavailable: %s", e)
 
             # Count training jobs in workspace
             job_count = 0
@@ -327,8 +327,8 @@ class WorkspacesRouter:
                         job_count += 1
                         if j.get("status") == "running":
                             active_jobs += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training job count unavailable: %s", e)
 
             # Count knowledge items in workspace
             knowledge_count = 0
@@ -341,8 +341,8 @@ class WorkspacesRouter:
                     1 for item in all_items
                     if item.get("workspace_id", "") == workspace_id
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Knowledge count unavailable: %s", e)
 
             return success_response(data={
                 "workspace_id": workspace_id,
@@ -389,8 +389,8 @@ class WorkspacesRouter:
                                 total_training_minutes += (e - s).total_seconds() / 60
                             except Exception:
                                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training job stats unavailable: %s", e)
 
             # Dataset count and estimated size
             dataset_count = 0
@@ -399,8 +399,8 @@ class WorkspacesRouter:
                 ctrl = get_datasets_controller()
                 ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
                 dataset_count = len(ds_list) if ds_list else 0
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Dataset count unavailable: %s", e)
 
             # Knowledge items
             knowledge_count = 0
@@ -413,8 +413,8 @@ class WorkspacesRouter:
                     1 for item in all_items
                     if item.get("workspace_id", "") == workspace_id
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Knowledge count unavailable: %s", e)
 
             # API key count
             api_key_count = 0
@@ -423,8 +423,8 @@ class WorkspacesRouter:
                 mgr = get_api_key_manager()
                 keys = mgr.list(workspace_id=workspace_id)
                 api_key_count = len(keys) if keys else 0
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("API key count unavailable: %s", e)
 
             # Member breakdown by role
             members = self._ws_repo.list_members(workspace_id)
@@ -482,8 +482,8 @@ class WorkspacesRouter:
                             "timestamp": j.get("updated_at", j.get("started_at", "")),
                             "user": j.get("user_id", ""),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training job activity unavailable: %s", e)
 
             # Audit log entries for this workspace
             try:
@@ -499,8 +499,8 @@ class WorkspacesRouter:
                         "timestamp": entry.get("timestamp", ""),
                         "user": entry.get("user_id", ""),
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Audit log activity unavailable: %s", e)
 
             # Apply filters
             if from_date:
@@ -561,8 +561,8 @@ class WorkspacesRouter:
                             "ended_at": j.get("ended_at", ""),
                             "user_id": j.get("user_id", ""),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training jobs export unavailable: %s", e)
 
             # API keys (metadata only, not secrets)
             api_keys = []
@@ -577,8 +577,8 @@ class WorkspacesRouter:
                         "created_at": k.get("created_at", ""),
                         "last_used_at": k.get("last_used_at", ""),
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("API keys export unavailable: %s", e)
 
             # Dataset count
             dataset_count = 0
@@ -587,8 +587,8 @@ class WorkspacesRouter:
                 ctrl = get_datasets_controller()
                 ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
                 dataset_count = len(ds_list) if ds_list else 0
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Dataset count export unavailable: %s", e)
 
             # Knowledge count
             knowledge_count = 0
@@ -601,8 +601,8 @@ class WorkspacesRouter:
                     1 for item in all_items
                     if item.get("workspace_id", "") == workspace_id
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Knowledge count export unavailable: %s", e)
 
             return success_response(data={
                 "workspace": {
@@ -669,8 +669,8 @@ class WorkspacesRouter:
                     )
                     self._ws_repo.add_member(member)
                     imported_members += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Member import skipped for %s: %s", m.get("user_id", "?"), e)
 
             logger.info(
                 "User %s imported workspace %s with %d members",
@@ -730,8 +730,8 @@ class WorkspacesRouter:
                         j_uid = j.get("user_id", "")
                         if j_uid and j_uid not in member_ids:
                             orphan_jobs += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training jobs health check unavailable: %s", e)
 
             checks.append({
                 "name": "training_jobs",
@@ -746,8 +746,8 @@ class WorkspacesRouter:
                 ctrl = get_datasets_controller()
                 ds_list = ctrl.list_datasets(user_id=user.id, workspace_id=workspace_id)
                 dataset_count = len(ds_list) if ds_list else 0
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Datasets health check unavailable: %s", e)
 
             checks.append({
                 "name": "datasets",
@@ -766,8 +766,8 @@ class WorkspacesRouter:
                     1 for item in all_items
                     if item.get("workspace_id", "") == workspace_id
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Knowledge health check unavailable: %s", e)
 
             checks.append({
                 "name": "knowledge",
@@ -934,8 +934,8 @@ class WorkspacesRouter:
                         if job_ts < training_cutoff:
                             repo.delete(job.id)
                             cleaned["training_jobs"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training job cleanup unavailable: %s", e)
 
             # Clean old audit logs
             try:
@@ -953,8 +953,8 @@ class WorkspacesRouter:
                         if log_ts < audit_cutoff:
                             audit.delete(log.get("id", ""))
                             cleaned["audit_logs"] += 1
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Audit log cleanup unavailable: %s", e)
 
             logger.info(
                 "User %s cleaned workspace %s: %s",
@@ -1064,8 +1064,8 @@ class WorkspacesRouter:
                             "status": status,
                             "timestamp": getattr(job, 'updated_at', getattr(job, 'created_at', '')),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training notifications unavailable: %s", e)
 
             # Recent member changes from audit log
             try:
@@ -1082,8 +1082,8 @@ class WorkspacesRouter:
                             "status": "info",
                             "timestamp": log.get("timestamp", ""),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Member change notifications unavailable: %s", e)
 
             # Sort by timestamp descending
             notifications.sort(key=lambda n: n.get("timestamp", ""), reverse=True)
@@ -1190,8 +1190,8 @@ class WorkspacesRouter:
                         "title": getattr(job, 'name', job.id),
                         "detail": f"Status: {getattr(job, 'status', 'unknown')}",
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Training job search unavailable: %s", e)
 
             # Search datasets
             try:
@@ -1205,8 +1205,8 @@ class WorkspacesRouter:
                         "title": ds.name,
                         "detail": f"Size: {getattr(ds, 'size', 0)} bytes",
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Dataset search unavailable: %s", e)
 
             # Search knowledge
             try:
@@ -1220,8 +1220,8 @@ class WorkspacesRouter:
                         "title": fact.subject if hasattr(fact, 'subject') else str(fact.id),
                         "detail": fact.predicate if hasattr(fact, 'predicate') else "",
                     })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Knowledge search unavailable: %s", e)
 
             total = sum(len(v) for v in results.values())
             return success_response(data={"results": results, "total": total})

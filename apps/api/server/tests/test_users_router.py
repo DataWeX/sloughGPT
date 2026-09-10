@@ -100,10 +100,11 @@ class TestGetUser:
         assert resp.json()["data"]["username"] == "bob"
 
     def test_user_cannot_use_admin_endpoint(self, mock_repo, regular_user):
-        # GET /users/{id} is admin-only — regular users must use /users/me/profile
-        mock_repo.get.side_effect = lambda uid: regular_user if uid == "user1" else None
+        # GET /users/{id} is admin-only for OTHER users — regular users must use /users/me/profile
+        other = _make_user("u2", "bob")
+        mock_repo.get.side_effect = lambda uid: regular_user if uid == "user1" else other
         _app, _ = _build_app(mock_repo, auth_user_dict=_AUTH_USER)
-        resp = TestClient(_app).get("/users/user1")
+        resp = TestClient(_app).get("/users/u2")
         assert resp.status_code == 403
 
     def test_user_cannot_get_other_profile(self, mock_repo, regular_user):
