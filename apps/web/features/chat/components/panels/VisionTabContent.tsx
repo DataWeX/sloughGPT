@@ -8,13 +8,10 @@ interface VisionTabContentProps {
   visionImagesLearned?: number
   visionTrained?: boolean
   visionStatus?: string
-  visionCaptionHistory?: string[]
   visionVocabSize?: number
   sessionId: string | null
   onGeneratedImage: (dataUrl: string, prompt: string) => void
   meanAccuracy?: number
-  lastAccuracy?: number
-  onSendText: (text: string) => void
 }
 
 export const VisionTabContent = memo(function VisionTabContent({

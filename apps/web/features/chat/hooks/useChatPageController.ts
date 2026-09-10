@@ -245,7 +245,7 @@ export function useChatPageController(
 
   useEffect(() => {
     if (health && health !== 'offline' && health.model_loaded) {
-      chatController.getSuggestions().then(setSuggestions)
+      chatController.getSuggestions().then(setSuggestions).catch(() => setSuggestions([]))
     } else {
       setSuggestions([])
     }

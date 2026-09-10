@@ -780,7 +780,122 @@ class SloughGPTClient:
         data = _unwrap_response(response.json())
         return data if isinstance(data, list) else data.get("keys", data)
 
+    def create_security_key(self, name: str, scopes: Optional[List[str]] = None, expires_in_days: Optional[int] = None) -> Dict[str, Any]:
+        """Create a new API key."""
+        body: Dict[str, Any] = {"name": name}
+        if scopes:
+            body["scopes"] = scopes
+        if expires_in_days is not None:
+            body["expires_in_days"] = expires_in_days
+        response = self._request("POST", "/security/keys", json=body)
+        return _unwrap_response(response.json())
+
+    def get_security_key(self, key_id: str) -> Dict[str, Any]:
+        """Get a specific API key by ID."""
+        response = self._request("GET", f"/security/keys/{key_id}")
+        return _unwrap_response(response.json())
+
+    def delete_security_key(self, key_id: str) -> Dict[str, Any]:
+        """Delete/revoke an API key."""
+        response = self._request("DELETE", f"/security/keys/{key_id}")
+        return _unwrap_response(response.json())
+
+    def rotate_security_key(self, key_id: str) -> Dict[str, Any]:
+        """Rotate an API key (generates new secret, invalidates old)."""
+        response = self._request("POST", f"/security/keys/{key_id}/rotate")
+        return _unwrap_response(response.json())
+
+    def validate_security_key(self, key: str) -> Dict[str, Any]:
+        """Validate an API key."""
+        response = self._request("POST", "/security/keys/validate", json={"key": key})
+        return _unwrap_response(response.json())
+
     # ============ Registry ============
+
+    def list_tenants(self) -> List[Dict[str, Any]]:
+        """List all tenants."""
+        response = self._request("GET", "/tenants")
+        data = _unwrap_response(response.json())
+        return data if isinstance(data, list) else data.get("tenants", data)
+
+    def get_tenant(self, tenant_id: str) -> Dict[str, Any]:
+        """Get a tenant by ID."""
+        response = self._request("GET", f"/tenants/{tenant_id}")
+        return _unwrap_response(response.json())
+
+    def create_tenant(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Create a new tenant."""
+        body = {"name": name, **kwargs}
+        response = self._request("POST", "/tenants", json=body)
+        return _unwrap_response(response.json())
+
+    def update_tenant(self, tenant_id: str, **kwargs: Any) -> Dict[str, Any]:
+        """Update a tenant."""
+        response = self._request("PUT", f"/tenants/{tenant_id}", json=kwargs)
+        return _unwrap_response(response.json())
+
+    def delete_tenant(self, tenant_id: str) -> Dict[str, Any]:
+        """Delete a tenant."""
+        response = self._request("DELETE", f"/tenants/{tenant_id}")
+        return _unwrap_response(response.json())
+
+    def get_tenant_stats(self, tenant_id: str) -> Dict[str, Any]:
+        """Get tenant statistics."""
+        response = self._request("GET", f"/tenants/{tenant_id}/stats")
+        return _unwrap_response(response.json())
+
+    # ============ Profiles ============
+
+    def list_profiles(self) -> List[Dict[str, Any]]:
+        """List all available profiles."""
+        response = self._request("GET", "/profiles")
+        data = _unwrap_response(response.json())
+        return data if isinstance(data, list) else data.get("profiles", data)
+
+    def get_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Get a profile by ID."""
+        response = self._request("GET", f"/profiles/{profile_id}")
+        return _unwrap_response(response.json())
+
+    def apply_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Apply a profile to current settings."""
+        response = self._request("POST", f"/profiles/apply", json={"profile_id": profile_id})
+        return _unwrap_response(response.json())
+
+    def get_active_profile(self) -> Dict[str, Any]:
+        """Get the currently active profile."""
+        response = self._request("GET", "/profiles/active")
+        return _unwrap_response(response.json())
+
+    def recommend_profile(self) -> Dict[str, Any]:
+        """Get profile recommendation based on usage patterns."""
+        response = self._request("GET", "/profiles/recommend")
+        return _unwrap_response(response.json())
+
+    # ============ Workspaces ============
+
+    def list_workspaces(self) -> List[Dict[str, Any]]:
+        """List all workspaces."""
+        response = self._request("GET", "/workspaces")
+        data = _unwrap_response(response.json())
+        return data if isinstance(data, list) else data.get("workspaces", data)
+
+    def get_workspace(self, workspace_id: str) -> Dict[str, Any]:
+        """Get a workspace by ID."""
+        response = self._request("GET", f"/workspaces/{workspace_id}")
+        return _unwrap_response(response.json())
+
+    def create_workspace(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Create a new workspace."""
+        body = {"name": name, **kwargs}
+        response = self._request("POST", "/workspaces", json=body)
+        return _unwrap_response(response.json())
+
+    def add_workspace_member(self, workspace_id: str, user_id: str, role: str = "member") -> Dict[str, Any]:
+        """Add a member to a workspace."""
+        body = {"user_id": user_id, "role": role}
+        response = self._request("POST", f"/workspaces/{workspace_id}/members", json=body)
+        return _unwrap_response(response.json())
 
     def list_registry_models(self) -> List[Dict[str, Any]]:
         """List models registered in the live model registry."""
@@ -1312,6 +1427,31 @@ class AsyncSloughGPTClient:
         data = _unwrap_response(await self._request("GET", "/security/keys"))
         return data if isinstance(data, list) else data.get("keys", data)
 
+    async def create_security_key(self, name: str, scopes: Optional[List[str]] = None, expires_in_days: Optional[int] = None) -> Dict[str, Any]:
+        """Create a new API key."""
+        body: Dict[str, Any] = {"name": name}
+        if scopes:
+            body["scopes"] = scopes
+        if expires_in_days is not None:
+            body["expires_in_days"] = expires_in_days
+        return _unwrap_response(await self._request("POST", "/security/keys", json=body))
+
+    async def get_security_key(self, key_id: str) -> Dict[str, Any]:
+        """Get a specific API key by ID."""
+        return _unwrap_response(await self._request("GET", f"/security/keys/{key_id}"))
+
+    async def delete_security_key(self, key_id: str) -> Dict[str, Any]:
+        """Delete/revoke an API key."""
+        return _unwrap_response(await self._request("DELETE", f"/security/keys/{key_id}"))
+
+    async def rotate_security_key(self, key_id: str) -> Dict[str, Any]:
+        """Rotate an API key (generates new secret, invalidates old)."""
+        return _unwrap_response(await self._request("POST", f"/security/keys/{key_id}/rotate"))
+
+    async def validate_security_key(self, key: str) -> Dict[str, Any]:
+        """Validate an API key."""
+        return _unwrap_response(await self._request("POST", "/security/keys/validate", json={"key": key}))
+
     async def list_registry_models(self) -> List[Dict[str, Any]]:
         """List models registered in the live model registry."""
         data = _unwrap_response(await self._request("GET", "/registry/models"))
@@ -1329,6 +1469,78 @@ class AsyncSloughGPTClient:
     async def get_registry_stats(self) -> Dict[str, Any]:
         """Get live model registry statistics."""
         return _unwrap_response(await self._request("GET", "/registry/stats"))
+
+    # ── Tenants ─────────────────────────────────────────────
+
+    async def list_tenants(self) -> List[Dict[str, Any]]:
+        """List all tenants."""
+        data = _unwrap_response(await self._request("GET", "/tenants"))
+        return data if isinstance(data, list) else data.get("tenants", data)
+
+    async def get_tenant(self, tenant_id: str) -> Dict[str, Any]:
+        """Get a tenant by ID."""
+        return _unwrap_response(await self._request("GET", f"/tenants/{tenant_id}"))
+
+    async def create_tenant(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Create a new tenant."""
+        body = {"name": name, **kwargs}
+        return _unwrap_response(await self._request("POST", "/tenants", json=body))
+
+    async def update_tenant(self, tenant_id: str, **kwargs: Any) -> Dict[str, Any]:
+        """Update a tenant."""
+        return _unwrap_response(await self._request("PUT", f"/tenants/{tenant_id}", json=kwargs))
+
+    async def delete_tenant(self, tenant_id: str) -> Dict[str, Any]:
+        """Delete a tenant."""
+        return _unwrap_response(await self._request("DELETE", f"/tenants/{tenant_id}"))
+
+    async def get_tenant_stats(self, tenant_id: str) -> Dict[str, Any]:
+        """Get tenant statistics."""
+        return _unwrap_response(await self._request("GET", f"/tenants/{tenant_id}/stats"))
+
+    # ── Profiles ────────────────────────────────────────────
+
+    async def list_profiles(self) -> List[Dict[str, Any]]:
+        """List all available profiles."""
+        data = _unwrap_response(await self._request("GET", "/profiles"))
+        return data if isinstance(data, list) else data.get("profiles", data)
+
+    async def get_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Get a profile by ID."""
+        return _unwrap_response(await self._request("GET", f"/profiles/{profile_id}"))
+
+    async def apply_profile(self, profile_id: str) -> Dict[str, Any]:
+        """Apply a profile to current settings."""
+        return _unwrap_response(await self._request("POST", "/profiles/apply", json={"profile_id": profile_id}))
+
+    async def get_active_profile(self) -> Dict[str, Any]:
+        """Get the currently active profile."""
+        return _unwrap_response(await self._request("GET", "/profiles/active"))
+
+    async def recommend_profile(self) -> Dict[str, Any]:
+        """Get profile recommendation based on usage patterns."""
+        return _unwrap_response(await self._request("GET", "/profiles/recommend"))
+
+    # ── Workspaces ──────────────────────────────────────────
+
+    async def list_workspaces(self) -> List[Dict[str, Any]]:
+        """List all workspaces."""
+        data = _unwrap_response(await self._request("GET", "/workspaces"))
+        return data if isinstance(data, list) else data.get("workspaces", data)
+
+    async def get_workspace(self, workspace_id: str) -> Dict[str, Any]:
+        """Get a workspace by ID."""
+        return _unwrap_response(await self._request("GET", f"/workspaces/{workspace_id}"))
+
+    async def create_workspace(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        """Create a new workspace."""
+        body = {"name": name, **kwargs}
+        return _unwrap_response(await self._request("POST", "/workspaces", json=body))
+
+    async def add_workspace_member(self, workspace_id: str, user_id: str, role: str = "member") -> Dict[str, Any]:
+        """Add a member to a workspace."""
+        body = {"user_id": user_id, "role": role}
+        return _unwrap_response(await self._request("POST", f"/workspaces/{workspace_id}/members", json=body))
 
     # ── Auto-train ─────────────────────────────────────────────
 

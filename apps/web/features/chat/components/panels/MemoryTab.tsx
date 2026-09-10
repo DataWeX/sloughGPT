@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { cn, Switch, Button, Slider, Spinner } from '@sloughgpt/strui'
+import { cn, Switch, Button, Spinner } from '@sloughgpt/strui'
 import { IconTrash, IconSearch, IconX, IconClock, IconEdit } from '@sloughgpt/strui'
-import { StatusBanner } from '@/components/composed/StatusBanner'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
 import { useToastStore } from '@/lib/toast-store'
 import { useChatMemory } from './useChatMemory'
 import { useMemoryData } from '@/hooks/useMemoryData'
+import { MemoryAddForm } from './MemoryAddForm'
+import { MemoryEditForm } from './MemoryEditForm'
 
 const MAX_VISIBLE = 8
 
@@ -29,18 +30,9 @@ export function MemoryTab() {
   const [pendingClear, setPendingClear] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
-  const [newContent, setNewContent] = useState('')
-  const [newTopic, setNewTopic] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
   const [activeTopic, setActiveTopic] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [editingItem, setEditingItem] = useState<MemoryItem | null>(null)
-  const [editContent, setEditContent] = useState('')
-  const [editTopic, setEditTopic] = useState('')
-  const [editImportance, setEditImportance] = useState(0.5)
-  const [savingEdit, setSavingEdit] = useState(false)
-  const [editError, setEditError] = useState<string | null>(null)
 
   useEffect(() => {
     if (pendingSseFact) {
@@ -78,58 +70,10 @@ export function MemoryTab() {
 
   const displayed = showAll ? topicFiltered : topicFiltered.slice(0, MAX_VISIBLE)
 
-  const handleAdd = useCallback(async () => {
-    if (!newContent.trim()) return
-    setAdding(true)
-    setAddError(null)
-    try {
-      const result = await memoryController.store(newContent, newTopic.trim() || 'manual')
-      if (result.stored) {
-        const content = newContent.trim()
-        setNewContent('')
-        setNewTopic('')
-        setShowAdd(false)
-        await fetchData()
-        highlightItem(content, items)
-      } else {
-        setAddError('Already remembered (or memory is disabled)')
-      }
-    } catch {
-      setAddError('Could not store fact')
-    } finally {
-      setAdding(false)
-    }
-  }, [newContent, newTopic, fetchData, items, highlightItem])
-
   const startEdit = useCallback((item: MemoryItem) => {
     setShowAdd(false)
     setEditingItem(item)
-    setEditContent(item.content)
-    setEditTopic(item.topic || '')
-    setEditImportance(typeof item.importance === 'number' ? item.importance : 0.5)
-    setEditError(null)
   }, [])
-
-  const handleSaveEdit = useCallback(async () => {
-    if (!editingItem || !editContent.trim()) return
-    setSavingEdit(true)
-    setEditError(null)
-    try {
-      const result = await memoryController.update(editingItem.id, editContent, editTopic, editImportance)
-      if (result.updated > 0) {
-        setEditingItem(null)
-        await fetchData()
-      } else if (result.duplicate) {
-        setEditError('That fact already exists in memory')
-      } else {
-        setEditError('Memory item not found')
-      }
-    } catch {
-      setEditError('Could not update memory item')
-    } finally {
-      setSavingEdit(false)
-    }
-  }, [editingItem, editContent, editTopic, editImportance, fetchData])
 
   const deleteItem = useCallback(async (item: MemoryItem) => {
     setItems(prev => prev.filter(i => i.id !== item.id))
@@ -262,28 +206,11 @@ export function MemoryTab() {
           </div>
 
           {showAdd && (
-            <div className="space-y-1.5 rounded border border-border/40 p-2">
-              <textarea
-                value={newContent}
-                onChange={e => setNewContent(e.target.value)}
-                placeholder="Type a fact the AI should remember..."
-                aria-label="New memory fact"
-                className="w-full h-14 resize-none rounded border border-border/40 bg-background p-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              />
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={newTopic}
-                  onChange={e => setNewTopic(e.target.value)}
-                  placeholder="topic"
-                  aria-label="Memory fact topic"
-                  className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-[10px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                />
-                <Button size="sm" className="h-6 text-[10px] px-2" disabled={!newContent.trim() || adding} onClick={handleAdd}>
-                  {adding ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
-              {addError && <StatusBanner variant="error" message={addError} dismissible={false} />}
-            </div>
+            <MemoryAddForm
+              onAdded={() => { setShowAdd(false); fetchData() }}
+              highlightItem={highlightItem}
+              items={items}
+            />
           )}
 
           {topics.length > 0 && (
@@ -309,51 +236,11 @@ export function MemoryTab() {
           )}
 
           {editingItem && (
-            <div className="space-y-1.5 rounded border border-primary/40 p-2">
-              <p className="text-[10px] font-medium text-muted-foreground flex items-center gap-1.5">
-                <IconEdit className="h-3 w-3" />
-                Edit memory fact
-              </p>
-              <textarea
-                value={editContent}
-                onChange={e => setEditContent(e.target.value)}
-                aria-label="Edit memory fact text"
-                className="w-full h-14 resize-none rounded border border-border/40 bg-background p-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-              />
-              <div className="flex items-center gap-1.5">
-                <input
-                  value={editTopic}
-                  onChange={e => setEditTopic(e.target.value)}
-                  placeholder={editingItem.topic || 'topic'}
-                  aria-label="Edit memory fact topic"
-                  className="flex-1 h-7 rounded border border-border/40 bg-background px-2 text-[10px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Slider
-                  label="Importance"
-                  value={[editImportance]}
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  showValue
-                  formatValue={(v) => v.toFixed(1)}
-                  onValueChange={([v]) => setEditImportance(v)}
-                  size="sm"
-                  className="flex-1"
-                  aria-label="Edit memory fact importance"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" className="h-6 text-[10px] px-2" disabled={!editContent.trim() || savingEdit} onClick={handleSaveEdit}>
-                  {savingEdit ? 'Saving…' : 'Save'}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setEditingItem(null)}>
-                  Cancel
-                </Button>
-              </div>
-              {editError && <StatusBanner variant="error" message={editError} dismissible={false} />}
-            </div>
+            <MemoryEditForm
+              item={editingItem}
+              onSaved={() => { setEditingItem(null); fetchData() }}
+              onCancelled={() => setEditingItem(null)}
+            />
           )}
         </>
       )}

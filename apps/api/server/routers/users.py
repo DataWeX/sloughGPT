@@ -113,10 +113,14 @@ class UsersRouter:
         # ─── Get user ──────────────────────────────────────────
         @endpoint("users.get")
         async def get_user(user_id: str, auth_user: dict = auth_dep) -> dict:
-            admin = self._require_admin(auth_user)
-            # Users can read their own profile
-            if auth_user.get("sub") != user_id and not admin.is_admin:
-                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+            if not auth_user:
+                raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
+            # Users can read their own profile without admin
+            is_self = auth_user.get("sub") == user_id
+            if not is_self:
+                caller = self._require_admin(auth_user)
+                if not caller.is_admin:
+                    raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
             user = self._repo.get(user_id)
             if not user:
                 raise_error("User not found", "E_NOT_FOUND", status_code=404)

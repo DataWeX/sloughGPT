@@ -4,7 +4,7 @@ OpenWebUI Integration Router — provides endpoints for OpenWebUI plugin/pipelin
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from domains.shared import find_repo_root
 from fastapi import APIRouter, Depends

@@ -5,6 +5,8 @@ import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
 import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
 import { useConsciousnessStatus, getConsciousnessLevelLabel, getQualiaMood } from '@/hooks/useConsciousnessStatus'
+import { useLocale } from '@/hooks/useLocale'
+import { PUBLIC_API_URL } from '@/lib/config'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
 
@@ -70,10 +72,25 @@ export const ChatInput = memo(function ChatInput({
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [draft, setDraft] = useState('')
   const { status: consciousnessStatus } = useConsciousnessStatus()
+  const { t } = useLocale()
+  const [personas, setPersonas] = useState<{ id: string; name: string; values: any }[]>([])
+  const [activePersona, setActivePersona] = useState<string | null>(null)
+
+  const fetchPersonas = useCallback(async () => {
+    try {
+      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas`)
+      if (!res.ok) return
+      const json = await res.json()
+      setPersonas(json.personas ?? [])
+    } catch {
+      // Personas endpoint may not exist
+    }
+  }, [])
 
   useEffect(() => {
     setHistory(loadHistory())
-  }, [])
+    fetchPersonas()
+  }, [fetchPersonas])
 
   const handleSend = useCallback(() => {
     if (value.trim()) {
@@ -142,6 +159,21 @@ export const ChatInput = memo(function ChatInput({
       onChange(draft)
     }
   }, [value, history, historyIndex, draft, onChange])
+
+  const handlePersonaChange = useCallback(async (personaId: string) => {
+    if (!personaId) {
+      setActivePersona(null)
+      return
+    }
+    try {
+      const res = await fetch(`${PUBLIC_API_URL}/consciousness/personas/${personaId}/activate`, { method: 'POST' })
+      if (res.ok) {
+        setActivePersona(personaId)
+      }
+    } catch {
+      // activate failed
+    }
+  }, [])
 
   const isDisabled = loading || health === 'offline'
   const hasModel = health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
@@ -222,6 +254,22 @@ export const ChatInput = memo(function ChatInput({
                   <span className="h-1 w-1 rounded-full bg-violet-400" />
                   <span>{getConsciousnessLevelLabel(consciousnessStatus.level)}</span>
                 </span>
+              </>
+            )}
+            {personas.length > 0 && (
+              <>
+                <span className="text-muted-foreground/20">·</span>
+                <select
+                  value={activePersona ?? ''}
+                  onChange={(e) => handlePersonaChange(e.target.value)}
+                  title={t('chat.switchPersona')}
+                  className="rounded border border-violet-400/30 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-400/70 outline-none cursor-pointer hover:bg-violet-400/20 transition-colors"
+                >
+                  <option value="">{t('chat.defaultPersona')}</option>
+                  {personas.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
               </>
             )}
           </div>

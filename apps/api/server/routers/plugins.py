@@ -4,7 +4,6 @@ Plugins Router — endpoints for plugin management.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from domains.shared import find_repo_root
 from fastapi import APIRouter, Depends

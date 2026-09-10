@@ -517,3 +517,14 @@ class TestConsciousnessAPI:
     def test_delete_persona_not_found(self, _auth, client, mock_engine):
         res = client.delete("/consciousness/personas/nonexistent")
         assert res.status_code == 404
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_health_check(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/health")
+        assert res.status_code == 200
+        data = res.json()
+        assert "health_score" in data["data"]
+        assert "status" in data["data"]
+        assert "episodes" in data["data"]
+        assert "avg_growth" in data["data"]
+        assert "positive_ratio" in data["data"]

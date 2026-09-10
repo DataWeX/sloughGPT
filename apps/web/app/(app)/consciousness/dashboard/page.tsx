@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton,
+  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton, Switch,
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
+import { useLocale } from '@/hooks/useLocale'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, AreaChart, Area,
@@ -75,6 +77,8 @@ function formatTimeAgo(ts: number): string {
 
 export default function ConsciousnessDashboardPage() {
   const addToast = useToastStore(state => state.addToast)
+  const { t } = useLocale()
+  const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
   const [loading, setLoading] = useState(true)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [qualiaHistory, setQualiaHistory] = useState<QualiaPoint[]>([])
@@ -145,6 +149,40 @@ export default function ConsciousnessDashboardPage() {
   }, [addToast])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  useEffect(() => {
+    if (!isLive || !latestEvent) return
+    if (latestEvent.qualia) setCurrentQualia(latestEvent.qualia)
+    if (latestEvent.beliefs) {
+      setCurrentBeliefs(latestEvent.beliefs)
+      setBeliefsHistory((prev) => {
+        const point: BeliefsPoint = {
+          timestamp: Date.now() / 1000,
+          step: (prev[prev.length - 1]?.step ?? 0) + 1,
+          competence: (latestEvent.beliefs as any).competence ?? 0,
+          helpfulness: (latestEvent.beliefs as any).helpfulness ?? 0,
+          creativity: (latestEvent.beliefs as any).creativity ?? 0,
+          accuracy: (latestEvent.beliefs as any).accuracy ?? 0,
+          empathy: (latestEvent.beliefs as any).empathy ?? 0,
+        }
+        return [...prev, point]
+      })
+    }
+    if (latestEvent.qualia) {
+      setQualiaHistory((prev) => {
+        const point: QualiaPoint = {
+          timestamp: Date.now() / 1000,
+          valence: latestEvent.qualia.valence ?? 0,
+          arousal: latestEvent.qualia.arousal ?? 0,
+          novelty: latestEvent.qualia.novelty ?? 0,
+          coherence: latestEvent.qualia.coherence ?? 0,
+        }
+        return [...prev, point]
+      })
+    }
+    if (latestEvent.level !== undefined) setConsciousnessLevel(latestEvent.level)
+    addToast('Consciousness state updated', 'success')
+  }, [latestEvent, isLive, addToast])
 
   const handleSeed = async () => {
     setSeeding(true)
@@ -305,7 +343,7 @@ export default function ConsciousnessDashboardPage() {
     <PageContainer title="Consciousness Dashboard">
       <div className="space-y-6 p-6">
         {/* Summary cards */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">Total Episodes</CardTitle>
@@ -333,6 +371,27 @@ export default function ConsciousnessDashboardPage() {
                 {episodes.length > 0
                   ? `${(episodes.reduce((s, e) => s + e.growth_delta, 0) / episodes.length * 100).toFixed(1)}%`
                   : '—'}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-muted-foreground flex items-center gap-2">
+                {t('consciousness_dashboard.autoRefresh')}
+                {isLive && (
+                  <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                    <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                    {t('consciousness_dashboard.live')}
+                  </Badge>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-3">
+                <Switch checked={isLive} onCheckedChange={toggleLive} />
+                <span className="text-xs text-muted-foreground">
+                  {lastUpdate ? `Updated ${formatTimeAgo(lastUpdate / 1000)}` : 'No updates yet'}
+                </span>
               </div>
             </CardContent>
           </Card>

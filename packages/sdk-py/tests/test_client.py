@@ -237,3 +237,137 @@ class TestAutoTrainConfig:
         result = client.update_auto_train_config(threshold=20)
         client._mock_request.assert_called_once()
         assert result["threshold"] == 20
+
+
+class TestSecurityKeys:
+    def test_list_keys(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"keys": [{"id": "k1"}], "count": 1})
+        result = client.get_security_keys()
+        client._mock_request.assert_called_once_with("GET", "/security/keys")
+        assert len(result) == 1
+
+    def test_create_key(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "k2", "name": "test"})
+        result = client.create_security_key("test", scopes=["read"], expires_in_days=30)
+        client._mock_request.assert_called_once()
+        assert result["name"] == "test"
+
+    def test_get_key(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "k1"})
+        result = client.get_security_key("k1")
+        client._mock_request.assert_called_once_with("GET", "/security/keys/k1")
+        assert result["id"] == "k1"
+
+    def test_delete_key(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"deleted": True})
+        result = client.delete_security_key("k1")
+        client._mock_request.assert_called_once_with("DELETE", "/security/keys/k1")
+        assert result["deleted"] is True
+
+    def test_rotate_key(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "k1", "new_secret": "s3cret"})
+        result = client.rotate_security_key("k1")
+        client._mock_request.assert_called_once_with("POST", "/security/keys/k1/rotate")
+        assert "new_secret" in result
+
+    def test_validate_key(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"valid": True})
+        result = client.validate_security_key("my-key")
+        client._mock_request.assert_called_once()
+        assert result["valid"] is True
+
+
+class TestTenants:
+    def test_list_tenants(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"tenants": [{"id": "t1"}], "count": 1})
+        result = client.list_tenants()
+        client._mock_request.assert_called_once_with("GET", "/tenants")
+        assert len(result) == 1
+
+    def test_get_tenant(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "t1", "name": "acme"})
+        result = client.get_tenant("t1")
+        client._mock_request.assert_called_once_with("GET", "/tenants/t1")
+        assert result["name"] == "acme"
+
+    def test_create_tenant(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "t2", "name": "new"})
+        result = client.create_tenant("new", plan="pro")
+        client._mock_request.assert_called_once()
+        assert result["name"] == "new"
+
+    def test_update_tenant(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "t1", "name": "updated"})
+        result = client.update_tenant("t1", name="updated")
+        client._mock_request.assert_called_once()
+        assert result["name"] == "updated"
+
+    def test_delete_tenant(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"deleted": True})
+        result = client.delete_tenant("t1")
+        client._mock_request.assert_called_once_with("DELETE", "/tenants/t1")
+        assert result["deleted"] is True
+
+    def test_tenant_stats(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"users": 10, "workspaces": 3})
+        result = client.get_tenant_stats("t1")
+        client._mock_request.assert_called_once_with("GET", "/tenants/t1/stats")
+        assert result["users"] == 10
+
+
+class TestProfiles:
+    def test_list_profiles(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"profiles": [{"id": "p1"}], "count": 1})
+        result = client.list_profiles()
+        client._mock_request.assert_called_once_with("GET", "/profiles")
+        assert len(result) == 1
+
+    def test_get_profile(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "p1", "name": "default"})
+        result = client.get_profile("p1")
+        client._mock_request.assert_called_once_with("GET", "/profiles/p1")
+        assert result["name"] == "default"
+
+    def test_apply_profile(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"applied": True})
+        result = client.apply_profile("p1")
+        client._mock_request.assert_called_once()
+        assert result["applied"] is True
+
+    def test_active_profile(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "p1"})
+        result = client.get_active_profile()
+        client._mock_request.assert_called_once_with("GET", "/profiles/active")
+        assert result["id"] == "p1"
+
+    def test_recommend_profile(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"profile_id": "p2", "reason": "best match"})
+        result = client.recommend_profile()
+        client._mock_request.assert_called_once_with("GET", "/profiles/recommend")
+        assert result["profile_id"] == "p2"
+
+
+class TestWorkspaces:
+    def test_list_workspaces(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"workspaces": [{"id": "w1"}], "count": 1})
+        result = client.list_workspaces()
+        client._mock_request.assert_called_once_with("GET", "/workspaces")
+        assert len(result) == 1
+
+    def test_get_workspace(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "w1", "name": "team"})
+        result = client.get_workspace("w1")
+        client._mock_request.assert_called_once_with("GET", "/workspaces/w1")
+        assert result["name"] == "team"
+
+    def test_create_workspace(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"id": "w2", "name": "new"})
+        result = client.create_workspace("new", description="test")
+        client._mock_request.assert_called_once()
+        assert result["name"] == "new"
+
+    def test_add_workspace_member(self, client):
+        client._mock_request.return_value = MagicMock(json=lambda: {"added": True})
+        result = client.add_workspace_member("w1", "user-1", "admin")
+        client._mock_request.assert_called_once()
+        assert result["added"] is True

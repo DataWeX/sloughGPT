@@ -75,7 +75,7 @@ def _filter_notes(
     limit: int | None = None,
 ) -> list[dict]:
     """Filter notes by tag, status, and limit."""
-    filtered = notes
+    filtered = list(notes)
 
     if tag:
         tag_lower = tag.lower()

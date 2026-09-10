@@ -5,6 +5,7 @@ import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: vi.fn((...args: any[]) => args.join(' ')),
+  Spinner: () => <span data-testid="spinner">loading</span>,
   Button: ({ children, onClick, variant, size, className, disabled, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} disabled={disabled} {...rest}>{children}</button>
   ),

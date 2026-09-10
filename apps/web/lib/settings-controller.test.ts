@@ -283,30 +283,30 @@ describe('settingsController.clearTrainingHistory', () => {
   })
 })
 
-describe('settingsController.getAutoTrainStatus', () => {
+describe('settingsController.getAutoTrainSettingsStatus', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('GETs auto-train status', async () => {
     apiClient.apiGet.mockResolvedValue({ enabled: true, threshold: 10 })
-    const result = await settingsController.getAutoTrainStatus()
+    const result = await settingsController.getAutoTrainSettingsStatus()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/training/auto-train/status')
     expect(result.enabled).toBe(true)
   })
 })
 
-describe('settingsController.updateAutoTrainConfig', () => {
+describe('settingsController.updateAutoTrainSettingsConfig', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
   it('PATCHes auto-train config with threshold', async () => {
     apiClient.apiPatch.mockResolvedValue({ enabled: true, threshold: 20 })
-    const result = await settingsController.updateAutoTrainConfig({ threshold: 20 })
+    const result = await settingsController.updateAutoTrainSettingsConfig({ threshold: 20 })
     expect(apiClient.apiPatch).toHaveBeenCalledWith('/settings/training/auto-train/config?threshold=20')
     expect(result.threshold).toBe(20)
   })
 
   it('PATCHes auto-train config with both params', async () => {
     apiClient.apiPatch.mockResolvedValue({ enabled: true, threshold: 30 })
-    const result = await settingsController.updateAutoTrainConfig({ threshold: 30, interval_s: 300 })
+    const result = await settingsController.updateAutoTrainSettingsConfig({ threshold: 30, interval_s: 300 })
     expect(apiClient.apiPatch).toHaveBeenCalledWith(expect.stringContaining('threshold=30'))
     expect(apiClient.apiPatch).toHaveBeenCalledWith(expect.stringContaining('interval_s=300'))
   })

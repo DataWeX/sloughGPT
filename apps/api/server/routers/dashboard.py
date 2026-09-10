@@ -20,7 +20,7 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, endpoint, success_response
+from schemas.common import endpoint, success_response
 
 logger = logging.getLogger("slo.dashboard")
 

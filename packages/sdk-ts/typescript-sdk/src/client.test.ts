@@ -711,7 +711,7 @@ describe('SloughGPTClient', () => {
 
     it('gets security keys', async () => {
       const mockKeys = [{ key_id: 'k1' }];
-      mockFetch.mockResolvedValue(createMockResponse({ status: 'success', data: { keys: mockKeys, count: 1 } }));
+      mockFetch.mockResolvedValue(createMockResponse(mockKeys));
       const client = new SloughGPTClient();
       const result = await client.getSecurityKeys();
       expect(result).toEqual(mockKeys);
@@ -1137,30 +1137,247 @@ describe('SloughGPTClient', () => {
     });
   });
 
-  describe('getAutoTrainStatus()', () => {
+  describe('getAutoTrainSettingsStatus()', () => {
     it('calls GET /settings/training/auto-train/status', async () => {
       const mockData = { enabled: true, threshold: 10 };
       mockFetch.mockResolvedValue(createMockResponse(mockData));
 
       const client = new SloughGPTClient();
-      const result = await client.getAutoTrainStatus();
+      const result = await client.getAutoTrainSettingsStatus();
 
       expect(result).toEqual(mockData);
       expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/auto-train/status');
     });
   });
 
-  describe('updateAutoTrainConfig()', () => {
+  describe('updateAutoTrainSettingsConfig()', () => {
     it('calls PATCH /settings/training/auto-train/config', async () => {
       const mockData = { enabled: true, threshold: 20 };
       mockFetch.mockResolvedValue(createMockResponse(mockData));
 
       const client = new SloughGPTClient();
-      const result = await client.updateAutoTrainConfig({ threshold: 20 });
+      const result = await client.updateAutoTrainSettingsConfig({ threshold: 20 });
 
       expect(result).toEqual(mockData);
       expect(mockFetch.mock.calls[0][0]).toContain('/settings/training/auto-train/config');
       expect(mockFetch.mock.calls[0][1].method).toBe('PATCH');
+    });
+  });
+
+  describe('Security Keys', () => {
+    it('listSecurityKeys calls GET /security/keys', async () => {
+      const mockData = [{ id: 'k1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getSecurityKeys();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/security/keys');
+    });
+
+    it('createSecurityKey calls POST /security/keys', async () => {
+      const mockData = { id: 'k2', name: 'test' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.createSecurityKey('test', ['read'], 30);
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('deleteSecurityKey calls DELETE /security/keys/{keyId}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteSecurityKey('k1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('rotateSecurityKey calls POST /security/keys/{keyId}/rotate', async () => {
+      const mockData = { id: 'k1', new_secret: 's3cret' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.rotateSecurityKey('k1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('validateSecurityKey calls POST /security/keys/validate', async () => {
+      const mockData = { valid: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.validateSecurityKey('my-key');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+  });
+
+  describe('Tenants', () => {
+    it('listTenants calls GET /tenants', async () => {
+      const mockData = [{ id: 't1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listTenants();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/tenants');
+    });
+
+    it('getTenant calls GET /tenants/{tenantId}', async () => {
+      const mockData = { id: 't1', name: 'acme' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTenant('t1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/tenants/t1');
+    });
+
+    it('createTenant calls POST /tenants', async () => {
+      const mockData = { id: 't2', name: 'new' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.createTenant('new', { plan: 'pro' });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('deleteTenant calls DELETE /tenants/{tenantId}', async () => {
+      const mockData = { deleted: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.deleteTenant('t1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+    });
+
+    it('getTenantStats calls GET /tenants/{tenantId}/stats', async () => {
+      const mockData = { users: 10, workspaces: 3 };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getTenantStats('t1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/tenants/t1/stats');
+    });
+  });
+
+  describe('Profiles', () => {
+    it('listProfiles calls GET /profiles', async () => {
+      const mockData = [{ id: 'p1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listProfiles();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/profiles');
+    });
+
+    it('getProfile calls GET /profiles/{profileId}', async () => {
+      const mockData = { id: 'p1', name: 'default' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getProfile('p1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/profiles/p1');
+    });
+
+    it('applyProfile calls POST /profiles/apply', async () => {
+      const mockData = { applied: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.applyProfile('p1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('getActiveProfile calls GET /profiles/active', async () => {
+      const mockData = { id: 'p1' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getActiveProfile();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/profiles/active');
+    });
+
+    it('recommendProfile calls GET /profiles/recommend', async () => {
+      const mockData = { profile_id: 'p2', reason: 'best match' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.recommendProfile();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/profiles/recommend');
+    });
+  });
+
+  describe('Workspaces', () => {
+    it('listWorkspaces calls GET /workspaces', async () => {
+      const mockData = [{ id: 'w1' }];
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.listWorkspaces();
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/workspaces');
+    });
+
+    it('getWorkspace calls GET /workspaces/{workspaceId}', async () => {
+      const mockData = { id: 'w1', name: 'team' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.getWorkspace('w1');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][0]).toContain('/workspaces/w1');
+    });
+
+    it('createWorkspace calls POST /workspaces', async () => {
+      const mockData = { id: 'w2', name: 'new' };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.createWorkspace('new', { description: 'test' });
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    });
+
+    it('addWorkspaceMember calls POST /workspaces/{id}/members', async () => {
+      const mockData = { added: true };
+      mockFetch.mockResolvedValue(createMockResponse(mockData));
+
+      const client = new SloughGPTClient();
+      const result = await client.addWorkspaceMember('w1', 'user-1', 'admin');
+
+      expect(result).toEqual(mockData);
+      expect(mockFetch.mock.calls[0][1].method).toBe('POST');
     });
   });
 });

@@ -104,6 +104,7 @@ class ConsciousnessRouter:
         self.router.add_api_route("/personas/{persona_id}", self.get_persona, methods=["GET"])
         self.router.add_api_route("/personas/{persona_id}/activate", self.activate_persona, methods=["POST"])
         self.router.add_api_route("/personas/{persona_id}", self.delete_persona, methods=["DELETE"])
+        self.router.add_api_route("/health", self.health_check, methods=["GET"])
 
     @endpoint("consciousness.status")
     async def get_status(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
@@ -595,6 +596,34 @@ class ConsciousnessRouter:
         if not deleted:
             raise_error("Persona not found", "E_NOT_FOUND", status_code=404)
         return success_response(data={"deleted": persona_id})
+
+    @endpoint("consciousness.health")
+    async def health_check(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        """Quick health check for consciousness system."""
+        engine = self._get_engine()
+        status = engine.get_status()
+        episodes = engine.self_model.episodes
+        recent_growth = [e.growth_delta for e in episodes[-10:]] if episodes else []
+        avg_growth = sum(recent_growth) / len(recent_growth) if recent_growth else 0
+        positive_count = sum(1 for g in recent_growth if g > 0)
+        positive_ratio = positive_count / len(recent_growth) if recent_growth else 0
+        health_score = min(100, max(0, int(
+            (1.0 if status.get("enabled") else 0.0) * 30
+            + min(1.0, len(episodes) / 50) * 20
+            + positive_ratio * 25
+            + (status.get("level", 0) / 3) * 25
+        )))
+        return success_response(data={
+            "status": "healthy" if health_score >= 50 else "degraded",
+            "health_score": health_score,
+            "enabled": status.get("enabled", False),
+            "level": status.get("level", 0),
+            "episodes": len(episodes),
+            "avg_growth": round(avg_growth, 4),
+            "positive_ratio": round(positive_ratio, 2),
+            "qualia": status.get("current_qualia", {}),
+            "last_reflection": status.get("last_reflection"),
+        })
 
 
 router = ConsciousnessRouter().router

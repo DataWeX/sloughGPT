@@ -236,15 +236,106 @@ export const settingsController = {
     return apiPost('/settings/restore', data)
   },
 
-  async getAutoTrainStatus(): Promise<Record<string, unknown>> {
+  async getAutoTrainSettingsStatus(): Promise<Record<string, unknown>> {
     return apiGet('/settings/training/auto-train/status')
   },
 
-  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
+  async updateAutoTrainSettingsConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
     const qs = new URLSearchParams()
     if (params.threshold !== undefined) qs.set('threshold', String(params.threshold))
     if (params.interval_s !== undefined) qs.set('interval_s', String(params.interval_s))
     const q = qs.toString()
     return apiPatch(`/settings/training/auto-train/config${q ? `?${q}` : ''}`)
+  },
+
+  // ── API Keys ──────────────────────────────────────────────
+
+  async createSecurityKey(name: string, scopes?: string[], expiresInDays?: number): Promise<Record<string, unknown>> {
+    const body: Record<string, unknown> = { name }
+    if (scopes) body.scopes = scopes
+    if (expiresInDays !== undefined) body.expires_in_days = expiresInDays
+    return apiPost('/security/keys', body)
+  },
+
+  async getSecurityKey(keyId: string): Promise<Record<string, unknown>> {
+    return apiGet(`/security/keys/${encodeURIComponent(keyId)}`)
+  },
+
+  async deleteSecurityKey(keyId: string): Promise<Record<string, unknown>> {
+    return apiDelete(`/security/keys/${encodeURIComponent(keyId)}`)
+  },
+
+  async rotateSecurityKey(keyId: string): Promise<Record<string, unknown>> {
+    return apiPost(`/security/keys/${encodeURIComponent(keyId)}/rotate`)
+  },
+
+  async validateSecurityKey(key: string): Promise<Record<string, unknown>> {
+    return apiPost('/security/keys/validate', { key })
+  },
+
+  // ── Tenants ───────────────────────────────────────────────
+
+  async listTenants(): Promise<Record<string, unknown>[]> {
+    return apiGet('/tenants')
+  },
+
+  async getTenant(tenantId: string): Promise<Record<string, unknown>> {
+    return apiGet(`/tenants/${encodeURIComponent(tenantId)}`)
+  },
+
+  async createTenant(name: string, options?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return apiPost('/tenants', { name, ...options })
+  },
+
+  async updateTenant(tenantId: string, options: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return apiPut(`/tenants/${encodeURIComponent(tenantId)}`, options)
+  },
+
+  async deleteTenant(tenantId: string): Promise<Record<string, unknown>> {
+    return apiDelete(`/tenants/${encodeURIComponent(tenantId)}`)
+  },
+
+  async getTenantStats(tenantId: string): Promise<Record<string, unknown>> {
+    return apiGet(`/tenants/${encodeURIComponent(tenantId)}/stats`)
+  },
+
+  // ── Profiles ──────────────────────────────────────────────
+
+  async listProfiles(): Promise<Record<string, unknown>[]> {
+    return apiGet('/profiles')
+  },
+
+  async getProfile(profileId: string): Promise<Record<string, unknown>> {
+    return apiGet(`/profiles/${encodeURIComponent(profileId)}`)
+  },
+
+  async applyProfile(profileId: string): Promise<Record<string, unknown>> {
+    return apiPost('/profiles/apply', { profile_id: profileId })
+  },
+
+  async getActiveProfile(): Promise<Record<string, unknown>> {
+    return apiGet('/profiles/active')
+  },
+
+  async recommendProfile(): Promise<Record<string, unknown>> {
+    return apiGet('/profiles/recommend')
+  },
+
+  // ── Workspaces ────────────────────────────────────────────
+
+  async listWorkspaces(): Promise<Record<string, unknown>[]> {
+    return apiGet('/workspaces')
+  },
+
+  async getWorkspace(workspaceId: string): Promise<Record<string, unknown>> {
+    return apiGet(`/workspaces/${encodeURIComponent(workspaceId)}`)
+  },
+
+  async createWorkspace(name: string, options?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return apiPost('/workspaces', { name, ...options })
+  },
+
+  async addWorkspaceMember(workspaceId: string, userId: string, role: string = 'member'): Promise<Record<string, unknown>> {
+    return apiPost(`/workspaces/${encodeURIComponent(workspaceId)}/members`, { user_id: userId, role })
   },
 }

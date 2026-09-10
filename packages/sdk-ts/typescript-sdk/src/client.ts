@@ -849,12 +849,12 @@ export class SloughGPTClient {
 
   // ============ Auto-train ============
 
-  async getAutoTrainStatus(): Promise<Record<string, unknown>> {
+  async getAutoTrainSettingsStatus(): Promise<Record<string, unknown>> {
     const data = await this.request<Record<string, unknown>>('GET', '/settings/training/auto-train/status');
     return this.unwrap(data) as Record<string, unknown>;
   }
 
-  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
+  async updateAutoTrainSettingsConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
     const qs = new URLSearchParams();
     if (params.threshold !== undefined) qs.set('threshold', String(params.threshold));
     if (params.interval_s !== undefined) qs.set('interval_s', String(params.interval_s));
@@ -1089,7 +1089,104 @@ export class SloughGPTClient {
     return result.message.content;
   }
 
-  // ============ OpenWebUI Integration ============
+  // ============ Security ============
+
+  async getSecurityKeys(): Promise<any[]> {
+    const response = await this.request('GET', '/security/keys');
+    return Array.isArray(response) ? response : response.keys || response;
+  }
+
+  async createSecurityKey(name: string, scopes?: string[], expiresInDays?: number): Promise<any> {
+    const body: any = { name };
+    if (scopes) body.scopes = scopes;
+    if (expiresInDays !== undefined) body.expires_in_days = expiresInDays;
+    return this.request('POST', '/security/keys', body);
+  }
+
+  async getSecurityKey(keyId: string): Promise<any> {
+    return this.request('GET', `/security/keys/${keyId}`);
+  }
+
+  async deleteSecurityKey(keyId: string): Promise<any> {
+    return this.request('DELETE', `/security/keys/${keyId}`);
+  }
+
+  async rotateSecurityKey(keyId: string): Promise<any> {
+    return this.request('POST', `/security/keys/${keyId}/rotate`);
+  }
+
+  async validateSecurityKey(key: string): Promise<any> {
+    return this.request('POST', '/security/keys/validate', { key });
+  }
+
+  // ============ Tenants ============
+
+  async listTenants(): Promise<any[]> {
+    const response = await this.request('GET', '/tenants');
+    return Array.isArray(response) ? response : response.tenants || response;
+  }
+
+  async getTenant(tenantId: string): Promise<any> {
+    return this.request('GET', `/tenants/${tenantId}`);
+  }
+
+  async createTenant(name: string, options?: Record<string, any>): Promise<any> {
+    return this.request('POST', '/tenants', { name, ...options });
+  }
+
+  async updateTenant(tenantId: string, options: Record<string, any>): Promise<any> {
+    return this.request('PUT', `/tenants/${tenantId}`, options);
+  }
+
+  async deleteTenant(tenantId: string): Promise<any> {
+    return this.request('DELETE', `/tenants/${tenantId}`);
+  }
+
+  async getTenantStats(tenantId: string): Promise<any> {
+    return this.request('GET', `/tenants/${tenantId}/stats`);
+  }
+
+  // ============ Profiles ============
+
+  async listProfiles(): Promise<any[]> {
+    const response = await this.request('GET', '/profiles');
+    return Array.isArray(response) ? response : response.profiles || response;
+  }
+
+  async getProfile(profileId: string): Promise<any> {
+    return this.request('GET', `/profiles/${profileId}`);
+  }
+
+  async applyProfile(profileId: string): Promise<any> {
+    return this.request('POST', '/profiles/apply', { profile_id: profileId });
+  }
+
+  async getActiveProfile(): Promise<any> {
+    return this.request('GET', '/profiles/active');
+  }
+
+  async recommendProfile(): Promise<any> {
+    return this.request('GET', '/profiles/recommend');
+  }
+
+  // ============ Workspaces ============
+
+  async listWorkspaces(): Promise<any[]> {
+    const response = await this.request('GET', '/workspaces');
+    return Array.isArray(response) ? response : response.workspaces || response;
+  }
+
+  async getWorkspace(workspaceId: string): Promise<any> {
+    return this.request('GET', `/workspaces/${workspaceId}`);
+  }
+
+  async createWorkspace(name: string, options?: Record<string, any>): Promise<any> {
+    return this.request('POST', '/workspaces', { name, ...options });
+  }
+
+  async addWorkspaceMember(workspaceId: string, userId: string, role: string = 'member'): Promise<any> {
+    return this.request('POST', `/workspaces/${workspaceId}/members`, { user_id: userId, role });
+  }
 
   async openwebuiDatasets(): Promise<any[]> {
     const response = await this.request('GET', '/openwebui/datasets');

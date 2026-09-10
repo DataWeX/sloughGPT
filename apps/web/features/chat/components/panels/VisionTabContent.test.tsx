@@ -14,7 +14,6 @@ import { VisionTabContent } from './VisionTabContent'
 
 describe('VisionTabContent', () => {
   const onGeneratedImage = vi.fn()
-  const onSendText = vi.fn()
 
   beforeEach(() => { vi.clearAllMocks() })
   afterEach(cleanup)
@@ -24,7 +23,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     expect(screen.getByText('Vision Model')).toBeDefined()
@@ -35,7 +33,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     expect(screen.getByText('0')).toBeDefined()
@@ -46,7 +43,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionImagesLearned={42}
       />
     )
@@ -58,7 +54,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionStatus="active"
       />
     )
@@ -70,7 +65,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionTrained={true}
         visionImagesLearned={10}
       />
@@ -83,7 +77,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionImagesLearned={5}
         visionTrained={false}
       />
@@ -96,7 +89,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     expect(screen.getByText(/Ready/)).toBeDefined()
@@ -107,7 +99,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         meanAccuracy={75}
       />
     )
@@ -120,7 +111,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         meanAccuracy={0}
       />
     )
@@ -132,7 +122,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     expect(screen.queryByText('Mean accuracy')).toBeNull()
@@ -143,7 +132,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionVocabSize={256}
       />
     )
@@ -156,7 +144,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionVocabSize={0}
       />
     )
@@ -168,7 +155,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     const dialog = screen.getByTestId('vision-studio-dialog')
@@ -182,7 +168,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="test-session-123"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     const dialog = screen.getByTestId('vision-studio-dialog')
@@ -194,7 +179,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
         visionImagesLearned={15}
         visionTrained={true}
         visionVocabSize={512}
@@ -212,7 +196,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     expect(screen.getByText('Open Vision Studio')).toBeDefined()
@@ -223,7 +206,6 @@ describe('VisionTabContent', () => {
       <VisionTabContent
         sessionId="s1"
         onGeneratedImage={onGeneratedImage}
-        onSendText={onSendText}
       />
     )
     const dots = container.querySelectorAll('.rounded-full')

@@ -72,15 +72,11 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 visionImagesLearned={ctx.visionCaps?.images_learned}
                 visionTrained={ctx.visionCaps?.trained}
                 visionStatus={ctx.visionCaps?.status}
-                visionCaptionHistory={ctx.visionCaptionHistory}
                 visionVocabSize={ctx.visionVocabSize}
                 sessionId={sessionId}
                 onGeneratedImage={(dataUrl, prompt) => {
                   const event = new CustomEvent('insert-generated-image', { detail: { dataUrl, prompt } })
                   window.dispatchEvent(event)
-                }}
-                onSendText={(text) => {
-                  window.dispatchEvent(new CustomEvent('send-text', { detail: { text } }))
                 }}
               />
             ) : (
