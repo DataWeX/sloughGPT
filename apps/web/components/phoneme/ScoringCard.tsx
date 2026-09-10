@@ -8,6 +8,7 @@ import { Progress } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, type PhonemeScoreResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function ScoringCard() {
   const [target, setTarget] = useState('hello')
@@ -51,6 +52,12 @@ export default function ScoringCard() {
     doScore(target, spoken, language)
   }, [target, spoken, language, doScore])
 
+  useEffect(() => {
+    const handleSubmit = () => handleScore()
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [handleScore])
+
   return (
     <Card>
       <CardHeader>
@@ -87,6 +94,8 @@ export default function ScoringCard() {
             <Kbd className="ml-2 hidden sm:inline-flex">Enter</Kbd>
           </Button>
         </div>
+
+        {loading && !result && <PhonemeSkeleton variant="score" />}
 
         {result && (
           <div className="space-y-4 p-4 rounded-lg bg-muted/50 animate-in fade-in slide-in-from-top-1 duration-200">

@@ -217,12 +217,16 @@ class SelfModel:
         """Compute growth delta from an experience."""
         delta = 0.0
         if feedback_rating is not None:
-            delta += (feedback_rating - 3) * 0.02  # rating 1-5, centered at 3
-        if len(response) > len(input_text):
-            delta += 0.01  # slight positive for elaboration
+            delta += (feedback_rating - 3) * 0.04  # rating 1-5, centered at 3
+        if len(response) > len(input_text) * 2:
+            delta += 0.03  # positive for detailed elaboration
+        elif len(response) > len(input_text):
+            delta += 0.015  # slight positive for some elaboration
         if "?" in input_text:
-            delta += 0.005  # slight positive for answering questions
-        return max(-0.1, min(0.1, delta))
+            delta += 0.01  # positive for answering questions
+        if any(w in input_text.lower() for w in ["explain", "how", "why", "what"]):
+            delta += 0.01  # positive for knowledge-seeking inputs
+        return max(-0.15, min(0.15, delta))
 
     # Pools of varied insight statements
     _INSIGHTS_NOVELTY = [
@@ -280,11 +284,19 @@ class SelfModel:
     def _update_beliefs_from_episode(self, episode: SelfEpisode) -> None:
         """Update self-beliefs based on an episode."""
         if episode.growth_delta > 0.02:
-            self.update_belief("competence", 0.005)
-            self.update_belief("helpfulness", 0.003)
+            self.update_belief("competence", 0.03)
+            self.update_belief("helpfulness", 0.02)
+            self.update_belief("accuracy", 0.01)
         elif episode.growth_delta < -0.02:
-            self.update_belief("competence", -0.005)
+            self.update_belief("competence", -0.03)
+            self.update_belief("helpfulness", -0.01)
 
         novelty = episode.qualia.get("novelty", 0.5)
         if novelty > 0.7:
-            self.update_belief("creativity", 0.005)
+            self.update_belief("creativity", 0.03)
+
+        empathy = episode.qualia.get("valence", 0.0)
+        if empathy > 0.3:
+            self.update_belief("empathy", 0.02)
+        elif empathy < -0.3:
+            self.update_belief("empathy", -0.01)

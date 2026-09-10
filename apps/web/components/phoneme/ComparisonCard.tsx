@@ -7,6 +7,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Progress } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function ComparisonCard() {
   const [word1, setWord1] = useState('hello')
@@ -45,6 +46,12 @@ export default function ComparisonCard() {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     doCompare(word1, word2, language)
   }, [word1, word2, language, doCompare])
+
+  useEffect(() => {
+    const handleSubmit = () => handleCompare()
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [handleCompare])
 
   const common = result1 && result2
     ? result1.phonemes.filter(p => result2.phonemes.includes(p))
@@ -89,6 +96,8 @@ export default function ComparisonCard() {
             Compare
           </Button>
         </div>
+
+        {loading && !result1 && <PhonemeSkeleton variant="compare" />}
 
         {result1 && result2 && (
           <div className="space-y-4 p-4 rounded-lg bg-muted/50 animate-in fade-in slide-in-from-top-1 duration-200">

@@ -8,6 +8,8 @@ import { Progress } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeScoreResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
+import { IconBolt } from '@sloughgpt/strui'
 
 const PRACTICE_WORDS: Record<PhonemeLanguage, string[]> = {
   en: ['hello', 'world', 'goodbye', 'please', 'thank', 'cat', 'dog', 'house', 'water', 'food'],
@@ -74,6 +76,7 @@ export default function PracticeCard() {
   const attemptDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const addToHistory = usePhonemeStore(s => s.addToHistory)
   const randomWordTrigger = usePhonemeStore(s => s.randomWordTrigger)
+  const pronunciationStreak = usePhonemeStore(s => s.pronunciationStreak)
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
@@ -150,12 +153,25 @@ export default function PracticeCard() {
         targetPhonemes: res.target_phonemes,
         spokenPhonemes: res.spoken_phonemes,
       })
+      if (res.score >= 0.8) {
+        const newStreak = pronunciationStreak + 1
+        if (newStreak === 3) addToast('3 in a row! Nice streak!', 'success')
+        else if (newStreak === 5) addToast('5 in a row! Amazing!', 'success')
+        else if (newStreak === 10) addToast('10 in a row! Unstoppable!', 'success')
+        else if (newStreak === 20) addToast('20 in a row! Legendary!', 'success')
+      }
     } catch {
       addToast('Scoring failed', 'error')
     } finally {
       setLoading(false)
     }
-  }, [targetWord, attempt, language, addToHistory, addToast])
+  }, [targetWord, attempt, language, addToHistory, addToast, pronunciationStreak])
+
+  useEffect(() => {
+    const handleSubmit = () => handleScore()
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [handleScore])
 
   const toggleRecording = useCallback(async () => {
     if (isRecording && mediaRecorderRef.current) {
@@ -201,7 +217,15 @@ export default function PracticeCard() {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Practice Mode</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Practice Mode</span>
+            {pronunciationStreak >= 3 && (
+              <Badge variant="default" className="gap-1 bg-warning text-warning-foreground">
+                <IconBolt className="h-3 w-3" />
+                {pronunciationStreak}
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -227,6 +251,8 @@ export default function PracticeCard() {
               className="flex-1"
             />
           </div>
+
+          {loading && !targetResult && <PhonemeSkeleton variant="practice" />}
 
           {targetResult && (
             <div className="p-3 rounded-lg bg-muted/50 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">

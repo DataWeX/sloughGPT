@@ -11,6 +11,7 @@ import PracticeCard from '@/components/phoneme/PracticeCard'
 import BatchCard from '@/components/phoneme/BatchCard'
 import DetectLanguageCard from '@/components/phoneme/DetectLanguageCard'
 import FlashcardCard from '@/components/phoneme/FlashcardCard'
+import QuizCard from '@/components/phoneme/QuizCard'
 import SynthesisCard from '@/components/phoneme/SynthesisCard'
 import HistoryCard from '@/components/phoneme/HistoryCard'
 import PhonemeReference from '@/components/phoneme/PhonemeReference'
@@ -26,8 +27,9 @@ const TABS = [
   { value: 'batch', label: 'Batch', shortcut: '5' },
   { value: 'detect', label: 'Detect', shortcut: '6' },
   { value: 'flashcards', label: 'Flashcards', shortcut: '7' },
-  { value: 'synthesize', label: 'Synthesize', shortcut: '8' },
-  { value: 'history', label: 'History', shortcut: '9' },
+  { value: 'quiz', label: 'Quiz', shortcut: '8' },
+  { value: 'synthesize', label: 'Synthesize', shortcut: '9' },
+  { value: 'history', label: 'History', shortcut: '0' },
 ] as const
 
 export default function PhonemePage() {
@@ -39,6 +41,11 @@ export default function PhonemePage() {
     setActiveTab(value)
   }, [])
 
+  const handleSubmit = useCallback(() => {
+    const event = new CustomEvent('phoneme-submit', { detail: { tab: activeTab } })
+    window.dispatchEvent(event)
+  }, [activeTab])
+
   usePhonemeShortcuts({
     onEncode: () => goToTab('encode'),
     onScore: () => goToTab('score'),
@@ -46,7 +53,7 @@ export default function PhonemePage() {
     onPractice: () => goToTab('practice'),
     onBatch: () => goToTab('batch'),
     onDetect: () => goToTab('detect'),
-    onQuiz: () => goToTab('flashcards'),
+    onQuiz: () => goToTab('quiz'),
     onSynthesize: () => goToTab('synthesize'),
     onHistory: () => goToTab('history'),
     onRandomWord: () => {
@@ -56,6 +63,7 @@ export default function PhonemePage() {
     onClear: () => {
       clearHistory()
     },
+    onSubmit: handleSubmit,
   })
 
   return (
@@ -64,8 +72,11 @@ export default function PhonemePage() {
       subtitle="Multi-language phoneme encoding, pronunciation scoring, and TTS"
       headerRight={
         <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
-          <Kbd>Ctrl+1-9</Kbd>
+          <Kbd>Ctrl+1-0</Kbd>
           <span>tabs</span>
+          <span className="text-border">|</span>
+          <Kbd>Ctrl+Enter</Kbd>
+          <span>submit</span>
           <span className="text-border">|</span>
           <Kbd>Ctrl+Shift+R</Kbd>
           <span>random</span>
@@ -112,6 +123,10 @@ export default function PhonemePage() {
 
           <TabsContent value="flashcards">
             <TabErrorBoundary tabName="Flashcards"><FlashcardCard /></TabErrorBoundary>
+          </TabsContent>
+
+          <TabsContent value="quiz">
+            <TabErrorBoundary tabName="Quiz"><QuizCard /></TabErrorBoundary>
           </TabsContent>
 
           <TabsContent value="synthesize">

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { phonemeController, type PhonemeSynthesizeResult } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
 import WaveformCanvas from './WaveformCanvas'
 import SpectrogramCanvas from './SpectrogramCanvas'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function SynthesisCard() {
   const [text, setText] = useState('hello world')
@@ -27,6 +28,12 @@ export default function SynthesisCard() {
     }
   }, [text, addToast])
 
+  useEffect(() => {
+    const handleSubmit = () => handleSynthesize()
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [handleSynthesize])
+
   return (
     <Card>
       <CardHeader>
@@ -46,6 +53,8 @@ export default function SynthesisCard() {
             Synthesize
           </Button>
         </div>
+
+        {loading && !result && <PhonemeSkeleton variant="synthesize" />}
 
         {result && (
           <div className="space-y-3 p-4 rounded-lg bg-muted/50">

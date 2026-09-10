@@ -138,10 +138,13 @@ class SystemRouter:
     @endpoint("system.get_lifecycle_status")
     async def get_lifecycle_status(self) -> dict:
         """Get the current lifecycle manager state."""
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
+        try:
+            from domains.infrastructure.lifecycle import get_lifecycle_manager
 
-        mgr = get_lifecycle_manager()
-        return success_response(data=mgr.get_results())
+            mgr = get_lifecycle_manager()
+            return success_response(data=mgr.get_results())
+        except Exception:
+            return success_response(data={"phase": "unavailable"})
     @endpoint("system.stream_output")
     async def stream_output(
         self, request: Request, tail: int = Query(50, ge=0, le=500)
@@ -279,14 +282,19 @@ class SystemRouter:
     @endpoint("system.get_inference_pool_status")
     async def get_inference_pool_status(self) -> dict:
         """Retrieve the InferencePool worker pool status."""
-        from infrastructure.inference_pool import InferencePool
+        try:
+            from infrastructure.inference_pool import InferencePool
 
-        pool = await InferencePool.get_instance()
-        return success_response(
-            data={
-                "initialized": True,
-                "max_workers": pool._max_workers,
-                "queue_timeout": pool._queue_timeout,
-            }
-        )
+            pool = await InferencePool.get_instance()
+            return success_response(
+                data={
+                    "initialized": True,
+                    "max_workers": pool._max_workers,
+                    "queue_timeout": pool._queue_timeout,
+                }
+            )
+        except Exception:
+            return success_response(
+                data={"initialized": False, "max_workers": 0, "queue_timeout": 0}
+            )
 router = SystemRouter().router

@@ -6,6 +6,7 @@ import { IconRefresh } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, toIPA, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function EncodingCard() {
   const [text, setText] = useState('hello world')
@@ -40,6 +41,12 @@ export default function EncodingCard() {
     doEncode(text, language)
   }, [text, language, doEncode])
 
+  useEffect(() => {
+    const handleSubmit = () => handleEncode()
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [handleEncode])
+
   const ipa = result ? toIPA(result.phonemes) : []
 
   return (
@@ -72,6 +79,8 @@ export default function EncodingCard() {
             <Kbd className="ml-2 hidden sm:inline-flex">Enter</Kbd>
           </Button>
         </div>
+
+        {loading && !result && <PhonemeSkeleton variant="encode" />}
 
         {result && (
           <div className="space-y-3 p-4 rounded-lg bg-muted/50 animate-in fade-in slide-in-from-top-1 duration-200">

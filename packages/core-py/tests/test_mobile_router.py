@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -40,7 +40,7 @@ class TestTrainingStats:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/train/stats")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["total"] == 100
         assert body["pending"] == 5
         assert body["by_quality"]["good"] == 70
@@ -56,7 +56,7 @@ class TestTrainingStats:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/train/stats")
         assert resp.status_code == 200
-        assert resp.json()["total"] == 0
+        assert resp.json()["data"]["total"] == 0
 
 
 # ── Notification history ──
@@ -76,7 +76,7 @@ class TestNotificationHistory:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/notifications/history")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         # Returns {"history": [...]} dict, not a plain list
         assert "history" in body
         assert len(body["history"]) == 2
@@ -91,7 +91,7 @@ class TestNotificationHistory:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/notifications/history?limit=1")
         assert resp.status_code == 200
-        assert len(resp.json()["history"]) == 1
+        assert len(resp.json()["data"]["history"]) == 1
 
 
 # ── Device list ──
@@ -111,7 +111,7 @@ class TestDeviceManagement:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/notifications/devices")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert len(body["devices"]) == 2
 
     @patch("domains.mobile.notifications.get_notification_service")
@@ -170,7 +170,7 @@ class TestCompact:
         client = TestClient(_app(mr))
         resp = client.post("/mobile/train/compact")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["status"] == "compacted"
         assert body["count"] == 42
 
@@ -194,7 +194,7 @@ class TestAutoTrainStatus:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/train/auto-status")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["enabled"] is True
         assert body["threshold"] == 10
 
@@ -218,7 +218,7 @@ class TestSendNotification:
     @patch("domains.mobile.notifications.get_notification_service")
     def test_send_notification(self, mock_get_svc):
         svc = MagicMock()
-        svc.send_notification.return_value = {"sent": 5, "failed": 0}
+        svc.send_notification_async = AsyncMock(return_value={"sent": 5, "failed": 0})
         mock_get_svc.return_value = svc
 
         mr = MobileRouter()
@@ -228,7 +228,7 @@ class TestSendNotification:
             "body": "Your model finished training",
         })
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["sent"] == 5
 
 
@@ -246,7 +246,7 @@ class TestCleanupDevices:
         client = TestClient(_app(mr))
         resp = client.post("/mobile/notifications/cleanup")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["removed"] == 3
 
 
@@ -267,7 +267,7 @@ class TestPendingPairs:
         client = TestClient(_app(mr))
         resp = client.get("/mobile/train/pending")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert len(body["pairs"]) == 2
 
     @patch("domains.training.mobile_training_store.get_training_store")

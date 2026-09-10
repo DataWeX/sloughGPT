@@ -169,7 +169,7 @@ class TestHealth:
     def test_model_health_error(self, mock_get_ctrl):
         mock_get_ctrl.return_value = _mock_ctrl()
         hr = _make_health_router()
-        client = TestClient(_app(hr))
+        client = TestClient(_app(hr), raise_server_exceptions=False)
         with patch("domains.feedback.model_health.get_health_monitor", side_effect=RuntimeError("boom")):
             resp = client.get("/health/model")
         assert resp.status_code == 500

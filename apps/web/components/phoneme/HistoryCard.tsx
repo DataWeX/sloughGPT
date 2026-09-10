@@ -10,6 +10,7 @@ import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import { PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
   const time = new Date(entry.timestamp).toLocaleTimeString()
@@ -357,11 +358,13 @@ export default function HistoryCard() {
 
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
           {filteredHistory.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              {history.length === 0
-                ? 'No history yet. Score some pronunciation to get started.'
-                : 'No entries match the selected filter.'}
-            </p>
+            history.length === 0 ? (
+              <PhonemeSkeleton variant="history" />
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No entries match the selected filter.
+              </p>
+            )
           ) : (
             filteredHistory.map((entry, i) => (
               <div key={entry.id} className="animate-in fade-in duration-200" style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}>

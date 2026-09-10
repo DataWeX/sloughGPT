@@ -189,3 +189,169 @@ class TestConsciousnessAPI:
         assert "overall_score" in data["data"]
         # The evaluator returns a flat dict with metrics directly
         assert "narrative_coherence" in data["data"] or "metrics" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_episode_history(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/history/episodes")
+        assert res.status_code == 200
+        data = res.json()
+        assert "episodes" in data["data"]
+        assert "total" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_qualia_history(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/history/qualia")
+        assert res.status_code == 200
+        data = res.json()
+        assert "history" in data["data"]
+        assert "total" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_beliefs_history_empty(self, _auth, client):
+        res = client.get("/consciousness/history/beliefs")
+        assert res.status_code == 200
+        data = res.json()
+        assert "beliefs" in data["data"]
+        assert "labels" in data["data"]
+        assert isinstance(data["data"]["beliefs"], list)
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_beliefs_history_with_episodes(self, _auth, mock_engine):
+        """Test beliefs history reconstructs evolution from episodes."""
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from infrastructure.exception_handlers import register_app_error_handler
+        import time
+
+        router_obj = ConsciousnessRouter()
+
+        # Create a mock engine with episodes
+        mock_eng = MagicMock()
+        mock_eng.config.is_enabled.return_value = True
+        mock_eng.config.level = 1
+
+        # Create fake episodes with qualia
+        from domains.consciousness.self_model import SelfEpisode
+        episodes = [
+            SelfEpisode(
+                timestamp=time.time() - 100 + i,
+                input_text=f"test {i}",
+                response=f"response {i}",
+                qualia={"novelty": 0.8 if i % 2 == 0 else 0.3, "coherence": 0.5},
+                self_insight="test insight",
+                growth_delta=0.05 if i % 3 == 0 else -0.01,
+            )
+            for i in range(10)
+        ]
+        mock_eng.self_model.episodes = episodes
+
+        router_obj._engine = mock_eng
+
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        res = client.get("/consciousness/history/beliefs")
+        assert res.status_code == 200
+        data = res.json()
+        beliefs = data["data"]["beliefs"]
+        assert len(beliefs) > 0
+        assert "competence" in beliefs[0]
+        assert "helpfulness" in beliefs[0]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_submit_feedback(self, _auth, mock_engine):
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from infrastructure.exception_handlers import register_app_error_handler
+        from domains.consciousness.self_model import SelfEpisode
+        import time
+
+        router_obj = ConsciousnessRouter()
+        mock_eng = MagicMock()
+        mock_eng.config.is_enabled.return_value = True
+        mock_eng.config.level = 1
+
+        episode = SelfEpisode(
+            timestamp=time.time(),
+            input_text="test input",
+            response="test response that is longer",
+            qualia={"novelty": 0.5, "valence": 0.2},
+            self_insight="test insight",
+            growth_delta=0.01,
+        )
+        mock_eng.self_model.episodes = [episode]
+        mock_eng.self_model._compute_growth.return_value = 0.05
+        mock_eng.self_model._update_beliefs_from_episode = MagicMock()
+        router_obj._engine = mock_eng
+
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        res = client.post("/consciousness/feedback", json={
+            "episode_index": 0,
+            "rating": 4,
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert "new_growth_delta" in data["data"]
+        assert "beliefs" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_submit_feedback_invalid_index(self, _auth):
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        router_obj = ConsciousnessRouter()
+        mock_eng = MagicMock()
+        mock_eng.config.is_enabled.return_value = True
+        mock_eng.config.level = 1
+        mock_eng.self_model.episodes = []
+        router_obj._engine = mock_eng
+
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        res = client.post("/consciousness/feedback", json={
+            "episode_index": 999,
+            "rating": 3,
+        })
+        assert res.status_code == 404
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_seed_data(self, _auth):
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from infrastructure.exception_handlers import register_app_error_handler
+        from domains.consciousness.self_model import SelfModel
+        from domains.consciousness.qualia import QualiaEngine
+        from domains.consciousness.meta_cognition import MetaCognition
+        from domains.consciousness.config import ConsciousnessConfig
+        from domains.consciousness.narrative import NarrativeGenerator
+
+        router_obj = ConsciousnessRouter()
+        real_engine = MagicMock()
+        real_engine.config = ConsciousnessConfig()
+        real_engine.self_model = SelfModel()
+        real_engine.qualia = QualiaEngine()
+        router_obj._engine = real_engine
+
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        res = client.post("/consciousness/seed?count=10")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["data"]["seeded"] == 10
+        assert data["data"]["total_episodes"] >= 10
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_seed_data_default_count(self, _auth, client, mock_engine):
+        res = client.post("/consciousness/seed")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["data"]["seeded"] == 30

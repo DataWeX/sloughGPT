@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh, IconBolt } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { usePhonemeStore } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 type Difficulty = 'easy' | 'medium' | 'hard'
 
@@ -80,6 +81,15 @@ export default function QuizCard() {
     setRevealedWord(currentWord.word)
   }, [currentWord, incrementQuizScore])
 
+  useEffect(() => {
+    const handleSubmit = () => {
+      if (guess.trim()) handleGuess()
+      else startQuiz()
+    }
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [guess, handleGuess, startQuiz])
+
   const showPhonemeHint = difficulty === 'easy'
   const showPhonemeCount = difficulty !== 'hard'
 
@@ -100,28 +110,35 @@ export default function QuizCard() {
         <CardContent className="space-y-3">
           {currentWord ? (
             <>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold">{currentWord.word}</span>
-                <Badge variant="secondary">{currentWord.lang.toUpperCase()}</Badge>
-                <Badge variant="outline" className="text-xs">{currentWord.difficulty}</Badge>
-              </div>
-              {showPhonemeHint && currentPhonemes.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {currentPhonemes.map((p, i) => (
-                    <Badge key={i} variant="outline">{p}</Badge>
-                  ))}
-                </div>
+              {loading && currentPhonemes.length === 0 && (
+                <PhonemeSkeleton variant="quiz" />
               )}
-              {!showPhonemeHint && showPhonemeCount && currentPhonemes.length > 0 && (
-                <p className="text-sm text-muted-foreground">{currentPhonemes.length} phonemes</p>
+              {!loading && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold">{currentWord.word}</span>
+                    <Badge variant="secondary">{currentWord.lang.toUpperCase()}</Badge>
+                    <Badge variant="outline" className="text-xs">{currentWord.difficulty}</Badge>
+                  </div>
+                  {showPhonemeHint && currentPhonemes.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {currentPhonemes.map((p, i) => (
+                        <Badge key={i} variant="outline">{p}</Badge>
+                      ))}
+                    </div>
+                  )}
+                  {!showPhonemeHint && showPhonemeCount && currentPhonemes.length > 0 && (
+                    <p className="text-sm text-muted-foreground">{currentPhonemes.length} phonemes</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={startQuiz}>New Word</Button>
+                    <Button onClick={() => {
+                      setRevealedWord(currentWord.word)
+                      setFeedback(null)
+                    }}>Reveal</Button>
+                  </div>
+                </>
               )}
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={startQuiz}>New Word</Button>
-                <Button onClick={() => {
-                  setRevealedWord(currentWord.word)
-                  setFeedback(null)
-                }}>Reveal</Button>
-              </div>
             </>
           ) : (
             <p className="text-muted-foreground">Click Start Quiz to begin</p>

@@ -574,7 +574,7 @@ export default function ConsciousnessDashboardPage() {
                 {[...episodes].reverse().map((ep, i) => {
                   const realIndex = episodes.length - 1 - i
                   return (
-                    <div key={i} className="flex gap-3 rounded-lg border p-3 text-sm">
+                    <div key={i} className="flex gap-3 rounded-lg border p-3 text-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedEpisode(ep)}>
                       <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground min-w-[60px]">
                         <span>{formatTimeAgo(ep.timestamp)}</span>
                         <span className={`font-mono ${ep.growth_delta >= 0 ? 'text-green-500' : 'text-red-500'}`}>
@@ -619,6 +619,81 @@ export default function ConsciousnessDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Episode Detail Modal */}
+      <Dialog open={selectedEpisode !== null} onOpenChange={(open) => { if (!open) setSelectedEpisode(null) }}>
+        <DialogPortal>
+          <DialogOverlay />
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Episode Detail</DialogTitle>
+            </DialogHeader>
+            {selectedEpisode && (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">Input</div>
+                  <div className="text-sm rounded-md bg-muted p-2">{selectedEpisode.input_text}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">Self Insight</div>
+                  <div className="text-sm">{selectedEpisode.self_insight}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">Growth Delta</div>
+                  <div className={`text-sm font-mono ${selectedEpisode.growth_delta >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {selectedEpisode.growth_delta >= 0 ? '+' : ''}{(selectedEpisode.growth_delta * 100).toFixed(2)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">Qualia Breakdown</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(selectedEpisode.qualia).map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="text-xs capitalize w-20">{k}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, ((v as number) + 1) / 2 * 100))}%`,
+                              backgroundColor: QUALIA_COLORS[k] || '#8b5cf6',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground w-8 text-right">
+                          {(v as number).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">Timestamp</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(selectedEpisode.timestamp * 1000).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  {[1, 2, 3, 4, 5].map((r) => (
+                    <Button
+                      key={r}
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const idx = episodes.indexOf(selectedEpisode)
+                        if (idx >= 0) handleFeedback(idx, r)
+                        setSelectedEpisode(null)
+                      }}
+                    >
+                      {r}
+                    </Button>
+                  ))}
+                  <span className="text-xs text-muted-foreground ml-1 self-center">rate this episode</span>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </DialogPortal>
+      </Dialog>
     </PageContainer>
   )
 }

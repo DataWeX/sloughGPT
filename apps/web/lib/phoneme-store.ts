@@ -28,6 +28,8 @@ interface PhonemeStore {
   quizTotal: number
   quizStreak: number
   quizBestStreak: number
+  pronunciationStreak: number
+  pronunciationBestStreak: number
   randomWordTrigger: number
   flashcardSRS: Record<string, FlashcardSRS>
   addToHistory: (entry: Omit<HistoryEntry, 'id' | 'timestamp'>) => void
@@ -88,6 +90,8 @@ const phonemeStore = createStore<PhonemeStore>((set, get) => ({
   quizTotal: 0,
   quizStreak: 0,
   quizBestStreak: 0,
+  pronunciationStreak: 0,
+  pronunciationBestStreak: 0,
   randomWordTrigger: 0,
   flashcardSRS: loadSRS(),
 
@@ -97,7 +101,13 @@ const phonemeStore = createStore<PhonemeStore>((set, get) => ({
     set(prev => {
       const history = [newEntry, ...prev.history].slice(0, 200)
       saveHistory(history)
-      return { history }
+      const isGood = entry.score >= 0.8
+      const newPronStreak = isGood ? prev.pronunciationStreak + 1 : 0
+      return {
+        history,
+        pronunciationStreak: newPronStreak,
+        pronunciationBestStreak: Math.max(prev.pronunciationBestStreak, newPronStreak),
+      }
     })
   },
 

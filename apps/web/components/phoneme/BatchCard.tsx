@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES, type PhonemeEncodeResult, type PhonemeScoreResult, type PhonemeLanguage } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 export default function BatchCard() {
   const [mode, setMode] = useState<'encode' | 'score'>('encode')
@@ -54,6 +55,15 @@ export default function BatchCard() {
     }
   }, [scoreInput, language, addToast])
 
+  useEffect(() => {
+    const handleSubmit = () => {
+      if (mode === 'encode') handleBatchEncode()
+      else handleBatchScore()
+    }
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [mode, handleBatchEncode, handleBatchScore])
+
   return (
     <Card>
       <CardHeader>
@@ -95,6 +105,8 @@ export default function BatchCard() {
               Encode All
             </Button>
 
+            {loading && encodeResults.length === 0 && <PhonemeSkeleton variant="batch" />}
+
             {encodeResults.length > 0 && (
               <div className="space-y-2 max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">
                 {encodeResults.map((r, i) => (
@@ -122,6 +134,8 @@ export default function BatchCard() {
               {loading ? <IconRefresh className="animate-spin mr-2 h-4 w-4" /> : null}
               Score All
             </Button>
+
+            {loading && scoreResults.length === 0 && <PhonemeSkeleton variant="batch" />}
 
             {scoreResults.length > 0 && (
               <div className="space-y-2 max-h-[300px] overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-200">

@@ -14,6 +14,7 @@ export interface PhonemeShortcuts {
   onHistory?: () => void
   onRandomWord?: () => void
   onClear?: () => void
+  onSubmit?: () => void
 }
 
 export function usePhonemeShortcuts(shortcuts: PhonemeShortcuts) {
@@ -26,7 +27,7 @@ export function usePhonemeShortcuts(shortcuts: PhonemeShortcuts) {
 
     const ctrl = e.ctrlKey || e.metaKey
 
-    // Ctrl+1-9: Switch tabs
+    // Ctrl+1-9,0: Switch tabs
     if (ctrl && !e.shiftKey) {
       switch (e.key) {
         case '1': e.preventDefault(); shortcuts.onEncode?.(); break
@@ -38,6 +39,7 @@ export function usePhonemeShortcuts(shortcuts: PhonemeShortcuts) {
         case '7': e.preventDefault(); shortcuts.onQuiz?.(); break
         case '8': e.preventDefault(); shortcuts.onSynthesize?.(); break
         case '9': e.preventDefault(); shortcuts.onHistory?.(); break
+        case '0': e.preventDefault(); shortcuts.onHistory?.(); break
       }
     }
 
@@ -51,6 +53,12 @@ export function usePhonemeShortcuts(shortcuts: PhonemeShortcuts) {
     if (ctrl && e.shiftKey && e.key === 'X') {
       e.preventDefault()
       shortcuts.onClear?.()
+    }
+
+    // Ctrl+Enter: Submit current form
+    if (ctrl && e.key === 'Enter') {
+      e.preventDefault()
+      shortcuts.onSubmit?.()
     }
   }, [shortcuts])
 

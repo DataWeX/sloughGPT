@@ -100,7 +100,7 @@ class TestLifecycle:
     def test_lifecycle_unavailable(self):
         sr = _make_system_router()
         with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", side_effect=RuntimeError("not init")):
-            client = TestClient(_app(sr))
+            client = TestClient(_app(sr), raise_server_exceptions=False)
             resp = client.get("/system/lifecycle")
         assert resp.status_code == 200
         assert resp.json()["data"]["phase"] == "unavailable"
@@ -234,7 +234,7 @@ class TestInferencePool:
         async def _raise():
             raise RuntimeError("no pool")
         with patch("infrastructure.inference_pool.InferencePool.get_instance", _raise):
-            client = TestClient(_app(sr))
+            client = TestClient(_app(sr), raise_server_exceptions=False)
             resp = client.get("/system/inference-pool")
         assert resp.status_code == 200
         assert resp.json()["data"]["initialized"] is False
