@@ -165,38 +165,15 @@ class BenchmarkRouter:
 
     @endpoint("benchmark.get_model_metrics")
     async def get_model_metrics(self, model: str = "gpt2") -> dict:
-        """Return real-time metrics for the currently loaded model.
-
-        Args:
-            model: Model ID string used for label only; the actual
-                metrics come from whatever provider is loaded in
-                ServerState. Defaults to "gpt2".
-
-        Returns:
-            Success envelope containing inference_count, total_tokens,
-            tokens_per_second, memory_mb, and num_parameters.
-
-        Side effects:
-            Reads the ServerState singleton for the active provider.
-            Reads the ModelsController for inference counters.
-            Returns model_loaded=False if no provider is resident.
-        """
+        """Return real-time metrics for the currently loaded model."""
+        result = self._get_model_metrics(model)
+        return success_response(data=result)
 
     @endpoint("benchmark.get_benchmark_by_id")
     async def get_benchmark_by_id(self, model_id: str) -> dict:
-        """Return benchmark results for a specific model.
-
-        Args:
-            model_id: Model identifier (e.g. "gpt2", "Qwen/Qwen2.5-0.5B-Instruct").
-
-        Returns:
-            Success envelope containing model metrics including
-            coherence, repetition, perplexity, avg_length, and
-            inference stats.
-
-        Side effects:
-            Reads the ServerState singleton for the active provider.
-        """
+        """Return benchmark results for a specific model."""
+        result = self._get_model_metrics(model_id)
+        return success_response(data=result)
 
     @endpoint("benchmark.calculate_perplexity")
     async def calculate_perplexity(

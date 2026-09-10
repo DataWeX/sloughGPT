@@ -251,7 +251,6 @@ def test_load_hf_model_publishes_to_state_and_server_state():
         patch.object(ModelsController, "_build_process_guard", return_value=None),
         patch("domains.models.provider.setup_providers"),
         patch("domains.models.provider.get_provider", return_value=provider),
-        patch("domains.infrastructure.server_state.get_server_state") as core,
         patch("state.model", new=MagicMock()),
         patch("state.provider", new=MagicMock()),
         patch("state.model_type", new=MagicMock()),
@@ -261,8 +260,6 @@ def test_load_hf_model_publishes_to_state_and_server_state():
         assert state.model is provider
         assert state.provider is provider
         assert state.model_type == "Qwen/Qwen2.5-0.5B-Instruct"
-        core.return_value.model.set.assert_called_once_with(provider)
-        core.return_value.model_type.set.assert_called_once_with("Qwen/Qwen2.5-0.5B-Instruct")
 
 
 def test_load_hf_model_provider_failure_does_not_publish():

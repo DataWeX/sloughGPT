@@ -355,3 +355,165 @@ class TestConsciousnessAPI:
         assert res.status_code == 200
         data = res.json()
         assert data["data"]["seeded"] == 30
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_get_personality(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/personality")
+        assert res.status_code == 200
+        data = res.json()
+        assert "values" in data["data"]
+        assert "goals" in data["data"]
+        assert "voice" in data["data"]
+        assert "traits" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_update_personality(self, _auth, client, mock_engine):
+        res = client.patch("/consciousness/personality", json={
+            "values": ["courage", "wisdom"],
+            "voice": {"humor": 0.8},
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["data"]["values"] == ["courage", "wisdom"]
+        assert data["data"]["voice"]["humor"] == 0.8
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_reset_personality(self, _auth, client, mock_engine):
+        client.patch("/consciousness/personality", json={"values": ["test"]})
+        res = client.post("/consciousness/personality/reset")
+        assert res.status_code == 200
+        data = res.json()
+        assert "helpfulness" in data["data"]["values"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_personality_history_empty(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/personality/history")
+        assert res.status_code == 200
+        data = res.json()
+        assert "history" in data["data"]
+        assert "labels" in data["data"]
+        assert isinstance(data["data"]["history"], list)
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_personality_history_with_episodes(self, _auth):
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from infrastructure.exception_handlers import register_app_error_handler
+        from domains.consciousness.self_model import SelfEpisode
+        import time
+
+        router_obj = ConsciousnessRouter()
+        mock_eng = MagicMock()
+        mock_eng.config.is_enabled.return_value = True
+        mock_eng.config.level = 1
+
+        episodes = [
+            SelfEpisode(
+                timestamp=time.time() - 100 + i,
+                input_text=f"test {i}",
+                response=f"response {i}",
+                qualia={"novelty": 0.8 if i % 2 == 0 else 0.3, "coherence": 0.5, "valence": 0.6},
+                self_insight="test insight",
+                growth_delta=0.06 if i % 3 == 0 else 0.01,
+            )
+            for i in range(10)
+        ]
+        mock_eng.self_model.episodes = episodes
+        router_obj._engine = mock_eng
+
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        res = client.get("/consciousness/personality/history")
+        assert res.status_code == 200
+        data = res.json()
+        history = data["data"]["history"]
+        assert len(history) > 0
+        assert "voice" in history[0]
+        assert "traits" in history[0]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_get_presets(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/personality/presets")
+        assert res.status_code == 200
+        data = res.json()
+        assert "presets" in data["data"]
+        assert "names" in data["data"]
+        assert "default" in data["data"]["names"]
+        assert "formal" in data["data"]["names"]
+        assert "creative" in data["data"]["names"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_apply_preset(self, _auth, client, mock_engine):
+        res = client.post("/consciousness/personality/presets/apply", json={"preset": "formal"})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["data"]["voice"]["formality"] > 0.8
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_apply_preset_invalid(self, _auth, client, mock_engine):
+        res = client.post("/consciousness/personality/presets/apply", json={"preset": "nonexistent"})
+        assert res.status_code == 400
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_get_conflicts(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/personality/conflicts")
+        assert res.status_code == 200
+        data = res.json()
+        assert "conflicts" in data["data"]
+        assert "count" in data["data"]
+        assert isinstance(data["data"]["conflicts"], list)
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_list_personas_empty(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/personas")
+        assert res.status_code == 200
+        data = res.json()
+        assert "personas" in data["data"]
+        assert "count" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_save_and_activate_persona(self, _auth, client, mock_engine):
+        # Save a persona
+        res = client.post("/consciousness/personas/save", json={
+            "persona_id": "test-hero",
+            "name": "Test Hero",
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["data"]["id"] == "test-hero"
+        assert data["data"]["name"] == "Test Hero"
+
+        # List should show it
+        res = client.get("/consciousness/personas")
+        assert res.status_code == 200
+        personas = res.json()["data"]["personas"]
+        assert any(p["id"] == "test-hero" for p in personas)
+
+        # Activate it
+        res = client.post("/consciousness/personas/test-hero/activate")
+        assert res.status_code == 200
+
+        # Get it
+        res = client.get("/consciousness/personas/test-hero")
+        assert res.status_code == 200
+
+        # Delete it
+        res = client.delete("/consciousness/personas/test-hero")
+        assert res.status_code == 200
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_get_persona_not_found(self, _auth, client, mock_engine):
+        res = client.get("/consciousness/personas/nonexistent")
+        assert res.status_code == 404
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_activate_persona_not_found(self, _auth, client, mock_engine):
+        res = client.post("/consciousness/personas/nonexistent/activate")
+        assert res.status_code == 404
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_delete_persona_not_found(self, _auth, client, mock_engine):
+        res = client.delete("/consciousness/personas/nonexistent")
+        assert res.status_code == 404

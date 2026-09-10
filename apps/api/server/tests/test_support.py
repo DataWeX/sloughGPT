@@ -32,6 +32,18 @@ try:
 except Exception:
     pass
 
+# Disable the readiness gate for tests so schema-validation tests can
+# reach the router and trigger 422s instead of being blocked with 503.
+try:
+    from infrastructure.middleware import ReadinessGateMiddleware as _RGM
+
+    async def _noop_readiness(self, request, call_next):
+        return await call_next(request)
+
+    _RGM.dispatch = _noop_readiness
+except Exception:
+    pass
+
 
 def _ensure_routers_registered():
     """Register all feature routers on the app if they haven't been yet."""

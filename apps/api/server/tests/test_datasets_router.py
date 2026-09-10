@@ -134,11 +134,11 @@ class TestListDatasets:
 
     def test_list_with_query(self, mock_controller):
         client.get("/datasets?q=shake")
-        mock_controller.list_datasets.assert_called_with("shake", None)
+        mock_controller.list_datasets.assert_called_with("shake", None, "")
 
     def test_list_with_type_filter(self, mock_controller):
         client.get("/datasets?type=text")
-        mock_controller.list_datasets.assert_called_with(None, "text")
+        mock_controller.list_datasets.assert_called_with(None, "text", "")
 
 
 # ── GET /datasets/search ──────────────────────────────────────────────────
@@ -164,7 +164,7 @@ class TestControllerSearch:
     regression (names instead of full summaries) can only be caught here."""
 
     def _make_controller(self, tmp_path: Path) -> DatasetsController:
-        datasets_dir = tmp_path / "datasets"
+        datasets_dir = tmp_path / "data"
         (datasets_dir / "shakespeare").mkdir(parents=True)
         (datasets_dir / "shakespeare" / "input.txt").write_text("To be or not to be.\n")
         (datasets_dir / "poetry").mkdir(parents=True)
@@ -224,7 +224,7 @@ class TestCreate:
 
     def test_create_calls_controller(self, mock_controller):
         client.post("/datasets", json={"name": "My Set", "description": "test"})
-        mock_controller.create_dataset.assert_called_with("My Set", "test")
+        mock_controller.create_dataset.assert_called_with("My Set", "test", "")
 
 
 # ── PATCH /datasets/{id} ────────────────────────────────────────────────

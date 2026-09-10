@@ -35,16 +35,10 @@ class TestWireModel:
     def test_prefers_auto_train_student(self):
         controller = FeedbackController(repo_root=Path("/tmp/fb-wiring-test"))
         controller._workflow = MagicMock()
-        at_state = _fake_module(
-            state=_fake_module(student_net="student-net", student_tokenizer="student-tok")
-        )
-        with patch.dict(
-            sys.modules,
-            {
-                "routers.auto_train": at_state,
-                "routers": _fake_module(),
-            },
-        ):
+        mock_state = MagicMock()
+        mock_state.student_net = "student-net"
+        mock_state.student_tokenizer = "student-tok"
+        with patch("domains.training.service.get_state", return_value=mock_state):
             controller._wire_model()
         controller._workflow.set_model.assert_called_once_with("student-net", "student-tok")
 
@@ -52,14 +46,11 @@ class TestWireModel:
         controller = FeedbackController(repo_root=Path("/tmp/fb-wiring-test"))
         controller._workflow = MagicMock()
         server_state = _fake_module(model=None, tokenizer=None)
-        at_state = _fake_module(state=_fake_module(student_net=None))
-        with patch.dict(
-            sys.modules,
-            {
-                "state": server_state,
-                "routers.auto_train": at_state,
-                "routers": _fake_module(),
-            },
+        mock_state = MagicMock()
+        mock_state.student_net = None
+        with (
+            patch("domains.training.service.get_state", return_value=mock_state),
+            patch.dict(sys.modules, {"state": server_state}),
         ):
             controller._wire_model()
         controller._workflow.set_model.assert_not_called()
@@ -67,13 +58,8 @@ class TestWireModel:
     def test_no_workflow_noop(self):
         controller = FeedbackController(repo_root=Path("/tmp/fb-wiring-test"))
         controller._workflow = None
-        at_state = _fake_module(state=_fake_module(student_net=None))
-        with patch.dict(
-            sys.modules,
-            {
-                "routers.auto_train": at_state,
-                "routers": _fake_module(),
-            },
-        ):
+        mock_state = MagicMock()
+        mock_state.student_net = None
+        with patch("domains.training.service.get_state", return_value=mock_state):
             controller._wire_model()
         assert True

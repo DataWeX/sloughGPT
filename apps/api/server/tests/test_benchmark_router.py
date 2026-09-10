@@ -7,8 +7,9 @@ def test_clear_history_endpoint():
     client = get_test_client()
     resp = client.post("/benchmark/history/clear")
     assert resp.status_code == 200
-    data = _data(resp)
-    assert data["status"] == "ok"
+    body = resp.json()
+    assert body["status"] == "success"
+    data = body.get("data", body)
     assert data["cleared"] is True
 
 

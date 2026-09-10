@@ -58,8 +58,11 @@ class ProfilesRouter:
     @endpoint("profiles.apply")
     async def apply_profile(self, req: ApplyProfileRequest) -> dict:
         """Apply a serving profile to the running process."""
-        result = apply_profile(req.profile_id)
-        return success_response(data=result)
+        try:
+            result = apply_profile(req.profile_id)
+            return success_response(data=result)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
 
     @endpoint("profiles.active")
     async def get_active_profile(self) -> dict:

@@ -356,11 +356,11 @@ class KBRouter:
                 importance=req.importance,
                 workspace_id=workspace_id,
             )
-            is_new = memory.add_fact(fact)
             import hashlib
 
             content_hash = hashlib.md5(req.content.encode()).hexdigest()
             item_id = f"fact_{memory._fact_counter}_{content_hash[:8]}"
+            is_new = memory.add_fact(fact)
 
             # Auto-ingest into production RAG for grounding verification
             if is_new:

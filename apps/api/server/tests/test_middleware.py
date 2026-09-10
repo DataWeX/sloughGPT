@@ -97,10 +97,13 @@ class TestCorrelationId:
         def run(cap):
             resp = client.get("/ok", headers={"X-Correlation-ID": "zz99"})
             assert resp.status_code == 200
-            req_logs = [r for r in cap.records if " corr=zz99" in r.getMessage()]
-            assert len(req_logs) == 1
-            ctx = req_logs[0].context
-            assert ctx["corr"] == "zz99"
+            # PayloadLoggingMiddleware + UnifiedRequestMiddleware both log the corr ID
+            # via extra={"http": {"corr": corr_id, ...}}.  Filter by the structured
+            # extra dict rather than message text, since multiple log lines now carry
+            # the correlation ID.
+            req_logs = [r for r in cap.records if getattr(r, "http", {}).get("corr") == "zz99"]
+            assert len(req_logs) >= 1
+            assert req_logs[0].http["corr"] == "zz99"
 
         _with_capture(app, run)
 

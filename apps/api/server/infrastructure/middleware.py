@@ -371,7 +371,7 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
                     },
                 )
         else:
-            logger.info(
+            logger.debug(
                 "%s %s %d (%s) corr=%s",
                 method,
                 path,

@@ -945,7 +945,17 @@ class MultimodalRouter:
     @endpoint("multimodal.list_checkpoints")
     async def list_checkpoints(self):
         """list_checkpoints."""
+        import math
         from domains.training.video_trainer import list_video_checkpoints
+
+        def _sanitize(obj):
+            if isinstance(obj, float) and (math.isinf(obj) or math.isnan(obj)):
+                return None
+            if isinstance(obj, dict):
+                return {k: _sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_sanitize(v) for v in obj]
+            return obj
 
         def _list():
             ckpts = list_video_checkpoints()
@@ -953,7 +963,7 @@ class MultimodalRouter:
                 ckpts = list_video_checkpoints(
                     str(Path(__file__).resolve().parents[4] / "models" / "video-training")
                 )
-            return ckpts
+            return _sanitize(ckpts)
 
         return await asyncio.to_thread(_list)
 
@@ -1221,7 +1231,8 @@ class MultimodalRouter:
         mgr._caption_history = []
         mgr._accuracy_history = []
         if getattr(mgr, "_replay_buffer", None):
-            mgr._replay_buffer.clear()
+            from domains.multimodal.engine import ReplayBuffer
+            mgr._replay_buffer = ReplayBuffer()
         mgr._multimodal_engine = None
         logger.info("Multimodal engine reset: all state cleared")
         safe_audit_log("multimodal.reset", resource="all")

@@ -97,7 +97,7 @@ class SecurityRouter:
     async def list_keys(auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         mgr = _get_key_manager()
         keys = mgr.list()
-        return success_response(data={"keys": keys, "count": len(keys)})
+        return success_response(data={"keys": keys, "count": len(keys), "configured": len(keys) > 0})
 
     @staticmethod
     @endpoint("security.get_key")

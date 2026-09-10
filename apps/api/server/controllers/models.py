@@ -164,7 +164,7 @@ class ModelsController:
             # ProcessGuard + .slnc are available. The guard worker materializes
             # weights; the parent only loads on guard death (lazy _get_model).
             try:
-                from domains.infrastructure.safetensors_loader import _get_model_dir
+                from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
                 from config import get_process_guard_enabled
 
@@ -315,7 +315,7 @@ class ModelsController:
 
         try:
             from domains.infrastructure.process_guard import ProcessGuard, resolve_memory_limit_mb
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domains.infrastructure.model_resolver import get_model_dir as _get_model_dir
             from domains.models.provider import attach_process_guard_to_provider
 
             from config import ServerConfig

@@ -472,3 +472,13 @@ class PersistentTrainingJobs:
         if key not in self:
             self[key] = default if default is not None else {}
         return self[key]
+
+    def clear(self) -> None:
+        """Remove all jobs from both the persistent store and the fallback dict."""
+        store = self._store()
+        if store:
+            for doc in store.list():
+                doc_id = doc.get("id") or doc.get("_id")
+                if doc_id:
+                    store.delete(doc_id)
+        self._fallback.clear()

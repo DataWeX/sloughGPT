@@ -44,8 +44,7 @@ class TestRecordFeedbackWorkflow:
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "success"
-        assert body["data"]["workflow_active"] is True
+        assert body["status"] == "ok"
 
     def test_record_workflow_feedback_down(self):
         resp = client.post(

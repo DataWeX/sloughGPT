@@ -233,7 +233,7 @@ class CompanionRouter:
     async def get_prompt(self) -> dict:
         """Get the current system prompt."""
         companion = self._get_companion()
-        return success_response(data={"system_prompt": companion.build_system_prompt()})
+        return success_response(data={"system_prompt": companion.get_system_prompt()})
 
     @endpoint("companion.chat")
     async def chat(
@@ -241,13 +241,10 @@ class CompanionRouter:
     ) -> ChatResponse:
         """Chat with the companion."""
         companion = self._get_companion()
-        system_prompt = companion.build_system_prompt() if req.include_system_prompt else ""
+        system_prompt = companion.get_system_prompt() if req.include_system_prompt else ""
         _chat_start = _time.monotonic()
-        response_text = await companion.generate(
+        response_text = companion.respond(
             user_message=req.message,
-            system_prompt=system_prompt,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
         )
         _chat_elapsed_ms = (_time.monotonic() - _chat_start) * 1000
         safe_audit_log(

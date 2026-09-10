@@ -61,7 +61,7 @@ class TestRunEval:
         ev = _mock_evaluator()
         ev.run.side_effect = [MagicMock(to_dict=lambda: {"perplexity": 2.5})]
         with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev):
-            resp = client.get("/lora-eval/run")
+            resp = client.post("/lora-eval/run")
         assert resp.status_code == 200
         data = _data(resp)
         assert "status" in data
@@ -74,7 +74,7 @@ class TestRunEval:
             patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev),
             patch("pathlib.Path.exists", return_value=True),
         ):
-            resp = client.get("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
+            resp = client.post("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
         assert resp.status_code == 200
         data = _data(resp)
         assert data["status"] == "compared"
@@ -86,7 +86,7 @@ class TestRunEval:
         client = get_test_client()
         ev = _mock_evaluator()
         with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev):
-            resp = client.get("/lora-eval/run?soul=custom_soul")
+            resp = client.post("/lora-eval/run?soul=custom_soul")
         assert resp.status_code == 200
         ev.run.assert_called()
 
