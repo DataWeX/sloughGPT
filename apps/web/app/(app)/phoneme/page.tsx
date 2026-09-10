@@ -34,6 +34,13 @@ import PronunciationDictation from '@/components/phoneme/PronunciationDictation'
 import PhonemePatternQuiz from '@/components/phoneme/PhonemePatternQuiz'
 import WordDifficultyRanker from '@/components/phoneme/WordDifficultyRanker'
 import PhonemeTypingMode from '@/components/phoneme/PhonemeTypingMode'
+import PronunciationSpeed from '@/components/phoneme/PronunciationSpeed'
+import PronunciationComparison from '@/components/phoneme/PronunciationComparison'
+import PronunciationHeatmap from '@/components/phoneme/PronunciationHeatmap'
+import ConfusionMatrix from '@/components/phoneme/ConfusionMatrix'
+import PracticeCalendar from '@/components/phoneme/PracticeCalendar'
+import PronunciationGame from '@/components/phoneme/PronunciationGame'
+import PhonemeNetwork from '@/components/phoneme/PhonemeNetwork'
 import PhonemeReference from '@/components/phoneme/PhonemeReference'
 import TabErrorBoundary from '@/components/phoneme/TabErrorBoundary'
 import { usePhonemeShortcuts } from '@/hooks/usePhonemeShortcuts'
@@ -158,6 +165,7 @@ export default function PhonemePage() {
             <div className="space-y-4">
               <TabErrorBoundary tabName="Practice"><PracticeCard /></TabErrorBoundary>
               <TabErrorBoundary tabName="Daily Goal"><DailyGoal /></TabErrorBoundary>
+              <TabErrorBoundary tabName="Pronunciation Game"><PronunciationGame /></TabErrorBoundary>
               <TabErrorBoundary tabName="Word of the Day"><WordOfDayCard /></TabErrorBoundary>
               <TabErrorBoundary tabName="Minimal Pairs"><MinimalPairsCard /></TabErrorBoundary>
               <TabErrorBoundary tabName="Rhyme Finder"><RhymeFinder /></TabErrorBoundary>
@@ -201,6 +209,7 @@ export default function PhonemePage() {
 
           <TabsContent value="history">
             <div className="space-y-4">
+              <TabErrorBoundary tabName="Practice Calendar"><PracticeCalendar /></TabErrorBoundary>
               <TabErrorBoundary tabName="Progress"><ProgressSummary /></TabErrorBoundary>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <TabErrorBoundary tabName="Phoneme Difficulty"><PhonemeDifficulty /></TabErrorBoundary>
@@ -208,7 +217,16 @@ export default function PhonemePage() {
               </div>
               <TabErrorBoundary tabName="Language Proficiency"><ProficiencyTracker /></TabErrorBoundary>
               <TabErrorBoundary tabName="Word Difficulty"><WordDifficultyRanker /></TabErrorBoundary>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <TabErrorBoundary tabName="Pronunciation Heatmap"><PronunciationHeatmap /></TabErrorBoundary>
+                <TabErrorBoundary tabName="Confusion Patterns"><ConfusionMatrix /></TabErrorBoundary>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <TabErrorBoundary tabName="Practice Speed"><PronunciationSpeed /></TabErrorBoundary>
+                <TabErrorBoundary tabName="Word Comparison"><PronunciationComparison /></TabErrorBoundary>
+              </div>
               <TabErrorBoundary tabName="Phoneme Clusters"><PhonemeClusters /></TabErrorBoundary>
+              <TabErrorBoundary tabName="Phoneme Network"><PhonemeNetwork /></TabErrorBoundary>
               <TabErrorBoundary tabName="Word Families"><WordFamilies /></TabErrorBoundary>
               <TabErrorBoundary tabName="Pronunciation Patterns"><PronunciationPatterns /></TabErrorBoundary>
               <TabErrorBoundary tabName="Journal"><PronunciationJournal /></TabErrorBoundary>
