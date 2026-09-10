@@ -7,6 +7,7 @@ import { PageContainer } from '@/components/PageContainer'
 import { AppRouteHeader, AppRouteHeaderLead } from '@/components/AppRouteHeader'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
+import { PUBLIC_API_URL } from '@/lib/config'
 import { AutoTrainStatusCard } from '@/components/auto-train/AutoTrainStatusCard'
 import { AutoTrainConfigCard } from '@/components/auto-train/AutoTrainConfigCard'
 import { AutoTrainHistoryCard } from '@/components/auto-train/AutoTrainHistoryCard'
@@ -44,8 +45,8 @@ export default function AutoTrainPage() {
     setLoading(true)
     try {
       const [statusResp, statsResp] = await Promise.all([
-        fetch('/settings/training/auto-train/status').then(r => r.json()),
-        fetch('/mobile/train/stats').then(r => r.json()),
+        fetch(`${PUBLIC_API_URL}/settings/training/auto-train/status`).then(r => r.json()),
+        fetch(`${PUBLIC_API_URL}/mobile/train/stats`).then(r => r.json()),
       ])
       if (statusResp.data) {
         setStatus(statusResp.data)
@@ -66,7 +67,7 @@ export default function AutoTrainPage() {
   const handleUpdateConfig = async () => {
     setUpdating(true)
     try {
-      await fetch(`/settings/training/auto-train/config?threshold=${threshold}&interval_s=${intervalS}`, { method: 'PATCH' })
+      await fetch(`${PUBLIC_API_URL}/settings/training/auto-train/config?threshold=${threshold}&interval_s=${intervalS}`, { method: 'PATCH' })
       fetchData()
     } catch (err) {
       console.error('Failed to update config:', err)
@@ -108,7 +109,7 @@ export default function AutoTrainPage() {
               threshold={status?.threshold}
               intervalS={120}
               onSave={async (t, i) => {
-                await fetch(`/settings/training/auto-train/config?threshold=${t}&interval_s=${i}`, { method: 'PATCH' })
+                await fetch(`${PUBLIC_API_URL}/settings/training/auto-train/config?threshold=${t}&interval_s=${i}`, { method: 'PATCH' })
                 fetchData()
               }}
             />
