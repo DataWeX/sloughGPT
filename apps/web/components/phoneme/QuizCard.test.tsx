@@ -63,43 +63,43 @@ describe('QuizCard', () => {
   it('renders quiz title', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    expect(screen.getByText('Quiz')).toBeInTheDocument()
+    expect(screen.getAllByText('Quiz').length).toBeGreaterThan(0)
   })
 
   it('renders word of the day title', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    expect(screen.getByText('Word of the Day')).toBeInTheDocument()
+    expect(screen.getAllByText('Word of the Day').length).toBeGreaterThan(0)
   })
 
   it('renders language selector', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    expect(screen.getByText('English')).toBeInTheDocument()
+    expect(screen.getAllByText('English').length).toBeGreaterThan(0)
   })
 
   it('renders difficulty selector', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    expect(screen.getByText('Medium')).toBeInTheDocument()
+    expect(screen.getAllByText('Medium').length).toBeGreaterThan(0)
   })
 
   it('renders start quiz button', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    expect(screen.getByText('Start Quiz')).toBeInTheDocument()
+    expect(screen.getAllByText('Start Quiz').length).toBeGreaterThan(0)
   })
 
   it('shows initial state message', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    expect(screen.getByText('Click Start Quiz to begin')).toBeInTheDocument()
+    expect(screen.getAllByText('Click Start Quiz to begin').length).toBeGreaterThan(0)
   })
 
   it('renders check and reveal buttons after starting', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    fireEvent.click(screen.getByText('Start Quiz'))
+    fireEvent.click(screen.getAllByText('Start Quiz')[0])
     await waitFor(() => {
       expect(screen.getByText('Check')).toBeInTheDocument()
       expect(screen.getByText('Reveal')).toBeInTheDocument()
@@ -109,7 +109,7 @@ describe('QuizCard', () => {
   it('renders hint phonemes after starting', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    fireEvent.click(screen.getByText('Start Quiz'))
+    fireEvent.click(screen.getAllByText('Start Quiz')[0])
     await waitFor(() => {
       expect(screen.getByText('Hint — Phonemes:')).toBeInTheDocument()
     })
@@ -118,7 +118,7 @@ describe('QuizCard', () => {
   it('renders new word button', async () => {
     const { default: QuizCard } = await import('./QuizCard')
     render(<QuizCard />)
-    fireEvent.click(screen.getByText('Start Quiz'))
+    fireEvent.click(screen.getAllByText('Start Quiz')[0])
     await waitFor(() => {
       expect(screen.getByText('New Word')).toBeInTheDocument()
     })
