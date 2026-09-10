@@ -1083,7 +1083,7 @@ class ModelsRouter:
         from domains.infrastructure.external_download import ExternalDownloadBackend
 
         cfg = self._external_servers[server]
-        backend = ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
+        ExternalDownloadBackend(cfg["url"], compressed=cfg.get("compressed", True))
 
         import urllib.request
         import urllib.error

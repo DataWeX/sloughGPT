@@ -1366,7 +1366,6 @@ class InferenceRouter:
         """
         await websocket.accept()
 
-        auth_user = None
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
             msg = json.loads(raw)
@@ -1394,7 +1393,7 @@ class InferenceRouter:
             from infrastructure.auth import get_jwt_auth
             jwt_auth = get_jwt_auth()
             try:
-                auth_user = jwt_auth.verify_token(api_key)
+                jwt_auth.verify_token(api_key)
             except Exception:
                 try:
                     await websocket.send_json({"status": "error", "error": "Invalid token"})

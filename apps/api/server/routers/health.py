@@ -425,7 +425,7 @@ class HealthRouter:
         # Adaptive engine
         try:
             from domains.training.adaptive_config import AdaptiveConfigEngine
-            engine = AdaptiveConfigEngine()
+            AdaptiveConfigEngine()
             services["adaptive"] = {"status": "ok"}
         except Exception as e:
             services["adaptive"] = {"status": "error", "error": str(e)}
