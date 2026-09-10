@@ -1,6 +1,7 @@
-"""Tests for inference router endpoints (non-streaming, sessions, suggestions, tools)."""
+"""Tests for inference router endpoints (non-streaming, sessions, suggestions, tools, operations, context)."""
 
 import uuid
+from unittest.mock import MagicMock, patch
 
 from tests.test_support import get_test_client
 
@@ -234,4 +235,145 @@ class TestSchemaValidation:
 
     def test_generate_temperature_out_of_range(self):
         resp = client.post("/inference/generate", json={"prompt": "hi", "temperature": 5.0})
+        assert resp.status_code == 422
+
+
+class TestContextStoreFact:
+    @patch("routers.inference._instance._get_context_core")
+    def test_store_fact_success(self, mock_get_ctx):
+        ctx = MagicMock()
+        mock_get_ctx.return_value = ctx
+        resp = client.post("/context/fact", params={"key": "capital", "value": "London"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] == "capital"
+        ctx.store_fact.assert_called_once_with("capital", "London")
+
+    @patch("routers.inference._instance._get_context_core")
+    def test_store_fact_no_context(self, mock_get_ctx):
+        mock_get_ctx.return_value = None
+        resp = client.post("/context/fact", params={"key": "k", "value": "v"})
+        assert resp.status_code in (500, 503)
+
+
+class TestContextGetFactsWithQuery:
+    @patch("routers.inference._instance._get_context_core")
+    def test_get_facts_with_query(self, mock_get_ctx):
+        ctx = MagicMock()
+        ctx.search_semantic.return_value = [{"key": "k1", "score": 0.9}]
+        mock_get_ctx.return_value = ctx
+        resp = client.get("/context/facts", params={"query": "capital"})
+        assert resp.status_code == 200
+        ctx.search_semantic.assert_called_once_with("capital")
+
+
+class TestSessionGetSingle:
+    def test_get_session_not_found(self):
+        resp = client.get(f"/chat/sessions/missing_{uuid.uuid4().hex[:8]}")
+        assert resp.status_code == 404
+
+
+class TestOperations:
+    def test_list_operations(self):
+        resp = client.get("/operations")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "operations" in body
+        assert "counts" in body
+
+    def test_list_operations_with_type_filter(self):
+        resp = client.get("/operations", params={"type": "training"})
+        assert resp.status_code == 200
+
+
+class TestCancelOperation:
+    def test_cancel_nonexistent_operation(self):
+        resp = client.post(f"/cancel/{uuid.uuid4().hex[:12]}")
+        assert resp.status_code == 404
+
+
+class TestCancelAllOperations:
+    def test_cancel_all_returns_empty(self):
+        resp = client.post("/cancel-all")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "cancelled" in body
+        assert isinstance(body["cancelled"], list)
+
+    def test_cancel_all_with_type_filter(self):
+        resp = client.post("/cancel-all", params={"type": "training"})
+        assert resp.status_code == 200
+
+
+class TestPurgeOperations:
+    def test_purge_returns_count(self):
+        resp = client.post("/operations/purge")
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert "purged" in body
+        assert "elapsed_ms" in body
+
+    def test_purge_with_custom_age(self):
+        resp = client.post("/operations/purge", params={"max_age_s": 60.0})
+        assert resp.status_code == 200
+
+
+class TestChatControl:
+    def test_control_cancel_no_active_stream(self):
+        resp = client.post(
+            "/chat/control",
+            json={"session_id": "test_session", "action": "cancel"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()["data"]
+        assert body["cancelled"] is False
+
+    def test_control_approve_stores(self):
+        resp = client.post(
+            "/chat/control",
+            json={
+                "session_id": "test_session",
+                "action": "approve",
+                "tool_name": "web_search",
+                "approved": True,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] is True
+
+    def test_control_context_stores(self):
+        resp = client.post(
+            "/chat/control",
+            json={
+                "session_id": "test_session",
+                "action": "context",
+                "context": "extra context info",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["data"]["stored"] is True
+
+    def test_control_invalid_action(self):
+        resp = client.post(
+            "/chat/control",
+            json={"session_id": "s", "action": "invalid"},
+        )
+        assert resp.status_code == 422
+
+
+class TestDeleteSessionThenGet:
+    def test_get_deleted_session_returns_404(self):
+        sid = f"delget_{uuid.uuid4().hex[:8]}"
+        client.post("/chat/sessions", json={"session_id": sid, "name": "temp"})
+        client.delete(f"/chat/sessions/{sid}")
+        resp = client.get(f"/chat/sessions/{sid}")
+        assert resp.status_code == 404
+
+
+class TestSchemaValidationExtended:
+    def test_chat_control_missing_session_id(self):
+        resp = client.post("/chat/control", json={"action": "cancel"})
+        assert resp.status_code == 422
+
+    def test_chat_control_missing_action(self):
+        resp = client.post("/chat/control", json={"session_id": "s"})
         assert resp.status_code == 422
