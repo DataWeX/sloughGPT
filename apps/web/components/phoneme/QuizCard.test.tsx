@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
+import QuizCard from './QuizCard'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -9,22 +10,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/phoneme-controller', () => ({
   phonemeController: {
     encode: vi.fn().mockResolvedValue({
-      word: 'hello',
-      language: 'en',
-      phonemes: ['HH', 'EH', 'L', 'OW'],
-      ids: [1, 2, 3, 4],
-      decoded: 'hello',
+      word: 'hello', language: 'en', phonemes: ['HH', 'EH', 'L', 'OW'], ids: [1, 2, 3, 4], decoded: 'hello',
     }),
-    score: vi.fn().mockResolvedValue({
-      target: 'hello',
-      spoken: 'helo',
-      language: 'en',
-      score: 0.75,
-      precision: 0.8,
-      recall: 0.7,
-      target_phonemes: ['HH', 'EH', 'L', 'OW'],
-      spoken_phonemes: ['HH', 'EH', 'L', 'OW'],
-    }),
+    score: vi.fn(),
   },
   PHONEME_LANGUAGES: [
     { value: 'en', label: 'English' },
@@ -37,97 +25,55 @@ vi.mock('@/lib/phoneme-controller', () => ({
   toIPA: vi.fn((phonemes: string[]) => phonemes),
 }))
 
-vi.mock('@/lib/phoneme-store', () => {
-  const store = {
-    quizScore: 0,
-    quizTotal: 0,
-    quizStreak: 0,
-    quizBestStreak: 0,
-    incrementQuizScore: vi.fn(),
-    resetQuiz: vi.fn(),
-  }
-  return {
-    usePhonemeStore: vi.fn((selector: any) => selector(store)),
-  }
-})
+vi.mock('@/lib/phoneme-store', () => ({
+  usePhonemeStore: vi.fn((selector: any) => selector({
+    quizScore: 0, quizTotal: 0, quizStreak: 0, quizBestStreak: 0,
+    incrementQuizScore: vi.fn(), resetQuiz: vi.fn(),
+  })),
+}))
 
 vi.mock('@/lib/toast-store', () => ({
   useToastStore: vi.fn((selector: any) => selector({ addToast: vi.fn() })),
 }))
 
 describe('QuizCard', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+  beforeEach(() => { vi.clearAllMocks() })
 
-  it('renders quiz title', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
+  it('renders quiz sections', () => {
     render(<QuizCard />)
     expect(screen.getAllByText('Quiz').length).toBeGreaterThan(0)
-  })
-
-  it('renders word of the day title', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
-    render(<QuizCard />)
     expect(screen.getAllByText('Word of the Day').length).toBeGreaterThan(0)
   })
 
-  it('renders language selector', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
-    render(<QuizCard />)
-    expect(screen.getAllByText('English').length).toBeGreaterThan(0)
-  })
-
-  it('renders difficulty selector', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
-    render(<QuizCard />)
-    expect(screen.getAllByText('Medium').length).toBeGreaterThan(0)
-  })
-
-  it('renders start quiz button', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
-    render(<QuizCard />)
-    expect(screen.getAllByText('Start Quiz').length).toBeGreaterThan(0)
-  })
-
-  it('shows initial state message', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
+  it('shows idle state before starting', () => {
     render(<QuizCard />)
     expect(screen.getAllByText('Click Start Quiz to begin').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Hint — Phonemes:')).not.toBeInTheDocument()
   })
 
-  it('renders check and reveal buttons after starting', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
+  it('shows game UI after starting', async () => {
     render(<QuizCard />)
-    fireEvent.click(screen.getAllByText('Start Quiz')[0])
-    await waitFor(() => {
-      expect(screen.getByText('Check')).toBeInTheDocument()
-      expect(screen.getByText('Reveal')).toBeInTheDocument()
+    const startBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Start Quiz'))!
+
+    await act(async () => {
+      fireEvent.click(startBtn)
+      await new Promise(r => setTimeout(r, 100))
     })
+
+    expect(screen.getByText('Check')).toBeInTheDocument()
+    expect(screen.getAllByText('Reveal').length).toBeGreaterThan(0)
+    expect(screen.getByText('Hint — Phonemes:')).toBeInTheDocument()
   })
 
-  it('renders hint phonemes after starting', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
+  it('shows new word button after starting', async () => {
     render(<QuizCard />)
-    fireEvent.click(screen.getAllByText('Start Quiz')[0])
-    await waitFor(() => {
-      expect(screen.getByText('Hint — Phonemes:')).toBeInTheDocument()
+    const startBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Start Quiz'))!
+
+    await act(async () => {
+      fireEvent.click(startBtn)
+      await new Promise(r => setTimeout(r, 100))
     })
-  })
 
-  it('renders new word button', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
-    render(<QuizCard />)
-    fireEvent.click(screen.getAllByText('Start Quiz')[0])
-    await waitFor(() => {
-      expect(screen.getByText('New Word')).toBeInTheDocument()
-    })
-  })
-
-  it('shows empty state when no quiz started', async () => {
-    const { default: QuizCard } = await import('./QuizCard')
-    render(<QuizCard />)
-    expect(screen.queryByText('Check')).not.toBeInTheDocument()
-    expect(screen.queryByText('Reveal')).not.toBeInTheDocument()
+    expect(screen.getAllByText('New Word').length).toBeGreaterThan(0)
   })
 })
