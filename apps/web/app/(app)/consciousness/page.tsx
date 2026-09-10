@@ -48,7 +48,7 @@ const LEVEL_DESCRIPTIONS = [
 ]
 
 export default function ConsciousnessPage() {
-  const { addToast } = useToastStore()
+  const addToast = useToastStore(state => state.addToast)
   const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -94,10 +94,10 @@ export default function ConsciousnessPage() {
         body: JSON.stringify({ level: newLevel }),
       })
       if (!res.ok) throw new Error('Failed to update level')
-      addToast({ title: 'Level updated', description: `Consciousness level set to ${LEVEL_LABELS[newLevel]}` })
+      addToast(`Consciousness level set to ${LEVEL_LABELS[newLevel]}`, 'success')
       fetchStatus()
     } catch (e) {
-      addToast({ title: 'Error', description: extractErrorMessage(e), variant: 'destructive' })
+      addToast(extractErrorMessage(e), 'error')
       setLevel(status?.level ?? 0)
     }
   }
@@ -110,7 +110,7 @@ export default function ConsciousnessPage() {
       const json = await res.json()
       setReflection(json.data?.reflection ?? json.reflection ?? 'No reflection generated')
     } catch (e) {
-      addToast({ title: 'Error', description: extractErrorMessage(e), variant: 'destructive' })
+      addToast(extractErrorMessage(e), 'error')
     } finally {
       setReflecting(false)
     }
@@ -128,11 +128,11 @@ export default function ConsciousnessPage() {
         const json = await res.json()
         throw new Error(json.detail?.message || 'Training failed')
       }
-      addToast({ title: 'Training complete', description: 'Consciousness LoRA training finished' })
+      addToast('Consciousness LoRA training finished', 'success')
       fetchStatus()
       fetchEval()
     } catch (e) {
-      addToast({ title: 'Training error', description: extractErrorMessage(e), variant: 'destructive' })
+      addToast(extractErrorMessage(e), 'error')
     } finally {
       setTraining(false)
     }

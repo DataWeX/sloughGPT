@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Input, Button, Badge, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { phonemeController, PHONEME_LANGUAGES } from '@/lib/phoneme-controller'
 import { useToastStore } from '@/lib/toast-store'
+import PhonemeSkeleton from './PhonemeSkeleton'
 
 const SAMPLE_WORDS: Record<string, string[]> = {
   en: ['hello', 'world', 'please', 'thank you', 'good morning'],
@@ -46,6 +47,12 @@ export default function DetectLanguageCard() {
     doDetect(text)
   }, [text, doDetect])
 
+  useEffect(() => {
+    const handleSubmit = () => handleDetect()
+    window.addEventListener('phoneme-submit', handleSubmit)
+    return () => window.removeEventListener('phoneme-submit', handleSubmit)
+  }, [handleDetect])
+
   const handleSample = useCallback((lang: string, word: string) => {
     setText(word)
   }, [])
@@ -71,6 +78,24 @@ export default function DetectLanguageCard() {
             Detect
           </Button>
         </div>
+
+        {loading && !result && (
+          <div className="space-y-3 p-4 rounded-lg bg-muted/30">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-7 w-28 rounded-full" />
+              <Skeleton className="h-4 w-8" />
+            </div>
+            <div className="space-y-1">
+              <Skeleton className="h-4 w-36" />
+              <div className="flex flex-wrap gap-1">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-6 w-16 rounded-full" />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {result && (
           <div className="p-4 rounded-lg bg-muted/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">

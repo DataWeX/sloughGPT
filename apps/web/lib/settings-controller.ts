@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost, apiDelete } from './http-client'
+import { apiGet, apiPatch, apiPost, apiPut, apiDelete } from './http-client'
 
 export interface GenerationSettings {
   temperature: number
