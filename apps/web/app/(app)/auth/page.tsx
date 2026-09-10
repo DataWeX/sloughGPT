@@ -5,6 +5,9 @@ import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiG
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { PageContainer } from '@/components/PageContainer'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
+import { AuthWorkspaceCard } from '@/components/auth/AuthWorkspaceCard'
+import { AuthTokenCard } from '@/components/auth/AuthTokenCard'
+import { AuthActivityCard, recordAuthEvent } from '@/components/auth/AuthActivityCard'
 import { authController, type UserInfo, type WorkspaceInfo } from '@/lib/auth-controller'
 import { useAuthStore } from '@/lib/auth'
 import { chatDB } from '@/lib/db'
@@ -62,6 +65,7 @@ export default function AuthPage() {
       const ws = await authController.getWorkspaces(data.token)
       setWorkspaces(ws)
       setStoreWorkspaces(ws)
+      recordAuthEvent(mode === 'login' ? 'login' : 'register', `User: ${data.user.username}`)
       try {
         await chatDB.setKV('auth_token', data.token)
       } catch {
@@ -75,6 +79,7 @@ export default function AuthPage() {
   }
 
   const handleLogout = () => {
+    recordAuthEvent('logout', currentUser?.username)
     setToken(null)
     setCurrentUser(null)
     chatDB.deleteKV('auth_token').catch(() => {})
@@ -127,6 +132,9 @@ export default function AuthPage() {
             </CardContent>
           </Card>
           <AuthSessionInfoCard token={token} user={currentUser} onLogout={handleLogout} />
+          <AuthTokenCard token={token} onVerify={async (t) => await authController.verify(t)} />
+          <AuthWorkspaceCard workspaces={workspaces} />
+          <AuthActivityCard />
         </>
       ) : (
         <Card>
