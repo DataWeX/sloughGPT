@@ -12,6 +12,12 @@ export const TURBO_DEFAULTS = { epochs: 10, lr: 1e-3, embed: 128, heads: 4, laye
 
 export type TurboConfig = { epochs: number; lr: number; embed: number; heads: number; layers: number }
 
+const TURBO_PRESETS: { label: string; config: TurboConfig }[] = [
+  { label: 'Quick', config: { epochs: 5, lr: 1e-3, embed: 64, heads: 2, layers: 2 } },
+  { label: 'Default', config: { epochs: 10, lr: 1e-3, embed: 128, heads: 4, layers: 3 } },
+  { label: 'Quality', config: { epochs: 20, lr: 5e-4, embed: 256, heads: 8, layers: 6 } },
+]
+
 export function TurboCard({
   datasets,
   session,
@@ -113,6 +119,20 @@ export function TurboCard({
               onChange={datasets.setSelectedDataset}
               showImport
             />
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Presets:</span>
+              {TURBO_PRESETS.map(p => (
+                <Button
+                  key={p.label}
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 text-[11px]"
+                  onClick={() => setConfig(p.config)}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <div className="flex flex-col gap-1">
                 <Label htmlFor="turbo-epochs" variant="uppercase">Epochs</Label>
