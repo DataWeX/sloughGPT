@@ -21,6 +21,13 @@ interface SavedPersona {
   values: string[]
 }
 
+interface PersonalityConflict {
+  type: string
+  severity: string
+  message: string
+  fields: string[]
+}
+
 interface PersonalityProfile {
   values: string[]
   goals: string[]
@@ -63,7 +70,7 @@ const STYLE_LABELS: Record<string, string> = {
 }
 
 export default function PersonalityPage() {
-  const { addToast } = useToastStore()
+  const addToast = useToastStore(state => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -76,7 +83,7 @@ export default function PersonalityPage() {
   const [activePreset, setActivePreset] = useState<string | null>(null)
   const [personalityHistory, setPersonalityHistory] = useState<PersonalityHistory[]>([])
   const [applyingPreset, setApplyingPreset] = useState<string | null>(null)
-  const [conflicts, setConflicts] = useState<Array<{type: string; severity: string; message: string; fields: string[]>>>([])
+  const [conflicts, setConflicts] = useState<PersonalityConflict[]>([])
   const [showComparison, setShowComparison] = useState(false)
   const [originalProfile, setOriginalProfile] = useState<PersonalityProfile | null>(null)
   const [savedPersonas, setSavedPersonas] = useState<SavedPersona[]>([])

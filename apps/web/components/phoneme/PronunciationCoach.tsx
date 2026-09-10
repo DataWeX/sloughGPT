@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@sloughgpt/strui'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
 import { usePhonemeStore } from '@/lib/phoneme-store'
+import type { HistoryEntry } from '@/lib/phoneme-store'
 
 interface Tip {
   category: string
@@ -12,16 +13,15 @@ interface Tip {
   severity: 'high' | 'medium' | 'low'
 }
 
-function analyzePatterns(history: NonNullable<ReturnType<typeof usePhonemeStore.getState>['history']>): Tip[] {
+function analyzePatterns(history: HistoryEntry[]): Tip[] {
   const tips: Tip[] = []
   if (history.length < 3) return tips
 
   const phonemeScores: Record<string, number[]> = {}
   history.forEach(entry => {
-    entry.targetPhonemes.forEach((p, i) => {
-      const score = entry.scores[i] ?? entry.scores[0] ?? 0
+    entry.targetPhonemes.forEach((p) => {
       phonemeScores[p] = phonemeScores[p] || []
-      phonemeScores[p].push(score)
+      phonemeScores[p].push(entry.score)
     })
   })
 
@@ -62,7 +62,7 @@ function analyzePatterns(history: NonNullable<ReturnType<typeof usePhonemeStore.
   const langScores: Record<string, number[]> = {}
   history.forEach(entry => {
     if (!langScores[entry.language]) langScores[entry.language] = []
-    langScores[entry.language].push(entry.scores.reduce((a, b) => a + b, 0) / entry.scores.length)
+    langScores[entry.language].push(entry.score)
   })
 
   const langAvgs = Object.entries(langScores).map(([lang, scores]) => ({
@@ -82,7 +82,7 @@ function analyzePatterns(history: NonNullable<ReturnType<typeof usePhonemeStore.
   }
 
   const recent = history.slice(-5)
-  const recentAvg = recent.reduce((sum, e) => sum + (e.scores.reduce((a, b) => a + b, 0) / e.scores.length), 0) / recent.length
+  const recentAvg = recent.reduce((sum, e) => sum + e.score, 0) / recent.length
 
   if (recentAvg < 0.6) {
     tips.push({

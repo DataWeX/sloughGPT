@@ -15,7 +15,7 @@ interface WordStats {
   avgScore: number
   bestScore: number
   worstScore: number
-  lastAttempt: string
+  lastAttempt: number
   difficulty: 'easy' | 'medium' | 'hard'
 }
 
@@ -43,10 +43,10 @@ export default function WordDifficultyRanker() {
     const wordMap: Record<string, WordStats> = {}
 
     history.forEach(entry => {
-      const key = `${entry.targetWord}-${entry.language}`
+      const key = `${entry.target}-${entry.language}`
       if (!wordMap[key]) {
         wordMap[key] = {
-          word: entry.targetWord,
+          word: entry.target,
           language: entry.language,
           attempts: 0,
           avgScore: 0,
@@ -57,11 +57,10 @@ export default function WordDifficultyRanker() {
         }
       }
       const w = wordMap[key]
-      const avg = entry.scores.reduce((a, b) => a + b, 0) / entry.scores.length
       w.attempts++
-      w.avgScore = (w.avgScore * (w.attempts - 1) + avg) / w.attempts
-      w.bestScore = Math.max(w.bestScore, ...entry.scores)
-      w.worstScore = Math.min(w.worstScore, ...entry.scores)
+      w.avgScore = (w.avgScore * (w.attempts - 1) + entry.score) / w.attempts
+      w.bestScore = Math.max(w.bestScore, entry.score)
+      w.worstScore = Math.min(w.worstScore, entry.score)
       if (entry.timestamp > w.lastAttempt) w.lastAttempt = entry.timestamp
     })
 

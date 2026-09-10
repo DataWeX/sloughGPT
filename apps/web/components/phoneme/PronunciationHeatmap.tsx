@@ -60,11 +60,10 @@ export default function PronunciationHeatmap() {
     const phonemeStats: Record<string, { total: number; correct: number }> = {}
 
     history.forEach(entry => {
-      entry.targetPhonemes.forEach((phoneme, i) => {
+      entry.targetPhonemes.forEach((phoneme) => {
         if (!phonemeStats[phoneme]) phonemeStats[phoneme] = { total: 0, correct: 0 }
         phonemeStats[phoneme].total++
-        const score = entry.scores[i] ?? entry.scores[0] ?? 0
-        if (score >= 0.8) phonemeStats[phoneme].correct++
+        if (entry.score >= 0.8) phonemeStats[phoneme].correct++
       })
     })
 

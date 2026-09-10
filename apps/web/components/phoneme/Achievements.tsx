@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@sloughgpt/strui'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/strui'
 import { usePhonemeStore } from '@/lib/phoneme-store'
+import type { HistoryEntry } from '@/lib/phoneme-store'
 
 interface Achievement {
   id: string
@@ -11,7 +12,7 @@ interface Achievement {
   description: string
   icon: string
   category: string
-  condition: (state: ReturnType<typeof usePhonemeStore.getState>) => boolean
+  condition: (state: { history: HistoryEntry[]; quizTotal: number; pronunciationBestStreak: number; flashcardSRS: Record<string, unknown>; challenge?: { score: number } }) => boolean
 }
 
 const ACHIEVEMENTS: Achievement[] = [
@@ -53,7 +54,7 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Get a perfect score (100%)',
     icon: '★',
     category: 'Scores',
-    condition: (s) => s.history.some(e => e.scores.every(sc => sc >= 0.99)),
+    condition: (s) => s.history.some(e => e.score >= 0.99),
   },
   {
     id: 'streak-3',
@@ -93,7 +94,7 @@ const ACHIEVEMENTS: Achievement[] = [
     description: 'Complete 20 quizzes',
     icon: 'Q',
     category: 'Quizzes',
-    condition: (s) => (s.quiz?.total ?? 0) >= 20,
+    condition: (s) => s.quizTotal >= 20,
   },
   {
     id: 'flashcard-pro',
