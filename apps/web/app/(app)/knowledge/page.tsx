@@ -13,7 +13,7 @@ import { Card, CardContent, Checkbox, EmptyCard, cn, Slider, Spinner } from '@sl
 import { Button } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
-import { KnowledgeStatsSkeleton, KnowledgeCategoryChartSkeleton, KnowledgeAdapterSkeleton, KnowledgeRAGSkeleton, KnowledgeTopicsSkeleton } from '@/components/ui/PageSkeletons'
+import { KnowledgeStatsSkeleton, KnowledgeAdapterSkeleton, KnowledgeRAGSkeleton, KnowledgeTopicsSkeleton } from '@/components/ui/PageSkeletons'
 import { Chip } from '@sloughgpt/strui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconSearch, IconCheck, IconX, IconDownload, IconEdit, IconChevronDown, IconMapPin } from '@sloughgpt/strui'

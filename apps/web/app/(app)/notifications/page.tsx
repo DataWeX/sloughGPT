@@ -71,7 +71,33 @@ export default function NotificationsPage() {
     return (
       <PageContainer title="Notifications">
         <Skeleton className="h-8 w-64 mb-4" />
-        <Skeleton className="h-64 w-full" />
+        <KpiGrid className="mb-6">
+          {[1,2,3].map(i => (
+            <Card key={i}><CardContent className="p-4 space-y-2">
+              <Skeleton className="h-2 w-12" />
+              <Skeleton className="h-5 w-8" />
+            </CardContent></Card>
+          ))}
+        </KpiGrid>
+        <Card className="mb-4"><CardContent className="py-2">
+          <Skeleton className="h-6 w-full" />
+        </CardContent></Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <Skeleton className="h-3 w-28" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="flex items-center justify-between py-2">
+                <div className="space-y-1 flex-1">
+                  <Skeleton className="h-2 w-24" />
+                  <Skeleton className="h-2 w-48" />
+                </div>
+                <Skeleton className="h-2 w-16" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }

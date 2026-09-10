@@ -125,12 +125,28 @@ export default function FeedbackPage() {
   if (loading) {
     return (
       <PageContainer title="Feedback" subtitle="Analytics & management">
+        {/* Tab bar skeleton */}
+        <div className="flex gap-0.5 border-b border-border/20 pb-0 mb-4">
+          {['stats', 'conversations', 'training'].map(t => (
+            <div key={t} className="px-2.5 py-1 text-[10px]">
+              <Skeleton className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-12" /></CardContent></Card>
           ))}
         </div>
-        <Card><CardContent className="p-4 space-y-3"><Skeleton className="h-4 w-32" /><Skeleton className="h-24 w-full rounded" /></CardContent></Card>
+        <Card><CardContent className="p-4 space-y-3">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-20 w-full rounded" />
+        </CardContent></Card>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4 space-y-2"><Skeleton className="h-3 w-16" /><Skeleton className="h-5 w-12" /></CardContent></Card>
+          ))}
+        </div>
       </PageContainer>
     )
   }

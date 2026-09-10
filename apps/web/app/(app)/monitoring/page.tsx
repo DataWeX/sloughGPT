@@ -313,18 +313,61 @@ export default function SystemHealthPage() {
       title="System Health"
       headerRight={headerRight}
     >
-      {/* Loading: skeleton while fetch is in progress */}
+      {/* Loading: skeleton matching actual 3-card layout */}
       {!loaded && !error && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
+          {/* Status card skeleton: 2x4 KPI grid */}
+          <Card className="p-3">
+            <Skeleton className="h-3 w-12 mb-2" />
+            <CardContent className="p-0">
+              <div className="grid grid-cols-2 gap-3">
+                {[1,2,3,4,5,6,7,8].map(i => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-2 w-10" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          {/* Resources card skeleton: 2x2 KPI grid + text line */}
+          <Card className="p-3">
+            <Skeleton className="h-3 w-16 mb-2" />
+            <CardContent className="p-0">
+              <div className="grid grid-cols-2 gap-3">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-2 w-12" />
+                    <Skeleton className="h-4 w-12" />
+                  </div>
+                ))}
+              </div>
+              <Skeleton className="h-2 w-32 mx-auto mt-2" />
+            </CardContent>
+          </Card>
+          {/* Alert thresholds skeleton: 2 sliders + alerts list */}
+          <Card className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-2 w-20" />
+            </div>
+            <CardContent className="p-0 space-y-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-2 w-8" />
+                  <Skeleton className="h-2 w-8" />
+                </div>
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-2 w-8" />
+                  <Skeleton className="h-2 w-8" />
+                </div>
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

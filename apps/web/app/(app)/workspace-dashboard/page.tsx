@@ -138,7 +138,28 @@ export default function WorkspaceDashboardPage() {
     return (
       <PageContainer title="Workspace Dashboard">
         <Skeleton className="h-8 w-64 mb-4" />
-        <Skeleton className="h-64 w-full" />
+        <KpiGrid className="mb-6">
+          {[1,2,3,4,5,6].map(i => (
+            <Card key={i}><CardContent className="p-4 space-y-2">
+              <Skeleton className="h-2 w-16" />
+              <Skeleton className="h-5 w-10" />
+            </CardContent></Card>
+          ))}
+        </KpiGrid>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <Card><CardContent className="p-4 space-y-3">
+            <Skeleton className="h-3 w-28" />
+            {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+          </CardContent></Card>
+          <Card><CardContent className="p-4 space-y-3">
+            <Skeleton className="h-3 w-28" />
+            {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+          </CardContent></Card>
+        </div>
+        <Card><CardContent className="p-4 space-y-2">
+          <Skeleton className="h-3 w-32" />
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-8 w-full" />)}
+        </CardContent></Card>
       </PageContainer>
     )
   }

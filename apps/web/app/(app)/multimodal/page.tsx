@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Skeleton } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/controllers'
