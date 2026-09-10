@@ -114,7 +114,7 @@ export const ConversationViewer = memo(function ConversationViewer({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 flex h-[90dvh] w-[90vw] max-w-3xl flex-col rounded-lg border border-border bg-background shadow-2xl">
+      <div className="relative z-10 flex h-[90dvh] w-[90vw] max-w-3xl flex-col min-h-0 rounded-lg border border-border bg-background shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 id="viewer-title" className="truncate text-base font-semibold text-foreground">{title}</h2>

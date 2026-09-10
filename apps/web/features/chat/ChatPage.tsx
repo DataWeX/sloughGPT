@@ -14,6 +14,7 @@ import {
   ChatChatSection,
   ChatSearchSection,
   ChatDialogSection,
+  ChatToolPanelInline,
 } from '@/features/chat/ChatPageSections'
 
 export default function ChatPage() {
@@ -46,6 +47,7 @@ export default function ChatPage() {
           <ChatChatSection controller={controller} />
           <ChatSearchSection controller={controller} />
         </div>
+        <ChatToolPanelInline controller={controller} />
       </main>
       <ChatDialogSection controller={controller} />
     </div>

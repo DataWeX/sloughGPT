@@ -48,7 +48,7 @@ export function VoiceChatMode({ onMessage, onClose }: VoiceChatModeProps) {
   const hasConversation = conversation.length > 0 || responseText.length > 0
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
+    <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
         <div className="flex items-center gap-2">

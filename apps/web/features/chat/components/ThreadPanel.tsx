@@ -43,7 +43,7 @@ export const ThreadPanel = memo(function ThreadPanel({
   }
 
   return (
-    <div className={cn('flex flex-col h-full border-l border-border/50 bg-background', className)}>
+    <div className={cn('flex flex-col h-full min-h-0 border-l border-border/50 bg-background', className)}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">

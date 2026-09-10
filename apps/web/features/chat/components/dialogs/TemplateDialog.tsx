@@ -92,7 +92,7 @@ export const TemplateDialog = memo(function TemplateDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-background border border-border rounded-lg shadow-xl w-[480px] max-h-[80vh] overflow-hidden"
+        className="bg-background border border-border rounded-lg shadow-xl w-[480px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">

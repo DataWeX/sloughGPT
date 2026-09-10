@@ -138,7 +138,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                     onClick={() => handleDelete(group.id)}
                     title="Delete group"
                     aria-label="Delete group"
@@ -157,7 +157,7 @@ export const ChatSessionGroups = memo(function ChatSessionGroups({
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        className="h-4 w-4 opacity-0 group-hover:opacity-100"
+                        className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                         onClick={() => handleUnassign(session.id)}
                         title="Remove from group"
                         aria-label="Remove from group"

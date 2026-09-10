@@ -35,8 +35,8 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
     <div
       id="chat-tool-panel"
       className={cn(
-        'border-l border-border/50 bg-background overflow-hidden transition-all duration-200 flex flex-col',
-        open ? 'w-[var(--tool-panel-width)] min-w-[var(--tool-panel-width)] lg:relative lg:w-[var(--tool-panel-width)] fixed right-0 top-0 bottom-0 z-50 shadow-xl lg:shadow-none' : 'w-0 min-w-0',
+        'border-l border-border/50 bg-background overflow-hidden transition-all duration-200 flex flex-col shrink-0 min-h-0',
+        open ? 'w-[var(--tool-panel-width)] min-w-[var(--tool-panel-width)]' : 'w-0 min-w-0',
       )}
     >
       {open && (

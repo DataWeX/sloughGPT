@@ -1,7 +1,7 @@
 'use client'
 
 import dynamicNext from 'next/dynamic'
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
 import { generationConfigController } from '@/lib/generation-config-controller'
@@ -344,6 +344,21 @@ export const ChatSearchSection = memo(function ChatSearchSection({ controller }:
   )
 })
 
+export const ChatToolPanelInline = memo(function ChatToolPanelInline({ controller }: ChatPageSectionProps) {
+  const { ui, chat, bookmarks, removeBookmark, clearAll } = controller
+  return (
+    <ChatToolPanel
+      open={ui.toolPanelOpen}
+      onClose={() => ui.setToolPanelOpen(false)}
+      sessionId={chat.sessionIdRef.current}
+      bookmarks={bookmarks}
+      onRemoveBookmark={removeBookmark}
+      onClearBookmarks={clearAll}
+      messages={chat.messages}
+    />
+  )
+})
+
 export const ChatDialogSection = memo(function ChatDialogSection({ controller }: ChatPageSectionProps) {
   const {
     ui, chat, model, bookmarks, removeBookmark, clearAll,
@@ -358,18 +373,6 @@ export const ChatDialogSection = memo(function ChatDialogSection({ controller }:
 
   return (
     <>
-      {ui.toolPanelOpen && (
-        <ChatToolPanel
-          open={true}
-          onClose={() => ui.setToolPanelOpen(false)}
-          sessionId={chat.sessionIdRef.current}
-          bookmarks={bookmarks}
-          onRemoveBookmark={removeBookmark}
-          onClearBookmarks={clearAll}
-          messages={chat.messages}
-        />
-      )}
-
       {model.pendingDownload !== null && (
         <DownloadDialog
           open={true}

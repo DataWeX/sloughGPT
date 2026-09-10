@@ -207,7 +207,7 @@ export const SmartPromptSuggestions = memo(function SmartPromptSuggestions({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="h-4 w-4 opacity-0 group-hover:opacity-100 shrink-0"
+                  className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0"
                   onClick={(e) => {
                     e.stopPropagation()
                     handleDelete(prompt.id)

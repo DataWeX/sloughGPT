@@ -42,7 +42,7 @@ export const KeyboardShortcutsOverlay = memo(function KeyboardShortcutsOverlay({
 }: KeyboardShortcutsOverlayProps) {
   return (
     <div className={cn('fixed inset-0 z-50 flex items-center justify-center bg-black/50', className)}>
-      <div className="bg-background border rounded-lg shadow-xl w-[480px] max-h-[80vh] overflow-hidden">
+      <div className="bg-background border rounded-lg shadow-xl w-[480px] max-w-[calc(100vw-2rem)] max-h-[80vh] overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <span className="text-sm font-medium">Keyboard Shortcuts</span>
           <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={onClose} aria-label="Close shortcuts">

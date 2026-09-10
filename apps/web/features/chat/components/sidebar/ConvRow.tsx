@@ -124,7 +124,7 @@ export const ConvRow = memo(function ConvRow({
             onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
             className={cn(
               "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
-              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
+              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 text-muted-foreground/40"
             )}
             aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
           >

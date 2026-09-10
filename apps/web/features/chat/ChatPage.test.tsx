@@ -228,7 +228,7 @@ describe('ChatPage', () => {
     expect(screen.getByLabelText('Chat')).toBeTruthy()
     expect(screen.getByTestId('chat-toolbar')).toBeTruthy()
     expect(screen.getByTestId('chat-provider')).toBeTruthy()
-    expect(screen.getAllByTestId('dynamic').length).toBe(6)
+    expect(screen.getAllByTestId('dynamic').length).toBe(7)
   })
 
   it('opens the sidebar and fetches initial data on mount', async () => {
@@ -271,7 +271,7 @@ describe('ChatPage', () => {
   it('renders ChatSettings when showSettings is enabled', async () => {
     state.ui.showSettings = true
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 
   it('renders the tool panel when toolPanelOpen is enabled', async () => {
@@ -283,7 +283,7 @@ describe('ChatPage', () => {
   it('opens the conversation search panel on the search-conversations window event', async () => {
     await renderChat()
     await act(async () => { window.dispatchEvent(new Event('search-conversations')) })
-    expect(screen.getAllByTestId('dynamic').length).toBe(6)
+    expect(screen.getAllByTestId('dynamic').length).toBe(7)
   })
 
   it('starts a new chat on the new-chat window event', async () => {
@@ -353,6 +353,6 @@ describe('ChatPage', () => {
   it('enables the voice overlay in talk mode', async () => {
     state.mode.chatMode = 'talk'
     await renderChat()
-    expect(screen.getAllByTestId('dynamic').length).toBe(7)
+    expect(screen.getAllByTestId('dynamic').length).toBe(8)
   })
 })

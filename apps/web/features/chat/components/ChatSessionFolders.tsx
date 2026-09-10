@@ -195,7 +195,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                       onClick={() => handleDelete(folder.id)}
                       title="Delete folder"
                       aria-label="Delete folder"
