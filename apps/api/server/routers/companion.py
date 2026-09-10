@@ -181,12 +181,14 @@ class CompanionRouter:
     ) -> dict:
         """Set companion personality (full replacement)."""
         companion = self._get_companion()
-        companion.name = req.name
-        companion.warmth = req.warmth
-        companion.curiosity = req.curiosity
-        companion.creativity = req.creativity
-        companion.confidence = req.confidence
-        companion.humor = req.humor
+        companion.set_personality(
+            name=req.name,
+            warmth=req.warmth,
+            curiosity=req.curiosity,
+            creativity=req.creativity,
+            confidence=req.confidence,
+            humor=req.humor,
+        )
         safe_audit_log("companion.personality.set", detail=f"name={req.name}")
         return success_response(data=companion.to_dict())
 
@@ -196,18 +198,31 @@ class CompanionRouter:
     ) -> dict:
         """Partial update to companion personality."""
         companion = self._get_companion()
+        # Build kwargs for only provided fields
+        kwargs = {}
         if req.name is not None:
-            companion.name = req.name
+            kwargs["name"] = req.name
         if req.warmth is not None:
-            companion.warmth = req.warmth
+            kwargs["warmth"] = req.warmth
         if req.curiosity is not None:
-            companion.curiosity = req.curiosity
+            kwargs["curiosity"] = req.curiosity
         if req.creativity is not None:
-            companion.creativity = req.creativity
+            kwargs["creativity"] = req.creativity
         if req.confidence is not None:
-            companion.confidence = req.confidence
+            kwargs["confidence"] = req.confidence
         if req.humor is not None:
-            companion.humor = req.humor
+            kwargs["humor"] = req.humor
+        if kwargs:
+            # Merge with current traits for full replacement
+            current = companion.traits
+            companion.set_personality(
+                name=kwargs.get("name", current.name),
+                warmth=kwargs.get("warmth", current.warmth),
+                curiosity=kwargs.get("curiosity", current.curiosity),
+                creativity=kwargs.get("creativity", current.creativity),
+                confidence=kwargs.get("confidence", current.confidence),
+                humor=kwargs.get("humor", current.humor),
+            )
         safe_audit_log("companion.personality.patch")
         return success_response(data=companion.to_dict())
 
@@ -223,9 +238,16 @@ class CompanionRouter:
             raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
         companion = self._get_companion()
         traits = preset.get("traits", {})
-        for k, v in traits.items():
-            if hasattr(companion, k):
-                setattr(companion, k, v)
+        # Merge preset traits with current companion traits
+        current = companion.traits
+        companion.set_personality(
+            name=traits.get("name", current.name),
+            warmth=traits.get("warmth", current.warmth),
+            curiosity=traits.get("curiosity", current.curiosity),
+            creativity=traits.get("creativity", current.creativity),
+            confidence=traits.get("confidence", current.confidence),
+            humor=traits.get("humor", current.humor),
+        )
         safe_audit_log("companion.preset.use", resource=preset_id)
         return success_response(data=companion.to_dict())
 
