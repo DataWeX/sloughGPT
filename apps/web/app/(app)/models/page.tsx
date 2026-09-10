@@ -213,6 +213,28 @@ export default function ModelsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* First-time user welcome */}
+        {!modelsLoading && !soulsLoading && models.length === 0 && souls.length === 0 && (
+          <Card className="border-dashed">
+            <CardContent className="py-6 text-center">
+              <p className="text-sm font-medium">Welcome to models</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+                Browse available models, load one for chat, or train your own.
+                Your loaded models and personalities will appear here.
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <Button size="sm" variant="outline" onClick={() => router.push('/datasets')}>
+                  Browse datasets
+                </Button>
+                <Button size="sm" onClick={() => router.push('/training')}>
+                  Train a model
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <ModelStatusCard
           isOnline={isOnline}
           health={health}
