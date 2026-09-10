@@ -6,16 +6,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import Any
-
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from datetime import UTC, datetime
 
 from domains.auth.models import Role, User, Workspace, WorkspaceMember
 from domains.auth.repositories import UserRepository, WorkspaceRepository
+from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
-from schemas.common import classify_and_raise, raise_error, success_response
+from pydantic import BaseModel, Field
+from schemas.common import raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.workspaces")
 
@@ -194,7 +192,7 @@ class WorkspacesRouter:
             if req.description is not None:
                 ws.description = req.description
 
-            ws.updated_at = datetime.now(timezone.utc).isoformat()
+            ws.updated_at = datetime.now(UTC).isoformat()
             self._ws_repo.update(ws)
             members = self._ws_repo.list_members(workspace_id)
             return success_response(data=self._to_response(ws, len(members)).model_dump())
@@ -617,7 +615,7 @@ class WorkspacesRouter:
                 "api_keys": api_keys,
                 "datasets_count": dataset_count,
                 "knowledge_count": knowledge_count,
-                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "exported_at": datetime.now(UTC).isoformat(),
             })
 
         # ─── Workspace data import ───────────────────────────────
@@ -832,7 +830,7 @@ class WorkspacesRouter:
             if req.allow_sharing is not None:
                 ws.allow_sharing = req.allow_sharing
 
-            ws.updated_at = datetime.now(timezone.utc).isoformat()
+            ws.updated_at = datetime.now(UTC).isoformat()
             self._ws_repo.update(ws)
             members = self._ws_repo.list_members(workspace_id)
             logger.info("User %s updated settings for workspace %s", user.username, workspace_id)
@@ -910,7 +908,7 @@ class WorkspacesRouter:
                 if not user.is_admin:
                     raise_error("Admin access required", "E_AUTH_MISSING", status_code=403)
 
-            now = datetime.now(timezone.utc).timestamp()
+            now = datetime.now(UTC).timestamp()
             default_retention = getattr(ws, 'data_retention_days', 90) or 90
             training_retention = getattr(ws, 'training_retention_days', None) or default_retention
             audit_retention = getattr(ws, 'audit_retention_days', None) or default_retention
@@ -1162,7 +1160,6 @@ class WorkspacesRouter:
                 raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
             # Get query from query params
-            from fastapi import Query
             # We need to access query params differently since this is a inner function
             # Use a simpler approach - search everything
             results = {"members": [], "training_jobs": [], "datasets": [], "knowledge": []}
@@ -1310,7 +1307,7 @@ class WorkspacesRouter:
                 "target_workspace_id": req.target_workspace_id,
                 "permission": req.permission,
                 "shared_by": user.id,
-                "shared_at": datetime.now(timezone.utc).isoformat(),
+                "shared_at": datetime.now(UTC).isoformat(),
             }
             # Store in MogDB
             from infrastructure.mogdb import get_mogdb
@@ -1350,8 +1347,8 @@ class WorkspacesRouter:
             return success_response(data={"revoked": share_id})
 
         async def get_shared_datasets(workspace_id: str, auth_user: dict = auth_dep) -> dict:
-            from infrastructure.mogdb import get_mogdb
             from controllers.datasets import get_datasets_controller
+            from infrastructure.mogdb import get_mogdb
             db = get_mogdb()
             shares = list(db.find("workspace_shares", {
                 "target_workspace_id": workspace_id,

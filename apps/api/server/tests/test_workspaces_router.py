@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from domains.auth.models import Role, User, UserRole, Workspace, WorkspaceMember
@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
