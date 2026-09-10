@@ -357,6 +357,58 @@ export default function ConsciousnessDashboardPage() {
           </Card>
         </div>
 
+        {/* Response Quality & Last Reflection */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Response Quality</CardTitle>
+              <CardDescription>How well responses match personality goals</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {evalReport ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Overall Score</span>
+                    <span className="text-2xl font-bold">{evalReport.overall_score.toFixed(0)}/100</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${evalReport.overall_score}%`,
+                        backgroundColor: evalReport.overall_score > 70 ? '#22c55e' : evalReport.overall_score > 40 ? '#f59e0b' : '#ef4444',
+                      }}
+                    />
+                  </div>
+                  {evalReport.diagnostics?.slice(0, 3).map((d: string, i: number) => (
+                    <div key={i} className="text-xs text-muted-foreground">{d}</div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No evaluation data yet</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Last Reflection</CardTitle>
+              <CardDescription>What the system is thinking right now</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const status = evalReport as any
+                const lastReflection = status?.last_reflection || episodes[episodes.length - 1]?.self_insight
+                return lastReflection ? (
+                  <div className="text-sm italic text-muted-foreground">"{lastReflection}"</div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">No reflections yet. Click "Reflect" to generate one.</div>
+                )
+              })()}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Consciousness level control */}
         <Card>
           <CardHeader>
