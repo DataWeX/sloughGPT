@@ -54,12 +54,17 @@ def plan_consolidation(facts: List[Dict[str, Any]], threshold: float = 0.80) -> 
     if not facts:
         return {"keep_ids": [], "remove_ids": [], "groups": [], "removed_count": 0}
 
+    # Filter out facts without required fields early
+    valid_facts = [f for f in facts if f.get("id") and f.get("content")]
+    if not valid_facts:
+        return {"keep_ids": [], "remove_ids": [], "groups": [], "removed_count": 0}
+
     by_topic: Dict[str, List[Dict[str, Any]]] = {}
-    for f in facts:
+    for f in valid_facts:
         by_topic.setdefault(f.get("topic") or "general", []).append(f)
 
-    cache = _embed_cache(facts)
-    parent = {f["id"]: f["id"] for f in facts}
+    cache = _embed_cache(valid_facts)
+    parent = {f["id"]: f["id"] for f in valid_facts}
 
     def find(x: str) -> str:
         while parent[x] != x:
@@ -82,10 +87,10 @@ def plan_consolidation(facts: List[Dict[str, Any]], threshold: float = 0.80) -> 
                         union(a["id"], b["id"])
 
     clusters: Dict[str, List[Dict[str, Any]]] = {}
-    for f in facts:
+    for f in valid_facts:
         clusters.setdefault(find(f["id"]), []).append(f)
 
-    input_order = [f["id"] for f in facts]
+    input_order = [f["id"] for f in valid_facts]
     keep_set: set = set()
     remove_set: set = set()
     groups: List[Dict[str, Any]] = []
