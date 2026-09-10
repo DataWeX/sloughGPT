@@ -6,6 +6,9 @@ import { IconRefresh, IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { experimentsController } from '@/lib/experiments-controller'
 import { ExperimentDetailsCard } from '@/components/experiments/ExperimentDetailsCard'
+import { ExperimentListCard } from '@/components/experiments/ExperimentListCard'
+import { ExperimentLogCard } from '@/components/experiments/ExperimentLogCard'
+import { ExperimentStatsCard } from '@/components/experiments/ExperimentStatsCard'
 import { useToastStore } from '@/lib/toast-store'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
@@ -356,6 +359,36 @@ export default function ExperimentsPage() {
         {selectedId && (
           <ExperimentDetailsCard experimentId={selectedId} />
         )}
+
+        <ExperimentListCard
+          experiments={experiments}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onDelete={async (id) => {
+            try {
+              await experimentsController.delete(id)
+              addToast('Experiment deleted', 'success')
+              void fetchExperiments()
+            } catch { addToast('Delete failed', 'error') }
+          }}
+        />
+
+        <ExperimentLogCard
+          experimentId={selectedId}
+          onLogMetric={async (id, name, value) => {
+            await experimentsController.logMetric(id, name, value)
+            addToast('Metric logged', 'success')
+          }}
+          onLogParam={async (id, name, value) => {
+            await experimentsController.logParam(id, name, value)
+            addToast('Param logged', 'success')
+          }}
+          onComplete={async (id) => {
+            await experimentsController.complete(id)
+            addToast('Experiment completed', 'success')
+            void fetchExperiments()
+          }}
+        />
       </PageContainer>
   )
 }
