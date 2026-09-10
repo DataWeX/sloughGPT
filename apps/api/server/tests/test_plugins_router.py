@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
 
-
 _AUTH_USER = {"sub": "user1", "tenant_id": "t1"}
 
 
