@@ -17,6 +17,9 @@ from routers.auth import AuthRouter, _get_auth_deps, reset_auth_router, set_auth
 @pytest.fixture(autouse=True)
 def _isolated_auth(tmp_path):
     """Create an AuthRouter backed by a temp MogDB, inject it, clean up."""
+    from routers.auth import _login_limiter, _register_limiter
+    _login_limiter._attempts.clear()
+    _register_limiter._attempts.clear()
     db_path = str(tmp_path / "auth_mogdb")
     auth = AuthRouter(db_path=db_path)
     set_auth_router(auth)
@@ -112,14 +115,14 @@ class TestLogin:
             json={
                 "username": "dave",
                 "email": "dave@example.com",
-                "password": "pass123",
+                "password": "pass1234",
             },
         )
         resp = client.post(
             "/auth/login",
             json={
                 "username": "dave",
-                "password": "pass123",
+                "password": "pass1234",
             },
         )
         assert resp.status_code == 200
@@ -134,7 +137,7 @@ class TestLogin:
             json={
                 "username": "dave",
                 "email": "dave@example.com",
-                "password": "pass123",
+                "password": "pass1234",
             },
         )
         resp = client.post(
@@ -170,7 +173,7 @@ class TestMe:
             json={
                 "username": "eve",
                 "email": "eve@example.com",
-                "password": "pass",
+                "password": "passpass",
             },
         ).json()
 
